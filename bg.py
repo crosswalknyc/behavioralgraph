@@ -746,7 +746,7 @@ def connect_snowflake():
     database = os.environ.get('SNOWFLAKE_DATABASE') or SNOWFLAKE_CONFIG.get('database', 'BEHAVIORALGRAPH')
     schema = os.environ.get('SNOWFLAKE_SCHEMA') or SNOWFLAKE_CONFIG.get('schema', 'PUBLIC')
     role = os.environ.get('SNOWFLAKE_ROLE') or SNOWFLAKE_CONFIG.get('role', 'ACCOUNTADMIN')
-    token = os.environ.get('SNOWFLAKE_TOKEN', '')
+    token = os.environ.get('SNOWFLAKE_TOKEN') or SNOWFLAKE_CONFIG.get('token', '')
     
     if not user or not account:
         raise ValueError("SNOWFLAKE_USER and SNOWFLAKE_ACCOUNT must be set as environment variables")
