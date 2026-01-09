@@ -1,0 +1,35 @@
+# Render Blueprint for Behavioral Graph Web App
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: behavioral-graph
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt && cp config.example.py config.py
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 300
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.6"
+      - key: APP_USERNAME
+        value: admin
+      - key: APP_PASSWORD
+        value: midgenow!2
+      - key: FLASK_DEBUG
+        value: "false"
+      # Snowflake credentials - set these in Render dashboard
+      - key: SNOWFLAKE_USER
+        sync: false
+      - key: SNOWFLAKE_PASSWORD
+        sync: false
+      - key: SNOWFLAKE_ACCOUNT
+        sync: false
+      - key: SNOWFLAKE_WAREHOUSE
+        value: "UID_REPLACER_WH_SMALL"
+      - key: SNOWFLAKE_DATABASE
+        value: "PROCESSEDCLICKSTREAM"
+      - key: SNOWFLAKE_SCHEMA
+        value: "PUBLIC"
+      - key: SNOWFLAKE_ROLE
+        value: "ACCOUNTADMIN"
+    healthCheckPath: /api/health

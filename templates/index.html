@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Behavioral Graph | Analysis Pipeline</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a1929;
+            --bg-card: #0d2137;
+            --bg-input: #132f4c;
+            --accent-blue: #5a9ad9;
+            --accent-cyan: #66d9ef;
+            --accent-green: #a6e22e;
+            --accent-orange: #fd971f;
+            --accent-red: #f92672;
+            --text-primary: #e6f1ff;
+            --text-secondary: #8892b0;
+            --border-color: #1e3a5f;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* Animated background */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(90, 154, 217, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(102, 217, 239, 0.1) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(90, 154, 217, 0.05) 0%, transparent 70%);
+            z-index: -1;
+            animation: pulse 8s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(90, 154, 217, 0.3);
+            transition: transform 0.3s ease;
+        }
+
+        .logo:hover {
+            transform: scale(1.05);
+        }
+
+        .header-text h1 {
+            font-family: 'Space Mono', monospace;
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-text p {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            margin-top: 0.25rem;
+        }
+
+        /* Main layout */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 900px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .card h2 {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.25rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .card h2 .icon {
+            font-size: 1.5rem;
+        }
+
+        /* Form styles */
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 1rem;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(90, 154, 217, 0.2);
+        }
+
+        input::placeholder, textarea::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        /* Checkbox */
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            cursor: pointer;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: var(--accent-blue);
+        }
+
+        .checkbox-group span {
+            font-size: 0.95rem;
+        }
+
+        /* Button */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 1rem 2rem;
+            font-family: 'Space Mono', monospace;
+            font-size: 1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-blue), #4a8ac9);
+            color: white;
+            box-shadow: 0 4px 15px rgba(90, 154, 217, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(90, 154, 217, 0.5);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+        }
+
+        /* Status panel */
+        .status-panel {
+            background: var(--bg-input);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .status-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.375rem 0.875rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge.queued {
+            background: rgba(253, 151, 31, 0.2);
+            color: var(--accent-orange);
+        }
+
+        .status-badge.running {
+            background: rgba(90, 154, 217, 0.2);
+            color: var(--accent-blue);
+        }
+
+        .status-badge.completed {
+            background: rgba(166, 226, 46, 0.2);
+            color: var(--accent-green);
+        }
+
+        .status-badge.failed {
+            background: rgba(249, 38, 114, 0.2);
+            color: var(--accent-red);
+        }
+
+        /* Progress bar */
+        .progress-container {
+            margin: 1rem 0;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: var(--bg-dark);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        /* Logs */
+        .logs-container {
+            max-height: 200px;
+            overflow-y: auto;
+            background: var(--bg-dark);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.8rem;
+            line-height: 1.8;
+        }
+
+        .log-entry {
+            color: var(--text-secondary);
+        }
+
+        .log-entry:last-child {
+            color: var(--accent-cyan);
+        }
+
+        /* Jobs list */
+        .jobs-list {
+            margin-top: 1rem;
+        }
+
+        .job-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: var(--bg-input);
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            transition: background 0.2s ease;
+        }
+
+        .job-item:hover {
+            background: var(--border-color);
+        }
+
+        .job-info h3 {
+            font-size: 1rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .job-info p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .job-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state .icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* Collapsible section */
+        .collapsible {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+
+        .collapsible-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .collapsible-header:hover {
+            background: var(--bg-input);
+        }
+
+        .collapsible-content {
+            padding: 1rem;
+            border-top: 1px solid var(--border-color);
+            display: none;
+        }
+
+        .collapsible-content.open {
+            display: block;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-dark);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+
+        /* Animation for loading */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid transparent;
+            border-top-color: currentColor;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 1000;
+        }
+
+        .toast {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            margin-top: 0.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-gradient"></div>
+    
+    <div class="container">
+        <header>
+            <img src="/static/logo.svg" alt="MIDG Logo" class="logo" style="width: 180px; height: auto; border-radius: 8px;">
+            <div class="header-text">
+                <h1>BEHAVIORAL GRAPH</h1>
+                <p>Clickstream Analysis Pipeline</p>
+            </div>
+        </header>
+
+        <div class="main-grid">
+            <!-- Input Form -->
+            <div class="card">
+                <h2><span class="icon">📊</span> Analysis Parameters</h2>
+                
+                <form id="analysisForm">
+                    <div class="form-group">
+                        <label for="project_name">Project Name</label>
+                        <input type="text" id="project_name" name="project_name" placeholder="e.g., Q4_Brand_Analysis" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="brands">Brands (comma-separated)</label>
+                        <textarea id="brands" name="brands" placeholder="e.g., nike, adidas, puma, under armour" required></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="start_date">Start Date</label>
+                            <input type="date" id="start_date" name="start_date" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="end_date">End Date</label>
+                            <input type="date" id="end_date" name="end_date" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="brand_category">Brand Category</label>
+                        <select id="brand_category" name="brand_category">
+                            <option value="GENERAL">General</option>
+                            <option value="APPAREL/FOOTWEAR">Apparel/Footwear</option>
+                            <option value="QSR">QSR (Quick Service Restaurant)</option>
+                            <option value="STREAMING/MUSIC">Streaming/Music</option>
+                            <option value="SOCIAL MEDIA">Social Media</option>
+                            <option value="TELECOM">Telecom</option>
+                            <option value="TECHNOLOGY/DEVICE">Technology/Device</option>
+                            <option value="RETAIL">Retail</option>
+                            <option value="INFLUENCERS">Influencers</option>
+                            <option value="SPORTS">Sports</option>
+                            <option value="MUSIC">Music</option>
+                            <option value="INSURANCE">Insurance</option>
+                            <option value="INVESTMENTS">Investments</option>
+                            <option value="GAMES">Games</option>
+                            <option value="TRAVEL">Travel</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-group">
+                            <input type="checkbox" id="is_genpop" name="is_genpop" checked>
+                            <span>GenPop Analysis (General Population)</span>
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-group">
+                            <input type="checkbox" id="purchasers_only" name="purchasers_only">
+                            <span>Purchasers Only</span>
+                        </label>
+                    </div>
+
+                    <!-- Demographics Section -->
+                    <div class="collapsible">
+                        <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                            <span>🎯 Demographic Filters (Optional)</span>
+                            <span>▼</span>
+                        </div>
+                        <div class="collapsible-content">
+                            <div class="form-group">
+                                <label for="gender">Gender</label>
+                                <select id="gender" name="gender">
+                                    <option value="">All</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Non-binary">Non-binary</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="age">Age Group</label>
+                                <select id="age" name="age">
+                                    <option value="">All</option>
+                                    <option value="<16">&lt;16</option>
+                                    <option value="16-18">16-18</option>
+                                    <option value="18-20">18-20</option>
+                                    <option value="21-25">21-25</option>
+                                    <option value="26-30">26-30</option>
+                                    <option value="31-40">31-40</option>
+                                    <option value="41-59">41-59</option>
+                                    <option value="60+">60+</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="ethnicity">Ethnicity</label>
+                                <select id="ethnicity" name="ethnicity">
+                                    <option value="">All</option>
+                                    <option value="White">White</option>
+                                    <option value="Black">Black</option>
+                                    <option value="LatinX">LatinX</option>
+                                    <option value="Asian">Asian</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="income">Household Income</label>
+                                <select id="income" name="income">
+                                    <option value="">All</option>
+                                    <option value="$40K - $60K">$40K - $60K</option>
+                                    <option value="$60K - $75K">$60K - $75K</option>
+                                    <option value="$75K - $100K">$75K - $100K</option>
+                                    <option value="$100K - $150K">$100K - $150K</option>
+                                    <option value="$150K - $250K">$150K - $250K</option>
+                                    <option value="$250K+">$250K+</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 1.5rem;">
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <span>🚀</span> Run Analysis
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Status & Results -->
+            <div class="card">
+                <h2><span class="icon">📈</span> Job Status</h2>
+                
+                <div id="currentJob" style="display: none;">
+                    <div class="status-panel">
+                        <div class="status-header">
+                            <span id="jobProjectName">Project Name</span>
+                            <span class="status-badge" id="statusBadge">Queued</span>
+                        </div>
+                        
+                        <div class="progress-container">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                            </div>
+                            <div class="progress-text">
+                                <span id="progressMessage">Waiting...</span>
+                                <span id="progressPercent">0%</span>
+                            </div>
+                        </div>
+
+                        <div class="logs-container" id="logsContainer">
+                            <div class="log-entry">Waiting for logs...</div>
+                        </div>
+
+                        <div id="downloadSection" style="display: none; margin-top: 1rem;">
+                            <button class="btn btn-primary" id="downloadBtn">
+                                <span>📥</span> Download Results
+                            </button>
+                        </div>
+
+                        <div id="errorSection" style="display: none; margin-top: 1rem;">
+                            <div style="background: rgba(249, 38, 114, 0.1); border: 1px solid var(--accent-red); border-radius: 8px; padding: 1rem;">
+                                <strong style="color: var(--accent-red);">Error:</strong>
+                                <pre id="errorMessage" style="margin-top: 0.5rem; white-space: pre-wrap; font-size: 0.8rem; color: var(--text-secondary);"></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="noCurrentJob">
+                    <div class="empty-state">
+                        <div class="icon">🔍</div>
+                        <p>No active job. Submit an analysis to get started.</p>
+                    </div>
+                </div>
+
+                <h3 style="margin-top: 2rem; margin-bottom: 1rem; font-size: 1rem; color: var(--text-secondary);">Recent Jobs</h3>
+                <div class="jobs-list" id="jobsList">
+                    <div class="empty-state" style="padding: 1.5rem;">
+                        <p>No jobs yet</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        let currentJobId = null;
+        let pollInterval = null;
+
+        // Set default dates (last 30 days)
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date();
+            const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+            
+            document.getElementById('end_date').value = formatDate(today);
+            document.getElementById('start_date').value = formatDate(thirtyDaysAgo);
+            
+            loadJobs();
+        });
+
+        function formatDate(date) {
+            return date.toISOString().split('T')[0];
+        }
+
+        function toggleCollapsible(header) {
+            const content = header.nextElementSibling;
+            content.classList.toggle('open');
+            header.querySelector('span:last-child').textContent = content.classList.contains('open') ? '▲' : '▼';
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.style.borderLeftColor = type === 'error' ? 'var(--accent-red)' : 
+                                          type === 'success' ? 'var(--accent-green)' : 'var(--accent-blue)';
+            toast.style.borderLeftWidth = '4px';
+            toast.textContent = message;
+            container.appendChild(toast);
+            
+            setTimeout(() => toast.remove(), 5000);
+        }
+
+        // Form submission
+        document.getElementById('analysisForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner"></span> Submitting...';
+            
+            const formData = {
+                project_name: document.getElementById('project_name').value,
+                brands: document.getElementById('brands').value,
+                start_date: document.getElementById('start_date').value,
+                end_date: document.getElementById('end_date').value,
+                brand_category: document.getElementById('brand_category').value,
+                is_genpop: document.getElementById('is_genpop').checked,
+                purchasers_only: document.getElementById('purchasers_only').checked,
+                gender: document.getElementById('gender').value,
+                age: document.getElementById('age').value,
+                ethnicity: document.getElementById('ethnicity').value,
+                income: document.getElementById('income').value
+            };
+
+            try {
+                const response = await fetch('/api/submit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    currentJobId = data.job_id;
+                    showToast('Analysis job submitted!', 'success');
+                    showCurrentJob();
+                    startPolling();
+                    loadJobs();
+                } else {
+                    showToast(data.error || 'Failed to submit job', 'error');
+                }
+            } catch (error) {
+                showToast('Network error: ' + error.message, 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<span>🚀</span> Run Analysis';
+            }
+        });
+
+        function showCurrentJob() {
+            document.getElementById('currentJob').style.display = 'block';
+            document.getElementById('noCurrentJob').style.display = 'none';
+        }
+
+        function startPolling() {
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(updateJobStatus, 2000);
+            updateJobStatus();
+        }
+
+        async function updateJobStatus() {
+            if (!currentJobId) return;
+            
+            try {
+                const response = await fetch(`/api/status/${currentJobId}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('jobProjectName').textContent = data.project_name || currentJobId;
+                    
+                    // Update status badge
+                    const badge = document.getElementById('statusBadge');
+                    badge.textContent = data.status.toUpperCase();
+                    badge.className = 'status-badge ' + data.status;
+                    
+                    // Update progress
+                    document.getElementById('progressFill').style.width = data.progress + '%';
+                    document.getElementById('progressPercent').textContent = data.progress + '%';
+                    document.getElementById('progressMessage').textContent = data.message || 'Processing...';
+                    
+                    // Update logs
+                    if (data.logs && data.logs.length > 0) {
+                        const logsContainer = document.getElementById('logsContainer');
+                        logsContainer.innerHTML = data.logs.map(log => 
+                            `<div class="log-entry">${log}</div>`
+                        ).join('');
+                        logsContainer.scrollTop = logsContainer.scrollHeight;
+                    }
+                    
+                    // Handle completion
+                    if (data.status === 'completed') {
+                        clearInterval(pollInterval);
+                        document.getElementById('downloadSection').style.display = 'block';
+                        document.getElementById('downloadBtn').onclick = () => downloadResult(currentJobId);
+                        showToast('Analysis completed!', 'success');
+                        loadJobs();
+                    }
+                    
+                    // Handle error
+                    if (data.status === 'failed') {
+                        clearInterval(pollInterval);
+                        document.getElementById('errorSection').style.display = 'block';
+                        document.getElementById('errorMessage').textContent = data.error || 'Unknown error';
+                        showToast('Analysis failed', 'error');
+                        loadJobs();
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to update status:', error);
+            }
+        }
+
+        async function loadJobs() {
+            try {
+                const response = await fetch('/api/jobs');
+                const jobs = await response.json();
+                
+                const container = document.getElementById('jobsList');
+                
+                if (jobs.length === 0) {
+                    container.innerHTML = '<div class="empty-state" style="padding: 1.5rem;"><p>No jobs yet</p></div>';
+                    return;
+                }
+                
+                container.innerHTML = jobs.slice(0, 5).map(job => `
+                    <div class="job-item">
+                        <div class="job-info">
+                            <h3>${job.project_name}</h3>
+                            <p>${new Date(job.created_at).toLocaleString()} • ${job.progress}%</p>
+                        </div>
+                        <div class="job-actions">
+                            <span class="status-badge ${job.status}" style="font-size: 0.7rem;">${job.status}</span>
+                            ${job.status === 'completed' ? 
+                                `<button class="btn btn-secondary btn-small" onclick="downloadResult('${job.job_id}')">📥</button>` : ''}
+                            ${job.status === 'running' || job.status === 'queued' ? 
+                                `<button class="btn btn-secondary btn-small" onclick="viewJob('${job.job_id}')">👁️</button>` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load jobs:', error);
+            }
+        }
+
+        function viewJob(jobId) {
+            currentJobId = jobId;
+            showCurrentJob();
+            startPolling();
+        }
+
+        function downloadResult(jobId) {
+            window.location.href = `/api/download/${jobId}`;
+        }
+    </script>
+</body>
+</html>

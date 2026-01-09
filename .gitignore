@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Output files
+outputs/
+*.csv
+
+# Environment - NEVER COMMIT CREDENTIALS
+.env
+.env.local
+config.py
+*.key
+*.pem
+*credentials*
+*secret*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Cache
+.cache/
