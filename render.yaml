@@ -1,16 +1,13 @@
 # Render Blueprint for Behavioral Graph Web App
-# https://render.com/docs/blueprint-spec
+# Using Docker for precise Python version control
 
 services:
   - type: web
     name: behavioral-graph
-    runtime: python
+    runtime: docker
     plan: starter
-    buildCommand: pip install -r requirements.txt && cp config.example.py config.py
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 300
+    dockerfilePath: ./Dockerfile
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.11.6"
       - key: APP_USERNAME
         value: admin
       - key: APP_PASSWORD
@@ -24,10 +21,12 @@ services:
         sync: false
       - key: SNOWFLAKE_ACCOUNT
         sync: false
+      - key: SNOWFLAKE_TOKEN
+        sync: false
       - key: SNOWFLAKE_WAREHOUSE
-        value: "UID_REPLACER_WH_SMALL"
+        value: "BEHAVIORGRAPH6X"
       - key: SNOWFLAKE_DATABASE
-        value: "PROCESSEDCLICKSTREAM"
+        value: "BEHAVIORALGRAPH"
       - key: SNOWFLAKE_SCHEMA
         value: "PUBLIC"
       - key: SNOWFLAKE_ROLE
