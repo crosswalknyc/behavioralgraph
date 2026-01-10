@@ -358,13 +358,6 @@
                                 </label>
                             </div>
                         </div>
-
-                        <div class="form-group">
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="auto_format" name="auto_format">
-                                <span>Auto Format Inputs (Generate brand variations)</span>
-                            </label>
-                        </div>
                     </div>
 
                     <!-- Step 2: Brand Input -->
@@ -379,30 +372,8 @@
 
                         <div class="form-group">
                             <label for="brand_category">Brand Category</label>
-                            <select id="brand_category" name="brand_category">
-                                <option value="GENERAL">General</option>
-                                <option value="APPAREL/FOOTWEAR">Apparel/Footwear</option>
-                                <option value="QSR">QSR (Quick Service Restaurant)</option>
-                                <option value="STREAMING/MUSIC">Streaming/Music</option>
-                                <option value="SOCIAL MEDIA">Social Media</option>
-                                <option value="TELECOM">Telecom</option>
-                                <option value="TECHNOLOGY/DEVICE">Technology/Device</option>
-                                <option value="RETAIL">Retail</option>
-                                <option value="INFLUENCERS">Influencers</option>
-                                <option value="SPORTS">Sports</option>
-                                <option value="MUSIC">Music</option>
-                                <option value="INSURANCE">Insurance</option>
-                                <option value="INVESTMENTS">Investments</option>
-                                <option value="GAMES">Games</option>
-                                <option value="TRAVEL">Travel</option>
-                                <option value="AMUSEMENT PARKS">Amusement Parks</option>
-                                <option value="BROADCAST/CABLE">Broadcast/Cable</option>
-                                <option value="VIRTUAL MVPD FAST">Virtual MVPD FAST</option>
-                                <option value="BEAUTY/WELLNESS">Beauty/Wellness</option>
-                                <option value="HOME/OUTDOOR">Home/Outdoor</option>
-                                <option value="PETS">Pets</option>
-                                <option value="PHARMACY">Pharmacy</option>
-                            </select>
+                            <input type="text" id="brand_category" name="brand_category" placeholder="e.g., APPAREL/FOOTWEAR, QSR, STREAMING/MUSIC, SOCIAL MEDIA">
+                            <div class="help-text">Enter the category for the main brand (e.g., INFLUENCERS, SOCIAL MEDIA, QSR, TELECOM, SPORTS, etc.)</div>
                         </div>
                     </div>
 
@@ -733,10 +704,10 @@
             const formData = {
                 project_name: document.getElementById('project_name').value,
                 brands: document.getElementById('brands').value,
-                brand_category: document.getElementById('brand_category').value,
+                brand_category: document.getElementById('brand_category').value || 'GENERAL',
                 is_genpop: document.getElementById('is_genpop').checked,
                 purchasers_only: document.getElementById('purchasers_only').checked,
-                auto_format: document.getElementById('auto_format').checked,
+                auto_format: true,  // Always enabled
                 include_frequency: document.getElementById('include_frequency').checked,
                 is_listener_watcher: document.getElementById('is_listener_watcher').checked,
                 is_update: document.getElementById('is_update').checked,

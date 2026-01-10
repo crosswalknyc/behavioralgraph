@@ -110,18 +110,17 @@ def submit_analysis():
             clean_brand = match.group(1).lower() if match else b.lower()
             brands.append(clean_brand)
         
-        # Auto-format brand variations if enabled
-        if data.get('auto_format', False):
-            expanded_brands = []
-            for brand in brands:
-                expanded_brands.append(brand)
-                # Add common variations
-                if '.' in brand:
-                    expanded_brands.append(brand.replace('.', ''))
-                if ' ' in brand:
-                    expanded_brands.append(brand.replace(' ', ''))
-                    expanded_brands.append(brand.replace(' ', '-'))
-            brands = list(set(expanded_brands))
+        # Always auto-format brand variations
+        expanded_brands = []
+        for brand in brands:
+            expanded_brands.append(brand)
+            # Add common variations
+            if '.' in brand:
+                expanded_brands.append(brand.replace('.', ''))
+            if ' ' in brand:
+                expanded_brands.append(brand.replace(' ', ''))
+                expanded_brands.append(brand.replace(' ', '-'))
+        brands = list(set(expanded_brands))
         
         # Parse dates
         try:
