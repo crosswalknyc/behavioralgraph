@@ -94,13 +94,41 @@ def submit_analysis():
         job_id = str(uuid.uuid4())[:8]
         
         # Parse inputs
+        import re
         project_name = data['project_name'].replace(' ', '_')
-        brands = [b.strip().lower() for b in data['brands'].split(',') if b.strip()]
+        project_name = re.sub(r'[<>:"/\\|?*]', '_', project_name)
         
-        # Parse dates (expecting YYYY-MM-DD format from frontend)
+        # Parse brands (handle comma-separated and newline-separated)
+        brands_raw = data['brands'].replace('\n', ',')
+        brands = []
+        for b in brands_raw.split(','):
+            b = b.strip()
+            if not b:
+                continue
+            # Extract domain from URLs
+            match = re.search(r'https?://([^/]+)', b)
+            clean_brand = match.group(1).lower() if match else b.lower()
+            brands.append(clean_brand)
+        
+        # Auto-format brand variations if enabled
+        if data.get('auto_format', False):
+            expanded_brands = []
+            for brand in brands:
+                expanded_brands.append(brand)
+                # Add common variations
+                if '.' in brand:
+                    expanded_brands.append(brand.replace('.', ''))
+                if ' ' in brand:
+                    expanded_brands.append(brand.replace(' ', ''))
+                    expanded_brands.append(brand.replace(' ', '-'))
+            brands = list(set(expanded_brands))
+        
+        # Parse dates
         try:
             start_date = datetime.strptime(data['start_date'], '%Y-%m-%d').strftime('%Y-%m-%d')
             end_date = datetime.strptime(data['end_date'], '%Y-%m-%d').strftime('%Y-%m-%d')
+            behavior_start = datetime.strptime(data.get('behavior_start', data['start_date']), '%Y-%m-%d').strftime('%Y-%m-%d')
+            behavior_end = datetime.strptime(data.get('behavior_end', data['end_date']), '%Y-%m-%d').strftime('%Y-%m-%d')
         except ValueError:
             return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
         
@@ -108,6 +136,9 @@ def submit_analysis():
         is_genpop = data.get('is_genpop', True)
         purchasers_only = data.get('purchasers_only', False)
         brand_category = data.get('brand_category', 'GENERAL')
+        include_frequency = data.get('include_frequency', False)
+        is_listener_watcher = data.get('is_listener_watcher', False)
+        previous_file = data.get('previous_file', None) if data.get('is_update', False) else None
         
         # Demographic filters
         filters = {}
@@ -119,6 +150,23 @@ def submit_analysis():
             filters['ETHNICITY'] = [data['ethnicity']]
         if data.get('income'):
             filters['INCOME'] = [data['income']]
+        if data.get('education'):
+            filters['EDUCATION'] = [data['education']]
+        if data.get('relationship'):
+            filters['RELATIONSHIP'] = [data['relationship']]
+        if data.get('sexual_orientation'):
+            filters['SEXUAL_ORIENTATION'] = [data['sexual_orientation']]
+        if data.get('parental_status'):
+            filters['PARENTAL_STATUS'] = [data['parental_status']]
+        
+        # Skew settings for demographic safety checks
+        skew_settings = {}
+        if data.get('enable_skew', False) and data.get('skew_category') and data.get('skew_target'):
+            targets = [t.strip() for t in data['skew_target'].split(',')]
+            skew_settings[data['skew_category']] = {
+                'target': targets,
+                'strength': data.get('skew_strength', 'medium')
+            }
         
         # Initialize job
         jobs[job_id] = {
@@ -136,7 +184,9 @@ def submit_analysis():
         thread = threading.Thread(
             target=run_analysis,
             args=(job_id, project_name, brands, start_date, end_date, 
-                  start_date, end_date, filters, {}, is_genpop, purchasers_only, brand_category)
+                  behavior_start, behavior_end, filters, skew_settings, 
+                  is_genpop, purchasers_only, brand_category, 
+                  include_frequency, is_listener_watcher, previous_file)
         )
         thread.daemon = True
         thread.start()
@@ -144,7 +194,8 @@ def submit_analysis():
         return jsonify({
             'job_id': job_id,
             'message': 'Analysis job submitted successfully',
-            'status': 'queued'
+            'status': 'queued',
+            'brands_count': len(brands)
         })
         
     except Exception as e:
@@ -231,7 +282,8 @@ def update_job_status(job_id, status=None, progress=None, message=None, error=No
 
 def run_analysis(job_id, project_name, brands, sample_start, sample_end, 
                  behavior_start, behavior_end, filters, skew_settings, 
-                 is_genpop, purchasers_only, brand_category):
+                 is_genpop, purchasers_only, brand_category,
+                 include_frequency=False, is_listener_watcher=False, previous_file_path=None):
     """Run the behavioral graph analysis pipeline."""
     try:
         update_job_status(job_id, status='running', progress=5, message='Starting analysis...')
@@ -255,10 +307,18 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
             update_job_status(job_id, status='failed', error=f'Snowflake connection failed: {str(e)}')
             return
         
-        update_job_status(job_id, progress=20, message='Connected to Snowflake. Running pipeline...')
+        update_job_status(job_id, progress=20, message=f'Connected! Analyzing {len(brands)} brands...')
+        
+        # Log the parameters being used
+        update_job_status(job_id, progress=25, message=f'Sample period: {sample_start} to {sample_end}')
+        update_job_status(job_id, progress=30, message=f'Behavior period: {behavior_start} to {behavior_end}')
+        if filters:
+            update_job_status(job_id, progress=32, message=f'Filters: {list(filters.keys())}')
         
         # Run the full pipeline
         try:
+            update_job_status(job_id, progress=35, message='Running full universe scan...')
+            
             result_file = bg.run_full_pipeline(
                 conn=conn,
                 project_name=project_name,
@@ -271,9 +331,11 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 skew_settings=skew_settings,
                 is_genpop=is_genpop,
                 purchasers_only=purchasers_only,
-                previous_file_path=None,
+                previous_file_path=previous_file_path,
                 brand_category=brand_category
             )
+            
+            update_job_status(job_id, progress=90, message='Processing complete, saving results...')
             
             # Copy result to our outputs directory
             if result_file and os.path.exists(result_file):
@@ -288,7 +350,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                     job_id, 
                     status='completed', 
                     progress=100, 
-                    message='Analysis completed successfully!',
+                    message=f'Analysis completed! Output: {output_filename}',
                     result_file=output_path
                 )
             else:
