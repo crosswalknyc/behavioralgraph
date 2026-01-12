@@ -375,8 +375,19 @@
             font-size: 0.7rem;
             font-weight: 600;
             color: var(--text-primary);
-            width: 50px;
+            min-width: 50px;
             text-align: right;
+        }
+
+        .behavioral-index {
+            font-size: 0.65rem;
+            font-weight: 700;
+            min-width: 32px;
+            text-align: center;
+            padding: 1px 4px;
+            border-radius: 3px;
+            background: rgba(0, 0, 0, 0.3);
+            margin-left: 4px;
             flex-shrink: 0;
         }
 
@@ -1435,7 +1446,7 @@
             document.getElementById('dashProjectedUS').textContent = formatNumber(parsed.projectedUS);
 
             renderCategoryTree(parsed.categories);
-            renderCharts(parsed.demographics);
+            renderCharts(parsed.demographics, parsed.demographicsIndex);
             renderBehavioralCards(parsed.behavioral);
             renderLocationTable(parsed.locations);
         }
@@ -1445,6 +1456,7 @@
                 sampleSize: 0,
                 projectedUS: 0,
                 demographics: { age: {}, gender: {}, ethnicity: {}, income: {} },
+                demographicsIndex: { age: {}, gender: {}, ethnicity: {}, income: {} },
                 behavioral: {},
                 categories: {},
                 locations: []
@@ -1452,6 +1464,7 @@
 
             const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'];
             const skipCategories = ['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'];
+            const US_POPULATION = 324700000;
 
             csvData.forEach(row => {
                 const category = (row.Column || '').toUpperCase();
@@ -1459,6 +1472,10 @@
                 const pct = parseFloat(row['Brand Penetration (Row)'] || row['Category Share'] || 0);
                 const rawNumbers = parseInt(row['Original Raw Numbers'] || row['Category Share'] || 0);
                 const usProjection = parseInt(row['US Gen Pop Projection'] || 0);
+                
+                // Calculate Gen Pop % and Index
+                const genPopPct = usProjection > 0 ? (usProjection / US_POPULATION) * 100 : 0;
+                const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
 
                 // Sample size is in Original Raw Numbers OR Category Share column for SAMPLE SIZE row
                 if (category === 'SAMPLE SIZE') {
@@ -1471,27 +1488,39 @@
                 
                 if (category === 'BRAND INPUT') result.projectedUS = usProjection;
 
-                // Demographics
-                if (category === 'AGE' && value) result.demographics.age[value] = pct;
-                if (category === 'GENDER' && value) result.demographics.gender[value] = pct;
-                if (category === 'ETHNICITY' && value) result.demographics.ethnicity[value] = pct;
-                if (category === 'INCOME' && value) result.demographics.income[value] = pct;
+                // Demographics - store both pct and index
+                if (category === 'AGE' && value) {
+                    result.demographics.age[value] = pct;
+                    result.demographicsIndex.age[value] = index;
+                }
+                if (category === 'GENDER' && value) {
+                    result.demographics.gender[value] = pct;
+                    result.demographicsIndex.gender[value] = index;
+                }
+                if (category === 'ETHNICITY' && value) {
+                    result.demographics.ethnicity[value] = pct;
+                    result.demographicsIndex.ethnicity[value] = index;
+                }
+                if (category === 'INCOME' && value) {
+                    result.demographics.income[value] = pct;
+                    result.demographicsIndex.income[value] = index;
+                }
 
                 // Location/DMA
                 if (category === 'LOCATION' && value) {
-                    result.locations.push({ name: value, pct: pct, index: pct > 0 ? (pct / 0.5 * 100).toFixed(0) : 0 });
+                    result.locations.push({ name: value, pct: pct, index: index });
                 }
 
                 // Categories tree
                 if (!skipCategories.includes(category) && value) {
                     if (!result.categories[category]) result.categories[category] = [];
-                    result.categories[category].push({ value, pct });
+                    result.categories[category].push({ value, pct, index });
                 }
 
-                // Behavioral (non-demographic categories)
+                // Behavioral (non-demographic categories) - include index
                 if (!demoCategories.includes(category) && !skipCategories.includes(category) && !['LOCATION'].includes(category) && value) {
                     if (!result.behavioral[category]) result.behavioral[category] = [];
-                    result.behavioral[category].push({ name: value, pct: pct });
+                    result.behavioral[category].push({ name: value, pct: pct, index: index, genPopPct: genPopPct });
                 }
             });
 
@@ -1520,16 +1549,30 @@
             el.nextElementSibling.classList.toggle('open');
         }
 
-        function renderCharts(demographics) {
+        let currentDemoIndexes = {};
+        
+        function renderCharts(demographics, demographicsIndex = {}) {
             Object.values(charts).forEach(c => c.destroy());
             charts = {};
+            currentDemoIndexes = demographicsIndex;
 
             const colors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74', '#75715e'];
 
-            // Age
+            // Helper to format label with index
+            const formatLabelWithIndex = (label, index) => {
+                const indexColor = index >= 100 ? '#10b981' : '#ef4444';
+                return index > 0 ? `${label} [${index}]` : label;
+            };
+
+            // Age - horizontal bar with index in data labels
+            const ageLabels = Object.keys(demographics.age);
+            const ageIndexes = ageLabels.map(k => demographicsIndex.age?.[k] || 0);
             charts.age = new Chart(document.getElementById('ageChart'), {
                 type: 'bar',
-                data: { labels: Object.keys(demographics.age), datasets: [{ data: Object.values(demographics.age), backgroundColor: '#5a9ad9', borderRadius: 4 }] },
+                data: { 
+                    labels: ageLabels, 
+                    datasets: [{ data: Object.values(demographics.age), backgroundColor: '#5a9ad9', borderRadius: 4 }] 
+                },
                 options: { 
                     indexAxis: 'y', 
                     responsive: true, 
@@ -1540,24 +1583,50 @@
                             color: '#fff',
                             anchor: 'end',
                             align: 'end',
-                            font: { size: 10, weight: 'bold' },
-                            formatter: (value) => value.toFixed(1) + '%'
+                            font: { size: 9, weight: 'bold' },
+                            formatter: (value, ctx) => {
+                                const idx = ageIndexes[ctx.dataIndex] || 0;
+                                const idxColor = idx >= 100 ? '🟢' : '🔴';
+                                return idx > 0 ? `${value.toFixed(1)}% ${idx}` : value.toFixed(1) + '%';
+                            }
                         }
                     }, 
                     scales: { x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 10 } } } } 
                 },
                 plugins: [ChartDataLabels]
             });
+            renderDemoIndexTable('ageIndexTable', demographics.age, demographicsIndex.age);
 
-            // Gender
+            // Gender - with index in legend
+            const genderLabels = Object.keys(demographics.gender);
+            const genderIndexes = genderLabels.map(k => demographicsIndex.gender?.[k] || 0);
             charts.gender = new Chart(document.getElementById('genderChart'), {
                 type: 'doughnut',
-                data: { labels: Object.keys(demographics.gender), datasets: [{ data: Object.values(demographics.gender), backgroundColor: colors }] },
+                data: { labels: genderLabels, datasets: [{ data: Object.values(demographics.gender), backgroundColor: colors }] },
                 options: { 
                     responsive: true, 
                     maintainAspectRatio: false, 
                     plugins: { 
-                        legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 9 } } },
+                        legend: { 
+                            position: 'right', 
+                            labels: { 
+                                color: '#e6f1ff', 
+                                font: { size: 9 },
+                                generateLabels: (chart) => {
+                                    const data = chart.data;
+                                    return data.labels.map((label, i) => {
+                                        const idx = genderIndexes[i] || 0;
+                                        const idxStr = idx > 0 ? ` [${idx}]` : '';
+                                        return {
+                                            text: `${label}${idxStr}`,
+                                            fillStyle: data.datasets[0].backgroundColor[i],
+                                            fontColor: idx >= 100 ? '#10b981' : (idx > 0 ? '#ef4444' : '#e6f1ff'),
+                                            index: i
+                                        };
+                                    });
+                                }
+                            } 
+                        },
                         datalabels: {
                             color: '#fff',
                             font: { size: 11, weight: 'bold' },
@@ -1572,15 +1641,36 @@
                 plugins: [ChartDataLabels]
             });
 
-            // Ethnicity
+            // Ethnicity - with index in legend
+            const ethLabels = Object.keys(demographics.ethnicity);
+            const ethIndexes = ethLabels.map(k => demographicsIndex.ethnicity?.[k] || 0);
             charts.ethnicity = new Chart(document.getElementById('ethnicityChart'), {
                 type: 'doughnut',
-                data: { labels: Object.keys(demographics.ethnicity), datasets: [{ data: Object.values(demographics.ethnicity), backgroundColor: colors }] },
+                data: { labels: ethLabels, datasets: [{ data: Object.values(demographics.ethnicity), backgroundColor: colors }] },
                 options: { 
                     responsive: true, 
                     maintainAspectRatio: false, 
                     plugins: { 
-                        legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 9 } } },
+                        legend: { 
+                            position: 'right', 
+                            labels: { 
+                                color: '#e6f1ff', 
+                                font: { size: 9 },
+                                generateLabels: (chart) => {
+                                    const data = chart.data;
+                                    return data.labels.map((label, i) => {
+                                        const idx = ethIndexes[i] || 0;
+                                        const idxStr = idx > 0 ? ` [${idx}]` : '';
+                                        return {
+                                            text: `${label}${idxStr}`,
+                                            fillStyle: data.datasets[0].backgroundColor[i],
+                                            fontColor: idx >= 100 ? '#10b981' : (idx > 0 ? '#ef4444' : '#e6f1ff'),
+                                            index: i
+                                        };
+                                    });
+                                }
+                            } 
+                        },
                         datalabels: {
                             color: '#fff',
                             font: { size: 11, weight: 'bold' },
@@ -1595,10 +1685,12 @@
                 plugins: [ChartDataLabels]
             });
 
-            // Income
+            // Income - horizontal bar with index in data labels
+            const incomeLabels = Object.keys(demographics.income);
+            const incomeIndexes = incomeLabels.map(k => demographicsIndex.income?.[k] || 0);
             charts.income = new Chart(document.getElementById('incomeChart'), {
                 type: 'bar',
-                data: { labels: Object.keys(demographics.income), datasets: [{ data: Object.values(demographics.income), backgroundColor: '#66d9ef', borderRadius: 4 }] },
+                data: { labels: incomeLabels, datasets: [{ data: Object.values(demographics.income), backgroundColor: '#66d9ef', borderRadius: 4 }] },
                 options: { 
                     responsive: true, 
                     maintainAspectRatio: false, 
@@ -1608,14 +1700,37 @@
                             color: '#fff',
                             anchor: 'end',
                             align: 'top',
-                            font: { size: 9, weight: 'bold' },
-                            formatter: (value) => value.toFixed(1) + '%'
+                            font: { size: 8, weight: 'bold' },
+                            formatter: (value, ctx) => {
+                                const idx = incomeIndexes[ctx.dataIndex] || 0;
+                                return idx > 0 ? `${value.toFixed(1)}%\n${idx}` : value.toFixed(1) + '%';
+                            }
                         }
                     }, 
                     scales: { x: { grid: { display: false }, ticks: { color: '#8892b0', font: { size: 8 }, maxRotation: 45 } }, y: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } } } 
                 },
                 plugins: [ChartDataLabels]
             });
+        }
+        
+        function renderDemoIndexTable(containerId, data, indexes) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            
+            const items = Object.entries(data).map(([label, pct]) => ({
+                label,
+                pct,
+                index: indexes?.[label] || 0
+            }));
+            
+            container.innerHTML = items.map(item => {
+                const indexColor = item.index >= 100 ? '#10b981' : '#ef4444';
+                const indexBadge = item.index > 0 ? `<span style="color: ${indexColor}; font-weight: 600;">${item.index}</span>` : '-';
+                return `<div style="display: flex; justify-content: space-between; padding: 2px 0; font-size: 0.7rem;">
+                    <span>${item.label}</span>
+                    <span>${item.pct.toFixed(1)}% ${indexBadge}</span>
+                </div>`;
+            }).join('');
         }
 
         let allBehavioralData = {};
@@ -1656,16 +1771,22 @@
         }
 
         function renderBehavioralItems(items, maxPct) {
-            return items.map((item, idx) => `
-                <div class="behavioral-item">
-                    <span class="behavioral-rank">${idx + 1}</span>
-                    <span class="behavioral-name" title="${item.name}">${item.name}</span>
-                    <div class="behavioral-bar-container">
-                        <div class="behavioral-bar" style="width: ${(item.pct / maxPct) * 100}%"></div>
+            return items.map((item, idx) => {
+                const index = item.index || 0;
+                const indexColor = index >= 100 ? '#10b981' : '#ef4444';
+                const indexBadge = index > 0 ? `<span class="behavioral-index" style="color: ${indexColor}">${index}</span>` : '';
+                return `
+                    <div class="behavioral-item">
+                        <span class="behavioral-rank">${idx + 1}</span>
+                        <span class="behavioral-name" title="${item.name}">${item.name}</span>
+                        <div class="behavioral-bar-container">
+                            <div class="behavioral-bar" style="width: ${(item.pct / maxPct) * 100}%"></div>
+                        </div>
+                        <span class="behavioral-pct">${item.pct.toFixed(2)}%</span>
+                        ${indexBadge}
                     </div>
-                    <span class="behavioral-pct">${item.pct.toFixed(2)}%</span>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         function searchInCard(catId, searchTerm) {
@@ -1687,28 +1808,34 @@
         }
 
         function renderLocationTable(locations) {
-            // Sort by percentage for "index"
-            const sorted = [...locations].sort((a, b) => b.pct - a.pct);
+            // Sort by index for ranking (higher index = over-indexes more)
+            const sorted = [...locations].sort((a, b) => b.index - a.index);
             const top = sorted.slice(0, 25);
             const bottom = sorted.slice(-25).reverse();
 
-            document.getElementById('locationList').innerHTML = top.map((loc, i) => `
-                <div class="location-row">
-                    <span>${i + 1}</span>
-                    <span>${loc.name}</span>
-                    <span>${loc.pct.toFixed(2)}%</span>
-                    <span class="index-high">${loc.index}</span>
-                </div>
-            `).join('');
+            document.getElementById('locationList').innerHTML = top.map((loc, i) => {
+                const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
+                return `
+                    <div class="location-row">
+                        <span>${i + 1}</span>
+                        <span>${loc.name}</span>
+                        <span>${loc.pct.toFixed(2)}%</span>
+                        <span style="color: ${indexColor}; font-weight: 600;">${loc.index}</span>
+                    </div>
+                `;
+            }).join('');
 
-            document.getElementById('locationListBottom').innerHTML = bottom.map((loc, i) => `
-                <div class="location-row">
-                    <span>${sorted.length - 24 + i}</span>
-                    <span>${loc.name}</span>
-                    <span>${loc.pct.toFixed(2)}%</span>
-                    <span class="index-low">${loc.index}</span>
-                </div>
-            `).join('');
+            document.getElementById('locationListBottom').innerHTML = bottom.map((loc, i) => {
+                const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
+                return `
+                    <div class="location-row">
+                        <span>${sorted.length - 24 + i}</span>
+                        <span>${loc.name}</span>
+                        <span>${loc.pct.toFixed(2)}%</span>
+                        <span style="color: ${indexColor}; font-weight: 600;">${loc.index}</span>
+                    </div>
+                `;
+            }).join('');
         }
 
         function downloadCurrentCSV() {
@@ -2151,7 +2278,8 @@
                         projectedUS: parsed.projectedUS,
                         medianAge: parsed.medianAge,
                         demographics: parsed.demographics,
-                        demographicsProjection: parsed.demographicsProjection
+                        demographicsProjection: parsed.demographicsProjection,
+                        demographicsIndex: parsed.demographicsIndex
                     });
                 } else {
                     container.innerHTML = `<div class="comparison-empty"><p>Failed to load profile: ${data.error || 'Unknown error'}</p></div>`;
@@ -2351,12 +2479,14 @@
         }
 
         function parseComparisonData(csvData) {
+            const US_POPULATION = 324700000;
             const result = {
                 sampleSize: 0,
                 projectedUS: 0,
                 medianAge: 0,
                 demographics: { age: {}, gender: {}, ethnicity: {}, income: {} },
                 demographicsProjection: { age: {}, gender: {}, ethnicity: {}, income: {} }, // Raw US projection numbers
+                demographicsIndex: { age: {}, gender: {}, ethnicity: {}, income: {} }, // Gen Pop Index
                 behavioral: {},
                 behavioralProjection: {}, // Raw projection numbers for behavioral
                 locations: [],
@@ -2374,6 +2504,10 @@
                 const rawNum = parseFloat(row['Original Raw Numbers'] || row[4] || 0);
                 const usGenPop = parseFloat(row['US Gen Pop Projection'] || row[5] || 0);
                 const pct = brandPen || catShare || 0;
+                
+                // Calculate Gen Pop % and Index
+                const genPopPct = usGenPop > 0 ? (usGenPop / US_POPULATION) * 100 : 0;
+                const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
 
                 if (category === 'SAMPLE SIZE') {
                     result.sampleSize = rawNum || catShare || brandPen || 0;
@@ -2385,22 +2519,26 @@
                     result.medianAge = brandPen || catShare || parseFloat(value) || 0;
                 }
 
-                // Demographics - store both percent and projection
+                // Demographics - store percent, projection, and index
                 if (category === 'AGE' && value && pct > 0) {
                     result.demographics.age[value] = pct;
                     result.demographicsProjection.age[value] = usGenPop || 0;
+                    result.demographicsIndex.age[value] = index;
                 }
                 if (category === 'GENDER' && value && pct > 0) {
                     result.demographics.gender[value] = pct;
                     result.demographicsProjection.gender[value] = usGenPop || 0;
+                    result.demographicsIndex.gender[value] = index;
                 }
                 if (category === 'ETHNICITY' && value && pct > 0) {
                     result.demographics.ethnicity[value] = pct;
                     result.demographicsProjection.ethnicity[value] = usGenPop || 0;
+                    result.demographicsIndex.ethnicity[value] = index;
                 }
                 if (category === 'INCOME' && value && pct > 0) {
                     result.demographics.income[value] = pct;
                     result.demographicsProjection.income[value] = usGenPop || 0;
+                    result.demographicsIndex.income[value] = index;
                 }
 
                 // Location/DMA - store both percent and projection
@@ -2520,6 +2658,7 @@
                             medianAge: parsed.medianAge,
                             demographics: parsed.demographics,
                             demographicsProjection: parsed.demographicsProjection,
+                            demographicsIndex: parsed.demographicsIndex,
                             behavioral: parsed.behavioral,
                             behavioralProjection: parsed.behavioralProjection,
                             locations: parsed.locations
@@ -3050,7 +3189,8 @@
                 return {
                     value: value,
                     pctData: profiles.map(p => p.demographics[demoType]?.[value] || 0),
-                    projData: profiles.map(p => p.demographicsProjection?.[demoType]?.[value] || 0)
+                    projData: profiles.map(p => p.demographicsProjection?.[demoType]?.[value] || 0),
+                    indexData: profiles.map(p => p.demographicsIndex?.[demoType]?.[value] || 0)
                 };
             });
 
@@ -3072,10 +3212,16 @@
                         ${profiles.map((p, i) => {
                             const pct = row.pctData[i];
                             const proj = row.projData[i];
+                            const index = row.indexData[i];
                             const maxPct = 60;
                             const displayVal = displayMode === 'projection' 
                                 ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                                 : (pct > 0 ? pct.toFixed(2) + '%' : '-');
+                            
+                            // Index color: green if >= 100, red if < 100
+                            const indexColor = index >= 100 ? '#10b981' : '#ef4444';
+                            const indexBadge = index > 0 ? `<span class="index-badge" style="color: ${indexColor};">${index}</span>` : '';
+                            
                             return `
                                 <td>
                                     <div class="comp-bar-cell">
@@ -3083,6 +3229,7 @@
                                             <div class="comp-bar-fill" style="width: ${Math.min(pct / maxPct * 100, 100)}%; background: ${p.color};"></div>
                                         </div>
                                         <span class="comp-bar-pct">${displayVal}</span>
+                                        ${indexBadge}
                                     </div>
                                 </td>
                             `;
