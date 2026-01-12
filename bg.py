@@ -761,7 +761,8 @@ def connect_snowflake():
                 warehouse=warehouse,
                 database=database,
                 schema=schema,
-                role=role
+                role=role,
+                authenticator='PROGRAMMATIC_ACCESS_TOKEN'
             )
             if not SILENCE_VERBOSE_OUTPUT:
                 print("✅ Connected using programmatic access token")
@@ -772,7 +773,7 @@ def connect_snowflake():
             print(f"⚠️ Token authentication failed: {token_error}")
             print("🔄 Falling back to password authentication...")
         if not password:
-            raise ValueError("SNOWFLAKE_PASSWORD must be set as environment variable")
+            raise ValueError(f"Token auth failed ({token_error}) and SNOWFLAKE_PASSWORD not set")
         conn = snowflake.connector.connect(
             user=user,
             password=password,
