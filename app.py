@@ -513,10 +513,16 @@ def submit_analysis():
         
         # Parse dates
         try:
-            start_date = datetime.strptime(data['start_date'], '%Y-%m-%d').strftime('%Y-%m-%d')
-            end_date = datetime.strptime(data['end_date'], '%Y-%m-%d').strftime('%Y-%m-%d')
-            behavior_start = datetime.strptime(data.get('behavior_start', data['start_date']), '%Y-%m-%d').strftime('%Y-%m-%d')
-            behavior_end = datetime.strptime(data.get('behavior_end', data['end_date']), '%Y-%m-%d').strftime('%Y-%m-%d')
+            # Support both old format (start_date/end_date) and new format (sample_start/sample_end)
+            start_date = data.get('sample_start') or data.get('start_date')
+            end_date = data.get('sample_end') or data.get('end_date')
+            behavior_start = data.get('behavior_start') or start_date
+            behavior_end = data.get('behavior_end') or end_date
+            
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').strftime('%Y-%m-%d')
+            end_date = datetime.strptime(end_date, '%Y-%m-%d').strftime('%Y-%m-%d')
+            behavior_start = datetime.strptime(behavior_start, '%Y-%m-%d').strftime('%Y-%m-%d')
+            behavior_end = datetime.strptime(behavior_end, '%Y-%m-%d').strftime('%Y-%m-%d')
         except ValueError:
             return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
         
@@ -542,20 +548,24 @@ def submit_analysis():
             except:
                 pass
         
-        # Demographic filters
-        filters = {}
-        for demo_field in ['gender', 'age', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status']:
-            if data.get(demo_field):
-                filters[demo_field.upper()] = [data[demo_field]]
+        # Demographic filters - support both object format and individual fields
+        filters = data.get('filters', {})
+        if not filters:
+            filters = {}
+            for demo_field in ['gender', 'age', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status']:
+                if data.get(demo_field):
+                    filters[demo_field.upper()] = [data[demo_field]]
         
-        # Skew settings
-        skew_settings = {}
-        if data.get('enable_skew', False) and data.get('skew_category') and data.get('skew_target'):
-            targets = [t.strip() for t in data['skew_target'].split(',')]
-            skew_settings[data['skew_category']] = {
-                'target': targets,
-                'strength': data.get('skew_strength', 'medium')
-            }
+        # Skew settings - support both object format and individual fields
+        skew_settings = data.get('skew_settings', {})
+        if not skew_settings:
+            skew_settings = {}
+            if data.get('enable_skew', False) and data.get('skew_category') and data.get('skew_target'):
+                targets = [t.strip() for t in data['skew_target'].split(',')]
+                skew_settings[data['skew_category']] = {
+                    'target': targets,
+                    'strength': data.get('skew_strength', 'medium')
+                }
         
         # Initialize job with simpler status tracking
         jobs[job_id] = {

@@ -947,15 +947,44 @@
                         </div>
 
                         <div class="form-section">
-                            <div class="form-section-title">Date Range</div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>Start Date</label>
-                                    <input type="date" id="start_date" required>
+                            <div class="form-section-title">Date Ranges</div>
+                            <div class="form-row" style="margin-bottom: 0.5rem;">
+                                <label class="checkbox-group"><input type="checkbox" id="same_dates" checked onchange="toggleDateFields()"><span>Same dates for Sample & Behavior</span></label>
+                            </div>
+                            <div id="singleDateRange">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Start Date</label>
+                                        <input type="date" id="start_date" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>End Date</label>
+                                        <input type="date" id="end_date" required>
+                                    </div>
                                 </div>
-                                <div class="form-group">
-                                    <label>End Date</label>
-                                    <input type="date" id="end_date" required>
+                            </div>
+                            <div id="separateDateRanges" style="display: none;">
+                                <div style="font-size: 0.7rem; color: var(--accent-cyan); margin-bottom: 0.5rem;">Sample Group Dates</div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Sample Start</label>
+                                        <input type="date" id="sample_start_date">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Sample End</label>
+                                        <input type="date" id="sample_end_date">
+                                    </div>
+                                </div>
+                                <div style="font-size: 0.7rem; color: var(--accent-cyan); margin: 0.5rem 0;">Behavior Study Dates</div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Behavior Start</label>
+                                        <input type="date" id="behavior_start_date">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Behavior End</label>
+                                        <input type="date" id="behavior_end_date">
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -968,7 +997,7 @@
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Gender</label>
-                                        <select id="gender"><option value="">All</option><option>Female</option><option>Male</option><option>Non-binary</option></select>
+                                        <select id="gender"><option value="">All</option><option>Female</option><option>Male</option><option>Trans Male</option><option>Trans Female</option><option>Non-binary</option></select>
                                     </div>
                                     <div class="form-group">
                                         <label>Age</label>
@@ -983,6 +1012,55 @@
                                     <div class="form-group">
                                         <label>Income</label>
                                         <select id="income"><option value="">All</option><option>$40K - $60K</option><option>$60K - $75K</option><option>$75K - $100K</option><option>$100K - $150K</option><option>$150K - $250K</option><option>$250K+</option></select>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Education</label>
+                                        <select id="education"><option value="">All</option><option>Complete College/University</option><option>Completed HS only</option><option>Completed Grad School</option><option>None</option></select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Relationship</label>
+                                        <select id="relationship"><option value="">All</option><option>Single</option><option>In a Relationship</option><option>Married</option><option>Divorced</option><option>Other</option></select>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Sexual Orientation</label>
+                                        <select id="sexual_orientation"><option value="">All</option><option>Yes</option><option>No</option><option>Prefer not to say</option></select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Parental Status</label>
+                                        <select id="parental_status"><option value="">All</option><option>Doesn't have Kids</option><option>Has Kids</option><option>Other</option></select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="collapsible">
+                            <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                                <span>🎛️ Demographic Safety Checks (Skew)</span><span>▼</span>
+                            </div>
+                            <div class="collapsible-content">
+                                <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Boost specific demographic values to ensure they're represented higher.</p>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Skew Gender</label>
+                                        <select id="skew_gender"><option value="">None</option><option>Female</option><option>Male</option><option>Non-binary</option></select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Skew Age</label>
+                                        <select id="skew_age"><option value="">None</option><option>&lt;16</option><option>16-18</option><option>18-20</option><option>21-25</option><option>26-30</option><option>31-40</option><option>41-59</option><option>60+</option></select>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Skew Ethnicity</label>
+                                        <select id="skew_ethnicity"><option value="">None</option><option>White</option><option>Black</option><option>LatinX</option><option>Asian</option><option>Other</option></select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Skew Strength</label>
+                                        <select id="skew_strength"><option value="medium">Medium</option><option value="small">Small</option><option value="large">Large</option></select>
                                     </div>
                                 </div>
                             </div>
@@ -1302,6 +1380,16 @@
             header.querySelector('span:last-child').textContent = content.classList.contains('open') ? '▲' : '▼';
         }
 
+        function toggleDateFields() {
+            const sameDates = document.getElementById('same_dates').checked;
+            document.getElementById('singleDateRange').style.display = sameDates ? 'block' : 'none';
+            document.getElementById('separateDateRanges').style.display = sameDates ? 'none' : 'block';
+            
+            // Update required fields
+            document.getElementById('start_date').required = sameDates;
+            document.getElementById('end_date').required = sameDates;
+        }
+
         // Form submission
         document.getElementById('analysisForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -1351,20 +1439,55 @@
         }
 
         async function submitNewAnalysis() {
+            const sameDates = document.getElementById('same_dates').checked;
+            
+            // Get dates based on same/different dates selection
+            let sampleStart, sampleEnd, behaviorStart, behaviorEnd;
+            if (sameDates) {
+                sampleStart = document.getElementById('start_date').value;
+                sampleEnd = document.getElementById('end_date').value;
+                behaviorStart = sampleStart;
+                behaviorEnd = sampleEnd;
+            } else {
+                sampleStart = document.getElementById('sample_start_date').value;
+                sampleEnd = document.getElementById('sample_end_date').value;
+                behaviorStart = document.getElementById('behavior_start_date').value;
+                behaviorEnd = document.getElementById('behavior_end_date').value;
+            }
+
+            // Build filters object
+            const filters = {};
+            const filterFields = ['gender', 'age', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status'];
+            filterFields.forEach(field => {
+                const value = document.getElementById(field)?.value;
+                if (value) filters[field.toUpperCase()] = [value];
+            });
+
+            // Build skew settings
+            const skewSettings = {};
+            const skewStrength = document.getElementById('skew_strength').value;
+            ['gender', 'age', 'ethnicity'].forEach(field => {
+                const value = document.getElementById('skew_' + field)?.value;
+                if (value) {
+                    skewSettings[field.toUpperCase()] = {
+                        target: [value],
+                        strength: skewStrength
+                    };
+                }
+            });
+
             const formData = {
                 project_name: document.getElementById('project_name').value,
                 brands: document.getElementById('brands').value,
                 brand_category: document.getElementById('brand_category').value || 'GENERAL',
                 is_genpop: document.getElementById('is_genpop').checked,
                 purchasers_only: document.getElementById('purchasers_only').checked,
-                start_date: document.getElementById('start_date').value,
-                end_date: document.getElementById('end_date').value,
-                behavior_start: document.getElementById('start_date').value,
-                behavior_end: document.getElementById('end_date').value,
-                gender: document.getElementById('gender').value,
-                age: document.getElementById('age').value,
-                ethnicity: document.getElementById('ethnicity').value,
-                income: document.getElementById('income').value
+                sample_start: sampleStart,
+                sample_end: sampleEnd,
+                behavior_start: behaviorStart,
+                behavior_end: behaviorEnd,
+                filters: filters,
+                skew_settings: skewSettings
             };
 
             try {
