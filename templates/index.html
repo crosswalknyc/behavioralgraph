@@ -676,6 +676,31 @@
             text-align: right;
             font-size: 0.75rem;
         }
+
+        .comp-table th.sortable {
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }
+
+        .comp-table th.sortable:hover {
+            background: var(--bg-input);
+        }
+
+        .comp-table th.sortable.sorted {
+            background: rgba(90, 154, 217, 0.3);
+        }
+
+        .comp-table th.sortable::after {
+            content: ' ↕';
+            opacity: 0.4;
+            font-size: 0.7rem;
+        }
+
+        .comp-table th.sortable.sorted::after {
+            content: ' ↓';
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -1890,17 +1915,27 @@
             }
 
             console.log('Rendering comparison with', profilesData.length, 'profiles:', profilesData.map(p => p.name));
+            // Store globally for sorting
+            window.comparisonProfilesData = profilesData;
             renderComparison(profilesData);
         }
 
-        // Auto-run comparison when profiles are selected
-        function autoRunComparisonIfNeeded() {
-            // Update the display to show how many are selected
-            const countEl = document.querySelector('.comp-selected-count');
-            if (countEl) countEl.textContent = `${selectedForComparison.size} selected`;
+        // Sorting state
+        let currentSortColumn = null;
+        let currentSortSection = null;
+
+        function sortComparisonTable(section, profileIndex) {
+            const profiles = window.comparisonProfilesData;
+            if (!profiles || profiles.length === 0) return;
+
+            currentSortColumn = profileIndex;
+            currentSortSection = section;
+            
+            // Re-render the comparison with sorting applied
+            renderComparison(profiles, section, profileIndex);
         }
 
-        function renderComparison(profiles) {
+        function renderComparison(profiles, sortSection = null, sortProfileIdx = null) {
             const container = document.getElementById('comparisonResults');
 
             // Collect all behavioral categories across all profiles
@@ -1908,6 +1943,12 @@
             profiles.forEach(p => {
                 Object.keys(p.behavioral || {}).forEach(cat => allBehavioralCats.add(cat));
             });
+
+            // Helper to create sortable header
+            const sortableHeader = (section, idx, name, color) => {
+                const isSorted = sortSection === section && sortProfileIdx === idx;
+                return `<th class="sortable ${isSorted ? 'sorted' : ''}" style="border-bottom: 3px solid ${color}" onclick="sortComparisonTable('${section}', ${idx})">${name}</th>`;
+            };
 
             let html = `
                 <!-- Summary Data -->
@@ -1944,11 +1985,11 @@
                         <thead>
                             <tr>
                                 <th>Gender ↓</th>
-                                ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
+                                ${profiles.map((p, i) => sortableHeader('gender', i, p.name, p.color)).join('')}
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'gender')}
+                            ${renderDemoComparisonRows(profiles, 'gender', sortSection === 'gender' ? sortProfileIdx : null)}
                         </tbody>
                     </table>
                 </div>
@@ -1960,11 +2001,11 @@
                         <thead>
                             <tr>
                                 <th>Age</th>
-                                ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
+                                ${profiles.map((p, i) => sortableHeader('age', i, p.name, p.color)).join('')}
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'age')}
+                            ${renderDemoComparisonRows(profiles, 'age', sortSection === 'age' ? sortProfileIdx : null)}
                         </tbody>
                     </table>
                 </div>
@@ -1976,11 +2017,11 @@
                         <thead>
                             <tr>
                                 <th>Ethnicity</th>
-                                ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
+                                ${profiles.map((p, i) => sortableHeader('ethnicity', i, p.name, p.color)).join('')}
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'ethnicity')}
+                            ${renderDemoComparisonRows(profiles, 'ethnicity', sortSection === 'ethnicity' ? sortProfileIdx : null)}
                         </tbody>
                     </table>
                 </div>
@@ -1992,11 +2033,11 @@
                         <thead>
                             <tr>
                                 <th>Income</th>
-                                ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
+                                ${profiles.map((p, i) => sortableHeader('income', i, p.name, p.color)).join('')}
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'income')}
+                            ${renderDemoComparisonRows(profiles, 'income', sortSection === 'income' ? sortProfileIdx : null)}
                         </tbody>
                     </table>
                 </div>
@@ -2005,6 +2046,7 @@
             // Add behavioral categories
             const sortedBehavioralCats = Array.from(allBehavioralCats).sort();
             sortedBehavioralCats.forEach(cat => {
+                const catKey = cat.replace(/[^a-zA-Z0-9]/g, '_');
                 html += `
                     <div class="comp-section">
                         <div class="comp-section-title">${cat} (Top 10)</div>
@@ -2012,11 +2054,11 @@
                             <thead>
                                 <tr>
                                     <th>${cat}</th>
-                                    ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
+                                    ${profiles.map((p, i) => sortableHeader('beh_' + catKey, i, p.name, p.color)).join('')}
                                 </tr>
                             </thead>
                             <tbody>
-                                ${renderBehavioralComparisonRows(profiles, cat)}
+                                ${renderBehavioralComparisonRows(profiles, cat, sortSection === 'beh_' + catKey ? sortProfileIdx : null)}
                             </tbody>
                         </table>
                     </div>
@@ -2033,11 +2075,11 @@
                             <thead>
                                 <tr>
                                     <th>Location</th>
-                                    ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
+                                    ${profiles.map((p, i) => sortableHeader('location', i, p.name, p.color)).join('')}
                                 </tr>
                             </thead>
                             <tbody>
-                                ${renderLocationComparisonRows(profiles)}
+                                ${renderLocationComparisonRows(profiles, sortSection === 'location' ? sortProfileIdx : null)}
                             </tbody>
                         </table>
                     </div>
@@ -2047,29 +2089,44 @@
             container.innerHTML = html;
         }
 
-        function renderBehavioralComparisonRows(profiles, category) {
-            // Get top 10 values across all profiles for this category
+        function renderBehavioralComparisonRows(profiles, category, sortByProfileIdx = null) {
+            // Get all values across all profiles for this category
             const allValues = new Map();
             profiles.forEach(p => {
                 (p.behavioral[category] || []).forEach(item => {
-                    if (!allValues.has(item.name) || allValues.get(item.name) < item.pct) {
-                        allValues.set(item.name, item.pct);
+                    if (!allValues.has(item.name)) {
+                        allValues.set(item.name, {});
                     }
                 });
             });
 
-            // Sort by max percentage and take top 10
-            const sortedValues = Array.from(allValues.entries())
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10)
-                .map(([name]) => name);
-
-            return sortedValues.map(value => `
-                <tr>
-                    <td>${value}</td>
-                    ${profiles.map(p => {
+            // Build data rows
+            let dataRows = Array.from(allValues.keys()).map(value => {
+                return {
+                    value: value,
+                    data: profiles.map(p => {
                         const item = (p.behavioral[category] || []).find(i => i.name === value);
-                        const pct = item ? item.pct : 0;
+                        return item ? item.pct : 0;
+                    })
+                };
+            });
+
+            // Sort by selected profile column, or by max value across all profiles
+            if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
+                dataRows.sort((a, b) => b.data[sortByProfileIdx] - a.data[sortByProfileIdx]);
+            } else {
+                // Default: sort by max value across all profiles
+                dataRows.sort((a, b) => Math.max(...b.data) - Math.max(...a.data));
+            }
+
+            // Take top 15
+            dataRows = dataRows.slice(0, 15);
+
+            return dataRows.map(row => `
+                <tr>
+                    <td>${row.value}</td>
+                    ${profiles.map((p, i) => {
+                        const pct = row.data[i];
                         return `
                             <td>
                                 <div class="comp-bar-cell">
@@ -2085,28 +2142,39 @@
             `).join('');
         }
 
-        function renderLocationComparisonRows(profiles) {
-            // Get top 15 locations across all profiles
-            const allLocations = new Map();
+        function renderLocationComparisonRows(profiles, sortByProfileIdx = null) {
+            // Get all locations across all profiles
+            const allLocations = new Set();
             profiles.forEach(p => {
-                (p.locations || []).forEach(loc => {
-                    if (!allLocations.has(loc.name) || allLocations.get(loc.name) < loc.pct) {
-                        allLocations.set(loc.name, loc.pct);
-                    }
-                });
+                (p.locations || []).forEach(loc => allLocations.add(loc.name));
             });
 
-            const sortedLocations = Array.from(allLocations.entries())
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 15)
-                .map(([name]) => name);
-
-            return sortedLocations.map(locName => `
-                <tr>
-                    <td>${locName}</td>
-                    ${profiles.map(p => {
+            // Build data rows
+            let dataRows = Array.from(allLocations).map(locName => {
+                return {
+                    value: locName,
+                    data: profiles.map(p => {
                         const loc = (p.locations || []).find(l => l.name === locName);
-                        const pct = loc ? loc.pct : 0;
+                        return loc ? loc.pct : 0;
+                    })
+                };
+            });
+
+            // Sort by selected profile column, or by max value
+            if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
+                dataRows.sort((a, b) => b.data[sortByProfileIdx] - a.data[sortByProfileIdx]);
+            } else {
+                dataRows.sort((a, b) => Math.max(...b.data) - Math.max(...a.data));
+            }
+
+            // Take top 15
+            dataRows = dataRows.slice(0, 15);
+
+            return dataRows.map(row => `
+                <tr>
+                    <td>${row.value}</td>
+                    ${profiles.map((p, i) => {
+                        const pct = row.data[i];
                         return `
                             <td>
                                 <div class="comp-bar-cell">
@@ -2122,30 +2190,39 @@
             `).join('');
         }
 
-        function renderDemoComparisonRows(profiles, demoType) {
+        function renderDemoComparisonRows(profiles, demoType, sortByProfileIdx = null) {
             // Get all unique values across all profiles
             const allValues = new Set();
             profiles.forEach(p => {
                 Object.keys(p.demographics[demoType] || {}).forEach(v => allValues.add(v));
             });
 
-            // Sort values appropriately
-            let sortedValues = Array.from(allValues);
-            if (demoType === 'age') {
-                sortedValues.sort((a, b) => {
-                    const numA = parseInt(a.replace(/[^0-9]/g, '')) || 0;
-                    const numB = parseInt(b.replace(/[^0-9]/g, '')) || 0;
+            // Build data array with values for sorting
+            let dataRows = Array.from(allValues).map(value => {
+                return {
+                    value: value,
+                    data: profiles.map(p => p.demographics[demoType]?.[value] || 0)
+                };
+            });
+
+            // Sort by selected profile column, or default sort
+            if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
+                dataRows.sort((a, b) => b.data[sortByProfileIdx] - a.data[sortByProfileIdx]);
+            } else if (demoType === 'age') {
+                dataRows.sort((a, b) => {
+                    const numA = parseInt(a.value.replace(/[^0-9]/g, '')) || 0;
+                    const numB = parseInt(b.value.replace(/[^0-9]/g, '')) || 0;
                     return numA - numB;
                 });
             }
 
-            return sortedValues.map(value => {
+            return dataRows.map(row => {
                 return `
                     <tr>
-                        <td>${value.toUpperCase()}</td>
-                        ${profiles.map(p => {
-                            const pct = p.demographics[demoType]?.[value] || 0;
-                            const maxPct = 60; // Scale bars to this max
+                        <td>${row.value.toUpperCase()}</td>
+                        ${profiles.map((p, i) => {
+                            const pct = row.data[i];
+                            const maxPct = 60;
                             return `
                                 <td>
                                     <div class="comp-bar-cell">
