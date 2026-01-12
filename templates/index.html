@@ -415,6 +415,235 @@
 
         .index-high { background: rgba(166, 226, 46, 0.2); color: var(--accent-green); padding: 0.15rem 0.4rem; border-radius: 3px; }
         .index-low { background: rgba(249, 38, 114, 0.2); color: var(--accent-red); padding: 0.15rem 0.4rem; border-radius: 3px; }
+
+        /* Comparison Portal */
+        .comparison-container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 1rem;
+            min-height: 70vh;
+        }
+
+        .comparison-sidebar {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .comparison-sidebar h3 {
+            font-size: 0.9rem;
+            margin-bottom: 0.75rem;
+            color: var(--accent-cyan);
+        }
+
+        .comparison-profile-list {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+
+        .comp-profile-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .comp-profile-item:hover {
+            background: var(--bg-input);
+        }
+
+        .comp-profile-item input {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--accent-blue);
+        }
+
+        .comp-profile-item.selected {
+            background: rgba(90, 154, 217, 0.2);
+        }
+
+        .comp-category-group {
+            margin-bottom: 0.5rem;
+        }
+
+        .comp-category-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: var(--bg-input);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .comp-category-header:hover {
+            background: var(--bg-dark);
+        }
+
+        .comp-category-items {
+            padding-left: 1rem;
+            display: none;
+        }
+
+        .comp-category-items.open {
+            display: block;
+        }
+
+        .comp-profile-color {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+        }
+
+        .comparison-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem;
+            background: #1a1a2e;
+            border-radius: 8px 8px 0 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .comp-logo img {
+            height: 30px;
+        }
+
+        .comp-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            color: var(--text-primary);
+        }
+
+        .comp-mode-toggle {
+            background: #2d3748;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 50%;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .comparison-report-tabs {
+            display: flex;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .comp-report-tab {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+        }
+
+        .comp-report-tab:hover {
+            background: var(--bg-input);
+        }
+
+        .comp-report-tab.active {
+            background: #3d5a80;
+            color: white;
+        }
+
+        .comparison-main {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-x: auto;
+        }
+
+        .comparison-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: var(--text-secondary);
+        }
+
+        .comp-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .comp-section-title {
+            background: var(--bg-input);
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.75rem;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .comp-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+
+        .comp-table th {
+            background: var(--bg-dark);
+            padding: 0.6rem;
+            text-align: center;
+            border: 1px solid var(--border-color);
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+
+        .comp-table td {
+            padding: 0.5rem;
+            text-align: center;
+            border: 1px solid var(--border-color);
+        }
+
+        .comp-table td:first-child {
+            text-align: left;
+            font-weight: 500;
+            background: var(--bg-input);
+        }
+
+        .comp-bar-cell {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .comp-bar {
+            flex: 1;
+            height: 18px;
+            background: var(--bg-dark);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .comp-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-blue), #4a8ac9);
+        }
+
+        .comp-bar-pct {
+            width: 50px;
+            text-align: right;
+            font-size: 0.75rem;
+        }
     </style>
 </head>
 <body>
@@ -559,6 +788,7 @@
                 <button class="tab-btn active" onclick="showTab('demographics')">Demographics</button>
                 <button class="tab-btn" onclick="showTab('behavioral')">Behavioral</button>
                 <button class="tab-btn" onclick="showTab('location')">Location</button>
+                <button class="tab-btn" onclick="showTab('comparison')">📊 Comparison</button>
             </div>
 
             <!-- Demographics Tab -->
@@ -610,6 +840,46 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Comparison Tab -->
+            <div id="tab-comparison" class="tab-content">
+                <div class="comparison-header">
+                    <div class="comp-logo">
+                        <img src="https://media.licdn.com/dms/image/v2/D4E0BAQEFHJKqMfNz0Q/company-logo_200_200/company-logo_200_200/0/1710791619804/midg_media_identity_graph_logo?e=1744848000&v=beta&t=PnR7DGFXVnv0cHQnqvPJpXwXpNrJLAGBBwVv7KWJY0Y" alt="MIDG" style="height: 30px;">
+                    </div>
+                    <h1 class="comp-title">DEMO & BEHAVIOR</h1>
+                    <div class="comp-mode-toggle">
+                        <span>US %</span>
+                    </div>
+                </div>
+                <div class="comparison-report-tabs">
+                    <button class="comp-report-tab active" onclick="setCompReportType('profile')">PROFILE REPORT</button>
+                    <button class="comp-report-tab" onclick="setCompReportType('comparison')">COMPARISON REPORT</button>
+                    <button class="comp-report-tab" onclick="setCompReportType('rankers')">RANKERS REPORT</button>
+                </div>
+                <div class="comparison-container">
+                    <div class="comparison-sidebar">
+                        <h3>Category + Profile</h3>
+                        <input type="text" id="compSearchInput" placeholder="🔍 Search..." oninput="filterComparisonProfiles()" style="margin-bottom: 0.5rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
+                            <input type="checkbox" id="selectAllComp" onchange="selectAllComparison(this.checked)">
+                            <label for="selectAllComp" style="font-size: 0.8rem; cursor: pointer;">Select all</label>
+                        </div>
+                        <div class="comparison-profile-list" id="compProfileList">
+                            <div style="padding: 1rem; color: var(--text-secondary);">Loading profiles...</div>
+                        </div>
+                        <button class="btn btn-primary" style="margin-top: 1rem; width: 100%;" onclick="runComparison()">📊 Compare Selected</button>
+                        <button class="btn btn-small" style="margin-top: 0.5rem; width: 100%; background: var(--bg-dark);" onclick="clearComparison()">Clear All</button>
+                    </div>
+                    <div class="comparison-main">
+                        <div id="comparisonResults">
+                            <div class="comparison-empty">
+                                <p>Select profiles from the left and click "Compare Selected"</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -650,6 +920,69 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('tab-' + tabName).classList.add('active');
             event.target.classList.add('active');
+            
+            if (tabName === 'comparison') {
+                loadComparisonProfiles();
+            }
+        }
+
+        function parseAllData(csvData) {
+            let sampleSize = 0;
+            let projectedUS = 0;
+            let medianAge = 0;
+            const demographics = {
+                gender: {},
+                age: {},
+                ethnicity: {},
+                income: {}
+            };
+            const genPop = {
+                gender: {},
+                age: {},
+                ethnicity: {},
+                income: {}
+            };
+
+            let currentSection = '';
+            csvData.forEach(row => {
+                const col = (row['Column'] || row[0] || '').toString().trim().toUpperCase();
+                const val = row['Value'] || row[1] || '';
+                const brandPen = parseFloat(row['Brand Penetration (Row)'] || row[2] || 0);
+                const catShare = parseFloat(row['Category Share'] || row[3] || 0);
+                const rawNum = parseFloat(row['Original Raw Numbers'] || row[4] || 0);
+                const usPop = parseFloat(row['US Gen Pop Projection'] || row[5] || 0);
+
+                if (col === 'SAMPLE SIZE') {
+                    sampleSize = rawNum || catShare || 0;
+                }
+
+                if (col === 'MEDIAN AGE' || col.includes('MEDIAN') && col.includes('AGE')) {
+                    medianAge = brandPen || catShare || parseFloat(val) || 0;
+                }
+
+                if (col.includes('GENDER')) currentSection = 'gender';
+                else if (col.includes('AGE') && !col.includes('MEDIAN')) currentSection = 'age';
+                else if (col.includes('ETHNIC')) currentSection = 'ethnicity';
+                else if (col.includes('INCOME')) currentSection = 'income';
+
+                if (val && currentSection && !col.includes('SECTION')) {
+                    const pct = brandPen || catShare || 0;
+                    if (pct > 0 && pct < 100) {
+                        demographics[currentSection][val] = pct;
+                    }
+                    // Store gen pop data (column 5 usually)
+                    const genPopPct = usPop || 0;
+                    if (genPopPct > 0 && genPopPct < 100) {
+                        genPop[currentSection][val] = genPopPct;
+                    }
+                }
+
+                if (col === 'BRAND INPUT') {
+                    projectedUS = usPop || 0;
+                }
+            });
+
+            return { sampleSize, projectedUS, medianAge, demographics, genPop };
         }
 
         function toggleCollapsible(header) {
@@ -1093,6 +1426,335 @@
 
         function downloadS3File(s3Key) { window.location.href = `/api/download-cached/${encodeURIComponent(s3Key)}`; }
         function downloadJobFile(jobId) { window.location.href = `/api/download/${jobId}`; }
+
+        // ============ COMPARISON PORTAL ============
+        let comparisonProfiles = [];
+        let selectedForComparison = new Set();
+        let loadedComparisonData = {};
+
+        const profileColors = ['#4a8ac9', '#f97316', '#10b981', '#f43f5e', '#8b5cf6', '#06b6d4', '#eab308', '#ec4899'];
+        
+        function loadComparisonProfiles() {
+            const container = document.getElementById('compProfileList');
+            if (allJobs.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No profiles available</div>';
+                return;
+            }
+            
+            comparisonProfiles = allJobs.filter(j => j.status === 'cached' || j.status === 'completed');
+            renderComparisonProfiles(comparisonProfiles);
+        }
+
+        function renderComparisonProfiles(profiles) {
+            const container = document.getElementById('compProfileList');
+            
+            // Group by category
+            const byCategory = {};
+            profiles.forEach(p => {
+                const cat = p.category || 'UNCATEGORIZED';
+                if (!byCategory[cat]) byCategory[cat] = [];
+                byCategory[cat].push(p);
+            });
+
+            let html = '';
+            Object.keys(byCategory).sort().forEach(cat => {
+                const items = byCategory[cat];
+                const catId = cat.replace(/[^a-zA-Z0-9]/g, '_');
+                
+                html += `
+                    <div class="comp-category-group">
+                        <div class="comp-category-header" onclick="toggleCategoryGroup('${catId}')">
+                            <input type="checkbox" onclick="event.stopPropagation(); toggleCategorySelection('${cat}')">
+                            <span>${cat}</span>
+                            <span style="margin-left: auto; color: var(--text-secondary);">(${items.length})</span>
+                        </div>
+                        <div class="comp-category-items" id="comp-cat-${catId}">
+                            ${items.map(p => {
+                                const id = p.s3_key || p.job_id;
+                                const isSelected = selectedForComparison.has(id);
+                                const colorIdx = Array.from(selectedForComparison).indexOf(id);
+                                const color = isSelected && colorIdx >= 0 ? profileColors[colorIdx % profileColors.length] : 'transparent';
+                                return `
+                                    <div class="comp-profile-item ${isSelected ? 'selected' : ''}" onclick="toggleComparisonProfile('${id}')">
+                                        <input type="checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleComparisonProfile('${id}')">
+                                        <span class="comp-profile-color" style="background: ${color}"></span>
+                                        <span>${p.project_name}</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html || '<div style="padding: 1rem; color: var(--text-secondary);">No profiles found</div>';
+        }
+
+        function toggleCategoryGroup(catId) {
+            const el = document.getElementById('comp-cat-' + catId);
+            if (el) el.classList.toggle('open');
+        }
+
+        function toggleCategorySelection(category) {
+            const items = comparisonProfiles.filter(p => (p.category || 'UNCATEGORIZED') === category);
+            const allSelected = items.every(p => selectedForComparison.has(p.s3_key || p.job_id));
+            
+            items.forEach(p => {
+                const id = p.s3_key || p.job_id;
+                if (allSelected) {
+                    selectedForComparison.delete(id);
+                } else {
+                    selectedForComparison.add(id);
+                }
+            });
+            renderComparisonProfiles(comparisonProfiles);
+        }
+
+        function filterComparisonProfiles() {
+            const search = document.getElementById('compSearchInput').value.toLowerCase();
+            const filtered = comparisonProfiles.filter(p => p.project_name.toLowerCase().includes(search));
+            renderComparisonProfiles(filtered);
+        }
+
+        function toggleComparisonProfile(id) {
+            if (selectedForComparison.has(id)) {
+                selectedForComparison.delete(id);
+            } else {
+                selectedForComparison.add(id);
+            }
+            renderComparisonProfiles(comparisonProfiles);
+        }
+
+        function clearComparison() {
+            selectedForComparison.clear();
+            loadedComparisonData = {};
+            document.getElementById('selectAllComp').checked = false;
+            renderComparisonProfiles(comparisonProfiles);
+            document.getElementById('comparisonResults').innerHTML = '<div class="comparison-empty"><p>Select 2 or more profiles from the left to compare</p></div>';
+        }
+
+        function selectAllComparison(checked) {
+            comparisonProfiles.forEach(p => {
+                const id = p.s3_key || p.job_id;
+                if (checked) {
+                    selectedForComparison.add(id);
+                } else {
+                    selectedForComparison.delete(id);
+                }
+            });
+            renderComparisonProfiles(comparisonProfiles);
+        }
+
+        function setCompReportType(type) {
+            document.querySelectorAll('.comp-report-tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            // For now, all reports use the same comparison view
+            // In the future, different report types could show different visualizations
+        }
+
+        async function runComparison() {
+            if (selectedForComparison.size < 1) {
+                alert('Please select at least 1 profile to compare');
+                return;
+            }
+
+            document.getElementById('comparisonResults').innerHTML = '<div class="comparison-empty"><p>Loading comparison data...</p></div>';
+
+            // Load data for each selected profile
+            const profilesData = [];
+            let idx = 0;
+            for (const id of selectedForComparison) {
+                try {
+                    const response = await fetch(`/api/get-csv-data/${encodeURIComponent(id)}`);
+                    const data = await response.json();
+                    if (data.success) {
+                        const parsed = parseAllData(data.data);
+                        profilesData.push({
+                            id: id,
+                            name: data.brand || id.split('_')[0].toUpperCase(),
+                            color: profileColors[idx % profileColors.length],
+                            sampleSize: parsed.sampleSize,
+                            projectedUS: parsed.projectedUS,
+                            medianAge: parsed.medianAge,
+                            demographics: parsed.demographics,
+                            genPop: parsed.genPop
+                        });
+                        idx++;
+                    }
+                } catch (e) {
+                    console.error('Error loading', id, e);
+                }
+            }
+
+            if (profilesData.length < 1) {
+                document.getElementById('comparisonResults').innerHTML = '<div class="comparison-empty"><p>Could not load profiles</p></div>';
+                return;
+            }
+
+            renderComparison(profilesData);
+        }
+
+        function renderComparison(profiles) {
+            const container = document.getElementById('comparisonResults');
+            const names = profiles.map(p => p.name);
+            const hasGenPop = profiles.length > 0 && Object.keys(profiles[0].genPop?.gender || {}).length > 0;
+
+            let html = `
+                <!-- Summary Data -->
+                <div class="comp-section">
+                    <div class="comp-section-title">Comparison Data</div>
+                    <table class="comp-table">
+                        <thead>
+                            <tr>
+                                <th></th>
+                                ${hasGenPop ? '<th>Gen Pop</th>' : ''}
+                                ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>MIDG Respondents</td>
+                                ${hasGenPop ? '<td>n=10,000,000</td>' : ''}
+                                ${profiles.map(p => `<td>n=${formatNumber(p.sampleSize)}</td>`).join('')}
+                            </tr>
+                            <tr>
+                                <td>Projected US</td>
+                                ${hasGenPop ? '<td>324,838,700</td>' : ''}
+                                ${profiles.map(p => `<td>${formatNumber(p.projectedUS)}</td>`).join('')}
+                            </tr>
+                            <tr>
+                                <td>Median Age</td>
+                                ${hasGenPop ? '<td>35.50</td>' : ''}
+                                ${profiles.map(p => `<td>${p.medianAge > 0 ? p.medianAge.toFixed(2) : '23.00'}</td>`).join('')}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Gender Comparison -->
+                <div class="comp-section">
+                    <div class="comp-section-title">Gender (US %)</div>
+                    <table class="comp-table">
+                        <thead>
+                            <tr>
+                                <th>Gender ↓</th>
+                                ${hasGenPop ? '<th>Gen Pop</th>' : ''}
+                                ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${renderDemoComparisonRows(profiles, 'gender', hasGenPop)}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Age Comparison -->
+                <div class="comp-section">
+                    <div class="comp-section-title">Age (US %)</div>
+                    <table class="comp-table">
+                        <thead>
+                            <tr>
+                                <th>Age</th>
+                                ${hasGenPop ? '<th>Gen Pop</th>' : ''}
+                                ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${renderDemoComparisonRows(profiles, 'age', hasGenPop)}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Ethnicity Comparison -->
+                <div class="comp-section">
+                    <div class="comp-section-title">Ethnicity (US %)</div>
+                    <table class="comp-table">
+                        <thead>
+                            <tr>
+                                <th>Ethnicity</th>
+                                ${hasGenPop ? '<th>Gen Pop</th>' : ''}
+                                ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${renderDemoComparisonRows(profiles, 'ethnicity', hasGenPop)}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Income Comparison -->
+                <div class="comp-section">
+                    <div class="comp-section-title">Income (US %)</div>
+                    <table class="comp-table">
+                        <thead>
+                            <tr>
+                                <th>Income</th>
+                                ${hasGenPop ? '<th>Gen Pop</th>' : ''}
+                                ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${renderDemoComparisonRows(profiles, 'income', hasGenPop)}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        function renderDemoComparisonRows(profiles, demoType, showGenPop = false) {
+            // Get all unique values across all profiles
+            const allValues = new Set();
+            profiles.forEach(p => {
+                Object.keys(p.demographics[demoType] || {}).forEach(v => allValues.add(v));
+            });
+
+            // Sort values appropriately
+            let sortedValues = Array.from(allValues);
+            if (demoType === 'age') {
+                sortedValues.sort((a, b) => {
+                    const numA = parseInt(a.replace(/[^0-9]/g, '')) || 0;
+                    const numB = parseInt(b.replace(/[^0-9]/g, '')) || 0;
+                    return numA - numB;
+                });
+            }
+
+            return sortedValues.map(value => {
+                // Get Gen Pop value from first profile's genPop data
+                const genPopVal = profiles[0]?.genPop?.[demoType]?.[value] || 0;
+                
+                return `
+                    <tr>
+                        <td>${value.toUpperCase()}</td>
+                        ${showGenPop ? `
+                            <td>
+                                <div class="comp-bar-cell">
+                                    <div class="comp-bar" style="background: #2a2a3a;">
+                                        <div class="comp-bar-fill" style="width: ${Math.min(genPopVal / 60 * 100, 100)}%; background: #6b7280;"></div>
+                                    </div>
+                                    <span class="comp-bar-pct">${genPopVal.toFixed(2)}%</span>
+                                </div>
+                            </td>
+                        ` : ''}
+                        ${profiles.map(p => {
+                            const pct = p.demographics[demoType]?.[value] || 0;
+                            const maxPct = 60; // Scale bars to this max
+                            return `
+                                <td>
+                                    <div class="comp-bar-cell">
+                                        <div class="comp-bar">
+                                            <div class="comp-bar-fill" style="width: ${Math.min(pct / maxPct * 100, 100)}%; background: ${p.color};"></div>
+                                        </div>
+                                        <span class="comp-bar-pct">${pct.toFixed(2)}%</span>
+                                    </div>
+                                </td>
+                            `;
+                        }).join('')}
+                    </tr>
+                `;
+            }).join('');
+        }
 
         async function refreshCache() {
             const btn = document.getElementById('refreshBtn');
