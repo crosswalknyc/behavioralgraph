@@ -32,45 +32,22 @@
             line-height: 1.6;
         }
 
-        .bg-gradient {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: 
-                radial-gradient(ellipse at 20% 20%, rgba(90, 154, 217, 0.15) 0%, transparent 50%),
-                radial-gradient(ellipse at 80% 80%, rgba(102, 217, 239, 0.1) 0%, transparent 50%);
-            z-index: -1;
-        }
-
-        .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+        .container { max-width: 1600px; margin: 0 auto; padding: 1rem; }
 
         header {
             display: flex;
             align-items: center;
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-            padding-bottom: 1.5rem;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
             border-bottom: 1px solid var(--border-color);
         }
 
-        .logo { width: 70px; height: auto; }
+        .logo { width: 50px; height: auto; }
+        .header-text h1 { font-family: 'Space Mono', monospace; font-size: 1.5rem; color: var(--accent-cyan); }
+        .header-text p { color: var(--text-secondary); font-size: 0.8rem; }
 
-        .header-text h1 {
-            font-family: 'Space Mono', monospace;
-            font-size: 1.75rem;
-            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .header-text p { color: var(--text-secondary); font-size: 0.9rem; }
-
-        /* View Toggle */
-        .view-toggle {
-            display: flex;
-            gap: 0.5rem;
-            margin-left: auto;
-        }
-
+        .view-toggle { display: flex; gap: 0.5rem; margin-left: auto; }
         .view-btn {
             padding: 0.5rem 1rem;
             background: var(--bg-input);
@@ -80,23 +57,13 @@
             cursor: pointer;
             font-size: 0.85rem;
         }
+        .view-btn.active { background: var(--accent-blue); color: white; border-color: var(--accent-blue); }
 
-        .view-btn.active {
-            background: var(--accent-blue);
-            color: white;
-            border-color: var(--accent-blue);
-        }
-
-        /* Form View */
         #formView { display: block; }
         #dashboardView { display: none; }
 
-        .main-grid {
-            display: grid;
-            grid-template-columns: 1.2fr 0.8fr;
-            gap: 1.5rem;
-        }
-
+        /* Form Styles */
+        .main-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 1.5rem; }
         @media (max-width: 1000px) { .main-grid { grid-template-columns: 1fr; } }
 
         .card {
@@ -105,322 +72,170 @@
             border-radius: 12px;
             padding: 1.5rem;
         }
+        .card h2 { font-family: 'Space Mono', monospace; font-size: 1rem; margin-bottom: 1rem; }
 
-        .card h2 {
-            font-family: 'Space Mono', monospace;
-            font-size: 1.1rem;
-            margin-bottom: 1.25rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .form-section {
-            background: var(--bg-input);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }
-
-        .form-section-title {
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--accent-cyan);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 0.75rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .form-group { margin-bottom: 1rem; }
-        .form-group:last-child { margin-bottom: 0; }
-
-        label {
-            display: block;
-            font-size: 0.75rem;
-            font-weight: 500;
-            color: var(--text-secondary);
-            margin-bottom: 0.35rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
+        .form-section { background: var(--bg-input); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+        .form-section-title { font-size: 0.75rem; font-weight: 600; color: var(--accent-cyan); text-transform: uppercase; margin-bottom: 0.75rem; }
+        .form-group { margin-bottom: 0.75rem; }
+        label { display: block; font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.25rem; text-transform: uppercase; }
         input, select, textarea {
-            width: 100%;
-            padding: 0.65rem 0.85rem;
-            background: var(--bg-dark);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-primary);
-            font-family: inherit;
-            font-size: 0.9rem;
-            transition: border-color 0.2s ease;
+            width: 100%; padding: 0.5rem; background: var(--bg-dark); border: 1px solid var(--border-color);
+            border-radius: 6px; color: var(--text-primary); font-size: 0.85rem;
         }
-
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--accent-blue);
-        }
-
-        textarea { min-height: 70px; resize: vertical; }
-
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.75rem;
-        }
-
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            cursor: pointer;
-            padding: 0.5rem 0;
-        }
-
-        .checkbox-group input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            accent-color: var(--accent-blue);
-        }
-
-        .checkbox-group span { font-size: 0.85rem; }
+        textarea { min-height: 60px; resize: vertical; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+        .checkbox-group { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0; cursor: pointer; }
+        .checkbox-group input { width: 16px; height: 16px; accent-color: var(--accent-blue); }
+        .checkbox-group span { font-size: 0.8rem; }
 
         .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            padding: 0.85rem 1.5rem;
-            font-family: 'Space Mono', monospace;
-            font-size: 0.9rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            width: 100%;
+            display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+            padding: 0.75rem 1.25rem; font-family: 'Space Mono', monospace; font-size: 0.85rem;
+            font-weight: 700; text-transform: uppercase; border: none; border-radius: 6px; cursor: pointer; width: 100%;
         }
+        .btn-primary { background: linear-gradient(135deg, var(--accent-blue), #4a8ac9); color: white; }
+        .btn-success { background: var(--accent-lime); color: #1a1a1a; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-small { padding: 0.35rem 0.75rem; font-size: 0.7rem; width: auto; }
 
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent-blue), #4a8ac9);
-            color: white;
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, var(--accent-green), #8bc926);
-            color: #1a1a1a;
-        }
-
-        .btn-primary:hover, .btn-success:hover { transform: translateY(-2px); }
-        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-
-        .collapsible {
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            overflow: hidden;
-        }
-
-        .collapsible-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.75rem 1rem;
-            cursor: pointer;
-            background: var(--bg-input);
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-
-        .collapsible-header:hover { background: var(--border-color); }
-
-        .collapsible-content {
-            padding: 1rem;
-            display: none;
-            background: var(--bg-dark);
-        }
-
+        .collapsible { border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 1rem; }
+        .collapsible-header { display: flex; justify-content: space-between; padding: 0.75rem 1rem; cursor: pointer; background: var(--bg-input); font-size: 0.8rem; }
+        .collapsible-content { padding: 1rem; display: none; background: var(--bg-dark); }
         .collapsible-content.open { display: block; }
 
-        /* Status Panel */
-        .status-panel {
-            background: var(--bg-input);
-            border-radius: 8px;
-            padding: 1.25rem;
-            text-align: center;
-        }
-
-        .status-text {
-            font-family: 'Space Mono', monospace;
-            font-size: 1.1rem;
-            color: var(--text-primary);
-            margin-bottom: 0.5rem;
-        }
-
-        .status-message {
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-        }
-
-        .progress-bar {
-            height: 6px;
-            background: var(--bg-dark);
-            border-radius: 3px;
-            overflow: hidden;
-            margin: 1rem 0;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
-            transition: width 0.5s ease;
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .status-badge.queued { background: rgba(253, 151, 31, 0.2); color: var(--accent-orange); }
+        .status-panel { background: var(--bg-input); border-radius: 8px; padding: 1rem; text-align: center; }
+        .progress-bar { height: 6px; background: var(--bg-dark); border-radius: 3px; margin: 0.75rem 0; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan)); transition: width 0.5s; }
+        .status-badge { padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+        .status-badge.completed, .status-badge.cached { background: rgba(166, 226, 46, 0.2); color: var(--accent-green); }
         .status-badge.running { background: rgba(90, 154, 217, 0.2); color: var(--accent-blue); }
-        .status-badge.completed { background: rgba(166, 226, 46, 0.2); color: var(--accent-green); }
-        .status-badge.cached { background: rgba(102, 217, 239, 0.2); color: var(--accent-cyan); }
         .status-badge.failed { background: rgba(249, 38, 114, 0.2); color: var(--accent-red); }
 
-        .empty-state {
-            text-align: center;
-            padding: 2rem 1rem;
-            color: var(--text-secondary);
-        }
-
-        .job-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.75rem;
-            background: var(--bg-input);
-            border-radius: 6px;
-            margin-bottom: 0.5rem;
-        }
-
-        .job-info h3 { font-size: 0.9rem; margin-bottom: 0.15rem; }
-        .job-info p { font-size: 0.7rem; color: var(--text-secondary); }
-
-        .btn-small {
-            padding: 0.35rem 0.75rem;
-            font-size: 0.7rem;
-            width: auto;
-        }
-
-        .help-text {
-            font-size: 0.7rem;
-            color: var(--text-secondary);
-            margin-top: 0.25rem;
-            font-style: italic;
-        }
+        .job-item { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-input); border-radius: 6px; margin-bottom: 0.4rem; }
+        .job-info h3 { font-size: 0.85rem; }
+        .job-info p { font-size: 0.65rem; color: var(--text-secondary); }
 
         @keyframes spin { to { transform: rotate(360deg); } }
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid var(--border-color);
-            border-top-color: var(--accent-blue);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin: 0 auto 1rem;
-        }
-
+        .spinner { width: 30px; height: 30px; border: 3px solid var(--border-color); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 0.75rem; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .pulse { animation: pulse 1.5s ease-in-out infinite; }
 
         /* ============================================
            DASHBOARD STYLES
            ============================================ */
-        .dashboard-container {
-            display: grid;
-            grid-template-columns: 280px 1fr;
-            gap: 1.5rem;
-            min-height: 80vh;
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
+            background: var(--bg-card);
+            border-radius: 8px;
         }
 
-        .dashboard-sidebar {
-            background: var(--bg-card);
+        .dashboard-header h2 {
+            font-size: 1.1rem;
+            color: var(--accent-lime);
+        }
+
+        .dashboard-tabs {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .tab-btn {
+            padding: 0.5rem 1rem;
+            background: var(--bg-input);
             border: 1px solid var(--border-color);
-            border-radius: 12px;
+            color: var(--text-secondary);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .tab-btn.active {
+            background: var(--accent-blue);
+            color: white;
+            border-color: var(--accent-blue);
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Demographics Tab */
+        .demo-grid {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            gap: 1rem;
+        }
+
+        .demo-sidebar {
+            background: var(--bg-card);
+            border-radius: 8px;
             padding: 1rem;
-            max-height: 85vh;
-            overflow-y: auto;
         }
 
         .brand-box {
             background: var(--accent-lime);
             color: #1a1a1a;
-            padding: 2rem 1rem;
+            padding: 1.5rem 1rem;
             border-radius: 8px;
             text-align: center;
             margin-bottom: 1rem;
         }
 
         .brand-box h2 {
-            font-family: 'DM Sans', sans-serif;
-            font-size: 2rem;
+            font-size: 1.5rem;
             font-weight: 700;
-            margin: 0;
-            color: #1a1a1a;
+            word-break: break-word;
         }
 
-        .date-range-bar {
+        .date-range-box {
             background: var(--bg-input);
-            padding: 0.75rem 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            font-size: 0.85rem;
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
             color: var(--text-secondary);
+            margin-bottom: 1rem;
         }
 
         .category-tree {
-            font-size: 0.85rem;
+            max-height: 400px;
+            overflow-y: auto;
         }
 
         .category-item {
-            padding: 0.35rem 0;
+            padding: 0.4rem 0;
             cursor: pointer;
+            font-size: 0.8rem;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.4rem;
         }
 
-        .category-item:hover {
-            color: var(--accent-cyan);
-        }
-
-        .category-item.active {
-            color: var(--accent-lime);
-            font-weight: 600;
-        }
+        .category-item:hover { color: var(--accent-cyan); }
+        .category-item .arrow { transition: transform 0.2s; }
+        .category-item.open .arrow { transform: rotate(90deg); }
 
         .category-children {
-            padding-left: 1.25rem;
+            padding-left: 1rem;
             display: none;
+            max-height: 200px;
+            overflow-y: auto;
         }
 
-        .category-children.open {
-            display: block;
+        .category-children.open { display: block; }
+
+        .category-child {
+            padding: 0.25rem 0;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
         }
 
-        .dashboard-main {
+        .demo-main {
             display: flex;
             flex-direction: column;
-            gap: 1.5rem;
+            gap: 1rem;
         }
 
         .stats-row {
@@ -431,29 +246,14 @@
 
         .stat-card {
             background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 1.5rem;
+            border-radius: 8px;
+            padding: 1.25rem;
             text-align: center;
         }
 
-        .stat-label {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            margin-bottom: 0.5rem;
-        }
-
-        .stat-value {
-            font-family: 'Space Mono', monospace;
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-
-        .stat-prefix {
-            font-size: 1.5rem;
-            color: var(--text-secondary);
-        }
+        .stat-label { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem; }
+        .stat-value { font-family: 'Space Mono', monospace; font-size: 2rem; font-weight: 700; }
+        .stat-prefix { font-size: 1.25rem; color: var(--text-secondary); }
 
         .charts-grid {
             display: grid;
@@ -463,41 +263,142 @@
 
         .chart-card {
             background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
+            border-radius: 8px;
             padding: 1rem;
         }
 
         .chart-card h3 {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: var(--text-secondary);
-            margin-bottom: 1rem;
+            margin-bottom: 0.75rem;
             text-align: center;
             text-transform: uppercase;
-            letter-spacing: 1px;
         }
 
-        .chart-container {
-            position: relative;
-            height: 200px;
-        }
+        .chart-container { height: 180px; }
 
-        .download-bar {
-            display: flex;
+        /* Behavioral Tab */
+        .behavioral-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
             gap: 1rem;
-            justify-content: flex-end;
         }
+
+        @media (max-width: 1200px) { .behavioral-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { .behavioral-grid { grid-template-columns: 1fr; } }
+
+        .behavioral-card {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 1rem;
+            max-height: 450px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .behavioral-card h3 {
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .behavioral-card .count {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        .behavioral-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .behavioral-item {
+            display: flex;
+            align-items: center;
+            padding: 0.35rem 0;
+            border-bottom: 1px solid var(--border-color);
+            gap: 0.5rem;
+        }
+
+        .behavioral-item:last-child { border-bottom: none; }
+
+        .behavioral-name {
+            flex: 1;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .behavioral-bar-container {
+            width: 80px;
+            height: 12px;
+            background: var(--bg-dark);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .behavioral-bar {
+            height: 100%;
+            background: var(--accent-blue);
+            border-radius: 2px;
+        }
+
+        .behavioral-pct {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            width: 45px;
+            text-align: right;
+        }
+
+        /* Location Tab */
+        .location-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .location-table {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 1rem;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .location-table h3 {
+            font-size: 0.85rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .location-row {
+            display: grid;
+            grid-template-columns: 40px 1fr 60px 60px;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.75rem;
+            align-items: center;
+        }
+
+        .location-row.header {
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .index-high { background: rgba(166, 226, 46, 0.2); color: var(--accent-green); padding: 0.15rem 0.4rem; border-radius: 3px; }
+        .index-low { background: rgba(249, 38, 114, 0.2); color: var(--accent-red); padding: 0.15rem 0.4rem; border-radius: 3px; }
     </style>
 </head>
 <body>
-    <div class="bg-gradient"></div>
-    
     <div class="container">
         <header>
             <img src="/static/logo.svg" alt="MIDG Logo" class="logo">
             <div class="header-text">
                 <h1>BEHAVIORAL GRAPH</h1>
-                <p>MIDG Clickstream Analysis Pipeline</p>
+                <p>MIDG Clickstream Analysis</p>
             </div>
             <div class="view-toggle">
                 <button class="view-btn active" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
@@ -510,260 +411,166 @@
             <div class="main-grid">
                 <div class="card">
                     <h2>📊 Analysis Parameters</h2>
-                    
                     <form id="analysisForm">
                         <div class="form-section">
-                            <div class="form-section-title">📁 Step 1 - Project Identification</div>
-                            
-                            <div class="form-group">
-                                <label for="project_name">Project Name</label>
-                                <input type="text" id="project_name" name="project_name" placeholder="e.g., Nike_Q4_Analysis" required>
-                            </div>
-
+                            <div class="form-section-title">Project & Brand</div>
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="is_genpop" name="is_genpop" checked>
-                                        <span>GenPop Analysis</span>
-                                    </label>
+                                    <label>Project Name</label>
+                                    <input type="text" id="project_name" placeholder="e.g., Nike_Q4" required>
                                 </div>
                                 <div class="form-group">
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="purchasers_only" name="purchasers_only">
-                                        <span>Purchasers Only</span>
-                                    </label>
+                                    <label>Category</label>
+                                    <input type="text" id="brand_category" placeholder="e.g., FOOTWEAR">
                                 </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Brands (comma-separated)</label>
+                                <textarea id="brands" placeholder="nike, adidas, puma" required></textarea>
+                            </div>
+                            <div class="form-row">
+                                <label class="checkbox-group"><input type="checkbox" id="is_genpop" checked><span>GenPop</span></label>
+                                <label class="checkbox-group"><input type="checkbox" id="purchasers_only"><span>Purchasers Only</span></label>
                             </div>
                         </div>
 
                         <div class="form-section">
-                            <div class="form-section-title">🏷️ Step 2 - Brand Input</div>
-                            
-                            <div class="form-group">
-                                <label for="brands">Brands (comma-separated)</label>
-                                <textarea id="brands" name="brands" placeholder="nike, adidas, puma" required></textarea>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="brand_category">Brand Category</label>
-                                <input type="text" id="brand_category" name="brand_category" placeholder="e.g., APPAREL/FOOTWEAR, QSR, STREAMING">
-                            </div>
-                        </div>
-
-                        <div class="form-section">
-                            <div class="form-section-title">📅 Step 3 - Date Ranges</div>
-                            
-                            <div class="form-group">
-                                <label class="checkbox-group">
-                                    <input type="checkbox" id="same_dates" name="same_dates" checked onchange="toggleDateRanges()">
-                                    <span>Same dates for Sample & Behavior</span>
-                                </label>
-                            </div>
-
-                            <div id="single_date_range">
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="start_date">Start Date</label>
-                                        <input type="date" id="start_date" name="start_date" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="end_date">End Date</label>
-                                        <input type="date" id="end_date" name="end_date" required>
-                                    </div>
+                            <div class="form-section-title">Date Range</div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Start Date</label>
+                                    <input type="date" id="start_date" required>
                                 </div>
-                            </div>
-
-                            <div id="separate_date_ranges" style="display: none;">
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="sample_start">Sample Start</label>
-                                        <input type="date" id="sample_start" name="sample_start">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="sample_end">Sample End</label>
-                                        <input type="date" id="sample_end" name="sample_end">
-                                    </div>
-                                </div>
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label for="behavior_start">Behavior Start</label>
-                                        <input type="date" id="behavior_start" name="behavior_start">
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="behavior_end">Behavior End</label>
-                                        <input type="date" id="behavior_end" name="behavior_end">
-                                    </div>
+                                <div class="form-group">
+                                    <label>End Date</label>
+                                    <input type="date" id="end_date" required>
                                 </div>
                             </div>
                         </div>
 
                         <div class="collapsible">
                             <div class="collapsible-header" onclick="toggleCollapsible(this)">
-                                <span>🎯 Demographic Filters (Optional)</span>
-                                <span>▼</span>
+                                <span>🎯 Demographic Filters</span><span>▼</span>
                             </div>
                             <div class="collapsible-content">
                                 <div class="form-row">
                                     <div class="form-group">
-                                        <label for="gender">Gender</label>
-                                        <select id="gender" name="gender">
-                                            <option value="">All</option>
-                                            <option value="Female">Female</option>
-                                            <option value="Male">Male</option>
-                                            <option value="Non-binary">Non-binary</option>
-                                        </select>
+                                        <label>Gender</label>
+                                        <select id="gender"><option value="">All</option><option>Female</option><option>Male</option><option>Non-binary</option></select>
                                     </div>
                                     <div class="form-group">
-                                        <label for="age">Age Group</label>
-                                        <select id="age" name="age">
-                                            <option value="">All</option>
-                                            <option value="<16">&lt;16</option>
-                                            <option value="16-18">16-18</option>
-                                            <option value="18-20">18-20</option>
-                                            <option value="21-25">21-25</option>
-                                            <option value="26-30">26-30</option>
-                                            <option value="31-40">31-40</option>
-                                            <option value="41-59">41-59</option>
-                                            <option value="60+">60+</option>
-                                        </select>
+                                        <label>Age</label>
+                                        <select id="age"><option value="">All</option><option>&lt;16</option><option>16-18</option><option>18-20</option><option>21-25</option><option>26-30</option><option>31-40</option><option>41-59</option><option>60+</option></select>
                                     </div>
                                 </div>
                                 <div class="form-row">
                                     <div class="form-group">
-                                        <label for="ethnicity">Ethnicity</label>
-                                        <select id="ethnicity" name="ethnicity">
-                                            <option value="">All</option>
-                                            <option value="White">White</option>
-                                            <option value="Black">Black</option>
-                                            <option value="LatinX">LatinX</option>
-                                            <option value="Asian">Asian</option>
-                                            <option value="Other">Other</option>
-                                        </select>
+                                        <label>Ethnicity</label>
+                                        <select id="ethnicity"><option value="">All</option><option>White</option><option>Black</option><option>LatinX</option><option>Asian</option><option>Other</option></select>
                                     </div>
                                     <div class="form-group">
-                                        <label for="income">Income</label>
-                                        <select id="income" name="income">
-                                            <option value="">All</option>
-                                            <option value="$40K - $60K">$40K - $60K</option>
-                                            <option value="$60K - $75K">$60K - $75K</option>
-                                            <option value="$75K - $100K">$75K - $100K</option>
-                                            <option value="$100K - $150K">$100K - $150K</option>
-                                            <option value="$150K - $250K">$150K - $250K</option>
-                                            <option value="$250K+">$250K+</option>
-                                        </select>
+                                        <label>Income</label>
+                                        <select id="income"><option value="">All</option><option>$40K - $60K</option><option>$60K - $75K</option><option>$75K - $100K</option><option>$100K - $150K</option><option>$150K - $250K</option><option>$250K+</option></select>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <button type="submit" class="btn btn-primary" id="submitBtn">
-                            <span>🚀</span> Run Analysis
-                        </button>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">🚀 Run Analysis</button>
                     </form>
                 </div>
 
                 <div class="card">
-                    <h2>📈 Job Status</h2>
-                    
+                    <h2>📈 Status & Results</h2>
                     <div id="currentJob" style="display: none;">
                         <div class="status-panel">
                             <div id="statusRunning">
                                 <div class="spinner"></div>
-                                <div class="status-text pulse" id="statusText">Processing...</div>
-                                <div class="status-message" id="statusMessage">Analysis in progress</div>
-                                <div class="progress-bar">
-                                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
-                                </div>
+                                <div class="pulse" id="statusText">Processing...</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);" id="statusMessage">Analysis in progress</div>
+                                <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width: 0%"></div></div>
                             </div>
-                            
                             <div id="statusComplete" style="display: none;">
-                                <div style="font-size: 3rem; margin-bottom: 0.5rem;">✅</div>
-                                <div class="status-text">Complete!</div>
-                                <div class="status-message">Click below to view results</div>
-                                <button class="btn btn-success" id="viewResultsBtn" style="margin-top: 1rem;">📊 View Dashboard</button>
+                                <div style="font-size: 2.5rem;">✅</div>
+                                <div style="margin: 0.5rem 0;">Complete!</div>
+                                <button class="btn btn-success" id="viewResultsBtn" style="margin-top: 0.75rem;">📊 View Dashboard</button>
                             </div>
-                            
                             <div id="statusError" style="display: none;">
-                                <div style="font-size: 3rem; margin-bottom: 0.5rem;">❌</div>
-                                <div class="status-text">Error</div>
-                                <div class="status-message" id="errorMessage" style="color: var(--accent-red);"></div>
+                                <div style="font-size: 2.5rem;">❌</div>
+                                <div style="color: var(--accent-red);" id="errorMessage"></div>
                             </div>
                         </div>
                     </div>
+                    <div id="noCurrentJob"><div class="empty-state" style="padding: 1.5rem; color: var(--text-secondary);">Submit an analysis to get started</div></div>
 
-                    <div id="noCurrentJob">
-                        <div class="empty-state">
-                            <p>🔍 Submit an analysis to get started.</p>
-                        </div>
-                    </div>
-
-                    <h3 style="margin-top: 1.5rem; margin-bottom: 0.75rem; font-size: 0.9rem; color: var(--text-secondary);">Recent Jobs</h3>
-                    <div id="jobsList">
-                        <div class="empty-state" style="padding: 1rem;"><p>No jobs yet</p></div>
-                    </div>
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">Recent Results</h3>
+                    <div id="jobsList"><div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Loading...</div></div>
                 </div>
             </div>
         </div>
 
         <!-- DASHBOARD VIEW -->
         <div id="dashboardView">
-            <div class="download-bar">
-                <button class="btn btn-primary btn-small" onclick="downloadCurrentCSV()">📥 Download CSV</button>
-                <button class="btn btn-small" style="background: var(--bg-input); color: var(--text-primary);" onclick="showFormView()">← Back to Form</button>
+            <div class="dashboard-header">
+                <h2 id="dashBrandTitle">Brand Dashboard</h2>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-small btn-primary" onclick="downloadCurrentCSV()">📥 Download CSV</button>
+                    <button class="btn btn-small" style="background: var(--bg-input);" onclick="showFormView()">← Back</button>
+                </div>
             </div>
-            
-            <div class="dashboard-container">
-                <div class="dashboard-sidebar">
-                    <div class="brand-box">
-                        <h2 id="dashBrandName">Brand</h2>
+
+            <div class="dashboard-tabs">
+                <button class="tab-btn active" onclick="showTab('demographics')">Demographics</button>
+                <button class="tab-btn" onclick="showTab('behavioral')">Behavioral</button>
+                <button class="tab-btn" onclick="showTab('location')">Location</button>
+            </div>
+
+            <!-- Demographics Tab -->
+            <div id="tab-demographics" class="tab-content active">
+                <div class="demo-grid">
+                    <div class="demo-sidebar">
+                        <div class="brand-box"><h2 id="dashBrandName">Brand</h2></div>
+                        <div class="date-range-box" id="dashDateRange">Date Range: --</div>
+                        <div class="category-tree" id="categoryTree"></div>
                     </div>
-                    
-                    <div class="date-range-bar" id="dashDateRange">
-                        Date Range: --
-                    </div>
-                    
-                    <div class="category-tree" id="categoryTree">
-                        <!-- Categories will be populated dynamically -->
+                    <div class="demo-main">
+                        <div class="stats-row">
+                            <div class="stat-card">
+                                <div class="stat-label">MIDG Respondents</div>
+                                <div class="stat-value"><span class="stat-prefix">n=</span><span id="dashSampleSize">0</span></div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Projected US</div>
+                                <div class="stat-value" id="dashProjectedUS">0</div>
+                            </div>
+                        </div>
+                        <div class="charts-grid">
+                            <div class="chart-card"><h3>Age</h3><div class="chart-container"><canvas id="ageChart"></canvas></div></div>
+                            <div class="chart-card"><h3>Gender</h3><div class="chart-container"><canvas id="genderChart"></canvas></div></div>
+                            <div class="chart-card"><h3>Ethnicity</h3><div class="chart-container"><canvas id="ethnicityChart"></canvas></div></div>
+                            <div class="chart-card"><h3>Income</h3><div class="chart-container"><canvas id="incomeChart"></canvas></div></div>
+                        </div>
                     </div>
                 </div>
-                
-                <div class="dashboard-main">
-                    <div class="stats-row">
-                        <div class="stat-card">
-                            <div class="stat-label">MIDG Respondents</div>
-                            <div class="stat-value"><span class="stat-prefix">n=</span><span id="dashSampleSize">0</span></div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Projected US</div>
-                            <div class="stat-value" id="dashProjectedUS">0</div>
-                        </div>
+            </div>
+
+            <!-- Behavioral Tab -->
+            <div id="tab-behavioral" class="tab-content">
+                <div class="behavioral-grid" id="behavioralGrid"></div>
+            </div>
+
+            <!-- Location Tab -->
+            <div id="tab-location" class="tab-content">
+                <div class="location-grid">
+                    <div class="location-table">
+                        <h3>Top DMAs by Index</h3>
+                        <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
+                        <div id="locationList"></div>
                     </div>
-                    
-                    <div class="charts-grid">
-                        <div class="chart-card">
-                            <h3>Age</h3>
-                            <div class="chart-container">
-                                <canvas id="ageChart"></canvas>
-                            </div>
-                        </div>
-                        <div class="chart-card">
-                            <h3>Gender</h3>
-                            <div class="chart-container">
-                                <canvas id="genderChart"></canvas>
-                            </div>
-                        </div>
-                        <div class="chart-card">
-                            <h3>Ethnicity</h3>
-                            <div class="chart-container">
-                                <canvas id="ethnicityChart"></canvas>
-                            </div>
-                        </div>
-                        <div class="chart-card">
-                            <h3>Income</h3>
-                            <div class="chart-container">
-                                <canvas id="incomeChart"></canvas>
-                            </div>
-                        </div>
+                    <div class="location-table">
+                        <h3>Bottom DMAs by Index</h3>
+                        <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
+                        <div id="locationListBottom"></div>
                     </div>
                 </div>
             </div>
@@ -786,6 +593,7 @@
         });
 
         function formatDate(date) { return date.toISOString().split('T')[0]; }
+        function formatNumber(num) { return num ? num.toLocaleString() : '0'; }
 
         function showFormView() {
             document.getElementById('formView').style.display = 'block';
@@ -801,30 +609,30 @@
             document.getElementById('dashboardViewBtn').classList.add('active');
         }
 
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tab-' + tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
         function toggleCollapsible(header) {
             const content = header.nextElementSibling;
             content.classList.toggle('open');
             header.querySelector('span:last-child').textContent = content.classList.contains('open') ? '▲' : '▼';
         }
 
-        function toggleDateRanges() {
-            const sameDates = document.getElementById('same_dates').checked;
-            document.getElementById('single_date_range').style.display = sameDates ? 'block' : 'none';
-            document.getElementById('separate_date_ranges').style.display = sameDates ? 'none' : 'block';
-        }
-
-        // Form submission - check cache first
+        // Form submission
         document.getElementById('analysisForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;margin:0;"></span> Checking...';
-            
+            submitBtn.innerHTML = 'Checking...';
+
             const brands = document.getElementById('brands').value.trim();
             const startDate = document.getElementById('start_date').value;
             const endDate = document.getElementById('end_date').value;
-            
+
             // Check cache first
             try {
                 const cacheResponse = await fetch('/api/check-cache', {
@@ -832,58 +640,47 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ brands, start_date: startDate, end_date: endDate })
                 });
-                
                 const cacheData = await cacheResponse.json();
-                
+
                 if (cacheData.found) {
-                    // Found cached result - load it into dashboard
                     const fileKey = cacheData.type === 'exact' ? cacheData.file : cacheData.files[0].key;
                     await loadCachedResult(fileKey);
                     submitBtn.disabled = false;
-                    submitBtn.innerHTML = '<span>🚀</span> Run Analysis';
+                    submitBtn.innerHTML = '🚀 Run Analysis';
                     return;
                 }
-            } catch (error) {
-                console.log('Cache check failed, proceeding with new analysis:', error);
-            }
-            
-            // No cache found - run new analysis
-            submitBtn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;margin:0;"></span> Submitting...';
+            } catch (error) { console.log('Cache check failed:', error); }
+
+            submitBtn.innerHTML = 'Submitting...';
             await submitNewAnalysis();
             submitBtn.disabled = false;
-            submitBtn.innerHTML = '<span>🚀</span> Run Analysis';
+            submitBtn.innerHTML = '🚀 Run Analysis';
         });
 
         async function loadCachedResult(fileKey) {
             try {
                 const response = await fetch(`/api/get-csv-data/${encodeURIComponent(fileKey)}`);
                 const data = await response.json();
-                
                 if (data.success) {
                     currentCSVData = data.data;
                     currentS3Key = fileKey;
                     renderDashboard(data.data, data.brand, data.date_range);
                     showDashboardView();
                 }
-            } catch (error) {
-                console.error('Failed to load cached result:', error);
-                alert('Failed to load cached result');
-            }
+            } catch (error) { console.error('Failed to load:', error); alert('Failed to load result'); }
         }
 
         async function submitNewAnalysis() {
-            const sameDates = document.getElementById('same_dates').checked;
-            
             const formData = {
                 project_name: document.getElementById('project_name').value,
                 brands: document.getElementById('brands').value,
                 brand_category: document.getElementById('brand_category').value || 'GENERAL',
                 is_genpop: document.getElementById('is_genpop').checked,
                 purchasers_only: document.getElementById('purchasers_only').checked,
-                start_date: sameDates ? document.getElementById('start_date').value : document.getElementById('sample_start').value,
-                end_date: sameDates ? document.getElementById('end_date').value : document.getElementById('sample_end').value,
-                behavior_start: sameDates ? document.getElementById('start_date').value : document.getElementById('behavior_start').value,
-                behavior_end: sameDates ? document.getElementById('end_date').value : document.getElementById('behavior_end').value,
+                start_date: document.getElementById('start_date').value,
+                end_date: document.getElementById('end_date').value,
+                behavior_start: document.getElementById('start_date').value,
+                behavior_end: document.getElementById('end_date').value,
                 gender: document.getElementById('gender').value,
                 age: document.getElementById('age').value,
                 ethnicity: document.getElementById('ethnicity').value,
@@ -891,25 +688,15 @@
             };
 
             try {
-                const response = await fetch('/api/submit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(formData)
-                });
-
+                const response = await fetch('/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
                 const data = await response.json();
-                
                 if (response.ok) {
                     currentJobId = data.job_id;
                     showCurrentJob();
                     startPolling();
                     loadJobs();
-                } else {
-                    alert(data.error || 'Failed to submit job');
-                }
-            } catch (error) {
-                alert('Network error: ' + error.message);
-            }
+                } else { alert(data.error || 'Failed'); }
+            } catch (error) { alert('Network error: ' + error.message); }
         }
 
         function showCurrentJob() {
@@ -928,16 +715,14 @@
 
         async function updateJobStatus() {
             if (!currentJobId) return;
-            
             try {
                 const response = await fetch(`/api/status/${currentJobId}`);
                 const data = await response.json();
-                
                 if (response.ok) {
                     document.getElementById('statusText').textContent = data.project_name || 'Processing...';
-                    document.getElementById('statusMessage').textContent = data.message || 'Analysis in progress';
+                    document.getElementById('statusMessage').textContent = data.message || 'In progress';
                     document.getElementById('progressFill').style.width = data.progress + '%';
-                    
+
                     if (data.status === 'completed') {
                         clearInterval(pollInterval);
                         document.getElementById('statusRunning').style.display = 'none';
@@ -945,280 +730,254 @@
                         document.getElementById('viewResultsBtn').onclick = () => loadJobResult(currentJobId);
                         loadJobs();
                     }
-                    
                     if (data.status === 'failed') {
                         clearInterval(pollInterval);
                         document.getElementById('statusRunning').style.display = 'none';
                         document.getElementById('statusError').style.display = 'block';
-                        document.getElementById('errorMessage').textContent = data.error || 'Unknown error';
+                        document.getElementById('errorMessage').textContent = data.error || 'Error';
                         loadJobs();
                     }
                 }
-            } catch (error) {
-                console.error('Failed to update status:', error);
-            }
+            } catch (error) { console.error('Status error:', error); }
         }
 
         async function loadJobResult(jobId) {
             try {
                 const response = await fetch(`/api/job-data/${jobId}`);
                 const data = await response.json();
-                
                 if (data.success) {
                     currentCSVData = data.data;
                     currentJobId = jobId;
+                    currentS3Key = null;
                     renderDashboard(data.data, data.brand, data.date_range);
                     showDashboardView();
                 }
-            } catch (error) {
-                console.error('Failed to load job result:', error);
-            }
+            } catch (error) { console.error('Failed:', error); }
         }
 
         function renderDashboard(csvData, brandName, dateRange) {
-            // Set brand name and date range
+            document.getElementById('dashBrandTitle').textContent = (brandName || 'Brand') + ' Dashboard';
             document.getElementById('dashBrandName').textContent = brandName || 'Brand';
-            document.getElementById('dashDateRange').textContent = `Date Range: ${dateRange || '--'}`;
-            
-            // Parse CSV data
-            const demographics = parseDemographics(csvData);
-            
-            // Set sample size and projected US
-            document.getElementById('dashSampleSize').textContent = formatNumber(demographics.sampleSize || 0);
-            document.getElementById('dashProjectedUS').textContent = formatNumber(demographics.projectedUS || 0);
-            
-            // Render category tree
-            renderCategoryTree(csvData);
-            
-            // Render charts
-            renderCharts(demographics);
+            document.getElementById('dashDateRange').textContent = 'Date Range: ' + (dateRange || '--');
+
+            const parsed = parseAllData(csvData);
+
+            document.getElementById('dashSampleSize').textContent = formatNumber(parsed.sampleSize);
+            document.getElementById('dashProjectedUS').textContent = formatNumber(parsed.projectedUS);
+
+            renderCategoryTree(parsed.categories);
+            renderCharts(parsed.demographics);
+            renderBehavioralCards(parsed.behavioral);
+            renderLocationTable(parsed.locations);
         }
 
-        function parseDemographics(csvData) {
+        function parseAllData(csvData) {
             const result = {
-                age: {},
-                gender: {},
-                ethnicity: {},
-                income: {},
                 sampleSize: 0,
-                projectedUS: 0
+                projectedUS: 0,
+                demographics: { age: {}, gender: {}, ethnicity: {}, income: {} },
+                behavioral: {},
+                categories: {},
+                locations: []
             };
-            
+
+            const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'];
+            const skipCategories = ['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN'];
+
             csvData.forEach(row => {
                 const category = (row.Column || '').toUpperCase();
                 const value = row.Value || '';
-                const percentage = parseFloat(row['Brand Penetration (Row)'] || row['Category Share'] || 0);
+                const pct = parseFloat(row['Brand Penetration (Row)'] || row['Category Share'] || 0);
                 const rawNumbers = parseInt(row['Original Raw Numbers'] || 0);
                 const usProjection = parseInt(row['US Gen Pop Projection'] || 0);
-                
-                if (category === 'SAMPLE SIZE') {
-                    result.sampleSize = rawNumbers;
+
+                if (category === 'SAMPLE SIZE') result.sampleSize = rawNumbers;
+                if (category === 'BRAND INPUT') result.projectedUS = usProjection;
+
+                // Demographics
+                if (category === 'AGE' && value) result.demographics.age[value] = pct;
+                if (category === 'GENDER' && value) result.demographics.gender[value] = pct;
+                if (category === 'ETHNICITY' && value) result.demographics.ethnicity[value] = pct;
+                if (category === 'INCOME' && value) result.demographics.income[value] = pct;
+
+                // Location/DMA
+                if (category === 'LOCATION' && value) {
+                    result.locations.push({ name: value, pct: pct, index: pct > 0 ? (pct / 0.5 * 100).toFixed(0) : 0 });
                 }
-                
-                if (category === 'BRAND INPUT') {
-                    result.projectedUS = usProjection;
+
+                // Categories tree
+                if (!skipCategories.includes(category) && value) {
+                    if (!result.categories[category]) result.categories[category] = [];
+                    result.categories[category].push({ value, pct });
                 }
-                
-                if (category === 'AGE' && value) {
-                    result.age[value] = percentage;
-                }
-                if (category === 'GENDER' && value) {
-                    result.gender[value] = percentage;
-                }
-                if (category === 'ETHNICITY' && value) {
-                    result.ethnicity[value] = percentage;
-                }
-                if (category === 'INCOME' && value) {
-                    result.income[value] = percentage;
+
+                // Behavioral (non-demographic categories)
+                if (!demoCategories.includes(category) && !skipCategories.includes(category) && !['LOCATION'].includes(category) && value) {
+                    if (!result.behavioral[category]) result.behavioral[category] = [];
+                    result.behavioral[category].push({ name: value, pct: pct });
                 }
             });
-            
+
+            // Sort behavioral by percentage
+            Object.keys(result.behavioral).forEach(cat => {
+                result.behavioral[cat].sort((a, b) => b.pct - a.pct);
+            });
+
             return result;
         }
 
-        function renderCategoryTree(csvData) {
-            const categories = {};
-            
-            csvData.forEach(row => {
-                const category = row.Column || '';
-                if (category && !['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN'].includes(category)) {
-                    if (!categories[category]) {
-                        categories[category] = [];
-                    }
-                    if (row.Value) {
-                        categories[category].push(row.Value);
-                    }
-                }
-            });
-            
-            const treeHtml = Object.keys(categories).sort().map(cat => `
-                <div class="category-item" onclick="this.nextElementSibling.classList.toggle('open')">
-                    ▸ ${cat}
+        function renderCategoryTree(categories) {
+            const container = document.getElementById('categoryTree');
+            container.innerHTML = Object.keys(categories).sort().map(cat => `
+                <div class="category-item" onclick="toggleCategory(this)">
+                    <span class="arrow">▸</span> ${cat}
                 </div>
                 <div class="category-children">
-                    ${categories[cat].slice(0, 10).map(v => `<div style="padding: 0.25rem 0; font-size: 0.8rem; color: var(--text-secondary);">○ ${v}</div>`).join('')}
+                    ${categories[cat].slice(0, 15).map(v => `<div class="category-child">○ ${v.value} (${v.pct.toFixed(1)}%)</div>`).join('')}
                 </div>
             `).join('');
-            
-            document.getElementById('categoryTree').innerHTML = treeHtml;
+        }
+
+        function toggleCategory(el) {
+            el.classList.toggle('open');
+            el.nextElementSibling.classList.toggle('open');
         }
 
         function renderCharts(demographics) {
-            // Destroy existing charts
-            Object.values(charts).forEach(chart => chart.destroy());
+            Object.values(charts).forEach(c => c.destroy());
             charts = {};
-            
-            const chartColors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74'];
-            
-            // Age Chart (horizontal bar)
-            const ageLabels = Object.keys(demographics.age);
-            const ageData = Object.values(demographics.age);
+
+            const colors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74', '#75715e'];
+
+            // Age
             charts.age = new Chart(document.getElementById('ageChart'), {
                 type: 'bar',
-                data: {
-                    labels: ageLabels,
-                    datasets: [{
-                        data: ageData,
-                        backgroundColor: '#5a9ad9',
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } },
-                        y: { grid: { display: false }, ticks: { color: '#e6f1ff' } }
-                    }
-                }
+                data: { labels: Object.keys(demographics.age), datasets: [{ data: Object.values(demographics.age), backgroundColor: '#5a9ad9', borderRadius: 4 }] },
+                options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 10 } } } } }
             });
-            
-            // Gender Chart (doughnut)
-            const genderLabels = Object.keys(demographics.gender);
-            const genderData = Object.values(demographics.gender);
+
+            // Gender
             charts.gender = new Chart(document.getElementById('genderChart'), {
                 type: 'doughnut',
-                data: {
-                    labels: genderLabels,
-                    datasets: [{
-                        data: genderData,
-                        backgroundColor: chartColors.slice(0, genderLabels.length)
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 10 } } }
-                    }
-                }
+                data: { labels: Object.keys(demographics.gender), datasets: [{ data: Object.values(demographics.gender), backgroundColor: colors }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 9 } } } } }
             });
-            
-            // Ethnicity Chart (doughnut)
-            const ethLabels = Object.keys(demographics.ethnicity);
-            const ethData = Object.values(demographics.ethnicity);
+
+            // Ethnicity
             charts.ethnicity = new Chart(document.getElementById('ethnicityChart'), {
                 type: 'doughnut',
-                data: {
-                    labels: ethLabels,
-                    datasets: [{
-                        data: ethData,
-                        backgroundColor: chartColors.slice(0, ethLabels.length)
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 10 } } }
-                    }
-                }
+                data: { labels: Object.keys(demographics.ethnicity), datasets: [{ data: Object.values(demographics.ethnicity), backgroundColor: colors }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 9 } } } } }
             });
-            
-            // Income Chart (bar)
-            const incomeLabels = Object.keys(demographics.income);
-            const incomeData = Object.values(demographics.income);
+
+            // Income
             charts.income = new Chart(document.getElementById('incomeChart'), {
                 type: 'bar',
-                data: {
-                    labels: incomeLabels,
-                    datasets: [{
-                        data: incomeData,
-                        backgroundColor: '#66d9ef',
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { grid: { display: false }, ticks: { color: '#8892b0', maxRotation: 45 } },
-                        y: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } }
-                    }
-                }
+                data: { labels: Object.keys(demographics.income), datasets: [{ data: Object.values(demographics.income), backgroundColor: '#66d9ef', borderRadius: 4 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: '#8892b0', font: { size: 8 }, maxRotation: 45 } }, y: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } } } }
             });
         }
 
-        function formatNumber(num) {
-            return num.toLocaleString();
+        function renderBehavioralCards(behavioral) {
+            const container = document.getElementById('behavioralGrid');
+            const priorityCategories = ['APPAREL/FOOTWEAR', 'RETAIL', 'APPS/PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING/VIDEO', 'STREAMING/MUSIC', 'QSR', 'TECHNOLOGY/DEVICE', 'GAMES', 'SPORTS', 'MEDIA'];
+
+            // Sort categories - priority first, then alphabetical
+            const sortedCats = Object.keys(behavioral).sort((a, b) => {
+                const aIdx = priorityCategories.indexOf(a);
+                const bIdx = priorityCategories.indexOf(b);
+                if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+                if (aIdx !== -1) return -1;
+                if (bIdx !== -1) return 1;
+                return a.localeCompare(b);
+            });
+
+            container.innerHTML = sortedCats.map(cat => {
+                const items = behavioral[cat].slice(0, 20);
+                const maxPct = Math.max(...items.map(i => i.pct), 1);
+                return `
+                    <div class="behavioral-card">
+                        <h3>${cat} <span class="count">${behavioral[cat].length}</span></h3>
+                        <div class="behavioral-list">
+                            ${items.map(item => `
+                                <div class="behavioral-item">
+                                    <span class="behavioral-name" title="${item.name}">${item.name}</span>
+                                    <div class="behavioral-bar-container">
+                                        <div class="behavioral-bar" style="width: ${(item.pct / maxPct) * 100}%"></div>
+                                    </div>
+                                    <span class="behavioral-pct">${item.pct.toFixed(1)}%</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderLocationTable(locations) {
+            // Sort by percentage for "index"
+            const sorted = [...locations].sort((a, b) => b.pct - a.pct);
+            const top = sorted.slice(0, 25);
+            const bottom = sorted.slice(-25).reverse();
+
+            document.getElementById('locationList').innerHTML = top.map((loc, i) => `
+                <div class="location-row">
+                    <span>${i + 1}</span>
+                    <span>${loc.name}</span>
+                    <span>${loc.pct.toFixed(2)}%</span>
+                    <span class="index-high">${loc.index}</span>
+                </div>
+            `).join('');
+
+            document.getElementById('locationListBottom').innerHTML = bottom.map((loc, i) => `
+                <div class="location-row">
+                    <span>${sorted.length - 24 + i}</span>
+                    <span>${loc.name}</span>
+                    <span>${loc.pct.toFixed(2)}%</span>
+                    <span class="index-low">${loc.index}</span>
+                </div>
+            `).join('');
         }
 
         function downloadCurrentCSV() {
-            if (currentS3Key) {
-                window.location.href = `/api/download-cached/${encodeURIComponent(currentS3Key)}`;
-            } else if (currentJobId) {
-                window.location.href = `/api/download/${currentJobId}`;
-            }
+            if (currentS3Key) window.location.href = `/api/download-cached/${encodeURIComponent(currentS3Key)}`;
+            else if (currentJobId) window.location.href = `/api/download/${currentJobId}`;
         }
 
         async function loadJobs() {
             try {
                 const response = await fetch('/api/jobs');
                 const jobs = await response.json();
-                
                 const container = document.getElementById('jobsList');
-                
+
                 if (jobs.length === 0) {
-                    container.innerHTML = '<div class="empty-state" style="padding: 1rem;"><p>No cached results yet</p></div>';
+                    container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No results yet</div>';
                     return;
                 }
-                
-                container.innerHTML = jobs.slice(0, 20).map(job => {
+
+                container.innerHTML = jobs.slice(0, 15).map(job => {
                     const isS3 = job.source === 's3';
                     const isCompleted = job.status === 'completed' || job.status === 'cached';
-                    
                     return `
                         <div class="job-item">
                             <div class="job-info">
                                 <h3>${job.project_name}</h3>
-                                <p>${new Date(job.created_at).toLocaleString()}</p>
+                                <p>${new Date(job.created_at).toLocaleDateString()}</p>
                             </div>
-                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <div style="display: flex; gap: 0.35rem;">
                                 ${isCompleted ? `
-                                    <button class="btn btn-small" style="background: var(--accent-cyan); color: #1a1a1a;" onclick="${isS3 ? `loadCachedResult('${job.s3_key}')` : `loadJobResult('${job.job_id}')`}" title="Visualize">📊</button>
-                                    <button class="btn btn-small" style="background: var(--bg-input);" onclick="${isS3 ? `downloadS3File('${job.s3_key}')` : `downloadJobFile('${job.job_id}')`}" title="Download">📥</button>
-                                ` : `
-                                    <span class="status-badge ${job.status}">${job.status}</span>
-                                `}
+                                    <button class="btn btn-small" style="background: var(--accent-cyan); color: #1a1a1a;" onclick="${isS3 ? `loadCachedResult('${job.s3_key}')` : `loadJobResult('${job.job_id}')`}">📊</button>
+                                    <button class="btn btn-small" style="background: var(--bg-dark);" onclick="${isS3 ? `downloadS3File('${job.s3_key}')` : `downloadJobFile('${job.job_id}')`}">📥</button>
+                                ` : `<span class="status-badge ${job.status}">${job.status}</span>`}
                             </div>
                         </div>
                     `;
                 }).join('');
-            } catch (error) {
-                console.error('Failed to load jobs:', error);
-            }
+            } catch (error) { console.error('Failed to load jobs:', error); }
         }
 
-        function downloadS3File(s3Key) {
-            window.location.href = `/api/download-cached/${encodeURIComponent(s3Key)}`;
-        }
-
-        function downloadJobFile(jobId) {
-            window.location.href = `/api/download/${jobId}`;
-        }
+        function downloadS3File(s3Key) { window.location.href = `/api/download-cached/${encodeURIComponent(s3Key)}`; }
+        function downloadJobFile(jobId) { window.location.href = `/api/download/${jobId}`; }
     </script>
 </body>
 </html>
