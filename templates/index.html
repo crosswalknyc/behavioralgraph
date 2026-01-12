@@ -287,28 +287,6 @@
         @media (max-width: 1200px) { .behavioral-grid { grid-template-columns: repeat(2, 1fr); } }
         @media (max-width: 768px) { .behavioral-grid { grid-template-columns: 1fr; } }
 
-        .slicer-btn {
-            padding: 0.35rem 0.75rem;
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            color: var(--text-secondary);
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.75rem;
-            transition: all 0.2s;
-        }
-
-        .slicer-btn:hover {
-            border-color: var(--accent-blue);
-            color: var(--text-primary);
-        }
-
-        .slicer-btn.active {
-            background: var(--accent-blue);
-            color: white;
-            border-color: var(--accent-blue);
-        }
-
         .behavioral-card {
             background: var(--bg-card);
             border-radius: 8px;
@@ -625,11 +603,6 @@
 
             <!-- Behavioral Tab -->
             <div id="tab-behavioral" class="tab-content">
-                <div style="margin-bottom: 1rem; display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
-                    <div style="font-size: 0.85rem; color: var(--text-secondary);">Filter by Category:</div>
-                    <div id="categorySlicers" style="display: flex; gap: 0.5rem; flex-wrap: wrap;"></div>
-                    <button class="btn btn-small" style="background: var(--bg-dark);" onclick="clearCategoryFilters()">Clear All</button>
-                </div>
                 <div class="behavioral-grid" id="behavioralGrid"></div>
             </div>
 
@@ -961,12 +934,10 @@
         }
 
         let allBehavioralData = {};
-        let activeCategoryFilters = new Set();
 
         function renderBehavioralCards(behavioral) {
             allBehavioralData = behavioral;
             const container = document.getElementById('behavioralGrid');
-            const slicerContainer = document.getElementById('categorySlicers');
             
             const priorityCategories = ['APPAREL/FOOTWEAR', 'RETAIL', 'APPS/PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING/VIDEO', 'STREAMING/MUSIC', 'QSR', 'TECHNOLOGY/DEVICE', 'GAMES', 'SPORTS', 'MEDIA'];
 
@@ -980,33 +951,19 @@
                 return a.localeCompare(b);
             });
 
-            // Render category slicers
-            slicerContainer.innerHTML = sortedCats.slice(0, 12).map(cat => `
-                <button class="slicer-btn ${activeCategoryFilters.has(cat) ? 'active' : ''}" onclick="toggleCategoryFilter('${cat}')">${cat}</button>
-            `).join('');
-
-            // Filter categories if filters are active
-            const catsToShow = activeCategoryFilters.size > 0 
-                ? sortedCats.filter(c => activeCategoryFilters.has(c))
-                : sortedCats;
-
-            container.innerHTML = catsToShow.map(cat => {
-                const items = behavioral[cat].slice(0, 25);
-                const maxPct = Math.max(...items.map(i => i.pct), 1);
+            container.innerHTML = sortedCats.map(cat => {
+                const catId = cat.replace(/[^a-zA-Z0-9]/g, '');
+                const items = behavioral[cat];
+                const displayItems = items.slice(0, 30);
+                const maxPct = Math.max(...displayItems.map(i => i.pct), 1);
                 return `
-                    <div class="behavioral-card" id="card-${cat.replace(/[^a-zA-Z]/g, '')}">
-                        <h3>${cat} <span class="count">${behavioral[cat].length}</span></h3>
+                    <div class="behavioral-card">
+                        <h3>${cat} <span class="count">${items.length}</span></h3>
                         <div class="behavioral-filter">
-                            <select onchange="filterCardItems('${cat}', this.value)">
-                                <option value="all">All Items</option>
-                                <option value="top10">Top 10</option>
-                                <option value="top25">Top 25</option>
-                                <option value="above50">Above 50%</option>
-                                <option value="above25">Above 25%</option>
-                            </select>
+                            <input type="text" placeholder="🔍 Search..." oninput="searchInCard('${catId}', this.value)" style="font-size: 0.75rem; padding: 0.35rem;">
                         </div>
-                        <div class="behavioral-list" id="list-${cat.replace(/[^a-zA-Z]/g, '')}">
-                            ${renderBehavioralItems(items, maxPct)}
+                        <div class="behavioral-list" id="list-${catId}" data-cat="${cat}">
+                            ${renderBehavioralItems(displayItems, maxPct)}
                         </div>
                     </div>
                 `;
@@ -1015,7 +972,7 @@
 
         function renderBehavioralItems(items, maxPct) {
             return items.map((item, idx) => `
-                <div class="behavioral-item" onclick="highlightItem(this)">
+                <div class="behavioral-item">
                     <span class="behavioral-rank">${idx + 1}</span>
                     <span class="behavioral-name" title="${item.name}">${item.name}</span>
                     <div class="behavioral-bar-container">
@@ -1026,44 +983,22 @@
             `).join('');
         }
 
-        function toggleCategoryFilter(cat) {
-            if (activeCategoryFilters.has(cat)) {
-                activeCategoryFilters.delete(cat);
-            } else {
-                activeCategoryFilters.add(cat);
-            }
-            renderBehavioralCards(allBehavioralData);
-        }
-
-        function clearCategoryFilters() {
-            activeCategoryFilters.clear();
-            renderBehavioralCards(allBehavioralData);
-        }
-
-        function filterCardItems(cat, filterType) {
+        function searchInCard(catId, searchTerm) {
+            const listEl = document.getElementById('list-' + catId);
+            const cat = listEl.dataset.cat;
             const items = allBehavioralData[cat] || [];
-            let filtered;
             
-            switch(filterType) {
-                case 'top10': filtered = items.slice(0, 10); break;
-                case 'top25': filtered = items.slice(0, 25); break;
-                case 'above50': filtered = items.filter(i => i.pct >= 50); break;
-                case 'above25': filtered = items.filter(i => i.pct >= 25); break;
-                default: filtered = items.slice(0, 25);
+            let filtered = items;
+            if (searchTerm.trim()) {
+                filtered = items.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
+            } else {
+                filtered = items.slice(0, 30);
             }
             
             const maxPct = Math.max(...filtered.map(i => i.pct), 1);
-            const listId = 'list-' + cat.replace(/[^a-zA-Z]/g, '');
-            document.getElementById(listId).innerHTML = renderBehavioralItems(filtered, maxPct);
-        }
-
-        function highlightItem(el) {
-            el.style.background = 'var(--accent-blue)';
-            el.style.color = 'white';
-            setTimeout(() => {
-                el.style.background = '';
-                el.style.color = '';
-            }, 500);
+            listEl.innerHTML = filtered.length > 0 
+                ? renderBehavioralItems(filtered.slice(0, 50), maxPct)
+                : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No matches</div>';
         }
 
         function renderLocationTable(locations) {
