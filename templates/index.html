@@ -503,7 +503,10 @@
                     </div>
                     <div id="noCurrentJob"><div class="empty-state" style="padding: 1.5rem; color: var(--text-secondary);">Submit an analysis to get started</div></div>
 
-                    <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">Results Library</h3>
+                    <div style="margin-top: 1.5rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="font-size: 0.85rem; color: var(--text-secondary);">Results Library</h3>
+                        <button class="btn btn-small" style="background: var(--bg-dark); padding: 0.25rem 0.5rem;" onclick="refreshCache()" id="refreshBtn" title="Refresh list">🔄</button>
+                    </div>
                     
                     <div style="margin-bottom: 0.75rem;">
                         <input type="text" id="searchInput" placeholder="🔍 Search brands..." oninput="filterJobs()" style="margin-bottom: 0.5rem;">
@@ -1025,6 +1028,22 @@
 
         function downloadS3File(s3Key) { window.location.href = `/api/download-cached/${encodeURIComponent(s3Key)}`; }
         function downloadJobFile(jobId) { window.location.href = `/api/download/${jobId}`; }
+
+        async function refreshCache() {
+            const btn = document.getElementById('refreshBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳';
+            
+            try {
+                await fetch('/api/refresh-cache');
+                await loadJobs();
+            } catch (error) {
+                console.error('Refresh failed:', error);
+            }
+            
+            btn.disabled = false;
+            btn.textContent = '🔄';
+        }
     </script>
 </body>
 </html>

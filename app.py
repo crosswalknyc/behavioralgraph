@@ -619,14 +619,25 @@ def download_result(job_id):
     )
 
 
+# Cache for S3 file list
+s3_cache = {
+    'jobs': [],
+    'categories': [],
+    'last_updated': None,
+    'file_count': 0
+}
+S3_CACHE_TTL = 300  # 5 minutes cache
+
 @app.route('/api/jobs')
 @requires_auth
 def list_jobs():
-    """List all jobs (local + S3 cached) with category info."""
+    """List all jobs (local + S3 cached) with caching for performance."""
+    import time
+    
     job_list = []
     categories = set()
     
-    # Add local jobs
+    # Add local jobs (always fresh)
     for job_id, job in jobs.items():
         job_list.append({
             'job_id': job_id,
@@ -639,54 +650,20 @@ def list_jobs():
         })
         categories.add('LOCAL')
     
-    # Add S3 cached files with category extraction
-    if s3_client:
-        try:
-            paginator = s3_client.get_paginator('list_objects_v2')
-            for page in paginator.paginate(Bucket=S3_BUCKET):
-                for obj in page.get('Contents', []):
-                    key = obj['Key']
-                    if not key.endswith('.csv'):
-                        continue
-                    
-                    # Extract project name from filename
-                    name_parts = key.replace('.csv', '').split('_')
-                    project_name = name_parts[0].upper() if name_parts else key.replace('.csv', '')
-                    
-                    # Try to get category from file content (first few KB)
-                    category = 'UNCATEGORIZED'
-                    try:
-                        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key, Range='bytes=0-5000')
-                        partial_content = response['Body'].read().decode('utf-8', errors='ignore')
-                        
-                        # Look for INPUT_METADATA or BRAND INPUT row
-                        lines = partial_content.split('\n')
-                        for line in lines:
-                            if 'BRAND INPUT' in line:
-                                # Format: BRAND INPUT,CategoryName,... 
-                                parts = line.split(',')
-                                if len(parts) >= 2 and parts[1].strip():
-                                    cat = parts[1].strip().upper()
-                                    if cat and cat != 'CSV':
-                                        category = cat
-                                break
-                    except:
-                        pass
-                    
-                    categories.add(category)
-                    
-                    job_list.append({
-                        'job_id': key,
-                        'project_name': project_name,
-                        'status': 'cached',
-                        'progress': 100,
-                        'created_at': obj['LastModified'].isoformat(),
-                        'source': 's3',
-                        's3_key': key,
-                        'category': category
-                    })
-        except Exception as e:
-            print(f"Error listing S3 files: {e}")
+    # Check if we need to refresh S3 cache
+    now = time.time()
+    need_refresh = (
+        s3_cache['last_updated'] is None or
+        (now - s3_cache['last_updated']) > S3_CACHE_TTL
+    )
+    
+    if need_refresh and s3_client:
+        refresh_s3_cache()
+    
+    # Add cached S3 jobs
+    job_list.extend(s3_cache['jobs'])
+    for cat in s3_cache['categories']:
+        categories.add(cat)
     
     # Sort by created_at descending
     sorted_jobs = sorted(job_list, key=lambda x: x['created_at'], reverse=True)
@@ -695,6 +672,84 @@ def list_jobs():
         'jobs': sorted_jobs,
         'categories': sorted(list(categories))
     })
+
+
+@app.route('/api/refresh-cache')
+@requires_auth
+def force_refresh_cache():
+    """Force refresh the S3 cache."""
+    if s3_client:
+        refresh_s3_cache()
+        return jsonify({'success': True, 'count': len(s3_cache['jobs'])})
+    return jsonify({'success': False, 'error': 'S3 not configured'})
+
+
+def refresh_s3_cache():
+    """Refresh the S3 file cache in background."""
+    import time
+    
+    job_list = []
+    categories = set()
+    
+    try:
+        # First, just get the list of files (fast)
+        paginator = s3_client.get_paginator('list_objects_v2')
+        all_objects = []
+        
+        for page in paginator.paginate(Bucket=S3_BUCKET):
+            for obj in page.get('Contents', []):
+                if obj['Key'].endswith('.csv'):
+                    all_objects.append(obj)
+        
+        # Process each file
+        for obj in all_objects:
+            key = obj['Key']
+            
+            # Extract project name from filename
+            name_parts = key.replace('.csv', '').split('_')
+            project_name = name_parts[0].upper() if name_parts else key.replace('.csv', '')
+            
+            # Try to get category from file content (only first 3KB for speed)
+            category = 'UNCATEGORIZED'
+            try:
+                response = s3_client.get_object(Bucket=S3_BUCKET, Key=key, Range='bytes=0-3000')
+                partial_content = response['Body'].read().decode('utf-8', errors='ignore')
+                
+                # Look for BRAND INPUT row
+                for line in partial_content.split('\n'):
+                    if 'BRAND INPUT' in line:
+                        parts = line.split(',')
+                        if len(parts) >= 2 and parts[1].strip():
+                            cat = parts[1].strip().upper()
+                            if cat and cat != 'CSV':
+                                category = cat
+                        break
+            except:
+                pass
+            
+            categories.add(category)
+            
+            job_list.append({
+                'job_id': key,
+                'project_name': project_name,
+                'status': 'cached',
+                'progress': 100,
+                'created_at': obj['LastModified'].isoformat(),
+                'source': 's3',
+                's3_key': key,
+                'category': category
+            })
+        
+        # Update cache
+        s3_cache['jobs'] = job_list
+        s3_cache['categories'] = list(categories)
+        s3_cache['last_updated'] = time.time()
+        s3_cache['file_count'] = len(job_list)
+        
+        print(f"✅ S3 cache refreshed: {len(job_list)} files")
+        
+    except Exception as e:
+        print(f"Error refreshing S3 cache: {e}")
 
 
 # ============================================================================
