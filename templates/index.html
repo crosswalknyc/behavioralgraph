@@ -553,10 +553,23 @@
         .comp-mode-toggle {
             background: #2d3748;
             color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 50%;
+            padding: 0.75rem 1.25rem;
+            border-radius: 25px;
             font-size: 0.75rem;
             font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .comp-mode-toggle:hover {
+            background: #4a5568;
+            transform: scale(1.05);
+        }
+
+        .comp-mode-toggle.active {
+            background: var(--accent-cyan);
+            color: #1a1a1a;
         }
 
         .comparison-report-tabs {
@@ -1070,8 +1083,8 @@
                         <img src="https://media.licdn.com/dms/image/v2/D4E0BAQEFHJKqMfNz0Q/company-logo_200_200/company-logo_200_200/0/1710791619804/midg_media_identity_graph_logo?e=1744848000&v=beta&t=PnR7DGFXVnv0cHQnqvPJpXwXpNrJLAGBBwVv7KWJY0Y" alt="MIDG" style="height: 30px;">
                     </div>
                     <h1 class="comp-title">DEMO & BEHAVIOR</h1>
-                    <div class="comp-mode-toggle">
-                        <span>US %</span>
+                    <div class="comp-mode-toggle" id="displayModeToggle" onclick="toggleDisplayMode()" title="Click to toggle between percentages and US population numbers">
+                        <span id="displayModeLabel">US %</span>
                     </div>
                 </div>
                 <div class="comparison-report-tabs">
@@ -1771,6 +1784,7 @@
         let comparisonProfiles = [];
         let selectedForComparison = new Set();
         let loadedComparisonData = {};
+        let displayMode = 'percent'; // 'percent' or 'projection'
 
         const profileColors = ['#4a8ac9', '#f97316', '#10b981', '#f43f5e', '#8b5cf6', '#06b6d4', '#eab308', '#ec4899'];
         let expandedCategories = new Set();
@@ -1988,6 +2002,7 @@
         let currentReportType = 'comparison';
         let selectedSingleProfile = null;
         let profileReportCharts = {};
+        let currentProfileReportData = null;
 
         function setCompReportType(type) {
             currentReportType = type;
@@ -2123,7 +2138,8 @@
                         sampleSize: parsed.sampleSize,
                         projectedUS: parsed.projectedUS,
                         medianAge: parsed.medianAge,
-                        demographics: parsed.demographics
+                        demographics: parsed.demographics,
+                        demographicsProjection: parsed.demographicsProjection
                     });
                 } else {
                     container.innerHTML = `<div class="comparison-empty"><p>Failed to load profile: ${data.error || 'Unknown error'}</p></div>`;
@@ -2134,14 +2150,18 @@
         }
 
         function renderProfileReport(profile) {
+            // Store current profile data for re-rendering on toggle
+            currentProfileReportData = profile;
+            
             const container = document.getElementById('profileReportContent');
+            const summaryLabel = displayMode === 'projection' ? 'DEMOGRAPHIC SUMMARY (US POP #)' : 'DEMOGRAPHIC SUMMARY (US %)';
             
             container.innerHTML = `
                 <div style="padding: 0.5rem 1rem; background: var(--bg-input); font-size: 0.8rem; color: var(--text-secondary);">
                     ${profile.dateRange ? `Date Range: ${profile.dateRange}` : ''}
                 </div>
                 <div style="background: var(--bg-dark); padding: 0.5rem 1rem; font-size: 0.85rem; text-align: center; color: var(--text-secondary);">
-                    DEMOGRAPHIC SUMMARY (US %)
+                    ${summaryLabel}
                 </div>
                 <div class="profile-report-container">
                     <div class="profile-header">
@@ -2180,15 +2200,58 @@
             Object.values(profileReportCharts).forEach(c => c?.destroy());
             profileReportCharts = {};
 
-            const colors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#f97316', '#f43f5e', '#8b5cf6', '#06b6d4', '#eab308'];
             const doughnutColors = ['#4a8ac9', '#66d9ef', '#a6e22e', '#f97316', '#f43f5e', '#8b5cf6'];
+
+            // Get data based on display mode
+            const ageLabels = Object.keys(profile.demographics.age);
+            const ageData = displayMode === 'projection' 
+                ? ageLabels.map(k => profile.demographicsProjection?.age?.[k] || 0)
+                : Object.values(profile.demographics.age);
+            
+            const genderLabels = Object.keys(profile.demographics.gender);
+            const genderData = displayMode === 'projection'
+                ? genderLabels.map(k => profile.demographicsProjection?.gender?.[k] || 0)
+                : Object.values(profile.demographics.gender);
+            
+            const ethnicityLabels = Object.keys(profile.demographics.ethnicity);
+            const ethnicityData = displayMode === 'projection'
+                ? ethnicityLabels.map(k => profile.demographicsProjection?.ethnicity?.[k] || 0)
+                : Object.values(profile.demographics.ethnicity);
+            
+            const incomeLabels = Object.keys(profile.demographics.income);
+            const incomeData = displayMode === 'projection'
+                ? incomeLabels.map(k => profile.demographicsProjection?.income?.[k] || 0)
+                : Object.values(profile.demographics.income);
+
+            // Data label formatter based on mode
+            const barFormatter = displayMode === 'projection'
+                ? (value) => formatNumber(Math.round(value))
+                : (value) => value.toFixed(2) + '%';
+            
+            const legendFormatter = displayMode === 'projection'
+                ? (chart) => {
+                    const data = chart.data;
+                    return data.labels.map((label, i) => ({
+                        text: `${label} ${formatNumber(Math.round(data.datasets[0].data[i]))}`,
+                        fillStyle: data.datasets[0].backgroundColor[i],
+                        index: i
+                    }));
+                }
+                : (chart) => {
+                    const data = chart.data;
+                    return data.labels.map((label, i) => ({
+                        text: `${label} ${data.datasets[0].data[i].toFixed(2)}%`,
+                        fillStyle: data.datasets[0].backgroundColor[i],
+                        index: i
+                    }));
+                };
 
             // Age chart (horizontal bar)
             profileReportCharts.age = new Chart(document.getElementById('profileAgeChart'), {
                 type: 'bar',
                 data: { 
-                    labels: Object.keys(profile.demographics.age), 
-                    datasets: [{ data: Object.values(profile.demographics.age), backgroundColor: '#5a9ad9', borderRadius: 4 }] 
+                    labels: ageLabels, 
+                    datasets: [{ data: ageData, backgroundColor: '#5a9ad9', borderRadius: 4 }] 
                 },
                 options: { 
                     indexAxis: 'y', 
@@ -2201,11 +2264,11 @@
                             anchor: 'end',
                             align: 'end',
                             font: { size: 10, weight: 'bold' },
-                            formatter: (value) => value.toFixed(2) + '%'
+                            formatter: barFormatter
                         }
                     }, 
                     scales: { 
-                        x: { display: false, max: 25 }, 
+                        x: { display: false }, 
                         y: { grid: { display: false }, ticks: { color: '#8892b0', font: { size: 10 } } } 
                     } 
                 },
@@ -2216,21 +2279,14 @@
             profileReportCharts.gender = new Chart(document.getElementById('profileGenderChart'), {
                 type: 'doughnut',
                 data: { 
-                    labels: Object.keys(profile.demographics.gender), 
-                    datasets: [{ data: Object.values(profile.demographics.gender), backgroundColor: doughnutColors }] 
+                    labels: genderLabels, 
+                    datasets: [{ data: genderData, backgroundColor: doughnutColors }] 
                 },
                 options: { 
                     responsive: true, 
                     maintainAspectRatio: false, 
                     plugins: { 
-                        legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 10 }, generateLabels: (chart) => {
-                            const data = chart.data;
-                            return data.labels.map((label, i) => ({
-                                text: `${label} ${data.datasets[0].data[i].toFixed(2)}%`,
-                                fillStyle: data.datasets[0].backgroundColor[i],
-                                index: i
-                            }));
-                        }}},
+                        legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 10 }, generateLabels: legendFormatter }},
                         datalabels: { display: false }
                     }
                 }
@@ -2240,21 +2296,14 @@
             profileReportCharts.ethnicity = new Chart(document.getElementById('profileEthnicityChart'), {
                 type: 'doughnut',
                 data: { 
-                    labels: Object.keys(profile.demographics.ethnicity), 
-                    datasets: [{ data: Object.values(profile.demographics.ethnicity), backgroundColor: doughnutColors }] 
+                    labels: ethnicityLabels, 
+                    datasets: [{ data: ethnicityData, backgroundColor: doughnutColors }] 
                 },
                 options: { 
                     responsive: true, 
                     maintainAspectRatio: false, 
                     plugins: { 
-                        legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 10 }, generateLabels: (chart) => {
-                            const data = chart.data;
-                            return data.labels.map((label, i) => ({
-                                text: `${label} ${data.datasets[0].data[i].toFixed(2)}%`,
-                                fillStyle: data.datasets[0].backgroundColor[i],
-                                index: i
-                            }));
-                        }}},
+                        legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 10 }, generateLabels: legendFormatter }},
                         datalabels: { display: false }
                     }
                 }
@@ -2264,8 +2313,8 @@
             profileReportCharts.income = new Chart(document.getElementById('profileIncomeChart'), {
                 type: 'bar',
                 data: { 
-                    labels: Object.keys(profile.demographics.income), 
-                    datasets: [{ data: Object.values(profile.demographics.income), backgroundColor: '#5a9ad9', borderRadius: 4 }] 
+                    labels: incomeLabels, 
+                    datasets: [{ data: incomeData, backgroundColor: '#5a9ad9', borderRadius: 4 }] 
                 },
                 options: { 
                     responsive: true, 
@@ -2277,12 +2326,12 @@
                             anchor: 'end',
                             align: 'top',
                             font: { size: 9, weight: 'bold' },
-                            formatter: (value) => value.toFixed(1) + '%'
+                            formatter: barFormatter
                         }
                     }, 
                     scales: { 
                         x: { grid: { display: false }, ticks: { color: '#8892b0', font: { size: 8 }, maxRotation: 45 } }, 
-                        y: { display: false, max: 25 } 
+                        y: { display: false } 
                     } 
                 },
                 plugins: [ChartDataLabels]
@@ -2295,8 +2344,11 @@
                 projectedUS: 0,
                 medianAge: 0,
                 demographics: { age: {}, gender: {}, ethnicity: {}, income: {} },
+                demographicsProjection: { age: {}, gender: {}, ethnicity: {}, income: {} }, // Raw US projection numbers
                 behavioral: {},
-                locations: []
+                behavioralProjection: {}, // Raw projection numbers for behavioral
+                locations: [],
+                locationsProjection: [] // Raw projection numbers for locations
             };
 
             const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'];
@@ -2308,33 +2360,47 @@
                 const brandPen = parseFloat(row['Brand Penetration (Row)'] || row[2] || 0);
                 const catShare = parseFloat(row['Category Share'] || row[3] || 0);
                 const rawNum = parseFloat(row['Original Raw Numbers'] || row[4] || 0);
+                const usGenPop = parseFloat(row['US Gen Pop Projection'] || row[5] || 0);
                 const pct = brandPen || catShare || 0;
 
                 if (category === 'SAMPLE SIZE') {
                     result.sampleSize = rawNum || catShare || brandPen || 0;
                 }
                 if (category === 'BRAND INPUT') {
-                    result.projectedUS = parseFloat(row['US Gen Pop Projection'] || row[5] || 0);
+                    result.projectedUS = usGenPop || 0;
                 }
                 if (category.includes('MEDIAN') && category.includes('AGE')) {
                     result.medianAge = brandPen || catShare || parseFloat(value) || 0;
                 }
 
-                // Demographics
-                if (category === 'AGE' && value && pct > 0) result.demographics.age[value] = pct;
-                if (category === 'GENDER' && value && pct > 0) result.demographics.gender[value] = pct;
-                if (category === 'ETHNICITY' && value && pct > 0) result.demographics.ethnicity[value] = pct;
-                if (category === 'INCOME' && value && pct > 0) result.demographics.income[value] = pct;
-
-                // Location/DMA
-                if (category === 'LOCATION' && value && pct > 0) {
-                    result.locations.push({ name: value, pct: pct });
+                // Demographics - store both percent and projection
+                if (category === 'AGE' && value && pct > 0) {
+                    result.demographics.age[value] = pct;
+                    result.demographicsProjection.age[value] = usGenPop || 0;
+                }
+                if (category === 'GENDER' && value && pct > 0) {
+                    result.demographics.gender[value] = pct;
+                    result.demographicsProjection.gender[value] = usGenPop || 0;
+                }
+                if (category === 'ETHNICITY' && value && pct > 0) {
+                    result.demographics.ethnicity[value] = pct;
+                    result.demographicsProjection.ethnicity[value] = usGenPop || 0;
+                }
+                if (category === 'INCOME' && value && pct > 0) {
+                    result.demographics.income[value] = pct;
+                    result.demographicsProjection.income[value] = usGenPop || 0;
                 }
 
-                // Behavioral (non-demographic categories)
+                // Location/DMA - store both percent and projection
+                if (category === 'LOCATION' && value && pct > 0) {
+                    result.locations.push({ name: value, pct: pct, projection: usGenPop || 0 });
+                }
+
+                // Behavioral (non-demographic categories) - store both percent and projection
                 if (!demoCategories.includes(category) && !skipCategories.includes(category) && category !== 'LOCATION' && value && pct > 0) {
                     if (!result.behavioral[category]) result.behavioral[category] = [];
-                    result.behavioral[category].push({ name: value, pct: pct });
+                    if (!result.behavioralProjection[category]) result.behavioralProjection[category] = [];
+                    result.behavioral[category].push({ name: value, pct: pct, projection: usGenPop || 0 });
                 }
             });
 
@@ -2344,6 +2410,37 @@
             });
 
             return result;
+        }
+
+        function toggleDisplayMode() {
+            displayMode = displayMode === 'percent' ? 'projection' : 'percent';
+            const toggle = document.getElementById('displayModeToggle');
+            const label = document.getElementById('displayModeLabel');
+            
+            if (displayMode === 'projection') {
+                toggle.classList.add('active');
+                label.textContent = 'US POP #';
+            } else {
+                toggle.classList.remove('active');
+                label.textContent = 'US %';
+            }
+
+            // Re-render comparison if data is loaded
+            if (loadedComparisonData.profiles && loadedComparisonData.profiles.length > 0) {
+                renderComparison(loadedComparisonData.profiles, currentSort.column, currentSort.direction);
+            }
+
+            // Re-render profile report if a profile is loaded
+            if (currentProfileReportData && currentReportType === 'profile') {
+                renderProfileReport(currentProfileReportData);
+            }
+        }
+
+        function formatDisplayValue(pct, projection) {
+            if (displayMode === 'projection') {
+                return formatNumber(Math.round(projection));
+            }
+            return pct.toFixed(2) + '%';
         }
 
         async function runComparison() {
@@ -2400,7 +2497,9 @@
                             projectedUS: parsed.projectedUS,
                             medianAge: parsed.medianAge,
                             demographics: parsed.demographics,
+                            demographicsProjection: parsed.demographicsProjection,
                             behavioral: parsed.behavioral,
+                            behavioralProjection: parsed.behavioralProjection,
                             locations: parsed.locations
                         };
                         
@@ -2792,23 +2891,27 @@
                 });
             });
 
-            // Build data rows
+            // Build data rows with both pct and projection
             let dataRows = Array.from(allValues.keys()).map(value => {
                 return {
                     value: value,
-                    data: profiles.map(p => {
+                    pctData: profiles.map(p => {
                         const item = (p.behavioral[category] || []).find(i => i.name === value);
                         return item ? item.pct : 0;
+                    }),
+                    projData: profiles.map(p => {
+                        const item = (p.behavioral[category] || []).find(i => i.name === value);
+                        return item ? (item.projection || 0) : 0;
                     })
                 };
             });
 
-            // Sort by selected profile column, or by max value across all profiles
+            // Sort by selected profile column (always use pct for sorting), or by max value
             if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
-                dataRows.sort((a, b) => b.data[sortByProfileIdx] - a.data[sortByProfileIdx]);
+                dataRows.sort((a, b) => b.pctData[sortByProfileIdx] - a.pctData[sortByProfileIdx]);
             } else {
                 // Default: sort by max value across all profiles
-                dataRows.sort((a, b) => Math.max(...b.data) - Math.max(...a.data));
+                dataRows.sort((a, b) => Math.max(...b.pctData) - Math.max(...a.pctData));
             }
 
             // Take top 15
@@ -2818,14 +2921,18 @@
                 <tr>
                     <td>${row.value}</td>
                     ${profiles.map((p, i) => {
-                        const pct = row.data[i];
+                        const pct = row.pctData[i];
+                        const proj = row.projData[i];
+                        const displayVal = displayMode === 'projection' 
+                            ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
+                            : (pct > 0 ? pct.toFixed(2) + '%' : '-');
                         return `
                             <td>
                                 <div class="comp-bar-cell">
                                     <div class="comp-bar">
                                         <div class="comp-bar-fill" style="width: ${Math.min(pct / 30 * 100, 100)}%; background: ${p.color};"></div>
                                     </div>
-                                    <span class="comp-bar-pct">${pct > 0 ? pct.toFixed(2) + '%' : '-'}</span>
+                                    <span class="comp-bar-pct">${displayVal}</span>
                                 </div>
                             </td>
                         `;
@@ -2841,22 +2948,26 @@
                 (p.locations || []).forEach(loc => allLocations.add(loc.name));
             });
 
-            // Build data rows
+            // Build data rows with both pct and projection
             let dataRows = Array.from(allLocations).map(locName => {
                 return {
                     value: locName,
-                    data: profiles.map(p => {
+                    pctData: profiles.map(p => {
                         const loc = (p.locations || []).find(l => l.name === locName);
                         return loc ? loc.pct : 0;
+                    }),
+                    projData: profiles.map(p => {
+                        const loc = (p.locations || []).find(l => l.name === locName);
+                        return loc ? (loc.projection || 0) : 0;
                     })
                 };
             });
 
-            // Sort by selected profile column, or by max value
+            // Sort by selected profile column (use pct), or by max value
             if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
-                dataRows.sort((a, b) => b.data[sortByProfileIdx] - a.data[sortByProfileIdx]);
+                dataRows.sort((a, b) => b.pctData[sortByProfileIdx] - a.pctData[sortByProfileIdx]);
             } else {
-                dataRows.sort((a, b) => Math.max(...b.data) - Math.max(...a.data));
+                dataRows.sort((a, b) => Math.max(...b.pctData) - Math.max(...a.pctData));
             }
 
             // Take top 15
@@ -2866,14 +2977,18 @@
                 <tr>
                     <td>${row.value}</td>
                     ${profiles.map((p, i) => {
-                        const pct = row.data[i];
+                        const pct = row.pctData[i];
+                        const proj = row.projData[i];
+                        const displayVal = displayMode === 'projection' 
+                            ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
+                            : (pct > 0 ? pct.toFixed(2) + '%' : '-');
                         return `
                             <td>
                                 <div class="comp-bar-cell">
                                     <div class="comp-bar">
                                         <div class="comp-bar-fill" style="width: ${Math.min(pct / 10 * 100, 100)}%; background: ${p.color};"></div>
                                     </div>
-                                    <span class="comp-bar-pct">${pct > 0 ? pct.toFixed(2) + '%' : '-'}</span>
+                                    <span class="comp-bar-pct">${displayVal}</span>
                                 </div>
                             </td>
                         `;
@@ -2889,17 +3004,18 @@
                 Object.keys(p.demographics[demoType] || {}).forEach(v => allValues.add(v));
             });
 
-            // Build data array with values for sorting
+            // Build data array with values for sorting (always sort by percentage for consistent ordering)
             let dataRows = Array.from(allValues).map(value => {
                 return {
                     value: value,
-                    data: profiles.map(p => p.demographics[demoType]?.[value] || 0)
+                    pctData: profiles.map(p => p.demographics[demoType]?.[value] || 0),
+                    projData: profiles.map(p => p.demographicsProjection?.[demoType]?.[value] || 0)
                 };
             });
 
-            // Sort by selected profile column, or default sort
+            // Sort by selected profile column (use pct for sorting), or default sort
             if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
-                dataRows.sort((a, b) => b.data[sortByProfileIdx] - a.data[sortByProfileIdx]);
+                dataRows.sort((a, b) => b.pctData[sortByProfileIdx] - a.pctData[sortByProfileIdx]);
             } else if (demoType === 'age') {
                 dataRows.sort((a, b) => {
                     const numA = parseInt(a.value.replace(/[^0-9]/g, '')) || 0;
@@ -2913,15 +3029,19 @@
                     <tr>
                         <td>${row.value.toUpperCase()}</td>
                         ${profiles.map((p, i) => {
-                            const pct = row.data[i];
+                            const pct = row.pctData[i];
+                            const proj = row.projData[i];
                             const maxPct = 60;
+                            const displayVal = displayMode === 'projection' 
+                                ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
+                                : (pct > 0 ? pct.toFixed(2) + '%' : '-');
                             return `
                                 <td>
                                     <div class="comp-bar-cell">
                                         <div class="comp-bar">
                                             <div class="comp-bar-fill" style="width: ${Math.min(pct / maxPct * 100, 100)}%; background: ${p.color};"></div>
                                         </div>
-                                        <span class="comp-bar-pct">${pct > 0 ? pct.toFixed(2) + '%' : '-'}</span>
+                                        <span class="comp-bar-pct">${displayVal}</span>
                                     </div>
                                 </td>
                             `;
