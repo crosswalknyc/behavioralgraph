@@ -364,6 +364,92 @@ def download_cached(s3_key):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/get-csv-data/<path:s3_key>')
+@requires_auth
+def get_csv_data(s3_key):
+    """Get CSV data as JSON for dashboard display."""
+    if not s3_client:
+        return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        csv_content = response['Body'].read().decode('utf-8')
+        
+        # Parse CSV
+        df = pd.read_csv(io.StringIO(csv_content))
+        
+        # Extract brand name and date range from metadata
+        brand_name = s3_key.split('_')[0] if '_' in s3_key else s3_key.replace('.csv', '')
+        date_range = ''
+        
+        # Try to get from INPUT_METADATA
+        metadata_rows = df[df['Column'] == 'INPUT_METADATA']
+        if not metadata_rows.empty:
+            metadata_value = str(metadata_rows.iloc[0]['Value'])
+            # Parse BRAND:xxx_SAMPLE_START:xxx_SAMPLE_END:xxx
+            if 'BRAND:' in metadata_value:
+                brand_name = metadata_value.split('BRAND:')[1].split('_')[0]
+            if 'SAMPLE_START:' in metadata_value and 'SAMPLE_END:' in metadata_value:
+                start = metadata_value.split('SAMPLE_START:')[1].split('_')[0]
+                end = metadata_value.split('SAMPLE_END:')[1].split('_')[0]
+                date_range = f"{start} - {end}"
+        
+        # Convert to records
+        data = df.to_dict('records')
+        
+        return jsonify({
+            'success': True,
+            'data': data,
+            'brand': brand_name.upper(),
+            'date_range': date_range
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/job-data/<job_id>')
+@requires_auth
+def get_job_data(job_id):
+    """Get job result data as JSON for dashboard display."""
+    if job_id not in jobs:
+        return jsonify({'success': False, 'error': 'Job not found'}), 404
+    
+    job = jobs[job_id]
+    if job['status'] != 'completed':
+        return jsonify({'success': False, 'error': 'Job not completed'}), 400
+    
+    if not job['result_file'] or not os.path.exists(job['result_file']):
+        return jsonify({'success': False, 'error': 'Result file not found'}), 404
+    
+    try:
+        df = pd.read_csv(job['result_file'])
+        
+        # Extract brand and date range
+        brand_name = job['project_name']
+        date_range = ''
+        
+        metadata_rows = df[df['Column'] == 'INPUT_METADATA']
+        if not metadata_rows.empty:
+            metadata_value = str(metadata_rows.iloc[0]['Value'])
+            if 'BRAND:' in metadata_value:
+                brand_name = metadata_value.split('BRAND:')[1].split('_')[0]
+            if 'SAMPLE_START:' in metadata_value and 'SAMPLE_END:' in metadata_value:
+                start = metadata_value.split('SAMPLE_START:')[1].split('_')[0]
+                end = metadata_value.split('SAMPLE_END:')[1].split('_')[0]
+                date_range = f"{start} - {end}"
+        
+        data = df.to_dict('records')
+        
+        return jsonify({
+            'success': True,
+            'data': data,
+            'brand': brand_name.upper(),
+            'date_range': date_range
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/submit', methods=['POST'])
 @requires_auth
 def submit_analysis():

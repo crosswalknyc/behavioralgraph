@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Behavioral Graph | MIDG Analysis Pipeline</title>
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --bg-dark: #0a1929;
@@ -15,6 +16,7 @@
             --accent-green: #a6e22e;
             --accent-orange: #fd971f;
             --accent-red: #f92672;
+            --accent-lime: #c8ff00;
             --text-primary: #e6f1ff;
             --text-secondary: #8892b0;
             --border-color: #1e3a5f;
@@ -61,6 +63,33 @@
         }
 
         .header-text p { color: var(--text-secondary); font-size: 0.9rem; }
+
+        /* View Toggle */
+        .view-toggle {
+            display: flex;
+            gap: 0.5rem;
+            margin-left: auto;
+        }
+
+        .view-btn {
+            padding: 0.5rem 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .view-btn.active {
+            background: var(--accent-blue);
+            color: white;
+            border-color: var(--accent-blue);
+        }
+
+        /* Form View */
+        #formView { display: block; }
+        #dashboardView { display: none; }
 
         .main-grid {
             display: grid;
@@ -182,12 +211,6 @@
             color: white;
         }
 
-        .btn-secondary {
-            background: var(--bg-input);
-            color: var(--text-primary);
-            border: 1px solid var(--border-color);
-        }
-
         .btn-success {
             background: linear-gradient(135deg, var(--accent-green), #8bc926);
             color: #1a1a1a;
@@ -224,17 +247,12 @@
 
         .collapsible-content.open { display: block; }
 
-        /* Status Panel - Simplified */
+        /* Status Panel */
         .status-panel {
             background: var(--bg-input);
             border-radius: 8px;
             padding: 1.25rem;
             text-align: center;
-        }
-
-        .status-icon {
-            font-size: 3rem;
-            margin-bottom: 0.75rem;
         }
 
         .status-text {
@@ -322,6 +340,152 @@
 
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .pulse { animation: pulse 1.5s ease-in-out infinite; }
+
+        /* ============================================
+           DASHBOARD STYLES
+           ============================================ */
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 1.5rem;
+            min-height: 80vh;
+        }
+
+        .dashboard-sidebar {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+
+        .brand-box {
+            background: var(--accent-lime);
+            color: #1a1a1a;
+            padding: 2rem 1rem;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .brand-box h2 {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0;
+            color: #1a1a1a;
+        }
+
+        .date-range-bar {
+            background: var(--bg-input);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .category-tree {
+            font-size: 0.85rem;
+        }
+
+        .category-item {
+            padding: 0.35rem 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .category-item:hover {
+            color: var(--accent-cyan);
+        }
+
+        .category-item.active {
+            color: var(--accent-lime);
+            font-weight: 600;
+        }
+
+        .category-children {
+            padding-left: 1.25rem;
+            display: none;
+        }
+
+        .category-children.open {
+            display: block;
+        }
+
+        .dashboard-main {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-family: 'Space Mono', monospace;
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stat-prefix {
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+
+        .chart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+
+        .chart-card h3 {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 200px;
+        }
+
+        .download-bar {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
     </style>
 </head>
 <body>
@@ -334,325 +498,272 @@
                 <h1>BEHAVIORAL GRAPH</h1>
                 <p>MIDG Clickstream Analysis Pipeline</p>
             </div>
+            <div class="view-toggle">
+                <button class="view-btn active" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
+                <button class="view-btn" id="dashboardViewBtn" onclick="showDashboardView()">📊 Dashboard</button>
+            </div>
         </header>
 
-        <div class="main-grid">
-            <!-- Input Form -->
-            <div class="card">
-                <h2>📊 Analysis Parameters</h2>
-                
-                
-                <form id="analysisForm">
-                    <!-- Step 1: Project Identification -->
-                    <div class="form-section">
-                        <div class="form-section-title">📁 Step 1 - Project Identification</div>
-                        
-                        <div class="form-group">
-                            <label for="project_name">Project Name</label>
-                            <input type="text" id="project_name" name="project_name" placeholder="e.g., Nike_Q4_Analysis" required>
-                        </div>
-
-                        <div class="form-row">
+        <!-- FORM VIEW -->
+        <div id="formView">
+            <div class="main-grid">
+                <div class="card">
+                    <h2>📊 Analysis Parameters</h2>
+                    
+                    <form id="analysisForm">
+                        <div class="form-section">
+                            <div class="form-section-title">📁 Step 1 - Project Identification</div>
+                            
                             <div class="form-group">
-                                <label class="checkbox-group">
-                                    <input type="checkbox" id="is_genpop" name="is_genpop" checked>
-                                    <span>GenPop Analysis (General Population)</span>
-                                </label>
+                                <label for="project_name">Project Name</label>
+                                <input type="text" id="project_name" name="project_name" placeholder="e.g., Nike_Q4_Analysis" required>
                             </div>
-                            <div class="form-group">
-                                <label class="checkbox-group">
-                                    <input type="checkbox" id="purchasers_only" name="purchasers_only">
-                                    <span>Purchasers Only</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- Step 2: Brand Input -->
-                    <div class="form-section">
-                        <div class="form-section-title">🏷️ Step 2 - Brand Input</div>
-                        
-                        <div class="form-group">
-                            <label for="brands">Brands (comma-separated or one per line)</label>
-                            <textarea id="brands" name="brands" placeholder="nike, adidas, puma&#10;or enter URLs like https://nike.com" required onblur="checkForCache()"></textarea>
-                            <div class="help-text">Enter brand names, domains, or full URLs. Variations will be auto-generated.</div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="brand_category">Brand Category</label>
-                            <input type="text" id="brand_category" name="brand_category" placeholder="e.g., APPAREL/FOOTWEAR, QSR, STREAMING/MUSIC, SOCIAL MEDIA">
-                            <div class="help-text">Enter the category for the main brand (e.g., INFLUENCERS, SOCIAL MEDIA, QSR, TELECOM, SPORTS, etc.)</div>
-                        </div>
-                    </div>
-
-                    <!-- Step 3: Date Ranges -->
-                    <div class="form-section">
-                        <div class="form-section-title">📅 Step 3 - Date Ranges</div>
-                        
-                        <div class="form-group">
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="same_dates" name="same_dates" checked onchange="toggleDateRanges()">
-                                <span>Same dates for Sample Group & Behavior Study</span>
-                            </label>
-                        </div>
-
-                        <div id="single_date_range">
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="start_date">Start Date</label>
-                                    <input type="date" id="start_date" name="start_date" required onchange="checkForCache()">
-                                </div>
-                                <div class="form-group">
-                                    <label for="end_date">End Date</label>
-                                    <input type="date" id="end_date" name="end_date" required onchange="checkForCache()">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="separate_date_ranges" style="display: none;">
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="sample_start">Sample Start</label>
-                                    <input type="date" id="sample_start" name="sample_start">
-                                </div>
-                                <div class="form-group">
-                                    <label for="sample_end">Sample End</label>
-                                    <input type="date" id="sample_end" name="sample_end">
-                                </div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="behavior_start">Behavior Start</label>
-                                    <input type="date" id="behavior_start" name="behavior_start">
-                                </div>
-                                <div class="form-group">
-                                    <label for="behavior_end">Behavior End</label>
-                                    <input type="date" id="behavior_end" name="behavior_end">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Step 4: Demographic Filters -->
-                    <div class="collapsible">
-                        <div class="collapsible-header" onclick="toggleCollapsible(this)">
-                            <span>🎯 Step 4 - Demographic Filters (Optional)</span>
-                            <span>▼</span>
-                        </div>
-                        <div class="collapsible-content">
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="gender">Gender</label>
-                                    <select id="gender" name="gender">
-                                        <option value="">All</option>
-                                        <option value="Female">Female</option>
-                                        <option value="Male">Male</option>
-                                        <option value="Trans Male">Trans Male</option>
-                                        <option value="Trans Female">Trans Female</option>
-                                        <option value="Non-binary">Non-binary</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="age">Age Group</label>
-                                    <select id="age" name="age">
-                                        <option value="">All</option>
-                                        <option value="<16">&lt;16</option>
-                                        <option value="16-18">16-18</option>
-                                        <option value="18-20">18-20</option>
-                                        <option value="21-25">21-25</option>
-                                        <option value="26-30">26-30</option>
-                                        <option value="31-40">31-40</option>
-                                        <option value="41-59">41-59</option>
-                                        <option value="60+">60+</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="ethnicity">Ethnicity</label>
-                                    <select id="ethnicity" name="ethnicity">
-                                        <option value="">All</option>
-                                        <option value="White">White</option>
-                                        <option value="Black">Black</option>
-                                        <option value="LatinX">LatinX</option>
-                                        <option value="Asian">Asian</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="income">Household Income</label>
-                                    <select id="income" name="income">
-                                        <option value="">All</option>
-                                        <option value="$40K - $60K">$40K - $60K</option>
-                                        <option value="$60K - $75K">$60K - $75K</option>
-                                        <option value="$75K - $100K">$75K - $100K</option>
-                                        <option value="$100K - $150K">$100K - $150K</option>
-                                        <option value="$150K - $250K">$150K - $250K</option>
-                                        <option value="$250K+">$250K+</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="education">Education</label>
-                                    <select id="education" name="education">
-                                        <option value="">All</option>
-                                        <option value="Completed HS only">Completed HS only</option>
-                                        <option value="Complete College/University">Complete College/University</option>
-                                        <option value="Completed Grad School">Completed Grad School</option>
-                                        <option value="None">None</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="relationship">Relationship Status</label>
-                                    <select id="relationship" name="relationship">
-                                        <option value="">All</option>
-                                        <option value="Single">Single</option>
-                                        <option value="In a Relationship">In a Relationship</option>
-                                        <option value="Married">Married</option>
-                                        <option value="Divorced">Divorced</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="sexual_orientation">LGBTQ+</label>
-                                    <select id="sexual_orientation" name="sexual_orientation">
-                                        <option value="">All</option>
-                                        <option value="Yes">Yes</option>
-                                        <option value="No">No</option>
-                                        <option value="Prefer not to say">Prefer not to say</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="parental_status">Parental Status</label>
-                                    <select id="parental_status" name="parental_status">
-                                        <option value="">All</option>
-                                        <option value="Has Kids">Has Kids</option>
-                                        <option value="Doesn't have Kids">Doesn't have Kids</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Step 5: Advanced Options -->
-                    <div class="collapsible">
-                        <div class="collapsible-header" onclick="toggleCollapsible(this)">
-                            <span>⚙️ Step 5 - Advanced Options</span>
-                            <span>▼</span>
-                        </div>
-                        <div class="collapsible-content">
                             <div class="form-row">
                                 <div class="form-group">
                                     <label class="checkbox-group">
-                                        <input type="checkbox" id="include_frequency" name="include_frequency">
-                                        <span>Include Visit Frequency Analysis</span>
+                                        <input type="checkbox" id="is_genpop" name="is_genpop" checked>
+                                        <span>GenPop Analysis</span>
                                     </label>
                                 </div>
                                 <div class="form-group">
                                     <label class="checkbox-group">
-                                        <input type="checkbox" id="is_listener_watcher" name="is_listener_watcher">
-                                        <span>Listener/Watcher/Player Profile</span>
+                                        <input type="checkbox" id="purchasers_only" name="purchasers_only">
+                                        <span>Purchasers Only</span>
                                     </label>
                                 </div>
                             </div>
+                        </div>
+
+                        <div class="form-section">
+                            <div class="form-section-title">🏷️ Step 2 - Brand Input</div>
+                            
+                            <div class="form-group">
+                                <label for="brands">Brands (comma-separated)</label>
+                                <textarea id="brands" name="brands" placeholder="nike, adidas, puma" required></textarea>
+                            </div>
 
                             <div class="form-group">
+                                <label for="brand_category">Brand Category</label>
+                                <input type="text" id="brand_category" name="brand_category" placeholder="e.g., APPAREL/FOOTWEAR, QSR, STREAMING">
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <div class="form-section-title">📅 Step 3 - Date Ranges</div>
+                            
+                            <div class="form-group">
                                 <label class="checkbox-group">
-                                    <input type="checkbox" id="is_update" name="is_update" onchange="togglePreviousFile()">
-                                    <span>Updating a Previous Run</span>
+                                    <input type="checkbox" id="same_dates" name="same_dates" checked onchange="toggleDateRanges()">
+                                    <span>Same dates for Sample & Behavior</span>
                                 </label>
                             </div>
 
-                            <div class="form-group" id="previous_file_group" style="display: none;">
-                                <label for="previous_file">Previous CSV File Path</label>
-                                <input type="text" id="previous_file" name="previous_file" placeholder="/path/to/previous_run.csv">
-                            </div>
-
-                            <div class="form-section-title" style="margin-top: 1rem;">🎛️ Demographic Safety Checks</div>
-                            <div class="form-group">
-                                <label class="checkbox-group">
-                                    <input type="checkbox" id="enable_skew" name="enable_skew" onchange="toggleSkewSettings()">
-                                    <span>Enable Demographic Safety Checks</span>
-                                </label>
-                            </div>
-
-                            <div id="skew_settings" style="display: none;">
+                            <div id="single_date_range">
                                 <div class="form-row">
                                     <div class="form-group">
-                                        <label for="skew_category">Category to Adjust</label>
-                                        <select id="skew_category" name="skew_category">
-                                            <option value="GENDER">Gender</option>
-                                            <option value="AGE">Age</option>
-                                            <option value="ETHNICITY">Ethnicity</option>
-                                            <option value="INCOME">Income</option>
+                                        <label for="start_date">Start Date</label>
+                                        <input type="date" id="start_date" name="start_date" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="end_date">End Date</label>
+                                        <input type="date" id="end_date" name="end_date" required>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="separate_date_ranges" style="display: none;">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="sample_start">Sample Start</label>
+                                        <input type="date" id="sample_start" name="sample_start">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sample_end">Sample End</label>
+                                        <input type="date" id="sample_end" name="sample_end">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="behavior_start">Behavior Start</label>
+                                        <input type="date" id="behavior_start" name="behavior_start">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="behavior_end">Behavior End</label>
+                                        <input type="date" id="behavior_end" name="behavior_end">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="collapsible">
+                            <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                                <span>🎯 Demographic Filters (Optional)</span>
+                                <span>▼</span>
+                            </div>
+                            <div class="collapsible-content">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="gender">Gender</label>
+                                        <select id="gender" name="gender">
+                                            <option value="">All</option>
+                                            <option value="Female">Female</option>
+                                            <option value="Male">Male</option>
+                                            <option value="Non-binary">Non-binary</option>
                                         </select>
                                     </div>
                                     <div class="form-group">
-                                        <label for="skew_target">Target Value(s)</label>
-                                        <input type="text" id="skew_target" name="skew_target" placeholder="e.g., Female, Male">
+                                        <label for="age">Age Group</label>
+                                        <select id="age" name="age">
+                                            <option value="">All</option>
+                                            <option value="<16">&lt;16</option>
+                                            <option value="16-18">16-18</option>
+                                            <option value="18-20">18-20</option>
+                                            <option value="21-25">21-25</option>
+                                            <option value="26-30">26-30</option>
+                                            <option value="31-40">31-40</option>
+                                            <option value="41-59">41-59</option>
+                                            <option value="60+">60+</option>
+                                        </select>
                                     </div>
                                 </div>
-                                <div class="form-group">
-                                    <label for="skew_strength">Adjustment Strength</label>
-                                    <select id="skew_strength" name="skew_strength">
-                                        <option value="small">Small</option>
-                                        <option value="medium">Medium</option>
-                                        <option value="large">Large</option>
-                                    </select>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="ethnicity">Ethnicity</label>
+                                        <select id="ethnicity" name="ethnicity">
+                                            <option value="">All</option>
+                                            <option value="White">White</option>
+                                            <option value="Black">Black</option>
+                                            <option value="LatinX">LatinX</option>
+                                            <option value="Asian">Asian</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="income">Income</label>
+                                        <select id="income" name="income">
+                                            <option value="">All</option>
+                                            <option value="$40K - $60K">$40K - $60K</option>
+                                            <option value="$60K - $75K">$60K - $75K</option>
+                                            <option value="$75K - $100K">$75K - $100K</option>
+                                            <option value="$100K - $150K">$100K - $150K</option>
+                                            <option value="$150K - $250K">$150K - $250K</option>
+                                            <option value="$250K+">$250K+</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <button type="submit" class="btn btn-primary" id="submitBtn">
-                        <span>🚀</span> Run Analysis
-                    </button>
-                </form>
-            </div>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <span>🚀</span> Run Analysis
+                        </button>
+                    </form>
+                </div>
 
-            <!-- Status & Results -->
-            <div class="card">
-                <h2>📈 Job Status</h2>
-                
-                <div id="currentJob" style="display: none;">
-                    <div class="status-panel">
-                        <div id="statusRunning">
-                            <div class="spinner"></div>
-                            <div class="status-text pulse" id="statusText">Processing...</div>
-                            <div class="status-message" id="statusMessage">Analysis in progress</div>
-                            <div class="progress-bar">
-                                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                <div class="card">
+                    <h2>📈 Job Status</h2>
+                    
+                    <div id="currentJob" style="display: none;">
+                        <div class="status-panel">
+                            <div id="statusRunning">
+                                <div class="spinner"></div>
+                                <div class="status-text pulse" id="statusText">Processing...</div>
+                                <div class="status-message" id="statusMessage">Analysis in progress</div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            
+                            <div id="statusComplete" style="display: none;">
+                                <div style="font-size: 3rem; margin-bottom: 0.5rem;">✅</div>
+                                <div class="status-text">Complete!</div>
+                                <div class="status-message">Click below to view results</div>
+                                <button class="btn btn-success" id="viewResultsBtn" style="margin-top: 1rem;">📊 View Dashboard</button>
+                            </div>
+                            
+                            <div id="statusError" style="display: none;">
+                                <div style="font-size: 3rem; margin-bottom: 0.5rem;">❌</div>
+                                <div class="status-text">Error</div>
+                                <div class="status-message" id="errorMessage" style="color: var(--accent-red);"></div>
                             </div>
                         </div>
-                        
-                        <div id="statusComplete" style="display: none;">
-                            <div class="status-icon">✅</div>
-                            <div class="status-text">Complete!</div>
-                            <div class="status-message" id="completeMessage">Analysis finished successfully</div>
-                            <button class="btn btn-success" id="downloadBtn" style="margin-top: 1rem;">📥 Download Results</button>
-                        </div>
-                        
-                        <div id="statusError" style="display: none;">
-                            <div class="status-icon">❌</div>
-                            <div class="status-text">Error</div>
-                            <div class="status-message" id="errorMessage" style="color: var(--accent-red);"></div>
+                    </div>
+
+                    <div id="noCurrentJob">
+                        <div class="empty-state">
+                            <p>🔍 Submit an analysis to get started.</p>
                         </div>
                     </div>
-                </div>
 
-                <div id="noCurrentJob">
-                    <div class="empty-state">
-                        <p>🔍 No active job. Submit an analysis to get started.</p>
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 0.75rem; font-size: 0.9rem; color: var(--text-secondary);">Recent Jobs</h3>
+                    <div id="jobsList">
+                        <div class="empty-state" style="padding: 1rem;"><p>No jobs yet</p></div>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <h3 style="margin-top: 1.5rem; margin-bottom: 0.75rem; font-size: 0.9rem; color: var(--text-secondary);">Recent Jobs</h3>
-                <div class="jobs-list" id="jobsList">
-                    <div class="empty-state" style="padding: 1rem;"><p>No jobs yet</p></div>
+        <!-- DASHBOARD VIEW -->
+        <div id="dashboardView">
+            <div class="download-bar">
+                <button class="btn btn-primary btn-small" onclick="downloadCurrentCSV()">📥 Download CSV</button>
+                <button class="btn btn-small" style="background: var(--bg-input); color: var(--text-primary);" onclick="showFormView()">← Back to Form</button>
+            </div>
+            
+            <div class="dashboard-container">
+                <div class="dashboard-sidebar">
+                    <div class="brand-box">
+                        <h2 id="dashBrandName">Brand</h2>
+                    </div>
+                    
+                    <div class="date-range-bar" id="dashDateRange">
+                        Date Range: --
+                    </div>
+                    
+                    <div class="category-tree" id="categoryTree">
+                        <!-- Categories will be populated dynamically -->
+                    </div>
+                </div>
+                
+                <div class="dashboard-main">
+                    <div class="stats-row">
+                        <div class="stat-card">
+                            <div class="stat-label">MIDG Respondents</div>
+                            <div class="stat-value"><span class="stat-prefix">n=</span><span id="dashSampleSize">0</span></div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Projected US</div>
+                            <div class="stat-value" id="dashProjectedUS">0</div>
+                        </div>
+                    </div>
+                    
+                    <div class="charts-grid">
+                        <div class="chart-card">
+                            <h3>Age</h3>
+                            <div class="chart-container">
+                                <canvas id="ageChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Gender</h3>
+                            <div class="chart-container">
+                                <canvas id="genderChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Ethnicity</h3>
+                            <div class="chart-container">
+                                <canvas id="ethnicityChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Income</h3>
+                            <div class="chart-container">
+                                <canvas id="incomeChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -661,6 +772,9 @@
     <script>
         let currentJobId = null;
         let pollInterval = null;
+        let currentCSVData = null;
+        let currentS3Key = null;
+        let charts = {};
 
         document.addEventListener('DOMContentLoaded', function() {
             const today = new Date();
@@ -671,6 +785,20 @@
         });
 
         function formatDate(date) { return date.toISOString().split('T')[0]; }
+
+        function showFormView() {
+            document.getElementById('formView').style.display = 'block';
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('formViewBtn').classList.add('active');
+            document.getElementById('dashboardViewBtn').classList.remove('active');
+        }
+
+        function showDashboardView() {
+            document.getElementById('formView').style.display = 'none';
+            document.getElementById('dashboardView').style.display = 'block';
+            document.getElementById('formViewBtn').classList.remove('active');
+            document.getElementById('dashboardViewBtn').classList.add('active');
+        }
 
         function toggleCollapsible(header) {
             const content = header.nextElementSibling;
@@ -684,54 +812,65 @@
             document.getElementById('separate_date_ranges').style.display = sameDates ? 'none' : 'block';
         }
 
-        function togglePreviousFile() {
-            document.getElementById('previous_file_group').style.display = 
-                document.getElementById('is_update').checked ? 'block' : 'none';
-        }
-
-        function toggleSkewSettings() {
-            document.getElementById('skew_settings').style.display = 
-                document.getElementById('enable_skew').checked ? 'block' : 'none';
-        }
-
-        // Check S3 for existing results - auto-download if found
-        async function checkForCache() {
-            const brands = document.getElementById('brands').value.trim();
-            const startDate = document.getElementById('start_date').value;
-            const endDate = document.getElementById('end_date').value;
-            
-            if (!brands || !startDate || !endDate) return;
-            
-            try {
-                const response = await fetch('/api/check-cache', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ brands, start_date: startDate, end_date: endDate })
-                });
-                
-                const data = await response.json();
-                
-                if (data.found && data.type === 'exact') {
-                    // Auto-download the exact match
-                    window.location.href = `/api/download-cached/${encodeURIComponent(data.file)}`;
-                } else if (data.found && data.type === 'similar' && data.files.length > 0) {
-                    // Auto-download the most recent similar file
-                    window.location.href = `/api/download-cached/${encodeURIComponent(data.files[0].key)}`;
-                }
-                // If not found, do nothing - user will run new analysis
-            } catch (error) {
-                console.log('Cache check failed:', error);
-            }
-        }
-
-
+        // Form submission - check cache first
         document.getElementById('analysisForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;"></span> Submitting...';
+            submitBtn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;margin:0;"></span> Checking...';
             
+            const brands = document.getElementById('brands').value.trim();
+            const startDate = document.getElementById('start_date').value;
+            const endDate = document.getElementById('end_date').value;
+            
+            // Check cache first
+            try {
+                const cacheResponse = await fetch('/api/check-cache', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ brands, start_date: startDate, end_date: endDate })
+                });
+                
+                const cacheData = await cacheResponse.json();
+                
+                if (cacheData.found) {
+                    // Found cached result - load it into dashboard
+                    const fileKey = cacheData.type === 'exact' ? cacheData.file : cacheData.files[0].key;
+                    await loadCachedResult(fileKey);
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<span>🚀</span> Run Analysis';
+                    return;
+                }
+            } catch (error) {
+                console.log('Cache check failed, proceeding with new analysis:', error);
+            }
+            
+            // No cache found - run new analysis
+            submitBtn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;margin:0;"></span> Submitting...';
+            await submitNewAnalysis();
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<span>🚀</span> Run Analysis';
+        });
+
+        async function loadCachedResult(fileKey) {
+            try {
+                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(fileKey)}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentCSVData = data.data;
+                    currentS3Key = fileKey;
+                    renderDashboard(data.data, data.brand, data.date_range);
+                    showDashboardView();
+                }
+            } catch (error) {
+                console.error('Failed to load cached result:', error);
+                alert('Failed to load cached result');
+            }
+        }
+
+        async function submitNewAnalysis() {
             const sameDates = document.getElementById('same_dates').checked;
             
             const formData = {
@@ -740,12 +879,6 @@
                 brand_category: document.getElementById('brand_category').value || 'GENERAL',
                 is_genpop: document.getElementById('is_genpop').checked,
                 purchasers_only: document.getElementById('purchasers_only').checked,
-                auto_format: true,
-                include_frequency: document.getElementById('include_frequency').checked,
-                is_listener_watcher: document.getElementById('is_listener_watcher').checked,
-                is_update: document.getElementById('is_update').checked,
-                previous_file: document.getElementById('previous_file').value,
-                same_dates: sameDates,
                 start_date: sameDates ? document.getElementById('start_date').value : document.getElementById('sample_start').value,
                 end_date: sameDates ? document.getElementById('end_date').value : document.getElementById('sample_end').value,
                 behavior_start: sameDates ? document.getElementById('start_date').value : document.getElementById('behavior_start').value,
@@ -753,15 +886,7 @@
                 gender: document.getElementById('gender').value,
                 age: document.getElementById('age').value,
                 ethnicity: document.getElementById('ethnicity').value,
-                income: document.getElementById('income').value,
-                education: document.getElementById('education').value,
-                relationship: document.getElementById('relationship').value,
-                sexual_orientation: document.getElementById('sexual_orientation').value,
-                parental_status: document.getElementById('parental_status').value,
-                enable_skew: document.getElementById('enable_skew').checked,
-                skew_category: document.getElementById('skew_category').value,
-                skew_target: document.getElementById('skew_target').value,
-                skew_strength: document.getElementById('skew_strength').value
+                income: document.getElementById('income').value
             };
 
             try {
@@ -783,11 +908,8 @@
                 }
             } catch (error) {
                 alert('Network error: ' + error.message);
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '<span>🚀</span> Run Analysis';
             }
-        });
+        }
 
         function showCurrentJob() {
             document.getElementById('currentJob').style.display = 'block';
@@ -819,8 +941,7 @@
                         clearInterval(pollInterval);
                         document.getElementById('statusRunning').style.display = 'none';
                         document.getElementById('statusComplete').style.display = 'block';
-                        document.getElementById('completeMessage').textContent = `Analysis completed for ${data.project_name}`;
-                        document.getElementById('downloadBtn').onclick = () => downloadResult(currentJobId);
+                        document.getElementById('viewResultsBtn').onclick = () => loadJobResult(currentJobId);
                         loadJobs();
                     }
                     
@@ -834,6 +955,221 @@
                 }
             } catch (error) {
                 console.error('Failed to update status:', error);
+            }
+        }
+
+        async function loadJobResult(jobId) {
+            try {
+                const response = await fetch(`/api/job-data/${jobId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentCSVData = data.data;
+                    currentJobId = jobId;
+                    renderDashboard(data.data, data.brand, data.date_range);
+                    showDashboardView();
+                }
+            } catch (error) {
+                console.error('Failed to load job result:', error);
+            }
+        }
+
+        function renderDashboard(csvData, brandName, dateRange) {
+            // Set brand name and date range
+            document.getElementById('dashBrandName').textContent = brandName || 'Brand';
+            document.getElementById('dashDateRange').textContent = `Date Range: ${dateRange || '--'}`;
+            
+            // Parse CSV data
+            const demographics = parseDemographics(csvData);
+            
+            // Set sample size and projected US
+            document.getElementById('dashSampleSize').textContent = formatNumber(demographics.sampleSize || 0);
+            document.getElementById('dashProjectedUS').textContent = formatNumber(demographics.projectedUS || 0);
+            
+            // Render category tree
+            renderCategoryTree(csvData);
+            
+            // Render charts
+            renderCharts(demographics);
+        }
+
+        function parseDemographics(csvData) {
+            const result = {
+                age: {},
+                gender: {},
+                ethnicity: {},
+                income: {},
+                sampleSize: 0,
+                projectedUS: 0
+            };
+            
+            csvData.forEach(row => {
+                const category = (row.Column || '').toUpperCase();
+                const value = row.Value || '';
+                const percentage = parseFloat(row['Brand Penetration (Row)'] || row['Category Share'] || 0);
+                const rawNumbers = parseInt(row['Original Raw Numbers'] || 0);
+                const usProjection = parseInt(row['US Gen Pop Projection'] || 0);
+                
+                if (category === 'SAMPLE SIZE') {
+                    result.sampleSize = rawNumbers;
+                }
+                
+                if (category === 'BRAND INPUT') {
+                    result.projectedUS = usProjection;
+                }
+                
+                if (category === 'AGE' && value) {
+                    result.age[value] = percentage;
+                }
+                if (category === 'GENDER' && value) {
+                    result.gender[value] = percentage;
+                }
+                if (category === 'ETHNICITY' && value) {
+                    result.ethnicity[value] = percentage;
+                }
+                if (category === 'INCOME' && value) {
+                    result.income[value] = percentage;
+                }
+            });
+            
+            return result;
+        }
+
+        function renderCategoryTree(csvData) {
+            const categories = {};
+            
+            csvData.forEach(row => {
+                const category = row.Column || '';
+                if (category && !['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN'].includes(category)) {
+                    if (!categories[category]) {
+                        categories[category] = [];
+                    }
+                    if (row.Value) {
+                        categories[category].push(row.Value);
+                    }
+                }
+            });
+            
+            const treeHtml = Object.keys(categories).sort().map(cat => `
+                <div class="category-item" onclick="this.nextElementSibling.classList.toggle('open')">
+                    ▸ ${cat}
+                </div>
+                <div class="category-children">
+                    ${categories[cat].slice(0, 10).map(v => `<div style="padding: 0.25rem 0; font-size: 0.8rem; color: var(--text-secondary);">○ ${v}</div>`).join('')}
+                </div>
+            `).join('');
+            
+            document.getElementById('categoryTree').innerHTML = treeHtml;
+        }
+
+        function renderCharts(demographics) {
+            // Destroy existing charts
+            Object.values(charts).forEach(chart => chart.destroy());
+            charts = {};
+            
+            const chartColors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74'];
+            
+            // Age Chart (horizontal bar)
+            const ageLabels = Object.keys(demographics.age);
+            const ageData = Object.values(demographics.age);
+            charts.age = new Chart(document.getElementById('ageChart'), {
+                type: 'bar',
+                data: {
+                    labels: ageLabels,
+                    datasets: [{
+                        data: ageData,
+                        backgroundColor: '#5a9ad9',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } },
+                        y: { grid: { display: false }, ticks: { color: '#e6f1ff' } }
+                    }
+                }
+            });
+            
+            // Gender Chart (doughnut)
+            const genderLabels = Object.keys(demographics.gender);
+            const genderData = Object.values(demographics.gender);
+            charts.gender = new Chart(document.getElementById('genderChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: genderLabels,
+                    datasets: [{
+                        data: genderData,
+                        backgroundColor: chartColors.slice(0, genderLabels.length)
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 10 } } }
+                    }
+                }
+            });
+            
+            // Ethnicity Chart (doughnut)
+            const ethLabels = Object.keys(demographics.ethnicity);
+            const ethData = Object.values(demographics.ethnicity);
+            charts.ethnicity = new Chart(document.getElementById('ethnicityChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ethLabels,
+                    datasets: [{
+                        data: ethData,
+                        backgroundColor: chartColors.slice(0, ethLabels.length)
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 10 } } }
+                    }
+                }
+            });
+            
+            // Income Chart (bar)
+            const incomeLabels = Object.keys(demographics.income);
+            const incomeData = Object.values(demographics.income);
+            charts.income = new Chart(document.getElementById('incomeChart'), {
+                type: 'bar',
+                data: {
+                    labels: incomeLabels,
+                    datasets: [{
+                        data: incomeData,
+                        backgroundColor: '#66d9ef',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#8892b0', maxRotation: 45 } },
+                        y: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } }
+                    }
+                }
+            });
+        }
+
+        function formatNumber(num) {
+            return num.toLocaleString();
+        }
+
+        function downloadCurrentCSV() {
+            if (currentS3Key) {
+                window.location.href = `/api/download-cached/${encodeURIComponent(currentS3Key)}`;
+            } else if (currentJobId) {
+                window.location.href = `/api/download/${currentJobId}`;
             }
         }
 
@@ -857,17 +1193,13 @@
                         </div>
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
                             <span class="status-badge ${job.status}">${job.status}</span>
-                            ${job.status === 'completed' ? `<button class="btn btn-small btn-success" onclick="downloadResult('${job.job_id}')">📥</button>` : ''}
+                            ${job.status === 'completed' ? `<button class="btn btn-small btn-success" onclick="loadJobResult('${job.job_id}')">📊</button>` : ''}
                         </div>
                     </div>
                 `).join('');
             } catch (error) {
                 console.error('Failed to load jobs:', error);
             }
-        }
-
-        function downloadResult(jobId) {
-            window.location.href = `/api/download/${jobId}`;
         }
     </script>
 </body>
