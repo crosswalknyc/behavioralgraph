@@ -685,9 +685,21 @@
         }
 
         .comp-bar-pct {
-            width: 50px;
+            min-width: 55px;
             text-align: right;
             font-size: 0.75rem;
+        }
+
+        .index-badge {
+            min-width: 38px;
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 2px 5px;
+            border-radius: 3px;
+            background: rgba(0, 0, 0, 0.4);
+            margin-left: 6px;
+            display: inline-block;
         }
 
         .comp-table th.sortable {
@@ -2396,11 +2408,21 @@
                     result.locations.push({ name: value, pct: pct, projection: usGenPop || 0 });
                 }
 
-                // Behavioral (non-demographic categories) - store both percent and projection
+                // Behavioral (non-demographic categories) - store percent, projection, and gen pop %
                 if (!demoCategories.includes(category) && !skipCategories.includes(category) && category !== 'LOCATION' && value && pct > 0) {
                     if (!result.behavioral[category]) result.behavioral[category] = [];
                     if (!result.behavioralProjection[category]) result.behavioralProjection[category] = [];
-                    result.behavioral[category].push({ name: value, pct: pct, projection: usGenPop || 0 });
+                    // Calculate Gen Pop % from US Gen Pop Projection (projection / 324.7M US pop * 100)
+                    const genPopPct = usGenPop > 0 ? (usGenPop / 324700000) * 100 : 0;
+                    // Calculate Index = (brand pct / gen pop pct) * 100
+                    const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
+                    result.behavioral[category].push({ 
+                        name: value, 
+                        pct: pct, 
+                        projection: usGenPop || 0,
+                        genPopPct: genPopPct,
+                        index: index
+                    });
                 }
             });
 
@@ -2835,12 +2857,12 @@
                 
                 html += `
                     <div class="comp-section">
-                        <div class="comp-section-title">${cat} (Top 15)</div>
+                        <div class="comp-section-title">${cat} (Top 15) <span style="font-size: 0.7rem; font-weight: normal; margin-left: 10px;">Index: <span style="color: #10b981;">●</span> &gt;100 Over | <span style="color: #ef4444;">●</span> &lt;100 Under</span></div>
                         <table class="comp-table">
                             <thead>
                                 <tr>
                                     <th>${cat}</th>
-                                    ${profiles.map((p, i) => sortableHeader(catKey, i, p.name, p.color)).join('')}
+                                    ${profiles.map((p, i) => sortableHeader(catKey, i, p.name + ' (% / Idx)', p.color)).join('')}
                                 </tr>
                             </thead>
                             <tbody>
@@ -2891,7 +2913,7 @@
                 });
             });
 
-            // Build data rows with both pct and projection
+            // Build data rows with pct, projection, and index
             let dataRows = Array.from(allValues.keys()).map(value => {
                 return {
                     value: value,
@@ -2902,7 +2924,19 @@
                     projData: profiles.map(p => {
                         const item = (p.behavioral[category] || []).find(i => i.name === value);
                         return item ? (item.projection || 0) : 0;
-                    })
+                    }),
+                    indexData: profiles.map(p => {
+                        const item = (p.behavioral[category] || []).find(i => i.name === value);
+                        return item ? (item.index || 0) : 0;
+                    }),
+                    genPopPct: (() => {
+                        // Get gen pop % from first profile that has this item
+                        for (const p of profiles) {
+                            const item = (p.behavioral[category] || []).find(i => i.name === value);
+                            if (item && item.genPopPct > 0) return item.genPopPct;
+                        }
+                        return 0;
+                    })()
                 };
             });
 
@@ -2923,9 +2957,15 @@
                     ${profiles.map((p, i) => {
                         const pct = row.pctData[i];
                         const proj = row.projData[i];
+                        const index = row.indexData[i];
                         const displayVal = displayMode === 'projection' 
                             ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                             : (pct > 0 ? pct.toFixed(2) + '%' : '-');
+                        
+                        // Index color: green if > 100 (over-index), red if < 100 (under-index)
+                        const indexColor = index >= 100 ? '#10b981' : '#ef4444';
+                        const indexDisplay = index > 0 ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${index}</span>` : '';
+                        
                         return `
                             <td>
                                 <div class="comp-bar-cell">
@@ -2933,6 +2973,7 @@
                                         <div class="comp-bar-fill" style="width: ${Math.min(pct / 30 * 100, 100)}%; background: ${p.color};"></div>
                                     </div>
                                     <span class="comp-bar-pct">${displayVal}</span>
+                                    ${indexDisplay}
                                 </div>
                             </td>
                         `;
