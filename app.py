@@ -709,23 +709,29 @@ def refresh_s3_cache():
             name_parts = key.replace('.csv', '').split('_')
             project_name = name_parts[0].upper() if name_parts else key.replace('.csv', '')
             
-            # Try to get category from file content (only first 3KB for speed)
+            # Try to get category from BRAND CATEGORY row in CSV
             category = 'UNCATEGORIZED'
             try:
-                response = s3_client.get_object(Bucket=S3_BUCKET, Key=key, Range='bytes=0-3000')
-                partial_content = response['Body'].read().decode('utf-8', errors='ignore')
+                # Get file size first
+                head_response = s3_client.head_object(Bucket=S3_BUCKET, Key=key)
+                file_size = head_response['ContentLength']
                 
-                # Look for BRAND INPUT row
-                for line in partial_content.split('\n'):
-                    if 'BRAND INPUT' in line:
+                # Read last 100KB where BRAND CATEGORY row usually is
+                start_byte = max(0, file_size - 100000)
+                response = s3_client.get_object(Bucket=S3_BUCKET, Key=key, Range=f'bytes={start_byte}-{file_size}')
+                content = response['Body'].read().decode('utf-8', errors='ignore')
+                
+                # Look for BRAND CATEGORY row
+                for line in content.split('\n'):
+                    if line.startswith('BRAND CATEGORY,'):
                         parts = line.split(',')
                         if len(parts) >= 2 and parts[1].strip():
                             cat = parts[1].strip().upper()
-                            if cat and cat != 'CSV':
+                            if cat:
                                 category = cat
                         break
-            except:
-                pass
+            except Exception as e:
+                print(f"Error reading category from {key}: {e}")
             
             categories.add(category)
             
