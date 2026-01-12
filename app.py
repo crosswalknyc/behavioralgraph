@@ -368,27 +368,37 @@ def download_cached(s3_key):
 @requires_auth
 def get_csv_data(s3_key):
     """Get CSV data as JSON for dashboard display."""
+    print(f"📥 get_csv_data called for: {s3_key}")
+    
     if not s3_client:
+        print("❌ S3 client not configured")
         return jsonify({'success': False, 'error': 'S3 not configured'}), 500
     
     try:
+        print(f"📂 Fetching from S3: {S3_BUCKET}/{s3_key}")
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
         csv_content = response['Body'].read().decode('utf-8')
+        print(f"✅ Got CSV content: {len(csv_content)} bytes")
         
         # Parse CSV
         df = pd.read_csv(io.StringIO(csv_content))
+        print(f"✅ Parsed CSV: {len(df)} rows")
         
-        # Extract brand name and date range from metadata
-        brand_name = s3_key.split('_')[0] if '_' in s3_key else s3_key.replace('.csv', '')
+        # Extract brand name from filename
+        # Format: NAME_MM_DD_YYYY_HH_MM.csv where NAME can have multiple underscores
+        name_without_ext = s3_key.replace('.csv', '')
+        match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+        if match:
+            brand_name = match.group(1).replace('_', ' ')
+        else:
+            brand_name = name_without_ext.replace('_', ' ')
+        
         date_range = ''
         
         # Try to get from INPUT_METADATA
         metadata_rows = df[df['Column'] == 'INPUT_METADATA']
         if not metadata_rows.empty:
             metadata_value = str(metadata_rows.iloc[0]['Value'])
-            # Parse BRAND:xxx_SAMPLE_START:xxx_SAMPLE_END:xxx
-            if 'BRAND:' in metadata_value:
-                brand_name = metadata_value.split('BRAND:')[1].split('_')[0]
             if 'SAMPLE_START:' in metadata_value and 'SAMPLE_END:' in metadata_value:
                 start = metadata_value.split('SAMPLE_START:')[1].split('_')[0]
                 end = metadata_value.split('SAMPLE_END:')[1].split('_')[0]
@@ -397,14 +407,19 @@ def get_csv_data(s3_key):
         # Convert to records
         data = df.to_dict('records')
         
+        print(f"✅ Returning data for brand: {brand_name.upper()}")
         return jsonify({
             'success': True,
             'data': data,
             'brand': brand_name.upper(),
-            'date_range': date_range
+            'date_range': date_range,
+            's3_key': s3_key
         })
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        print(f"❌ Error in get_csv_data: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
 
 
 @app.route('/api/job-data/<job_id>')

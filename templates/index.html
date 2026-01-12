@@ -1813,31 +1813,39 @@
             console.log('Selected count:', selectedForComparison.size);
             console.log('Selected IDs:', selectedIds);
             
-            resultsContainer.innerHTML = `<div class="comparison-empty"><p>Loading ${selectedIds.length} profile(s)...</p></div>`;
-
             // Load data for each selected profile
             const profilesData = [];
+            const loadingErrors = [];
             
             for (let idx = 0; idx < selectedIds.length; idx++) {
                 const id = selectedIds[idx];
+                resultsContainer.innerHTML = `<div class="comparison-empty"><p>Loading profile ${idx + 1} of ${selectedIds.length}...</p><p style="font-size: 0.75rem; color: var(--text-secondary);">${id}</p></div>`;
+                
                 try {
                     console.log(`Loading profile ${idx + 1}/${selectedIds.length}:`, id);
-                    const response = await fetch(`/api/get-csv-data/${encodeURIComponent(id)}`);
+                    const url = `/api/get-csv-data/${encodeURIComponent(id)}`;
+                    console.log('Fetch URL:', url);
+                    
+                    const response = await fetch(url);
+                    console.log(`Response status for ${id}:`, response.status);
                     
                     if (!response.ok) {
-                        console.error(`Failed to load ${id}: HTTP ${response.status}`);
+                        const errorText = await response.text();
+                        console.error(`Failed to load ${id}: HTTP ${response.status}`, errorText);
+                        loadingErrors.push(`${id}: HTTP ${response.status}`);
                         continue;
                     }
                     
                     const data = await response.json();
-                    console.log(`Response for ${id}:`, data.success, data.error || '');
+                    console.log(`Response for ${id}:`, {success: data.success, brand: data.brand, dataLength: data.data?.length, error: data.error});
                     
                     if (data.success && data.data && data.data.length > 0) {
                         const parsed = parseComparisonData(data.data);
                         const profile = comparisonProfiles.find(p => (p.s3_key || p.job_id) === id);
+                        // Use brand from API response, or extract from s3_key
                         const displayName = data.brand || (profile ? getProfileFullName(profile) : id.split('_')[0]);
                         
-                        profilesData.push({
+                        const profileData = {
                             id: id,
                             name: displayName.toUpperCase(),
                             color: profileColors[idx % profileColors.length],
@@ -1847,26 +1855,38 @@
                             demographics: parsed.demographics,
                             behavioral: parsed.behavioral,
                             locations: parsed.locations
-                        });
-                        console.log(`✓ Loaded ${displayName}: sample=${parsed.sampleSize}`);
+                        };
+                        
+                        profilesData.push(profileData);
+                        console.log(`✓ Loaded ${displayName}: sample=${parsed.sampleSize}, demographics:`, Object.keys(parsed.demographics));
                     } else {
                         console.error(`No data for ${id}:`, data.error || 'empty data array');
+                        loadingErrors.push(`${id}: ${data.error || 'No data'}`);
                     }
                 } catch (e) {
                     console.error('Error loading', id, e);
+                    loadingErrors.push(`${id}: ${e.message}`);
                 }
             }
             
+            console.log('=== LOADING COMPLETE ===');
             console.log('Total profiles loaded:', profilesData.length);
             console.log('Profile names:', profilesData.map(p => p.name));
+            console.log('Loading errors:', loadingErrors);
 
             if (profilesData.length < 1) {
                 resultsContainer.innerHTML = `<div class="comparison-empty">
                     <p>Could not load any profiles.</p>
-                    <p style="font-size: 0.8rem; color: var(--text-secondary);">Selected: ${selectedIds.join(', ')}</p>
-                    <p style="font-size: 0.8rem;">Check browser console (F12) for errors.</p>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary);">Selected ${selectedIds.length}: ${selectedIds.map(id => id.substring(0, 30)).join(', ')}</p>
+                    ${loadingErrors.length > 0 ? `<p style="font-size: 0.75rem; color: var(--accent-red);">Errors: ${loadingErrors.join('; ')}</p>` : ''}
+                    <p style="font-size: 0.8rem;">Check browser console (F12) for details.</p>
                 </div>`;
                 return;
+            }
+
+            // Show partial load warning if some failed
+            if (loadingErrors.length > 0) {
+                console.warn('Some profiles failed to load:', loadingErrors);
             }
 
             console.log('Rendering comparison with', profilesData.length, 'profiles:', profilesData.map(p => p.name));
