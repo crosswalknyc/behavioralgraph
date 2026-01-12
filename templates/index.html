@@ -747,6 +747,125 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
+
+        /* Profile Report Styles */
+        .profile-report-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            padding: 1rem;
+        }
+
+        .profile-header {
+            grid-column: 1 / -1;
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .profile-name-box {
+            background: linear-gradient(135deg, #c8e600, #a0d911);
+            color: #1a1a1a;
+            padding: 1.5rem 2rem;
+            border-radius: 8px;
+            font-size: 1.5rem;
+            font-weight: 700;
+            text-align: center;
+            min-width: 200px;
+        }
+
+        .profile-stats-box {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .profile-stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: var(--bg-card);
+            border-radius: 6px;
+        }
+
+        .profile-stat-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .profile-stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .profile-chart-card {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .profile-chart-card h3 {
+            font-size: 0.9rem;
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .profile-chart-card h3 .median {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: normal;
+        }
+
+        .profile-chart-container {
+            height: 200px;
+            position: relative;
+        }
+
+        .profile-select-item {
+            padding: 0.4rem 0.5rem;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .profile-select-item:hover {
+            background: var(--bg-input);
+        }
+
+        .profile-select-item.selected {
+            background: rgba(200, 230, 0, 0.2);
+        }
+
+        .profile-select-item .radio {
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--text-secondary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .profile-select-item.selected .radio {
+            border-color: #a0d911;
+        }
+
+        .profile-select-item.selected .radio::after {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #a0d911;
+            border-radius: 50%;
+        }
     </style>
 </head>
 <body>
@@ -956,46 +1075,81 @@
                     </div>
                 </div>
                 <div class="comparison-report-tabs">
-                    <button class="comp-report-tab active" onclick="setCompReportType('profile')">PROFILE REPORT</button>
-                    <button class="comp-report-tab" onclick="setCompReportType('comparison')">COMPARISON REPORT</button>
-                    <button class="comp-report-tab" onclick="setCompReportType('rankers')">RANKERS REPORT</button>
+                    <button class="comp-report-tab active" id="profileReportTab" onclick="setCompReportType('profile')">PROFILE REPORT</button>
+                    <button class="comp-report-tab" id="comparisonReportTab" onclick="setCompReportType('comparison')">COMPARISON REPORT</button>
+                    <button class="comp-report-tab" id="rankersReportTab" onclick="setCompReportType('rankers')">RANKERS REPORT</button>
                 </div>
-                <div class="comparison-container">
-                    <div class="comparison-sidebar">
-                        <div class="sidebar-section">
-                            <h3>Category + Profile</h3>
-                            <div style="position: relative; margin-bottom: 0.75rem;">
-                                <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
-                                <input type="text" id="compSearchInput" placeholder="Search profiles" oninput="filterComparisonProfiles()" style="padding-left: 32px; width: 100%; box-sizing: border-box;">
-                            </div>
-                            <div class="comparison-profile-list" id="compProfileList" style="max-height: 250px;">
-                                <div style="padding: 1rem; color: var(--text-secondary);">Loading profiles...</div>
-                            </div>
-                        </div>
-                        
-                        <div class="sidebar-section" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
-                            <h3>Data Categories</h3>
-                            <div style="position: relative; margin-bottom: 0.5rem;">
-                                <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
-                                <input type="text" id="catFilterSearch" placeholder="Search categories" oninput="filterCategoryList()" style="padding-left: 32px; width: 100%; box-sizing: border-box; font-size: 0.8rem;">
-                            </div>
-                            <div class="category-filter-list" id="categoryFilterList" style="max-height: 200px; overflow-y: auto;">
-                                <div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">Run comparison first</div>
+                <!-- Profile Report View -->
+                <div id="profileReportView" class="report-view" style="display: none;">
+                    <div class="comparison-container">
+                        <div class="comparison-sidebar">
+                            <div class="sidebar-section">
+                                <h3>Category + Profile</h3>
+                                <div style="position: relative; margin-bottom: 0.75rem;">
+                                    <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
+                                    <input type="text" id="profileSearchInput" placeholder="Search" oninput="filterProfileList()" style="padding-left: 32px; width: 100%; box-sizing: border-box;">
+                                </div>
+                                <div class="comparison-profile-list" id="profileSelectList" style="max-height: 500px;">
+                                    <div style="padding: 1rem; color: var(--text-secondary);">Loading profiles...</div>
+                                </div>
                             </div>
                         </div>
-                        
-                        <div style="margin-top: 1rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; text-align: center;">
-                            <span class="comp-selected-count" style="font-weight: 600;">0 selected</span>
+                        <div class="comparison-main" style="padding: 0;">
+                            <div id="profileReportContent">
+                                <div class="comparison-empty">
+                                    <p>Select a profile from the left to view details</p>
+                                </div>
+                            </div>
                         </div>
-                        <button class="btn btn-primary" style="margin-top: 0.5rem; width: 100%;" onclick="runComparison()">📊 COMPARE SELECTED</button>
-                        <button class="btn btn-small" style="margin-top: 0.5rem; width: 100%; background: var(--bg-dark);" onclick="clearComparison()">CLEAR ALL</button>
                     </div>
-                    <div class="comparison-main">
-                        <div id="comparisonResults">
-                            <div class="comparison-empty">
-                                <p>Select profiles from the left and click "Compare Selected"</p>
+                </div>
+
+                <!-- Comparison Report View -->
+                <div id="comparisonReportView" class="report-view">
+                    <div class="comparison-container">
+                        <div class="comparison-sidebar">
+                            <div class="sidebar-section">
+                                <h3>Category + Profile</h3>
+                                <div style="position: relative; margin-bottom: 0.75rem;">
+                                    <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
+                                    <input type="text" id="compSearchInput" placeholder="Search profiles" oninput="filterComparisonProfiles()" style="padding-left: 32px; width: 100%; box-sizing: border-box;">
+                                </div>
+                                <div class="comparison-profile-list" id="compProfileList" style="max-height: 250px;">
+                                    <div style="padding: 1rem; color: var(--text-secondary);">Loading profiles...</div>
+                                </div>
+                            </div>
+                            
+                            <div class="sidebar-section" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                                <h3>Data Categories</h3>
+                                <div style="position: relative; margin-bottom: 0.5rem;">
+                                    <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
+                                    <input type="text" id="catFilterSearch" placeholder="Search categories" oninput="filterCategoryList()" style="padding-left: 32px; width: 100%; box-sizing: border-box; font-size: 0.8rem;">
+                                </div>
+                                <div class="category-filter-list" id="categoryFilterList" style="max-height: 200px; overflow-y: auto;">
+                                    <div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">Run comparison first</div>
+                                </div>
+                            </div>
+                            
+                            <div style="margin-top: 1rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; text-align: center;">
+                                <span class="comp-selected-count" style="font-weight: 600;">0 selected</span>
+                            </div>
+                            <button class="btn btn-primary" style="margin-top: 0.5rem; width: 100%;" onclick="runComparison()">📊 COMPARE SELECTED</button>
+                            <button class="btn btn-small" style="margin-top: 0.5rem; width: 100%; background: var(--bg-dark);" onclick="clearComparison()">CLEAR ALL</button>
+                        </div>
+                        <div class="comparison-main">
+                            <div id="comparisonResults">
+                                <div class="comparison-empty">
+                                    <p>Select profiles from the left and click "Compare Selected"</p>
+                                </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Rankers Report View (placeholder) -->
+                <div id="rankersReportView" class="report-view" style="display: none;">
+                    <div class="comparison-empty" style="height: 400px;">
+                        <p>Rankers Report - Coming Soon</p>
                     </div>
                 </div>
             </div>
@@ -1041,6 +1195,8 @@
             event.target.classList.add('active');
             
             if (tabName === 'comparison') {
+                // Default to comparison report view
+                setCompReportType('comparison');
                 loadComparisonProfiles();
             }
         }
@@ -1829,9 +1985,308 @@
             renderComparisonProfiles(comparisonProfiles);
         }
 
+        let currentReportType = 'comparison';
+        let selectedSingleProfile = null;
+        let profileReportCharts = {};
+
         function setCompReportType(type) {
+            currentReportType = type;
             document.querySelectorAll('.comp-report-tab').forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
+            document.querySelectorAll('.report-view').forEach(v => v.style.display = 'none');
+            
+            if (type === 'profile') {
+                document.getElementById('profileReportTab').classList.add('active');
+                document.getElementById('profileReportView').style.display = 'block';
+                loadProfileSelectList();
+            } else if (type === 'comparison') {
+                document.getElementById('comparisonReportTab').classList.add('active');
+                document.getElementById('comparisonReportView').style.display = 'block';
+            } else if (type === 'rankers') {
+                document.getElementById('rankersReportTab').classList.add('active');
+                document.getElementById('rankersReportView').style.display = 'block';
+            }
+        }
+
+        function loadProfileSelectList() {
+            const container = document.getElementById('profileSelectList');
+            if (allJobs.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No profiles available</div>';
+                return;
+            }
+            
+            const profiles = allJobs.filter(j => j.status === 'cached' || j.status === 'completed');
+            renderProfileSelectList(profiles);
+        }
+
+        function renderProfileSelectList(profiles) {
+            const container = document.getElementById('profileSelectList');
+            const searchTerm = (document.getElementById('profileSearchInput')?.value || '').toLowerCase();
+            
+            // Group by category
+            const byCategory = {};
+            profiles.forEach(p => {
+                const cat = p.category || 'UNCATEGORIZED';
+                if (!byCategory[cat]) byCategory[cat] = [];
+                byCategory[cat].push(p);
+            });
+
+            // Filter by search
+            let html = `
+                <div class="tree-item category-item" onclick="toggleProfileBrandCategory()">
+                    <span class="tree-arrow ${expandedCategories.has('PROFILE_BRAND') ? 'expanded' : ''}" id="profile-brand-arrow">▶</span>
+                    <span class="tree-label" style="font-weight: 600;">BRAND</span>
+                </div>
+                <div class="tree-children ${expandedCategories.has('PROFILE_BRAND') ? 'open' : ''}" id="profile-brand-children">
+            `;
+
+            Object.keys(byCategory).sort().forEach(cat => {
+                const items = byCategory[cat].filter(p => {
+                    if (!searchTerm) return true;
+                    const fullName = getProfileFullName(p).toLowerCase();
+                    return fullName.includes(searchTerm) || cat.toLowerCase().includes(searchTerm);
+                });
+                
+                if (items.length === 0) return;
+                
+                const catId = 'profile_' + cat.replace(/[^a-zA-Z0-9]/g, '_');
+                const isExpanded = expandedCategories.has(catId);
+
+                html += `
+                    <div class="tree-item category-item" onclick="toggleProfileCategoryGroup('${catId}')">
+                        <span class="tree-arrow ${isExpanded ? 'expanded' : ''}">▶</span>
+                        <span class="tree-label">${cat}</span>
+                        <span class="tree-count">(${items.length})</span>
+                    </div>
+                    <div class="tree-children ${isExpanded ? 'open' : ''}" id="cat-${catId}">
+                        ${items.map(p => {
+                            const id = p.s3_key || p.job_id;
+                            const isSelected = selectedSingleProfile === id;
+                            const fullName = getProfileFullName(p);
+                            return `
+                                <div class="profile-select-item ${isSelected ? 'selected' : ''}" onclick="selectSingleProfile('${id}')" title="${fullName}">
+                                    <span class="radio"></span>
+                                    <span>${fullName}</span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function toggleProfileBrandCategory() {
+            if (expandedCategories.has('PROFILE_BRAND')) {
+                expandedCategories.delete('PROFILE_BRAND');
+            } else {
+                expandedCategories.add('PROFILE_BRAND');
+            }
+            loadProfileSelectList();
+        }
+
+        function toggleProfileCategoryGroup(catId) {
+            if (expandedCategories.has(catId)) {
+                expandedCategories.delete(catId);
+            } else {
+                expandedCategories.add(catId);
+                expandedCategories.add('PROFILE_BRAND');
+            }
+            loadProfileSelectList();
+        }
+
+        function filterProfileList() {
+            const profiles = allJobs.filter(j => j.status === 'cached' || j.status === 'completed');
+            renderProfileSelectList(profiles);
+        }
+
+        async function selectSingleProfile(id) {
+            selectedSingleProfile = id;
+            loadProfileSelectList(); // Update selection UI
+            
+            const container = document.getElementById('profileReportContent');
+            container.innerHTML = '<div class="comparison-empty"><p>Loading profile...</p></div>';
+            
+            try {
+                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(id)}`);
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    const parsed = parseComparisonData(data.data);
+                    const profile = allJobs.find(p => (p.s3_key || p.job_id) === id);
+                    const displayName = data.brand || (profile ? getProfileFullName(profile) : id);
+                    
+                    renderProfileReport({
+                        name: displayName.toUpperCase(),
+                        dateRange: data.date_range || '',
+                        sampleSize: parsed.sampleSize,
+                        projectedUS: parsed.projectedUS,
+                        medianAge: parsed.medianAge,
+                        demographics: parsed.demographics
+                    });
+                } else {
+                    container.innerHTML = `<div class="comparison-empty"><p>Failed to load profile: ${data.error || 'Unknown error'}</p></div>`;
+                }
+            } catch (e) {
+                container.innerHTML = `<div class="comparison-empty"><p>Error loading profile: ${e.message}</p></div>`;
+            }
+        }
+
+        function renderProfileReport(profile) {
+            const container = document.getElementById('profileReportContent');
+            
+            container.innerHTML = `
+                <div style="padding: 0.5rem 1rem; background: var(--bg-input); font-size: 0.8rem; color: var(--text-secondary);">
+                    ${profile.dateRange ? `Date Range: ${profile.dateRange}` : ''}
+                </div>
+                <div style="background: var(--bg-dark); padding: 0.5rem 1rem; font-size: 0.85rem; text-align: center; color: var(--text-secondary);">
+                    DEMOGRAPHIC SUMMARY (US %)
+                </div>
+                <div class="profile-report-container">
+                    <div class="profile-header">
+                        <div class="profile-name-box">${profile.name}</div>
+                        <div class="profile-stats-box">
+                            <div class="profile-stat-row">
+                                <span class="profile-stat-label">MIDG Respondents</span>
+                                <span class="profile-stat-value">n=${formatNumber(profile.sampleSize)}</span>
+                            </div>
+                            <div class="profile-stat-row">
+                                <span class="profile-stat-label">Projected US</span>
+                                <span class="profile-stat-value">${formatNumber(profile.projectedUS)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="profile-chart-card">
+                        <h3>Age <span class="median">Median: ${profile.medianAge > 0 ? profile.medianAge.toFixed(1) : '23.0'}</span></h3>
+                        <div class="profile-chart-container"><canvas id="profileAgeChart"></canvas></div>
+                    </div>
+                    <div class="profile-chart-card">
+                        <h3>Gender</h3>
+                        <div class="profile-chart-container"><canvas id="profileGenderChart"></canvas></div>
+                    </div>
+                    <div class="profile-chart-card">
+                        <h3>Ethnicity</h3>
+                        <div class="profile-chart-container"><canvas id="profileEthnicityChart"></canvas></div>
+                    </div>
+                    <div class="profile-chart-card">
+                        <h3>Income</h3>
+                        <div class="profile-chart-container"><canvas id="profileIncomeChart"></canvas></div>
+                    </div>
+                </div>
+            `;
+
+            // Destroy old charts
+            Object.values(profileReportCharts).forEach(c => c?.destroy());
+            profileReportCharts = {};
+
+            const colors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#f97316', '#f43f5e', '#8b5cf6', '#06b6d4', '#eab308'];
+            const doughnutColors = ['#4a8ac9', '#66d9ef', '#a6e22e', '#f97316', '#f43f5e', '#8b5cf6'];
+
+            // Age chart (horizontal bar)
+            profileReportCharts.age = new Chart(document.getElementById('profileAgeChart'), {
+                type: 'bar',
+                data: { 
+                    labels: Object.keys(profile.demographics.age), 
+                    datasets: [{ data: Object.values(profile.demographics.age), backgroundColor: '#5a9ad9', borderRadius: 4 }] 
+                },
+                options: { 
+                    indexAxis: 'y', 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { 
+                        legend: { display: false },
+                        datalabels: {
+                            color: '#fff',
+                            anchor: 'end',
+                            align: 'end',
+                            font: { size: 10, weight: 'bold' },
+                            formatter: (value) => value.toFixed(2) + '%'
+                        }
+                    }, 
+                    scales: { 
+                        x: { display: false, max: 25 }, 
+                        y: { grid: { display: false }, ticks: { color: '#8892b0', font: { size: 10 } } } 
+                    } 
+                },
+                plugins: [ChartDataLabels]
+            });
+
+            // Gender chart (doughnut)
+            profileReportCharts.gender = new Chart(document.getElementById('profileGenderChart'), {
+                type: 'doughnut',
+                data: { 
+                    labels: Object.keys(profile.demographics.gender), 
+                    datasets: [{ data: Object.values(profile.demographics.gender), backgroundColor: doughnutColors }] 
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { 
+                        legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 10 }, generateLabels: (chart) => {
+                            const data = chart.data;
+                            return data.labels.map((label, i) => ({
+                                text: `${label} ${data.datasets[0].data[i].toFixed(2)}%`,
+                                fillStyle: data.datasets[0].backgroundColor[i],
+                                index: i
+                            }));
+                        }}},
+                        datalabels: { display: false }
+                    }
+                }
+            });
+
+            // Ethnicity chart (doughnut)
+            profileReportCharts.ethnicity = new Chart(document.getElementById('profileEthnicityChart'), {
+                type: 'doughnut',
+                data: { 
+                    labels: Object.keys(profile.demographics.ethnicity), 
+                    datasets: [{ data: Object.values(profile.demographics.ethnicity), backgroundColor: doughnutColors }] 
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { 
+                        legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 10 }, generateLabels: (chart) => {
+                            const data = chart.data;
+                            return data.labels.map((label, i) => ({
+                                text: `${label} ${data.datasets[0].data[i].toFixed(2)}%`,
+                                fillStyle: data.datasets[0].backgroundColor[i],
+                                index: i
+                            }));
+                        }}},
+                        datalabels: { display: false }
+                    }
+                }
+            });
+
+            // Income chart (vertical bar)
+            profileReportCharts.income = new Chart(document.getElementById('profileIncomeChart'), {
+                type: 'bar',
+                data: { 
+                    labels: Object.keys(profile.demographics.income), 
+                    datasets: [{ data: Object.values(profile.demographics.income), backgroundColor: '#5a9ad9', borderRadius: 4 }] 
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { 
+                        legend: { display: false },
+                        datalabels: {
+                            color: '#fff',
+                            anchor: 'end',
+                            align: 'top',
+                            font: { size: 9, weight: 'bold' },
+                            formatter: (value) => value.toFixed(1) + '%'
+                        }
+                    }, 
+                    scales: { 
+                        x: { grid: { display: false }, ticks: { color: '#8892b0', font: { size: 8 }, maxRotation: 45 } }, 
+                        y: { display: false, max: 25 } 
+                    } 
+                },
+                plugins: [ChartDataLabels]
+            });
         }
 
         function parseComparisonData(csvData) {
