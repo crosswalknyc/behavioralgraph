@@ -6,6 +6,7 @@
     <title>Behavioral Graph | MIDG Analysis Pipeline</title>
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <style>
         :root {
             --bg-dark: #0a1929;
@@ -1253,28 +1254,91 @@
             charts.age = new Chart(document.getElementById('ageChart'), {
                 type: 'bar',
                 data: { labels: Object.keys(demographics.age), datasets: [{ data: Object.values(demographics.age), backgroundColor: '#5a9ad9', borderRadius: 4 }] },
-                options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 10 } } } } }
+                options: { 
+                    indexAxis: 'y', 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { 
+                        legend: { display: false },
+                        datalabels: {
+                            color: '#fff',
+                            anchor: 'end',
+                            align: 'end',
+                            font: { size: 10, weight: 'bold' },
+                            formatter: (value) => value.toFixed(1) + '%'
+                        }
+                    }, 
+                    scales: { x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 10 } } } } 
+                },
+                plugins: [ChartDataLabels]
             });
 
             // Gender
             charts.gender = new Chart(document.getElementById('genderChart'), {
                 type: 'doughnut',
                 data: { labels: Object.keys(demographics.gender), datasets: [{ data: Object.values(demographics.gender), backgroundColor: colors }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 9 } } } } }
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { 
+                        legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 9 } } },
+                        datalabels: {
+                            color: '#fff',
+                            font: { size: 11, weight: 'bold' },
+                            formatter: (value, ctx) => {
+                                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                const pct = (value / total * 100).toFixed(1);
+                                return pct > 5 ? pct + '%' : '';
+                            }
+                        }
+                    }
+                },
+                plugins: [ChartDataLabels]
             });
 
             // Ethnicity
             charts.ethnicity = new Chart(document.getElementById('ethnicityChart'), {
                 type: 'doughnut',
                 data: { labels: Object.keys(demographics.ethnicity), datasets: [{ data: Object.values(demographics.ethnicity), backgroundColor: colors }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 9 } } } } }
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { 
+                        legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 9 } } },
+                        datalabels: {
+                            color: '#fff',
+                            font: { size: 11, weight: 'bold' },
+                            formatter: (value, ctx) => {
+                                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                const pct = (value / total * 100).toFixed(1);
+                                return pct > 5 ? pct + '%' : '';
+                            }
+                        }
+                    }
+                },
+                plugins: [ChartDataLabels]
             });
 
             // Income
             charts.income = new Chart(document.getElementById('incomeChart'), {
                 type: 'bar',
                 data: { labels: Object.keys(demographics.income), datasets: [{ data: Object.values(demographics.income), backgroundColor: '#66d9ef', borderRadius: 4 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: '#8892b0', font: { size: 8 }, maxRotation: 45 } }, y: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } } } }
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { 
+                        legend: { display: false },
+                        datalabels: {
+                            color: '#fff',
+                            anchor: 'end',
+                            align: 'top',
+                            font: { size: 9, weight: 'bold' },
+                            formatter: (value) => value.toFixed(1) + '%'
+                        }
+                    }, 
+                    scales: { x: { grid: { display: false }, ticks: { color: '#8892b0', font: { size: 8 }, maxRotation: 45 } }, y: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } } } 
+                },
+                plugins: [ChartDataLabels]
             });
         }
 
