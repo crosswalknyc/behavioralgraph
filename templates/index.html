@@ -139,6 +139,30 @@
             color: var(--accent-lime);
         }
 
+        .display-mode-toggle {
+            background: #2d3748;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+            min-width: 70px;
+            text-align: center;
+        }
+
+        .display-mode-toggle:hover {
+            background: #4a5568;
+            transform: scale(1.05);
+        }
+
+        .display-mode-toggle.active {
+            background: var(--accent-cyan);
+            color: #1a1a1a;
+        }
+
         .dashboard-tabs {
             display: flex;
             gap: 0.5rem;
@@ -1114,7 +1138,10 @@
         <div id="dashboardView">
             <div class="dashboard-header">
                 <h2 id="dashBrandTitle">Brand Dashboard</h2>
-                <div style="display: flex; gap: 0.5rem;">
+                <div style="display: flex; gap: 0.75rem; align-items: center;">
+                    <div class="display-mode-toggle" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" title="Toggle between percentages and US population numbers">
+                        <span id="dashDisplayLabel">US %</span>
+                    </div>
                     <button class="btn btn-small btn-primary" onclick="downloadCurrentCSV()">📥 Download CSV</button>
                     <button class="btn btn-small" style="background: var(--bg-input);" onclick="showFormView()">← Back</button>
                 </div>
@@ -1564,12 +1591,15 @@
             document.getElementById('dashDateRange').textContent = 'Date Range: ' + (dateRange || '--');
 
             const parsed = parseAllData(csvData);
+            
+            // Store parsed data for re-rendering when display mode changes
+            currentDashboardData = parsed;
 
             document.getElementById('dashSampleSize').textContent = formatNumber(parsed.sampleSize);
             document.getElementById('dashProjectedUS').textContent = formatNumber(parsed.projectedUS);
 
             renderCategoryTree(parsed.categories);
-            renderCharts(parsed.demographics, parsed.demographicsIndex);
+            renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection);
             renderBehavioralCards(parsed.behavioral);
             renderLocationTable(parsed.locations);
         }
@@ -1580,6 +1610,7 @@
                 projectedUS: 0,
                 demographics: { age: {}, gender: {}, ethnicity: {}, income: {} },
                 demographicsIndex: { age: {}, gender: {}, ethnicity: {}, income: {} },
+                demographicsProjection: { age: {}, gender: {}, ethnicity: {}, income: {} },
                 behavioral: {},
                 categories: {},
                 locations: []
@@ -1594,6 +1625,7 @@
                 const value = row.Value || '';
                 const pct = parseFloat(row['Brand Penetration (Row)'] || row['Category Share'] || 0);
                 const rawNumbers = parseInt(row['Original Raw Numbers'] || row['Category Share'] || 0);
+                const usProjection = parseInt(row['US Gen Pop Projection'] || 0);
                 const usProjection = parseInt(row['US Gen Pop Projection'] || 0);
                 
                 // Calculate Gen Pop % and Index
@@ -1611,39 +1643,43 @@
                 
                 if (category === 'BRAND INPUT') result.projectedUS = usProjection;
 
-                // Demographics - store both pct and index
+                // Demographics - store pct, index, and projection
                 if (category === 'AGE' && value) {
                     result.demographics.age[value] = pct;
                     result.demographicsIndex.age[value] = index;
+                    result.demographicsProjection.age[value] = usProjection;
                 }
                 if (category === 'GENDER' && value) {
                     result.demographics.gender[value] = pct;
                     result.demographicsIndex.gender[value] = index;
+                    result.demographicsProjection.gender[value] = usProjection;
                 }
                 if (category === 'ETHNICITY' && value) {
                     result.demographics.ethnicity[value] = pct;
                     result.demographicsIndex.ethnicity[value] = index;
+                    result.demographicsProjection.ethnicity[value] = usProjection;
                 }
                 if (category === 'INCOME' && value) {
                     result.demographics.income[value] = pct;
                     result.demographicsIndex.income[value] = index;
+                    result.demographicsProjection.income[value] = usProjection;
                 }
 
-                // Location/DMA
+                // Location/DMA - include projection
                 if (category === 'LOCATION' && value) {
-                    result.locations.push({ name: value, pct: pct, index: index });
+                    result.locations.push({ name: value, pct: pct, index: index, projection: usProjection });
                 }
 
                 // Categories tree
                 if (!skipCategories.includes(category) && value) {
                     if (!result.categories[category]) result.categories[category] = [];
-                    result.categories[category].push({ value, pct, index });
+                    result.categories[category].push({ value, pct, index, projection: usProjection });
                 }
 
-                // Behavioral (non-demographic categories) - include index
+                // Behavioral (non-demographic categories) - include index and projection
                 if (!demoCategories.includes(category) && !skipCategories.includes(category) && !['LOCATION'].includes(category) && value) {
                     if (!result.behavioral[category]) result.behavioral[category] = [];
-                    result.behavioral[category].push({ name: value, pct: pct, index: index, genPopPct: genPopPct });
+                    result.behavioral[category].push({ name: value, pct: pct, index: index, genPopPct: genPopPct, projection: usProjection });
                 }
             });
 
@@ -1673,28 +1709,50 @@
         }
 
         let currentDemoIndexes = {};
+        let dashDisplayMode = 'percent'; // 'percent' or 'projection'
+        let currentDashboardData = null; // Store full parsed data for re-rendering
         
-        function renderCharts(demographics, demographicsIndex = {}) {
+        function toggleDashboardDisplayMode() {
+            dashDisplayMode = dashDisplayMode === 'percent' ? 'projection' : 'percent';
+            const toggle = document.getElementById('dashDisplayToggle');
+            const label = document.getElementById('dashDisplayLabel');
+            
+            if (dashDisplayMode === 'projection') {
+                toggle.classList.add('active');
+                label.textContent = 'US POP #';
+            } else {
+                toggle.classList.remove('active');
+                label.textContent = 'US %';
+            }
+
+            // Re-render all dashboard data with new display mode
+            if (currentDashboardData) {
+                renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection);
+                renderBehavioralCards(currentDashboardData.behavioral);
+                renderLocationTable(currentDashboardData.locations);
+            }
+        }
+        
+        function renderCharts(demographics, demographicsIndex = {}, demographicsProjection = {}) {
             Object.values(charts).forEach(c => c.destroy());
             charts = {};
             currentDemoIndexes = demographicsIndex;
 
             const colors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74', '#75715e'];
-
-            // Helper to format label with index
-            const formatLabelWithIndex = (label, index) => {
-                const indexColor = index >= 100 ? '#10b981' : '#ef4444';
-                return index > 0 ? `${label} [${index}]` : label;
-            };
+            const isProjection = dashDisplayMode === 'projection';
 
             // Age - horizontal bar with index in data labels
             const ageLabels = Object.keys(demographics.age);
             const ageIndexes = ageLabels.map(k => demographicsIndex.age?.[k] || 0);
+            const ageData = isProjection 
+                ? ageLabels.map(k => demographicsProjection.age?.[k] || 0)
+                : Object.values(demographics.age);
+            
             charts.age = new Chart(document.getElementById('ageChart'), {
                 type: 'bar',
                 data: { 
                     labels: ageLabels, 
-                    datasets: [{ data: Object.values(demographics.age), backgroundColor: '#5a9ad9', borderRadius: 4 }] 
+                    datasets: [{ data: ageData, backgroundColor: '#5a9ad9', borderRadius: 4 }] 
                 },
                 options: { 
                     indexAxis: 'y', 
@@ -1709,8 +1767,10 @@
                             font: { size: 9, weight: 'bold' },
                             formatter: (value, ctx) => {
                                 const idx = ageIndexes[ctx.dataIndex] || 0;
-                                const idxColor = idx >= 100 ? '🟢' : '🔴';
-                                return idx > 0 ? `${value.toFixed(1)}% ${idx}` : value.toFixed(1) + '%';
+                                if (isProjection) {
+                                    return idx > 0 ? `${formatNumber(Math.round(value))} [${idx}]` : formatNumber(Math.round(value));
+                                }
+                                return idx > 0 ? `${value.toFixed(1)}% [${idx}]` : value.toFixed(1) + '%';
                             }
                         }
                     }, 
@@ -1718,14 +1778,17 @@
                 },
                 plugins: [ChartDataLabels]
             });
-            renderDemoIndexTable('ageIndexTable', demographics.age, demographicsIndex.age);
 
             // Gender - with index in legend
             const genderLabels = Object.keys(demographics.gender);
             const genderIndexes = genderLabels.map(k => demographicsIndex.gender?.[k] || 0);
+            const genderData = isProjection
+                ? genderLabels.map(k => demographicsProjection.gender?.[k] || 0)
+                : Object.values(demographics.gender);
+            
             charts.gender = new Chart(document.getElementById('genderChart'), {
                 type: 'doughnut',
-                data: { labels: genderLabels, datasets: [{ data: Object.values(demographics.gender), backgroundColor: colors }] },
+                data: { labels: genderLabels, datasets: [{ data: genderData, backgroundColor: colors }] },
                 options: { 
                     responsive: true, 
                     maintainAspectRatio: false, 
@@ -1739,9 +1802,11 @@
                                     const data = chart.data;
                                     return data.labels.map((label, i) => {
                                         const idx = genderIndexes[i] || 0;
+                                        const val = data.datasets[0].data[i];
+                                        const valStr = isProjection ? formatNumber(Math.round(val)) : val.toFixed(1) + '%';
                                         const idxStr = idx > 0 ? ` [${idx}]` : '';
                                         return {
-                                            text: `${label}${idxStr}`,
+                                            text: `${label} ${valStr}${idxStr}`,
                                             fillStyle: data.datasets[0].backgroundColor[i],
                                             fontColor: idx >= 100 ? '#10b981' : (idx > 0 ? '#ef4444' : '#e6f1ff'),
                                             index: i
@@ -1750,15 +1815,7 @@
                                 }
                             } 
                         },
-                        datalabels: {
-                            color: '#fff',
-                            font: { size: 11, weight: 'bold' },
-                            formatter: (value, ctx) => {
-                                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
-                                const pct = (value / total * 100).toFixed(1);
-                                return pct > 5 ? pct + '%' : '';
-                            }
-                        }
+                        datalabels: { display: false }
                     }
                 },
                 plugins: [ChartDataLabels]
@@ -1767,9 +1824,13 @@
             // Ethnicity - with index in legend
             const ethLabels = Object.keys(demographics.ethnicity);
             const ethIndexes = ethLabels.map(k => demographicsIndex.ethnicity?.[k] || 0);
+            const ethData = isProjection
+                ? ethLabels.map(k => demographicsProjection.ethnicity?.[k] || 0)
+                : Object.values(demographics.ethnicity);
+            
             charts.ethnicity = new Chart(document.getElementById('ethnicityChart'), {
                 type: 'doughnut',
-                data: { labels: ethLabels, datasets: [{ data: Object.values(demographics.ethnicity), backgroundColor: colors }] },
+                data: { labels: ethLabels, datasets: [{ data: ethData, backgroundColor: colors }] },
                 options: { 
                     responsive: true, 
                     maintainAspectRatio: false, 
@@ -1783,9 +1844,11 @@
                                     const data = chart.data;
                                     return data.labels.map((label, i) => {
                                         const idx = ethIndexes[i] || 0;
+                                        const val = data.datasets[0].data[i];
+                                        const valStr = isProjection ? formatNumber(Math.round(val)) : val.toFixed(1) + '%';
                                         const idxStr = idx > 0 ? ` [${idx}]` : '';
                                         return {
-                                            text: `${label}${idxStr}`,
+                                            text: `${label} ${valStr}${idxStr}`,
                                             fillStyle: data.datasets[0].backgroundColor[i],
                                             fontColor: idx >= 100 ? '#10b981' : (idx > 0 ? '#ef4444' : '#e6f1ff'),
                                             index: i
@@ -1794,15 +1857,7 @@
                                 }
                             } 
                         },
-                        datalabels: {
-                            color: '#fff',
-                            font: { size: 11, weight: 'bold' },
-                            formatter: (value, ctx) => {
-                                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
-                                const pct = (value / total * 100).toFixed(1);
-                                return pct > 5 ? pct + '%' : '';
-                            }
-                        }
+                        datalabels: { display: false }
                     }
                 },
                 plugins: [ChartDataLabels]
@@ -1811,9 +1866,13 @@
             // Income - horizontal bar with index in data labels
             const incomeLabels = Object.keys(demographics.income);
             const incomeIndexes = incomeLabels.map(k => demographicsIndex.income?.[k] || 0);
+            const incomeData = isProjection
+                ? incomeLabels.map(k => demographicsProjection.income?.[k] || 0)
+                : Object.values(demographics.income);
+            
             charts.income = new Chart(document.getElementById('incomeChart'), {
                 type: 'bar',
-                data: { labels: incomeLabels, datasets: [{ data: Object.values(demographics.income), backgroundColor: '#66d9ef', borderRadius: 4 }] },
+                data: { labels: incomeLabels, datasets: [{ data: incomeData, backgroundColor: '#66d9ef', borderRadius: 4 }] },
                 options: { 
                     responsive: true, 
                     maintainAspectRatio: false, 
@@ -1826,7 +1885,10 @@
                             font: { size: 8, weight: 'bold' },
                             formatter: (value, ctx) => {
                                 const idx = incomeIndexes[ctx.dataIndex] || 0;
-                                return idx > 0 ? `${value.toFixed(1)}%\n${idx}` : value.toFixed(1) + '%';
+                                if (isProjection) {
+                                    return idx > 0 ? `${formatNumber(Math.round(value))}\n[${idx}]` : formatNumber(Math.round(value));
+                                }
+                                return idx > 0 ? `${value.toFixed(1)}%\n[${idx}]` : value.toFixed(1) + '%';
                             }
                         }
                     }, 
@@ -1894,10 +1956,14 @@
         }
 
         function renderBehavioralItems(items, maxPct) {
+            const isProjection = dashDisplayMode === 'projection';
             return items.map((item, idx) => {
                 const index = item.index || 0;
                 const indexColor = index >= 100 ? '#10b981' : '#ef4444';
                 const indexBadge = index > 0 ? `<span class="behavioral-index" style="color: ${indexColor}">${index}</span>` : '';
+                const displayValue = isProjection 
+                    ? formatNumber(Math.round(item.projection || 0))
+                    : item.pct.toFixed(2) + '%';
                 return `
                     <div class="behavioral-item">
                         <span class="behavioral-rank">${idx + 1}</span>
@@ -1905,7 +1971,7 @@
                         <div class="behavioral-bar-container">
                             <div class="behavioral-bar" style="width: ${(item.pct / maxPct) * 100}%"></div>
                         </div>
-                        <span class="behavioral-pct">${item.pct.toFixed(2)}%</span>
+                        <span class="behavioral-pct">${displayValue}</span>
                         ${indexBadge}
                     </div>
                 `;
@@ -1931,6 +1997,7 @@
         }
 
         function renderLocationTable(locations) {
+            const isProjection = dashDisplayMode === 'projection';
             // Sort by index for ranking (higher index = over-indexes more)
             const sorted = [...locations].sort((a, b) => b.index - a.index);
             const top = sorted.slice(0, 25);
@@ -1938,11 +2005,14 @@
 
             document.getElementById('locationList').innerHTML = top.map((loc, i) => {
                 const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
+                const displayValue = isProjection 
+                    ? formatNumber(Math.round(loc.projection || 0))
+                    : loc.pct.toFixed(2) + '%';
                 return `
                     <div class="location-row">
                         <span>${i + 1}</span>
                         <span>${loc.name}</span>
-                        <span>${loc.pct.toFixed(2)}%</span>
+                        <span>${displayValue}</span>
                         <span style="color: ${indexColor}; font-weight: 600;">${loc.index}</span>
                     </div>
                 `;
@@ -1950,11 +2020,14 @@
 
             document.getElementById('locationListBottom').innerHTML = bottom.map((loc, i) => {
                 const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
+                const displayValue = isProjection 
+                    ? formatNumber(Math.round(loc.projection || 0))
+                    : loc.pct.toFixed(2) + '%';
                 return `
                     <div class="location-row">
                         <span>${sorted.length - 24 + i}</span>
                         <span>${loc.name}</span>
-                        <span>${loc.pct.toFixed(2)}%</span>
+                        <span>${displayValue}</span>
                         <span style="color: ${indexColor}; font-weight: 600;">${loc.index}</span>
                     </div>
                 `;
