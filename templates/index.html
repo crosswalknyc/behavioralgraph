@@ -257,6 +257,87 @@
             color: var(--text-secondary);
         }
 
+        /* Profile Selector in Dashboard Sidebar */
+        .sidebar-header-section {
+            margin-bottom: 1rem;
+        }
+
+        .sidebar-header-section h3 {
+            font-size: 0.9rem;
+            color: var(--accent-cyan);
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-search {
+            width: 100%;
+            padding: 0.5rem;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.8rem;
+        }
+
+        .profile-select-tree {
+            max-height: 350px;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+            background: var(--bg-input);
+            border-radius: 8px;
+            padding: 0.5rem;
+        }
+
+        .profile-cat-item {
+            padding: 0.4rem 0.5rem;
+            cursor: pointer;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            border-radius: 4px;
+        }
+
+        .profile-cat-item:hover { background: var(--bg-dark); }
+        .profile-cat-item .cat-arrow { transition: transform 0.2s; font-size: 0.65rem; }
+        .profile-cat-item.open .cat-arrow { transform: rotate(90deg); }
+
+        .profile-cat-label { flex: 1; font-weight: 500; }
+        .profile-cat-count { font-size: 0.65rem; color: var(--text-secondary); }
+
+        .profile-cat-children {
+            padding-left: 1rem;
+            display: none;
+        }
+
+        .profile-cat-children.open { display: block; }
+
+        .profile-select-item {
+            padding: 0.35rem 0.5rem;
+            cursor: pointer;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            border-radius: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: all 0.15s;
+        }
+
+        .profile-select-item:hover {
+            background: var(--bg-dark);
+            color: var(--text-primary);
+        }
+
+        .profile-select-item.active {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        .selected-profile-info {
+            border-top: 1px solid var(--border-color);
+            padding-top: 1rem;
+        }
+
         .demo-main {
             display: flex;
             flex-direction: column;
@@ -1158,9 +1239,17 @@
             <div id="tab-demographics" class="tab-content active">
                 <div class="demo-grid">
                     <div class="demo-sidebar">
-                        <div class="brand-box"><h2 id="dashBrandName">Brand</h2></div>
-                        <div class="date-range-box" id="dashDateRange">Date Range: --</div>
-                        <div class="category-tree" id="categoryTree"></div>
+                        <div class="sidebar-header-section">
+                            <h3>Select Profile</h3>
+                            <input type="text" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search" onkeyup="filterDashboardProfiles()">
+                        </div>
+                        <div class="profile-select-tree" id="dashProfileTree">
+                            <!-- Profiles will be loaded here -->
+                        </div>
+                        <div class="selected-profile-info">
+                            <div class="brand-box"><h2 id="dashBrandName">Select a profile</h2></div>
+                            <div class="date-range-box" id="dashDateRange">Date Range: --</div>
+                        </div>
                     </div>
                     <div class="demo-main">
                         <div class="stats-row">
@@ -1327,6 +1416,8 @@
             document.getElementById('dashboardView').style.display = 'block';
             document.getElementById('formViewBtn').classList.remove('active');
             document.getElementById('dashboardViewBtn').classList.add('active');
+            // Load profiles in sidebar when showing dashboard
+            loadDashboardProfiles();
         }
 
         function showTab(tabName) {
@@ -1334,6 +1425,11 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('tab-' + tabName).classList.add('active');
             event.target.classList.add('active');
+            
+            if (tabName === 'demographics') {
+                // Load profile selector in sidebar
+                loadDashboardProfiles();
+            }
             
             if (tabName === 'comparison') {
                 // Default to comparison report view
@@ -1459,6 +1555,7 @@
                 if (data.success) {
                     currentCSVData = data.data;
                     currentS3Key = fileKey;
+                    selectedDashProfile = fileKey; // Set selected profile for sidebar
                     renderDashboard(data.data, data.brand, data.date_range);
                     showDashboardView();
                 }
@@ -1598,7 +1695,9 @@
             document.getElementById('dashSampleSize').textContent = formatNumber(parsed.sampleSize);
             document.getElementById('dashProjectedUS').textContent = formatNumber(parsed.projectedUS);
 
-            renderCategoryTree(parsed.categories);
+            // Load profile selector in sidebar (instead of categories)
+            loadDashboardProfiles();
+            
             renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection);
             renderBehavioralCards(parsed.behavioral);
             renderLocationTable(parsed.locations);
@@ -1691,16 +1790,120 @@
             return result;
         }
 
-        function renderCategoryTree(categories) {
-            const container = document.getElementById('categoryTree');
-            container.innerHTML = Object.keys(categories).sort().map(cat => `
-                <div class="category-item" onclick="toggleCategory(this)">
-                    <span class="arrow">▸</span> ${cat}
-                </div>
-                <div class="category-children">
-                    ${categories[cat].slice(0, 15).map(v => `<div class="category-child">○ ${v.value} (${v.pct.toFixed(1)}%)</div>`).join('')}
-                </div>
-            `).join('');
+        // Dashboard Profile Selector
+        let dashboardProfiles = [];
+        let selectedDashProfile = null;
+        let expandedDashCategories = new Set();
+
+        function renderDashboardProfileTree(profiles) {
+            dashboardProfiles = profiles;
+            const container = document.getElementById('dashProfileTree');
+            if (!container) return;
+            
+            const searchTerm = (document.getElementById('dashProfileSearchInput')?.value || '').toLowerCase();
+            
+            // Group by category
+            const byCategory = {};
+            profiles.forEach(p => {
+                const cat = p.category || 'UNCATEGORIZED';
+                if (!byCategory[cat]) byCategory[cat] = [];
+                byCategory[cat].push(p);
+            });
+
+            // Filter by search and build HTML
+            let html = '';
+            Object.keys(byCategory).sort().forEach(cat => {
+                const items = byCategory[cat].filter(p => {
+                    if (!searchTerm) return true;
+                    const fullName = getProfileFullName(p).toLowerCase();
+                    return fullName.includes(searchTerm) || cat.toLowerCase().includes(searchTerm);
+                });
+                
+                if (items.length === 0) return;
+                
+                const catId = 'dash_' + cat.replace(/[^a-zA-Z0-9]/g, '_');
+                const isExpanded = expandedDashCategories.has(catId);
+
+                html += `
+                    <div class="profile-cat-item ${isExpanded ? 'open' : ''}" onclick="toggleDashCategory('${catId}')">
+                        <span class="cat-arrow">▸</span>
+                        <span class="profile-cat-label">${cat}</span>
+                        <span class="profile-cat-count">(${items.length})</span>
+                    </div>
+                    <div class="profile-cat-children ${isExpanded ? 'open' : ''}" id="cat-${catId}">
+                        ${items.map(p => {
+                            const id = p.s3_key || p.job_id;
+                            const isActive = selectedDashProfile === id;
+                            const fullName = getProfileFullName(p);
+                            return `
+                                <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="selectDashboardProfile('${id}')" title="${fullName}">
+                                    ${fullName}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html || '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No profiles found</div>';
+        }
+
+        function toggleDashCategory(catId) {
+            if (expandedDashCategories.has(catId)) {
+                expandedDashCategories.delete(catId);
+            } else {
+                expandedDashCategories.add(catId);
+            }
+            renderDashboardProfileTree(dashboardProfiles);
+        }
+
+        function filterDashboardProfiles() {
+            renderDashboardProfileTree(dashboardProfiles);
+        }
+
+        async function selectDashboardProfile(profileId) {
+            selectedDashProfile = profileId;
+            renderDashboardProfileTree(dashboardProfiles);
+            
+            // Load and display the profile data
+            try {
+                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(profileId)}`);
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    currentS3Key = profileId;
+                    const parsed = parseAllData(data.data);
+                    currentDashboardData = parsed;
+                    
+                    // Update selected profile info
+                    const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === profileId);
+                    const brandName = data.brand || (profile ? getProfileFullName(profile) : 'Unknown');
+                    
+                    document.getElementById('dashBrandName').textContent = brandName.toUpperCase();
+                    document.getElementById('dashDateRange').textContent = data.date_range ? `Date Range: ${data.date_range}` : 'Date Range: --';
+                    document.getElementById('dashSampleSize').textContent = formatNumber(parsed.sampleSize);
+                    document.getElementById('dashProjectedUS').textContent = formatNumber(parsed.projectedUS);
+                    
+                    // Render charts and data
+                    renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection);
+                    renderBehavioralCards(parsed.behavioral);
+                    renderLocationTable(parsed.locations);
+                }
+            } catch (error) {
+                console.error('Error loading profile:', error);
+            }
+        }
+
+        // Load profiles when dashboard tab is shown
+        async function loadDashboardProfiles() {
+            try {
+                const response = await fetch('/api/jobs');
+                const data = await response.json();
+                const profiles = data.jobs || [];
+                renderDashboardProfileTree(profiles);
+            } catch (error) {
+                console.error('Failed to load profiles:', error);
+            }
         }
 
         function toggleCategory(el) {
