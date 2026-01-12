@@ -293,6 +293,7 @@
         .status-badge.queued { background: rgba(253, 151, 31, 0.2); color: var(--accent-orange); }
         .status-badge.running { background: rgba(90, 154, 217, 0.2); color: var(--accent-blue); }
         .status-badge.completed { background: rgba(166, 226, 46, 0.2); color: var(--accent-green); }
+        .status-badge.cached { background: rgba(102, 217, 239, 0.2); color: var(--accent-cyan); }
         .status-badge.failed { background: rgba(249, 38, 114, 0.2); color: var(--accent-red); }
 
         .empty-state {
@@ -1181,25 +1182,42 @@
                 const container = document.getElementById('jobsList');
                 
                 if (jobs.length === 0) {
-                    container.innerHTML = '<div class="empty-state" style="padding: 1rem;"><p>No jobs yet</p></div>';
+                    container.innerHTML = '<div class="empty-state" style="padding: 1rem;"><p>No cached results yet</p></div>';
                     return;
                 }
                 
-                container.innerHTML = jobs.slice(0, 5).map(job => `
-                    <div class="job-item">
-                        <div class="job-info">
-                            <h3>${job.project_name}</h3>
-                            <p>${new Date(job.created_at).toLocaleString()}</p>
+                container.innerHTML = jobs.slice(0, 20).map(job => {
+                    const isS3 = job.source === 's3';
+                    const isCompleted = job.status === 'completed' || job.status === 'cached';
+                    
+                    return `
+                        <div class="job-item">
+                            <div class="job-info">
+                                <h3>${job.project_name}</h3>
+                                <p>${new Date(job.created_at).toLocaleString()}</p>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                ${isCompleted ? `
+                                    <button class="btn btn-small" style="background: var(--accent-cyan); color: #1a1a1a;" onclick="${isS3 ? `loadCachedResult('${job.s3_key}')` : `loadJobResult('${job.job_id}')`}" title="Visualize">📊</button>
+                                    <button class="btn btn-small" style="background: var(--bg-input);" onclick="${isS3 ? `downloadS3File('${job.s3_key}')` : `downloadJobFile('${job.job_id}')`}" title="Download">📥</button>
+                                ` : `
+                                    <span class="status-badge ${job.status}">${job.status}</span>
+                                `}
+                            </div>
                         </div>
-                        <div style="display: flex; gap: 0.5rem; align-items: center;">
-                            <span class="status-badge ${job.status}">${job.status}</span>
-                            ${job.status === 'completed' ? `<button class="btn btn-small btn-success" onclick="loadJobResult('${job.job_id}')">📊</button>` : ''}
-                        </div>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
             } catch (error) {
                 console.error('Failed to load jobs:', error);
             }
+        }
+
+        function downloadS3File(s3Key) {
+            window.location.href = `/api/download-cached/${encodeURIComponent(s3Key)}`;
+        }
+
+        function downloadJobFile(jobId) {
+            window.location.href = `/api/download/${jobId}`;
         }
     </script>
 </body>

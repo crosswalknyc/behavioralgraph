@@ -622,16 +622,50 @@ def download_result(job_id):
 @app.route('/api/jobs')
 @requires_auth
 def list_jobs():
-    """List all jobs."""
+    """List all jobs (local + S3 cached)."""
     job_list = []
+    
+    # Add local jobs
     for job_id, job in jobs.items():
         job_list.append({
             'job_id': job_id,
             'project_name': job['project_name'],
             'status': job['status'],
             'progress': job['progress'],
-            'created_at': job['created_at']
+            'created_at': job['created_at'],
+            'source': 'local'
         })
+    
+    # Add S3 cached files
+    if s3_client:
+        try:
+            paginator = s3_client.get_paginator('list_objects_v2')
+            for page in paginator.paginate(Bucket=S3_BUCKET):
+                for obj in page.get('Contents', []):
+                    key = obj['Key']
+                    if not key.endswith('.csv'):
+                        continue
+                    
+                    # Extract project name from filename (format: brandname_MM_DD_YYYY_HH_MM.csv)
+                    name_parts = key.replace('.csv', '').split('_')
+                    if len(name_parts) >= 1:
+                        project_name = name_parts[0].upper()
+                    else:
+                        project_name = key.replace('.csv', '')
+                    
+                    job_list.append({
+                        'job_id': key,
+                        'project_name': project_name,
+                        'status': 'cached',
+                        'progress': 100,
+                        'created_at': obj['LastModified'].isoformat(),
+                        'source': 's3',
+                        's3_key': key
+                    })
+        except Exception as e:
+            print(f"Error listing S3 files: {e}")
+    
+    # Sort by created_at descending
     return jsonify(sorted(job_list, key=lambda x: x['created_at'], reverse=True))
 
 
