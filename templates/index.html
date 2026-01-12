@@ -433,75 +433,99 @@
         }
 
         .comparison-sidebar h3 {
-            font-size: 0.9rem;
+            font-size: 1rem;
+            font-weight: 700;
             margin-bottom: 0.75rem;
-            color: var(--accent-cyan);
+            color: var(--text-primary);
         }
 
         .comparison-profile-list {
             flex: 1;
             overflow-y: auto;
-            max-height: 400px;
+            max-height: 500px;
+            font-size: 0.85rem;
         }
 
-        .comp-profile-item {
+        /* Tree structure styles */
+        .tree-item {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem;
-            border-radius: 4px;
+            gap: 0.4rem;
+            padding: 0.35rem 0.5rem;
             cursor: pointer;
-            font-size: 0.8rem;
-            border-bottom: 1px solid var(--border-color);
+            border-radius: 3px;
         }
 
-        .comp-profile-item:hover {
+        .tree-item:hover {
             background: var(--bg-input);
         }
 
-        .comp-profile-item input {
+        .tree-arrow {
             width: 16px;
             height: 16px;
-            accent-color: var(--accent-blue);
-        }
-
-        .comp-profile-item.selected {
-            background: rgba(90, 154, 217, 0.2);
-        }
-
-        .comp-category-group {
-            margin-bottom: 0.5rem;
-        }
-
-        .comp-category-header {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem;
-            background: var(--bg-input);
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            font-weight: 500;
+            justify-content: center;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            transition: transform 0.2s;
         }
 
-        .comp-category-header:hover {
-            background: var(--bg-dark);
+        .tree-arrow.expanded {
+            transform: rotate(90deg);
         }
 
-        .comp-category-items {
-            padding-left: 1rem;
+        .tree-checkbox {
+            width: 14px;
+            height: 14px;
+            accent-color: var(--accent-blue);
+            flex-shrink: 0;
+        }
+
+        .tree-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+
+        .tree-label {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tree-count {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+        }
+
+        .tree-children {
             display: none;
+            margin-left: 1.25rem;
         }
 
-        .comp-category-items.open {
+        .tree-children.open {
             display: block;
         }
 
-        .comp-profile-color {
-            width: 10px;
-            height: 10px;
-            border-radius: 2px;
+        .tree-root {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .tree-item.selected {
+            background: rgba(90, 154, 217, 0.15);
+        }
+
+        .tree-item.category-item {
+            font-weight: 500;
+        }
+
+        .tree-item.profile-item {
+            padding-left: 0.75rem;
         }
 
         .comparison-header {
@@ -860,10 +884,9 @@
                 <div class="comparison-container">
                     <div class="comparison-sidebar">
                         <h3>Category + Profile</h3>
-                        <input type="text" id="compSearchInput" placeholder="🔍 Search..." oninput="filterComparisonProfiles()" style="margin-bottom: 0.5rem;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); margin-bottom: 0.5rem;">
-                            <input type="checkbox" id="selectAllComp" onchange="selectAllComparison(this.checked)">
-                            <label for="selectAllComp" style="font-size: 0.8rem; cursor: pointer;">Select all</label>
+                        <div style="position: relative; margin-bottom: 0.75rem;">
+                            <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
+                            <input type="text" id="compSearchInput" placeholder="Search" oninput="filterComparisonProfiles()" style="padding-left: 32px; width: 100%; box-sizing: border-box;">
                         </div>
                         <div class="comparison-profile-list" id="compProfileList">
                             <div style="padding: 1rem; color: var(--text-secondary);">Loading profiles...</div>
@@ -1433,6 +1456,7 @@
         let loadedComparisonData = {};
 
         const profileColors = ['#4a8ac9', '#f97316', '#10b981', '#f43f5e', '#8b5cf6', '#06b6d4', '#eab308', '#ec4899'];
+        let expandedCategories = new Set();
         
         function loadComparisonProfiles() {
             const container = document.getElementById('compProfileList');
@@ -1443,6 +1467,16 @@
             
             comparisonProfiles = allJobs.filter(j => j.status === 'cached' || j.status === 'completed');
             renderComparisonProfiles(comparisonProfiles);
+        }
+
+        function getProfileFullName(profile) {
+            // Get full name from s3_key or project_name
+            if (profile.s3_key) {
+                // Remove timestamp and .csv extension
+                const name = profile.s3_key.replace('.csv', '').replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '');
+                return name.replace(/_/g, ' ');
+            }
+            return profile.project_name;
         }
 
         function renderComparisonProfiles(profiles) {
@@ -1456,43 +1490,94 @@
                 byCategory[cat].push(p);
             });
 
-            let html = '';
-            Object.keys(byCategory).sort().forEach(cat => {
+            const categories = Object.keys(byCategory).sort();
+            const totalProfiles = profiles.length;
+
+            // Check if all profiles are selected
+            const allSelected = profiles.length > 0 && profiles.every(p => selectedForComparison.has(p.s3_key || p.job_id));
+            const someSelected = profiles.some(p => selectedForComparison.has(p.s3_key || p.job_id));
+
+            let html = `
+                <div class="tree-root">
+                    <div class="tree-item" onclick="toggleAllCategories()">
+                        <span class="tree-arrow ${expandedCategories.has('BRAND') ? 'expanded' : ''}">▶</span>
+                        <input type="checkbox" class="tree-checkbox" ${allSelected ? 'checked' : ''} ${someSelected && !allSelected ? 'indeterminate' : ''} onclick="event.stopPropagation(); selectAllComparison(this.checked)">
+                        <span class="tree-label" style="font-weight: 600;">Select all</span>
+                    </div>
+                </div>
+                <div class="tree-item category-item" onclick="toggleBrandCategory()">
+                    <span class="tree-arrow ${expandedCategories.has('BRAND') ? 'expanded' : ''}" id="brand-arrow">▶</span>
+                    <input type="checkbox" class="tree-checkbox" ${allSelected ? 'checked' : ''} onclick="event.stopPropagation(); selectAllComparison(this.checked)">
+                    <span class="tree-label">BRAND</span>
+                </div>
+                <div class="tree-children ${expandedCategories.has('BRAND') ? 'open' : ''}" id="brand-children">
+            `;
+
+            categories.forEach(cat => {
                 const items = byCategory[cat];
                 const catId = cat.replace(/[^a-zA-Z0-9]/g, '_');
+                const isExpanded = expandedCategories.has(catId);
+                
+                // Check category selection state
+                const catAllSelected = items.every(p => selectedForComparison.has(p.s3_key || p.job_id));
+                const catSomeSelected = items.some(p => selectedForComparison.has(p.s3_key || p.job_id));
                 
                 html += `
-                    <div class="comp-category-group">
-                        <div class="comp-category-header" onclick="toggleCategoryGroup('${catId}')">
-                            <input type="checkbox" onclick="event.stopPropagation(); toggleCategorySelection('${cat}')">
-                            <span>${cat}</span>
-                            <span style="margin-left: auto; color: var(--text-secondary);">(${items.length})</span>
-                        </div>
-                        <div class="comp-category-items" id="comp-cat-${catId}">
-                            ${items.map(p => {
-                                const id = p.s3_key || p.job_id;
-                                const isSelected = selectedForComparison.has(id);
-                                const colorIdx = Array.from(selectedForComparison).indexOf(id);
-                                const color = isSelected && colorIdx >= 0 ? profileColors[colorIdx % profileColors.length] : 'transparent';
-                                return `
-                                    <div class="comp-profile-item ${isSelected ? 'selected' : ''}" onclick="toggleComparisonProfile('${id}')">
-                                        <input type="checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleComparisonProfile('${id}')">
-                                        <span class="comp-profile-color" style="background: ${color}"></span>
-                                        <span>${p.project_name}</span>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
+                    <div class="tree-item category-item" onclick="toggleCategoryGroup('${catId}')">
+                        <span class="tree-arrow ${isExpanded ? 'expanded' : ''}" id="arrow-${catId}">▶</span>
+                        <input type="checkbox" class="tree-checkbox" ${catAllSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleCategorySelection('${cat}')">
+                        <span class="tree-label">${cat}</span>
+                        <span class="tree-count">(${items.length})</span>
+                    </div>
+                    <div class="tree-children ${isExpanded ? 'open' : ''}" id="cat-${catId}">
+                        ${items.map(p => {
+                            const id = p.s3_key || p.job_id;
+                            const isSelected = selectedForComparison.has(id);
+                            const colorIdx = Array.from(selectedForComparison).indexOf(id);
+                            const color = isSelected && colorIdx >= 0 ? profileColors[colorIdx % profileColors.length] : '#555';
+                            const fullName = getProfileFullName(p);
+                            return `
+                                <div class="tree-item profile-item ${isSelected ? 'selected' : ''}" onclick="toggleComparisonProfile('${id}')" title="${fullName}">
+                                    <input type="checkbox" class="tree-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleComparisonProfile('${id}')">
+                                    <span class="tree-color" style="background: ${color}"></span>
+                                    <span class="tree-label">${fullName}</span>
+                                </div>
+                            `;
+                        }).join('')}
                     </div>
                 `;
             });
 
+            html += '</div>';
             container.innerHTML = html || '<div style="padding: 1rem; color: var(--text-secondary);">No profiles found</div>';
         }
 
+        function toggleBrandCategory() {
+            if (expandedCategories.has('BRAND')) {
+                expandedCategories.delete('BRAND');
+            } else {
+                expandedCategories.add('BRAND');
+            }
+            renderComparisonProfiles(comparisonProfiles);
+        }
+
+        function toggleAllCategories() {
+            if (expandedCategories.has('BRAND')) {
+                expandedCategories.clear();
+            } else {
+                expandedCategories.add('BRAND');
+            }
+            renderComparisonProfiles(comparisonProfiles);
+        }
+
         function toggleCategoryGroup(catId) {
-            const el = document.getElementById('comp-cat-' + catId);
-            if (el) el.classList.toggle('open');
+            if (expandedCategories.has(catId)) {
+                expandedCategories.delete(catId);
+            } else {
+                expandedCategories.add(catId);
+                expandedCategories.add('BRAND'); // Also expand parent
+            }
+            renderComparisonProfiles(comparisonProfiles);
         }
 
         function toggleCategorySelection(category) {
@@ -1511,8 +1596,21 @@
         }
 
         function filterComparisonProfiles() {
-            const search = document.getElementById('compSearchInput').value.toLowerCase();
-            const filtered = comparisonProfiles.filter(p => p.project_name.toLowerCase().includes(search));
+            const search = document.getElementById('compSearchInput').value.toLowerCase().trim();
+            if (!search) {
+                renderComparisonProfiles(comparisonProfiles);
+                return;
+            }
+            const filtered = comparisonProfiles.filter(p => {
+                const fullName = getProfileFullName(p).toLowerCase();
+                return fullName.includes(search) || (p.category || '').toLowerCase().includes(search);
+            });
+            // Auto-expand categories that have matches
+            filtered.forEach(p => {
+                const catId = (p.category || 'UNCATEGORIZED').replace(/[^a-zA-Z0-9]/g, '_');
+                expandedCategories.add('BRAND');
+                expandedCategories.add(catId);
+            });
             renderComparisonProfiles(filtered);
         }
 
@@ -1528,9 +1626,8 @@
         function clearComparison() {
             selectedForComparison.clear();
             loadedComparisonData = {};
-            document.getElementById('selectAllComp').checked = false;
             renderComparisonProfiles(comparisonProfiles);
-            document.getElementById('comparisonResults').innerHTML = '<div class="comparison-empty"><p>Select 2 or more profiles from the left to compare</p></div>';
+            document.getElementById('comparisonResults').innerHTML = '<div class="comparison-empty"><p>Select profiles from the left and click "Compare Selected"</p></div>';
         }
 
         function selectAllComparison(checked) {
@@ -1548,8 +1645,6 @@
         function setCompReportType(type) {
             document.querySelectorAll('.comp-report-tab').forEach(t => t.classList.remove('active'));
             event.target.classList.add('active');
-            // For now, all reports use the same comparison view
-            // In the future, different report types could show different visualizations
         }
 
         async function runComparison() {
@@ -1558,20 +1653,36 @@
                 return;
             }
 
-            document.getElementById('comparisonResults').innerHTML = '<div class="comparison-empty"><p>Loading comparison data...</p></div>';
+            const resultsContainer = document.getElementById('comparisonResults');
+            resultsContainer.innerHTML = `<div class="comparison-empty"><p>Loading ${selectedForComparison.size} profile(s)...</p></div>`;
 
             // Load data for each selected profile
             const profilesData = [];
             let idx = 0;
+            const errors = [];
+            
             for (const id of selectedForComparison) {
                 try {
+                    console.log('Loading profile:', id);
                     const response = await fetch(`/api/get-csv-data/${encodeURIComponent(id)}`);
+                    
+                    if (!response.ok) {
+                        errors.push(`Failed to load ${id}: ${response.status}`);
+                        continue;
+                    }
+                    
                     const data = await response.json();
-                    if (data.success) {
+                    console.log('Received data for', id, data);
+                    
+                    if (data.success && data.data) {
                         const parsed = parseAllData(data.data);
+                        // Get profile name from our list
+                        const profile = comparisonProfiles.find(p => (p.s3_key || p.job_id) === id);
+                        const displayName = data.brand || (profile ? getProfileFullName(profile) : id.split('_')[0]);
+                        
                         profilesData.push({
                             id: id,
-                            name: data.brand || id.split('_')[0].toUpperCase(),
+                            name: displayName.toUpperCase(),
                             color: profileColors[idx % profileColors.length],
                             sampleSize: parsed.sampleSize,
                             projectedUS: parsed.projectedUS,
@@ -1580,17 +1691,24 @@
                             genPop: parsed.genPop
                         });
                         idx++;
+                    } else {
+                        errors.push(`No data for ${id}: ${data.error || 'Unknown error'}`);
                     }
                 } catch (e) {
                     console.error('Error loading', id, e);
+                    errors.push(`Error loading ${id}: ${e.message}`);
                 }
             }
 
             if (profilesData.length < 1) {
-                document.getElementById('comparisonResults').innerHTML = '<div class="comparison-empty"><p>Could not load profiles</p></div>';
+                resultsContainer.innerHTML = `<div class="comparison-empty">
+                    <p>Could not load any profiles</p>
+                    ${errors.length > 0 ? `<p style="font-size: 0.8rem; color: var(--accent-red);">${errors.join('<br>')}</p>` : ''}
+                </div>`;
                 return;
             }
 
+            console.log('Rendering comparison with', profilesData.length, 'profiles');
             renderComparison(profilesData);
         }
 
