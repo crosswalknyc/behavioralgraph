@@ -503,8 +503,16 @@
                     </div>
                     <div id="noCurrentJob"><div class="empty-state" style="padding: 1.5rem; color: var(--text-secondary);">Submit an analysis to get started</div></div>
 
-                    <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">Recent Results</h3>
-                    <div id="jobsList"><div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Loading...</div></div>
+                    <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);">Results Library</h3>
+                    
+                    <div style="margin-bottom: 0.75rem;">
+                        <input type="text" id="searchInput" placeholder="🔍 Search brands..." oninput="filterJobs()" style="margin-bottom: 0.5rem;">
+                        <select id="categoryFilter" onchange="filterJobs()" style="font-size: 0.8rem;">
+                            <option value="">All Categories</option>
+                        </select>
+                    </div>
+                    
+                    <div id="jobsList" style="max-height: 350px; overflow-y: auto;"><div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Loading...</div></div>
                 </div>
             </div>
         </div>
@@ -944,36 +952,75 @@
             else if (currentJobId) window.location.href = `/api/download/${currentJobId}`;
         }
 
+        let allJobs = [];
+        let allCategories = [];
+
         async function loadJobs() {
             try {
                 const response = await fetch('/api/jobs');
-                const jobs = await response.json();
-                const container = document.getElementById('jobsList');
+                const data = await response.json();
+                
+                allJobs = data.jobs || [];
+                allCategories = data.categories || [];
+                
+                // Populate category filter
+                const categorySelect = document.getElementById('categoryFilter');
+                categorySelect.innerHTML = '<option value="">All Categories</option>' + 
+                    allCategories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+                
+                renderJobs(allJobs);
+            } catch (error) { 
+                console.error('Failed to load jobs:', error);
+                document.getElementById('jobsList').innerHTML = '<div style="padding: 1rem; color: var(--accent-red); font-size: 0.8rem;">Failed to load</div>';
+            }
+        }
 
-                if (jobs.length === 0) {
-                    container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No results yet</div>';
-                    return;
-                }
+        function filterJobs() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+            const categoryFilter = document.getElementById('categoryFilter').value;
+            
+            let filtered = allJobs;
+            
+            if (searchTerm) {
+                filtered = filtered.filter(job => 
+                    job.project_name.toLowerCase().includes(searchTerm) ||
+                    (job.s3_key && job.s3_key.toLowerCase().includes(searchTerm))
+                );
+            }
+            
+            if (categoryFilter) {
+                filtered = filtered.filter(job => job.category === categoryFilter);
+            }
+            
+            renderJobs(filtered);
+        }
 
-                container.innerHTML = jobs.slice(0, 15).map(job => {
-                    const isS3 = job.source === 's3';
-                    const isCompleted = job.status === 'completed' || job.status === 'cached';
-                    return `
-                        <div class="job-item">
-                            <div class="job-info">
-                                <h3>${job.project_name}</h3>
-                                <p>${new Date(job.created_at).toLocaleDateString()}</p>
-                            </div>
-                            <div style="display: flex; gap: 0.35rem;">
-                                ${isCompleted ? `
-                                    <button class="btn btn-small" style="background: var(--accent-cyan); color: #1a1a1a;" onclick="${isS3 ? `loadCachedResult('${job.s3_key}')` : `loadJobResult('${job.job_id}')`}">📊</button>
-                                    <button class="btn btn-small" style="background: var(--bg-dark);" onclick="${isS3 ? `downloadS3File('${job.s3_key}')` : `downloadJobFile('${job.job_id}')`}">📥</button>
-                                ` : `<span class="status-badge ${job.status}">${job.status}</span>`}
-                            </div>
+        function renderJobs(jobs) {
+            const container = document.getElementById('jobsList');
+
+            if (jobs.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No results found</div>';
+                return;
+            }
+
+            container.innerHTML = jobs.map(job => {
+                const isS3 = job.source === 's3';
+                const isCompleted = job.status === 'completed' || job.status === 'cached';
+                return `
+                    <div class="job-item">
+                        <div class="job-info">
+                            <h3>${job.project_name}</h3>
+                            <p>${job.category || ''} • ${new Date(job.created_at).toLocaleDateString()}</p>
                         </div>
-                    `;
-                }).join('');
-            } catch (error) { console.error('Failed to load jobs:', error); }
+                        <div style="display: flex; gap: 0.35rem;">
+                            ${isCompleted ? `
+                                <button class="btn btn-small" style="background: var(--accent-cyan); color: #1a1a1a;" onclick="${isS3 ? `loadCachedResult('${job.s3_key}')` : `loadJobResult('${job.job_id}')`}" title="View">📊</button>
+                                <button class="btn btn-small" style="background: var(--bg-dark);" onclick="${isS3 ? `downloadS3File('${job.s3_key}')` : `downloadJobFile('${job.job_id}')`}" title="Download">📥</button>
+                            ` : `<span class="status-badge ${job.status}">${job.status}</span>`}
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         function downloadS3File(s3Key) { window.location.href = `/api/download-cached/${encodeURIComponent(s3Key)}`; }

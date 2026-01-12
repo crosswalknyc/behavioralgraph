@@ -622,8 +622,9 @@ def download_result(job_id):
 @app.route('/api/jobs')
 @requires_auth
 def list_jobs():
-    """List all jobs (local + S3 cached)."""
+    """List all jobs (local + S3 cached) with category info."""
     job_list = []
+    categories = set()
     
     # Add local jobs
     for job_id, job in jobs.items():
@@ -633,10 +634,12 @@ def list_jobs():
             'status': job['status'],
             'progress': job['progress'],
             'created_at': job['created_at'],
-            'source': 'local'
+            'source': 'local',
+            'category': 'LOCAL'
         })
+        categories.add('LOCAL')
     
-    # Add S3 cached files
+    # Add S3 cached files with category extraction
     if s3_client:
         try:
             paginator = s3_client.get_paginator('list_objects_v2')
@@ -646,12 +649,31 @@ def list_jobs():
                     if not key.endswith('.csv'):
                         continue
                     
-                    # Extract project name from filename (format: brandname_MM_DD_YYYY_HH_MM.csv)
+                    # Extract project name from filename
                     name_parts = key.replace('.csv', '').split('_')
-                    if len(name_parts) >= 1:
-                        project_name = name_parts[0].upper()
-                    else:
-                        project_name = key.replace('.csv', '')
+                    project_name = name_parts[0].upper() if name_parts else key.replace('.csv', '')
+                    
+                    # Try to get category from file content (first few KB)
+                    category = 'UNCATEGORIZED'
+                    try:
+                        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key, Range='bytes=0-5000')
+                        partial_content = response['Body'].read().decode('utf-8', errors='ignore')
+                        
+                        # Look for INPUT_METADATA or BRAND INPUT row
+                        lines = partial_content.split('\n')
+                        for line in lines:
+                            if 'BRAND INPUT' in line:
+                                # Format: BRAND INPUT,CategoryName,... 
+                                parts = line.split(',')
+                                if len(parts) >= 2 and parts[1].strip():
+                                    cat = parts[1].strip().upper()
+                                    if cat and cat != 'CSV':
+                                        category = cat
+                                break
+                    except:
+                        pass
+                    
+                    categories.add(category)
                     
                     job_list.append({
                         'job_id': key,
@@ -660,13 +682,19 @@ def list_jobs():
                         'progress': 100,
                         'created_at': obj['LastModified'].isoformat(),
                         'source': 's3',
-                        's3_key': key
+                        's3_key': key,
+                        'category': category
                     })
         except Exception as e:
             print(f"Error listing S3 files: {e}")
     
     # Sort by created_at descending
-    return jsonify(sorted(job_list, key=lambda x: x['created_at'], reverse=True))
+    sorted_jobs = sorted(job_list, key=lambda x: x['created_at'], reverse=True)
+    
+    return jsonify({
+        'jobs': sorted_jobs,
+        'categories': sorted(list(categories))
+    })
 
 
 # ============================================================================
