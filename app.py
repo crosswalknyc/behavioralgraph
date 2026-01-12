@@ -382,6 +382,8 @@ def get_csv_data(s3_key):
         
         # Parse CSV
         df = pd.read_csv(io.StringIO(csv_content))
+        # Replace NaN with None (which becomes null in JSON)
+        df = df.fillna('')
         print(f"✅ Parsed CSV: {len(df)} rows")
         
         # Extract brand name from filename
@@ -438,6 +440,8 @@ def get_job_data(job_id):
     
     try:
         df = pd.read_csv(job['result_file'])
+        # Replace NaN with empty string for valid JSON
+        df = df.fillna('')
         
         # Extract brand and date range
         brand_name = job['project_name']
