@@ -32,7 +32,7 @@
             line-height: 1.6;
         }
 
-        .container { max-width: 1600px; margin: 0 auto; padding: 1rem; }
+        .container { max-width: 100%; margin: 0 auto; padding: 1rem; overflow-x: hidden; }
 
         header {
             display: flex;
@@ -280,114 +280,103 @@
         /* Behavioral Tab */
         .behavioral-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 1rem;
+            width: 100%;
         }
-
-        @media (max-width: 1200px) { .behavioral-grid { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 768px) { .behavioral-grid { grid-template-columns: 1fr; } }
 
         .behavioral-card {
             background: var(--bg-card);
             border-radius: 8px;
-            padding: 1rem;
-            max-height: 500px;
+            padding: 0.75rem;
+            height: 450px;
             display: flex;
             flex-direction: column;
+            min-width: 0;
         }
 
         .behavioral-card h3 {
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             color: var(--text-primary);
             margin-bottom: 0.5rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-shrink: 0;
         }
 
         .behavioral-card .count {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             color: var(--text-secondary);
             background: var(--bg-input);
-            padding: 0.15rem 0.5rem;
+            padding: 0.1rem 0.4rem;
             border-radius: 10px;
         }
 
         .behavioral-filter {
             margin-bottom: 0.5rem;
-        }
-
-        .behavioral-filter select {
-            width: 100%;
-            padding: 0.35rem;
-            font-size: 0.75rem;
-            background: var(--bg-dark);
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            border-radius: 4px;
+            flex-shrink: 0;
         }
 
         .behavioral-list {
             flex: 1;
             overflow-y: auto;
+            min-height: 0;
         }
 
         .behavioral-item {
             display: flex;
             align-items: center;
-            padding: 0.4rem 0;
+            padding: 0.35rem 0;
             border-bottom: 1px solid var(--border-color);
-            gap: 0.5rem;
-            cursor: pointer;
-            transition: background 0.2s;
+            gap: 0.35rem;
         }
 
         .behavioral-item:hover {
             background: var(--bg-input);
-            margin: 0 -0.5rem;
-            padding-left: 0.5rem;
-            padding-right: 0.5rem;
         }
 
         .behavioral-item:last-child { border-bottom: none; }
 
         .behavioral-rank {
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             color: var(--text-secondary);
-            width: 20px;
-            text-align: center;
+            width: 18px;
+            text-align: right;
+            flex-shrink: 0;
         }
 
         .behavioral-name {
             flex: 1;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            min-width: 0;
         }
 
         .behavioral-bar-container {
-            width: 100px;
-            height: 14px;
+            width: 60px;
+            height: 12px;
             background: var(--bg-dark);
             border-radius: 2px;
             overflow: hidden;
-            position: relative;
+            flex-shrink: 0;
         }
 
         .behavioral-bar {
             height: 100%;
             background: linear-gradient(90deg, var(--accent-blue), #4a8ac9);
             border-radius: 2px;
-            transition: width 0.3s;
         }
 
         .behavioral-pct {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             font-weight: 600;
             color: var(--text-primary);
-            width: 55px;
+            width: 50px;
             text-align: right;
+            flex-shrink: 0;
         }
 
         /* Location Tab */
