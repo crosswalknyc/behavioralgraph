@@ -224,50 +224,6 @@
 
         .collapsible-content.open { display: block; }
 
-        /* Cache Result Panel */
-        .cache-panel {
-            background: rgba(166, 226, 46, 0.1);
-            border: 1px solid var(--accent-green);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            display: none;
-        }
-
-        .cache-panel.show { display: block; }
-
-        .cache-panel h3 {
-            color: var(--accent-green);
-            font-size: 0.9rem;
-            margin-bottom: 0.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .cache-panel p {
-            color: var(--text-secondary);
-            font-size: 0.8rem;
-            margin-bottom: 0.75rem;
-        }
-
-        .cache-info {
-            background: var(--bg-dark);
-            padding: 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            margin-bottom: 0.75rem;
-        }
-
-        .cache-info span {
-            display: block;
-            color: var(--text-secondary);
-        }
-
-        .cache-info strong {
-            color: var(--text-primary);
-        }
-
         /* Status Panel - Simplified */
         .status-panel {
             background: var(--bg-input);
@@ -385,20 +341,6 @@
             <div class="card">
                 <h2>📊 Analysis Parameters</h2>
                 
-                <!-- Cache Result Panel -->
-                <div class="cache-panel" id="cachePanel">
-                    <h3>✅ Existing Results Found</h3>
-                    <p id="cacheMessage">An exact match was found in the cache.</p>
-                    <div class="cache-info" id="cacheInfo"></div>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-success" id="useCacheBtn" onclick="useCachedResult()">
-                            📥 Use Cached Result
-                        </button>
-                        <button class="btn btn-secondary" onclick="hideCachePanel()">
-                            🔄 Run New Analysis
-                        </button>
-                    </div>
-                </div>
                 
                 <form id="analysisForm">
                     <!-- Step 1: Project Identification -->
@@ -719,7 +661,6 @@
     <script>
         let currentJobId = null;
         let pollInterval = null;
-        let cachedFileKey = null;
 
         document.addEventListener('DOMContentLoaded', function() {
             const today = new Date();
@@ -753,7 +694,7 @@
                 document.getElementById('enable_skew').checked ? 'block' : 'none';
         }
 
-        // Check S3 for existing results
+        // Check S3 for existing results - auto-download if found
         async function checkForCache() {
             const brands = document.getElementById('brands').value.trim();
             const startDate = document.getElementById('start_date').value;
@@ -771,55 +712,18 @@
                 const data = await response.json();
                 
                 if (data.found && data.type === 'exact') {
-                    showCachePanel(data);
-                } else if (data.found && data.type === 'similar') {
-                    showSimilarFilesPanel(data);
-                } else {
-                    hideCachePanel();
+                    // Auto-download the exact match
+                    window.location.href = `/api/download-cached/${encodeURIComponent(data.file)}`;
+                } else if (data.found && data.type === 'similar' && data.files.length > 0) {
+                    // Auto-download the most recent similar file
+                    window.location.href = `/api/download-cached/${encodeURIComponent(data.files[0].key)}`;
                 }
+                // If not found, do nothing - user will run new analysis
             } catch (error) {
                 console.log('Cache check failed:', error);
             }
         }
 
-        function showCachePanel(data) {
-            cachedFileKey = data.file;
-            const panel = document.getElementById('cachePanel');
-            document.getElementById('cacheMessage').textContent = 'An exact match was found in the cache!';
-            document.getElementById('cacheInfo').innerHTML = `
-                <span><strong>File:</strong> ${data.file}</span>
-                <span><strong>Sample Size:</strong> ${data.sample_size ? data.sample_size.toLocaleString() : 'N/A'}</span>
-                <span><strong>Created:</strong> ${new Date(data.last_modified).toLocaleString()}</span>
-            `;
-            panel.classList.add('show');
-        }
-
-        function showSimilarFilesPanel(data) {
-            const panel = document.getElementById('cachePanel');
-            document.getElementById('cacheMessage').textContent = `Found ${data.files.length} similar run(s) with different dates. Demographics will be validated within ±5%.`;
-            
-            let filesHtml = data.files.map(f => `
-                <span style="display: block; margin-bottom: 0.25rem;">
-                    <strong>${f.key}</strong> (${f.start_date} to ${f.end_date})
-                </span>
-            `).join('');
-            
-            document.getElementById('cacheInfo').innerHTML = filesHtml;
-            document.getElementById('useCacheBtn').style.display = 'none';
-            panel.classList.add('show');
-        }
-
-        function hideCachePanel() {
-            document.getElementById('cachePanel').classList.remove('show');
-            document.getElementById('useCacheBtn').style.display = 'block';
-            cachedFileKey = null;
-        }
-
-        function useCachedResult() {
-            if (cachedFileKey) {
-                window.location.href = `/api/download-cached/${encodeURIComponent(cachedFileKey)}`;
-            }
-        }
 
         document.getElementById('analysisForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -874,7 +778,6 @@
                     showCurrentJob();
                     startPolling();
                     loadJobs();
-                    hideCachePanel();
                 } else {
                     alert(data.error || 'Failed to submit job');
                 }
