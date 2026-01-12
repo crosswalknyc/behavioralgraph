@@ -592,6 +592,13 @@
             border-radius: 8px;
             padding: 1rem;
             overflow-x: auto;
+            overflow-y: auto;
+            max-height: calc(100vh - 250px);
+        }
+
+        .comp-table-wrapper {
+            overflow-x: auto;
+            margin-bottom: 1rem;
         }
 
         .comparison-empty {
@@ -892,8 +899,11 @@
                         <div class="comparison-profile-list" id="compProfileList">
                             <div style="padding: 1rem; color: var(--text-secondary);">Loading profiles...</div>
                         </div>
-                        <button class="btn btn-primary" style="margin-top: 1rem; width: 100%;" onclick="runComparison()">📊 Compare Selected</button>
-                        <button class="btn btn-small" style="margin-top: 0.5rem; width: 100%; background: var(--bg-dark);" onclick="clearComparison()">Clear All</button>
+                        <div style="margin-top: 1rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; text-align: center;">
+                            <span class="comp-selected-count" style="font-weight: 600;">0 selected</span>
+                        </div>
+                        <button class="btn btn-primary" style="margin-top: 0.5rem; width: 100%;" onclick="runComparison()">📊 COMPARE SELECTED</button>
+                        <button class="btn btn-small" style="margin-top: 0.5rem; width: 100%; background: var(--bg-dark);" onclick="clearComparison()">CLEAR ALL</button>
                     </div>
                     <div class="comparison-main">
                         <div id="comparisonResults">
@@ -1666,6 +1676,7 @@
                     selectedForComparison.add(id);
                 }
             });
+            updateSelectedCount();
             renderComparisonProfiles(comparisonProfiles);
         }
 
@@ -1694,12 +1705,21 @@
             } else {
                 selectedForComparison.add(id);
             }
+            updateSelectedCount();
             renderComparisonProfiles(comparisonProfiles);
+        }
+
+        function updateSelectedCount() {
+            const countEl = document.querySelector('.comp-selected-count');
+            if (countEl) {
+                countEl.textContent = `${selectedForComparison.size} selected`;
+            }
         }
 
         function clearComparison() {
             selectedForComparison.clear();
             loadedComparisonData = {};
+            updateSelectedCount();
             renderComparisonProfiles(comparisonProfiles);
             document.getElementById('comparisonResults').innerHTML = '<div class="comparison-empty"><p>Select profiles from the left and click "Compare Selected"</p></div>';
         }
@@ -1713,6 +1733,7 @@
                     selectedForComparison.delete(id);
                 }
             });
+            updateSelectedCount();
             renderComparisonProfiles(comparisonProfiles);
         }
 
@@ -1786,28 +1807,37 @@
 
             const resultsContainer = document.getElementById('comparisonResults');
             const selectedIds = Array.from(selectedForComparison);
+            
+            // Debug: log what's selected
+            console.log('=== COMPARISON DEBUG ===');
+            console.log('Selected count:', selectedForComparison.size);
+            console.log('Selected IDs:', selectedIds);
+            
             resultsContainer.innerHTML = `<div class="comparison-empty"><p>Loading ${selectedIds.length} profile(s)...</p></div>`;
 
-            // Load data for each selected profile using Promise.all for parallel loading
-            const loadPromises = selectedIds.map(async (id, idx) => {
+            // Load data for each selected profile
+            const profilesData = [];
+            
+            for (let idx = 0; idx < selectedIds.length; idx++) {
+                const id = selectedIds[idx];
                 try {
-                    console.log('Loading profile:', id);
+                    console.log(`Loading profile ${idx + 1}/${selectedIds.length}:`, id);
                     const response = await fetch(`/api/get-csv-data/${encodeURIComponent(id)}`);
                     
                     if (!response.ok) {
-                        console.error(`Failed to load ${id}: ${response.status}`);
-                        return null;
+                        console.error(`Failed to load ${id}: HTTP ${response.status}`);
+                        continue;
                     }
                     
                     const data = await response.json();
-                    console.log('Received data for', id, data.success);
+                    console.log(`Response for ${id}:`, data.success, data.error || '');
                     
-                    if (data.success && data.data) {
+                    if (data.success && data.data && data.data.length > 0) {
                         const parsed = parseComparisonData(data.data);
                         const profile = comparisonProfiles.find(p => (p.s3_key || p.job_id) === id);
                         const displayName = data.brand || (profile ? getProfileFullName(profile) : id.split('_')[0]);
                         
-                        return {
+                        profilesData.push({
                             id: id,
                             name: displayName.toUpperCase(),
                             color: profileColors[idx % profileColors.length],
@@ -1817,24 +1847,37 @@
                             demographics: parsed.demographics,
                             behavioral: parsed.behavioral,
                             locations: parsed.locations
-                        };
+                        });
+                        console.log(`✓ Loaded ${displayName}: sample=${parsed.sampleSize}`);
+                    } else {
+                        console.error(`No data for ${id}:`, data.error || 'empty data array');
                     }
                 } catch (e) {
                     console.error('Error loading', id, e);
                 }
-                return null;
-            });
-
-            const results = await Promise.all(loadPromises);
-            const profilesData = results.filter(p => p !== null);
+            }
+            
+            console.log('Total profiles loaded:', profilesData.length);
+            console.log('Profile names:', profilesData.map(p => p.name));
 
             if (profilesData.length < 1) {
-                resultsContainer.innerHTML = `<div class="comparison-empty"><p>Could not load any profiles. Check console for errors.</p></div>`;
+                resultsContainer.innerHTML = `<div class="comparison-empty">
+                    <p>Could not load any profiles.</p>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary);">Selected: ${selectedIds.join(', ')}</p>
+                    <p style="font-size: 0.8rem;">Check browser console (F12) for errors.</p>
+                </div>`;
                 return;
             }
 
             console.log('Rendering comparison with', profilesData.length, 'profiles:', profilesData.map(p => p.name));
             renderComparison(profilesData);
+        }
+
+        // Auto-run comparison when profiles are selected
+        function autoRunComparisonIfNeeded() {
+            // Update the display to show how many are selected
+            const countEl = document.querySelector('.comp-selected-count');
+            if (countEl) countEl.textContent = `${selectedForComparison.size} selected`;
         }
 
         function renderComparison(profiles) {
