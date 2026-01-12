@@ -1698,7 +1698,7 @@
             // Load profile selector in sidebar (instead of categories)
             loadDashboardProfiles();
             
-            renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection);
+            renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
             renderBehavioralCards(parsed.behavioral);
             renderLocationTable(parsed.locations);
         }
@@ -1709,6 +1709,7 @@
                 projectedUS: 0,
                 demographics: { age: {}, gender: {}, ethnicity: {}, income: {} },
                 demographicsIndex: { age: {}, gender: {}, ethnicity: {}, income: {} },
+                demographicsGenPop: { age: {}, gender: {}, ethnicity: {}, income: {} }, // Gen Pop percentages
                 demographicsProjection: { age: {}, gender: {}, ethnicity: {}, income: {} },
                 behavioral: {},
                 categories: {},
@@ -1724,7 +1725,6 @@
                 const value = row.Value || '';
                 const pct = parseFloat(row['Brand Penetration (Row)'] || row['Category Share'] || 0);
                 const rawNumbers = parseInt(row['Original Raw Numbers'] || row['Category Share'] || 0);
-                const usProjection = parseInt(row['US Gen Pop Projection'] || 0);
                 const usProjection = parseInt(row['US Gen Pop Projection'] || 0);
                 
                 // Calculate Gen Pop % and Index
@@ -1742,37 +1742,41 @@
                 
                 if (category === 'BRAND INPUT') result.projectedUS = usProjection;
 
-                // Demographics - store pct, index, and projection
+                // Demographics - store pct, genPopPct, index, and projection
                 if (category === 'AGE' && value) {
                     result.demographics.age[value] = pct;
                     result.demographicsIndex.age[value] = index;
+                    result.demographicsGenPop.age[value] = genPopPct;
                     result.demographicsProjection.age[value] = usProjection;
                 }
                 if (category === 'GENDER' && value) {
                     result.demographics.gender[value] = pct;
                     result.demographicsIndex.gender[value] = index;
+                    result.demographicsGenPop.gender[value] = genPopPct;
                     result.demographicsProjection.gender[value] = usProjection;
                 }
                 if (category === 'ETHNICITY' && value) {
                     result.demographics.ethnicity[value] = pct;
                     result.demographicsIndex.ethnicity[value] = index;
+                    result.demographicsGenPop.ethnicity[value] = genPopPct;
                     result.demographicsProjection.ethnicity[value] = usProjection;
                 }
                 if (category === 'INCOME' && value) {
                     result.demographics.income[value] = pct;
                     result.demographicsIndex.income[value] = index;
+                    result.demographicsGenPop.income[value] = genPopPct;
                     result.demographicsProjection.income[value] = usProjection;
                 }
 
-                // Location/DMA - include projection
+                // Location/DMA - include genPopPct and projection
                 if (category === 'LOCATION' && value) {
-                    result.locations.push({ name: value, pct: pct, index: index, projection: usProjection });
+                    result.locations.push({ name: value, pct: pct, index: index, genPopPct: genPopPct, projection: usProjection });
                 }
 
                 // Categories tree
                 if (!skipCategories.includes(category) && value) {
                     if (!result.categories[category]) result.categories[category] = [];
-                    result.categories[category].push({ value, pct, index, projection: usProjection });
+                    result.categories[category].push({ value, pct, index, genPopPct, projection: usProjection });
                 }
 
                 // Behavioral (non-demographic categories) - include index and projection
@@ -1885,7 +1889,7 @@
                     document.getElementById('dashProjectedUS').textContent = formatNumber(parsed.projectedUS);
                     
                     // Render charts and data
-                    renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection);
+                    renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
                     renderBehavioralCards(parsed.behavioral);
                     renderLocationTable(parsed.locations);
                 }
@@ -1930,13 +1934,13 @@
 
             // Re-render all dashboard data with new display mode
             if (currentDashboardData) {
-                renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection);
+                renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
                 renderBehavioralCards(currentDashboardData.behavioral);
                 renderLocationTable(currentDashboardData.locations);
             }
         }
         
-        function renderCharts(demographics, demographicsIndex = {}, demographicsProjection = {}) {
+        function renderCharts(demographics, demographicsIndex = {}, demographicsProjection = {}, demographicsGenPop = {}) {
             Object.values(charts).forEach(c => c.destroy());
             charts = {};
             currentDemoIndexes = demographicsIndex;
@@ -1944,9 +1948,9 @@
             const colors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74', '#75715e'];
             const isProjection = dashDisplayMode === 'projection';
 
-            // Age - horizontal bar with index in data labels
+            // Age - horizontal bar with Gen Pop % in data labels
             const ageLabels = Object.keys(demographics.age);
-            const ageIndexes = ageLabels.map(k => demographicsIndex.age?.[k] || 0);
+            const ageGenPop = ageLabels.map(k => demographicsGenPop.age?.[k] || 0);
             const ageData = isProjection 
                 ? ageLabels.map(k => demographicsProjection.age?.[k] || 0)
                 : Object.values(demographics.age);
@@ -1969,11 +1973,12 @@
                             align: 'end',
                             font: { size: 9, weight: 'bold' },
                             formatter: (value, ctx) => {
-                                const idx = ageIndexes[ctx.dataIndex] || 0;
+                                const genPop = ageGenPop[ctx.dataIndex] || 0;
                                 if (isProjection) {
-                                    return idx > 0 ? `${formatNumber(Math.round(value))} [${idx}]` : formatNumber(Math.round(value));
+                                    return formatNumber(Math.round(value));
                                 }
-                                return idx > 0 ? `${value.toFixed(1)}% [${idx}]` : value.toFixed(1) + '%';
+                                // Show profile % and Gen Pop % side by side
+                                return genPop > 0 ? `${value.toFixed(1)}% (GP: ${genPop.toFixed(1)}%)` : value.toFixed(1) + '%';
                             }
                         }
                     }, 
@@ -1982,9 +1987,9 @@
                 plugins: [ChartDataLabels]
             });
 
-            // Gender - with index in legend
+            // Gender - with Gen Pop % in legend
             const genderLabels = Object.keys(demographics.gender);
-            const genderIndexes = genderLabels.map(k => demographicsIndex.gender?.[k] || 0);
+            const genderGenPop = genderLabels.map(k => demographicsGenPop.gender?.[k] || 0);
             const genderData = isProjection
                 ? genderLabels.map(k => demographicsProjection.gender?.[k] || 0)
                 : Object.values(demographics.gender);
@@ -2004,14 +2009,14 @@
                                 generateLabels: (chart) => {
                                     const data = chart.data;
                                     return data.labels.map((label, i) => {
-                                        const idx = genderIndexes[i] || 0;
+                                        const genPop = genderGenPop[i] || 0;
                                         const val = data.datasets[0].data[i];
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : val.toFixed(1) + '%';
-                                        const idxStr = idx > 0 ? ` [${idx}]` : '';
+                                        const gpStr = genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '';
                                         return {
-                                            text: `${label} ${valStr}${idxStr}`,
+                                            text: `${label} ${valStr}${gpStr}`,
                                             fillStyle: data.datasets[0].backgroundColor[i],
-                                            fontColor: idx >= 100 ? '#10b981' : (idx > 0 ? '#ef4444' : '#e6f1ff'),
+                                            fontColor: '#e6f1ff',
                                             index: i
                                         };
                                     });
@@ -2024,9 +2029,9 @@
                 plugins: [ChartDataLabels]
             });
 
-            // Ethnicity - with index in legend
+            // Ethnicity - with Gen Pop % in legend
             const ethLabels = Object.keys(demographics.ethnicity);
-            const ethIndexes = ethLabels.map(k => demographicsIndex.ethnicity?.[k] || 0);
+            const ethGenPop = ethLabels.map(k => demographicsGenPop.ethnicity?.[k] || 0);
             const ethData = isProjection
                 ? ethLabels.map(k => demographicsProjection.ethnicity?.[k] || 0)
                 : Object.values(demographics.ethnicity);
@@ -2046,14 +2051,14 @@
                                 generateLabels: (chart) => {
                                     const data = chart.data;
                                     return data.labels.map((label, i) => {
-                                        const idx = ethIndexes[i] || 0;
+                                        const genPop = ethGenPop[i] || 0;
                                         const val = data.datasets[0].data[i];
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : val.toFixed(1) + '%';
-                                        const idxStr = idx > 0 ? ` [${idx}]` : '';
+                                        const gpStr = genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '';
                                         return {
-                                            text: `${label} ${valStr}${idxStr}`,
+                                            text: `${label} ${valStr}${gpStr}`,
                                             fillStyle: data.datasets[0].backgroundColor[i],
-                                            fontColor: idx >= 100 ? '#10b981' : (idx > 0 ? '#ef4444' : '#e6f1ff'),
+                                            fontColor: '#e6f1ff',
                                             index: i
                                         };
                                     });
@@ -2066,9 +2071,9 @@
                 plugins: [ChartDataLabels]
             });
 
-            // Income - horizontal bar with index in data labels
+            // Income - horizontal bar with Gen Pop % in data labels
             const incomeLabels = Object.keys(demographics.income);
-            const incomeIndexes = incomeLabels.map(k => demographicsIndex.income?.[k] || 0);
+            const incomeGenPop = incomeLabels.map(k => demographicsGenPop.income?.[k] || 0);
             const incomeData = isProjection
                 ? incomeLabels.map(k => demographicsProjection.income?.[k] || 0)
                 : Object.values(demographics.income);
@@ -2087,11 +2092,12 @@
                             align: 'top',
                             font: { size: 8, weight: 'bold' },
                             formatter: (value, ctx) => {
-                                const idx = incomeIndexes[ctx.dataIndex] || 0;
+                                const genPop = incomeGenPop[ctx.dataIndex] || 0;
                                 if (isProjection) {
-                                    return idx > 0 ? `${formatNumber(Math.round(value))}\n[${idx}]` : formatNumber(Math.round(value));
+                                    return formatNumber(Math.round(value));
                                 }
-                                return idx > 0 ? `${value.toFixed(1)}%\n[${idx}]` : value.toFixed(1) + '%';
+                                // Show profile % and Gen Pop % 
+                                return genPop > 0 ? `${value.toFixed(1)}%\n(GP: ${genPop.toFixed(1)}%)` : value.toFixed(1) + '%';
                             }
                         }
                     }, 
