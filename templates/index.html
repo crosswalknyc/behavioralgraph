@@ -287,11 +287,33 @@
         @media (max-width: 1200px) { .behavioral-grid { grid-template-columns: repeat(2, 1fr); } }
         @media (max-width: 768px) { .behavioral-grid { grid-template-columns: 1fr; } }
 
+        .slicer-btn {
+            padding: 0.35rem 0.75rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.2s;
+        }
+
+        .slicer-btn:hover {
+            border-color: var(--accent-blue);
+            color: var(--text-primary);
+        }
+
+        .slicer-btn.active {
+            background: var(--accent-blue);
+            color: white;
+            border-color: var(--accent-blue);
+        }
+
         .behavioral-card {
             background: var(--bg-card);
             border-radius: 8px;
             padding: 1rem;
-            max-height: 450px;
+            max-height: 500px;
             display: flex;
             flex-direction: column;
         }
@@ -308,6 +330,23 @@
         .behavioral-card .count {
             font-size: 0.7rem;
             color: var(--text-secondary);
+            background: var(--bg-input);
+            padding: 0.15rem 0.5rem;
+            border-radius: 10px;
+        }
+
+        .behavioral-filter {
+            margin-bottom: 0.5rem;
+        }
+
+        .behavioral-filter select {
+            width: 100%;
+            padding: 0.35rem;
+            font-size: 0.75rem;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            border-radius: 4px;
         }
 
         .behavioral-list {
@@ -318,12 +357,28 @@
         .behavioral-item {
             display: flex;
             align-items: center;
-            padding: 0.35rem 0;
+            padding: 0.4rem 0;
             border-bottom: 1px solid var(--border-color);
             gap: 0.5rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .behavioral-item:hover {
+            background: var(--bg-input);
+            margin: 0 -0.5rem;
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
         }
 
         .behavioral-item:last-child { border-bottom: none; }
+
+        .behavioral-rank {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            width: 20px;
+            text-align: center;
+        }
 
         .behavioral-name {
             flex: 1;
@@ -334,23 +389,26 @@
         }
 
         .behavioral-bar-container {
-            width: 80px;
-            height: 12px;
+            width: 100px;
+            height: 14px;
             background: var(--bg-dark);
             border-radius: 2px;
             overflow: hidden;
+            position: relative;
         }
 
         .behavioral-bar {
             height: 100%;
-            background: var(--accent-blue);
+            background: linear-gradient(90deg, var(--accent-blue), #4a8ac9);
             border-radius: 2px;
+            transition: width 0.3s;
         }
 
         .behavioral-pct {
-            font-size: 0.7rem;
-            color: var(--text-secondary);
-            width: 45px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            width: 55px;
             text-align: right;
         }
 
@@ -567,6 +625,11 @@
 
             <!-- Behavioral Tab -->
             <div id="tab-behavioral" class="tab-content">
+                <div style="margin-bottom: 1rem; display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                    <div style="font-size: 0.85rem; color: var(--text-secondary);">Filter by Category:</div>
+                    <div id="categorySlicers" style="display: flex; gap: 0.5rem; flex-wrap: wrap;"></div>
+                    <button class="btn btn-small" style="background: var(--bg-dark);" onclick="clearCategoryFilters()">Clear All</button>
+                </div>
                 <div class="behavioral-grid" id="behavioralGrid"></div>
             </div>
 
@@ -897,11 +960,17 @@
             });
         }
 
+        let allBehavioralData = {};
+        let activeCategoryFilters = new Set();
+
         function renderBehavioralCards(behavioral) {
+            allBehavioralData = behavioral;
             const container = document.getElementById('behavioralGrid');
+            const slicerContainer = document.getElementById('categorySlicers');
+            
             const priorityCategories = ['APPAREL/FOOTWEAR', 'RETAIL', 'APPS/PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING/VIDEO', 'STREAMING/MUSIC', 'QSR', 'TECHNOLOGY/DEVICE', 'GAMES', 'SPORTS', 'MEDIA'];
 
-            // Sort categories - priority first, then alphabetical
+            // Sort categories
             const sortedCats = Object.keys(behavioral).sort((a, b) => {
                 const aIdx = priorityCategories.indexOf(a);
                 const bIdx = priorityCategories.indexOf(b);
@@ -911,26 +980,90 @@
                 return a.localeCompare(b);
             });
 
-            container.innerHTML = sortedCats.map(cat => {
-                const items = behavioral[cat].slice(0, 20);
+            // Render category slicers
+            slicerContainer.innerHTML = sortedCats.slice(0, 12).map(cat => `
+                <button class="slicer-btn ${activeCategoryFilters.has(cat) ? 'active' : ''}" onclick="toggleCategoryFilter('${cat}')">${cat}</button>
+            `).join('');
+
+            // Filter categories if filters are active
+            const catsToShow = activeCategoryFilters.size > 0 
+                ? sortedCats.filter(c => activeCategoryFilters.has(c))
+                : sortedCats;
+
+            container.innerHTML = catsToShow.map(cat => {
+                const items = behavioral[cat].slice(0, 25);
                 const maxPct = Math.max(...items.map(i => i.pct), 1);
                 return `
-                    <div class="behavioral-card">
+                    <div class="behavioral-card" id="card-${cat.replace(/[^a-zA-Z]/g, '')}">
                         <h3>${cat} <span class="count">${behavioral[cat].length}</span></h3>
-                        <div class="behavioral-list">
-                            ${items.map(item => `
-                                <div class="behavioral-item">
-                                    <span class="behavioral-name" title="${item.name}">${item.name}</span>
-                                    <div class="behavioral-bar-container">
-                                        <div class="behavioral-bar" style="width: ${(item.pct / maxPct) * 100}%"></div>
-                                    </div>
-                                    <span class="behavioral-pct">${item.pct.toFixed(1)}%</span>
-                                </div>
-                            `).join('')}
+                        <div class="behavioral-filter">
+                            <select onchange="filterCardItems('${cat}', this.value)">
+                                <option value="all">All Items</option>
+                                <option value="top10">Top 10</option>
+                                <option value="top25">Top 25</option>
+                                <option value="above50">Above 50%</option>
+                                <option value="above25">Above 25%</option>
+                            </select>
+                        </div>
+                        <div class="behavioral-list" id="list-${cat.replace(/[^a-zA-Z]/g, '')}">
+                            ${renderBehavioralItems(items, maxPct)}
                         </div>
                     </div>
                 `;
             }).join('');
+        }
+
+        function renderBehavioralItems(items, maxPct) {
+            return items.map((item, idx) => `
+                <div class="behavioral-item" onclick="highlightItem(this)">
+                    <span class="behavioral-rank">${idx + 1}</span>
+                    <span class="behavioral-name" title="${item.name}">${item.name}</span>
+                    <div class="behavioral-bar-container">
+                        <div class="behavioral-bar" style="width: ${(item.pct / maxPct) * 100}%"></div>
+                    </div>
+                    <span class="behavioral-pct">${item.pct.toFixed(2)}%</span>
+                </div>
+            `).join('');
+        }
+
+        function toggleCategoryFilter(cat) {
+            if (activeCategoryFilters.has(cat)) {
+                activeCategoryFilters.delete(cat);
+            } else {
+                activeCategoryFilters.add(cat);
+            }
+            renderBehavioralCards(allBehavioralData);
+        }
+
+        function clearCategoryFilters() {
+            activeCategoryFilters.clear();
+            renderBehavioralCards(allBehavioralData);
+        }
+
+        function filterCardItems(cat, filterType) {
+            const items = allBehavioralData[cat] || [];
+            let filtered;
+            
+            switch(filterType) {
+                case 'top10': filtered = items.slice(0, 10); break;
+                case 'top25': filtered = items.slice(0, 25); break;
+                case 'above50': filtered = items.filter(i => i.pct >= 50); break;
+                case 'above25': filtered = items.filter(i => i.pct >= 25); break;
+                default: filtered = items.slice(0, 25);
+            }
+            
+            const maxPct = Math.max(...filtered.map(i => i.pct), 1);
+            const listId = 'list-' + cat.replace(/[^a-zA-Z]/g, '');
+            document.getElementById(listId).innerHTML = renderBehavioralItems(filtered, maxPct);
+        }
+
+        function highlightItem(el) {
+            el.style.background = 'var(--accent-blue)';
+            el.style.color = 'white';
+            setTimeout(() => {
+                el.style.background = '';
+                el.style.color = '';
+            }, 500);
         }
 
         function renderLocationTable(locations) {
