@@ -143,12 +143,6 @@
             gap: 0.75rem;
         }
 
-        .form-row-3 {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 0.75rem;
-        }
-
         .checkbox-group {
             display: flex;
             align-items: center;
@@ -188,8 +182,19 @@
             color: white;
         }
 
-        .btn-primary:hover { transform: translateY(-2px); }
-        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .btn-secondary {
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--accent-green), #8bc926);
+            color: #1a1a1a;
+        }
+
+        .btn-primary:hover, .btn-success:hover { transform: translateY(-2px); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
         .collapsible {
             border: 1px solid var(--border-color);
@@ -219,21 +224,91 @@
 
         .collapsible-content.open { display: block; }
 
-        /* Status Panel */
-        .status-panel {
-            background: var(--bg-input);
+        /* Cache Result Panel */
+        .cache-panel {
+            background: rgba(166, 226, 46, 0.1);
+            border: 1px solid var(--accent-green);
             border-radius: 8px;
             padding: 1rem;
+            margin-bottom: 1rem;
+            display: none;
         }
 
-        .status-header {
+        .cache-panel.show { display: block; }
+
+        .cache-panel h3 {
+            color: var(--accent-green);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            gap: 0.5rem;
+        }
+
+        .cache-panel p {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
             margin-bottom: 0.75rem;
         }
 
+        .cache-info {
+            background: var(--bg-dark);
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .cache-info span {
+            display: block;
+            color: var(--text-secondary);
+        }
+
+        .cache-info strong {
+            color: var(--text-primary);
+        }
+
+        /* Status Panel - Simplified */
+        .status-panel {
+            background: var(--bg-input);
+            border-radius: 8px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+
+        .status-icon {
+            font-size: 3rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .status-text {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.1rem;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .status-message {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .progress-bar {
+            height: 6px;
+            background: var(--bg-dark);
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+            transition: width 0.5s ease;
+        }
+
         .status-badge {
+            display: inline-block;
             padding: 0.25rem 0.75rem;
             border-radius: 20px;
             font-size: 0.75rem;
@@ -245,35 +320,6 @@
         .status-badge.running { background: rgba(90, 154, 217, 0.2); color: var(--accent-blue); }
         .status-badge.completed { background: rgba(166, 226, 46, 0.2); color: var(--accent-green); }
         .status-badge.failed { background: rgba(249, 38, 114, 0.2); color: var(--accent-red); }
-
-        .progress-bar {
-            height: 6px;
-            background: var(--bg-dark);
-            border-radius: 3px;
-            overflow: hidden;
-            margin: 0.5rem 0;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
-            transition: width 0.5s ease;
-        }
-
-        .logs-container {
-            max-height: 150px;
-            overflow-y: auto;
-            background: var(--bg-dark);
-            border-radius: 6px;
-            padding: 0.75rem;
-            margin-top: 0.75rem;
-            font-family: 'Space Mono', monospace;
-            font-size: 0.7rem;
-            line-height: 1.6;
-        }
-
-        .log-entry { color: var(--text-secondary); }
-        .log-entry:last-child { color: var(--accent-cyan); }
 
         .empty-state {
             text-align: center;
@@ -297,6 +343,7 @@
         .btn-small {
             padding: 0.35rem 0.75rem;
             font-size: 0.7rem;
+            width: auto;
         }
 
         .help-text {
@@ -308,13 +355,17 @@
 
         @keyframes spin { to { transform: rotate(360deg); } }
         .spinner {
-            width: 16px;
-            height: 16px;
-            border: 2px solid transparent;
-            border-top-color: currentColor;
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent-blue);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
+            margin: 0 auto 1rem;
         }
+
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .pulse { animation: pulse 1.5s ease-in-out infinite; }
     </style>
 </head>
 <body>
@@ -333,6 +384,21 @@
             <!-- Input Form -->
             <div class="card">
                 <h2>📊 Analysis Parameters</h2>
+                
+                <!-- Cache Result Panel -->
+                <div class="cache-panel" id="cachePanel">
+                    <h3>✅ Existing Results Found</h3>
+                    <p id="cacheMessage">An exact match was found in the cache.</p>
+                    <div class="cache-info" id="cacheInfo"></div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-success" id="useCacheBtn" onclick="useCachedResult()">
+                            📥 Use Cached Result
+                        </button>
+                        <button class="btn btn-secondary" onclick="hideCachePanel()">
+                            🔄 Run New Analysis
+                        </button>
+                    </div>
+                </div>
                 
                 <form id="analysisForm">
                     <!-- Step 1: Project Identification -->
@@ -366,8 +432,8 @@
                         
                         <div class="form-group">
                             <label for="brands">Brands (comma-separated or one per line)</label>
-                            <textarea id="brands" name="brands" placeholder="nike, adidas, puma&#10;or enter URLs like https://nike.com" required></textarea>
-                            <div class="help-text">Enter brand names, domains, or full URLs. Auto-format will generate variations.</div>
+                            <textarea id="brands" name="brands" placeholder="nike, adidas, puma&#10;or enter URLs like https://nike.com" required onblur="checkForCache()"></textarea>
+                            <div class="help-text">Enter brand names, domains, or full URLs. Variations will be auto-generated.</div>
                         </div>
 
                         <div class="form-group">
@@ -392,11 +458,11 @@
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="start_date">Start Date</label>
-                                    <input type="date" id="start_date" name="start_date" required>
+                                    <input type="date" id="start_date" name="start_date" required onchange="checkForCache()">
                                 </div>
                                 <div class="form-group">
                                     <label for="end_date">End Date</label>
-                                    <input type="date" id="end_date" name="end_date" required>
+                                    <input type="date" id="end_date" name="end_date" required onchange="checkForCache()">
                                 </div>
                             </div>
                         </div>
@@ -612,32 +678,26 @@
                 
                 <div id="currentJob" style="display: none;">
                     <div class="status-panel">
-                        <div class="status-header">
-                            <span id="jobProjectName">Project</span>
-                            <span class="status-badge" id="statusBadge">Queued</span>
+                        <div id="statusRunning">
+                            <div class="spinner"></div>
+                            <div class="status-text pulse" id="statusText">Processing...</div>
+                            <div class="status-message" id="statusMessage">Analysis in progress</div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                            </div>
                         </div>
                         
-                        <div class="progress-bar">
-                            <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                        <div id="statusComplete" style="display: none;">
+                            <div class="status-icon">✅</div>
+                            <div class="status-text">Complete!</div>
+                            <div class="status-message" id="completeMessage">Analysis finished successfully</div>
+                            <button class="btn btn-success" id="downloadBtn" style="margin-top: 1rem;">📥 Download Results</button>
                         </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-secondary);">
-                            <span id="progressMessage">Waiting...</span>
-                            <span id="progressPercent">0%</span>
-                        </div>
-
-                        <div class="logs-container" id="logsContainer">
-                            <div class="log-entry">Waiting for logs...</div>
-                        </div>
-
-                        <div id="downloadSection" style="display: none; margin-top: 1rem;">
-                            <button class="btn btn-primary" id="downloadBtn">📥 Download Results</button>
-                        </div>
-
-                        <div id="errorSection" style="display: none; margin-top: 1rem;">
-                            <div style="background: rgba(249, 38, 114, 0.1); border: 1px solid var(--accent-red); border-radius: 6px; padding: 0.75rem;">
-                                <strong style="color: var(--accent-red);">Error:</strong>
-                                <pre id="errorMessage" style="margin-top: 0.5rem; white-space: pre-wrap; font-size: 0.7rem; color: var(--text-secondary);"></pre>
-                            </div>
+                        
+                        <div id="statusError" style="display: none;">
+                            <div class="status-icon">❌</div>
+                            <div class="status-text">Error</div>
+                            <div class="status-message" id="errorMessage" style="color: var(--accent-red);"></div>
                         </div>
                     </div>
                 </div>
@@ -659,6 +719,7 @@
     <script>
         let currentJobId = null;
         let pollInterval = null;
+        let cachedFileKey = null;
 
         document.addEventListener('DOMContentLoaded', function() {
             const today = new Date();
@@ -692,12 +753,80 @@
                 document.getElementById('enable_skew').checked ? 'block' : 'none';
         }
 
+        // Check S3 for existing results
+        async function checkForCache() {
+            const brands = document.getElementById('brands').value.trim();
+            const startDate = document.getElementById('start_date').value;
+            const endDate = document.getElementById('end_date').value;
+            
+            if (!brands || !startDate || !endDate) return;
+            
+            try {
+                const response = await fetch('/api/check-cache', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ brands, start_date: startDate, end_date: endDate })
+                });
+                
+                const data = await response.json();
+                
+                if (data.found && data.type === 'exact') {
+                    showCachePanel(data);
+                } else if (data.found && data.type === 'similar') {
+                    showSimilarFilesPanel(data);
+                } else {
+                    hideCachePanel();
+                }
+            } catch (error) {
+                console.log('Cache check failed:', error);
+            }
+        }
+
+        function showCachePanel(data) {
+            cachedFileKey = data.file;
+            const panel = document.getElementById('cachePanel');
+            document.getElementById('cacheMessage').textContent = 'An exact match was found in the cache!';
+            document.getElementById('cacheInfo').innerHTML = `
+                <span><strong>File:</strong> ${data.file}</span>
+                <span><strong>Sample Size:</strong> ${data.sample_size ? data.sample_size.toLocaleString() : 'N/A'}</span>
+                <span><strong>Created:</strong> ${new Date(data.last_modified).toLocaleString()}</span>
+            `;
+            panel.classList.add('show');
+        }
+
+        function showSimilarFilesPanel(data) {
+            const panel = document.getElementById('cachePanel');
+            document.getElementById('cacheMessage').textContent = `Found ${data.files.length} similar run(s) with different dates. Demographics will be validated within ±5%.`;
+            
+            let filesHtml = data.files.map(f => `
+                <span style="display: block; margin-bottom: 0.25rem;">
+                    <strong>${f.key}</strong> (${f.start_date} to ${f.end_date})
+                </span>
+            `).join('');
+            
+            document.getElementById('cacheInfo').innerHTML = filesHtml;
+            document.getElementById('useCacheBtn').style.display = 'none';
+            panel.classList.add('show');
+        }
+
+        function hideCachePanel() {
+            document.getElementById('cachePanel').classList.remove('show');
+            document.getElementById('useCacheBtn').style.display = 'block';
+            cachedFileKey = null;
+        }
+
+        function useCachedResult() {
+            if (cachedFileKey) {
+                window.location.href = `/api/download-cached/${encodeURIComponent(cachedFileKey)}`;
+            }
+        }
+
         document.getElementById('analysisForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner"></span> Submitting...';
+            submitBtn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;"></span> Submitting...';
             
             const sameDates = document.getElementById('same_dates').checked;
             
@@ -707,18 +836,16 @@
                 brand_category: document.getElementById('brand_category').value || 'GENERAL',
                 is_genpop: document.getElementById('is_genpop').checked,
                 purchasers_only: document.getElementById('purchasers_only').checked,
-                auto_format: true,  // Always enabled
+                auto_format: true,
                 include_frequency: document.getElementById('include_frequency').checked,
                 is_listener_watcher: document.getElementById('is_listener_watcher').checked,
                 is_update: document.getElementById('is_update').checked,
                 previous_file: document.getElementById('previous_file').value,
-                // Dates
                 same_dates: sameDates,
                 start_date: sameDates ? document.getElementById('start_date').value : document.getElementById('sample_start').value,
                 end_date: sameDates ? document.getElementById('end_date').value : document.getElementById('sample_end').value,
                 behavior_start: sameDates ? document.getElementById('start_date').value : document.getElementById('behavior_start').value,
                 behavior_end: sameDates ? document.getElementById('end_date').value : document.getElementById('behavior_end').value,
-                // Demographics
                 gender: document.getElementById('gender').value,
                 age: document.getElementById('age').value,
                 ethnicity: document.getElementById('ethnicity').value,
@@ -727,7 +854,6 @@
                 relationship: document.getElementById('relationship').value,
                 sexual_orientation: document.getElementById('sexual_orientation').value,
                 parental_status: document.getElementById('parental_status').value,
-                // Skew settings
                 enable_skew: document.getElementById('enable_skew').checked,
                 skew_category: document.getElementById('skew_category').value,
                 skew_target: document.getElementById('skew_target').value,
@@ -748,6 +874,7 @@
                     showCurrentJob();
                     startPolling();
                     loadJobs();
+                    hideCachePanel();
                 } else {
                     alert(data.error || 'Failed to submit job');
                 }
@@ -762,8 +889,9 @@
         function showCurrentJob() {
             document.getElementById('currentJob').style.display = 'block';
             document.getElementById('noCurrentJob').style.display = 'none';
-            document.getElementById('downloadSection').style.display = 'none';
-            document.getElementById('errorSection').style.display = 'none';
+            document.getElementById('statusRunning').style.display = 'block';
+            document.getElementById('statusComplete').style.display = 'none';
+            document.getElementById('statusError').style.display = 'none';
         }
 
         function startPolling() {
@@ -780,32 +908,23 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    document.getElementById('jobProjectName').textContent = data.project_name || currentJobId;
-                    
-                    const badge = document.getElementById('statusBadge');
-                    badge.textContent = data.status.toUpperCase();
-                    badge.className = 'status-badge ' + data.status;
-                    
+                    document.getElementById('statusText').textContent = data.project_name || 'Processing...';
+                    document.getElementById('statusMessage').textContent = data.message || 'Analysis in progress';
                     document.getElementById('progressFill').style.width = data.progress + '%';
-                    document.getElementById('progressPercent').textContent = data.progress + '%';
-                    document.getElementById('progressMessage').textContent = data.message || 'Processing...';
-                    
-                    if (data.logs && data.logs.length > 0) {
-                        const logsContainer = document.getElementById('logsContainer');
-                        logsContainer.innerHTML = data.logs.map(log => `<div class="log-entry">${log}</div>`).join('');
-                        logsContainer.scrollTop = logsContainer.scrollHeight;
-                    }
                     
                     if (data.status === 'completed') {
                         clearInterval(pollInterval);
-                        document.getElementById('downloadSection').style.display = 'block';
+                        document.getElementById('statusRunning').style.display = 'none';
+                        document.getElementById('statusComplete').style.display = 'block';
+                        document.getElementById('completeMessage').textContent = `Analysis completed for ${data.project_name}`;
                         document.getElementById('downloadBtn').onclick = () => downloadResult(currentJobId);
                         loadJobs();
                     }
                     
                     if (data.status === 'failed') {
                         clearInterval(pollInterval);
-                        document.getElementById('errorSection').style.display = 'block';
+                        document.getElementById('statusRunning').style.display = 'none';
+                        document.getElementById('statusError').style.display = 'block';
                         document.getElementById('errorMessage').textContent = data.error || 'Unknown error';
                         loadJobs();
                     }
@@ -835,7 +954,7 @@
                         </div>
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
                             <span class="status-badge ${job.status}">${job.status}</span>
-                            ${job.status === 'completed' ? `<button class="btn btn-small" onclick="downloadResult('${job.job_id}')">📥</button>` : ''}
+                            ${job.status === 'completed' ? `<button class="btn btn-small btn-success" onclick="downloadResult('${job.job_id}')">📥</button>` : ''}
                         </div>
                     </div>
                 `).join('');
