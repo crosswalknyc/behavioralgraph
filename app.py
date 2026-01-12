@@ -706,8 +706,16 @@ def refresh_s3_cache():
             key = obj['Key']
             
             # Extract project name from filename
-            name_parts = key.replace('.csv', '').split('_')
-            project_name = name_parts[0].upper() if name_parts else key.replace('.csv', '')
+            # File format: NAME_MM_DD_YYYY_HH_MM.csv where NAME can have multiple underscores
+            import re
+            name_without_ext = key.replace('.csv', '')
+            # Remove the date/time pattern at the end: _MM_DD_YYYY_HH_MM
+            match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+            if match:
+                project_name = match.group(1).replace('_', ' ').upper()
+            else:
+                # Fallback: just use the whole name without extension
+                project_name = name_without_ext.replace('_', ' ').upper()
             
             # Try to get category from BRAND CATEGORY row in CSV
             category = 'UNCATEGORIZED'

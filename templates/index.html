@@ -1430,10 +1430,12 @@
             container.innerHTML = jobs.map(job => {
                 const isS3 = job.source === 's3';
                 const isCompleted = job.status === 'completed' || job.status === 'cached';
+                // Get full display name
+                const displayName = getProfileFullName(job);
                 return `
                     <div class="job-item">
                         <div class="job-info">
-                            <h3>${job.project_name}</h3>
+                            <h3>${displayName}</h3>
                             <p>${job.category || ''} • ${new Date(job.created_at).toLocaleDateString()}</p>
                         </div>
                         <div style="display: flex; gap: 0.35rem;">
@@ -1471,12 +1473,20 @@
 
         function getProfileFullName(profile) {
             // Get full name from s3_key or project_name
+            // File format: NAME_MM_DD_YYYY_HH_MM.csv where NAME can have multiple underscores
             if (profile.s3_key) {
-                // Remove timestamp and .csv extension
-                const name = profile.s3_key.replace('.csv', '').replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '');
+                // Remove .csv extension first
+                let name = profile.s3_key.replace('.csv', '');
+                // Remove the date/time pattern at the end: _MM_DD_YYYY_HH_MM
+                name = name.replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '');
+                // Replace remaining underscores with spaces
                 return name.replace(/_/g, ' ');
             }
-            return profile.project_name;
+            // For project_name, also handle underscore-to-space conversion
+            if (profile.project_name) {
+                return profile.project_name.replace(/_/g, ' ');
+            }
+            return 'Unknown';
         }
 
         function renderComparisonProfiles(profiles) {
