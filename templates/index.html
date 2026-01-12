@@ -1721,6 +1721,63 @@
             event.target.classList.add('active');
         }
 
+        function parseComparisonData(csvData) {
+            const result = {
+                sampleSize: 0,
+                projectedUS: 0,
+                medianAge: 0,
+                demographics: { age: {}, gender: {}, ethnicity: {}, income: {} },
+                behavioral: {},
+                locations: []
+            };
+
+            const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'];
+            const skipCategories = ['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY', 'MEDIAN AGE'];
+
+            csvData.forEach(row => {
+                const category = (row.Column || row[0] || '').toString().toUpperCase().trim();
+                const value = row.Value || row[1] || '';
+                const brandPen = parseFloat(row['Brand Penetration (Row)'] || row[2] || 0);
+                const catShare = parseFloat(row['Category Share'] || row[3] || 0);
+                const rawNum = parseFloat(row['Original Raw Numbers'] || row[4] || 0);
+                const pct = brandPen || catShare || 0;
+
+                if (category === 'SAMPLE SIZE') {
+                    result.sampleSize = rawNum || catShare || brandPen || 0;
+                }
+                if (category === 'BRAND INPUT') {
+                    result.projectedUS = parseFloat(row['US Gen Pop Projection'] || row[5] || 0);
+                }
+                if (category.includes('MEDIAN') && category.includes('AGE')) {
+                    result.medianAge = brandPen || catShare || parseFloat(value) || 0;
+                }
+
+                // Demographics
+                if (category === 'AGE' && value && pct > 0) result.demographics.age[value] = pct;
+                if (category === 'GENDER' && value && pct > 0) result.demographics.gender[value] = pct;
+                if (category === 'ETHNICITY' && value && pct > 0) result.demographics.ethnicity[value] = pct;
+                if (category === 'INCOME' && value && pct > 0) result.demographics.income[value] = pct;
+
+                // Location/DMA
+                if (category === 'LOCATION' && value && pct > 0) {
+                    result.locations.push({ name: value, pct: pct });
+                }
+
+                // Behavioral (non-demographic categories)
+                if (!demoCategories.includes(category) && !skipCategories.includes(category) && category !== 'LOCATION' && value && pct > 0) {
+                    if (!result.behavioral[category]) result.behavioral[category] = [];
+                    result.behavioral[category].push({ name: value, pct: pct });
+                }
+            });
+
+            // Sort behavioral by percentage
+            Object.keys(result.behavioral).forEach(cat => {
+                result.behavioral[cat].sort((a, b) => b.pct - a.pct);
+            });
+
+            return result;
+        }
+
         async function runComparison() {
             if (selectedForComparison.size < 1) {
                 alert('Please select at least 1 profile to compare');
@@ -1728,33 +1785,29 @@
             }
 
             const resultsContainer = document.getElementById('comparisonResults');
-            resultsContainer.innerHTML = `<div class="comparison-empty"><p>Loading ${selectedForComparison.size} profile(s)...</p></div>`;
+            const selectedIds = Array.from(selectedForComparison);
+            resultsContainer.innerHTML = `<div class="comparison-empty"><p>Loading ${selectedIds.length} profile(s)...</p></div>`;
 
-            // Load data for each selected profile
-            const profilesData = [];
-            let idx = 0;
-            const errors = [];
-            
-            for (const id of selectedForComparison) {
+            // Load data for each selected profile using Promise.all for parallel loading
+            const loadPromises = selectedIds.map(async (id, idx) => {
                 try {
                     console.log('Loading profile:', id);
                     const response = await fetch(`/api/get-csv-data/${encodeURIComponent(id)}`);
                     
                     if (!response.ok) {
-                        errors.push(`Failed to load ${id}: ${response.status}`);
-                        continue;
+                        console.error(`Failed to load ${id}: ${response.status}`);
+                        return null;
                     }
                     
                     const data = await response.json();
-                    console.log('Received data for', id, data);
+                    console.log('Received data for', id, data.success);
                     
                     if (data.success && data.data) {
-                        const parsed = parseAllData(data.data);
-                        // Get profile name from our list
+                        const parsed = parseComparisonData(data.data);
                         const profile = comparisonProfiles.find(p => (p.s3_key || p.job_id) === id);
                         const displayName = data.brand || (profile ? getProfileFullName(profile) : id.split('_')[0]);
                         
-                        profilesData.push({
+                        return {
                             id: id,
                             name: displayName.toUpperCase(),
                             color: profileColors[idx % profileColors.length],
@@ -1762,34 +1815,36 @@
                             projectedUS: parsed.projectedUS,
                             medianAge: parsed.medianAge,
                             demographics: parsed.demographics,
-                            genPop: parsed.genPop
-                        });
-                        idx++;
-                    } else {
-                        errors.push(`No data for ${id}: ${data.error || 'Unknown error'}`);
+                            behavioral: parsed.behavioral,
+                            locations: parsed.locations
+                        };
                     }
                 } catch (e) {
                     console.error('Error loading', id, e);
-                    errors.push(`Error loading ${id}: ${e.message}`);
                 }
-            }
+                return null;
+            });
+
+            const results = await Promise.all(loadPromises);
+            const profilesData = results.filter(p => p !== null);
 
             if (profilesData.length < 1) {
-                resultsContainer.innerHTML = `<div class="comparison-empty">
-                    <p>Could not load any profiles</p>
-                    ${errors.length > 0 ? `<p style="font-size: 0.8rem; color: var(--accent-red);">${errors.join('<br>')}</p>` : ''}
-                </div>`;
+                resultsContainer.innerHTML = `<div class="comparison-empty"><p>Could not load any profiles. Check console for errors.</p></div>`;
                 return;
             }
 
-            console.log('Rendering comparison with', profilesData.length, 'profiles');
+            console.log('Rendering comparison with', profilesData.length, 'profiles:', profilesData.map(p => p.name));
             renderComparison(profilesData);
         }
 
         function renderComparison(profiles) {
             const container = document.getElementById('comparisonResults');
-            const names = profiles.map(p => p.name);
-            const hasGenPop = profiles.length > 0 && Object.keys(profiles[0].genPop?.gender || {}).length > 0;
+
+            // Collect all behavioral categories across all profiles
+            const allBehavioralCats = new Set();
+            profiles.forEach(p => {
+                Object.keys(p.behavioral || {}).forEach(cat => allBehavioralCats.add(cat));
+            });
 
             let html = `
                 <!-- Summary Data -->
@@ -1799,25 +1854,21 @@
                         <thead>
                             <tr>
                                 <th></th>
-                                ${hasGenPop ? '<th>Gen Pop</th>' : ''}
                                 ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
                                 <td>MIDG Respondents</td>
-                                ${hasGenPop ? '<td>n=10,000,000</td>' : ''}
                                 ${profiles.map(p => `<td>n=${formatNumber(p.sampleSize)}</td>`).join('')}
                             </tr>
                             <tr>
                                 <td>Projected US</td>
-                                ${hasGenPop ? '<td>324,838,700</td>' : ''}
                                 ${profiles.map(p => `<td>${formatNumber(p.projectedUS)}</td>`).join('')}
                             </tr>
                             <tr>
                                 <td>Median Age</td>
-                                ${hasGenPop ? '<td>35.50</td>' : ''}
-                                ${profiles.map(p => `<td>${p.medianAge > 0 ? p.medianAge.toFixed(2) : '23.00'}</td>`).join('')}
+                                ${profiles.map(p => `<td>${p.medianAge > 0 ? p.medianAge.toFixed(2) : '-'}</td>`).join('')}
                             </tr>
                         </tbody>
                     </table>
@@ -1830,12 +1881,11 @@
                         <thead>
                             <tr>
                                 <th>Gender ↓</th>
-                                ${hasGenPop ? '<th>Gen Pop</th>' : ''}
                                 ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'gender', hasGenPop)}
+                            ${renderDemoComparisonRows(profiles, 'gender')}
                         </tbody>
                     </table>
                 </div>
@@ -1847,12 +1897,11 @@
                         <thead>
                             <tr>
                                 <th>Age</th>
-                                ${hasGenPop ? '<th>Gen Pop</th>' : ''}
                                 ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'age', hasGenPop)}
+                            ${renderDemoComparisonRows(profiles, 'age')}
                         </tbody>
                     </table>
                 </div>
@@ -1864,12 +1913,11 @@
                         <thead>
                             <tr>
                                 <th>Ethnicity</th>
-                                ${hasGenPop ? '<th>Gen Pop</th>' : ''}
                                 ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'ethnicity', hasGenPop)}
+                            ${renderDemoComparisonRows(profiles, 'ethnicity')}
                         </tbody>
                     </table>
                 </div>
@@ -1881,21 +1929,137 @@
                         <thead>
                             <tr>
                                 <th>Income</th>
-                                ${hasGenPop ? '<th>Gen Pop</th>' : ''}
                                 ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'income', hasGenPop)}
+                            ${renderDemoComparisonRows(profiles, 'income')}
                         </tbody>
                     </table>
                 </div>
             `;
 
+            // Add behavioral categories
+            const sortedBehavioralCats = Array.from(allBehavioralCats).sort();
+            sortedBehavioralCats.forEach(cat => {
+                html += `
+                    <div class="comp-section">
+                        <div class="comp-section-title">${cat} (Top 10)</div>
+                        <table class="comp-table">
+                            <thead>
+                                <tr>
+                                    <th>${cat}</th>
+                                    ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${renderBehavioralComparisonRows(profiles, cat)}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            });
+
+            // Add Location/DMA comparison if any profile has location data
+            const hasLocations = profiles.some(p => p.locations && p.locations.length > 0);
+            if (hasLocations) {
+                html += `
+                    <div class="comp-section">
+                        <div class="comp-section-title">Top Locations/DMAs</div>
+                        <table class="comp-table">
+                            <thead>
+                                <tr>
+                                    <th>Location</th>
+                                    ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${renderLocationComparisonRows(profiles)}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
             container.innerHTML = html;
         }
 
-        function renderDemoComparisonRows(profiles, demoType, showGenPop = false) {
+        function renderBehavioralComparisonRows(profiles, category) {
+            // Get top 10 values across all profiles for this category
+            const allValues = new Map();
+            profiles.forEach(p => {
+                (p.behavioral[category] || []).forEach(item => {
+                    if (!allValues.has(item.name) || allValues.get(item.name) < item.pct) {
+                        allValues.set(item.name, item.pct);
+                    }
+                });
+            });
+
+            // Sort by max percentage and take top 10
+            const sortedValues = Array.from(allValues.entries())
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10)
+                .map(([name]) => name);
+
+            return sortedValues.map(value => `
+                <tr>
+                    <td>${value}</td>
+                    ${profiles.map(p => {
+                        const item = (p.behavioral[category] || []).find(i => i.name === value);
+                        const pct = item ? item.pct : 0;
+                        return `
+                            <td>
+                                <div class="comp-bar-cell">
+                                    <div class="comp-bar">
+                                        <div class="comp-bar-fill" style="width: ${Math.min(pct / 30 * 100, 100)}%; background: ${p.color};"></div>
+                                    </div>
+                                    <span class="comp-bar-pct">${pct > 0 ? pct.toFixed(2) + '%' : '-'}</span>
+                                </div>
+                            </td>
+                        `;
+                    }).join('')}
+                </tr>
+            `).join('');
+        }
+
+        function renderLocationComparisonRows(profiles) {
+            // Get top 15 locations across all profiles
+            const allLocations = new Map();
+            profiles.forEach(p => {
+                (p.locations || []).forEach(loc => {
+                    if (!allLocations.has(loc.name) || allLocations.get(loc.name) < loc.pct) {
+                        allLocations.set(loc.name, loc.pct);
+                    }
+                });
+            });
+
+            const sortedLocations = Array.from(allLocations.entries())
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 15)
+                .map(([name]) => name);
+
+            return sortedLocations.map(locName => `
+                <tr>
+                    <td>${locName}</td>
+                    ${profiles.map(p => {
+                        const loc = (p.locations || []).find(l => l.name === locName);
+                        const pct = loc ? loc.pct : 0;
+                        return `
+                            <td>
+                                <div class="comp-bar-cell">
+                                    <div class="comp-bar">
+                                        <div class="comp-bar-fill" style="width: ${Math.min(pct / 10 * 100, 100)}%; background: ${p.color};"></div>
+                                    </div>
+                                    <span class="comp-bar-pct">${pct > 0 ? pct.toFixed(2) + '%' : '-'}</span>
+                                </div>
+                            </td>
+                        `;
+                    }).join('')}
+                </tr>
+            `).join('');
+        }
+
+        function renderDemoComparisonRows(profiles, demoType) {
             // Get all unique values across all profiles
             const allValues = new Set();
             profiles.forEach(p => {
@@ -1913,22 +2077,9 @@
             }
 
             return sortedValues.map(value => {
-                // Get Gen Pop value from first profile's genPop data
-                const genPopVal = profiles[0]?.genPop?.[demoType]?.[value] || 0;
-                
                 return `
                     <tr>
                         <td>${value.toUpperCase()}</td>
-                        ${showGenPop ? `
-                            <td>
-                                <div class="comp-bar-cell">
-                                    <div class="comp-bar" style="background: #2a2a3a;">
-                                        <div class="comp-bar-fill" style="width: ${Math.min(genPopVal / 60 * 100, 100)}%; background: #6b7280;"></div>
-                                    </div>
-                                    <span class="comp-bar-pct">${genPopVal.toFixed(2)}%</span>
-                                </div>
-                            </td>
-                        ` : ''}
                         ${profiles.map(p => {
                             const pct = p.demographics[demoType]?.[value] || 0;
                             const maxPct = 60; // Scale bars to this max
@@ -1938,7 +2089,7 @@
                                         <div class="comp-bar">
                                             <div class="comp-bar-fill" style="width: ${Math.min(pct / maxPct * 100, 100)}%; background: ${p.color};"></div>
                                         </div>
-                                        <span class="comp-bar-pct">${pct.toFixed(2)}%</span>
+                                        <span class="comp-bar-pct">${pct > 0 ? pct.toFixed(2) + '%' : '-'}</span>
                                     </div>
                                 </td>
                             `;
