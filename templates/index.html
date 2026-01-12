@@ -701,6 +701,52 @@
             content: ' ↓';
             opacity: 1;
         }
+
+        .sidebar-section h3 {
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            color: var(--accent-cyan);
+        }
+
+        .category-filter-list {
+            font-size: 0.8rem;
+        }
+
+        .cat-filter-item {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.3rem 0.5rem;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+
+        .cat-filter-item:hover {
+            background: var(--bg-input);
+        }
+
+        .cat-filter-item input {
+            width: 14px;
+            height: 14px;
+            accent-color: var(--accent-blue);
+        }
+
+        .cat-filter-item.disabled {
+            opacity: 0.5;
+        }
+
+        .cat-filter-group {
+            margin-bottom: 0.25rem;
+        }
+
+        .cat-filter-group-header {
+            font-weight: 600;
+            padding: 0.25rem 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
     </style>
 </head>
 <body>
@@ -916,14 +962,28 @@
                 </div>
                 <div class="comparison-container">
                     <div class="comparison-sidebar">
-                        <h3>Category + Profile</h3>
-                        <div style="position: relative; margin-bottom: 0.75rem;">
-                            <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
-                            <input type="text" id="compSearchInput" placeholder="Search" oninput="filterComparisonProfiles()" style="padding-left: 32px; width: 100%; box-sizing: border-box;">
+                        <div class="sidebar-section">
+                            <h3>Category + Profile</h3>
+                            <div style="position: relative; margin-bottom: 0.75rem;">
+                                <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
+                                <input type="text" id="compSearchInput" placeholder="Search profiles" oninput="filterComparisonProfiles()" style="padding-left: 32px; width: 100%; box-sizing: border-box;">
+                            </div>
+                            <div class="comparison-profile-list" id="compProfileList" style="max-height: 250px;">
+                                <div style="padding: 1rem; color: var(--text-secondary);">Loading profiles...</div>
+                            </div>
                         </div>
-                        <div class="comparison-profile-list" id="compProfileList">
-                            <div style="padding: 1rem; color: var(--text-secondary);">Loading profiles...</div>
+                        
+                        <div class="sidebar-section" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                            <h3>Data Categories</h3>
+                            <div style="position: relative; margin-bottom: 0.5rem;">
+                                <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
+                                <input type="text" id="catFilterSearch" placeholder="Search categories" oninput="filterCategoryList()" style="padding-left: 32px; width: 100%; box-sizing: border-box; font-size: 0.8rem;">
+                            </div>
+                            <div class="category-filter-list" id="categoryFilterList" style="max-height: 200px; overflow-y: auto;">
+                                <div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">Run comparison first</div>
+                            </div>
                         </div>
+                        
                         <div style="margin-top: 1rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; text-align: center;">
                             <span class="comp-selected-count" style="font-weight: 600;">0 selected</span>
                         </div>
@@ -1744,9 +1804,16 @@
         function clearComparison() {
             selectedForComparison.clear();
             loadedComparisonData = {};
+            window.comparisonProfilesData = null;
+            availableCategories.behavioral = [];
+            availableCategories.location = false;
+            selectedCategories.clear();
+            currentSortColumn = null;
+            currentSortSection = null;
             updateSelectedCount();
             renderComparisonProfiles(comparisonProfiles);
             document.getElementById('comparisonResults').innerHTML = '<div class="comparison-empty"><p>Select profiles from the left and click "Compare Selected"</p></div>';
+            document.getElementById('categoryFilterList').innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">Run comparison first</div>';
         }
 
         function selectAllComparison(checked) {
@@ -1924,6 +1991,15 @@
         let currentSortColumn = null;
         let currentSortSection = null;
 
+        // Category filter state
+        let availableCategories = {
+            demographics: ['gender', 'age', 'ethnicity', 'income'],
+            behavioral: [],
+            location: false
+        };
+        let selectedCategories = new Set();
+        let allCategoriesSelected = true;
+
         function sortComparisonTable(section, profileIndex) {
             const profiles = window.comparisonProfilesData;
             if (!profiles || profiles.length === 0) return;
@@ -1935,8 +2011,150 @@
             renderComparison(profiles, section, profileIndex);
         }
 
+        function buildCategoryList(profiles, preserveSelection = false) {
+            // Store previous selections if preserving
+            const prevSelected = preserveSelection ? new Set(selectedCategories) : null;
+
+            // Collect all available categories
+            availableCategories.behavioral = [];
+            availableCategories.location = false;
+
+            profiles.forEach(p => {
+                Object.keys(p.behavioral || {}).forEach(cat => {
+                    if (!availableCategories.behavioral.includes(cat)) {
+                        availableCategories.behavioral.push(cat);
+                    }
+                });
+                if (p.locations && p.locations.length > 0) {
+                    availableCategories.location = true;
+                }
+            });
+
+            availableCategories.behavioral.sort();
+
+            // Restore previous selections or select all by default
+            if (preserveSelection && prevSelected.size > 0) {
+                // Keep existing selections, but only if they're still valid
+                selectedCategories.clear();
+                prevSelected.forEach(cat => {
+                    if (cat.startsWith('demo_') || cat === 'location' || availableCategories.behavioral.includes(cat.replace('beh_', ''))) {
+                        selectedCategories.add(cat);
+                    }
+                });
+            } else if (selectedCategories.size === 0) {
+                // Select all by default on first load
+                availableCategories.demographics.forEach(c => selectedCategories.add('demo_' + c));
+                availableCategories.behavioral.forEach(c => selectedCategories.add('beh_' + c));
+                if (availableCategories.location) selectedCategories.add('location');
+            }
+
+            renderCategoryFilterList();
+        }
+
+        function renderCategoryFilterList() {
+            const container = document.getElementById('categoryFilterList');
+            const searchTerm = (document.getElementById('catFilterSearch')?.value || '').toLowerCase();
+
+            let html = '';
+
+            // Demographics group
+            const demoItems = availableCategories.demographics.filter(c => 
+                searchTerm === '' || c.toLowerCase().includes(searchTerm) || 'demo'.includes(searchTerm)
+            );
+            if (demoItems.length > 0) {
+                html += `<div class="cat-filter-group">
+                    <div class="cat-filter-group-header">Demographics</div>
+                    ${demoItems.map(cat => {
+                        const id = 'demo_' + cat;
+                        const checked = selectedCategories.has(id);
+                        return `<div class="cat-filter-item" onclick="toggleCategoryFilter('${id}')">
+                            <input type="checkbox" ${checked ? 'checked' : ''} onclick="event.stopPropagation(); toggleCategoryFilter('${id}')">
+                            <span>DEMO-${cat.toUpperCase()}</span>
+                        </div>`;
+                    }).join('')}
+                </div>`;
+            }
+
+            // Location
+            if (availableCategories.location && (searchTerm === '' || 'location'.includes(searchTerm) || 'dma'.includes(searchTerm))) {
+                const checked = selectedCategories.has('location');
+                html += `<div class="cat-filter-group">
+                    <div class="cat-filter-group-header">Location</div>
+                    <div class="cat-filter-item" onclick="toggleCategoryFilter('location')">
+                        <input type="checkbox" ${checked ? 'checked' : ''} onclick="event.stopPropagation(); toggleCategoryFilter('location')">
+                        <span>DMA-LOCATION</span>
+                    </div>
+                </div>`;
+            }
+
+            // Behavioral categories
+            const behItems = availableCategories.behavioral.filter(c => 
+                searchTerm === '' || c.toLowerCase().includes(searchTerm)
+            );
+            if (behItems.length > 0) {
+                html += `<div class="cat-filter-group">
+                    <div class="cat-filter-group-header">Behavioral (${behItems.length})</div>
+                    ${behItems.map(cat => {
+                        const id = 'beh_' + cat;
+                        const checked = selectedCategories.has(id);
+                        return `<div class="cat-filter-item" onclick="toggleCategoryFilter('${id}')">
+                            <input type="checkbox" ${checked ? 'checked' : ''} onclick="event.stopPropagation(); toggleCategoryFilter('${id}')">
+                            <span>${cat}</span>
+                        </div>`;
+                    }).join('')}
+                </div>`;
+            }
+
+            // Select All / Deselect All buttons
+            html = `<div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <button class="btn btn-small" style="flex: 1; font-size: 0.7rem; padding: 0.25rem;" onclick="selectAllCategories()">Select All</button>
+                <button class="btn btn-small" style="flex: 1; font-size: 0.7rem; padding: 0.25rem; background: var(--bg-dark);" onclick="deselectAllCategories()">Deselect All</button>
+            </div>` + html;
+
+            container.innerHTML = html || '<div style="padding: 0.5rem; color: var(--text-secondary);">No categories</div>';
+        }
+
+        function toggleCategoryFilter(catId) {
+            if (selectedCategories.has(catId)) {
+                selectedCategories.delete(catId);
+            } else {
+                selectedCategories.add(catId);
+            }
+            renderCategoryFilterList();
+            // Re-render comparison with updated filters
+            if (window.comparisonProfilesData) {
+                renderComparison(window.comparisonProfilesData, currentSortSection, currentSortColumn);
+            }
+        }
+
+        function selectAllCategories() {
+            availableCategories.demographics.forEach(c => selectedCategories.add('demo_' + c));
+            availableCategories.behavioral.forEach(c => selectedCategories.add('beh_' + c));
+            if (availableCategories.location) selectedCategories.add('location');
+            renderCategoryFilterList();
+            if (window.comparisonProfilesData) {
+                renderComparison(window.comparisonProfilesData, currentSortSection, currentSortColumn);
+            }
+        }
+
+        function deselectAllCategories() {
+            selectedCategories.clear();
+            renderCategoryFilterList();
+            if (window.comparisonProfilesData) {
+                renderComparison(window.comparisonProfilesData, currentSortSection, currentSortColumn);
+            }
+        }
+
+        function filterCategoryList() {
+            renderCategoryFilterList();
+        }
+
         function renderComparison(profiles, sortSection = null, sortProfileIdx = null) {
             const container = document.getElementById('comparisonResults');
+
+            // Build category list (preserve selection if already built)
+            const isFirstRender = availableCategories.behavioral.length === 0;
+            buildCategoryList(profiles, !isFirstRender);
 
             // Collect all behavioral categories across all profiles
             const allBehavioralCats = new Set();
@@ -1977,8 +2195,11 @@
                         </tbody>
                     </table>
                 </div>
+            `;
 
-                <!-- Gender Comparison -->
+            // Gender Comparison (if selected)
+            if (selectedCategories.has('demo_gender')) {
+                html += `
                 <div class="comp-section">
                     <div class="comp-section-title">Gender (US %)</div>
                     <table class="comp-table">
@@ -1992,9 +2213,12 @@
                             ${renderDemoComparisonRows(profiles, 'gender', sortSection === 'gender' ? sortProfileIdx : null)}
                         </tbody>
                     </table>
-                </div>
+                </div>`;
+            }
 
-                <!-- Age Comparison -->
+            // Age Comparison (if selected)
+            if (selectedCategories.has('demo_age')) {
+                html += `
                 <div class="comp-section">
                     <div class="comp-section-title">Age (US %)</div>
                     <table class="comp-table">
@@ -2008,9 +2232,12 @@
                             ${renderDemoComparisonRows(profiles, 'age', sortSection === 'age' ? sortProfileIdx : null)}
                         </tbody>
                     </table>
-                </div>
+                </div>`;
+            }
 
-                <!-- Ethnicity Comparison -->
+            // Ethnicity Comparison (if selected)
+            if (selectedCategories.has('demo_ethnicity')) {
+                html += `
                 <div class="comp-section">
                     <div class="comp-section-title">Ethnicity (US %)</div>
                     <table class="comp-table">
@@ -2024,9 +2251,12 @@
                             ${renderDemoComparisonRows(profiles, 'ethnicity', sortSection === 'ethnicity' ? sortProfileIdx : null)}
                         </tbody>
                     </table>
-                </div>
+                </div>`;
+            }
 
-                <!-- Income Comparison -->
+            // Income Comparison (if selected)
+            if (selectedCategories.has('demo_income')) {
+                html += `
                 <div class="comp-section">
                     <div class="comp-section-title">Income (US %)</div>
                     <table class="comp-table">
@@ -2040,34 +2270,36 @@
                             ${renderDemoComparisonRows(profiles, 'income', sortSection === 'income' ? sortProfileIdx : null)}
                         </tbody>
                     </table>
-                </div>
-            `;
+                </div>`;
+            }
 
-            // Add behavioral categories
+            // Add behavioral categories (only if selected)
             const sortedBehavioralCats = Array.from(allBehavioralCats).sort();
             sortedBehavioralCats.forEach(cat => {
-                const catKey = cat.replace(/[^a-zA-Z0-9]/g, '_');
+                const catKey = 'beh_' + cat;
+                if (!selectedCategories.has(catKey)) return; // Skip if not selected
+                
                 html += `
                     <div class="comp-section">
-                        <div class="comp-section-title">${cat} (Top 10)</div>
+                        <div class="comp-section-title">${cat} (Top 15)</div>
                         <table class="comp-table">
                             <thead>
                                 <tr>
                                     <th>${cat}</th>
-                                    ${profiles.map((p, i) => sortableHeader('beh_' + catKey, i, p.name, p.color)).join('')}
+                                    ${profiles.map((p, i) => sortableHeader(catKey, i, p.name, p.color)).join('')}
                                 </tr>
                             </thead>
                             <tbody>
-                                ${renderBehavioralComparisonRows(profiles, cat, sortSection === 'beh_' + catKey ? sortProfileIdx : null)}
+                                ${renderBehavioralComparisonRows(profiles, cat, sortSection === catKey ? sortProfileIdx : null)}
                             </tbody>
                         </table>
                     </div>
                 `;
             });
 
-            // Add Location/DMA comparison if any profile has location data
+            // Add Location/DMA comparison if selected and has data
             const hasLocations = profiles.some(p => p.locations && p.locations.length > 0);
-            if (hasLocations) {
+            if (hasLocations && selectedCategories.has('location')) {
                 html += `
                     <div class="comp-section">
                         <div class="comp-section-title">Top Locations/DMAs</div>
@@ -2084,6 +2316,11 @@
                         </table>
                     </div>
                 `;
+            }
+
+            // Show message if no categories selected
+            if (selectedCategories.size === 0) {
+                html += `<div class="comparison-empty"><p>No categories selected. Use the "Data Categories" filter to choose what to display.</p></div>`;
             }
 
             container.innerHTML = html;
