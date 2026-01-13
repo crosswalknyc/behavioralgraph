@@ -294,6 +294,167 @@ TOP LOCATIONS:
     except Exception as e:
         return {"error": str(e)}
 
+def answer_business_question(profile_data, question, conversation_history=None):
+    """Answer a business question using profile data with follow-up suggestions."""
+    if not openai_client:
+        return {"error": "OpenAI not configured"}
+    
+    try:
+        demographics = profile_data.get('demographics', {})
+        behavioral = profile_data.get('behavioral', {})
+        locations = profile_data.get('locations', [])
+        sample_size = profile_data.get('sampleSize', 0)
+        profile_name = profile_data.get('name', 'This audience')
+        
+        # Build data context
+        behavior_summary = []
+        for cat, items in behavioral.items():
+            if isinstance(items, list) and items:
+                top_items = items[:5]
+                behavior_summary.append(f"{cat}: {', '.join([f'{i.get(\"name\", \"\")} ({i.get(\"pct\", 0):.1f}%)' for i in top_items])}")
+        
+        data_context = f"""
+AUDIENCE PROFILE: {profile_name}
+Sample Size: {sample_size:,}
+
+DEMOGRAPHICS:
+{json.dumps(demographics, indent=2, default=str)[:1500]}
+
+KEY BEHAVIORS:
+{chr(10).join(behavior_summary[:15])}
+
+TOP LOCATIONS:
+{json.dumps(locations[:10] if locations else [], indent=2, default=str)[:500]}
+"""
+        
+        # Build conversation context
+        messages = [
+            {"role": "system", "content": f"""You are a senior business intelligence analyst helping a marketing team understand their audience data.
+
+Your role:
+1. Answer business questions using the provided audience data
+2. Be specific - cite actual numbers and percentages from the data
+3. Connect insights to actionable business recommendations
+4. After answering, suggest 2-3 follow-up questions that could help them further
+5. Ask how you can make the analysis more useful for their specific business goals
+
+AUDIENCE DATA:
+{data_context}
+
+Always format your response with:
+1. **Direct Answer** - Address their question with data-backed insights
+2. **Key Data Points** - Bullet the most relevant numbers
+3. **Business Recommendation** - Actionable next step
+4. **Follow-up Questions** - 2-3 questions to dig deeper
+
+Be conversational and helpful."""}
+        ]
+        
+        # Add conversation history if provided
+        if conversation_history:
+            for msg in conversation_history[-6:]:  # Keep last 6 messages for context
+                messages.append(msg)
+        
+        messages.append({"role": "user", "content": question})
+        
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=1000,
+            temperature=0.7
+        )
+        
+        return {
+            "answer": response.choices[0].message.content,
+            "tokens_used": response.usage.total_tokens
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+def generate_business_deck(profile_data, business_question, key_findings=None):
+    """Generate a presentation deck outline for a business question."""
+    if not openai_client:
+        return {"error": "OpenAI not configured"}
+    
+    try:
+        demographics = profile_data.get('demographics', {})
+        behavioral = profile_data.get('behavioral', {})
+        sample_size = profile_data.get('sampleSize', 0)
+        profile_name = profile_data.get('name', 'Audience')
+        
+        # Build data summary
+        behavior_summary = []
+        for cat, items in behavioral.items():
+            if isinstance(items, list) and items:
+                behavior_summary.append(f"{cat}: {', '.join([i.get('name', '') for i in items[:3]])}")
+        
+        prompt = f"""Create a professional presentation deck outline to answer this business question:
+
+BUSINESS QUESTION: {business_question}
+
+AUDIENCE: {profile_name}
+Sample Size: {sample_size:,}
+
+KEY DEMOGRAPHICS:
+- Gender: {json.dumps(demographics.get('gender', {}), default=str)}
+- Age: {json.dumps(demographics.get('age', {}), default=str)}
+- Income: {json.dumps(demographics.get('income', {}), default=str)}
+
+TOP BEHAVIORS:
+{chr(10).join(behavior_summary[:10])}
+
+{f'PREVIOUS FINDINGS: {key_findings}' if key_findings else ''}
+
+Generate a 6-8 slide deck outline with:
+1. Title slide
+2. Executive Summary (key answer to the business question)
+3. Audience Overview (demographics snapshot)
+4. Key Behavioral Insights (2-3 slides with specific data points)
+5. Recommendations slide
+6. Next Steps / Call to Action
+
+For each slide provide:
+- Slide title
+- Key points (3-4 bullets with actual data)
+- Suggested visual (chart type, graphic, etc.)
+
+Format as JSON with structure:
+{{
+  "title": "Deck title",
+  "slides": [
+    {{"title": "...", "points": ["...", "..."], "visual": "..."}}
+  ]
+}}"""
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a presentation design expert. Create compelling, data-driven slide decks. Return valid JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1500,
+            temperature=0.7
+        )
+        
+        content = response.choices[0].message.content
+        
+        # Parse JSON from response
+        try:
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+            deck = json.loads(content)
+        except:
+            deck = {"raw": content}
+        
+        return {
+            "deck": deck,
+            "tokens_used": response.usage.total_tokens
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 def compare_profiles_ai(profiles_data):
     """AI comparison of multiple profiles."""
     if not openai_client:
@@ -1123,6 +1284,36 @@ def api_ai_compare():
     if len(profiles) < 2:
         return jsonify({'error': 'Need at least 2 profiles to compare'}), 400
     result = compare_profiles_ai(profiles)
+    return jsonify(result)
+
+@app.route('/api/ai/business', methods=['POST'])
+@requires_auth
+def api_ai_business():
+    """Answer a business question using profile data."""
+    data = request.get_json()
+    profile_data = data.get('profile', {})
+    question = data.get('question', '')
+    history = data.get('history', [])
+    
+    if not question:
+        return jsonify({'error': 'No question provided'}), 400
+    
+    result = answer_business_question(profile_data, question, history)
+    return jsonify(result)
+
+@app.route('/api/ai/deck', methods=['POST'])
+@requires_auth
+def api_ai_deck():
+    """Generate a presentation deck for a business question."""
+    data = request.get_json()
+    profile_data = data.get('profile', {})
+    question = data.get('question', '')
+    findings = data.get('findings', '')
+    
+    if not question:
+        return jsonify({'error': 'No question provided'}), 400
+    
+    result = generate_business_deck(profile_data, question, findings)
     return jsonify(result)
 
 # ============================================================================

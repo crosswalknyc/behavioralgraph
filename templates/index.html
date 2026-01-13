@@ -733,6 +733,166 @@
             margin: 0 0 0.5rem 0;
             font-size: 0.9rem;
         }
+        
+        /* Business Q&A Styles */
+        .business-qa-header h4 {
+            color: #ec4899;
+            margin: 0 0 0.5rem 0;
+        }
+        .business-input-area {
+            margin-bottom: 1rem;
+        }
+        .business-input-area textarea {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: inherit;
+            resize: vertical;
+            margin-bottom: 0.5rem;
+        }
+        .business-input-area textarea::placeholder {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+        .btn-large {
+            width: 100%;
+            padding: 0.75rem;
+            font-size: 1rem;
+        }
+        .business-conversation {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+        }
+        .business-message {
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }
+        .business-message.user {
+            background: rgba(74, 138, 201, 0.15);
+            border-left: 3px solid var(--accent-blue);
+        }
+        .business-message.user::before {
+            content: '📋 Your Question';
+            display: block;
+            font-weight: 600;
+            color: var(--accent-blue);
+            margin-bottom: 0.5rem;
+            font-size: 0.75rem;
+        }
+        .business-message.assistant {
+            background: rgba(139, 92, 246, 0.1);
+            border-left: 3px solid #8b5cf6;
+        }
+        .business-message.assistant::before {
+            content: '🤖 AI Analysis';
+            display: block;
+            font-weight: 600;
+            color: #8b5cf6;
+            margin-bottom: 0.5rem;
+            font-size: 0.75rem;
+        }
+        .business-followup {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .followup-prompt {
+            color: #10b981;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+        .followup-suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .followup-suggestion {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .followup-suggestion:hover {
+            background: rgba(74, 138, 201, 0.2);
+            border-color: var(--accent-blue);
+        }
+        .followup-input {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .followup-input input {
+            flex: 1;
+            padding: 0.5rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+        }
+        .btn-secondary {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+        .btn-secondary:hover {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: #8b5cf6;
+        }
+        
+        /* Deck Preview Styles */
+        .deck-preview {
+            background: var(--bg-input);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .deck-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #ec4899;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        .slide-preview {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.05));
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        .slide-number {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+        }
+        .slide-title {
+            font-weight: 600;
+            color: var(--accent-blue);
+            margin-bottom: 0.5rem;
+        }
+        .slide-points {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        .slide-points li {
+            margin-bottom: 0.25rem;
+        }
+        .slide-visual {
+            font-size: 0.7rem;
+            color: #8b5cf6;
+            font-style: italic;
+            margin-top: 0.5rem;
+        }
 
         /* Location Tab */
         .location-grid {
@@ -1518,13 +1678,44 @@
                     <button onclick="toggleAIPanel()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem;">✕</button>
                 </div>
                 <div class="ai-tabs">
-                    <button class="ai-tab active" onclick="showAITab('insights')">💡 Insights</button>
+                    <button class="ai-tab active" onclick="showAITab('business')">🎯 Business Q&A</button>
+                    <button class="ai-tab" onclick="showAITab('insights')">💡 Insights</button>
                     <button class="ai-tab" onclick="showAITab('persona')">👤 Persona</button>
-                    <button class="ai-tab" onclick="showAITab('marketing')">📈 Strategy</button>
-                    <button class="ai-tab" onclick="showAITab('chat')">💬 Chat</button>
+                    <button class="ai-tab" onclick="showAITab('deck')">📊 Deck</button>
                 </div>
                 <div class="ai-content">
-                    <div id="ai-tab-insights" class="ai-tab-content active">
+                    <!-- Business Q&A Tab (Primary) -->
+                    <div id="ai-tab-business" class="ai-tab-content active">
+                        <div class="business-qa-header">
+                            <h4>Enter your business question:</h4>
+                            <p class="ai-description">Ask any business question about this audience. I'll analyze the data and help you find actionable insights.</p>
+                        </div>
+                        <div class="business-input-area">
+                            <textarea id="businessQuestion" placeholder="Example questions:
+• Who is our core audience and how can we reach them?
+• What media channels should we prioritize?
+• How does this audience differ from general population?
+• What content will resonate with this audience?
+• Should we target this demographic for our product launch?" rows="4"></textarea>
+                            <button class="btn btn-primary btn-large" onclick="askBusinessQuestion()" id="businessBtn">
+                                🔍 Analyze & Answer
+                            </button>
+                        </div>
+                        <div id="businessConversation" class="business-conversation"></div>
+                        <div id="businessFollowUp" class="business-followup" style="display: none;">
+                            <p class="followup-prompt">💡 How can I make this analysis more useful for your business goals?</p>
+                            <div class="followup-suggestions" id="followupSuggestions"></div>
+                            <div class="followup-input">
+                                <input type="text" id="followupQuestion" placeholder="Ask a follow-up question or tell me what you need...">
+                                <button class="btn btn-primary" onclick="askFollowUp()">Ask</button>
+                            </div>
+                            <button class="btn btn-secondary" onclick="generateDeckFromConversation()" style="margin-top: 0.75rem; width: 100%;">
+                                📊 Generate Presentation Deck
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="ai-tab-insights" class="ai-tab-content">
                         <p class="ai-description">Get AI-powered insights about this audience.</p>
                         <button class="btn btn-primary" onclick="generateInsights()" id="insightsBtn">Generate Insights</button>
                         <div id="insightsResult" class="ai-result"></div>
@@ -1534,18 +1725,11 @@
                         <button class="btn btn-primary" onclick="generatePersona()" id="personaBtn">Generate Persona</button>
                         <div id="personaResult" class="ai-result"></div>
                     </div>
-                    <div id="ai-tab-marketing" class="ai-tab-content">
-                        <p class="ai-description">Get marketing strategy recommendations.</p>
-                        <button class="btn btn-primary" onclick="generateStrategy()" id="strategyBtn">Generate Strategy</button>
-                        <div id="strategyResult" class="ai-result"></div>
-                    </div>
-                    <div id="ai-tab-chat" class="ai-tab-content">
-                        <p class="ai-description">Ask questions about this audience.</p>
-                        <div class="ai-chat-input">
-                            <input type="text" id="aiChatInput" placeholder="Ask a question..." onkeypress="if(event.key==='Enter')askAI()">
-                            <button class="btn btn-primary" onclick="askAI()">Ask</button>
-                        </div>
-                        <div id="chatResult" class="ai-result ai-chat-history"></div>
+                    <div id="ai-tab-deck" class="ai-tab-content">
+                        <p class="ai-description">Generate a presentation deck for your business question.</p>
+                        <textarea id="deckQuestion" placeholder="What business question should the deck answer?" rows="3" style="width: 100%; margin-bottom: 0.5rem;"></textarea>
+                        <button class="btn btn-primary" onclick="generateDeck()" id="deckBtn">📊 Generate Deck</button>
+                        <div id="deckResult" class="ai-result"></div>
                     </div>
                 </div>
             </div>
@@ -2356,6 +2540,11 @@
                     // Update favorite button
                     updateFavoriteButton();
                     
+                    // Reset business conversation for new profile
+                    if (typeof resetBusinessConversation === 'function') {
+                        resetBusinessConversation();
+                    }
+                    
                     // Render charts and data
                     renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
                     renderBehavioralCards(parsed.behavioral);
@@ -2964,6 +3153,288 @@
                 .replace(/^- (.*$)/gm, '• $1<br>')
                 .replace(/^\d+\. (.*$)/gm, '<li>$1</li>')
                 .replace(/\n/g, '<br>');
+        }
+        
+        // ============================================================================
+        // BUSINESS Q&A FUNCTIONS
+        // ============================================================================
+        
+        let businessConversationHistory = [];
+        let currentBusinessQuestion = '';
+        
+        async function askBusinessQuestion() {
+            const textarea = document.getElementById('businessQuestion');
+            const question = textarea.value.trim();
+            if (!question) {
+                alert('Please enter a business question');
+                return;
+            }
+            
+            if (!currentProfileData) {
+                alert('Please select a profile first');
+                return;
+            }
+            
+            currentBusinessQuestion = question;
+            const btn = document.getElementById('businessBtn');
+            const conversation = document.getElementById('businessConversation');
+            const followUp = document.getElementById('businessFollowUp');
+            
+            btn.disabled = true;
+            btn.textContent = '🔍 Analyzing...';
+            
+            // Add user message to conversation
+            conversation.innerHTML += `<div class="business-message user">${escapeHtml(question)}</div>`;
+            
+            // Add loading indicator
+            const loadingId = 'loading-' + Date.now();
+            conversation.innerHTML += `<div class="business-message assistant loading" id="${loadingId}">Analyzing your audience data to answer this question...</div>`;
+            conversation.scrollTop = conversation.scrollHeight;
+            
+            try {
+                const response = await fetch('/api/ai/business', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        profile: currentProfileData,
+                        question: question,
+                        history: businessConversationHistory
+                    })
+                });
+                
+                const data = await response.json();
+                const loadingEl = document.getElementById(loadingId);
+                
+                if (data.error) {
+                    loadingEl.innerHTML = `<span style="color: #ef4444;">Error: ${data.error}</span>`;
+                    loadingEl.classList.remove('loading');
+                } else {
+                    loadingEl.innerHTML = formatMarkdown(data.answer);
+                    loadingEl.classList.remove('loading');
+                    
+                    // Store in conversation history
+                    businessConversationHistory.push(
+                        { role: 'user', content: question },
+                        { role: 'assistant', content: data.answer }
+                    );
+                    
+                    // Show follow-up section
+                    followUp.style.display = 'block';
+                    
+                    // Extract and show follow-up suggestions
+                    extractFollowUpSuggestions(data.answer);
+                }
+                
+                conversation.scrollTop = conversation.scrollHeight;
+                textarea.value = '';
+            } catch (e) {
+                const loadingEl = document.getElementById(loadingId);
+                loadingEl.innerHTML = `<span style="color: #ef4444;">Error: ${e.message}</span>`;
+                loadingEl.classList.remove('loading');
+            }
+            
+            btn.disabled = false;
+            btn.textContent = '🔍 Analyze & Answer';
+        }
+        
+        function extractFollowUpSuggestions(answer) {
+            const suggestions = document.getElementById('followupSuggestions');
+            suggestions.innerHTML = '';
+            
+            // Try to extract questions from the answer
+            const questionPatterns = [
+                /(?:follow-up|dig deeper|consider|explore).*?\?/gi,
+                /(?:\d+\.|•|-)\s*([^?\n]+\?)/gi
+            ];
+            
+            let found = [];
+            for (const pattern of questionPatterns) {
+                const matches = answer.match(pattern);
+                if (matches) {
+                    found = found.concat(matches.slice(0, 3));
+                }
+            }
+            
+            // Default suggestions if none found
+            if (found.length === 0) {
+                found = [
+                    "What specific tactics would you recommend?",
+                    "How does this compare to competitors?",
+                    "What's the ROI potential for this segment?"
+                ];
+            }
+            
+            found.slice(0, 3).forEach(q => {
+                const cleanQ = q.replace(/^\d+\.\s*|^•\s*|^-\s*/g, '').trim();
+                suggestions.innerHTML += `<span class="followup-suggestion" onclick="askSuggestedQuestion('${escapeHtml(cleanQ)}')">${cleanQ}</span>`;
+            });
+        }
+        
+        function askSuggestedQuestion(question) {
+            document.getElementById('followupQuestion').value = question;
+            askFollowUp();
+        }
+        
+        async function askFollowUp() {
+            const input = document.getElementById('followupQuestion');
+            const question = input.value.trim();
+            if (!question) return;
+            
+            const conversation = document.getElementById('businessConversation');
+            
+            // Add user message
+            conversation.innerHTML += `<div class="business-message user">${escapeHtml(question)}</div>`;
+            
+            // Add loading
+            const loadingId = 'loading-' + Date.now();
+            conversation.innerHTML += `<div class="business-message assistant loading" id="${loadingId}">Thinking...</div>`;
+            conversation.scrollTop = conversation.scrollHeight;
+            input.value = '';
+            
+            try {
+                const response = await fetch('/api/ai/business', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        profile: currentProfileData,
+                        question: question,
+                        history: businessConversationHistory
+                    })
+                });
+                
+                const data = await response.json();
+                const loadingEl = document.getElementById(loadingId);
+                
+                if (data.error) {
+                    loadingEl.innerHTML = `<span style="color: #ef4444;">Error: ${data.error}</span>`;
+                } else {
+                    loadingEl.innerHTML = formatMarkdown(data.answer);
+                    
+                    businessConversationHistory.push(
+                        { role: 'user', content: question },
+                        { role: 'assistant', content: data.answer }
+                    );
+                    
+                    extractFollowUpSuggestions(data.answer);
+                }
+                loadingEl.classList.remove('loading');
+                conversation.scrollTop = conversation.scrollHeight;
+            } catch (e) {
+                const loadingEl = document.getElementById(loadingId);
+                loadingEl.innerHTML = `<span style="color: #ef4444;">Error: ${e.message}</span>`;
+                loadingEl.classList.remove('loading');
+            }
+        }
+        
+        async function generateDeckFromConversation() {
+            if (!currentProfileData || !currentBusinessQuestion) {
+                alert('Please ask a business question first');
+                return;
+            }
+            
+            // Compile findings from conversation
+            const findings = businessConversationHistory
+                .filter(m => m.role === 'assistant')
+                .map(m => m.content)
+                .join('\n\n');
+            
+            await generateDeckWithQuestion(currentBusinessQuestion, findings);
+        }
+        
+        async function generateDeck() {
+            const question = document.getElementById('deckQuestion').value.trim();
+            if (!question) {
+                alert('Please enter a business question');
+                return;
+            }
+            await generateDeckWithQuestion(question, '');
+        }
+        
+        async function generateDeckWithQuestion(question, findings) {
+            if (!currentProfileData) {
+                alert('Please select a profile first');
+                return;
+            }
+            
+            const btn = document.getElementById('deckBtn');
+            const result = document.getElementById('deckResult');
+            
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = '📊 Generating...';
+            }
+            result.innerHTML = '<div class="loading">Creating your presentation deck...</div>';
+            result.classList.add('loading');
+            
+            try {
+                const response = await fetch('/api/ai/deck', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        profile: currentProfileData,
+                        question: question,
+                        findings: findings
+                    })
+                });
+                
+                const data = await response.json();
+                result.classList.remove('loading');
+                
+                if (data.error) {
+                    result.innerHTML = `<span style="color: #ef4444;">Error: ${data.error}</span>`;
+                } else if (data.deck) {
+                    const deck = data.deck;
+                    
+                    if (deck.raw) {
+                        result.innerHTML = `<div class="deck-preview">${formatMarkdown(deck.raw)}</div>`;
+                    } else if (deck.slides) {
+                        let deckHtml = `<div class="deck-preview">
+                            <div class="deck-title">📊 ${deck.title || 'Presentation Deck'}</div>`;
+                        
+                        deck.slides.forEach((slide, idx) => {
+                            deckHtml += `
+                                <div class="slide-preview">
+                                    <div class="slide-number">Slide ${idx + 1}</div>
+                                    <div class="slide-title">${slide.title || ''}</div>
+                                    <ul class="slide-points">
+                                        ${(slide.points || []).map(p => `<li>${p}</li>`).join('')}
+                                    </ul>
+                                    ${slide.visual ? `<div class="slide-visual">📈 Suggested: ${slide.visual}</div>` : ''}
+                                </div>
+                            `;
+                        });
+                        
+                        deckHtml += '</div>';
+                        result.innerHTML = deckHtml;
+                    }
+                    
+                    // Switch to deck tab to show result
+                    showAITab('deck');
+                }
+            } catch (e) {
+                result.classList.remove('loading');
+                result.innerHTML = `<span style="color: #ef4444;">Error: ${e.message}</span>`;
+            }
+            
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '📊 Generate Deck';
+            }
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Reset business conversation when switching profiles
+        function resetBusinessConversation() {
+            businessConversationHistory = [];
+            currentBusinessQuestion = '';
+            document.getElementById('businessConversation').innerHTML = '';
+            document.getElementById('businessFollowUp').style.display = 'none';
+            document.getElementById('businessQuestion').value = '';
         }
         
         // ============================================================================
