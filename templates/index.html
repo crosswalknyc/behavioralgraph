@@ -2900,6 +2900,17 @@
 
             document.getElementById('dashSampleSize').textContent = formatNumber(parsed.sampleSize);
             document.getElementById('dashProjectedUS').textContent = formatNumber(parsed.projectedUS);
+            
+            // IMPORTANT: Also set currentProfileData for AI and export features
+            currentProfileData = {
+                name: brandName || 'Brand',
+                sampleSize: parsed.sampleSize,
+                projectedUS: parsed.projectedUS,
+                demographics: parsed.demographics,
+                behavioral: parsed.behavioral,
+                locations: parsed.locations,
+                s3Key: currentS3Key
+            };
 
             // Load profile selector in sidebar (instead of categories)
             loadDashboardProfiles();
@@ -2907,6 +2918,9 @@
             renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
             renderBehavioralCards(parsed.behavioral);
             renderLocationTable(parsed.locations);
+            
+            // Render top insights for this profile
+            renderTopInsights(parsed);
         }
 
         function parseAllData(csvData) {
