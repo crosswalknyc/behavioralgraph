@@ -736,12 +736,19 @@ def connect_snowflake():
         print("🔌 Connecting to Snowflake...")
     
     # Load credentials from config or environment variables
-    from config import SNOWFLAKE_CONFIG
     import os
     
-    user = os.environ.get('SNOWFLAKE_USER') or SNOWFLAKE_CONFIG.get('user', '')
+    # Try to load from config.py, fall back to empty dict if not available
+    try:
+        from config import SNOWFLAKE_CONFIG
+    except ImportError:
+        print("⚠️ config.py not found, using environment variables only")
+        SNOWFLAKE_CONFIG = {}
+    
+    # Environment variables take precedence over config file
+    user = os.environ.get('SNOWFLAKE_USER') or SNOWFLAKE_CONFIG.get('user', 'hotdogsandcheezeits')
     password = os.environ.get('SNOWFLAKE_PASSWORD') or SNOWFLAKE_CONFIG.get('password', '')
-    account = os.environ.get('SNOWFLAKE_ACCOUNT') or SNOWFLAKE_CONFIG.get('account', '')
+    account = os.environ.get('SNOWFLAKE_ACCOUNT') or SNOWFLAKE_CONFIG.get('account', 'qsodrkt-hgb46445')
     warehouse = os.environ.get('SNOWFLAKE_WAREHOUSE') or SNOWFLAKE_CONFIG.get('warehouse', 'BEHAVIORGRAPH6X')
     database = os.environ.get('SNOWFLAKE_DATABASE') or SNOWFLAKE_CONFIG.get('database', 'BEHAVIORALGRAPH')
     schema = os.environ.get('SNOWFLAKE_SCHEMA') or SNOWFLAKE_CONFIG.get('schema', 'PUBLIC')
@@ -750,6 +757,9 @@ def connect_snowflake():
     
     if not user or not account:
         raise ValueError("SNOWFLAKE_USER and SNOWFLAKE_ACCOUNT must be set as environment variables")
+    
+    if not token:
+        raise ValueError("SNOWFLAKE_TOKEN environment variable is required. Set it in Render Dashboard → Environment.")
     
     # Try programmatic access token first, fallback to password if needed
     try:
