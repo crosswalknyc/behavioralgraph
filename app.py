@@ -1749,14 +1749,64 @@ def download_result(job_id):
     )
 
 
-# Cache for S3 file list
+# Cache for S3 file list - now persisted to S3 for faster loads
 s3_cache = {
     'jobs': [],
     'categories': [],
     'last_updated': None,
-    'file_count': 0
+    'file_count': 0,
+    'last_full_scan': None  # Track when we did a full scan
 }
 S3_CACHE_TTL = 300  # 5 minutes cache
+S3_CACHE_KEY = 'system/s3_cache.json'  # Persisted cache location
+
+def load_persisted_cache():
+    """Load the S3 file cache from S3 storage."""
+    global s3_cache
+    if not s3_client:
+        return False
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_CACHE_KEY)
+        cached_data = json.loads(response['Body'].read().decode('utf-8'))
+        s3_cache['jobs'] = cached_data.get('jobs', [])
+        s3_cache['categories'] = cached_data.get('categories', [])
+        s3_cache['last_updated'] = cached_data.get('last_updated')
+        s3_cache['file_count'] = cached_data.get('file_count', 0)
+        s3_cache['last_full_scan'] = cached_data.get('last_full_scan')
+        print(f"✅ Loaded persisted cache: {len(s3_cache['jobs'])} files")
+        return True
+    except s3_client.exceptions.NoSuchKey:
+        print("📂 No persisted cache found, will do full scan")
+        return False
+    except Exception as e:
+        print(f"⚠️ Error loading persisted cache: {e}")
+        return False
+
+def save_persisted_cache():
+    """Save the S3 file cache to S3 storage."""
+    if not s3_client:
+        return
+    try:
+        cache_data = {
+            'jobs': s3_cache['jobs'],
+            'categories': s3_cache['categories'],
+            'last_updated': s3_cache['last_updated'],
+            'file_count': s3_cache['file_count'],
+            'last_full_scan': s3_cache['last_full_scan']
+        }
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=S3_CACHE_KEY,
+            Body=json.dumps(cache_data),
+            ContentType='application/json'
+        )
+        print(f"💾 Saved cache to S3: {len(s3_cache['jobs'])} files")
+    except Exception as e:
+        print(f"⚠️ Error saving persisted cache: {e}")
+
+# Try to load persisted cache on startup
+if s3_client:
+    load_persisted_cache()
 
 @app.route('/api/jobs')
 @requires_auth
@@ -1766,6 +1816,14 @@ def list_jobs():
     
     job_list = []
     categories = set()
+    
+    # Update user's last activity time
+    username = session.get('username')
+    if username:
+        users = load_users()
+        if username in users:
+            users[username]['last_activity'] = time.time()
+            save_users(users)
     
     # Add local jobs (always fresh)
     for job_id, job in jobs.items():
@@ -1782,13 +1840,20 @@ def list_jobs():
     
     # Check if we need to refresh S3 cache
     now = time.time()
+    
+    # If cache is empty, try to load persisted cache first
+    if not s3_cache['jobs'] and s3_client:
+        load_persisted_cache()
+    
+    # Determine if we need any refresh
     need_refresh = (
         s3_cache['last_updated'] is None or
         (now - s3_cache['last_updated']) > S3_CACHE_TTL
     )
     
     if need_refresh and s3_client:
-        refresh_s3_cache()
+        # Use incremental refresh - much faster!
+        refresh_s3_cache(incremental=True)
     
     # Add cached S3 jobs
     job_list.extend(s3_cache['jobs'])
@@ -1800,100 +1865,149 @@ def list_jobs():
     
     return jsonify({
         'jobs': sorted_jobs,
-        'categories': sorted(list(categories))
+        'categories': sorted(list(categories)),
+        'cache_info': {
+            'last_updated': s3_cache.get('last_updated'),
+            'file_count': s3_cache.get('file_count', 0),
+            'cached': True
+        }
     })
 
 
 @app.route('/api/refresh-cache')
 @requires_auth
 def force_refresh_cache():
-    """Force refresh the S3 cache."""
+    """Force refresh the S3 cache - does full scan when manually triggered."""
     if s3_client:
-        refresh_s3_cache()
-        return jsonify({'success': True, 'count': len(s3_cache['jobs'])})
+        refresh_s3_cache(incremental=False)  # Full scan on manual refresh
+        return jsonify({
+            'success': True, 
+            'count': len(s3_cache['jobs']),
+            'message': 'Full cache refresh complete'
+        })
     return jsonify({'success': False, 'error': 'S3 not configured'})
 
 
-def refresh_s3_cache():
-    """Refresh the S3 file cache in background."""
+def refresh_s3_cache(incremental=True):
+    """Refresh the S3 file cache - incremental by default for speed."""
     import time
+    from datetime import datetime, timezone
     
-    job_list = []
-    categories = set()
+    existing_keys = {job['s3_key']: job for job in s3_cache.get('jobs', []) if job.get('s3_key')}
+    last_scan_time = s3_cache.get('last_full_scan')
+    
+    # Determine if we should do incremental or full scan
+    do_full_scan = not incremental or not existing_keys or not last_scan_time
+    
+    if do_full_scan:
+        print("🔄 Doing full S3 scan...")
+        job_list = []
+        categories = set()
+    else:
+        print(f"⚡ Doing incremental S3 scan since {datetime.fromtimestamp(last_scan_time)}")
+        job_list = s3_cache['jobs'].copy()
+        categories = set(s3_cache['categories'])
     
     try:
-        # First, just get the list of files (fast)
+        # Get list of files
         paginator = s3_client.get_paginator('list_objects_v2')
-        all_objects = []
+        new_count = 0
         
         for page in paginator.paginate(Bucket=S3_BUCKET):
             for obj in page.get('Contents', []):
-                if obj['Key'].endswith('.csv'):
-                    all_objects.append(obj)
-        
-        # Process each file
-        for obj in all_objects:
-            key = obj['Key']
-            
-            # Extract project name from filename
-            # File format: NAME_MM_DD_YYYY_HH_MM.csv where NAME can have multiple underscores
-            import re
-            name_without_ext = key.replace('.csv', '')
-            # Remove the date/time pattern at the end: _MM_DD_YYYY_HH_MM
-            match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
-            if match:
-                project_name = match.group(1).replace('_', ' ').upper()
-            else:
-                # Fallback: just use the whole name without extension
-                project_name = name_without_ext.replace('_', ' ').upper()
-            
-            # Try to get category from BRAND CATEGORY row in CSV
-            category = 'UNCATEGORIZED'
-            try:
-                # Get file size first
-                head_response = s3_client.head_object(Bucket=S3_BUCKET, Key=key)
-                file_size = head_response['ContentLength']
+                key = obj['Key']
+                if not key.endswith('.csv') or key.startswith('system/'):
+                    continue
                 
-                # Read last 100KB where BRAND CATEGORY row usually is
-                start_byte = max(0, file_size - 100000)
-                response = s3_client.get_object(Bucket=S3_BUCKET, Key=key, Range=f'bytes={start_byte}-{file_size}')
-                content = response['Body'].read().decode('utf-8', errors='ignore')
+                # For incremental: skip if we already have it and it hasn't changed
+                if not do_full_scan:
+                    if key in existing_keys:
+                        cached_time = existing_keys[key].get('created_at', '')
+                        obj_time = obj['LastModified'].isoformat()
+                        if cached_time == obj_time:
+                            continue  # Skip unchanged files
                 
-                # Look for BRAND CATEGORY row
-                for line in content.split('\n'):
-                    if line.startswith('BRAND CATEGORY,'):
-                        parts = line.split(',')
-                        if len(parts) >= 2 and parts[1].strip():
-                            cat = parts[1].strip().upper()
-                            if cat:
-                                category = cat
-                        break
-            except Exception as e:
-                print(f"Error reading category from {key}: {e}")
-            
-            categories.add(category)
-            
-            job_list.append({
-                'job_id': key,
-                'project_name': project_name,
-                'status': 'cached',
-                'progress': 100,
-                'created_at': obj['LastModified'].isoformat(),
-                'source': 's3',
-                's3_key': key,
-                'category': category
-            })
+                # Process this file (new or changed)
+                new_count += 1
+                job_data = process_s3_file_metadata(key, obj)
+                
+                if do_full_scan:
+                    job_list.append(job_data)
+                    categories.add(job_data['category'])
+                else:
+                    # Update or add
+                    if key in existing_keys:
+                        # Update existing
+                        for i, job in enumerate(job_list):
+                            if job.get('s3_key') == key:
+                                job_list[i] = job_data
+                                break
+                    else:
+                        job_list.append(job_data)
+                    categories.add(job_data['category'])
         
         # Update cache
         s3_cache['jobs'] = job_list
         s3_cache['categories'] = list(categories)
         s3_cache['last_updated'] = time.time()
         s3_cache['file_count'] = len(job_list)
+        s3_cache['last_full_scan'] = time.time()
         
-        print(f"✅ S3 cache refreshed: {len(job_list)} files")
+        # Persist to S3 for fast loads
+        save_persisted_cache()
+        
+        if do_full_scan:
+            print(f"✅ Full S3 scan complete: {len(job_list)} files")
+        else:
+            print(f"⚡ Incremental scan: {new_count} new/changed files, {len(job_list)} total")
         
     except Exception as e:
         print(f"Error refreshing S3 cache: {e}")
+
+def process_s3_file_metadata(key, obj):
+    """Process a single S3 file and extract metadata."""
+    import re
+    
+    # Extract project name from filename
+    name_without_ext = key.replace('.csv', '')
+    match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+    if match:
+        project_name = match.group(1).replace('_', ' ').upper()
+    else:
+        project_name = name_without_ext.replace('_', ' ').upper()
+    
+    # Try to get category from BRAND CATEGORY row in CSV
+    category = 'UNCATEGORIZED'
+    try:
+        head_response = s3_client.head_object(Bucket=S3_BUCKET, Key=key)
+        file_size = head_response['ContentLength']
+        
+        # Read last 100KB where BRAND CATEGORY row usually is
+        start_byte = max(0, file_size - 100000)
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key, Range=f'bytes={start_byte}-{file_size}')
+        content = response['Body'].read().decode('utf-8', errors='ignore')
+        
+        for line in content.split('\n'):
+            if line.startswith('BRAND CATEGORY,'):
+                parts = line.split(',')
+                if len(parts) >= 2 and parts[1].strip():
+                    cat = parts[1].strip().upper()
+                    if cat:
+                        category = cat
+                break
+    except Exception as e:
+        print(f"Error reading category from {key}: {e}")
+    
+    return {
+        'job_id': key,
+        'project_name': project_name,
+        'status': 'cached',
+        'progress': 100,
+        'created_at': obj['LastModified'].isoformat(),
+        'source': 's3',
+        's3_key': key,
+        'category': category
+    }
 
 
 # ============================================================================

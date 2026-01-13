@@ -2034,9 +2034,12 @@
                     </div>
                     <div id="noCurrentJob"><div class="empty-state" style="padding: 1.5rem; color: var(--text-secondary);">Submit an analysis to get started</div></div>
 
-                    <div style="margin-top: 1.5rem; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
-                        <h3 style="font-size: 0.85rem; color: var(--text-secondary);">Results Library</h3>
-                        <button class="btn btn-small" style="background: var(--bg-dark); padding: 0.25rem 0.5rem;" onclick="refreshCache()" id="refreshBtn" title="Refresh list">🔄</button>
+                    <div style="margin-top: 1.5rem; margin-bottom: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="font-size: 0.85rem; color: var(--text-secondary);">Results Library</h3>
+                            <button class="btn btn-small" style="background: var(--bg-dark); padding: 0.25rem 0.5rem;" onclick="refreshCache()" id="refreshBtn" title="Full refresh">🔄</button>
+                        </div>
+                        <div id="cacheStatus" style="margin-top: 0.25rem;"></div>
                     </div>
                     
                     <div style="margin-bottom: 0.75rem;">
@@ -4778,14 +4781,30 @@
 
         let allJobs = [];
         let allCategories = [];
+        let cacheInfo = null;
 
-        async function loadJobs() {
+        async function loadJobs(showLoading = true) {
+            const container = document.getElementById('jobsList');
+            const cacheStatus = document.getElementById('cacheStatus');
+            
+            if (showLoading && container) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;"><span class="spinner"></span> Loading results...</div>';
+            }
+            
             try {
                 const response = await fetch('/api/jobs');
                 const data = await response.json();
                 
                 allJobs = data.jobs || [];
                 allCategories = data.categories || [];
+                cacheInfo = data.cache_info || null;
+                
+                // Update cache status indicator
+                if (cacheStatus && cacheInfo) {
+                    const lastUpdated = cacheInfo.last_updated ? new Date(cacheInfo.last_updated * 1000) : null;
+                    const timeAgo = lastUpdated ? getTimeAgo(lastUpdated) : 'never';
+                    cacheStatus.innerHTML = `<span style="color: var(--text-secondary); font-size: 0.7rem;">⚡ ${cacheInfo.file_count} files • Updated ${timeAgo}</span>`;
+                }
                 
                 // Populate category filter
                 const categorySelect = document.getElementById('categoryFilter');
@@ -4795,8 +4814,20 @@
                 renderJobs(allJobs);
             } catch (error) { 
                 console.error('Failed to load jobs:', error);
-                document.getElementById('jobsList').innerHTML = '<div style="padding: 1rem; color: var(--accent-red); font-size: 0.8rem;">Failed to load</div>';
+                if (container) {
+                    container.innerHTML = '<div style="padding: 1rem; color: var(--accent-red); font-size: 0.8rem;">Failed to load</div>';
+                }
             }
+        }
+        
+        function getTimeAgo(date) {
+            const seconds = Math.floor((new Date() - date) / 1000);
+            if (seconds < 60) return 'just now';
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes}m ago`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours}h ago`;
+            return `${Math.floor(hours / 24)}d ago`;
         }
 
         function filterJobs() {
