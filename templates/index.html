@@ -1046,8 +1046,35 @@
                                 <textarea id="brands" placeholder="nike, adidas, puma" required></textarea>
                             </div>
                             <div class="form-row">
-                                <label class="checkbox-group"><input type="checkbox" id="is_genpop" checked><span>GenPop</span></label>
-                                <label class="checkbox-group"><input type="checkbox" id="purchasers_only"><span>Purchasers Only</span></label>
+                                <label class="checkbox-group"><input type="checkbox" id="is_genpop" onchange="toggleGenPopOptions()"><span>Updating GenPop?</span></label>
+                                <label class="checkbox-group" id="purchasers_group"><input type="checkbox" id="purchasers_only"><span>Purchasers Only</span></label>
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <div class="form-section-title">Additional Options</div>
+                            <div class="form-row">
+                                <label class="checkbox-group"><input type="checkbox" id="include_frequency"><span>Include visit frequency analysis?</span></label>
+                            </div>
+                            <div class="form-row">
+                                <label class="checkbox-group"><input type="checkbox" id="is_listener_watcher" onchange="toggleListenerOptions()"><span>Is this a listener/watcher/player profile?</span></label>
+                            </div>
+                            <div id="listenerOptions" style="display: none; margin-left: 1.5rem;">
+                                <div class="form-group">
+                                    <label>Platform name (as it appears in hostmap)</label>
+                                    <input type="text" id="platform_name" placeholder="e.g., spotify, netflix, hulu">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <label class="checkbox-group"><input type="checkbox" id="is_update" onchange="toggleUpdateOptions()"><span>Are you updating a previous run?</span></label>
+                            </div>
+                            <div id="updateOptions" style="display: none; margin-left: 1.5rem;">
+                                <div class="form-group">
+                                    <label>Previous CSV file (select from S3)</label>
+                                    <select id="previous_file" style="font-size: 0.8rem;">
+                                        <option value="">Select a previous run...</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
@@ -1513,6 +1540,52 @@
             document.getElementById('end_date').required = sameDates;
         }
 
+        function toggleGenPopOptions() {
+            const isGenpop = document.getElementById('is_genpop').checked;
+            // Hide "Purchasers Only" if GenPop is checked (GenPop doesn't use purchasers)
+            document.getElementById('purchasers_group').style.display = isGenpop ? 'none' : 'flex';
+            if (isGenpop) {
+                document.getElementById('purchasers_only').checked = false;
+            }
+        }
+
+        function toggleListenerOptions() {
+            const isListener = document.getElementById('is_listener_watcher').checked;
+            document.getElementById('listenerOptions').style.display = isListener ? 'block' : 'none';
+        }
+
+        function toggleUpdateOptions() {
+            const isUpdate = document.getElementById('is_update').checked;
+            document.getElementById('updateOptions').style.display = isUpdate ? 'block' : 'none';
+            
+            // Populate the previous files dropdown with S3 files
+            if (isUpdate) {
+                populatePreviousFiles();
+            }
+        }
+
+        async function populatePreviousFiles() {
+            try {
+                const response = await fetch('/api/jobs');
+                const data = await response.json();
+                const jobs = data.jobs || [];
+                
+                const select = document.getElementById('previous_file');
+                select.innerHTML = '<option value="">Select a previous run...</option>';
+                
+                jobs.forEach(job => {
+                    if (job.status === 'cached' || job.status === 'completed') {
+                        const option = document.createElement('option');
+                        option.value = job.s3_key || job.job_id;
+                        option.textContent = `${job.project_name} (${job.category || 'Uncategorized'})`;
+                        select.appendChild(option);
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to load previous files:', error);
+            }
+        }
+
         // Form submission
         document.getElementById('analysisForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -1611,7 +1684,13 @@
                 behavior_start: behaviorStart,
                 behavior_end: behaviorEnd,
                 filters: filters,
-                skew_settings: skewSettings
+                skew_settings: skewSettings,
+                // Additional options matching bg.py terminal
+                include_frequency: document.getElementById('include_frequency').checked,
+                is_listener_watcher: document.getElementById('is_listener_watcher').checked,
+                platform_name: document.getElementById('platform_name')?.value || '',
+                is_update: document.getElementById('is_update').checked,
+                previous_file: document.getElementById('previous_file')?.value || ''
             };
 
             try {

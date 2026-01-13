@@ -532,6 +532,7 @@ def submit_analysis():
         brand_category = data.get('brand_category', 'GENERAL')
         include_frequency = data.get('include_frequency', False)
         is_listener_watcher = data.get('is_listener_watcher', False)
+        platform_name = data.get('platform_name', None) if is_listener_watcher else None
         previous_file = data.get('previous_file', None) if data.get('is_update', False) else None
         
         # Get reference file for demographic consistency (from similar runs)
@@ -588,7 +589,7 @@ def submit_analysis():
             args=(job_id, project_name, brands, start_date, end_date, 
                   behavior_start, behavior_end, filters, skew_settings, 
                   is_genpop, purchasers_only, brand_category, 
-                  include_frequency, is_listener_watcher, previous_file,
+                  include_frequency, is_listener_watcher, platform_name, previous_file,
                   reference_demographics, reference_sample_size)
         )
         thread.daemon = True
@@ -822,8 +823,8 @@ def update_job_status(job_id, status=None, progress=None, message=None, error=No
 def run_analysis(job_id, project_name, brands, sample_start, sample_end, 
                  behavior_start, behavior_end, filters, skew_settings, 
                  is_genpop, purchasers_only, brand_category,
-                 include_frequency=False, is_listener_watcher=False, previous_file_path=None,
-                 reference_demographics=None, reference_sample_size=None):
+                 include_frequency=False, is_listener_watcher=False, platform_name=None, 
+                 previous_file_path=None, reference_demographics=None, reference_sample_size=None):
     """Run the behavioral graph analysis pipeline with demographic consistency validation."""
     try:
         update_job_status(job_id, status='running', progress=5, message='Initializing...')
