@@ -894,6 +894,269 @@
             margin-top: 0.5rem;
         }
 
+        /* Insights Tab */
+        .insights-container {
+            padding: 1rem;
+        }
+        .insights-header {
+            margin-bottom: 1.5rem;
+        }
+        .insights-header h2 {
+            margin: 0 0 0.5rem 0;
+        }
+        .insights-header p {
+            color: var(--text-secondary);
+            margin: 0;
+        }
+        .insights-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1rem;
+        }
+        .insight-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+        .insight-card.highlight {
+            border-color: #10b981;
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.02));
+        }
+        .insight-card.wide {
+            grid-column: span 2;
+        }
+        .insight-card h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1rem;
+        }
+        .insight-desc {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            margin: 0 0 0.75rem 0;
+        }
+        .insight-list {
+            max-height: 350px;
+            overflow-y: auto;
+        }
+        .insight-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            border-radius: 6px;
+            margin-bottom: 0.25rem;
+            font-size: 0.8rem;
+        }
+        .insight-item:hover {
+            background: rgba(255,255,255,0.05);
+        }
+        .insight-item .name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .insight-item .category {
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            margin-left: 0.5rem;
+        }
+        .insight-item .index {
+            font-weight: 700;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            min-width: 50px;
+            text-align: center;
+        }
+        .insight-item .index.high { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .insight-item .index.low { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .insight-grid-small {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.5rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .champion-card {
+            background: var(--bg-input);
+            border-radius: 6px;
+            padding: 0.5rem;
+            font-size: 0.75rem;
+        }
+        .champion-card .cat-name {
+            color: var(--accent-blue);
+            font-weight: 600;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+        }
+        .champion-card .item-name {
+            margin: 0.25rem 0;
+        }
+        .champion-card .item-index {
+            color: #10b981;
+            font-weight: 700;
+        }
+        .stats-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem;
+            background: var(--bg-input);
+            border-radius: 6px;
+        }
+        .stat-row .label { color: var(--text-secondary); }
+        .stat-row .value { font-weight: 600; }
+
+        /* Segmentation Tab */
+        .segmentation-container {
+            padding: 1rem;
+        }
+        .seg-header {
+            margin-bottom: 1.5rem;
+        }
+        .seg-header h2 { margin: 0 0 0.5rem 0; }
+        .seg-header p { color: var(--text-secondary); margin: 0; }
+        .seg-builder {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 1.5rem;
+        }
+        .seg-filters {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+        .seg-filters h3 {
+            margin: 0 0 1rem 0;
+            font-size: 1rem;
+        }
+        .seg-filter-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .seg-filter-group label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+        }
+        .seg-filter-group select {
+            width: 100%;
+            padding: 0.5rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+        }
+        .seg-filter-group select[multiple] {
+            height: 80px;
+        }
+        .seg-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        .seg-status {
+            margin-top: 0.75rem;
+            padding: 0.5rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+        .seg-status.loading {
+            background: rgba(74, 138, 201, 0.2);
+            color: var(--accent-blue);
+        }
+        .seg-status.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        .seg-results {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+        .seg-results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .seg-results-header h3 { margin: 0; }
+        .seg-sample-info {
+            display: flex;
+            gap: 1.5rem;
+            font-size: 0.85rem;
+        }
+        .seg-results-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+        .seg-result-card {
+            background: var(--bg-input);
+            border-radius: 8px;
+            padding: 0.75rem;
+        }
+        .seg-result-card h4 {
+            margin: 0 0 0.5rem 0;
+            font-size: 0.9rem;
+            color: var(--accent-blue);
+        }
+        .seg-list {
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .seg-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.35rem 0;
+            font-size: 0.8rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .seg-item:last-child { border-bottom: none; }
+        .seg-item .diff {
+            font-weight: 600;
+        }
+        .seg-item .diff.up { color: #10b981; }
+        .seg-item .diff.down { color: #ef4444; }
+        .saved-segments {
+            margin-top: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+        .saved-segments h3 { margin: 0 0 0.75rem 0; }
+        .saved-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .saved-segment-chip {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            padding: 0.5rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .saved-segment-chip:hover {
+            background: rgba(74, 138, 201, 0.2);
+            border-color: var(--accent-blue);
+        }
+
         /* Location Tab */
         .location-grid {
             display: grid;
@@ -1738,6 +2001,8 @@
                 <button class="tab-btn active" onclick="showTab('demographics')">Demographics</button>
                 <button class="tab-btn" onclick="showTab('behavioral')">Behavioral</button>
                 <button class="tab-btn" onclick="showTab('location')">Location</button>
+                <button class="tab-btn" onclick="showTab('insights')">🔥 Top Insights</button>
+                <button class="tab-btn" onclick="showTab('segmentation')">🎯 Segment Builder</button>
                 <button class="tab-btn" onclick="showTab('comparison')">📊 Comparison</button>
             </div>
 
@@ -1795,6 +2060,175 @@
                         <h3>Bottom DMAs by Index</h3>
                         <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
                         <div id="locationListBottom"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Insights Tab -->
+            <div id="tab-insights" class="tab-content">
+                <div class="insights-container">
+                    <div class="insights-header">
+                        <h2>🔥 Top Over-Indexing Insights</h2>
+                        <p>Items where this audience significantly over-indexes vs General Population</p>
+                    </div>
+                    
+                    <div class="insights-grid">
+                        <div class="insight-card highlight">
+                            <h3>📈 Biggest Over-Indexers</h3>
+                            <p class="insight-desc">Top 20 items with highest index vs Gen Pop</p>
+                            <div id="topOverIndexers" class="insight-list"></div>
+                        </div>
+                        
+                        <div class="insight-card">
+                            <h3>📉 Biggest Under-Indexers</h3>
+                            <p class="insight-desc">Top 20 items where audience under-indexes</p>
+                            <div id="topUnderIndexers" class="insight-list"></div>
+                        </div>
+                        
+                        <div class="insight-card wide">
+                            <h3>🎯 Category Champions</h3>
+                            <p class="insight-desc">Highest indexing item in each behavioral category</p>
+                            <div id="categoryChampions" class="insight-grid-small"></div>
+                        </div>
+                        
+                        <div class="insight-card">
+                            <h3>📊 Key Statistics</h3>
+                            <div id="keyStats" class="stats-list"></div>
+                        </div>
+                        
+                        <div class="insight-card">
+                            <h3>🎬 Media & Entertainment Affinity</h3>
+                            <div id="mediaAffinity" class="insight-list"></div>
+                        </div>
+                        
+                        <div class="insight-card">
+                            <h3>🛒 Shopping & Brand Affinity</h3>
+                            <div id="shoppingAffinity" class="insight-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Segmentation Builder Tab -->
+            <div id="tab-segmentation" class="tab-content">
+                <div class="segmentation-container">
+                    <div class="seg-header">
+                        <h2>🎯 Audience Segment Builder</h2>
+                        <p>Filter by demographics to see how behaviors change for specific segments</p>
+                    </div>
+                    
+                    <div class="seg-builder">
+                        <div class="seg-filters">
+                            <h3>Select Demographics</h3>
+                            <div class="seg-filter-grid">
+                                <div class="seg-filter-group">
+                                    <label>Gender</label>
+                                    <select id="segGender" multiple>
+                                        <option value="">All</option>
+                                        <option value="Female">Female</option>
+                                        <option value="Male">Male</option>
+                                        <option value="Trans Female">Trans Female</option>
+                                        <option value="Trans Male">Trans Male</option>
+                                        <option value="Non-Binary">Non-Binary</option>
+                                    </select>
+                                </div>
+                                <div class="seg-filter-group">
+                                    <label>Age</label>
+                                    <select id="segAge" multiple>
+                                        <option value="">All</option>
+                                        <option value="<16">&lt;16</option>
+                                        <option value="16-18">16-18</option>
+                                        <option value="18-20">18-20</option>
+                                        <option value="21-25">21-25</option>
+                                        <option value="26-30">26-30</option>
+                                        <option value="31-40">31-40</option>
+                                        <option value="41-59">41-59</option>
+                                        <option value="60+">60+</option>
+                                    </select>
+                                </div>
+                                <div class="seg-filter-group">
+                                    <label>Income</label>
+                                    <select id="segIncome" multiple>
+                                        <option value="">All</option>
+                                        <option value="$40K-$60K">$40K-$60K</option>
+                                        <option value="$60K-$75K">$60K-$75K</option>
+                                        <option value="$75K-$100K">$75K-$100K</option>
+                                        <option value="$100K-$150K">$100K-$150K</option>
+                                        <option value="$150K-$250K">$150K-$250K</option>
+                                        <option value="$250K+">$250K+</option>
+                                    </select>
+                                </div>
+                                <div class="seg-filter-group">
+                                    <label>Ethnicity</label>
+                                    <select id="segEthnicity" multiple>
+                                        <option value="">All</option>
+                                        <option value="White">White</option>
+                                        <option value="Black">Black</option>
+                                        <option value="LatinX">LatinX</option>
+                                        <option value="Asian">Asian</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="seg-filter-group">
+                                    <label>Relationship</label>
+                                    <select id="segRelationship">
+                                        <option value="">All</option>
+                                        <option value="Single">Single</option>
+                                        <option value="In a Relationship">In a Relationship</option>
+                                        <option value="Married">Married</option>
+                                        <option value="Divorced">Divorced</option>
+                                    </select>
+                                </div>
+                                <div class="seg-filter-group">
+                                    <label>Parental Status</label>
+                                    <select id="segParental">
+                                        <option value="">All</option>
+                                        <option value="Has Kids">Has Kids</option>
+                                        <option value="Doesn't have Kids">Doesn't have Kids</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="seg-actions">
+                                <button class="btn btn-primary" onclick="runSegmentAnalysis()">🔍 Analyze Segment</button>
+                                <button class="btn btn-secondary" onclick="clearSegmentFilters()">Clear Filters</button>
+                                <button class="btn btn-secondary" onclick="saveSegment()">💾 Save Segment</button>
+                            </div>
+                            <div id="segmentStatus" class="seg-status"></div>
+                        </div>
+                        
+                        <div class="seg-results" id="segResults" style="display: none;">
+                            <div class="seg-results-header">
+                                <h3>📊 Segment Results: <span id="segName">Custom Segment</span></h3>
+                                <div class="seg-sample-info">
+                                    <span>Estimated Size: <strong id="segSize">--</strong></span>
+                                    <span>% of Total: <strong id="segPercent">--</strong></span>
+                                </div>
+                            </div>
+                            
+                            <div class="seg-results-grid">
+                                <div class="seg-result-card">
+                                    <h4>Top Behaviors for This Segment</h4>
+                                    <div id="segTopBehaviors" class="seg-list"></div>
+                                </div>
+                                <div class="seg-result-card">
+                                    <h4>How This Segment Differs</h4>
+                                    <div id="segDifferences" class="seg-list"></div>
+                                </div>
+                                <div class="seg-result-card">
+                                    <h4>Media Consumption</h4>
+                                    <div id="segMedia" class="seg-list"></div>
+                                </div>
+                                <div class="seg-result-card">
+                                    <h4>Shopping Preferences</h4>
+                                    <div id="segShopping" class="seg-list"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="saved-segments" id="savedSegments">
+                        <h3>💾 Saved Segments</h3>
+                        <div id="savedSegmentsList" class="saved-list"></div>
                     </div>
                 </div>
             </div>
@@ -2549,6 +2983,9 @@
                     renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
                     renderBehavioralCards(parsed.behavioral);
                     renderLocationTable(parsed.locations);
+                    
+                    // Render top insights
+                    renderTopInsights(parsed);
                 }
             } catch (error) {
                 console.error('Error loading profile:', error);
@@ -3436,6 +3873,330 @@
             document.getElementById('businessFollowUp').style.display = 'none';
             document.getElementById('businessQuestion').value = '';
         }
+        
+        // ============================================================================
+        // TOP INSIGHTS FUNCTIONS
+        // ============================================================================
+        
+        function renderTopInsights(data) {
+            if (!data || !data.behavioral) return;
+            
+            // Collect all items with indexes
+            const allItems = [];
+            
+            // Add behavioral items
+            Object.entries(data.behavioral).forEach(([category, items]) => {
+                if (Array.isArray(items)) {
+                    items.forEach(item => {
+                        if (item.index && item.index > 0) {
+                            allItems.push({
+                                name: item.name || item.value,
+                                category: category,
+                                index: item.index,
+                                pct: item.pct || 0,
+                                genPopPct: item.genPopPct || 0
+                            });
+                        }
+                    });
+                }
+            });
+            
+            // Sort by index
+            const sortedByIndex = [...allItems].sort((a, b) => b.index - a.index);
+            const topOverIndexers = sortedByIndex.filter(i => i.index > 100).slice(0, 20);
+            const topUnderIndexers = sortedByIndex.filter(i => i.index < 100).sort((a, b) => a.index - b.index).slice(0, 20);
+            
+            // Render top over-indexers
+            document.getElementById('topOverIndexers').innerHTML = topOverIndexers.map(item => `
+                <div class="insight-item">
+                    <span class="name">${item.name}</span>
+                    <span class="category">${item.category}</span>
+                    <span class="index high">${item.index}</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No over-indexing items found</p>';
+            
+            // Render top under-indexers
+            document.getElementById('topUnderIndexers').innerHTML = topUnderIndexers.map(item => `
+                <div class="insight-item">
+                    <span class="name">${item.name}</span>
+                    <span class="category">${item.category}</span>
+                    <span class="index low">${item.index}</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No under-indexing items found</p>';
+            
+            // Category champions - highest indexer in each category
+            const categoryChampions = {};
+            allItems.forEach(item => {
+                if (!categoryChampions[item.category] || item.index > categoryChampions[item.category].index) {
+                    categoryChampions[item.category] = item;
+                }
+            });
+            
+            const championsHtml = Object.entries(categoryChampions)
+                .sort((a, b) => b[1].index - a[1].index)
+                .slice(0, 24)
+                .map(([cat, item]) => `
+                    <div class="champion-card">
+                        <div class="cat-name">${cat}</div>
+                        <div class="item-name">${item.name}</div>
+                        <div class="item-index">Index: ${item.index}</div>
+                    </div>
+                `).join('');
+            document.getElementById('categoryChampions').innerHTML = championsHtml;
+            
+            // Key statistics
+            const avgIndex = allItems.length > 0 ? Math.round(allItems.reduce((sum, i) => sum + i.index, 0) / allItems.length) : 0;
+            const over100Count = allItems.filter(i => i.index > 100).length;
+            const under100Count = allItems.filter(i => i.index < 100).length;
+            const categoryCount = Object.keys(data.behavioral).length;
+            
+            document.getElementById('keyStats').innerHTML = `
+                <div class="stat-row"><span class="label">Total Items Analyzed</span><span class="value">${allItems.length.toLocaleString()}</span></div>
+                <div class="stat-row"><span class="label">Categories</span><span class="value">${categoryCount}</span></div>
+                <div class="stat-row"><span class="label">Over-Indexing Items</span><span class="value" style="color: #10b981;">${over100Count.toLocaleString()}</span></div>
+                <div class="stat-row"><span class="label">Under-Indexing Items</span><span class="value" style="color: #ef4444;">${under100Count.toLocaleString()}</span></div>
+                <div class="stat-row"><span class="label">Average Index</span><span class="value">${avgIndex}</span></div>
+            `;
+            
+            // Media affinity (filter media-related categories)
+            const mediaCategories = ['SOCIAL MEDIA', 'STREAMING/PLATFORM', 'STREAMING/MUSIC', 'BROADCAST/CABLE', 'APP/PLATFORM USAGE', 'PODCAST', 'MEDIA'];
+            const mediaItems = allItems
+                .filter(i => mediaCategories.some(mc => i.category.toUpperCase().includes(mc) || mc.includes(i.category.toUpperCase())))
+                .sort((a, b) => b.index - a.index)
+                .slice(0, 15);
+            
+            document.getElementById('mediaAffinity').innerHTML = mediaItems.map(item => `
+                <div class="insight-item">
+                    <span class="name">${item.name}</span>
+                    <span class="index ${item.index >= 100 ? 'high' : 'low'}">${item.index}</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No media data</p>';
+            
+            // Shopping affinity
+            const shoppingCategories = ['WHERE THEY SHOP', 'MOST PURCHASED BRANDS', 'MOST PURCHASED CATEGORIES', 'APPAREL', 'BEAUTY'];
+            const shoppingItems = allItems
+                .filter(i => shoppingCategories.some(sc => i.category.toUpperCase().includes(sc) || sc.includes(i.category.toUpperCase())))
+                .sort((a, b) => b.index - a.index)
+                .slice(0, 15);
+            
+            document.getElementById('shoppingAffinity').innerHTML = shoppingItems.map(item => `
+                <div class="insight-item">
+                    <span class="name">${item.name}</span>
+                    <span class="index ${item.index >= 100 ? 'high' : 'low'}">${item.index}</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No shopping data</p>';
+        }
+        
+        // ============================================================================
+        // SEGMENTATION BUILDER FUNCTIONS
+        // ============================================================================
+        
+        let savedSegments = [];
+        
+        function getSelectedFilters() {
+            const getValue = (id) => {
+                const el = document.getElementById(id);
+                if (el.multiple) {
+                    return Array.from(el.selectedOptions).map(o => o.value).filter(v => v);
+                }
+                return el.value ? [el.value] : [];
+            };
+            
+            return {
+                gender: getValue('segGender'),
+                age: getValue('segAge'),
+                income: getValue('segIncome'),
+                ethnicity: getValue('segEthnicity'),
+                relationship: getValue('segRelationship'),
+                parental: getValue('segParental')
+            };
+        }
+        
+        function getSegmentName(filters) {
+            const parts = [];
+            if (filters.gender.length) parts.push(filters.gender.join('/'));
+            if (filters.age.length) parts.push(filters.age.join('/'));
+            if (filters.income.length) parts.push(filters.income.join('/'));
+            if (filters.ethnicity.length) parts.push(filters.ethnicity.join('/'));
+            return parts.length > 0 ? parts.join(' + ') : 'All Audience';
+        }
+        
+        async function runSegmentAnalysis() {
+            if (!currentProfileData) {
+                alert('Please select a profile first');
+                return;
+            }
+            
+            const filters = getSelectedFilters();
+            const hasFilters = Object.values(filters).some(v => v.length > 0);
+            
+            const status = document.getElementById('segmentStatus');
+            const results = document.getElementById('segResults');
+            
+            status.className = 'seg-status loading';
+            status.textContent = hasFilters ? '🔄 Analyzing segment...' : 'ℹ️ No filters selected - showing full audience';
+            
+            // For now, estimate from existing data (in production, this would query Snowflake)
+            // This is a simplified estimation based on demographic percentages
+            setTimeout(() => {
+                const demographics = currentProfileData.demographics || {};
+                const behavioral = currentProfileData.behavioral || {};
+                const sampleSize = currentProfileData.sampleSize || 0;
+                
+                // Estimate segment size based on selected demographics
+                let segmentMultiplier = 1;
+                
+                if (filters.gender.length && demographics.gender) {
+                    const genderPct = filters.gender.reduce((sum, g) => sum + (demographics.gender[g] || 0), 0) / 100;
+                    segmentMultiplier *= genderPct || 1;
+                }
+                if (filters.age.length && demographics.age) {
+                    const agePct = filters.age.reduce((sum, a) => sum + (demographics.age[a] || 0), 0) / 100;
+                    segmentMultiplier *= agePct || 1;
+                }
+                if (filters.income.length && demographics.income) {
+                    const incomePct = filters.income.reduce((sum, i) => sum + (demographics.income[i] || 0), 0) / 100;
+                    segmentMultiplier *= incomePct || 1;
+                }
+                if (filters.ethnicity.length && demographics.ethnicity) {
+                    const ethPct = filters.ethnicity.reduce((sum, e) => sum + (demographics.ethnicity[e] || 0), 0) / 100;
+                    segmentMultiplier *= ethPct || 1;
+                }
+                
+                const estimatedSize = Math.round(sampleSize * segmentMultiplier);
+                const percentOfTotal = (segmentMultiplier * 100).toFixed(1);
+                
+                // Update results
+                document.getElementById('segName').textContent = getSegmentName(filters);
+                document.getElementById('segSize').textContent = estimatedSize.toLocaleString();
+                document.getElementById('segPercent').textContent = percentOfTotal + '%';
+                
+                // Get top behaviors (would be recalculated in production)
+                const allBehaviors = [];
+                Object.entries(behavioral).forEach(([cat, items]) => {
+                    if (Array.isArray(items)) {
+                        items.forEach(item => {
+                            allBehaviors.push({
+                                name: item.name || item.value,
+                                category: cat,
+                                pct: item.pct,
+                                index: item.index || 100
+                            });
+                        });
+                    }
+                });
+                
+                const topBehaviors = allBehaviors.sort((a, b) => b.pct - a.pct).slice(0, 15);
+                document.getElementById('segTopBehaviors').innerHTML = topBehaviors.map(b => `
+                    <div class="seg-item">
+                        <span>${b.name}</span>
+                        <span>${b.pct.toFixed(1)}%</span>
+                    </div>
+                `).join('');
+                
+                // Differences (simulated - would be calculated in production)
+                const differences = allBehaviors
+                    .filter(b => b.index > 110 || b.index < 90)
+                    .sort((a, b) => Math.abs(b.index - 100) - Math.abs(a.index - 100))
+                    .slice(0, 10);
+                document.getElementById('segDifferences').innerHTML = differences.map(b => {
+                    const diff = b.index - 100;
+                    return `
+                        <div class="seg-item">
+                            <span>${b.name}</span>
+                            <span class="diff ${diff > 0 ? 'up' : 'down'}">${diff > 0 ? '+' : ''}${diff}%</span>
+                        </div>
+                    `;
+                }).join('');
+                
+                // Media items
+                const mediaItems = allBehaviors
+                    .filter(b => ['SOCIAL MEDIA', 'STREAMING', 'APP/PLATFORM', 'PODCAST', 'MEDIA'].some(m => b.category.toUpperCase().includes(m)))
+                    .sort((a, b) => b.pct - a.pct)
+                    .slice(0, 10);
+                document.getElementById('segMedia').innerHTML = mediaItems.map(b => `
+                    <div class="seg-item">
+                        <span>${b.name}</span>
+                        <span>${b.pct.toFixed(1)}%</span>
+                    </div>
+                `).join('') || '<p style="color: var(--text-secondary);">No media data</p>';
+                
+                // Shopping items
+                const shoppingItems = allBehaviors
+                    .filter(b => ['SHOP', 'BRAND', 'PURCHASE', 'APPAREL'].some(s => b.category.toUpperCase().includes(s)))
+                    .sort((a, b) => b.pct - a.pct)
+                    .slice(0, 10);
+                document.getElementById('segShopping').innerHTML = shoppingItems.map(b => `
+                    <div class="seg-item">
+                        <span>${b.name}</span>
+                        <span>${b.pct.toFixed(1)}%</span>
+                    </div>
+                `).join('') || '<p style="color: var(--text-secondary);">No shopping data</p>';
+                
+                status.className = 'seg-status';
+                status.textContent = `✅ Analysis complete for ${getSegmentName(filters)}`;
+                results.style.display = 'block';
+                
+            }, 500);
+        }
+        
+        function clearSegmentFilters() {
+            ['segGender', 'segAge', 'segIncome', 'segEthnicity', 'segRelationship', 'segParental'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el.multiple) {
+                    Array.from(el.options).forEach(o => o.selected = false);
+                } else {
+                    el.value = '';
+                }
+            });
+            document.getElementById('segResults').style.display = 'none';
+            document.getElementById('segmentStatus').textContent = '';
+        }
+        
+        function saveSegment() {
+            const filters = getSelectedFilters();
+            const name = getSegmentName(filters);
+            
+            if (savedSegments.some(s => s.name === name)) {
+                alert('Segment already saved');
+                return;
+            }
+            
+            savedSegments.push({ name, filters, savedAt: new Date().toISOString() });
+            renderSavedSegments();
+        }
+        
+        function renderSavedSegments() {
+            const container = document.getElementById('savedSegmentsList');
+            container.innerHTML = savedSegments.map((seg, idx) => `
+                <span class="saved-segment-chip" onclick="loadSavedSegment(${idx})">${seg.name}</span>
+            `).join('') || '<p style="color: var(--text-secondary); font-size: 0.85rem;">No saved segments yet</p>';
+        }
+        
+        function loadSavedSegment(idx) {
+            const seg = savedSegments[idx];
+            if (!seg) return;
+            
+            // Set filter values
+            Object.entries(seg.filters).forEach(([key, values]) => {
+                const elId = 'seg' + key.charAt(0).toUpperCase() + key.slice(1);
+                const el = document.getElementById(elId);
+                if (el) {
+                    if (el.multiple) {
+                        Array.from(el.options).forEach(o => {
+                            o.selected = values.includes(o.value);
+                        });
+                    } else {
+                        el.value = values[0] || '';
+                    }
+                }
+            });
+            
+            runSegmentAnalysis();
+        }
+        
+        // Initialize saved segments
+        renderSavedSegments();
         
         // ============================================================================
         // FAVORITES FUNCTIONS
