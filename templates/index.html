@@ -2471,13 +2471,18 @@
 
         function renderBehavioralItems(items, maxPct) {
             const isProjection = dashDisplayMode === 'projection';
+            const US_POP = 324700000;
             return items.map((item, idx) => {
                 const index = item.index || 0;
                 const genPopPct = item.genPopPct || 0;
                 // Green if over-indexing (index >= 100), red if under-indexing (index < 100)
                 const indexColor = index >= 100 ? '#10b981' : '#ef4444';
-                // Show Gen Pop % instead of index number
-                const genPopBadge = genPopPct > 0 ? `<span class="behavioral-index" style="color: ${indexColor}">${genPopPct.toFixed(1)}%</span>` : '';
+                // Show Gen Pop % or projection number based on toggle
+                const genPopProjection = Math.round((genPopPct / 100) * US_POP);
+                const genPopDisplay = isProjection 
+                    ? formatNumber(genPopProjection)
+                    : genPopPct.toFixed(1) + '%';
+                const genPopBadge = genPopPct > 0 ? `<span class="behavioral-index" style="color: ${indexColor}">${genPopDisplay}</span>` : '';
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(item.projection || 0))
                     : item.pct.toFixed(2) + '%';
