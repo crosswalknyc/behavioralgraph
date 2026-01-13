@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Portal | MIDG Behavioral Graph</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a1929;
+            --bg-card: #0d2137;
+            --bg-input: #132f4c;
+            --accent-blue: #5a9ad9;
+            --accent-cyan: #66d9ef;
+            --accent-green: #a6e22e;
+            --accent-orange: #fd971f;
+            --accent-red: #f92672;
+            --accent-lime: #c8ff00;
+            --accent-purple: #ae81ff;
+            --text-primary: #e6f1ff;
+            --text-secondary: #8892b0;
+            --border-color: #1e3a5f;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo { width: 50px; height: auto; }
+        
+        .header-text h1 { 
+            font-family: 'Space Mono', monospace; 
+            font-size: 1.5rem; 
+            color: var(--accent-purple); 
+        }
+        .header-text p { color: var(--text-secondary); font-size: 0.8rem; }
+
+        .header-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1rem;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary { background: var(--accent-blue); color: white; }
+        .btn-success { background: var(--accent-green); color: #1a1a1a; }
+        .btn-danger { background: var(--accent-red); color: white; }
+        .btn-secondary { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); }
+        .btn:hover { transform: translateY(-1px); opacity: 0.9; }
+        .btn-small { padding: 0.4rem 0.75rem; font-size: 0.7rem; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 900px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+        }
+
+        .stat-card h3 {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-family: 'Space Mono', monospace;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .stat-value.blue { color: var(--accent-blue); }
+        .stat-value.green { color: var(--accent-green); }
+        .stat-value.orange { color: var(--accent-orange); }
+        .stat-value.purple { color: var(--accent-purple); }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 1000px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card h2 {
+            font-family: 'Space Mono', monospace;
+            font-size: 1rem;
+            color: var(--accent-cyan);
+        }
+
+        .user-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .user-table th, .user-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .user-table th {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .user-table td {
+            font-size: 0.85rem;
+        }
+
+        .user-table tr:hover {
+            background: rgba(90, 154, 217, 0.05);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-admin { background: rgba(174, 129, 255, 0.2); color: var(--accent-purple); }
+        .badge-user { background: rgba(90, 154, 217, 0.2); color: var(--accent-blue); }
+        .badge-unlimited { background: rgba(166, 226, 46, 0.2); color: var(--accent-green); }
+
+        .credits-display {
+            font-family: 'Space Mono', monospace;
+            font-weight: 600;
+        }
+
+        .credits-display.unlimited { color: var(--accent-green); }
+        .credits-display.low { color: var(--accent-orange); }
+        .credits-display.empty { color: var(--accent-red); }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show { display: flex; }
+
+        .modal-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-header h2 {
+            font-family: 'Space Mono', monospace;
+            color: var(--accent-cyan);
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.4rem;
+            text-transform: uppercase;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.3rem 0;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--accent-blue);
+        }
+
+        .checkbox-group span {
+            font-size: 0.85rem;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .access-section {
+            background: var(--bg-input);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .access-section h4 {
+            font-size: 0.75rem;
+            color: var(--accent-cyan);
+            margin-bottom: 0.75rem;
+            text-transform: uppercase;
+        }
+
+        .category-group {
+            margin-bottom: 0.75rem;
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            padding: 0.3rem 0;
+        }
+
+        .category-header:hover {
+            color: var(--accent-blue);
+        }
+
+        .category-items {
+            margin-left: 1.5rem;
+            display: none;
+        }
+
+        .category-items.open { display: block; }
+
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            padding: 1rem 1.5rem;
+            background: var(--accent-green);
+            color: #1a1a1a;
+            border-radius: 8px;
+            font-weight: 600;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 2000;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.error {
+            background: var(--accent-red);
+            color: white;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .usage-bar {
+            height: 6px;
+            background: var(--bg-dark);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 0.25rem;
+        }
+
+        .usage-fill {
+            height: 100%;
+            background: var(--accent-blue);
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="MIDG Logo" class="logo" onerror="this.style.display='none'">
+                <div class="header-text">
+                    <h1>🔐 Admin Portal</h1>
+                    <p>User Management & Access Control</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <a href="/" class="btn btn-secondary">← Back to Dashboard</a>
+                <button class="btn btn-success" onclick="showAddUserModal()">+ Add User</button>
+            </div>
+        </header>
+
+        <!-- Stats Overview -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Users</h3>
+                <div class="stat-value blue" id="totalUsers">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Total Credits Used</h3>
+                <div class="stat-value orange" id="totalCreditsUsed">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Total Runs Available</h3>
+                <div class="stat-value green" id="totalRunsAvailable">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Categories</h3>
+                <div class="stat-value purple" id="totalCategories">0</div>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="main-grid">
+            <!-- Users Table -->
+            <div class="card" style="grid-column: span 2;">
+                <div class="card-header">
+                    <h2>👥 User Management</h2>
+                    <button class="btn btn-small btn-secondary" onclick="loadUsers()">↻ Refresh</button>
+                </div>
+                <table class="user-table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Role</th>
+                            <th>Credits Left</th>
+                            <th>Credits Used</th>
+                            <th>Usage</th>
+                            <th>Last Login</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Categories & Runs Access -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>📁 Categories</h2>
+                </div>
+                <div id="categoriesList">
+                    <p style="color: var(--text-secondary); font-size: 0.85rem;">Loading categories from S3...</p>
+                </div>
+            </div>
+
+            <!-- Recent Runs -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>📊 Recent Runs</h2>
+                </div>
+                <div id="recentRunsList">
+                    <p style="color: var(--text-secondary); font-size: 0.85rem;">Loading recent runs...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit User Modal -->
+    <div class="modal" id="userModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Add New User</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <form id="userForm">
+                <input type="hidden" id="editUsername">
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="newUsername" placeholder="Enter username" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="newPassword" placeholder="Enter password">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Role</label>
+                        <select id="newRole">
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Credits</label>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="number" id="newCredits" value="5" min="-1" style="flex: 1;">
+                            <label class="checkbox-group" style="margin: 0; white-space: nowrap;">
+                                <input type="checkbox" id="unlimitedCredits" onchange="toggleUnlimited()">
+                                <span>Unlimited</span>
+                            </label>
+                        </div>
+                        <small style="color: var(--text-secondary); font-size: 0.7rem;">Set to -1 or check Unlimited for no limit</small>
+                    </div>
+                </div>
+
+                <div class="access-section">
+                    <h4>📁 Category Access</h4>
+                    <label class="checkbox-group">
+                        <input type="checkbox" id="allCategories" checked onchange="toggleAllCategories()">
+                        <span>All Categories</span>
+                    </label>
+                    <div id="categoryCheckboxes">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <div class="access-section">
+                    <h4>📊 Run Access</h4>
+                    <label class="checkbox-group">
+                        <input type="checkbox" id="allRuns" checked onchange="toggleAllRuns()">
+                        <span>All Runs</span>
+                    </label>
+                    <div id="runCheckboxes">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()" style="flex: 1;">Cancel</button>
+                    <button type="submit" class="btn btn-success" style="flex: 1;">Save User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        let allUsers = {};
+        let allCategories = [];
+        let allRuns = [];
+
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadUsers();
+            loadCategoriesAndRuns();
+        });
+
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/admin/users');
+                const data = await response.json();
+                
+                if (data.success) {
+                    allUsers = data.users;
+                    renderUsersTable(data.users);
+                    updateStats(data.users);
+                }
+            } catch (error) {
+                showToast('Failed to load users', true);
+            }
+        }
+
+        async function loadCategoriesAndRuns() {
+            try {
+                const response = await fetch('/api/cached_files');
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Extract unique categories
+                    const categories = new Set();
+                    const runs = [];
+                    
+                    data.files.forEach(file => {
+                        categories.add(file.category || 'Uncategorized');
+                        runs.push({
+                            key: file.key,
+                            name: file.project_name,
+                            category: file.category || 'Uncategorized'
+                        });
+                    });
+
+                    allCategories = Array.from(categories).sort();
+                    allRuns = runs;
+
+                    renderCategoriesList(allCategories);
+                    renderRecentRuns(runs.slice(0, 10));
+                    document.getElementById('totalCategories').textContent = allCategories.length;
+                    document.getElementById('totalRunsAvailable').textContent = runs.length;
+                }
+            } catch (error) {
+                console.error('Failed to load categories:', error);
+            }
+        }
+
+        function renderUsersTable(users) {
+            const tbody = document.getElementById('usersTableBody');
+            tbody.innerHTML = '';
+
+            Object.entries(users).forEach(([username, user]) => {
+                const creditsLeft = user.credits === -1 ? '∞' : user.credits;
+                const creditsClass = user.credits === -1 ? 'unlimited' : (user.credits <= 1 ? 'low' : (user.credits === 0 ? 'empty' : ''));
+                const usagePercent = user.credits === -1 ? 0 : (user.credits_used / (user.credits + user.credits_used) * 100) || 0;
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${username}</strong></td>
+                    <td><span class="badge badge-${user.role}">${user.role}</span></td>
+                    <td><span class="credits-display ${creditsClass}">${creditsLeft}</span></td>
+                    <td>${user.credits_used || 0}</td>
+                    <td style="min-width: 80px;">
+                        <div class="usage-bar">
+                            <div class="usage-fill" style="width: ${usagePercent}%"></div>
+                        </div>
+                    </td>
+                    <td style="font-size: 0.75rem; color: var(--text-secondary);">${user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn btn-small btn-secondary" onclick="editUser('${username}')">Edit</button>
+                            ${username !== 'admin' ? `<button class="btn btn-small btn-danger" onclick="deleteUser('${username}')">Delete</button>` : ''}
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function renderCategoriesList(categories) {
+            const container = document.getElementById('categoriesList');
+            container.innerHTML = categories.map(cat => `
+                <div style="padding: 0.5rem; background: var(--bg-input); border-radius: 6px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                    <span>${cat}</span>
+                    <span class="badge badge-user">${allRuns.filter(r => r.category === cat).length} runs</span>
+                </div>
+            `).join('');
+        }
+
+        function renderRecentRuns(runs) {
+            const container = document.getElementById('recentRunsList');
+            container.innerHTML = runs.map(run => `
+                <div style="padding: 0.5rem; background: var(--bg-input); border-radius: 6px; margin-bottom: 0.5rem;">
+                    <div style="font-size: 0.85rem; font-weight: 500;">${run.name}</div>
+                    <div style="font-size: 0.7rem; color: var(--text-secondary);">${run.category}</div>
+                </div>
+            `).join('');
+        }
+
+        function updateStats(users) {
+            const userList = Object.values(users);
+            document.getElementById('totalUsers').textContent = userList.length;
+            document.getElementById('totalCreditsUsed').textContent = userList.reduce((sum, u) => sum + (u.credits_used || 0), 0);
+        }
+
+        function showAddUserModal() {
+            document.getElementById('modalTitle').textContent = 'Add New User';
+            document.getElementById('editUsername').value = '';
+            document.getElementById('newUsername').value = '';
+            document.getElementById('newUsername').disabled = false;
+            document.getElementById('newPassword').value = '';
+            document.getElementById('newPassword').required = true;
+            document.getElementById('newRole').value = 'user';
+            document.getElementById('newCredits').value = '5';
+            document.getElementById('unlimitedCredits').checked = false;
+            document.getElementById('allCategories').checked = true;
+            document.getElementById('allRuns').checked = true;
+            
+            populateCategoryCheckboxes();
+            populateRunCheckboxes();
+            
+            document.getElementById('userModal').classList.add('show');
+        }
+
+        function editUser(username) {
+            const user = allUsers[username];
+            if (!user) return;
+
+            document.getElementById('modalTitle').textContent = 'Edit User: ' + username;
+            document.getElementById('editUsername').value = username;
+            document.getElementById('newUsername').value = username;
+            document.getElementById('newUsername').disabled = true;
+            document.getElementById('newPassword').value = '';
+            document.getElementById('newPassword').required = false;
+            document.getElementById('newPassword').placeholder = 'Leave blank to keep current';
+            document.getElementById('newRole').value = user.role;
+            document.getElementById('newCredits').value = user.credits === -1 ? '0' : user.credits;
+            document.getElementById('unlimitedCredits').checked = user.credits === -1;
+            document.getElementById('allCategories').checked = user.allowed_categories?.includes('*');
+            document.getElementById('allRuns').checked = user.allowed_runs?.includes('*');
+
+            populateCategoryCheckboxes(user.allowed_categories);
+            populateRunCheckboxes(user.allowed_runs);
+
+            document.getElementById('userModal').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('userModal').classList.remove('show');
+        }
+
+        function toggleUnlimited() {
+            const checkbox = document.getElementById('unlimitedCredits');
+            const input = document.getElementById('newCredits');
+            if (checkbox.checked) {
+                input.value = '-1';
+                input.disabled = true;
+            } else {
+                input.value = '5';
+                input.disabled = false;
+            }
+        }
+
+        function toggleAllCategories() {
+            const allChecked = document.getElementById('allCategories').checked;
+            document.querySelectorAll('#categoryCheckboxes input[type="checkbox"]').forEach(cb => {
+                cb.checked = allChecked;
+                cb.disabled = allChecked;
+            });
+        }
+
+        function toggleAllRuns() {
+            const allChecked = document.getElementById('allRuns').checked;
+            document.querySelectorAll('#runCheckboxes input[type="checkbox"]').forEach(cb => {
+                cb.checked = allChecked;
+                cb.disabled = allChecked;
+            });
+        }
+
+        function populateCategoryCheckboxes(selected = ['*']) {
+            const container = document.getElementById('categoryCheckboxes');
+            const isAll = selected?.includes('*');
+            container.innerHTML = allCategories.map(cat => `
+                <label class="checkbox-group">
+                    <input type="checkbox" value="${cat}" ${isAll || selected?.includes(cat) ? 'checked' : ''} ${isAll ? 'disabled' : ''}>
+                    <span>${cat}</span>
+                </label>
+            `).join('');
+        }
+
+        function populateRunCheckboxes(selected = ['*']) {
+            const container = document.getElementById('runCheckboxes');
+            const isAll = selected?.includes('*');
+            container.innerHTML = allRuns.slice(0, 20).map(run => `
+                <label class="checkbox-group">
+                    <input type="checkbox" value="${run.key}" ${isAll || selected?.includes(run.key) ? 'checked' : ''} ${isAll ? 'disabled' : ''}>
+                    <span>${run.name}</span>
+                </label>
+            `).join('');
+            
+            if (allRuns.length > 20) {
+                container.innerHTML += `<p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">+ ${allRuns.length - 20} more runs...</p>`;
+            }
+        }
+
+        // Form submission
+        document.getElementById('userForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const editUsername = document.getElementById('editUsername').value;
+            const isEdit = !!editUsername;
+
+            const userData = {
+                username: document.getElementById('newUsername').value,
+                role: document.getElementById('newRole').value,
+                credits: document.getElementById('unlimitedCredits').checked ? -1 : parseInt(document.getElementById('newCredits').value),
+                allowed_categories: document.getElementById('allCategories').checked ? ['*'] : 
+                    Array.from(document.querySelectorAll('#categoryCheckboxes input:checked')).map(cb => cb.value),
+                allowed_runs: document.getElementById('allRuns').checked ? ['*'] : 
+                    Array.from(document.querySelectorAll('#runCheckboxes input:checked')).map(cb => cb.value)
+            };
+
+            const password = document.getElementById('newPassword').value;
+            if (password) {
+                userData.password = password;
+            }
+
+            try {
+                const url = isEdit ? `/api/admin/users/${editUsername}` : '/api/admin/users';
+                const method = isEdit ? 'PUT' : 'POST';
+
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(userData)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast(isEdit ? 'User updated successfully!' : 'User created successfully!');
+                    closeModal();
+                    loadUsers();
+                } else {
+                    showToast(data.error || 'Failed to save user', true);
+                }
+            } catch (error) {
+                showToast('Network error', true);
+            }
+        });
+
+        async function deleteUser(username) {
+            if (!confirm(`Are you sure you want to delete user "${username}"?`)) return;
+
+            try {
+                const response = await fetch(`/api/admin/users/${username}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showToast('User deleted successfully!');
+                    loadUsers();
+                } else {
+                    showToast(data.error || 'Failed to delete user', true);
+                }
+            } catch (error) {
+                showToast('Network error', true);
+            }
+        }
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast' + (isError ? ' error' : '');
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+    </script>
+</body>
+</html>

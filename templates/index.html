@@ -48,7 +48,81 @@
         .header-text h1 { font-family: 'Space Mono', monospace; font-size: 1.5rem; color: var(--accent-cyan); }
         .header-text p { color: var(--text-secondary); font-size: 0.8rem; }
 
-        .view-toggle { display: flex; gap: 0.5rem; margin-left: auto; }
+        /* User Info Bar */
+        .user-info-bar {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            margin-left: auto;
+            margin-right: 1.5rem;
+        }
+
+        .credits-display {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: linear-gradient(135deg, rgba(200, 255, 0, 0.15), rgba(166, 226, 46, 0.1));
+            border: 1px solid rgba(200, 255, 0, 0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 25px;
+            font-family: 'Space Mono', monospace;
+        }
+
+        .credits-icon { font-size: 1.1rem; }
+        .credits-label { 
+            font-size: 0.75rem; 
+            color: var(--text-secondary); 
+            text-transform: uppercase;
+        }
+        .credits-value { 
+            font-size: 1rem; 
+            font-weight: 700; 
+            color: var(--accent-lime);
+        }
+        .credits-value.low { color: var(--accent-orange); }
+        .credits-value.empty { color: var(--accent-red); }
+
+        .user-menu {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .user-name {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .header-btn {
+            padding: 0.4rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .admin-btn {
+            background: rgba(174, 129, 255, 0.2);
+            color: #ae81ff;
+            border: 1px solid rgba(174, 129, 255, 0.3);
+        }
+
+        .admin-btn:hover {
+            background: rgba(174, 129, 255, 0.3);
+        }
+
+        .logout-btn {
+            background: rgba(249, 38, 114, 0.1);
+            color: var(--accent-red);
+            border: 1px solid rgba(249, 38, 114, 0.3);
+        }
+
+        .logout-btn:hover {
+            background: rgba(249, 38, 114, 0.2);
+        }
+
+        .view-toggle { display: flex; gap: 0.5rem; }
         .view-btn {
             padding: 0.5rem 1rem;
             background: var(--bg-input);
@@ -1022,6 +1096,20 @@
                 <h1>BEHAVIORAL GRAPH</h1>
                 <p>MIDG Clickstream Analysis</p>
             </div>
+            <div class="user-info-bar">
+                <div class="credits-display" id="creditsDisplay">
+                    <span class="credits-icon">💳</span>
+                    <span class="credits-label">Credits:</span>
+                    <span class="credits-value" id="creditsValue">{{ 'Unlimited' if credits == -1 else credits }}</span>
+                </div>
+                <div class="user-menu">
+                    <span class="user-name">👤 {{ username }}</span>
+                    {% if role == 'admin' %}
+                    <a href="/admin" class="header-btn admin-btn">🔐 Admin</a>
+                    {% endif %}
+                    <a href="/logout" class="header-btn logout-btn">Logout</a>
+                </div>
+            </div>
             <div class="view-toggle">
                 <button class="view-btn active" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
                 <button class="view-btn" id="dashboardViewBtn" onclick="showDashboardView()">📊 Dashboard</button>
@@ -1704,11 +1792,33 @@
                 const data = await response.json();
                 if (response.ok) {
                     currentJobId = data.job_id;
+                    // Update credits display
+                    if (data.credits_left !== undefined) {
+                        updateCreditsDisplay(data.credits_left);
+                    }
                     showCurrentJob();
                     startPolling();
                     loadJobs();
-                } else { alert(data.error || 'Failed'); }
+                } else { 
+                    if (response.status === 403 && data.credits_left === 0) {
+                        alert('❌ No credits remaining!\n\nPlease contact an administrator to get more credits.');
+                        updateCreditsDisplay(0);
+                    } else {
+                        alert(data.error || 'Failed'); 
+                    }
+                }
             } catch (error) { alert('Network error: ' + error.message); }
+        }
+
+        function updateCreditsDisplay(credits) {
+            const creditsValue = document.getElementById('creditsValue');
+            if (credits === -1) {
+                creditsValue.textContent = 'Unlimited';
+                creditsValue.className = 'credits-value';
+            } else {
+                creditsValue.textContent = credits;
+                creditsValue.className = 'credits-value' + (credits <= 1 ? ' low' : '') + (credits === 0 ? ' empty' : '');
+            }
         }
 
         function showCurrentJob() {

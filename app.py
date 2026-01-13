@@ -3,7 +3,7 @@
 Behavioral Graph Web Application
 ================================
 A Flask-based web interface for the BG.py behavioral analysis pipeline.
-Password protected with basic authentication.
+Session-based authentication with user credits and admin portal.
 Includes S3 caching for existing results.
 """
 
@@ -15,9 +15,11 @@ import threading
 import traceback
 import re
 import io
+import hashlib
+import secrets
 from datetime import datetime
 from functools import wraps
-from flask import Flask, render_template, request, jsonify, send_file, Response
+from flask import Flask, render_template, request, jsonify, send_file, Response, redirect, url_for, session
 from flask_cors import CORS
 import pandas as pd
 import boto3
@@ -27,6 +29,7 @@ from botocore.exceptions import ClientError, NoCredentialsError
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 CORS(app)
 
 # ============================================================================
@@ -35,6 +38,7 @@ CORS(app)
 
 S3_BUCKET = 'dashboard-inputs'
 S3_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
 
 # Initialize S3 client
 try:
@@ -49,28 +53,191 @@ except Exception as e:
     s3_client = None
 
 # ============================================================================
-# AUTHENTICATION
+# USER MANAGEMENT
 # ============================================================================
 
-USERNAME = os.environ.get('APP_USERNAME', 'admin')
-PASSWORD = os.environ.get('APP_PASSWORD', 'midgenow!2')
+def hash_password(password, salt=None):
+    """Hash a password with PBKDF2."""
+    if salt is None:
+        salt = secrets.token_hex(16)
+    pwd_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 600000)
+    return f"pbkdf2:sha256:600000${salt}${pwd_hash.hex()}"
 
-def check_auth(username, password):
-    return username == USERNAME and password == PASSWORD
+def verify_password(stored_hash, password):
+    """Verify a password against its hash."""
+    try:
+        parts = stored_hash.split('$')
+        if len(parts) != 3:
+            return False
+        salt = parts[1]
+        stored_pwd_hash = parts[2]
+        computed_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 600000)
+        return computed_hash.hex() == stored_pwd_hash
+    except Exception:
+        return False
 
-def authenticate():
-    return Response(
-        'Access denied. Please provide valid credentials.',
-        401,
-        {'WWW-Authenticate': 'Basic realm="Behavioral Graph Access"'}
-    )
+def load_users():
+    """Load users from JSON file."""
+    try:
+        if os.path.exists(USERS_FILE):
+            with open(USERS_FILE, 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Error loading users: {e}")
+    
+    # Return default structure if file doesn't exist
+    return {
+        "users": {
+            "admin": {
+                "password_hash": hash_password("midgenow!2"),
+                "role": "admin",
+                "credits": -1,
+                "credits_used": 0,
+                "created_at": datetime.now().isoformat(),
+                "last_login": None,
+                "allowed_categories": ["*"],
+                "allowed_runs": ["*"]
+            }
+        },
+        "categories": {},
+        "runs": {}
+    }
+
+def save_users(data):
+    """Save users to JSON file."""
+    try:
+        with open(USERS_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"Error saving users: {e}")
+        return False
+
+def init_users():
+    """Initialize users file with default users if it doesn't exist or has placeholder passwords."""
+    data = load_users()
+    changed = False
+    
+    # Check for admin user
+    if 'admin' not in data['users']:
+        data['users']['admin'] = {
+            "password_hash": hash_password("midgenow!2"),
+            "role": "admin",
+            "credits": -1,
+            "credits_used": 0,
+            "created_at": datetime.now().isoformat(),
+            "last_login": None,
+            "allowed_categories": ["*"],
+            "allowed_runs": ["*"]
+        }
+        changed = True
+    elif 'placeholder' in data['users']['admin'].get('password_hash', ''):
+        data['users']['admin']['password_hash'] = hash_password("midgenow!2")
+        changed = True
+    
+    # Check for liz user
+    if 'liz' not in data['users']:
+        data['users']['liz'] = {
+            "password_hash": hash_password("ZestyBuffalo"),
+            "role": "user",
+            "credits": 5,
+            "credits_used": 0,
+            "created_at": datetime.now().isoformat(),
+            "last_login": None,
+            "allowed_categories": ["*"],
+            "allowed_runs": ["*"]
+        }
+        changed = True
+    elif 'placeholder' in data['users']['liz'].get('password_hash', ''):
+        data['users']['liz']['password_hash'] = hash_password("ZestyBuffalo")
+        changed = True
+    
+    # Check for jessie user
+    if 'jessie' not in data['users']:
+        data['users']['jessie'] = {
+            "password_hash": hash_password("SpicySriracha"),
+            "role": "user",
+            "credits": 5,
+            "credits_used": 0,
+            "created_at": datetime.now().isoformat(),
+            "last_login": None,
+            "allowed_categories": ["*"],
+            "allowed_runs": ["*"]
+        }
+        changed = True
+    elif 'placeholder' in data['users']['jessie'].get('password_hash', ''):
+        data['users']['jessie']['password_hash'] = hash_password("SpicySriracha")
+        changed = True
+    
+    if changed:
+        save_users(data)
+    
+    return data
+
+# Initialize users on startup
+init_users()
+
+def get_current_user():
+    """Get current logged-in user data."""
+    if 'username' not in session:
+        return None
+    data = load_users()
+    return data['users'].get(session['username'])
+
+def check_user_credits(username):
+    """Check if user has credits remaining. Returns (has_credits, credits_left)."""
+    data = load_users()
+    user = data['users'].get(username)
+    if not user:
+        return False, 0
+    
+    # -1 means unlimited
+    if user['credits'] == -1:
+        return True, -1
+    
+    return user['credits'] > 0, user['credits']
+
+def consume_credit(username):
+    """Consume one credit from user. Returns True if successful."""
+    data = load_users()
+    user = data['users'].get(username)
+    if not user:
+        return False
+    
+    # -1 means unlimited
+    if user['credits'] == -1:
+        user['credits_used'] = user.get('credits_used', 0) + 1
+        save_users(data)
+        return True
+    
+    if user['credits'] <= 0:
+        return False
+    
+    user['credits'] -= 1
+    user['credits_used'] = user.get('credits_used', 0) + 1
+    save_users(data)
+    return True
+
+# ============================================================================
+# AUTHENTICATION DECORATORS
+# ============================================================================
 
 def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        auth = request.authorization
-        if not auth or not check_auth(auth.username, auth.password):
-            return authenticate()
+        if 'username' not in session:
+            return redirect(url_for('login_page'))
+        return f(*args, **kwargs)
+    return decorated
+
+def requires_admin(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'username' not in session:
+            return redirect(url_for('login_page'))
+        user = get_current_user()
+        if not user or user.get('role') != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
         return f(*args, **kwargs)
     return decorated
 
@@ -284,10 +451,190 @@ def upload_to_s3(file_path, brand_name, start_date, end_date):
 # ROUTES
 # ============================================================================
 
+# ============================================================================
+# LOGIN / LOGOUT ROUTES
+# ============================================================================
+
+@app.route('/login', methods=['GET', 'POST'])
+def login_page():
+    if request.method == 'GET':
+        # If already logged in, redirect to home
+        if 'username' in session:
+            return redirect(url_for('index'))
+        return render_template('login.html')
+    
+    # POST - handle login
+    try:
+        data = request.json
+        username = data.get('username', '').strip().lower()
+        password = data.get('password', '')
+        
+        users_data = load_users()
+        user = users_data['users'].get(username)
+        
+        if not user:
+            return jsonify({'success': False, 'error': 'Invalid username or password'})
+        
+        if not verify_password(user['password_hash'], password):
+            return jsonify({'success': False, 'error': 'Invalid username or password'})
+        
+        # Update last login
+        user['last_login'] = datetime.now().isoformat()
+        save_users(users_data)
+        
+        # Set session
+        session['username'] = username
+        session['role'] = user.get('role', 'user')
+        
+        redirect_url = '/admin' if user.get('role') == 'admin' else '/'
+        return jsonify({'success': True, 'redirect': redirect_url})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login_page'))
+
+@app.route('/admin')
+@requires_admin
+def admin_portal():
+    return render_template('admin.html')
+
+# ============================================================================
+# ADMIN API ROUTES
+# ============================================================================
+
+@app.route('/api/admin/users', methods=['GET'])
+@requires_admin
+def get_all_users():
+    """Get all users (without password hashes)."""
+    data = load_users()
+    safe_users = {}
+    for username, user in data['users'].items():
+        safe_users[username] = {k: v for k, v in user.items() if k != 'password_hash'}
+    return jsonify({'success': True, 'users': safe_users})
+
+@app.route('/api/admin/users', methods=['POST'])
+@requires_admin
+def create_user():
+    """Create a new user."""
+    try:
+        req_data = request.json
+        username = req_data.get('username', '').strip().lower()
+        password = req_data.get('password', '')
+        
+        if not username or not password:
+            return jsonify({'success': False, 'error': 'Username and password required'})
+        
+        if len(username) < 2:
+            return jsonify({'success': False, 'error': 'Username must be at least 2 characters'})
+        
+        data = load_users()
+        
+        if username in data['users']:
+            return jsonify({'success': False, 'error': 'Username already exists'})
+        
+        data['users'][username] = {
+            'password_hash': hash_password(password),
+            'role': req_data.get('role', 'user'),
+            'credits': req_data.get('credits', 5),
+            'credits_used': 0,
+            'created_at': datetime.now().isoformat(),
+            'last_login': None,
+            'allowed_categories': req_data.get('allowed_categories', ['*']),
+            'allowed_runs': req_data.get('allowed_runs', ['*'])
+        }
+        
+        save_users(data)
+        return jsonify({'success': True, 'message': f'User {username} created'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/users/<username>', methods=['PUT'])
+@requires_admin
+def update_user(username):
+    """Update an existing user."""
+    try:
+        req_data = request.json
+        data = load_users()
+        
+        if username not in data['users']:
+            return jsonify({'success': False, 'error': 'User not found'})
+        
+        user = data['users'][username]
+        
+        # Update allowed fields
+        if 'password' in req_data and req_data['password']:
+            user['password_hash'] = hash_password(req_data['password'])
+        if 'role' in req_data:
+            user['role'] = req_data['role']
+        if 'credits' in req_data:
+            user['credits'] = req_data['credits']
+        if 'allowed_categories' in req_data:
+            user['allowed_categories'] = req_data['allowed_categories']
+        if 'allowed_runs' in req_data:
+            user['allowed_runs'] = req_data['allowed_runs']
+        
+        save_users(data)
+        return jsonify({'success': True, 'message': f'User {username} updated'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/users/<username>', methods=['DELETE'])
+@requires_admin
+def delete_user(username):
+    """Delete a user."""
+    try:
+        if username == 'admin':
+            return jsonify({'success': False, 'error': 'Cannot delete admin user'})
+        
+        data = load_users()
+        
+        if username not in data['users']:
+            return jsonify({'success': False, 'error': 'User not found'})
+        
+        del data['users'][username]
+        save_users(data)
+        return jsonify({'success': True, 'message': f'User {username} deleted'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/user/info')
+@requires_auth
+def get_user_info():
+    """Get current user info including credits."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    return jsonify({
+        'success': True,
+        'username': session['username'],
+        'role': user.get('role', 'user'),
+        'credits': user.get('credits', 0),
+        'credits_used': user.get('credits_used', 0),
+        'allowed_categories': user.get('allowed_categories', ['*']),
+        'allowed_runs': user.get('allowed_runs', ['*'])
+    })
+
+# ============================================================================
+# MAIN ROUTES
+# ============================================================================
+
 @app.route('/')
 @requires_auth
 def index():
-    return render_template('index.html')
+    user = get_current_user()
+    return render_template('index.html', 
+                           username=session.get('username'),
+                           role=user.get('role', 'user') if user else 'user',
+                           credits=user.get('credits', 0) if user else 0,
+                           credits_used=user.get('credits_used', 0) if user else 0)
 
 
 @app.route('/api/health')
@@ -462,6 +809,16 @@ def get_job_data(job_id):
 def submit_analysis():
     """Submit a new behavioral graph analysis job."""
     try:
+        # Check user credits first
+        username = session.get('username')
+        has_credits, credits_left = check_user_credits(username)
+        
+        if not has_credits:
+            return jsonify({
+                'error': 'No credits remaining. Please contact an administrator to get more credits.',
+                'credits_left': 0
+            }), 403
+        
         data = request.json
         
         # Validate required fields (support both old and new date field names)
@@ -587,10 +944,17 @@ def submit_analysis():
         thread.daemon = True
         thread.start()
         
+        # Consume credit for this run
+        consume_credit(username)
+        
+        # Get updated credits
+        _, credits_left = check_user_credits(username)
+        
         return jsonify({
             'job_id': job_id,
             'message': 'Analysis job submitted successfully',
             'status': 'queued',
+            'credits_left': credits_left,
             'brands_count': len(brands)
         })
         
