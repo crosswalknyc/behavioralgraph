@@ -1,7 +1,7 @@
 {
   "users": {
     "admin": {
-      "password_hash": "pbkdf2:sha256:600000$midgenow2$a1b2c3d4e5f6",
+      "password_hash": "pbkdf2:sha256:600000$2c2c1ae32a0ae51ba02c72c8ca1ccd2e$05daae0b1cf8cc5f16974bdcdbd44f10123d76b7c94e3ccaff48ca8737b41308",
       "role": "admin",
       "credits": -1,
       "credits_used": 0,
@@ -11,7 +11,7 @@
       "allowed_runs": ["*"]
     },
     "liz": {
-      "password_hash": "pbkdf2:sha256:600000$ZestyBuffalo$placeholder",
+      "password_hash": "pbkdf2:sha256:600000$3b0bd76741181dd7c3d60b97c41f1e29$6c1833b1a4afbd8d2f7995a97315b3d404f0c5d987442682a08dd6e196bdf9a2",
       "role": "enterprise",
       "credits": 5,
       "credits_used": 0,
@@ -21,7 +21,7 @@
       "allowed_runs": ["*"]
     },
     "jessie": {
-      "password_hash": "pbkdf2:sha256:600000$SpicySriracha$placeholder",
+      "password_hash": "pbkdf2:sha256:600000$b17a316556e1fba5083620318ef6c7e4$c157191f787d6ac5be36430e800d77817c98c7788e87f2d65676fea29ed58b82",
       "role": "enterprise",
       "credits": 5,
       "credits_used": 0,

@@ -113,6 +113,14 @@ def save_users(data):
         print(f"Error saving users: {e}")
         return False
 
+def is_valid_hash(hash_str):
+    """Check if a password hash looks valid (has proper structure and length)."""
+    if not hash_str or 'placeholder' in hash_str:
+        return False
+    parts = hash_str.split('$')
+    # Valid hash should have 3 parts and the hash part should be 64 chars (SHA256 hex)
+    return len(parts) == 3 and len(parts[2]) == 64
+
 def init_users():
     """Initialize users file with default users if it doesn't exist or has placeholder passwords."""
     data = load_users()
@@ -131,7 +139,7 @@ def init_users():
             "allowed_runs": ["*"]
         }
         changed = True
-    elif 'placeholder' in data['users']['admin'].get('password_hash', ''):
+    elif not is_valid_hash(data['users']['admin'].get('password_hash', '')):
         data['users']['admin']['password_hash'] = hash_password("midgenow!2")
         changed = True
     
@@ -148,7 +156,7 @@ def init_users():
             "allowed_runs": ["*"]
         }
         changed = True
-    elif 'placeholder' in data['users']['liz'].get('password_hash', ''):
+    elif not is_valid_hash(data['users']['liz'].get('password_hash', '')):
         data['users']['liz']['password_hash'] = hash_password("ZestyBuffalo")
         data['users']['liz']['role'] = "enterprise"
         changed = True
@@ -166,7 +174,7 @@ def init_users():
             "allowed_runs": ["*"]
         }
         changed = True
-    elif 'placeholder' in data['users']['jessie'].get('password_hash', ''):
+    elif not is_valid_hash(data['users']['jessie'].get('password_hash', '')):
         data['users']['jessie']['password_hash'] = hash_password("SpicySriracha")
         data['users']['jessie']['role'] = "enterprise"
         changed = True
