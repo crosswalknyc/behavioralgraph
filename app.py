@@ -448,9 +448,10 @@ def check_s3_for_existing(brand_search, start_date, end_date):
     
     return exact_match, similar_files
 
-def validate_demographics_consistency(new_demographics, existing_demographics, tolerance=5):
+def validate_demographics_consistency(new_demographics, existing_demographics, tolerance=2):
     """
     Check if new demographics are within tolerance of existing demographics.
+    Tolerance is +/- 2% to ensure consistency with previous runs.
     Returns: (is_valid, discrepancies)
     """
     discrepancies = []
@@ -1281,15 +1282,15 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                         new_sample_size = extract_sample_size_from_csv(new_csv_content)
                         
                         is_valid, discrepancies = validate_demographics_consistency(
-                            new_demographics, reference_demographics, tolerance=5
+                            new_demographics, reference_demographics, tolerance=2
                         )
                         
-                        # Check sample size tolerance (2-5%)
+                        # Check sample size tolerance (+/- 2%)
                         sample_valid = True
                         sample_diff = 0
                         if reference_sample_size and new_sample_size:
                             sample_diff = abs(new_sample_size - reference_sample_size) / reference_sample_size * 100
-                            sample_valid = sample_diff <= 5
+                            sample_valid = sample_diff <= 2
                         
                         demographic_validation = {
                             'demographics_valid': is_valid,

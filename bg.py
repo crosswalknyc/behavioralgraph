@@ -8702,15 +8702,15 @@ def load_previous_run_data(file_path):
 def ensure_demographic_consistency(df_demo, previous_demo_lookup):
     """
     Ensure demographic percentages are consistent with previous run (small fluctuations only).
-    Adjusts new demographics to be within ±2.3% of previous values.
-    Uses constrained renormalization to maintain ±2.3% rule while getting close to 100% totals.
+    Adjusts new demographics to be within ±2% of previous values.
+    Uses constrained renormalization to maintain ±2% rule while getting close to 100% totals.
     """
     if not previous_demo_lookup:
         return df_demo
     
-    print("🔄 Ensuring demographic consistency with previous run (±2.3% rule)...")
+    print("🔄 Ensuring demographic consistency with previous run (±2% rule)...")
     
-    # Process each category separately to maintain ±2.3% constraints
+    # Process each category separately to maintain ±2% constraints
     for category in df_demo['Column'].unique():
         category_mask = df_demo['Column'] == category
         category_data = df_demo[category_mask].copy()
@@ -8720,7 +8720,7 @@ def ensure_demographic_consistency(df_demo, previous_demo_lookup):
         
         print(f"🔧 Processing {category} category...")
         
-        # Apply ±2.3% constraints to each value in this category
+        # Apply ±2% constraints to each value in this category
         adjusted_count = 0
         constraints = {}  # Store the allowed ranges for each value
         
@@ -8731,8 +8731,8 @@ def ensure_demographic_consistency(df_demo, previous_demo_lookup):
                 previous_pct = previous_demo_lookup[key]
                 current_pct = float(row['Percentage']) if isinstance(row['Percentage'], str) else row['Percentage']
                 
-                # Calculate allowed range (±2.3%) per new requirements
-                max_change = 2.3
+                # Calculate allowed range (±2%) per requirements
+                max_change = 2.0
                 min_allowed = max(0.01, previous_pct - max_change)
                 max_allowed = min(98.0, previous_pct + max_change)
                 
@@ -9809,7 +9809,7 @@ def enforce_final_difference_caps(df_final, previous_demo_lookup, previous_behav
                 continue
             
             prev_pct = all_previous_lookup.get(key, 0.0)
-            # Use tighter ±2.3 % for demographics, wider ±6.2 % for behavioral
+            # Use tighter ±2% for demographics, wider ±6% for behavioral
             if category.upper() in [
                 "GENDER", "AGE", "ETHNICITY", "INCOME", "EDUCATION", "RELATIONSHIP",
                 "SEXUAL_ORIENTATION", "PARENTAL_STATUS", "LOCATION", "OCCUPATION"
