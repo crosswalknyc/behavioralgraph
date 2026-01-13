@@ -1723,12 +1723,14 @@
             csvData.forEach(row => {
                 const category = (row.Column || '').toUpperCase();
                 const value = row.Value || '';
-                const pct = parseFloat(row['Brand Penetration (Row)'] || row['Category Share'] || 0);
-                const rawNumbers = parseInt(row['Original Raw Numbers'] || row['Category Share'] || 0);
+                const pct = parseFloat(row['Brand Penetration (Row)'] || 0);
+                const catShare = parseFloat(row['Category Share'] || 0);
+                const rawNumbers = parseInt(row['Original Raw Numbers'] || 0);
                 const usProjection = parseInt(row['US Gen Pop Projection'] || 0);
                 
-                // Calculate Gen Pop % and Index
-                const genPopPct = usProjection > 0 ? (usProjection / US_POPULATION) * 100 : 0;
+                // For behavioral items, Category Share IS the Gen Pop percentage
+                // For demographics, calculate from US Gen Pop Projection
+                const genPopPct = catShare > 0 ? catShare : (usProjection > 0 ? (usProjection / US_POPULATION) * 100 : 0);
                 const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
 
                 // Sample size is in Original Raw Numbers OR Category Share column for SAMPLE SIZE row
