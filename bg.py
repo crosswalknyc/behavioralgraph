@@ -775,7 +775,10 @@ def connect_snowflake():
                 database=database,
                 schema=schema,
                 role=role,
-                authenticator='PROGRAMMATIC_ACCESS_TOKEN'
+                authenticator='PROGRAMMATIC_ACCESS_TOKEN',
+                # SSL/OCSP settings to handle certificate issues
+                insecure_mode=False,
+                ocsp_fail_open=True
             )
             if not SILENCE_VERBOSE_OUTPUT:
                 print("✅ Connected using programmatic access token")
@@ -794,7 +797,10 @@ def connect_snowflake():
                 warehouse=warehouse,
                 database=database,
                 schema=schema,
-                role=role
+                role=role,
+                # SSL/OCSP settings to handle certificate issues
+                insecure_mode=False,
+                ocsp_fail_open=True
             )
             if not SILENCE_VERBOSE_OUTPUT:
                 print("✅ Connected using password authentication")
