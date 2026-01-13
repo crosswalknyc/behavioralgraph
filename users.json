@@ -12,7 +12,7 @@
     },
     "liz": {
       "password_hash": "pbkdf2:sha256:600000$ZestyBuffalo$placeholder",
-      "role": "user",
+      "role": "enterprise",
       "credits": 5,
       "credits_used": 0,
       "created_at": "2024-01-13T00:00:00",
@@ -22,7 +22,7 @@
     },
     "jessie": {
       "password_hash": "pbkdf2:sha256:600000$SpicySriracha$placeholder",
-      "role": "user",
+      "role": "enterprise",
       "credits": 5,
       "credits_used": 0,
       "created_at": "2024-01-13T00:00:00",

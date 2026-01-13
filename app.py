@@ -139,7 +139,7 @@ def init_users():
     if 'liz' not in data['users']:
         data['users']['liz'] = {
             "password_hash": hash_password("ZestyBuffalo"),
-            "role": "user",
+            "role": "enterprise",
             "credits": 5,
             "credits_used": 0,
             "created_at": datetime.now().isoformat(),
@@ -150,13 +150,14 @@ def init_users():
         changed = True
     elif 'placeholder' in data['users']['liz'].get('password_hash', ''):
         data['users']['liz']['password_hash'] = hash_password("ZestyBuffalo")
+        data['users']['liz']['role'] = "enterprise"
         changed = True
     
     # Check for jessie user
     if 'jessie' not in data['users']:
         data['users']['jessie'] = {
             "password_hash": hash_password("SpicySriracha"),
-            "role": "user",
+            "role": "enterprise",
             "credits": 5,
             "credits_used": 0,
             "created_at": datetime.now().isoformat(),
@@ -167,6 +168,7 @@ def init_users():
         changed = True
     elif 'placeholder' in data['users']['jessie'].get('password_hash', ''):
         data['users']['jessie']['password_hash'] = hash_password("SpicySriracha")
+        data['users']['jessie']['role'] = "enterprise"
         changed = True
     
     if changed:

@@ -122,6 +122,17 @@
             background: rgba(249, 38, 114, 0.2);
         }
 
+        .user-role-badge {
+            padding: 0.2rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .user-role-badge.admin { background: rgba(174, 129, 255, 0.2); color: #ae81ff; }
+        .user-role-badge.enterprise { background: rgba(253, 151, 31, 0.2); color: #fd971f; }
+        .user-role-badge.user { background: rgba(90, 154, 217, 0.2); color: var(--accent-blue); }
+
         .view-toggle { display: flex; gap: 0.5rem; }
         .view-btn {
             padding: 0.5rem 1rem;
@@ -136,6 +147,14 @@
 
         #formView { display: block; }
         #dashboardView { display: none; }
+        #adminView { display: none; }
+        
+        #adminView iframe {
+            width: 100%;
+            height: calc(100vh - 120px);
+            border: none;
+            border-radius: 12px;
+        }
 
         /* Form Styles */
         .main-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 1.5rem; }
@@ -1104,15 +1123,16 @@
                 </div>
                 <div class="user-menu">
                     <span class="user-name">👤 {{ username }}</span>
-                    {% if role == 'admin' %}
-                    <a href="/admin" class="header-btn admin-btn">🔐 Admin</a>
-                    {% endif %}
+                    <span class="user-role-badge {{ role }}">{{ role }}</span>
                     <a href="/logout" class="header-btn logout-btn">Logout</a>
                 </div>
             </div>
             <div class="view-toggle">
                 <button class="view-btn active" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
                 <button class="view-btn" id="dashboardViewBtn" onclick="showDashboardView()">📊 Dashboard</button>
+                {% if role == 'admin' %}
+                <button class="view-btn" id="adminViewBtn" onclick="showAdminView()">🔐 Admin</button>
+                {% endif %}
             </div>
         </header>
 
@@ -1504,6 +1524,13 @@
                 </div>
             </div>
         </div>
+
+        <!-- ADMIN VIEW (only for admin users) -->
+        {% if role == 'admin' %}
+        <div id="adminView">
+            <iframe src="/admin" id="adminFrame"></iframe>
+        </div>
+        {% endif %}
     </div>
 
     <script>
@@ -1527,15 +1554,34 @@
         function showFormView() {
             document.getElementById('formView').style.display = 'block';
             document.getElementById('dashboardView').style.display = 'none';
+            const adminView = document.getElementById('adminView');
+            if (adminView) adminView.style.display = 'none';
             document.getElementById('formViewBtn').classList.add('active');
             document.getElementById('dashboardViewBtn').classList.remove('active');
+            const adminBtn = document.getElementById('adminViewBtn');
+            if (adminBtn) adminBtn.classList.remove('active');
         }
 
         function showDashboardView() {
             document.getElementById('formView').style.display = 'none';
             document.getElementById('dashboardView').style.display = 'block';
+            const adminView = document.getElementById('adminView');
+            if (adminView) adminView.style.display = 'none';
             document.getElementById('formViewBtn').classList.remove('active');
             document.getElementById('dashboardViewBtn').classList.add('active');
+            const adminBtn = document.getElementById('adminViewBtn');
+            if (adminBtn) adminBtn.classList.remove('active');
+        }
+
+        function showAdminView() {
+            document.getElementById('formView').style.display = 'none';
+            document.getElementById('dashboardView').style.display = 'none';
+            const adminView = document.getElementById('adminView');
+            if (adminView) adminView.style.display = 'block';
+            document.getElementById('formViewBtn').classList.remove('active');
+            document.getElementById('dashboardViewBtn').classList.remove('active');
+            const adminBtn = document.getElementById('adminViewBtn');
+            if (adminBtn) adminBtn.classList.add('active');
             // Load profiles in sidebar when showing dashboard
             loadDashboardProfiles();
         }
