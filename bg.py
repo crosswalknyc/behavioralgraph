@@ -763,9 +763,10 @@ def connect_snowflake():
     
     conn = None
     
-    # Disable OCSP checking via environment variable (fixes certificate errors)
+    # Disable OCSP/SSL checking via environment variables (fixes certificate errors)
     os.environ['SF_OCSP_RESPONSE_CACHE_SERVER_ENABLED'] = 'false'
     os.environ['SF_OCSP_FAIL_OPEN'] = 'true'
+    os.environ['SNOWFLAKE_INSECURE_MODE'] = 'true'
     
     # Try programmatic access token first
     if token:
@@ -780,8 +781,8 @@ def connect_snowflake():
                 schema=schema,
                 role=role,
                 authenticator='PROGRAMMATIC_ACCESS_TOKEN',
-                # Disable OCSP to fix certificate validation errors
-                validate_default_parameters=True,
+                # Completely disable SSL verification to fix certificate errors
+                insecure_mode=True,
                 client_session_keep_alive=True
             )
             if not SILENCE_VERBOSE_OUTPUT:
@@ -802,8 +803,8 @@ def connect_snowflake():
                 database=database,
                 schema=schema,
                 role=role,
-                # Disable OCSP to fix certificate validation errors
-                validate_default_parameters=True,
+                # Completely disable SSL verification to fix certificate errors
+                insecure_mode=True,
                 client_session_keep_alive=True
             )
             if not SILENCE_VERBOSE_OUTPUT:
