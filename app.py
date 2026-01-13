@@ -376,14 +376,18 @@ def compare_demographics(existing_demos, tolerance_percent=5):
 def check_s3_for_existing(brand_search, start_date, end_date):
     """
     Check S3 bucket for existing results matching the brand and dates.
+    First checks filename for brand match, then checks metadata.
     Returns: (exact_match_file, similar_files_with_different_dates)
     """
     if not s3_client:
         return None, []
     
     normalized_brand = normalize_brand_for_search(brand_search)
+    search_lower = brand_search.lower().replace(' ', '_').replace('-', '_')
     exact_match = None
     similar_files = []
+    
+    print(f"🔍 Searching S3 for brand: '{brand_search}' (normalized: '{normalized_brand}', search: '{search_lower}')")
     
     try:
         # List all objects in the bucket
@@ -395,10 +399,27 @@ def check_s3_for_existing(brand_search, start_date, end_date):
                 if not key.endswith('.csv'):
                     continue
                 
-                # Check if filename contains the brand
-                filename_lower = key.lower()
-                if normalized_brand not in filename_lower and brand_search.lower() not in filename_lower:
+                # Skip system files
+                if key.startswith('system/'):
                     continue
+                
+                # Extract filename without extension and date portion
+                # Format: BrandName_MM_DD_YYYY_HH_MM.csv
+                filename = key.replace('.csv', '')
+                filename_lower = filename.lower()
+                
+                # Check if filename contains the brand (multiple matching strategies)
+                filename_match = (
+                    normalized_brand in filename_lower or 
+                    search_lower in filename_lower or
+                    brand_search.lower() in filename_lower or
+                    brand_search.lower().replace(' ', '') in filename_lower.replace('_', '')
+                )
+                
+                if not filename_match:
+                    continue
+                
+                print(f"📁 Found matching file: {key}")
                 
                 # Download and check the file's metadata
                 try:
@@ -406,35 +427,43 @@ def check_s3_for_existing(brand_search, start_date, end_date):
                     csv_content = response['Body'].read().decode('utf-8')
                     metadata = parse_metadata_from_csv(csv_content)
                     
+                    # Get dates from metadata or try to parse from filename
+                    file_start = ''
+                    file_end = ''
                     if metadata:
-                        file_brand = metadata.get('BRAND', '').lower()
                         file_start = metadata.get('SAMPLE_START', '')
                         file_end = metadata.get('SAMPLE_END', '')
-                        
-                        # Check for exact match (same brand AND same dates)
-                        if (normalized_brand in file_brand or brand_search.lower() in file_brand):
-                            if file_start == start_date and file_end == end_date:
-                                # Exact match!
-                                exact_match = {
-                                    'key': key,
-                                    'content': csv_content,
-                                    'metadata': metadata,
-                                    'demographics': extract_demographics_from_csv(csv_content),
-                                    'sample_size': extract_sample_size_from_csv(csv_content),
-                                    'last_modified': obj['LastModified'].isoformat()
-                                }
-                            else:
-                                # Same brand, different dates
-                                similar_files.append({
-                                    'key': key,
-                                    'content': csv_content,
-                                    'metadata': metadata,
-                                    'demographics': extract_demographics_from_csv(csv_content),
-                                    'sample_size': extract_sample_size_from_csv(csv_content),
-                                    'start_date': file_start,
-                                    'end_date': file_end,
-                                    'last_modified': obj['LastModified'].isoformat()
-                                })
+                    
+                    # Extract demographics and sample size
+                    demographics = extract_demographics_from_csv(csv_content)
+                    sample_size = extract_sample_size_from_csv(csv_content)
+                    
+                    print(f"   📊 Sample size: {sample_size}, Dates: {file_start} to {file_end}")
+                    
+                    # Check for exact date match
+                    if file_start == start_date and file_end == end_date:
+                        print(f"   ✅ EXACT match (same dates)")
+                        exact_match = {
+                            'key': key,
+                            'content': csv_content,
+                            'metadata': metadata,
+                            'demographics': demographics,
+                            'sample_size': sample_size,
+                            'last_modified': obj['LastModified'].isoformat()
+                        }
+                    else:
+                        # Same brand, different dates - use for consistency validation
+                        print(f"   📋 Similar match (different dates: {file_start}-{file_end} vs {start_date}-{end_date})")
+                        similar_files.append({
+                            'key': key,
+                            'content': csv_content,
+                            'metadata': metadata,
+                            'demographics': demographics,
+                            'sample_size': sample_size,
+                            'start_date': file_start,
+                            'end_date': file_end,
+                            'last_modified': obj['LastModified'].isoformat()
+                        })
                 except Exception as e:
                     print(f"Error reading {key}: {e}")
                     continue
@@ -446,6 +475,7 @@ def check_s3_for_existing(brand_search, start_date, end_date):
     except Exception as e:
         print(f"Unexpected error checking S3: {e}")
     
+    print(f"🔍 Search complete: exact_match={exact_match is not None}, similar_files={len(similar_files)}")
     return exact_match, similar_files
 
 def validate_demographics_consistency(new_demographics, existing_demographics, tolerance=2):
@@ -931,19 +961,31 @@ def submit_analysis():
         platform_name = data.get('platform_name', None) if is_listener_watcher else None
         previous_file = data.get('previous_file', None) if data.get('is_update', False) else None
         
-        # Get reference file for demographic consistency (from similar runs)
+        # Automatically search for similar files for demographic consistency
         reference_demographics = None
         reference_sample_size = None
-        if data.get('reference_file_key'):
-            try:
-                _, similar_files = check_s3_for_existing(brands[0], start_date, end_date)
-                for f in similar_files:
-                    if f['key'] == data['reference_file_key']:
-                        reference_demographics = f['demographics']
-                        reference_sample_size = f['sample_size']
-                        break
-            except:
-                pass
+        reference_file_key = None
+        
+        # Search S3 for existing runs with same brand
+        try:
+            print(f"🔍 Checking for existing runs of '{brands[0]}' for consistency validation...")
+            exact_match, similar_files = check_s3_for_existing(brands[0], start_date, end_date)
+            
+            # If there's a similar file (same brand, different dates), use it as reference
+            if similar_files:
+                # Use the most recent similar file as reference
+                similar_files.sort(key=lambda x: x.get('last_modified', ''), reverse=True)
+                reference_file = similar_files[0]
+                reference_file_key = reference_file['key']
+                reference_demographics = reference_file['demographics']
+                reference_sample_size = reference_file['sample_size']
+                print(f"📋 Found reference file: {reference_file_key}")
+                print(f"   Reference sample size: {reference_sample_size}")
+                print(f"   Will enforce ±2% consistency for demographics and sample size")
+            else:
+                print(f"📋 No previous runs found for '{brands[0]}' - will create baseline")
+        except Exception as e:
+            print(f"⚠️ Error checking for reference files: {e}")
         
         # Demographic filters - support both object format and individual fields
         filters = data.get('filters', {})
@@ -986,7 +1028,7 @@ def submit_analysis():
                   behavior_start, behavior_end, filters, skew_settings, 
                   is_genpop, purchasers_only, brand_category, 
                   include_frequency, is_listener_watcher, platform_name, previous_file,
-                  reference_demographics, reference_sample_size)
+                  reference_demographics, reference_sample_size, reference_file_key)
         )
         thread.daemon = True
         thread.start()
@@ -1227,7 +1269,8 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                  behavior_start, behavior_end, filters, skew_settings, 
                  is_genpop, purchasers_only, brand_category,
                  include_frequency=False, is_listener_watcher=False, platform_name=None, 
-                 previous_file_path=None, reference_demographics=None, reference_sample_size=None):
+                 previous_file_path=None, reference_demographics=None, reference_sample_size=None,
+                 reference_file_key=None):
     """Run the behavioral graph analysis pipeline with demographic consistency validation."""
     try:
         update_job_status(job_id, status='running', progress=5, message='Initializing...')
@@ -1240,6 +1283,26 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
             update_job_status(job_id, status='failed', error=f'Module import failed: {str(e)}')
             return
         
+        # If we have a reference file from S3, download it for consistency enforcement
+        actual_previous_file = previous_file_path
+        if reference_file_key and s3_client and not previous_file_path:
+            try:
+                update_job_status(job_id, progress=8, message='Loading reference file for consistency...')
+                print(f"📥 Downloading reference file: {reference_file_key}")
+                
+                # Download reference file to temp location
+                import tempfile
+                temp_dir = tempfile.gettempdir()
+                ref_filename = os.path.basename(reference_file_key)
+                ref_local_path = os.path.join(temp_dir, f"ref_{ref_filename}")
+                
+                s3_client.download_file(S3_BUCKET, reference_file_key, ref_local_path)
+                actual_previous_file = ref_local_path
+                print(f"✅ Reference file downloaded: {ref_local_path}")
+                print(f"   Will enforce ±2% consistency with this reference")
+            except Exception as e:
+                print(f"⚠️ Could not download reference file: {e}")
+        
         # Connect to Snowflake
         update_job_status(job_id, progress=15, message='Connecting to database...')
         
@@ -1251,7 +1314,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
         
         update_job_status(job_id, progress=25, message='Running analysis...')
         
-        # Run the full pipeline
+        # Run the full pipeline with reference file for consistency
         try:
             result_file = bg.run_full_pipeline(
                 conn=conn,
@@ -1265,7 +1328,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 skew_settings=skew_settings,
                 is_genpop=is_genpop,
                 purchasers_only=purchasers_only,
-                previous_file_path=previous_file_path,
+                previous_file_path=actual_previous_file,
                 brand_category=brand_category
             )
             
