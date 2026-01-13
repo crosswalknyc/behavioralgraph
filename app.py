@@ -53,6 +53,301 @@ except Exception as e:
     s3_client = None
 
 # ============================================================================
+# OPENAI INTEGRATION
+# ============================================================================
+
+try:
+    from openai import OpenAI
+    openai_client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
+    print("✅ OpenAI client initialized")
+except Exception as e:
+    print(f"Warning: OpenAI client initialization failed: {e}")
+    openai_client = None
+
+def generate_ai_insights(profile_data):
+    """Generate AI-powered insights from profile data."""
+    if not openai_client:
+        return {"error": "OpenAI not configured"}
+    
+    try:
+        # Prepare data summary for GPT
+        demographics = profile_data.get('demographics', {})
+        behavioral = profile_data.get('behavioral', {})
+        sample_size = profile_data.get('sampleSize', 0)
+        profile_name = profile_data.get('name', 'This audience')
+        
+        # Build context
+        demo_summary = []
+        for cat, values in demographics.items():
+            if isinstance(values, dict):
+                top_items = sorted(values.items(), key=lambda x: x[1], reverse=True)[:3]
+                demo_summary.append(f"{cat}: {', '.join([f'{k} ({v:.1f}%)' for k, v in top_items])}")
+        
+        behavior_summary = []
+        for cat, items in behavioral.items():
+            if isinstance(items, list) and items:
+                top_items = items[:5]
+                behavior_summary.append(f"{cat}: {', '.join([f'{i.get(\"name\", i.get(\"value\", \"\"))} ({i.get(\"pct\", 0):.1f}%)' for i in top_items])}")
+        
+        prompt = f"""Analyze this audience profile and provide 5 key insights in bullet points. Be specific and actionable.
+
+Profile: {profile_name}
+Sample Size: {sample_size:,}
+
+Demographics:
+{chr(10).join(demo_summary[:8])}
+
+Top Behaviors:
+{chr(10).join(behavior_summary[:10])}
+
+Provide insights about:
+1. Who this audience is (demographics)
+2. What makes them unique vs general population
+3. Their media consumption habits
+4. Potential marketing opportunities
+5. Key differentiators
+
+Keep each insight to 1-2 sentences. Be specific with numbers."""
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert audience analyst. Provide clear, actionable insights about consumer audiences based on behavioral and demographic data. Focus on what makes this audience unique and how marketers can reach them."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=500,
+            temperature=0.7
+        )
+        
+        return {
+            "insights": response.choices[0].message.content,
+            "tokens_used": response.usage.total_tokens
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+def generate_persona(profile_data):
+    """Generate an AI persona from profile data."""
+    if not openai_client:
+        return {"error": "OpenAI not configured"}
+    
+    try:
+        demographics = profile_data.get('demographics', {})
+        behavioral = profile_data.get('behavioral', {})
+        profile_name = profile_data.get('name', 'Audience')
+        
+        # Get top demographics
+        gender = demographics.get('gender', {})
+        age = demographics.get('age', {})
+        income = demographics.get('income', {})
+        
+        top_gender = max(gender.items(), key=lambda x: x[1])[0] if gender else "Unknown"
+        top_age = max(age.items(), key=lambda x: x[1])[0] if age else "Unknown"
+        top_income = max(income.items(), key=lambda x: x[1])[0] if income else "Unknown"
+        
+        # Get top behaviors
+        top_behaviors = []
+        for cat, items in behavioral.items():
+            if isinstance(items, list):
+                for item in items[:2]:
+                    top_behaviors.append(f"{item.get('name', '')} ({cat})")
+        
+        prompt = f"""Create a detailed marketing persona for this audience segment.
+
+Profile: {profile_name}
+Primary Gender: {top_gender}
+Primary Age Range: {top_age}
+Primary Income: {top_income}
+Top Interests/Behaviors: {', '.join(top_behaviors[:10])}
+
+Generate:
+1. A creative persona name (like "Tech-Savvy Trendsetter" or "Budget-Conscious Parent")
+2. A brief bio (2-3 sentences describing who they are)
+3. Daily routine highlights (morning, afternoon, evening)
+4. Media consumption habits
+5. Shopping preferences
+6. Pain points and motivations
+7. Best channels to reach them
+
+Format as JSON with keys: name, bio, routine, media, shopping, painPoints, channels"""
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a marketing strategist creating detailed audience personas. Return valid JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=800,
+            temperature=0.8
+        )
+        
+        content = response.choices[0].message.content
+        # Try to parse JSON from response
+        try:
+            # Remove markdown code blocks if present
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+            persona = json.loads(content)
+        except:
+            persona = {"raw": content}
+        
+        return {
+            "persona": persona,
+            "tokens_used": response.usage.total_tokens
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+def generate_marketing_strategy(profile_data):
+    """Generate AI marketing recommendations."""
+    if not openai_client:
+        return {"error": "OpenAI not configured"}
+    
+    try:
+        demographics = profile_data.get('demographics', {})
+        behavioral = profile_data.get('behavioral', {})
+        profile_name = profile_data.get('name', 'Audience')
+        
+        # Compile behavioral insights
+        behavior_list = []
+        for cat, items in behavioral.items():
+            if isinstance(items, list):
+                for item in items[:3]:
+                    behavior_list.append(f"{item.get('name', '')} ({item.get('pct', 0):.1f}%)")
+        
+        prompt = f"""Create a comprehensive marketing strategy for reaching this audience.
+
+Profile: {profile_name}
+Demographics: {json.dumps(demographics, default=str)[:500]}
+Key Behaviors: {', '.join(behavior_list[:15])}
+
+Provide:
+1. **Channel Strategy** - Which platforms/channels to prioritize and why
+2. **Content Strategy** - Types of content that will resonate
+3. **Messaging Framework** - Key themes and tone to use
+4. **Campaign Ideas** - 3 specific campaign concepts
+5. **Timing Recommendations** - Best times/days to reach them
+6. **Budget Allocation** - Suggested % split across channels
+
+Be specific and actionable. Reference the actual data provided."""
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a senior marketing strategist. Provide detailed, data-driven marketing recommendations."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=1000,
+            temperature=0.7
+        )
+        
+        return {
+            "strategy": response.choices[0].message.content,
+            "tokens_used": response.usage.total_tokens
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+def chat_with_data(profile_data, user_question):
+    """Answer questions about the profile data."""
+    if not openai_client:
+        return {"error": "OpenAI not configured"}
+    
+    try:
+        demographics = profile_data.get('demographics', {})
+        behavioral = profile_data.get('behavioral', {})
+        locations = profile_data.get('locations', [])
+        sample_size = profile_data.get('sampleSize', 0)
+        profile_name = profile_data.get('name', 'This audience')
+        
+        # Build comprehensive data context
+        data_context = f"""
+Profile: {profile_name}
+Sample Size: {sample_size:,}
+
+DEMOGRAPHICS:
+{json.dumps(demographics, indent=2, default=str)[:1500]}
+
+TOP BEHAVIORS BY CATEGORY:
+{json.dumps({k: v[:5] if isinstance(v, list) else v for k, v in list(behavioral.items())[:10]}, indent=2, default=str)[:2000]}
+
+TOP LOCATIONS:
+{json.dumps(locations[:10], indent=2, default=str)[:500]}
+"""
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": f"You are an audience data analyst. Answer questions about this profile data accurately and concisely. Always cite specific numbers from the data when relevant.\n\nDATA:\n{data_context}"},
+                {"role": "user", "content": user_question}
+            ],
+            max_tokens=500,
+            temperature=0.5
+        )
+        
+        return {
+            "answer": response.choices[0].message.content,
+            "tokens_used": response.usage.total_tokens
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+def compare_profiles_ai(profiles_data):
+    """AI comparison of multiple profiles."""
+    if not openai_client:
+        return {"error": "OpenAI not configured"}
+    
+    try:
+        profiles_summary = []
+        for profile in profiles_data:
+            name = profile.get('name', 'Unknown')
+            demo = profile.get('demographics', {})
+            behaviors = profile.get('behavioral', {})
+            
+            # Get key stats
+            top_behaviors = []
+            for cat, items in behaviors.items():
+                if isinstance(items, list) and items:
+                    top_behaviors.append(f"{items[0].get('name', '')} ({cat})")
+            
+            profiles_summary.append(f"""
+{name}:
+- Gender: {json.dumps(demo.get('gender', {}), default=str)[:200]}
+- Age: {json.dumps(demo.get('age', {}), default=str)[:200]}
+- Top Behaviors: {', '.join(top_behaviors[:5])}
+""")
+        
+        prompt = f"""Compare these audience profiles and identify:
+1. Key similarities between the audiences
+2. Key differences that set each apart
+3. Overlap opportunities (where they might be reached together)
+4. Distinct positioning for each
+
+Profiles:
+{''.join(profiles_summary)}
+
+Be specific with numbers and percentages."""
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an audience research expert. Compare profiles clearly and identify actionable differences."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=800,
+            temperature=0.7
+        )
+        
+        return {
+            "comparison": response.choices[0].message.content,
+            "tokens_used": response.usage.total_tokens
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+# ============================================================================
 # USER MANAGEMENT
 # ============================================================================
 
@@ -774,6 +1069,165 @@ def download_cached(s3_key):
         )
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# AI-POWERED API ENDPOINTS
+# ============================================================================
+
+@app.route('/api/ai/insights', methods=['POST'])
+@requires_auth
+def api_ai_insights():
+    """Generate AI insights for a profile."""
+    data = request.get_json()
+    profile_data = data.get('profile', {})
+    result = generate_ai_insights(profile_data)
+    return jsonify(result)
+
+@app.route('/api/ai/persona', methods=['POST'])
+@requires_auth
+def api_ai_persona():
+    """Generate AI persona for a profile."""
+    data = request.get_json()
+    profile_data = data.get('profile', {})
+    result = generate_persona(profile_data)
+    return jsonify(result)
+
+@app.route('/api/ai/marketing', methods=['POST'])
+@requires_auth
+def api_ai_marketing():
+    """Generate AI marketing strategy for a profile."""
+    data = request.get_json()
+    profile_data = data.get('profile', {})
+    result = generate_marketing_strategy(profile_data)
+    return jsonify(result)
+
+@app.route('/api/ai/chat', methods=['POST'])
+@requires_auth
+def api_ai_chat():
+    """Chat with profile data."""
+    data = request.get_json()
+    profile_data = data.get('profile', {})
+    question = data.get('question', '')
+    if not question:
+        return jsonify({'error': 'No question provided'}), 400
+    result = chat_with_data(profile_data, question)
+    return jsonify(result)
+
+@app.route('/api/ai/compare', methods=['POST'])
+@requires_auth
+def api_ai_compare():
+    """AI comparison of multiple profiles."""
+    data = request.get_json()
+    profiles = data.get('profiles', [])
+    if len(profiles) < 2:
+        return jsonify({'error': 'Need at least 2 profiles to compare'}), 400
+    result = compare_profiles_ai(profiles)
+    return jsonify(result)
+
+# ============================================================================
+# FAVORITES/BOOKMARKS
+# ============================================================================
+
+@app.route('/api/favorites', methods=['GET'])
+@requires_auth
+def get_favorites():
+    """Get user's favorite profiles."""
+    username = session.get('username')
+    users = load_users()
+    user = users.get(username, {})
+    return jsonify({'favorites': user.get('favorites', [])})
+
+@app.route('/api/favorites', methods=['POST'])
+@requires_auth
+def add_favorite():
+    """Add a profile to favorites."""
+    username = session.get('username')
+    data = request.get_json()
+    profile_key = data.get('key')
+    profile_name = data.get('name', profile_key)
+    
+    users = load_users()
+    if username not in users:
+        return jsonify({'error': 'User not found'}), 404
+    
+    if 'favorites' not in users[username]:
+        users[username]['favorites'] = []
+    
+    # Check if already in favorites
+    for fav in users[username]['favorites']:
+        if fav.get('key') == profile_key:
+            return jsonify({'error': 'Already in favorites'}), 400
+    
+    users[username]['favorites'].append({
+        'key': profile_key,
+        'name': profile_name,
+        'added': datetime.now().isoformat()
+    })
+    
+    save_users(users)
+    return jsonify({'success': True, 'favorites': users[username]['favorites']})
+
+@app.route('/api/favorites/<path:profile_key>', methods=['DELETE'])
+@requires_auth
+def remove_favorite(profile_key):
+    """Remove a profile from favorites."""
+    username = session.get('username')
+    users = load_users()
+    
+    if username not in users:
+        return jsonify({'error': 'User not found'}), 404
+    
+    users[username]['favorites'] = [
+        f for f in users[username].get('favorites', []) 
+        if f.get('key') != profile_key
+    ]
+    
+    save_users(users)
+    return jsonify({'success': True})
+
+# ============================================================================
+# SHAREABLE LINKS
+# ============================================================================
+
+shared_links = {}  # In production, store in database/S3
+
+@app.route('/api/share', methods=['POST'])
+@requires_auth
+def create_share_link():
+    """Create a shareable link for a profile."""
+    data = request.get_json()
+    profile_key = data.get('key')
+    expires_days = data.get('expires_days', 7)
+    
+    share_id = secrets.token_urlsafe(16)
+    shared_links[share_id] = {
+        'profile_key': profile_key,
+        'created_by': session.get('username'),
+        'created_at': datetime.now().isoformat(),
+        'expires_at': (datetime.now() + pd.Timedelta(days=expires_days)).isoformat()
+    }
+    
+    return jsonify({
+        'share_id': share_id,
+        'url': f"/shared/{share_id}"
+    })
+
+@app.route('/shared/<share_id>')
+def view_shared(share_id):
+    """View a shared profile (no auth required)."""
+    if share_id not in shared_links:
+        return "Link not found or expired", 404
+    
+    link_data = shared_links[share_id]
+    if datetime.fromisoformat(link_data['expires_at']) < datetime.now():
+        del shared_links[share_id]
+        return "Link expired", 404
+    
+    # Return a simplified view template
+    return render_template('shared.html', 
+                         profile_key=link_data['profile_key'],
+                         share_id=share_id)
 
 
 @app.route('/api/get-csv-data/<path:s3_key>')

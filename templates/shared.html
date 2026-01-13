@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shared Profile | MIDG Behavioral Graph</title>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-card: #161b22;
+            --text-primary: #e6f1ff;
+            --text-secondary: #8b949e;
+            --accent-blue: #4a8ac9;
+            --border-color: #30363d;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .logo { height: 40px; }
+        h1 { font-size: 1.5rem; }
+        .badge {
+            background: rgba(74, 138, 201, 0.2);
+            color: var(--accent-blue);
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+        }
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+        .stat-label { color: var(--text-secondary); font-size: 0.85rem; }
+        .stat-value { font-size: 2rem; font-weight: 700; margin-top: 0.5rem; }
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+        .chart-card {
+            background: var(--bg-card);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+        .chart-card h3 {
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+        .error {
+            text-align: center;
+            padding: 3rem;
+            color: #ef4444;
+        }
+        canvas { max-width: 100%; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="/static/logo.svg" alt="MIDG" class="logo">
+            <h1>Shared Audience Profile</h1>
+            <span class="badge">Read Only</span>
+        </div>
+        
+        <div id="content">
+            <div class="loading">Loading profile data...</div>
+        </div>
+    </div>
+    
+    <script>
+        const profileKey = "{{ profile_key }}";
+        
+        async function loadProfile() {
+            try {
+                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(profileKey)}`);
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    renderProfile(data);
+                } else {
+                    document.getElementById('content').innerHTML = '<div class="error">Could not load profile</div>';
+                }
+            } catch (e) {
+                document.getElementById('content').innerHTML = `<div class="error">Error: ${e.message}</div>`;
+            }
+        }
+        
+        function renderProfile(data) {
+            const csvData = data.data;
+            
+            // Parse sample size and demographics
+            let sampleSize = 0;
+            const demographics = { gender: {}, age: {}, ethnicity: {}, income: {} };
+            
+            csvData.forEach(row => {
+                const col = (row.Column || '').toUpperCase();
+                const val = row.Value || '';
+                const pct = parseFloat(row['Brand Penetration (Row)'] || 0);
+                
+                if (col === 'SAMPLE SIZE') {
+                    sampleSize = parseInt(row['Original Raw Numbers'] || row['Category Share'] || 0);
+                }
+                if (col === 'GENDER' && val) demographics.gender[val] = pct;
+                if (col === 'AGE' && val) demographics.age[val] = pct;
+                if (col === 'ETHNICITY' && val) demographics.ethnicity[val] = pct;
+                if (col === 'INCOME' && val) demographics.income[val] = pct;
+            });
+            
+            const projectedUS = Math.round((sampleSize / 10000000) * 324700000);
+            
+            document.getElementById('content').innerHTML = `
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="stat-label">Sample Size</div>
+                        <div class="stat-value">n=${sampleSize.toLocaleString()}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Projected US</div>
+                        <div class="stat-value">${projectedUS.toLocaleString()}</div>
+                    </div>
+                </div>
+                <div class="charts-grid">
+                    <div class="chart-card"><h3>Gender</h3><canvas id="genderChart"></canvas></div>
+                    <div class="chart-card"><h3>Age</h3><canvas id="ageChart"></canvas></div>
+                    <div class="chart-card"><h3>Ethnicity</h3><canvas id="ethnicityChart"></canvas></div>
+                    <div class="chart-card"><h3>Income</h3><canvas id="incomeChart"></canvas></div>
+                </div>
+            `;
+            
+            // Render charts
+            const chartColors = ['#4a8ac9', '#10b981', '#f97316', '#ec4899', '#8b5cf6', '#06b6d4'];
+            
+            function createChart(id, labels, values) {
+                new Chart(document.getElementById(id), {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: chartColors.slice(0, labels.length)
+                        }]
+                    },
+                    options: {
+                        plugins: {
+                            legend: { position: 'right', labels: { color: '#e6f1ff' } }
+                        }
+                    }
+                });
+            }
+            
+            createChart('genderChart', Object.keys(demographics.gender), Object.values(demographics.gender));
+            createChart('ageChart', Object.keys(demographics.age), Object.values(demographics.age));
+            createChart('ethnicityChart', Object.keys(demographics.ethnicity), Object.values(demographics.ethnicity));
+            createChart('incomeChart', Object.keys(demographics.income), Object.values(demographics.income));
+        }
+        
+        loadProfile();
+    </script>
+</body>
+</html>
