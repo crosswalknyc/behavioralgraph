@@ -87,7 +87,12 @@ def generate_ai_insights(profile_data):
         for cat, items in behavioral.items():
             if isinstance(items, list) and items:
                 top_items = items[:5]
-                behavior_summary.append(f"{cat}: {', '.join([f'{i.get(\"name\", i.get(\"value\", \"\"))} ({i.get(\"pct\", 0):.1f}%)' for i in top_items])}")
+                item_strs = []
+                for i in top_items:
+                    name = i.get('name', i.get('value', ''))
+                    pct = i.get('pct', 0)
+                    item_strs.append(f"{name} ({pct:.1f}%)")
+                behavior_summary.append(f"{cat}: {', '.join(item_strs)}")
         
         prompt = f"""Analyze this audience profile and provide 5 key insights in bullet points. Be specific and actionable.
 
@@ -311,7 +316,12 @@ def answer_business_question(profile_data, question, conversation_history=None):
         for cat, items in behavioral.items():
             if isinstance(items, list) and items:
                 top_items = items[:5]
-                behavior_summary.append(f"{cat}: {', '.join([f'{i.get(\"name\", \"\")} ({i.get(\"pct\", 0):.1f}%)' for i in top_items])}")
+                item_strs = []
+                for i in top_items:
+                    name = i.get('name', '')
+                    pct = i.get('pct', 0)
+                    item_strs.append(f"{name} ({pct:.1f}%)")
+                behavior_summary.append(f"{cat}: {', '.join(item_strs)}")
         
         data_context = f"""
 AUDIENCE PROFILE: {profile_name}
