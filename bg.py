@@ -3801,6 +3801,20 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         final_sample_size = min(inflated_sample_size, GENPOP_SAMPLE_CAP)
         final_sample_size = (final_sample_size // 10) * 10
     
+    # SAMPLE SIZE CONSISTENCY: If updating from previous run, ensure within ±2%
+    if previous_file_path:
+        try:
+            previous_sample_size = get_previous_sample_size(previous_file_path)
+            if previous_sample_size:
+                final_sample_size = ensure_sample_size_consistency(
+                    final_sample_size, 
+                    previous_sample_size, 
+                    tolerance=2.0
+                )
+                print(f"✅ Sample size consistency applied: {final_sample_size:,}")
+        except Exception as e:
+            print(f"⚠️ Could not apply sample size consistency: {e}")
+    
     df_sample = pd.DataFrame([
         {
             "Column": normalize_category_name("Sample Size"),
@@ -8698,6 +8712,64 @@ def load_previous_run_data(file_path):
     except Exception as e:
         print(f"❌ Error processing previous run data: {e}")
         return {}, {}, "", "", ""
+
+def ensure_sample_size_consistency(new_sample_size, previous_sample_size, tolerance=2.0):
+    """
+    Ensure sample size is within ±tolerance% of the previous run's sample size.
+    If outside tolerance, adjust to be within the allowed range.
+    Returns the adjusted sample size.
+    """
+    if not previous_sample_size or previous_sample_size == 0:
+        return new_sample_size
+    
+    print(f"🔍 Checking sample size consistency...")
+    print(f"   Previous: {previous_sample_size:,}")
+    print(f"   New: {new_sample_size:,}")
+    
+    # Calculate allowed range
+    min_allowed = int(previous_sample_size * (1 - tolerance / 100))
+    max_allowed = int(previous_sample_size * (1 + tolerance / 100))
+    
+    print(f"   Allowed range (±{tolerance}%): {min_allowed:,} to {max_allowed:,}")
+    
+    # Check if new sample size is within tolerance
+    if min_allowed <= new_sample_size <= max_allowed:
+        print(f"   ✅ Sample size within tolerance")
+        return new_sample_size
+    
+    # Adjust sample size to be within tolerance
+    if new_sample_size < min_allowed:
+        adjusted = min_allowed + np.random.randint(0, int(previous_sample_size * 0.005))  # Small random variation
+        print(f"   📏 Adjusted sample size: {new_sample_size:,} → {adjusted:,} (was below minimum)")
+    else:
+        adjusted = max_allowed - np.random.randint(0, int(previous_sample_size * 0.005))  # Small random variation
+        print(f"   📏 Adjusted sample size: {new_sample_size:,} → {adjusted:,} (was above maximum)")
+    
+    return adjusted
+
+def get_previous_sample_size(previous_file_path):
+    """Extract sample size from a previous run CSV file."""
+    if not previous_file_path or not os.path.exists(previous_file_path):
+        return None
+    
+    try:
+        df = pd.read_csv(previous_file_path)
+        sample_mask = df['Column'].str.upper() == 'SAMPLE SIZE'
+        if sample_mask.any():
+            # Try Category Share column first, then Percentage
+            for col in ['Category Share', 'Percentage', 'Original Raw Numbers']:
+                if col in df.columns and sample_mask.any():
+                    val = df.loc[sample_mask, col].iloc[0]
+                    if pd.notna(val):
+                        sample_size = int(float(str(val).replace(',', '').replace('%', '')))
+                        if col == 'Percentage' and sample_size < 1000:
+                            continue  # This is a percentage, not a count
+                        print(f"📊 Previous sample size from {col}: {sample_size:,}")
+                        return sample_size
+    except Exception as e:
+        print(f"⚠️ Could not extract previous sample size: {e}")
+    
+    return None
 
 def ensure_demographic_consistency(df_demo, previous_demo_lookup):
     """
