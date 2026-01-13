@@ -8697,7 +8697,7 @@ def load_previous_run_data(file_path):
         
     except Exception as e:
         print(f"❌ Error processing previous run data: {e}")
-        return {}, {}, "", ""
+        return {}, {}, "", "", ""
 
 def ensure_demographic_consistency(df_demo, previous_demo_lookup):
     """
