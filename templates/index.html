@@ -144,6 +144,37 @@
             font-size: 0.85rem;
         }
         .view-btn.active { background: var(--accent-blue); color: white; border-color: var(--accent-blue); }
+        
+        /* Export Dropdown */
+        .export-dropdown {
+            position: relative;
+        }
+        .export-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.5rem 0;
+            min-width: 180px;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .export-menu button {
+            display: block;
+            width: 100%;
+            padding: 0.5rem 1rem;
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            text-align: left;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        .export-menu button:hover {
+            background: rgba(74, 138, 201, 0.2);
+        }
 
         #formView { display: block; }
         #dashboardView { display: none; }
@@ -1158,6 +1189,108 @@
         }
 
         /* Location Tab */
+        .location-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .location-header h2 { margin: 0; }
+        .location-stats {
+            display: flex;
+            gap: 1.5rem;
+            font-size: 0.85rem;
+        }
+        .location-stats .stat {
+            background: var(--bg-card);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+        }
+        .heatmap-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            position: relative;
+        }
+        .heatmap-legend {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+        .legend-gradient {
+            width: 150px;
+            height: 12px;
+            background: linear-gradient(to right, #3b82f6, #10b981, #eab308, #f97316, #ef4444);
+            border-radius: 3px;
+        }
+        .us-heatmap {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 0.5rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .state-box {
+            padding: 0.5rem;
+            border-radius: 6px;
+            text-align: center;
+            font-size: 0.75rem;
+            cursor: default;
+        }
+        .state-box .state-name {
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .state-box .state-pct {
+            font-size: 0.65rem;
+            opacity: 0.8;
+        }
+        .regional-breakdown {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+        .regional-breakdown h3 { margin: 0 0 1rem 0; }
+        .regional-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.75rem;
+        }
+        .region-card {
+            background: var(--bg-input);
+            border-radius: 8px;
+            padding: 0.75rem;
+        }
+        .region-card h4 {
+            margin: 0 0 0.5rem 0;
+            font-size: 0.85rem;
+            color: var(--accent-blue);
+        }
+        .region-bar {
+            height: 8px;
+            background: var(--bg-primary);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 0.25rem;
+        }
+        .region-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+        .region-pct {
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
         .location-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -1929,7 +2062,15 @@
                     <div class="display-mode-toggle" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" title="Toggle between percentages and US population numbers">
                         <span id="dashDisplayLabel">US %</span>
                     </div>
-                    <button class="btn btn-small btn-primary" onclick="downloadCurrentCSV()">📥 Download CSV</button>
+                    <div class="export-dropdown">
+                        <button class="btn btn-small btn-primary" onclick="toggleExportMenu()">📥 Export ▾</button>
+                        <div id="exportMenu" class="export-menu" style="display: none;">
+                            <button onclick="downloadCurrentCSV()">📄 Download CSV</button>
+                            <button onclick="exportForAdPlatform('meta')">📘 Meta Ads Format</button>
+                            <button onclick="exportForAdPlatform('google')">🔍 Google Ads Format</button>
+                            <button onclick="exportForAdPlatform('tiktok')">🎵 TikTok Ads Format</button>
+                        </div>
+                    </div>
                     <button class="btn btn-small" style="background: var(--bg-input);" onclick="showFormView()">← Back</button>
                 </div>
             </div>
@@ -2050,17 +2191,38 @@
 
             <!-- Location Tab -->
             <div id="tab-location" class="tab-content">
+                <div class="location-header">
+                    <h2>📍 Geographic Distribution</h2>
+                    <div class="location-stats" id="locationStats"></div>
+                </div>
+                
+                <!-- US Heat Map -->
+                <div class="heatmap-container">
+                    <div class="heatmap-legend">
+                        <span class="legend-label">Low</span>
+                        <div class="legend-gradient"></div>
+                        <span class="legend-label">High</span>
+                    </div>
+                    <div id="usHeatmap" class="us-heatmap"></div>
+                </div>
+                
                 <div class="location-grid">
                     <div class="location-table">
-                        <h3>Top DMAs by Index</h3>
+                        <h3>🔥 Top DMAs by Index</h3>
                         <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
                         <div id="locationList"></div>
                     </div>
                     <div class="location-table">
-                        <h3>Bottom DMAs by Index</h3>
+                        <h3>❄️ Bottom DMAs by Index</h3>
                         <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
                         <div id="locationListBottom"></div>
                     </div>
+                </div>
+                
+                <!-- Regional Breakdown -->
+                <div class="regional-breakdown">
+                    <h3>📊 Regional Breakdown</h3>
+                    <div id="regionalBreakdown" class="regional-grid"></div>
                 </div>
             </div>
 
@@ -3346,6 +3508,9 @@
             const sorted = [...locations].sort((a, b) => b.index - a.index);
             const top = sorted.slice(0, 25);
             const bottom = sorted.slice(-25).reverse();
+            
+            // Render heat map
+            renderHeatmap(locations);
 
             document.getElementById('locationList').innerHTML = top.map((loc, i) => {
                 const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
@@ -4197,6 +4362,327 @@
         
         // Initialize saved segments
         renderSavedSegments();
+        
+        // ============================================================================
+        // GEOGRAPHIC HEAT MAP FUNCTIONS
+        // ============================================================================
+        
+        const STATE_ABBREVS = {
+            'NEW YORK': 'NY', 'LOS ANGELES': 'CA', 'CHICAGO': 'IL', 'HOUSTON': 'TX',
+            'PHOENIX': 'AZ', 'PHILADELPHIA': 'PA', 'SAN ANTONIO': 'TX', 'SAN DIEGO': 'CA',
+            'DALLAS': 'TX', 'SAN JOSE': 'CA', 'AUSTIN': 'TX', 'JACKSONVILLE': 'FL',
+            'FORT WORTH': 'TX', 'COLUMBUS': 'OH', 'SAN FRANCISCO': 'CA', 'CHARLOTTE': 'NC',
+            'INDIANAPOLIS': 'IN', 'SEATTLE': 'WA', 'DENVER': 'CO', 'WASHINGTON': 'DC',
+            'BOSTON': 'MA', 'EL PASO': 'TX', 'DETROIT': 'MI', 'NASHVILLE': 'TN',
+            'PORTLAND': 'OR', 'MEMPHIS': 'TN', 'OKLAHOMA': 'OK', 'LAS VEGAS': 'NV',
+            'LOUISVILLE': 'KY', 'BALTIMORE': 'MD', 'MILWAUKEE': 'WI', 'ALBUQUERQUE': 'NM',
+            'TUCSON': 'AZ', 'FRESNO': 'CA', 'SACRAMENTO': 'CA', 'KANSAS': 'MO',
+            'ATLANTA': 'GA', 'MIAMI': 'FL', 'RALEIGH': 'NC', 'OMAHA': 'NE',
+            'CLEVELAND': 'OH', 'MINNEAPOLIS': 'MN', 'TULSA': 'OK', 'ORLANDO': 'FL',
+            'TAMPA': 'FL', 'SALT LAKE': 'UT', 'PITTSBURGH': 'PA', 'CINCINNATI': 'OH'
+        };
+        
+        const REGIONS = {
+            'Northeast': ['NY', 'PA', 'NJ', 'CT', 'MA', 'RI', 'VT', 'NH', 'ME', 'DC', 'MD'],
+            'Southeast': ['FL', 'GA', 'NC', 'SC', 'VA', 'TN', 'AL', 'MS', 'LA', 'KY', 'WV'],
+            'Midwest': ['IL', 'OH', 'MI', 'IN', 'WI', 'MN', 'IA', 'MO', 'KS', 'NE', 'ND', 'SD'],
+            'Southwest': ['TX', 'AZ', 'NM', 'OK'],
+            'West': ['CA', 'WA', 'OR', 'NV', 'CO', 'UT', 'HI', 'AK', 'ID', 'MT', 'WY']
+        };
+        
+        function getStateFromLocation(locationName) {
+            const upper = locationName.toUpperCase();
+            // Check for state abbreviation at end
+            const stateMatch = upper.match(/\b([A-Z]{2})$/);
+            if (stateMatch) return stateMatch[1];
+            
+            // Check for known cities
+            for (const [city, state] of Object.entries(STATE_ABBREVS)) {
+                if (upper.includes(city)) return state;
+            }
+            return null;
+        }
+        
+        function getRegionForState(state) {
+            for (const [region, states] of Object.entries(REGIONS)) {
+                if (states.includes(state)) return region;
+            }
+            return 'Other';
+        }
+        
+        function getHeatColor(value, min, max) {
+            const normalized = (value - min) / (max - min || 1);
+            // Blue -> Green -> Yellow -> Orange -> Red
+            if (normalized < 0.25) {
+                return `rgba(59, 130, 246, ${0.3 + normalized * 2})`; // Blue
+            } else if (normalized < 0.5) {
+                return `rgba(16, 185, 129, ${0.3 + normalized * 1.4})`; // Green
+            } else if (normalized < 0.75) {
+                return `rgba(234, 179, 8, ${0.3 + normalized * 1.2})`; // Yellow
+            } else {
+                return `rgba(239, 68, 68, ${0.4 + normalized * 0.6})`; // Red
+            }
+        }
+        
+        function renderHeatmap(locations) {
+            if (!locations || locations.length === 0) {
+                document.getElementById('usHeatmap').innerHTML = '<p style="color: var(--text-secondary);">No location data</p>';
+                return;
+            }
+            
+            // Group by state
+            const stateData = {};
+            locations.forEach(loc => {
+                const state = getStateFromLocation(loc.name);
+                if (state) {
+                    if (!stateData[state]) {
+                        stateData[state] = { pct: 0, index: 0, count: 0, names: [] };
+                    }
+                    stateData[state].pct += loc.pct;
+                    stateData[state].index += loc.index || 100;
+                    stateData[state].count++;
+                    stateData[state].names.push(loc.name);
+                }
+            });
+            
+            // Calculate averages
+            Object.keys(stateData).forEach(state => {
+                stateData[state].avgIndex = Math.round(stateData[state].index / stateData[state].count);
+            });
+            
+            // Get min/max for color scaling
+            const values = Object.values(stateData).map(s => s.pct);
+            const minVal = Math.min(...values);
+            const maxVal = Math.max(...values);
+            
+            // Render state boxes
+            const sortedStates = Object.entries(stateData).sort((a, b) => b[1].pct - a[1].pct);
+            
+            document.getElementById('usHeatmap').innerHTML = sortedStates.map(([state, data]) => `
+                <div class="state-box" style="background: ${getHeatColor(data.pct, minVal, maxVal)};" title="${data.names.slice(0, 3).join(', ')}">
+                    <div class="state-name">${state}</div>
+                    <div class="state-pct">${data.pct.toFixed(1)}%</div>
+                </div>
+            `).join('');
+            
+            // Location stats
+            const totalLocations = locations.length;
+            const topState = sortedStates[0];
+            document.getElementById('locationStats').innerHTML = `
+                <span class="stat">📍 ${totalLocations} DMAs</span>
+                <span class="stat">🏆 Top: ${topState ? topState[0] + ' (' + topState[1].pct.toFixed(1) + '%)' : '-'}</span>
+            `;
+            
+            // Regional breakdown
+            const regionData = {};
+            Object.entries(stateData).forEach(([state, data]) => {
+                const region = getRegionForState(state);
+                if (!regionData[region]) regionData[region] = { pct: 0, count: 0 };
+                regionData[region].pct += data.pct;
+                regionData[region].count++;
+            });
+            
+            const regionColors = {
+                'Northeast': '#4a8ac9',
+                'Southeast': '#10b981',
+                'Midwest': '#f97316',
+                'Southwest': '#ec4899',
+                'West': '#8b5cf6',
+                'Other': '#6b7280'
+            };
+            
+            const maxRegionPct = Math.max(...Object.values(regionData).map(r => r.pct));
+            
+            document.getElementById('regionalBreakdown').innerHTML = Object.entries(regionData)
+                .sort((a, b) => b[1].pct - a[1].pct)
+                .map(([region, data]) => `
+                    <div class="region-card">
+                        <h4>${region}</h4>
+                        <div class="region-bar">
+                            <div class="region-bar-fill" style="width: ${(data.pct / maxRegionPct * 100)}%; background: ${regionColors[region] || '#6b7280'};"></div>
+                        </div>
+                        <span class="region-pct">${data.pct.toFixed(1)}%</span>
+                    </div>
+                `).join('');
+        }
+        
+        // ============================================================================
+        // EXPORT FUNCTIONS
+        // ============================================================================
+        
+        function exportToCSV() {
+            if (!currentProfileData) {
+                alert('Please select a profile first');
+                return;
+            }
+            
+            // This downloads the original CSV
+            if (currentS3Key) {
+                window.location.href = `/api/download-cached/${encodeURIComponent(currentS3Key)}`;
+            }
+        }
+        
+        function exportToExcel() {
+            // Convert current data to Excel-friendly format
+            alert('Excel export coming soon!');
+        }
+        
+        function exportForAdPlatform(platform) {
+            if (!currentProfileData) {
+                alert('Please select a profile first');
+                return;
+            }
+            
+            const demographics = currentProfileData.demographics || {};
+            const behavioral = currentProfileData.behavioral || {};
+            
+            let exportData = {};
+            
+            switch(platform) {
+                case 'meta':
+                    exportData = {
+                        platform: 'Meta Ads Manager',
+                        targeting: {
+                            age_min: getMinAge(demographics.age),
+                            age_max: getMaxAge(demographics.age),
+                            genders: mapGendersToMeta(demographics.gender),
+                            interests: getTopInterests(behavioral, 20),
+                            behaviors: getTopBehaviors(behavioral, 10)
+                        }
+                    };
+                    break;
+                case 'google':
+                    exportData = {
+                        platform: 'Google Ads',
+                        targeting: {
+                            demographics: formatForGoogle(demographics),
+                            affinity_audiences: getTopInterests(behavioral, 15),
+                            in_market_audiences: getTopBehaviors(behavioral, 10)
+                        }
+                    };
+                    break;
+                case 'tiktok':
+                    exportData = {
+                        platform: 'TikTok Ads',
+                        targeting: {
+                            age: mapAgesToTikTok(demographics.age),
+                            gender: mapGendersToTikTok(demographics.gender),
+                            interests: getTopInterests(behavioral, 15)
+                        }
+                    };
+                    break;
+            }
+            
+            // Download as JSON
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentProfileData.name || 'audience'}_${platform}_export.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        function getMinAge(ageData) {
+            if (!ageData) return 18;
+            const ages = Object.keys(ageData);
+            if (ages.includes('<16')) return 13;
+            if (ages.includes('16-18')) return 16;
+            if (ages.includes('18-20')) return 18;
+            return 18;
+        }
+        
+        function getMaxAge(ageData) {
+            if (!ageData) return 65;
+            const ages = Object.keys(ageData);
+            if (ages.includes('60+')) return 65;
+            if (ages.includes('41-59')) return 59;
+            return 65;
+        }
+        
+        function mapGendersToMeta(genderData) {
+            if (!genderData) return [0]; // All
+            const result = [];
+            if (genderData['Female'] > 30) result.push(2);
+            if (genderData['Male'] > 30) result.push(1);
+            return result.length > 0 ? result : [0];
+        }
+        
+        function mapGendersToTikTok(genderData) {
+            if (!genderData) return 'ALL';
+            const female = genderData['Female'] || 0;
+            const male = genderData['Male'] || 0;
+            if (female > 70) return 'FEMALE';
+            if (male > 70) return 'MALE';
+            return 'ALL';
+        }
+        
+        function mapAgesToTikTok(ageData) {
+            if (!ageData) return ['AGE_18_24', 'AGE_25_34'];
+            const result = [];
+            if (ageData['18-20'] > 10 || ageData['21-25'] > 10) result.push('AGE_18_24');
+            if (ageData['26-30'] > 10 || ageData['31-40'] > 10) result.push('AGE_25_34');
+            if (ageData['31-40'] > 10) result.push('AGE_35_44');
+            if (ageData['41-59'] > 10) result.push('AGE_45_54');
+            if (ageData['60+'] > 10) result.push('AGE_55_PLUS');
+            return result.length > 0 ? result : ['AGE_18_24', 'AGE_25_34'];
+        }
+        
+        function formatForGoogle(demographics) {
+            return {
+                age_ranges: Object.keys(demographics.age || {}),
+                genders: Object.keys(demographics.gender || {}),
+                household_income: Object.keys(demographics.income || {})
+            };
+        }
+        
+        function getTopInterests(behavioral, count) {
+            const interests = [];
+            const interestCategories = ['INTEREST', 'TALENT', 'MUSICIAN/BAND', 'ACTOR', 'ATHLETE', 'SPORTS TEAM'];
+            
+            Object.entries(behavioral).forEach(([cat, items]) => {
+                if (interestCategories.some(ic => cat.toUpperCase().includes(ic))) {
+                    if (Array.isArray(items)) {
+                        items.slice(0, 5).forEach(item => {
+                            interests.push(item.name || item.value);
+                        });
+                    }
+                }
+            });
+            
+            return interests.slice(0, count);
+        }
+        
+        function getTopBehaviors(behavioral, count) {
+            const behaviors = [];
+            const behaviorCategories = ['APP/PLATFORM', 'WHERE THEY SHOP', 'STREAMING', 'SOCIAL MEDIA'];
+            
+            Object.entries(behavioral).forEach(([cat, items]) => {
+                if (behaviorCategories.some(bc => cat.toUpperCase().includes(bc))) {
+                    if (Array.isArray(items)) {
+                        items.slice(0, 3).forEach(item => {
+                            behaviors.push(item.name || item.value);
+                        });
+                    }
+                }
+            });
+            
+            return behaviors.slice(0, count);
+        }
+        
+        function toggleExportMenu() {
+            const menu = document.getElementById('exportMenu');
+            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        // Close export menu when clicking elsewhere
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('exportMenu');
+            const dropdown = e.target.closest('.export-dropdown');
+            if (!dropdown && menu) {
+                menu.style.display = 'none';
+            }
+        });
         
         // ============================================================================
         // FAVORITES FUNCTIONS
