@@ -758,12 +758,15 @@ def connect_snowflake():
     if not user or not account:
         raise ValueError("SNOWFLAKE_USER and SNOWFLAKE_ACCOUNT must be set as environment variables")
     
-    if not token:
-        raise ValueError("SNOWFLAKE_TOKEN environment variable is required. Set it in Render Dashboard → Environment.")
+    if not token and not password:
+        raise ValueError("Either SNOWFLAKE_TOKEN or SNOWFLAKE_PASSWORD must be set in environment variables")
     
-    # Try programmatic access token first, fallback to password if needed
-    try:
-        if token:
+    conn = None
+    
+    # Try programmatic access token first
+    if token:
+        try:
+            print(f"🔑 Attempting PAT authentication for user: {user}")
             conn = snowflake.connector.connect(
                 user=user,
                 token=token,
@@ -776,25 +779,30 @@ def connect_snowflake():
             )
             if not SILENCE_VERBOSE_OUTPUT:
                 print("✅ Connected using programmatic access token")
-        else:
-            raise Exception("No token provided, using password auth")
-    except Exception as token_error:
-        if not SILENCE_VERBOSE_OUTPUT:
+        except Exception as token_error:
             print(f"⚠️ Token authentication failed: {token_error}")
-            print("🔄 Falling back to password authentication...")
-        if not password:
-            raise ValueError(f"Token auth failed ({token_error}) and SNOWFLAKE_PASSWORD not set")
-        conn = snowflake.connector.connect(
-            user=user,
-            password=password,
-            account=account,
-            warehouse=warehouse,
-            database=database,
-            schema=schema,
-            role=role
-        )
-        if not SILENCE_VERBOSE_OUTPUT:
-            print("✅ Connected using password authentication")
+            conn = None
+    
+    # Fallback to password if token failed or wasn't provided
+    if conn is None and password:
+        try:
+            print(f"🔄 Attempting password authentication for user: {user}")
+            conn = snowflake.connector.connect(
+                user=user,
+                password=password,
+                account=account,
+                warehouse=warehouse,
+                database=database,
+                schema=schema,
+                role=role
+            )
+            if not SILENCE_VERBOSE_OUTPUT:
+                print("✅ Connected using password authentication")
+        except Exception as pwd_error:
+            raise ValueError(f"Password authentication also failed: {pwd_error}")
+    
+    if conn is None:
+        raise ValueError("All authentication methods failed. Check SNOWFLAKE_TOKEN and SNOWFLAKE_PASSWORD.")
     with conn.cursor() as cur:
         cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         # INTELLIGENT WAREHOUSE SCALING: Match warehouse size to data volume
