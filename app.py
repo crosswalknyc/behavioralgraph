@@ -464,11 +464,15 @@ def submit_analysis():
     try:
         data = request.json
         
-        # Validate required fields
-        required = ['project_name', 'brands', 'start_date', 'end_date']
-        for field in required:
-            if field not in data or not data[field]:
-                return jsonify({'error': f'Missing required field: {field}'}), 400
+        # Validate required fields (support both old and new date field names)
+        if not data.get('project_name'):
+            return jsonify({'error': 'Missing required field: project_name'}), 400
+        if not data.get('brands'):
+            return jsonify({'error': 'Missing required field: brands'}), 400
+        if not (data.get('sample_start') or data.get('start_date')):
+            return jsonify({'error': 'Missing required field: start date'}), 400
+        if not (data.get('sample_end') or data.get('end_date')):
+            return jsonify({'error': 'Missing required field: end date'}), 400
         
         # Create job ID
         job_id = str(uuid.uuid4())[:8]
