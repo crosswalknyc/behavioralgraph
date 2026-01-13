@@ -2,7 +2,9 @@ flask==3.0.0
 flask-cors==4.0.0
 pandas==2.0.3
 numpy==1.24.3
-snowflake-connector-python==3.6.0
+snowflake-connector-python==3.12.0
 gunicorn==21.2.0
 python-dotenv==1.0.0
 boto3==1.34.0
+certifi
+pyopenssl

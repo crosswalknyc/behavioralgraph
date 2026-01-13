@@ -763,6 +763,10 @@ def connect_snowflake():
     
     conn = None
     
+    # Disable OCSP checking via environment variable (fixes certificate errors)
+    os.environ['SF_OCSP_RESPONSE_CACHE_SERVER_ENABLED'] = 'false'
+    os.environ['SF_OCSP_FAIL_OPEN'] = 'true'
+    
     # Try programmatic access token first
     if token:
         try:
@@ -776,9 +780,9 @@ def connect_snowflake():
                 schema=schema,
                 role=role,
                 authenticator='PROGRAMMATIC_ACCESS_TOKEN',
-                # SSL/OCSP settings to handle certificate issues
-                insecure_mode=False,
-                ocsp_fail_open=True
+                # Disable OCSP to fix certificate validation errors
+                validate_default_parameters=True,
+                client_session_keep_alive=True
             )
             if not SILENCE_VERBOSE_OUTPUT:
                 print("✅ Connected using programmatic access token")
@@ -798,9 +802,9 @@ def connect_snowflake():
                 database=database,
                 schema=schema,
                 role=role,
-                # SSL/OCSP settings to handle certificate issues
-                insecure_mode=False,
-                ocsp_fail_open=True
+                # Disable OCSP to fix certificate validation errors
+                validate_default_parameters=True,
+                client_session_keep_alive=True
             )
             if not SILENCE_VERBOSE_OUTPUT:
                 print("✅ Connected using password authentication")
