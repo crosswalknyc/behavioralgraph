@@ -76,16 +76,34 @@ def verify_password(stored_hash, password):
     except Exception:
         return False
 
+S3_USERS_KEY = 'system/users.json'  # S3 key for persistent user storage
+
 def load_users():
-    """Load users from JSON file."""
+    """Load users from S3 (persistent) or local file (fallback)."""
+    # Try S3 first for persistence across Render restarts
+    if s3_client:
+        try:
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_USERS_KEY)
+            data = json.loads(response['Body'].read().decode('utf-8'))
+            print(f"✅ Loaded users from S3")
+            # Also save locally for faster subsequent reads
+            with open(USERS_FILE, 'w') as f:
+                json.dump(data, f, indent=2)
+            return data
+        except s3_client.exceptions.NoSuchKey:
+            print("📁 No users.json in S3 yet, will create on first save")
+        except Exception as e:
+            print(f"⚠️ S3 load failed: {e}, trying local file")
+    
+    # Fall back to local file
     try:
         if os.path.exists(USERS_FILE):
             with open(USERS_FILE, 'r') as f:
                 return json.load(f)
     except Exception as e:
-        print(f"Error loading users: {e}")
+        print(f"Error loading local users: {e}")
     
-    # Return default structure if file doesn't exist
+    # Return default structure if nothing exists
     return {
         "users": {
             "admin": {
@@ -104,14 +122,32 @@ def load_users():
     }
 
 def save_users(data):
-    """Save users to JSON file."""
+    """Save users to both S3 (persistent) and local file."""
+    success = True
+    
+    # Save to local file first (fast)
     try:
         with open(USERS_FILE, 'w') as f:
             json.dump(data, f, indent=2)
-        return True
     except Exception as e:
-        print(f"Error saving users: {e}")
-        return False
+        print(f"Error saving local users: {e}")
+        success = False
+    
+    # Save to S3 for persistence across Render restarts
+    if s3_client:
+        try:
+            s3_client.put_object(
+                Bucket=S3_BUCKET,
+                Key=S3_USERS_KEY,
+                Body=json.dumps(data, indent=2),
+                ContentType='application/json'
+            )
+            print(f"✅ Users saved to S3")
+        except Exception as e:
+            print(f"⚠️ Error saving users to S3: {e}")
+            success = False
+    
+    return success
 
 def is_valid_hash(hash_str):
     """Check if a password hash looks valid (has proper structure and length)."""
