@@ -308,8 +308,9 @@ def check_cache():
         if not brand or not start_date or not end_date:
             return jsonify({'found': False, 'message': 'Missing required fields'})
         
-        exact_match, similar_files = check_s3_for_existing(brand, start_date, end_date)
+        exact_match, _ = check_s3_for_existing(brand, start_date, end_date)
         
+        # Only return cached result for EXACT match (same brand AND same dates)
         if exact_match:
             return jsonify({
                 'found': True,
@@ -321,23 +322,10 @@ def check_cache():
                 'message': f"Exact match found! File created {exact_match['last_modified']}"
             })
         
-        if similar_files:
-            return jsonify({
-                'found': True,
-                'type': 'similar',
-                'files': [{
-                    'key': f['key'],
-                    'start_date': f['start_date'],
-                    'end_date': f['end_date'],
-                    'sample_size': f['sample_size'],
-                    'last_modified': f['last_modified']
-                } for f in similar_files[:5]],  # Return up to 5 similar files
-                'message': f"Found {len(similar_files)} similar run(s) with different dates"
-            })
-        
+        # No exact match found - new analysis required
         return jsonify({
             'found': False,
-            'message': 'No existing results found - new analysis required'
+            'message': 'No exact match found - new analysis required'
         })
         
     except Exception as e:

@@ -1171,28 +1171,28 @@
 
                         <div class="collapsible">
                             <div class="collapsible-header" onclick="toggleCollapsible(this)">
-                                <span>🎛️ Demographic Safety Checks (Skew)</span><span>▼</span>
+                                <span>🔧 Safety Check Demographics (Optional)</span><span>▼</span>
                             </div>
                             <div class="collapsible-content">
-                                <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Boost specific demographic values to ensure they're represented higher.</p>
+                                <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Select demographics to check and which values should be represented higher. Options: GENDER, AGE, ETHNICITY, INCOME, EDUCATION, RELATIONSHIP, SEXUAL_ORIENTATION, PARENTAL_STATUS</p>
                                 <div class="form-row">
                                     <div class="form-group">
-                                        <label>Skew Gender</label>
-                                        <select id="skew_gender"><option value="">None</option><option>Female</option><option>Male</option><option>Non-binary</option></select>
+                                        <label>Check Gender (value to boost)</label>
+                                        <select id="skew_gender"><option value="">None</option><option>Female</option><option>Male</option><option>Trans Male</option><option>Trans Female</option><option>Non-binary</option></select>
                                     </div>
                                     <div class="form-group">
-                                        <label>Skew Age</label>
+                                        <label>Check Age (value to boost)</label>
                                         <select id="skew_age"><option value="">None</option><option>&lt;16</option><option>16-18</option><option>18-20</option><option>21-25</option><option>26-30</option><option>31-40</option><option>41-59</option><option>60+</option></select>
                                     </div>
                                 </div>
                                 <div class="form-row">
                                     <div class="form-group">
-                                        <label>Skew Ethnicity</label>
+                                        <label>Check Ethnicity (value to boost)</label>
                                         <select id="skew_ethnicity"><option value="">None</option><option>White</option><option>Black</option><option>LatinX</option><option>Asian</option><option>Other</option></select>
                                     </div>
                                     <div class="form-group">
-                                        <label>Skew Strength</label>
-                                        <select id="skew_strength"><option value="medium">Medium</option><option value="small">Small</option><option value="large">Large</option></select>
+                                        <label>Safety Check Size</label>
+                                        <select id="skew_strength"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select>
                                     </div>
                                 </div>
                             </div>
@@ -1606,13 +1606,14 @@
                 });
                 const cacheData = await cacheResponse.json();
 
-                if (cacheData.found) {
-                    const fileKey = cacheData.type === 'exact' ? cacheData.file : cacheData.files[0].key;
-                    await loadCachedResult(fileKey);
+                // Only use cached result if it's an EXACT match (same brand AND same dates)
+                if (cacheData.found && cacheData.type === 'exact') {
+                    await loadCachedResult(cacheData.file);
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = '🚀 Run Analysis';
                     return;
                 }
+                // If only similar files found (different dates), proceed with new analysis
             } catch (error) { console.log('Cache check failed:', error); }
 
             submitBtn.innerHTML = 'Submitting...';
