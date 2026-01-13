@@ -1960,6 +1960,28 @@
             const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'];
             const skipCategories = ['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'];
             const US_POPULATION = 324700000;
+            
+            // HARDCODED GEN POP DEMOGRAPHICS (US Census-based, from bg.py GENPOP_DEMOGRAPHICS)
+            const GENPOP_DEMOGRAPHICS = {
+                'AGE': {
+                    '<16': 16.9, '16-18': 3.7, '18-20': 2.7, '21-25': 6.8,
+                    '26-30': 6.7, '31-40': 13.7, '41-59': 25.1, '60+': 24.5
+                },
+                'GENDER': {
+                    'Female': 48.2, 'Male': 47.8, 'Trans Female': 0.8, 'Trans Male': 1.0, 'Non-Binary': 2.1
+                },
+                'ETHNICITY': {
+                    'White': 59.0, 'LatinX': 18.6, 'Black': 14.3, 'Other': 5.0, 'Asian': 3.0
+                },
+                'INCOME': {
+                    '$40K - $60K': 26.3, '$40K-$60K': 26.3,
+                    '$60K - $75K': 14.3, '$60K-$75K': 14.3,
+                    '$75K - $100K': 19.1, '$75K-$100K': 19.1, '<$75K-$100K': 19.1,
+                    '$100K - $150K': 21.4, '$100K-$150K': 21.4,
+                    '$150K - $250K': 10.6, '$150K-$250K': 10.6,
+                    '$250K+': 8.2
+                }
+            };
 
             csvData.forEach(row => {
                 const category = (row.Column || '').toUpperCase();
@@ -1969,9 +1991,16 @@
                 const rawNumbers = parseInt(row['Original Raw Numbers'] || 0);
                 const usProjection = parseInt(row['US Gen Pop Projection'] || 0);
                 
-                // For behavioral items, Category Share IS the Gen Pop percentage
-                // For demographics, calculate from US Gen Pop Projection
-                const genPopPct = catShare > 0 ? catShare : (usProjection > 0 ? (usProjection / US_POPULATION) * 100 : 0);
+                // For DEMOGRAPHICS: Use hardcoded Gen Pop percentages
+                // For BEHAVIORAL: Category Share IS the Gen Pop percentage
+                let genPopPct = 0;
+                if (demoCategories.includes(category) && GENPOP_DEMOGRAPHICS[category]) {
+                    // Look up hardcoded Gen Pop value for this demographic
+                    genPopPct = GENPOP_DEMOGRAPHICS[category][value] || 0;
+                } else {
+                    // For behavioral items, Category Share is the Gen Pop percentage
+                    genPopPct = catShare > 0 ? catShare : 0;
+                }
                 const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
 
                 // Sample size is in Original Raw Numbers OR Category Share column for SAMPLE SIZE row
