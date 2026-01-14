@@ -1352,6 +1352,109 @@ def api_ai_deck():
     result = generate_business_deck(profile_data, question, findings)
     return jsonify(result)
 
+
+@app.route('/api/ai/generate-logline', methods=['POST'])
+@requires_auth
+def api_generate_logline():
+    """Generate a content logline and concept based on audience analysis."""
+    data = request.get_json()
+    result = generate_content_logline(data)
+    return jsonify(result)
+
+
+def generate_content_logline(analysis_data):
+    """Generate a content logline using AI based on audience analysis."""
+    client = get_openai_client()
+    if not client:
+        return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
+    
+    try:
+        target_demo = analysis_data.get('targetDemo', {})
+        top_shows = analysis_data.get('topShows', [])
+        top_talent = analysis_data.get('topTalent', [])
+        top_brands = analysis_data.get('topBrands', [])
+        gaps = analysis_data.get('gaps', [])
+        genres = analysis_data.get('genres', [])
+        
+        # Build context
+        demo_str = f"Gender: {', '.join(target_demo.get('gender', []))}, Age: {', '.join(target_demo.get('age', []))}"
+        platforms_str = ', '.join(target_demo.get('platforms', []))
+        shows_str = ', '.join([s.get('name', '') for s in top_shows[:5]])
+        talent_str = ', '.join([t.get('name', '') for t in top_talent[:5]])
+        gaps_str = '\n'.join([f"- {g.get('type')}: {g.get('opportunity')}" for g in gaps[:3]])
+        genres_str = ', '.join([f"{g.get('genre')} ({g.get('score')}%)" for g in genres[:4]])
+        
+        prompt = f"""You are a Hollywood content development executive. Based on the following audience analysis, create an original content concept.
+
+TARGET AUDIENCE:
+{demo_str}
+Target Platforms: {platforms_str}
+
+WHAT WORKS FOR THIS AUDIENCE:
+Top performing shows: {shows_str}
+Top genres by audience fit: {genres_str}
+Resonating talent: {talent_str}
+
+CONTENT GAPS/OPPORTUNITIES:
+{gaps_str}
+
+Based on this analysis, create:
+
+1. LOGLINE: A compelling one-sentence pitch for an original series (format: "When [protagonist] [inciting incident], they must [goal] before [stakes]")
+
+2. CONCEPT: A 2-3 sentence expanded description of the series concept
+
+3. GENRE & FORMAT: Recommended genre and format (e.g., "Drama • 1-hour serialized")
+
+4. DEMOGRAPHIC APPEAL: Why this concept will resonate with the target demographic
+
+5. TAGS: 5 descriptive tags for this concept
+
+Respond in JSON format:
+{{
+    "logline": "...",
+    "concept": "...",
+    "genre": "...",
+    "format": "...",
+    "demographicAppeal": "...",
+    "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
+}}"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8
+        )
+        
+        content = response.choices[0].message.content
+        
+        # Parse JSON response
+        import json
+        # Clean up markdown if present
+        if '```json' in content:
+            content = content.split('```json')[1].split('```')[0]
+        elif '```' in content:
+            content = content.split('```')[1].split('```')[0]
+        
+        result = json.loads(content.strip())
+        return result
+        
+    except json.JSONDecodeError as e:
+        print(f"JSON parse error: {e}")
+        return {
+            "logline": "When a diverse group of characters face unexpected challenges, they must unite to overcome obstacles before time runs out.",
+            "concept": "Based on the analysis, we recommend a character-driven drama that resonates with the target demographic's preferences.",
+            "genre": "Drama",
+            "format": "1-hour serialized",
+            "demographicAppeal": "Appeals to the target demographic through relevant themes and relatable characters.",
+            "tags": ["Drama", "Character-Driven", "Contemporary", "Ensemble", "Streaming"],
+            "error": "AI response parsing issue - showing fallback"
+        }
+    except Exception as e:
+        print(f"Error generating logline: {e}")
+        return {"error": str(e)}
+
+
 # ============================================================================
 # FAVORITES/BOOKMARKS
 # ============================================================================

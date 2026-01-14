@@ -1204,6 +1204,284 @@
         .matrix-cell.high { background: rgba(16, 185, 129, 0.3); }
         .matrix-cell.medium { background: rgba(245, 158, 11, 0.3); }
         .matrix-cell.low { background: rgba(239, 68, 68, 0.2); }
+        
+        /* Content Development Tab */
+        .content-dev-container {
+            padding: 1rem;
+        }
+        .content-dev-header {
+            margin-bottom: 1.5rem;
+        }
+        .content-dev-header h2 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.5rem;
+        }
+        .content-dev-header p {
+            color: var(--text-secondary);
+            margin: 0;
+        }
+        .content-dev-grid {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 1.5rem;
+        }
+        .content-input-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem;
+        }
+        .input-section {
+            margin-bottom: 1.5rem;
+        }
+        .input-section h3 {
+            margin: 0 0 0.75rem 0;
+            font-size: 0.95rem;
+            color: var(--accent-cyan);
+        }
+        .input-group {
+            margin-bottom: 0.75rem;
+        }
+        .input-group label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+        }
+        .input-group select {
+            width: 100%;
+            padding: 0.5rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            min-height: 80px;
+        }
+        .platform-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+        .platform-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: var(--bg-input);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .platform-option:hover {
+            background: rgba(74, 138, 201, 0.2);
+        }
+        .platform-option input:checked + span,
+        .platform-option:has(input:checked) {
+            background: rgba(16, 185, 129, 0.2);
+        }
+        .analysis-status {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            text-align: center;
+        }
+        .analysis-status.loading {
+            background: rgba(74, 138, 201, 0.2);
+            color: var(--accent-blue);
+        }
+        .analysis-status.success {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+        .analysis-status.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        
+        .content-results-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem;
+        }
+        .results-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        .result-tab {
+            padding: 0.5rem 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .result-tab.active {
+            background: var(--accent-blue);
+            color: white;
+            border-color: var(--accent-blue);
+        }
+        .content-result-tab {
+            display: none;
+        }
+        .content-result-tab.active {
+            display: block;
+        }
+        .result-header {
+            margin-bottom: 1rem;
+        }
+        .result-header h3 {
+            margin: 0 0 0.25rem 0;
+        }
+        .result-header p {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin: 0;
+        }
+        .content-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .content-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: var(--bg-input);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            transition: all 0.2s;
+        }
+        .content-item:hover {
+            background: rgba(74, 138, 201, 0.15);
+        }
+        .content-item-main {
+            flex: 1;
+        }
+        .content-item-title {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        .content-item-meta {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        .content-item-score {
+            text-align: right;
+        }
+        .content-item-score .score-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #10b981;
+        }
+        .content-item-score .score-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+        .talent-gender-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .gender-tab {
+            padding: 0.35rem 0.75rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 15px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+        .gender-tab.active {
+            background: var(--accent-cyan);
+            color: #1a1a1a;
+            border-color: var(--accent-cyan);
+        }
+        .genre-analysis {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .genre-card {
+            background: var(--bg-input);
+            border-radius: 10px;
+            padding: 1rem;
+        }
+        .genre-card h4 {
+            margin: 0 0 0.75rem 0;
+            font-size: 1rem;
+        }
+        .demo-breakdown {
+            font-size: 0.8rem;
+        }
+        .demo-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.35rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .demo-row:last-child {
+            border-bottom: none;
+        }
+        .demo-row .pct {
+            font-weight: 600;
+        }
+        .demo-row .pct.high { color: #10b981; }
+        .demo-row .pct.medium { color: #f59e0b; }
+        .demo-row .pct.low { color: #ef4444; }
+        
+        .logline-section {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-color);
+        }
+        .logline-section h3 {
+            margin: 0 0 0.5rem 0;
+        }
+        .logline-section p {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin: 0 0 1rem 0;
+        }
+        .logline-result {
+            margin-top: 1rem;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.1));
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 12px;
+        }
+        .logline-content h4 {
+            color: var(--accent-cyan);
+            margin: 0 0 0.5rem 0;
+        }
+        .logline-content p {
+            margin: 0 0 1rem 0;
+            color: var(--text-primary);
+        }
+        .logline-tags {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+        .logline-tag {
+            padding: 0.25rem 0.75rem;
+            background: rgba(74, 138, 201, 0.2);
+            border-radius: 15px;
+            font-size: 0.75rem;
+        }
+        
+        @media (max-width: 900px) {
+            .content-dev-grid {
+                grid-template-columns: 1fr;
+            }
+        }
         .insight-grid-small {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -2353,6 +2631,7 @@
                 <button class="tab-btn" onclick="showTab('sponsorship')">💰 Sponsorship</button>
                 <button class="tab-btn" onclick="showTab('talent')">⭐ Talent Assessment</button>
                 <button class="tab-btn" onclick="showTab('media')">📺 Media Optimizer</button>
+                <button class="tab-btn" onclick="showTab('content')">🎬 Content Dev</button>
                 <button class="tab-btn" onclick="showTab('segmentation')">🎯 Segment Builder</button>
                 <button class="tab-btn" onclick="showTab('comparison')">📊 Comparison</button>
             </div>
@@ -2626,6 +2905,150 @@
                         <div class="media-card wide">
                             <h3>📊 Channel Reach Comparison</h3>
                             <canvas id="mediaReachChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content Development Tab -->
+            <div id="tab-content" class="tab-content">
+                <div class="content-dev-container">
+                    <div class="content-dev-header">
+                        <h2>🎬 Content Development Lab</h2>
+                        <p>Discover content opportunities based on audience data across platforms and talent</p>
+                    </div>
+                    
+                    <div class="content-dev-grid">
+                        <!-- Input Panel -->
+                        <div class="content-input-panel">
+                            <div class="input-section">
+                                <h3>🎯 Target Audience</h3>
+                                <div class="input-group">
+                                    <label>Gender</label>
+                                    <select id="contentGender" multiple>
+                                        <option value="Female">Female</option>
+                                        <option value="Male">Male</option>
+                                        <option value="Non-Binary">Non-Binary</option>
+                                    </select>
+                                </div>
+                                <div class="input-group">
+                                    <label>Age Range</label>
+                                    <select id="contentAge" multiple>
+                                        <option value="<16">Under 16</option>
+                                        <option value="16-18">16-18</option>
+                                        <option value="18-20">18-20</option>
+                                        <option value="21-25">21-25</option>
+                                        <option value="26-30">26-30</option>
+                                        <option value="31-40">31-40</option>
+                                        <option value="41-59">41-59</option>
+                                        <option value="60+">60+</option>
+                                    </select>
+                                </div>
+                                <div class="input-group">
+                                    <label>Income</label>
+                                    <select id="contentIncome" multiple>
+                                        <option value="$40K-$60K">$40K-$60K</option>
+                                        <option value="$60K-$75K">$60K-$75K</option>
+                                        <option value="$75K-$100K">$75K-$100K</option>
+                                        <option value="$100K-$150K">$100K-$150K</option>
+                                        <option value="$150K-$250K">$150K-$250K</option>
+                                        <option value="$250K+">$250K+</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="input-section">
+                                <h3>📺 Platform</h3>
+                                <div class="platform-grid" id="platformGrid">
+                                    <label class="platform-option"><input type="checkbox" value="NETFLIX"> Netflix</label>
+                                    <label class="platform-option"><input type="checkbox" value="HULU"> Hulu</label>
+                                    <label class="platform-option"><input type="checkbox" value="HBO"> HBO/Max</label>
+                                    <label class="platform-option"><input type="checkbox" value="DISNEY"> Disney+</label>
+                                    <label class="platform-option"><input type="checkbox" value="PARAMOUNT"> Paramount+</label>
+                                    <label class="platform-option"><input type="checkbox" value="PEACOCK"> Peacock</label>
+                                    <label class="platform-option"><input type="checkbox" value="AMAZON"> Prime Video</label>
+                                    <label class="platform-option"><input type="checkbox" value="APPLE"> Apple TV+</label>
+                                    <label class="platform-option"><input type="checkbox" value="BROADCAST"> Broadcast</label>
+                                    <label class="platform-option"><input type="checkbox" value="CABLE"> Cable</label>
+                                </div>
+                            </div>
+                            
+                            <button class="btn btn-primary" onclick="runContentAnalysis()" style="width: 100%; margin-top: 1rem;">
+                                🔍 Analyze Content Opportunities
+                            </button>
+                            
+                            <div id="contentAnalysisStatus" class="analysis-status"></div>
+                        </div>
+                        
+                        <!-- Results Panel -->
+                        <div class="content-results-panel" id="contentResultsPanel" style="display: none;">
+                            <div class="results-tabs">
+                                <button class="result-tab active" onclick="showContentResultTab('shows')">📺 Shows</button>
+                                <button class="result-tab" onclick="showContentResultTab('gaps')">🎯 Gaps</button>
+                                <button class="result-tab" onclick="showContentResultTab('talent')">⭐ Talent</button>
+                                <button class="result-tab" onclick="showContentResultTab('brands')">💰 Brands</button>
+                                <button class="result-tab" onclick="showContentResultTab('genres')">🎭 Genres</button>
+                            </div>
+                            
+                            <!-- Shows Tab -->
+                            <div id="contentTab-shows" class="content-result-tab active">
+                                <div class="result-header">
+                                    <h3>📺 Top Performing Shows for This Audience</h3>
+                                    <p>Series that resonate with your target demographics</p>
+                                </div>
+                                <div id="contentShowsList" class="content-list"></div>
+                            </div>
+                            
+                            <!-- Gaps Tab -->
+                            <div id="contentTab-gaps" class="content-result-tab">
+                                <div class="result-header">
+                                    <h3>🎯 Content Gaps & Opportunities</h3>
+                                    <p>What's missing in the current content landscape</p>
+                                </div>
+                                <div id="contentGapsList" class="content-list"></div>
+                            </div>
+                            
+                            <!-- Talent Tab -->
+                            <div id="contentTab-talent" class="content-result-tab">
+                                <div class="result-header">
+                                    <h3>⭐ Recommended Talent</h3>
+                                    <p>Actors and personalities who resonate with this audience</p>
+                                </div>
+                                <div class="talent-gender-tabs">
+                                    <button class="gender-tab active" onclick="filterTalentByGender('all')">All</button>
+                                    <button class="gender-tab" onclick="filterTalentByGender('female')">Female</button>
+                                    <button class="gender-tab" onclick="filterTalentByGender('male')">Male</button>
+                                </div>
+                                <div id="contentTalentList" class="content-list"></div>
+                            </div>
+                            
+                            <!-- Brands Tab -->
+                            <div id="contentTab-brands" class="content-result-tab">
+                                <div class="result-header">
+                                    <h3>💰 Brand Integration Opportunities</h3>
+                                    <p>Brands ideal for product placement and integration</p>
+                                </div>
+                                <div id="contentBrandsList" class="content-list"></div>
+                            </div>
+                            
+                            <!-- Genres Tab -->
+                            <div id="contentTab-genres" class="content-result-tab">
+                                <div class="result-header">
+                                    <h3>🎭 Genre Performance by Demographics</h3>
+                                    <p>How genres perform across age and gender segments</p>
+                                </div>
+                                <div id="contentGenreAnalysis" class="genre-analysis"></div>
+                            </div>
+                            
+                            <!-- Logline Generator -->
+                            <div class="logline-section">
+                                <h3>✨ AI Content Generator</h3>
+                                <p>Based on the analysis, generate content recommendations</p>
+                                <button class="btn btn-primary" onclick="generateLogline()" id="loglineBtn">
+                                    🎬 Generate Logline & Content Concept
+                                </button>
+                                <div id="loglineResult" class="logline-result"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -4926,6 +5349,495 @@
                 });
             }
             return items;
+        }
+        
+        // ============================================================================
+        // CONTENT DEVELOPMENT FUNCTIONS
+        // ============================================================================
+        
+        let contentAnalysisData = {
+            shows: [],
+            talent: [],
+            brands: [],
+            genres: {},
+            gaps: []
+        };
+        
+        async function runContentAnalysis() {
+            const status = document.getElementById('contentAnalysisStatus');
+            const resultsPanel = document.getElementById('contentResultsPanel');
+            
+            // Get selected demographics
+            const gender = Array.from(document.getElementById('contentGender').selectedOptions).map(o => o.value);
+            const age = Array.from(document.getElementById('contentAge').selectedOptions).map(o => o.value);
+            const income = Array.from(document.getElementById('contentIncome').selectedOptions).map(o => o.value);
+            
+            // Get selected platforms
+            const platforms = Array.from(document.querySelectorAll('#platformGrid input:checked')).map(i => i.value);
+            
+            if (platforms.length === 0) {
+                status.className = 'analysis-status error';
+                status.textContent = '⚠️ Please select at least one platform';
+                return;
+            }
+            
+            status.className = 'analysis-status loading';
+            status.textContent = '🔄 Analyzing content across ' + platforms.length + ' platform(s)...';
+            
+            try {
+                // Fetch all cached files to analyze
+                const response = await fetch('/api/jobs');
+                const data = await response.json();
+                const allJobs = data.jobs || [];
+                
+                // Filter for series and relevant profiles
+                const seriesProfiles = allJobs.filter(job => {
+                    const cat = (job.category || '').toUpperCase();
+                    return cat.startsWith('SERIES') || cat.includes('SERIES -') || cat.includes('TV');
+                });
+                
+                const actorProfiles = allJobs.filter(job => {
+                    const cat = (job.category || '').toUpperCase();
+                    return cat === 'ACTOR' || cat === 'ACTRESS' || cat.includes('TALENT') || cat.includes('CELEBRITY');
+                });
+                
+                const brandProfiles = allJobs.filter(job => {
+                    const cat = (job.category || '').toUpperCase();
+                    return cat.includes('BRAND') || cat.includes('RETAIL') || cat.includes('CPG') || cat.includes('APPAREL');
+                });
+                
+                // Load and analyze each profile
+                status.textContent = '🔄 Loading ' + seriesProfiles.length + ' series profiles...';
+                
+                const showsData = [];
+                const talentData = [];
+                const brandsData = [];
+                
+                // Analyze top series (limit to prevent overload)
+                for (const show of seriesProfiles.slice(0, 30)) {
+                    try {
+                        const profileData = await fetchProfileData(show.s3_key || show.job_id);
+                        if (profileData) {
+                            const score = calculateAudienceFit(profileData, { gender, age, income });
+                            const platform = detectPlatform(show.project_name, show.category);
+                            
+                            if (platforms.length === 0 || platforms.some(p => platform.toUpperCase().includes(p))) {
+                                showsData.push({
+                                    name: show.project_name,
+                                    platform: platform,
+                                    score: score,
+                                    demographics: profileData.demographics,
+                                    category: show.category
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        console.log('Error loading show:', show.project_name, e);
+                    }
+                }
+                
+                // Analyze talent
+                status.textContent = '🔄 Analyzing talent profiles...';
+                for (const talent of actorProfiles.slice(0, 30)) {
+                    try {
+                        const profileData = await fetchProfileData(talent.s3_key || talent.job_id);
+                        if (profileData) {
+                            const score = calculateAudienceFit(profileData, { gender, age, income });
+                            const talentGender = detectTalentGender(talent.project_name, profileData);
+                            talentData.push({
+                                name: talent.project_name,
+                                gender: talentGender,
+                                score: score,
+                                demographics: profileData.demographics,
+                                sampleSize: profileData.sampleSize
+                            });
+                        }
+                    } catch (e) {
+                        console.log('Error loading talent:', talent.project_name, e);
+                    }
+                }
+                
+                // Analyze brands for integration
+                status.textContent = '🔄 Identifying brand opportunities...';
+                for (const brand of brandProfiles.slice(0, 20)) {
+                    try {
+                        const profileData = await fetchProfileData(brand.s3_key || brand.job_id);
+                        if (profileData) {
+                            const score = calculateAudienceFit(profileData, { gender, age, income });
+                            brandsData.push({
+                                name: brand.project_name,
+                                category: brand.category,
+                                score: score,
+                                demographics: profileData.demographics
+                            });
+                        }
+                    } catch (e) {
+                        console.log('Error loading brand:', brand.project_name, e);
+                    }
+                }
+                
+                // Sort by score
+                showsData.sort((a, b) => b.score - a.score);
+                talentData.sort((a, b) => b.score - a.score);
+                brandsData.sort((a, b) => b.score - a.score);
+                
+                // Store results
+                contentAnalysisData = {
+                    shows: showsData,
+                    talent: talentData,
+                    brands: brandsData,
+                    genres: analyzeGenres(showsData),
+                    gaps: identifyContentGaps(showsData, { gender, age, platforms }),
+                    targetDemo: { gender, age, income, platforms }
+                };
+                
+                // Render results
+                renderContentResults();
+                
+                status.className = 'analysis-status success';
+                status.textContent = '✅ Analysis complete! Found ' + showsData.length + ' shows, ' + talentData.length + ' talent, ' + brandsData.length + ' brands';
+                resultsPanel.style.display = 'block';
+                
+            } catch (error) {
+                status.className = 'analysis-status error';
+                status.textContent = '❌ Error: ' + error.message;
+                console.error('Content analysis error:', error);
+            }
+        }
+        
+        async function fetchProfileData(key) {
+            try {
+                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(key)}`);
+                const data = await response.json();
+                if (data.success) {
+                    const parsed = parseAllData(data.data);
+                    return {
+                        demographics: parsed.demographics,
+                        behavioral: parsed.behavioral,
+                        sampleSize: parsed.sampleSize
+                    };
+                }
+            } catch (e) {
+                console.log('Fetch error:', e);
+            }
+            return null;
+        }
+        
+        function calculateAudienceFit(profileData, targetDemo) {
+            let score = 50; // Base score
+            const demo = profileData.demographics || {};
+            
+            // Gender fit
+            if (targetDemo.gender && targetDemo.gender.length > 0 && demo.gender) {
+                const genderPct = targetDemo.gender.reduce((sum, g) => sum + (demo.gender[g] || 0), 0);
+                score += genderPct * 0.3;
+            }
+            
+            // Age fit
+            if (targetDemo.age && targetDemo.age.length > 0 && demo.age) {
+                const agePct = targetDemo.age.reduce((sum, a) => sum + (demo.age[a] || 0), 0);
+                score += agePct * 0.4;
+            }
+            
+            // Income fit
+            if (targetDemo.income && targetDemo.income.length > 0 && demo.income) {
+                const incomePct = targetDemo.income.reduce((sum, i) => sum + (demo.income[i] || 0), 0);
+                score += incomePct * 0.3;
+            }
+            
+            return Math.round(Math.min(100, score));
+        }
+        
+        function detectPlatform(name, category) {
+            const text = (name + ' ' + (category || '')).toUpperCase();
+            if (text.includes('NETFLIX')) return 'Netflix';
+            if (text.includes('HULU')) return 'Hulu';
+            if (text.includes('HBO') || text.includes('MAX')) return 'HBO/Max';
+            if (text.includes('DISNEY')) return 'Disney+';
+            if (text.includes('PARAMOUNT') || text.includes('CBS')) return 'Paramount+';
+            if (text.includes('PEACOCK') || text.includes('NBC')) return 'Peacock';
+            if (text.includes('AMAZON') || text.includes('PRIME')) return 'Prime Video';
+            if (text.includes('APPLE')) return 'Apple TV+';
+            if (text.includes('ABC') || text.includes('FOX') || text.includes('CW')) return 'Broadcast';
+            return 'Cable/Other';
+        }
+        
+        function detectTalentGender(name, profileData) {
+            // Simple heuristic - in production would use a more robust method
+            const demo = profileData?.demographics?.gender || {};
+            const femalePct = demo['Female'] || 0;
+            const malePct = demo['Male'] || 0;
+            
+            // If audience skews heavily one way, talent might be that gender
+            // This is a very rough heuristic
+            if (femalePct > 65) return 'female';
+            if (malePct > 65) return 'male';
+            return 'unknown';
+        }
+        
+        function analyzeGenres(showsData) {
+            // Simplified genre analysis - in production would use AI to detect genres
+            const genres = {
+                'Drama': { shows: [], avgScore: 0, demographics: {} },
+                'Comedy': { shows: [], avgScore: 0, demographics: {} },
+                'Action/Thriller': { shows: [], avgScore: 0, demographics: {} },
+                'Sci-Fi/Fantasy': { shows: [], avgScore: 0, demographics: {} },
+                'Reality': { shows: [], avgScore: 0, demographics: {} },
+                'Documentary': { shows: [], avgScore: 0, demographics: {} }
+            };
+            
+            // Simple keyword-based genre detection
+            showsData.forEach(show => {
+                const name = show.name.toUpperCase();
+                if (name.includes('REAL') || name.includes('HOUSE')) {
+                    genres['Reality'].shows.push(show);
+                } else if (name.includes('DOC') || name.includes('TRUE')) {
+                    genres['Documentary'].shows.push(show);
+                } else if (name.includes('DEAD') || name.includes('THRON') || name.includes('WARS')) {
+                    genres['Sci-Fi/Fantasy'].shows.push(show);
+                } else if (name.includes('KILL') || name.includes('CRIME') || name.includes('LAW')) {
+                    genres['Action/Thriller'].shows.push(show);
+                } else if (name.includes('OFFICE') || name.includes('FRIENDS') || name.includes('SITCOM')) {
+                    genres['Comedy'].shows.push(show);
+                } else {
+                    genres['Drama'].shows.push(show);
+                }
+            });
+            
+            // Calculate average scores
+            Object.keys(genres).forEach(genre => {
+                const shows = genres[genre].shows;
+                if (shows.length > 0) {
+                    genres[genre].avgScore = Math.round(shows.reduce((sum, s) => sum + s.score, 0) / shows.length);
+                }
+            });
+            
+            return genres;
+        }
+        
+        function identifyContentGaps(showsData, targetDemo) {
+            const gaps = [];
+            
+            // Check platform coverage
+            const platformCoverage = {};
+            showsData.forEach(show => {
+                platformCoverage[show.platform] = (platformCoverage[show.platform] || 0) + 1;
+            });
+            
+            targetDemo.platforms.forEach(platform => {
+                if (!platformCoverage[platform] || platformCoverage[platform] < 3) {
+                    gaps.push({
+                        type: 'Platform Gap',
+                        description: `Limited content on ${platform} for this audience`,
+                        opportunity: `Create original content for ${platform}`,
+                        priority: 'High'
+                    });
+                }
+            });
+            
+            // Check demographic gaps
+            if (targetDemo.age.includes('21-25') || targetDemo.age.includes('26-30')) {
+                gaps.push({
+                    type: 'Young Adult Content',
+                    description: 'Young adult audiences (21-30) often underserved',
+                    opportunity: 'Develop content addressing young adult themes and lifestyles',
+                    priority: 'Medium'
+                });
+            }
+            
+            if (targetDemo.gender.includes('Female')) {
+                gaps.push({
+                    type: 'Female-Led Content',
+                    description: 'Female audiences seeking more representation',
+                    opportunity: 'Develop female-led series with strong protagonists',
+                    priority: 'High'
+                });
+            }
+            
+            gaps.push({
+                type: 'Cross-Platform Appeal',
+                description: 'Content that can work across multiple platforms',
+                opportunity: 'Develop IP with franchise potential for multiple platforms',
+                priority: 'Medium'
+            });
+            
+            return gaps;
+        }
+        
+        function renderContentResults() {
+            // Render shows
+            document.getElementById('contentShowsList').innerHTML = contentAnalysisData.shows.slice(0, 15).map(show => `
+                <div class="content-item">
+                    <div class="content-item-main">
+                        <div class="content-item-title">${show.name}</div>
+                        <div class="content-item-meta">${show.platform} • ${show.category || 'Series'}</div>
+                    </div>
+                    <div class="content-item-score">
+                        <div class="score-value">${show.score}</div>
+                        <div class="score-label">Fit Score</div>
+                    </div>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No series found. Run a broader analysis.</p>';
+            
+            // Render gaps
+            document.getElementById('contentGapsList').innerHTML = contentAnalysisData.gaps.map(gap => `
+                <div class="content-item">
+                    <div class="content-item-main">
+                        <div class="content-item-title">${gap.type}</div>
+                        <div class="content-item-meta">${gap.description}</div>
+                        <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #10b981;">💡 ${gap.opportunity}</div>
+                    </div>
+                    <div class="content-item-score">
+                        <div class="score-value" style="font-size: 0.9rem; color: ${gap.priority === 'High' ? '#ef4444' : '#f59e0b'};">${gap.priority}</div>
+                        <div class="score-label">Priority</div>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Render talent
+            renderTalentList('all');
+            
+            // Render brands
+            document.getElementById('contentBrandsList').innerHTML = contentAnalysisData.brands.slice(0, 10).map(brand => `
+                <div class="content-item">
+                    <div class="content-item-main">
+                        <div class="content-item-title">${brand.name}</div>
+                        <div class="content-item-meta">${brand.category || 'Brand'}</div>
+                    </div>
+                    <div class="content-item-score">
+                        <div class="score-value">${brand.score}</div>
+                        <div class="score-label">Match Score</div>
+                    </div>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No brand data available.</p>';
+            
+            // Render genres
+            renderGenreAnalysis();
+        }
+        
+        function renderTalentList(genderFilter) {
+            let filteredTalent = contentAnalysisData.talent;
+            
+            if (genderFilter !== 'all') {
+                filteredTalent = filteredTalent.filter(t => t.gender === genderFilter);
+            }
+            
+            document.getElementById('contentTalentList').innerHTML = filteredTalent.slice(0, 10).map(talent => `
+                <div class="content-item">
+                    <div class="content-item-main">
+                        <div class="content-item-title">${talent.name}</div>
+                        <div class="content-item-meta">Sample: n=${formatNumber(talent.sampleSize || 0)}</div>
+                    </div>
+                    <div class="content-item-score">
+                        <div class="score-value">${talent.score}</div>
+                        <div class="score-label">Fit Score</div>
+                    </div>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No talent profiles found matching criteria.</p>';
+        }
+        
+        function filterTalentByGender(gender) {
+            document.querySelectorAll('.gender-tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            renderTalentList(gender);
+        }
+        
+        function renderGenreAnalysis() {
+            const genres = contentAnalysisData.genres;
+            const targetDemo = contentAnalysisData.targetDemo || {};
+            
+            document.getElementById('contentGenreAnalysis').innerHTML = Object.entries(genres)
+                .filter(([_, data]) => data.shows.length > 0)
+                .sort((a, b) => b[1].avgScore - a[1].avgScore)
+                .map(([genre, data]) => {
+                    const scoreClass = data.avgScore >= 70 ? 'high' : data.avgScore >= 50 ? 'medium' : 'low';
+                    return `
+                        <div class="genre-card">
+                            <h4>${genre}</h4>
+                            <div style="font-size: 1.5rem; font-weight: 700; color: ${scoreClass === 'high' ? '#10b981' : scoreClass === 'medium' ? '#f59e0b' : '#ef4444'};">${data.avgScore}%</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Audience Fit Score</div>
+                            <div class="demo-breakdown">
+                                <div class="demo-row">
+                                    <span>Shows Analyzed</span>
+                                    <span class="pct">${data.shows.length}</span>
+                                </div>
+                                <div class="demo-row">
+                                    <span>Avg Score</span>
+                                    <span class="pct ${scoreClass}">${data.avgScore}%</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('') || '<p style="color: var(--text-secondary);">Run analysis to see genre breakdown.</p>';
+        }
+        
+        function showContentResultTab(tabName) {
+            document.querySelectorAll('.content-result-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.result-tab').forEach(b => b.classList.remove('active'));
+            document.getElementById('contentTab-' + tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        async function generateLogline() {
+            const btn = document.getElementById('loglineBtn');
+            const result = document.getElementById('loglineResult');
+            
+            if (!contentAnalysisData.shows.length) {
+                alert('Please run the content analysis first');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = '🔄 Generating...';
+            result.innerHTML = '<p style="color: var(--text-secondary);">AI is analyzing the data and generating content recommendations...</p>';
+            
+            try {
+                const response = await fetch('/api/ai/generate-logline', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        targetDemo: contentAnalysisData.targetDemo,
+                        topShows: contentAnalysisData.shows.slice(0, 5),
+                        topTalent: contentAnalysisData.talent.slice(0, 5),
+                        topBrands: contentAnalysisData.brands.slice(0, 5),
+                        gaps: contentAnalysisData.gaps,
+                        genres: Object.entries(contentAnalysisData.genres)
+                            .filter(([_, d]) => d.avgScore > 0)
+                            .map(([g, d]) => ({ genre: g, score: d.avgScore }))
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    result.innerHTML = `<p style="color: #ef4444;">Error: ${data.error}</p>`;
+                } else {
+                    result.innerHTML = `
+                        <div class="logline-content">
+                            <h4>🎬 Recommended Logline</h4>
+                            <p style="font-size: 1.1rem; font-style: italic; border-left: 3px solid var(--accent-cyan); padding-left: 1rem;">"${data.logline}"</p>
+                            
+                            <h4 style="margin-top: 1.5rem;">📝 Content Concept</h4>
+                            <p>${data.concept}</p>
+                            
+                            <h4 style="margin-top: 1.5rem;">🎭 Suggested Genre & Format</h4>
+                            <p>${data.genre} • ${data.format}</p>
+                            
+                            <h4 style="margin-top: 1.5rem;">👥 Target Demographic Appeal</h4>
+                            <p>${data.demographicAppeal}</p>
+                            
+                            <div class="logline-tags">
+                                ${(data.tags || []).map(tag => `<span class="logline-tag">${tag}</span>`).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                result.innerHTML = `<p style="color: #ef4444;">Error generating logline: ${error.message}</p>`;
+            }
+            
+            btn.disabled = false;
+            btn.textContent = '🎬 Generate Logline & Content Concept';
         }
         
         // ============================================================================
