@@ -1096,6 +1096,16 @@ def logout():
     session.clear()
     return redirect(url_for('login_page'))
 
+@app.route('/terms')
+def terms_page():
+    """Terms of Use page - accessible without login"""
+    return render_template('terms.html')
+
+@app.route('/privacy')
+def privacy_page():
+    """Privacy Policy page - accessible without login"""
+    return render_template('privacy.html')
+
 @app.route('/admin')
 @requires_admin
 def admin_portal():
