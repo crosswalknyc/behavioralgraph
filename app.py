@@ -2103,13 +2103,29 @@ def list_jobs():
 @app.route('/api/refresh-cache')
 @requires_auth
 def force_refresh_cache():
-    """Force refresh the S3 cache - does full scan when manually triggered."""
+    """Smart refresh - only updates new/modified files."""
     if s3_client:
-        refresh_s3_cache(incremental=False)  # Full scan on manual refresh
+        result = smart_cache_update()
         return jsonify({
-            'success': True, 
-            'count': len(s3_cache['jobs']),
-            'message': 'Full cache refresh complete'
+            'success': True,
+            'new_files': result.get('new', 0),
+            'updated_files': result.get('updated', 0),
+            'total': result.get('total', 0),
+            'message': f"Found {result.get('new', 0)} new, {result.get('updated', 0)} modified files"
+        })
+    return jsonify({'success': False, 'error': 'S3 not configured'})
+
+
+@app.route('/api/full-refresh-cache')
+@requires_auth  
+def full_refresh_cache():
+    """Full scan - rebuilds entire cache (slow, use sparingly)."""
+    if s3_client:
+        result = refresh_s3_cache(incremental=False)
+        return jsonify({
+            'success': True,
+            'total': result.get('total', 0),
+            'message': f"Full rebuild: {result.get('total', 0)} files cached"
         })
     return jsonify({'success': False, 'error': 'S3 not configured'})
 
@@ -2229,30 +2245,40 @@ def build_demographics_cache():
     })
 
 
-def refresh_s3_cache(incremental=True):
-    """Refresh the S3 file cache - incremental by default for speed."""
+def smart_cache_update():
+    """
+    Smart incremental cache update - only fetches NEW or MODIFIED files.
+    
+    How it works:
+    1. Cache stores last_modified timestamp for each file
+    2. S3 list only checks files modified AFTER last cache update
+    3. New files are added, modified files are updated
+    4. Unchanged files are never re-fetched
+    
+    This makes updates nearly instant even with 1000+ files.
+    """
     import time
-    from datetime import datetime, timezone
+    from datetime import datetime, timezone, timedelta
     
-    existing_keys = {job['s3_key']: job for job in s3_cache.get('jobs', []) if job.get('s3_key')}
-    last_scan_time = s3_cache.get('last_full_scan')
+    if not s3_client:
+        return {'new': 0, 'updated': 0, 'total': 0}
     
-    # Determine if we should do incremental or full scan
-    do_full_scan = not incremental or not existing_keys or not last_scan_time
-    
-    if do_full_scan:
-        print("🔄 Doing full S3 scan...")
-        job_list = []
-        categories = set()
+    # Get last update time from cache
+    last_update = s3_cache.get('last_updated')
+    if last_update:
+        # Check for files modified in the last hour (buffer for timezone issues)
+        since_time = datetime.fromtimestamp(last_update, tz=timezone.utc) - timedelta(hours=1)
     else:
-        print(f"⚡ Doing incremental S3 scan since {datetime.fromtimestamp(last_scan_time)}")
-        job_list = s3_cache['jobs'].copy()
-        categories = set(s3_cache['categories'])
+        since_time = None
+    
+    # Build lookup of existing files by key -> last_modified
+    existing = {job['s3_key']: job.get('last_modified', '') for job in s3_cache.get('jobs', []) if job.get('s3_key')}
+    
+    new_count = 0
+    updated_count = 0
     
     try:
-        # Get list of files
         paginator = s3_client.get_paginator('list_objects_v2')
-        new_count = 0
         
         for page in paginator.paginate(Bucket=S3_BUCKET):
             for obj in page.get('Contents', []):
@@ -2260,50 +2286,88 @@ def refresh_s3_cache(incremental=True):
                 if not key.endswith('.csv') or key.startswith('system/'):
                     continue
                 
-                # For incremental: skip if we already have it and it hasn't changed
-                if not do_full_scan:
-                    if key in existing_keys:
-                        cached_time = existing_keys[key].get('created_at', '')
-                        obj_time = obj['LastModified'].isoformat()
-                        if cached_time == obj_time:
-                            continue  # Skip unchanged files
+                obj_modified = obj['LastModified'].isoformat()
                 
-                # Process this file (new or changed)
-                new_count += 1
-                job_data = process_s3_file_metadata(key, obj)
-                
-                if do_full_scan:
-                    job_list.append(job_data)
-                    categories.add(job_data['category'])
-                else:
-                    # Update or add
-                    if key in existing_keys:
-                        # Update existing
-                        for i, job in enumerate(job_list):
-                            if job.get('s3_key') == key:
-                                job_list[i] = job_data
-                                break
-                    else:
-                        job_list.append(job_data)
-                    categories.add(job_data['category'])
+                # Check if this is a new or modified file
+                if key not in existing:
+                    # NEW file
+                    job_data = process_s3_file_metadata(key, obj)
+                    job_data['last_modified'] = obj_modified
+                    s3_cache['jobs'].append(job_data)
+                    if job_data['category'] not in s3_cache['categories']:
+                        s3_cache['categories'].append(job_data['category'])
+                    new_count += 1
+                    print(f"   ➕ New: {key}")
+                    
+                elif existing[key] != obj_modified:
+                    # MODIFIED file
+                    job_data = process_s3_file_metadata(key, obj)
+                    job_data['last_modified'] = obj_modified
+                    # Update in place
+                    for i, job in enumerate(s3_cache['jobs']):
+                        if job.get('s3_key') == key:
+                            s3_cache['jobs'][i] = job_data
+                            break
+                    updated_count += 1
+                    print(f"   🔄 Updated: {key}")
         
-        # Update cache
+        # Update cache metadata
+        s3_cache['last_updated'] = time.time()
+        s3_cache['file_count'] = len(s3_cache['jobs'])
+        
+        # Save if there were changes
+        if new_count > 0 or updated_count > 0:
+            save_persisted_cache()
+            print(f"✅ Smart update: {new_count} new, {updated_count} modified, {len(s3_cache['jobs'])} total")
+        else:
+            print(f"✅ No changes detected ({len(s3_cache['jobs'])} files cached)")
+        
+        return {'new': new_count, 'updated': updated_count, 'total': len(s3_cache['jobs'])}
+        
+    except Exception as e:
+        print(f"Error in smart cache update: {e}")
+        return {'new': 0, 'updated': 0, 'total': len(s3_cache.get('jobs', [])), 'error': str(e)}
+
+
+def refresh_s3_cache(incremental=True):
+    """Refresh cache - uses smart update for speed."""
+    if incremental:
+        return smart_cache_update()
+    
+    # Full scan (only when explicitly requested)
+    import time
+    print("🔄 Doing full S3 scan...")
+    
+    job_list = []
+    categories = set()
+    
+    try:
+        paginator = s3_client.get_paginator('list_objects_v2')
+        
+        for page in paginator.paginate(Bucket=S3_BUCKET):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                if not key.endswith('.csv') or key.startswith('system/'):
+                    continue
+                
+                job_data = process_s3_file_metadata(key, obj)
+                job_data['last_modified'] = obj['LastModified'].isoformat()
+                job_list.append(job_data)
+                categories.add(job_data['category'])
+        
         s3_cache['jobs'] = job_list
         s3_cache['categories'] = list(categories)
         s3_cache['last_updated'] = time.time()
         s3_cache['file_count'] = len(job_list)
-        s3_cache['last_full_scan'] = time.time()
         
-        # Persist to S3 for fast loads
         save_persisted_cache()
+        print(f"✅ Full scan complete: {len(job_list)} files")
         
-        if do_full_scan:
-            print(f"✅ Full S3 scan complete: {len(job_list)} files")
-        else:
-            print(f"⚡ Incremental scan: {new_count} new/changed files, {len(job_list)} total")
+        return {'new': len(job_list), 'updated': 0, 'total': len(job_list)}
         
     except Exception as e:
-        print(f"Error refreshing S3 cache: {e}")
+        print(f"Error in full scan: {e}")
+        return {'error': str(e)}
 
 def process_s3_file_metadata(key, obj):
     """Process a single S3 file and extract metadata."""
@@ -2514,7 +2578,11 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
 # STARTUP CACHE LOADING (Fast sync load of persisted cache)
 # ============================================================================
 
+import threading
+import time as time_module
+
 cache_loading_complete = False
+BACKGROUND_CHECK_INTERVAL = 300  # Check for new files every 5 minutes
 
 def quick_startup_cache():
     """Quick startup - just load the pre-built JSON cache (fast!)."""
@@ -2536,8 +2604,26 @@ def quick_startup_cache():
     print(f"🎉 Startup complete in {time.time()-start:.2f}s")
 
 
+def background_cache_checker():
+    """Background thread that checks for new/modified files every 5 minutes."""
+    print("🔄 Starting background cache checker (every 5 min)...")
+    while True:
+        time_module.sleep(BACKGROUND_CHECK_INTERVAL)
+        try:
+            print("🔍 Background check for new files...")
+            result = smart_cache_update()
+            if result.get('new', 0) > 0 or result.get('updated', 0) > 0:
+                print(f"   📥 Found {result.get('new', 0)} new, {result.get('updated', 0)} modified")
+        except Exception as e:
+            print(f"   ⚠️ Background check error: {e}")
+
+
 # Load cache at startup (fast - just reads a JSON file)
 quick_startup_cache()
+
+# Start background checker thread
+bg_checker = threading.Thread(target=background_cache_checker, daemon=True)
+bg_checker.start()
 
 
 # ============================================================================

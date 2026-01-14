@@ -8509,14 +8509,24 @@
 
         async function refreshCache() {
             const btn = document.getElementById('refreshBtn');
+            const cacheStatus = document.getElementById('cacheStatus');
             btn.disabled = true;
             btn.textContent = '⏳';
             
             try {
-                await fetch('/api/refresh-cache');
+                const response = await fetch('/api/refresh-cache');
+                const data = await response.json();
+                
+                if (data.new_files > 0 || data.updated_files > 0) {
+                    cacheStatus.innerHTML = `<span style="color: var(--accent-green); font-size: 0.7rem;">✅ +${data.new_files} new, ${data.updated_files} updated</span>`;
+                } else {
+                    cacheStatus.innerHTML = `<span style="color: var(--text-secondary); font-size: 0.7rem;">✅ No new files (${data.total} cached)</span>`;
+                }
+                
                 await loadJobs();
             } catch (error) {
                 console.error('Refresh failed:', error);
+                cacheStatus.innerHTML = `<span style="color: var(--accent-red); font-size: 0.7rem;">❌ Refresh failed</span>`;
             }
             
             btn.disabled = false;
