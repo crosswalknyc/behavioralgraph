@@ -56,18 +56,33 @@ except Exception as e:
 # OPENAI INTEGRATION
 # ============================================================================
 
-try:
-    from openai import OpenAI
-    openai_client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
-    print("✅ OpenAI client initialized")
-except Exception as e:
-    print(f"Warning: OpenAI client initialization failed: {e}")
-    openai_client = None
+openai_client = None
+
+def get_openai_client():
+    """Get or create OpenAI client - checks for API key at runtime."""
+    global openai_client
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        return None
+    if openai_client is None:
+        try:
+            from openai import OpenAI
+            openai_client = OpenAI(api_key=api_key)
+            print("✅ OpenAI client initialized")
+        except Exception as e:
+            print(f"Warning: OpenAI client initialization failed: {e}")
+            return None
+    return openai_client
+
+# Try to initialize at startup if key exists
+if os.environ.get('OPENAI_API_KEY'):
+    get_openai_client()
 
 def generate_ai_insights(profile_data):
     """Generate AI-powered insights from profile data."""
-    if not openai_client:
-        return {"error": "OpenAI not configured"}
+    client = get_openai_client()
+    if not client:
+        return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
         # Prepare data summary for GPT
@@ -114,7 +129,7 @@ Provide insights about:
 
 Keep each insight to 1-2 sentences. Be specific with numbers."""
 
-        response = openai_client.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an expert audience analyst. Provide clear, actionable insights about consumer audiences based on behavioral and demographic data. Focus on what makes this audience unique and how marketers can reach them."},
@@ -133,8 +148,9 @@ Keep each insight to 1-2 sentences. Be specific with numbers."""
 
 def generate_persona(profile_data):
     """Generate an AI persona from profile data."""
-    if not openai_client:
-        return {"error": "OpenAI not configured"}
+    client = get_openai_client()
+    if not client:
+        return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
         demographics = profile_data.get('demographics', {})
@@ -176,7 +192,7 @@ Generate:
 
 Format as JSON with keys: name, bio, routine, media, shopping, painPoints, channels"""
 
-        response = openai_client.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a marketing strategist creating detailed audience personas. Return valid JSON only."},
@@ -207,8 +223,9 @@ Format as JSON with keys: name, bio, routine, media, shopping, painPoints, chann
 
 def generate_marketing_strategy(profile_data):
     """Generate AI marketing recommendations."""
-    if not openai_client:
-        return {"error": "OpenAI not configured"}
+    client = get_openai_client()
+    if not client:
+        return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
         demographics = profile_data.get('demographics', {})
@@ -238,7 +255,7 @@ Provide:
 
 Be specific and actionable. Reference the actual data provided."""
 
-        response = openai_client.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a senior marketing strategist. Provide detailed, data-driven marketing recommendations."},
@@ -257,8 +274,9 @@ Be specific and actionable. Reference the actual data provided."""
 
 def chat_with_data(profile_data, user_question):
     """Answer questions about the profile data."""
-    if not openai_client:
-        return {"error": "OpenAI not configured"}
+    client = get_openai_client()
+    if not client:
+        return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
         demographics = profile_data.get('demographics', {})
@@ -282,7 +300,7 @@ TOP LOCATIONS:
 {json.dumps(locations[:10], indent=2, default=str)[:500]}
 """
 
-        response = openai_client.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": f"You are an audience data analyst. Answer questions about this profile data accurately and concisely. Always cite specific numbers from the data when relevant.\n\nDATA:\n{data_context}"},
@@ -301,8 +319,9 @@ TOP LOCATIONS:
 
 def answer_business_question(profile_data, question, conversation_history=None):
     """Answer a business question using profile data with follow-up suggestions."""
-    if not openai_client:
-        return {"error": "OpenAI not configured"}
+    client = get_openai_client()
+    if not client:
+        return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
         demographics = profile_data.get('demographics', {})
@@ -367,7 +386,7 @@ Be conversational and helpful."""}
         
         messages.append({"role": "user", "content": question})
         
-        response = openai_client.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,
             max_tokens=1000,
@@ -383,8 +402,9 @@ Be conversational and helpful."""}
 
 def generate_business_deck(profile_data, business_question, key_findings=None):
     """Generate a presentation deck outline for a business question."""
-    if not openai_client:
-        return {"error": "OpenAI not configured"}
+    client = get_openai_client()
+    if not client:
+        return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
         demographics = profile_data.get('demographics', {})
@@ -436,7 +456,7 @@ Format as JSON with structure:
   ]
 }}"""
 
-        response = openai_client.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a presentation design expert. Create compelling, data-driven slide decks. Return valid JSON only."},
@@ -467,8 +487,9 @@ Format as JSON with structure:
 
 def compare_profiles_ai(profiles_data):
     """AI comparison of multiple profiles."""
-    if not openai_client:
-        return {"error": "OpenAI not configured"}
+    client = get_openai_client()
+    if not client:
+        return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
         profiles_summary = []
@@ -501,7 +522,7 @@ Profiles:
 
 Be specific with numbers and percentages."""
 
-        response = openai_client.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are an audience research expert. Compare profiles clearly and identify actionable differences."},
