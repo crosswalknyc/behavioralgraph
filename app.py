@@ -1184,6 +1184,238 @@ def delete_user(username):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+# ============================================================================
+# ADMIN CONTENT MANAGEMENT
+# ============================================================================
+
+@app.route('/api/admin/content', methods=['GET'])
+@requires_admin
+def get_admin_content():
+    """Get all content files grouped by category, including archived."""
+    try:
+        s3 = boto3.client('s3',
+                          aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                          aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                          region_name='us-east-1')
+        
+        bucket_name = 'dashboard-inputs'
+        
+        # Get active files
+        active_files = []
+        paginator = s3.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=bucket_name, Prefix=''):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                # Skip historic folder and non-CSV files
+                if key.startswith('historic/') or not key.endswith('.csv'):
+                    continue
+                
+                # Parse file info
+                filename = key.split('/')[-1]
+                project_name = filename.replace('.csv', '').replace('_', ' ').title()
+                
+                # Try to get category from filename or cache
+                category = 'Uncategorized'
+                if key in s3_cache:
+                    category = s3_cache[key].get('category', 'Uncategorized')
+                
+                active_files.append({
+                    'key': key,
+                    'filename': filename,
+                    'project_name': project_name,
+                    'category': category,
+                    'size': obj.get('Size', 0),
+                    'last_modified': obj['LastModified'].isoformat() if obj.get('LastModified') else None
+                })
+        
+        # Get archived files
+        archived_files = []
+        for page in paginator.paginate(Bucket=bucket_name, Prefix='historic/'):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                if not key.endswith('.csv'):
+                    continue
+                
+                filename = key.split('/')[-1]
+                project_name = filename.replace('.csv', '').replace('_', ' ').title()
+                
+                archived_files.append({
+                    'key': key,
+                    'filename': filename,
+                    'project_name': project_name,
+                    'category': 'Archived',
+                    'size': obj.get('Size', 0),
+                    'last_modified': obj['LastModified'].isoformat() if obj.get('LastModified') else None
+                })
+        
+        return jsonify({
+            'success': True,
+            'files': active_files,
+            'archived': archived_files
+        })
+        
+    except Exception as e:
+        print(f"Error getting admin content: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/content/archive', methods=['POST'])
+@requires_admin
+def archive_content():
+    """Move files to historic/ folder."""
+    try:
+        keys = request.json.get('keys', [])
+        if not keys:
+            return jsonify({'success': False, 'error': 'No files specified'})
+        
+        s3 = boto3.client('s3',
+                          aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                          aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                          region_name='us-east-1')
+        
+        bucket_name = 'dashboard-inputs'
+        archived_count = 0
+        
+        for key in keys:
+            # Skip if already in historic
+            if key.startswith('historic/'):
+                continue
+            
+            try:
+                # Copy to historic folder
+                filename = key.split('/')[-1]
+                new_key = f'historic/{filename}'
+                
+                s3.copy_object(
+                    Bucket=bucket_name,
+                    CopySource={'Bucket': bucket_name, 'Key': key},
+                    Key=new_key
+                )
+                
+                # Delete original
+                s3.delete_object(Bucket=bucket_name, Key=key)
+                
+                # Update cache
+                if key in s3_cache:
+                    del s3_cache[key]
+                
+                archived_count += 1
+                print(f"Archived: {key} -> {new_key}")
+                
+            except Exception as e:
+                print(f"Failed to archive {key}: {e}")
+        
+        # Persist cache after changes
+        persist_s3_cache()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Archived {archived_count} file(s)',
+            'archived_count': archived_count
+        })
+        
+    except Exception as e:
+        print(f"Archive error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/content/restore', methods=['POST'])
+@requires_admin
+def restore_content():
+    """Move files from historic/ folder back to root."""
+    try:
+        keys = request.json.get('keys', [])
+        if not keys:
+            return jsonify({'success': False, 'error': 'No files specified'})
+        
+        s3 = boto3.client('s3',
+                          aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                          aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                          region_name='us-east-1')
+        
+        bucket_name = 'dashboard-inputs'
+        restored_count = 0
+        
+        for key in keys:
+            # Only restore from historic
+            if not key.startswith('historic/'):
+                continue
+            
+            try:
+                # Copy back to root
+                filename = key.replace('historic/', '')
+                new_key = filename
+                
+                s3.copy_object(
+                    Bucket=bucket_name,
+                    CopySource={'Bucket': bucket_name, 'Key': key},
+                    Key=new_key
+                )
+                
+                # Delete from historic
+                s3.delete_object(Bucket=bucket_name, Key=key)
+                
+                restored_count += 1
+                print(f"Restored: {key} -> {new_key}")
+                
+            except Exception as e:
+                print(f"Failed to restore {key}: {e}")
+        
+        # Refresh cache to pick up restored files
+        smart_cache_update()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Restored {restored_count} file(s)',
+            'restored_count': restored_count
+        })
+        
+    except Exception as e:
+        print(f"Restore error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/content/delete', methods=['POST'])
+@requires_admin
+def delete_content():
+    """Permanently delete files from S3."""
+    try:
+        keys = request.json.get('keys', [])
+        if not keys:
+            return jsonify({'success': False, 'error': 'No files specified'})
+        
+        s3 = boto3.client('s3',
+                          aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                          aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                          region_name='us-east-1')
+        
+        bucket_name = 'dashboard-inputs'
+        deleted_count = 0
+        
+        for key in keys:
+            try:
+                s3.delete_object(Bucket=bucket_name, Key=key)
+                
+                # Update cache
+                if key in s3_cache:
+                    del s3_cache[key]
+                
+                deleted_count += 1
+                print(f"Deleted permanently: {key}")
+                
+            except Exception as e:
+                print(f"Failed to delete {key}: {e}")
+        
+        # Persist cache after changes
+        persist_s3_cache()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Deleted {deleted_count} file(s)',
+            'deleted_count': deleted_count
+        })
+        
+    except Exception as e:
+        print(f"Delete error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/api/user/info')
 @requires_auth
 def get_user_info():

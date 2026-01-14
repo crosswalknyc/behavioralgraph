@@ -382,6 +382,186 @@
             background: var(--accent-blue);
             transition: width 0.3s;
         }
+
+        /* Admin Tabs */
+        .admin-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+
+        .admin-tab {
+            padding: 0.75rem 1.5rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-family: 'Space Mono', monospace;
+            font-size: 0.85rem;
+            cursor: pointer;
+            border-radius: 8px 8px 0 0;
+            transition: all 0.2s;
+        }
+
+        .admin-tab:hover {
+            color: var(--text-primary);
+            background: rgba(90, 154, 217, 0.1);
+        }
+
+        .admin-tab.active {
+            color: var(--accent-cyan);
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-bottom: none;
+        }
+
+        .admin-section {
+            display: none;
+        }
+
+        .admin-section.active {
+            display: block;
+        }
+
+        /* Content Management */
+        .content-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .content-search {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .category-filter {
+            padding: 0.5rem 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+        }
+
+        .content-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .content-table th, .content-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .content-table th {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            font-weight: 600;
+            background: var(--bg-input);
+        }
+
+        .content-table td {
+            font-size: 0.85rem;
+        }
+
+        .content-table tr:hover {
+            background: rgba(90, 154, 217, 0.05);
+        }
+
+        .file-name {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .btn-archive {
+            background: var(--accent-orange);
+            color: #1a1a1a;
+        }
+
+        .btn-icon {
+            padding: 0.4rem 0.6rem;
+            font-size: 0.8rem;
+        }
+
+        .selection-bar {
+            display: none;
+            background: var(--bg-input);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid var(--accent-blue);
+        }
+
+        .selection-bar.show {
+            display: flex;
+        }
+
+        .selection-count {
+            font-family: 'Space Mono', monospace;
+            color: var(--accent-blue);
+        }
+
+        .category-accordion {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+
+        .category-accordion-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.25rem;
+            background: var(--bg-input);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .category-accordion-header:hover {
+            background: rgba(90, 154, 217, 0.1);
+        }
+
+        .category-accordion-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.9rem;
+        }
+
+        .category-accordion-arrow {
+            transition: transform 0.2s;
+        }
+
+        .category-accordion.open .category-accordion-arrow {
+            transform: rotate(180deg);
+        }
+
+        .category-accordion-content {
+            display: none;
+            padding: 0;
+        }
+
+        .category-accordion.open .category-accordion-content {
+            display: block;
+        }
+
+        .confirm-modal {
+            background: rgba(249, 38, 114, 0.1);
+            border: 1px solid var(--accent-red);
+        }
     </style>
 </head>
 <body>
@@ -391,78 +571,151 @@
                 <img src="{{ url_for('static', filename='crosswalk-logo.svg') }}" alt="Crosswalk Logo" class="logo" onerror="this.style.display='none'">
                 <div class="header-text">
                     <h1>🔐 Admin Portal</h1>
-                    <p>User Management & Access Control</p>
+                    <p>User Management & Content Control</p>
                 </div>
             </div>
             <div class="header-actions">
                 <a href="/" class="btn btn-secondary">← Back to Dashboard</a>
-                <button class="btn btn-success" onclick="showAddUserModal()">+ Add User</button>
             </div>
         </header>
 
-        <!-- Stats Overview -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <h3>Total Users</h3>
-                <div class="stat-value blue" id="totalUsers">0</div>
+        <!-- Admin Tabs -->
+        <div class="admin-tabs">
+            <button class="admin-tab active" onclick="showAdminTab('users')">👥 Users</button>
+            <button class="admin-tab" onclick="showAdminTab('content')">📁 Content Management</button>
+        </div>
+
+        <!-- USERS SECTION -->
+        <div id="section-users" class="admin-section active">
+            <!-- Stats Overview -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Users</h3>
+                    <div class="stat-value blue" id="totalUsers">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Total Credits Used</h3>
+                    <div class="stat-value orange" id="totalCreditsUsed">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Total Runs Available</h3>
+                    <div class="stat-value green" id="totalRunsAvailable">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Categories</h3>
+                    <div class="stat-value purple" id="totalCategories">0</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <h3>Total Credits Used</h3>
-                <div class="stat-value orange" id="totalCreditsUsed">0</div>
-            </div>
-            <div class="stat-card">
-                <h3>Total Runs Available</h3>
-                <div class="stat-value green" id="totalRunsAvailable">0</div>
-            </div>
-            <div class="stat-card">
-                <h3>Categories</h3>
-                <div class="stat-value purple" id="totalCategories">0</div>
+
+            <!-- Main Content Grid -->
+            <div class="main-grid">
+                <!-- Users Table -->
+                <div class="card" style="grid-column: span 2;">
+                    <div class="card-header">
+                        <h2>👥 User Management</h2>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-small btn-secondary" onclick="loadUsers()">↻ Refresh</button>
+                            <button class="btn btn-small btn-success" onclick="showAddUserModal()">+ Add User</button>
+                        </div>
+                    </div>
+                    <table class="user-table">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Role</th>
+                                <th>Credits Left</th>
+                                <th>Credits Used</th>
+                                <th>Usage</th>
+                                <th>Last Login</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Categories & Runs Access -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📁 Categories</h2>
+                    </div>
+                    <div id="categoriesList">
+                        <p style="color: var(--text-secondary); font-size: 0.85rem;">Loading categories from S3...</p>
+                    </div>
+                </div>
+
+                <!-- Recent Runs -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📊 Recent Runs</h2>
+                    </div>
+                    <div id="recentRunsList">
+                        <p style="color: var(--text-secondary); font-size: 0.85rem;">Loading recent runs...</p>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Main Content Grid -->
-        <div class="main-grid">
-            <!-- Users Table -->
-            <div class="card" style="grid-column: span 2;">
-                <div class="card-header">
-                    <h2>👥 User Management</h2>
-                    <button class="btn btn-small btn-secondary" onclick="loadUsers()">↻ Refresh</button>
+        <!-- CONTENT MANAGEMENT SECTION -->
+        <div id="section-content" class="admin-section">
+            <!-- Content Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Files</h3>
+                    <div class="stat-value blue" id="contentTotalFiles">0</div>
                 </div>
-                <table class="user-table">
-                    <thead>
-                        <tr>
-                            <th>Username</th>
-                            <th>Role</th>
-                            <th>Credits Left</th>
-                            <th>Credits Used</th>
-                            <th>Usage</th>
-                            <th>Last Login</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="usersTableBody">
-                        <!-- Populated by JS -->
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Categories & Runs Access -->
-            <div class="card">
-                <div class="card-header">
-                    <h2>📁 Categories</h2>
+                <div class="stat-card">
+                    <h3>Categories</h3>
+                    <div class="stat-value purple" id="contentCategories">0</div>
                 </div>
-                <div id="categoriesList">
-                    <p style="color: var(--text-secondary); font-size: 0.85rem;">Loading categories from S3...</p>
+                <div class="stat-card">
+                    <h3>Archived Files</h3>
+                    <div class="stat-value orange" id="contentArchived">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Storage Used</h3>
+                    <div class="stat-value green" id="contentStorage">--</div>
                 </div>
             </div>
 
-            <!-- Recent Runs -->
             <div class="card">
                 <div class="card-header">
-                    <h2>📊 Recent Runs</h2>
+                    <h2>📁 Content by Category</h2>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-small btn-secondary" onclick="loadContentFiles()">↻ Refresh</button>
+                        <button class="btn btn-small btn-secondary" onclick="toggleArchiveView()">
+                            <span id="archiveToggleText">📦 Show Archived</span>
+                        </button>
+                    </div>
                 </div>
-                <div id="recentRunsList">
-                    <p style="color: var(--text-secondary); font-size: 0.85rem;">Loading recent runs...</p>
+
+                <!-- Bulk Actions Bar -->
+                <div class="selection-bar" id="selectionBar">
+                    <span class="selection-count"><span id="selectedCount">0</span> files selected</span>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-small btn-archive" onclick="bulkArchive()">📦 Archive Selected</button>
+                        <button class="btn btn-small btn-danger" onclick="bulkDelete()">🗑️ Delete Selected</button>
+                        <button class="btn btn-small btn-secondary" onclick="clearSelection()">✕ Clear</button>
+                    </div>
+                </div>
+
+                <!-- Search and Filter -->
+                <div class="content-controls">
+                    <input type="text" id="contentSearch" class="content-search" placeholder="🔍 Search files..." onkeyup="filterContentFiles()">
+                    <select id="categoryFilterSelect" class="category-filter" onchange="filterContentFiles()">
+                        <option value="">All Categories</option>
+                    </select>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" id="selectAllVisible" onchange="toggleSelectAll()">
+                        <span style="font-size: 0.85rem; color: var(--text-secondary);">Select All Visible</span>
+                    </label>
+                </div>
+
+                <!-- Content Accordions by Category -->
+                <div id="contentAccordions">
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; padding: 2rem; text-align: center;">Loading content from S3...</p>
                 </div>
             </div>
         </div>
@@ -548,12 +801,29 @@
         let allUsers = {};
         let allCategories = [];
         let allRuns = [];
+        let contentFiles = [];
+        let archivedFiles = [];
+        let selectedFiles = new Set();
+        let showingArchived = false;
 
         // Load data on page load
         document.addEventListener('DOMContentLoaded', () => {
             loadUsers();
             loadCategoriesAndRuns();
+            loadContentFiles();
         });
+
+        // Tab switching
+        function showAdminTab(tabName) {
+            document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
+            document.querySelector(`.admin-tab[onclick="showAdminTab('${tabName}')"]`).classList.add('active');
+            document.getElementById('section-' + tabName).classList.add('active');
+            
+            if (tabName === 'content') {
+                loadContentFiles();
+            }
+        }
 
         async function loadUsers() {
             try {
@@ -833,6 +1103,364 @@
             toast.className = 'toast' + (isError ? ' error' : '');
             toast.classList.add('show');
             setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // ============ CONTENT MANAGEMENT ============
+        
+        async function loadContentFiles() {
+            try {
+                const response = await fetch('/api/admin/content');
+                const data = await response.json();
+                
+                if (data.success) {
+                    contentFiles = data.files || [];
+                    archivedFiles = data.archived || [];
+                    
+                    // Update stats
+                    document.getElementById('contentTotalFiles').textContent = contentFiles.length;
+                    document.getElementById('contentArchived').textContent = archivedFiles.length;
+                    
+                    // Calculate categories
+                    const categories = new Set(contentFiles.map(f => f.category || 'Uncategorized'));
+                    document.getElementById('contentCategories').textContent = categories.size;
+                    
+                    // Calculate storage (estimate)
+                    const totalSize = [...contentFiles, ...archivedFiles].reduce((sum, f) => sum + (f.size || 0), 0);
+                    document.getElementById('contentStorage').textContent = formatBytes(totalSize);
+                    
+                    // Populate category filter
+                    populateCategoryFilter(categories);
+                    
+                    // Render content
+                    renderContentAccordions(showingArchived ? archivedFiles : contentFiles);
+                }
+            } catch (error) {
+                console.error('Failed to load content:', error);
+                showToast('Failed to load content files', true);
+            }
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function populateCategoryFilter(categories) {
+            const select = document.getElementById('categoryFilterSelect');
+            select.innerHTML = '<option value="">All Categories</option>';
+            Array.from(categories).sort().forEach(cat => {
+                select.innerHTML += `<option value="${cat}">${cat}</option>`;
+            });
+        }
+
+        function renderContentAccordions(files) {
+            const container = document.getElementById('contentAccordions');
+            
+            // Group by category
+            const byCategory = {};
+            files.forEach(file => {
+                const cat = file.category || 'Uncategorized';
+                if (!byCategory[cat]) byCategory[cat] = [];
+                byCategory[cat].push(file);
+            });
+
+            // Sort categories
+            const sortedCategories = Object.keys(byCategory).sort();
+
+            if (sortedCategories.length === 0) {
+                container.innerHTML = `<p style="color: var(--text-secondary); font-size: 0.85rem; padding: 2rem; text-align: center;">
+                    ${showingArchived ? 'No archived files found.' : 'No content files found.'}
+                </p>`;
+                return;
+            }
+
+            container.innerHTML = sortedCategories.map(category => {
+                const catFiles = byCategory[category];
+                return `
+                    <div class="category-accordion" data-category="${category}">
+                        <div class="category-accordion-header" onclick="toggleAccordion(this)">
+                            <div class="category-accordion-title">
+                                <span class="category-accordion-arrow">▼</span>
+                                <span>${getCategoryIcon(category)} ${category}</span>
+                                <span class="badge badge-user">${catFiles.length} files</span>
+                            </div>
+                        </div>
+                        <div class="category-accordion-content">
+                            <table class="content-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px;"><input type="checkbox" onchange="toggleCategorySelection('${category}', this.checked)"></th>
+                                        <th>File Name</th>
+                                        <th>Project</th>
+                                        <th>Date</th>
+                                        <th>Size</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${catFiles.map(file => renderFileRow(file)).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getCategoryIcon(category) {
+            const icons = {
+                'ACTOR': '🎭',
+                'ACTRESS': '🎭',
+                'SERIES': '📺',
+                'BRAND': '🏷️',
+                'MOVIE': '🎬',
+                'SPORTS': '⚽',
+                'MUSIC': '🎵',
+                'EMERGING TALENT': '⭐',
+                'Uncategorized': '📄'
+            };
+            return icons[category.toUpperCase()] || icons[category] || '📁';
+        }
+
+        function renderFileRow(file) {
+            const isSelected = selectedFiles.has(file.key);
+            const dateStr = file.last_modified ? new Date(file.last_modified).toLocaleDateString() : '--';
+            
+            return `
+                <tr data-key="${file.key}" class="${isSelected ? 'selected' : ''}">
+                    <td><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleFileSelection('${file.key}')"></td>
+                    <td class="file-name" title="${file.key}">${file.key.split('/').pop()}</td>
+                    <td>${file.project_name || '--'}</td>
+                    <td style="font-size: 0.75rem; color: var(--text-secondary);">${dateStr}</td>
+                    <td style="font-size: 0.75rem;">${formatBytes(file.size)}</td>
+                    <td>
+                        <div class="action-buttons">
+                            ${showingArchived ? 
+                                `<button class="btn btn-small btn-success btn-icon" onclick="restoreFile('${file.key}')" title="Restore">↩️</button>` :
+                                `<button class="btn btn-small btn-archive btn-icon" onclick="archiveFile('${file.key}')" title="Archive">📦</button>`
+                            }
+                            <button class="btn btn-small btn-danger btn-icon" onclick="deleteFile('${file.key}')" title="Delete permanently">🗑️</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+
+        function toggleAccordion(header) {
+            const accordion = header.closest('.category-accordion');
+            accordion.classList.toggle('open');
+        }
+
+        function toggleFileSelection(key) {
+            if (selectedFiles.has(key)) {
+                selectedFiles.delete(key);
+            } else {
+                selectedFiles.add(key);
+            }
+            updateSelectionBar();
+        }
+
+        function toggleCategorySelection(category, checked) {
+            const files = showingArchived ? archivedFiles : contentFiles;
+            files.filter(f => (f.category || 'Uncategorized') === category).forEach(file => {
+                if (checked) {
+                    selectedFiles.add(file.key);
+                } else {
+                    selectedFiles.delete(file.key);
+                }
+            });
+            renderContentAccordions(showingArchived ? archivedFiles : contentFiles);
+            updateSelectionBar();
+        }
+
+        function toggleSelectAll() {
+            const checked = document.getElementById('selectAllVisible').checked;
+            const files = showingArchived ? archivedFiles : contentFiles;
+            const searchTerm = document.getElementById('contentSearch').value.toLowerCase();
+            const categoryFilter = document.getElementById('categoryFilterSelect').value;
+
+            files.filter(f => {
+                const matchesSearch = !searchTerm || f.key.toLowerCase().includes(searchTerm) || (f.project_name || '').toLowerCase().includes(searchTerm);
+                const matchesCategory = !categoryFilter || (f.category || 'Uncategorized') === categoryFilter;
+                return matchesSearch && matchesCategory;
+            }).forEach(file => {
+                if (checked) {
+                    selectedFiles.add(file.key);
+                } else {
+                    selectedFiles.delete(file.key);
+                }
+            });
+            
+            renderContentAccordions(showingArchived ? archivedFiles : contentFiles);
+            updateSelectionBar();
+        }
+
+        function clearSelection() {
+            selectedFiles.clear();
+            document.getElementById('selectAllVisible').checked = false;
+            renderContentAccordions(showingArchived ? archivedFiles : contentFiles);
+            updateSelectionBar();
+        }
+
+        function updateSelectionBar() {
+            const bar = document.getElementById('selectionBar');
+            const count = selectedFiles.size;
+            document.getElementById('selectedCount').textContent = count;
+            
+            if (count > 0) {
+                bar.classList.add('show');
+            } else {
+                bar.classList.remove('show');
+            }
+        }
+
+        function filterContentFiles() {
+            const searchTerm = document.getElementById('contentSearch').value.toLowerCase();
+            const categoryFilter = document.getElementById('categoryFilterSelect').value;
+            const files = showingArchived ? archivedFiles : contentFiles;
+
+            const filtered = files.filter(f => {
+                const matchesSearch = !searchTerm || f.key.toLowerCase().includes(searchTerm) || (f.project_name || '').toLowerCase().includes(searchTerm);
+                const matchesCategory = !categoryFilter || (f.category || 'Uncategorized') === categoryFilter;
+                return matchesSearch && matchesCategory;
+            });
+
+            renderContentAccordions(filtered);
+        }
+
+        function toggleArchiveView() {
+            showingArchived = !showingArchived;
+            document.getElementById('archiveToggleText').textContent = showingArchived ? '📂 Show Active' : '📦 Show Archived';
+            selectedFiles.clear();
+            updateSelectionBar();
+            filterContentFiles();
+        }
+
+        // Single file operations
+        async function archiveFile(key) {
+            if (!confirm(`Archive "${key.split('/').pop()}"?\n\nThis will move it to the historic folder.`)) return;
+            
+            try {
+                const response = await fetch('/api/admin/content/archive', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keys: [key] })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showToast('File archived successfully');
+                    loadContentFiles();
+                } else {
+                    showToast(data.error || 'Failed to archive file', true);
+                }
+            } catch (error) {
+                showToast('Network error', true);
+            }
+        }
+
+        async function restoreFile(key) {
+            if (!confirm(`Restore "${key.split('/').pop()}"?\n\nThis will move it back to the active folder.`)) return;
+            
+            try {
+                const response = await fetch('/api/admin/content/restore', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keys: [key] })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showToast('File restored successfully');
+                    loadContentFiles();
+                } else {
+                    showToast(data.error || 'Failed to restore file', true);
+                }
+            } catch (error) {
+                showToast('Network error', true);
+            }
+        }
+
+        async function deleteFile(key) {
+            if (!confirm(`⚠️ PERMANENTLY DELETE "${key.split('/').pop()}"?\n\nThis action cannot be undone!`)) return;
+            if (!confirm('Are you absolutely sure? This file will be gone forever.')) return;
+            
+            try {
+                const response = await fetch('/api/admin/content/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keys: [key] })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showToast('File deleted permanently');
+                    loadContentFiles();
+                } else {
+                    showToast(data.error || 'Failed to delete file', true);
+                }
+            } catch (error) {
+                showToast('Network error', true);
+            }
+        }
+
+        // Bulk operations
+        async function bulkArchive() {
+            const keys = Array.from(selectedFiles);
+            if (keys.length === 0) return;
+            
+            if (!confirm(`Archive ${keys.length} file(s)?\n\nThey will be moved to the historic folder.`)) return;
+            
+            try {
+                const response = await fetch('/api/admin/content/archive', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keys })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showToast(`${keys.length} file(s) archived successfully`);
+                    selectedFiles.clear();
+                    updateSelectionBar();
+                    loadContentFiles();
+                } else {
+                    showToast(data.error || 'Failed to archive files', true);
+                }
+            } catch (error) {
+                showToast('Network error', true);
+            }
+        }
+
+        async function bulkDelete() {
+            const keys = Array.from(selectedFiles);
+            if (keys.length === 0) return;
+            
+            if (!confirm(`⚠️ PERMANENTLY DELETE ${keys.length} file(s)?\n\nThis action cannot be undone!`)) return;
+            if (!confirm('Are you absolutely sure? These files will be gone forever.')) return;
+            
+            try {
+                const response = await fetch('/api/admin/content/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keys })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showToast(`${keys.length} file(s) deleted permanently`);
+                    selectedFiles.clear();
+                    updateSelectionBar();
+                    loadContentFiles();
+                } else {
+                    showToast(data.error || 'Failed to delete files', true);
+                }
+            } catch (error) {
+                showToast('Network error', true);
+            }
         }
     </script>
 </body>
