@@ -707,9 +707,17 @@
                     <select id="categoryFilterSelect" class="category-filter" onchange="filterContentFiles()">
                         <option value="">All Categories</option>
                     </select>
+                    <select id="sortSelect" class="category-filter" onchange="sortContentFiles()">
+                        <option value="date-desc">📅 Newest First</option>
+                        <option value="date-asc">📅 Oldest First</option>
+                        <option value="name-asc">🔤 Name A-Z</option>
+                        <option value="name-desc">🔤 Name Z-A</option>
+                        <option value="size-desc">📊 Largest First</option>
+                        <option value="size-asc">📊 Smallest First</option>
+                    </select>
                     <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                         <input type="checkbox" id="selectAllVisible" onchange="toggleSelectAll()">
-                        <span style="font-size: 0.85rem; color: var(--text-secondary);">Select All Visible</span>
+                        <span style="font-size: 0.85rem; color: var(--text-secondary);">Select All</span>
                     </label>
                 </div>
 
@@ -1107,6 +1115,8 @@
 
         // ============ CONTENT MANAGEMENT ============
         
+        let currentSort = 'date-desc';
+        
         async function loadContentFiles() {
             try {
                 const response = await fetch('/api/admin/content');
@@ -1131,13 +1141,54 @@
                     // Populate category filter
                     populateCategoryFilter(categories);
                     
-                    // Render content
-                    renderContentAccordions(showingArchived ? archivedFiles : contentFiles);
+                    // Sort and render content
+                    sortContentFiles();
                 }
             } catch (error) {
                 console.error('Failed to load content:', error);
                 showToast('Failed to load content files', true);
             }
+        }
+        
+        function sortContentFiles() {
+            currentSort = document.getElementById('sortSelect').value;
+            let files = showingArchived ? [...archivedFiles] : [...contentFiles];
+            
+            // Apply sort
+            files.sort((a, b) => {
+                switch (currentSort) {
+                    case 'date-desc':
+                        return new Date(b.last_modified || 0) - new Date(a.last_modified || 0);
+                    case 'date-asc':
+                        return new Date(a.last_modified || 0) - new Date(b.last_modified || 0);
+                    case 'name-asc':
+                        return (a.project_name || '').localeCompare(b.project_name || '');
+                    case 'name-desc':
+                        return (b.project_name || '').localeCompare(a.project_name || '');
+                    case 'size-desc':
+                        return (b.size || 0) - (a.size || 0);
+                    case 'size-asc':
+                        return (a.size || 0) - (b.size || 0);
+                    default:
+                        return 0;
+                }
+            });
+            
+            // Apply search filter
+            const searchTerm = document.getElementById('contentSearch').value.toLowerCase();
+            const categoryFilter = document.getElementById('categoryFilterSelect').value;
+            
+            if (searchTerm || categoryFilter) {
+                files = files.filter(f => {
+                    const matchesSearch = !searchTerm || 
+                        f.key.toLowerCase().includes(searchTerm) || 
+                        (f.project_name || '').toLowerCase().includes(searchTerm);
+                    const matchesCategory = !categoryFilter || (f.category || 'Uncategorized') === categoryFilter;
+                    return matchesSearch && matchesCategory;
+                });
+            }
+            
+            renderContentAccordions(files);
         }
 
         function formatBytes(bytes) {
@@ -1318,17 +1369,8 @@
         }
 
         function filterContentFiles() {
-            const searchTerm = document.getElementById('contentSearch').value.toLowerCase();
-            const categoryFilter = document.getElementById('categoryFilterSelect').value;
-            const files = showingArchived ? archivedFiles : contentFiles;
-
-            const filtered = files.filter(f => {
-                const matchesSearch = !searchTerm || f.key.toLowerCase().includes(searchTerm) || (f.project_name || '').toLowerCase().includes(searchTerm);
-                const matchesCategory = !categoryFilter || (f.category || 'Uncategorized') === categoryFilter;
-                return matchesSearch && matchesCategory;
-            });
-
-            renderContentAccordions(filtered);
+            // Use sortContentFiles which also handles filtering
+            sortContentFiles();
         }
 
         function toggleArchiveView() {
@@ -1336,7 +1378,7 @@
             document.getElementById('archiveToggleText').textContent = showingArchived ? '📂 Show Active' : '📦 Show Archived';
             selectedFiles.clear();
             updateSelectionBar();
-            filterContentFiles();
+            sortContentFiles();
         }
 
         // Single file operations

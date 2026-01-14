@@ -1200,24 +1200,28 @@ def get_admin_content():
         
         bucket_name = 'dashboard-inputs'
         
+        # Build a lookup from cached jobs for proper categories
+        cached_lookup = {}
+        for job in s3_cache.get('jobs', []):
+            cached_lookup[job.get('key', '')] = job
+        
         # Get active files
         active_files = []
         paginator = s3.get_paginator('list_objects_v2')
         for page in paginator.paginate(Bucket=bucket_name, Prefix=''):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                # Skip historic folder and non-CSV files
-                if key.startswith('historic/') or not key.endswith('.csv'):
+                # Skip historic folder, system folder, and non-CSV files
+                if key.startswith('historic/') or key.startswith('system/') or not key.endswith('.csv'):
                     continue
                 
                 # Parse file info
                 filename = key.split('/')[-1]
-                project_name = filename.replace('.csv', '').replace('_', ' ').title()
                 
-                # Try to get category from filename or cache
-                category = 'Uncategorized'
-                if key in s3_cache:
-                    category = s3_cache[key].get('category', 'Uncategorized')
+                # Try to get category and project_name from cache (which has proper brand categories from CSV)
+                cached = cached_lookup.get(key, {})
+                category = cached.get('category', 'Uncategorized')
+                project_name = cached.get('project_name', filename.replace('.csv', '').replace('_', ' ').title())
                 
                 active_files.append({
                     'key': key,
