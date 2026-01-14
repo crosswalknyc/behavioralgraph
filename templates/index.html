@@ -611,7 +611,43 @@
             display: flex;
             flex-direction: column;
             min-width: 0;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+            cursor: grab;
+            user-select: none;
+        }
+        
+        .behavioral-card:active {
+            cursor: grabbing;
+        }
+        
+        .behavioral-card.dragging {
+            opacity: 0.5;
+            transform: scale(1.02);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+        }
+        
+        .behavioral-card.drag-over {
+            border: 2px dashed var(--accent-cyan);
+            background: rgba(0, 217, 255, 0.05);
+        }
+        
+        .behavioral-card .drag-handle {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            opacity: 0.4;
+            cursor: grab;
+            padding: 0.2rem;
+            transition: opacity 0.2s, color 0.2s;
+        }
+        
+        .behavioral-card:hover .drag-handle {
+            opacity: 1;
+            color: var(--accent-cyan);
+        }
+        
+        .behavioral-card .drag-handle:active {
+            cursor: grabbing;
         }
         
         .behavioral-card.highlighted {
@@ -2704,7 +2740,6 @@
         <!-- DASHBOARD VIEW -->
         <div id="dashboardView">
             <div class="dashboard-header">
-                <h2 id="dashBrandTitle">Brand Dashboard</h2>
                 <div style="display: flex; gap: 0.75rem; align-items: center;">
                     <button class="btn btn-small" style="background: linear-gradient(135deg, #8b5cf6, #ec4899);" onclick="toggleAIPanel()">🧪 Business Intelligence Lab</button>
                     <button class="btn btn-small" id="favoriteBtn" onclick="toggleFavorite()" title="Add to favorites">⭐</button>
@@ -3992,7 +4027,7 @@
         }
 
         function renderDashboard(csvData, brandName, dateRange) {
-            document.getElementById('dashBrandTitle').textContent = (brandName || 'Brand') + ' Dashboard';
+            // Title removed from header per user request
             document.getElementById('dashBrandName').textContent = brandName || 'Brand';
             document.getElementById('dashDateRange').textContent = 'Date Range: ' + (dateRange || '--');
 
@@ -4625,8 +4660,22 @@
                 const isHighlighted = cat === highlightCategory;
                 const positionBadge = idx === 0 ? '<span style="background: var(--accent-lime); color: #000; padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.6rem; margin-left: 0.5rem;">1ST</span>' : '';
                 return `
-                    <div class="behavioral-card ${isHighlighted ? 'highlighted' : ''}" data-category="${cat}">
-                        <h3>${cat} ${positionBadge}<span class="count">${items.length}</span></h3>
+                    <div class="behavioral-card ${isHighlighted ? 'highlighted' : ''}" 
+                         data-category="${cat}" 
+                         data-index="${idx}"
+                         draggable="true"
+                         ondragstart="handleDragStart(event)"
+                         ondragend="handleDragEnd(event)"
+                         ondragover="handleDragOver(event)"
+                         ondragleave="handleDragLeave(event)"
+                         ondrop="handleDrop(event)">
+                        <h3>
+                            <span style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span class="drag-handle" title="Drag to reorder">⋮⋮</span>
+                                ${cat} ${positionBadge}
+                            </span>
+                            <span class="count">${items.length}</span>
+                        </h3>
                         <div class="behavioral-filter">
                             <input type="text" placeholder="🔍 Search..." oninput="searchInCard('${catId}', this.value)" style="font-size: 0.75rem; padding: 0.35rem;">
                         </div>
@@ -4636,6 +4685,9 @@
                     </div>
                 `;
             }).join('');
+            
+            // Re-attach touch event listeners for mobile
+            attachTouchDragListeners();
             
             // Remove highlight after animation
             if (highlightCategory) {
@@ -4673,6 +4725,159 @@
         function resetCategoryOrder() {
             currentCategoryOrder = [];
             renderBehavioralCards(allBehavioralData);
+        }
+        
+        // ============================================
+        // DRAG AND DROP FOR BEHAVIORAL CARDS
+        // ============================================
+        let draggedCard = null;
+        let draggedCategory = null;
+        
+        function handleDragStart(e) {
+            draggedCard = e.target.closest('.behavioral-card');
+            draggedCategory = draggedCard.dataset.category;
+            draggedCard.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', draggedCategory);
+            
+            // Add slight delay for visual feedback
+            setTimeout(() => {
+                draggedCard.style.opacity = '0.5';
+            }, 0);
+        }
+        
+        function handleDragEnd(e) {
+            const card = e.target.closest('.behavioral-card');
+            if (card) {
+                card.classList.remove('dragging');
+                card.style.opacity = '1';
+            }
+            
+            // Remove drag-over class from all cards
+            document.querySelectorAll('.behavioral-card.drag-over').forEach(el => {
+                el.classList.remove('drag-over');
+            });
+            
+            draggedCard = null;
+            draggedCategory = null;
+        }
+        
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            const targetCard = e.target.closest('.behavioral-card');
+            if (targetCard && targetCard !== draggedCard) {
+                targetCard.classList.add('drag-over');
+            }
+        }
+        
+        function handleDragLeave(e) {
+            const targetCard = e.target.closest('.behavioral-card');
+            if (targetCard) {
+                targetCard.classList.remove('drag-over');
+            }
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            
+            const targetCard = e.target.closest('.behavioral-card');
+            if (!targetCard || !draggedCard || targetCard === draggedCard) return;
+            
+            const targetCategory = targetCard.dataset.category;
+            
+            // Remove drag-over styling
+            targetCard.classList.remove('drag-over');
+            
+            // Reorder the categories
+            const draggedIdx = currentCategoryOrder.indexOf(draggedCategory);
+            const targetIdx = currentCategoryOrder.indexOf(targetCategory);
+            
+            if (draggedIdx === -1 || targetIdx === -1) return;
+            
+            // Remove dragged item and insert at target position
+            currentCategoryOrder.splice(draggedIdx, 1);
+            currentCategoryOrder.splice(targetIdx, 0, draggedCategory);
+            
+            // Re-render the cards
+            renderBehavioralCards(allBehavioralData);
+        }
+        
+        // Touch support for mobile drag and drop
+        let touchStartY = 0;
+        let touchStartX = 0;
+        let touchedCard = null;
+        let touchClone = null;
+        
+        function attachTouchDragListeners() {
+            const cards = document.querySelectorAll('.behavioral-card');
+            cards.forEach(card => {
+                card.addEventListener('touchstart', handleTouchStart, { passive: false });
+                card.addEventListener('touchmove', handleTouchMove, { passive: false });
+                card.addEventListener('touchend', handleTouchEnd);
+            });
+        }
+        
+        function handleTouchStart(e) {
+            // Only trigger on drag handle or long press
+            const handle = e.target.closest('.drag-handle');
+            if (!handle) return;
+            
+            touchedCard = e.currentTarget;
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            
+            touchedCard.classList.add('dragging');
+            draggedCategory = touchedCard.dataset.category;
+        }
+        
+        function handleTouchMove(e) {
+            if (!touchedCard) return;
+            e.preventDefault();
+            
+            const touch = e.touches[0];
+            const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+            const targetCard = elementBelow?.closest('.behavioral-card');
+            
+            // Remove drag-over from all
+            document.querySelectorAll('.behavioral-card.drag-over').forEach(el => {
+                el.classList.remove('drag-over');
+            });
+            
+            // Add drag-over to current target
+            if (targetCard && targetCard !== touchedCard) {
+                targetCard.classList.add('drag-over');
+            }
+        }
+        
+        function handleTouchEnd(e) {
+            if (!touchedCard) return;
+            
+            const touch = e.changedTouches[0];
+            const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+            const targetCard = elementBelow?.closest('.behavioral-card');
+            
+            if (targetCard && targetCard !== touchedCard) {
+                const targetCategory = targetCard.dataset.category;
+                const draggedIdx = currentCategoryOrder.indexOf(draggedCategory);
+                const targetIdx = currentCategoryOrder.indexOf(targetCategory);
+                
+                if (draggedIdx !== -1 && targetIdx !== -1) {
+                    currentCategoryOrder.splice(draggedIdx, 1);
+                    currentCategoryOrder.splice(targetIdx, 0, draggedCategory);
+                    renderBehavioralCards(allBehavioralData);
+                }
+            }
+            
+            // Cleanup
+            touchedCard.classList.remove('dragging');
+            document.querySelectorAll('.behavioral-card.drag-over').forEach(el => {
+                el.classList.remove('drag-over');
+            });
+            
+            touchedCard = null;
+            draggedCategory = null;
         }
 
         function renderBehavioralItems(items, maxPct) {
