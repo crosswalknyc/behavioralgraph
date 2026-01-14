@@ -32,6 +32,35 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 CORS(app)
 
+# Global error handler for API routes - ensures JSON responses
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Return JSON instead of HTML for API errors."""
+    if request.path.startswith('/api/'):
+        import traceback
+        print(f"API Error: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'error': str(e),
+            'type': type(e).__name__
+        }), 500
+    # For non-API routes, let Flask handle it normally
+    raise e
+
+@app.errorhandler(404)
+def not_found(e):
+    """Return JSON for API 404 errors."""
+    if request.path.startswith('/api/'):
+        return jsonify({'error': 'Endpoint not found', 'path': request.path}), 404
+    return redirect(url_for('login_page'))
+
+@app.errorhandler(500)
+def server_error(e):
+    """Return JSON for API 500 errors."""
+    if request.path.startswith('/api/'):
+        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+    return redirect(url_for('login_page'))
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -775,6 +804,9 @@ def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if 'username' not in session:
+            # For API endpoints, return JSON error instead of redirect
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'Authentication required', 'redirect': '/login'}), 401
             return redirect(url_for('login_page'))
         return f(*args, **kwargs)
     return decorated

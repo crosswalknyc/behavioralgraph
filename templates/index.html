@@ -3770,6 +3770,14 @@
         async function populatePreviousFiles() {
             try {
                 const response = await fetch('/api/jobs');
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                if (!response.ok) {
+                    console.error('API error:', response.status);
+                    return;
+                }
                 const data = await response.json();
                 const jobs = data.jobs || [];
                 
@@ -4368,6 +4376,18 @@
         async function loadDashboardProfiles() {
             try {
                 const response = await fetch('/api/jobs');
+                
+                // Handle authentication errors
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                if (!response.ok) {
+                    console.error('Failed to load profiles:', response.status);
+                    return;
+                }
+                
                 const data = await response.json();
                 const profiles = data.jobs || [];
                 renderDashboardProfileTree(profiles);
@@ -7697,6 +7717,22 @@
             
             try {
                 const response = await fetch('/api/jobs');
+                
+                // Handle authentication errors
+                if (response.status === 401) {
+                    if (cachePollingInterval) {
+                        clearInterval(cachePollingInterval);
+                        cachePollingInterval = null;
+                    }
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                // Handle other HTTP errors
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
                 
                 // Handle loading state - poll until ready
@@ -9223,6 +9259,17 @@
             
             try {
                 const response = await fetch('/api/refresh-cache');
+                
+                // Handle authentication errors
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
                 
                 if (data.new_files > 0 || data.updated_files > 0) {
