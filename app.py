@@ -2024,6 +2024,16 @@ def extract_demographics_summary(csv_content):
 if s3_client:
     load_persisted_cache()
 
+@app.route('/api/health')
+def health_check():
+    """Quick health check endpoint."""
+    return jsonify({
+        'status': 'ok',
+        'cache_ready': cache_loading_complete,
+        'cache_size': len(s3_cache.get('jobs', []))
+    })
+
+
 @app.route('/api/jobs')
 @requires_auth
 def list_jobs():
@@ -2033,13 +2043,25 @@ def list_jobs():
     job_list = []
     categories = set()
     
-    # Update user's last activity time
+    # Return quickly if cache is still loading
+    if not cache_loading_complete and not s3_cache.get('jobs'):
+        return jsonify({
+            'jobs': [],
+            'categories': [],
+            'cache_info': {'loading': True, 'message': 'Loading profiles...'},
+            'loading': True
+        })
+    
+    # Update user's last activity time (but don't block on it)
     username = session.get('username')
     if username:
-        users = load_users()
-        if username in users:
-            users[username]['last_activity'] = time.time()
-            save_users(users)
+        try:
+            users = load_users()
+            if username in users:
+                users[username]['last_activity'] = time.time()
+                save_users(users)
+        except:
+            pass  # Don't block on activity tracking
     
     # Add local jobs (always fresh)
     for job_id, job in jobs.items():
@@ -2501,34 +2523,41 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
 
 
 # ============================================================================
-# STARTUP CACHE LOADING
+# STARTUP CACHE LOADING (Background)
 # ============================================================================
 
-def preload_caches():
-    """Preload caches at startup for fast initial page load."""
-    print("🚀 Preloading caches...")
+import threading
+
+cache_loading_complete = False
+
+def preload_caches_background():
+    """Preload caches in background thread so app starts immediately."""
+    global cache_loading_complete
+    print("🚀 Starting background cache loading...")
     
     # Load persisted file list cache
     if s3_client:
-        if load_persisted_cache():
-            print(f"   ✅ File list cache: {len(s3_cache.get('jobs', []))} profiles")
+        try:
+            if load_persisted_cache():
+                print(f"   ✅ File list cache: {len(s3_cache.get('jobs', []))} profiles")
+        except Exception as e:
+            print(f"   ⚠️ File cache warning: {e}")
         
-        # Load demographics cache
-        if load_demographics_cache():
-            print(f"   ✅ Demographics cache: {len(demographics_cache)} profiles")
+        # Load demographics cache (optional - not blocking)
+        try:
+            if load_demographics_cache():
+                print(f"   ✅ Demographics cache: {len(demographics_cache)} profiles")
+        except Exception as e:
+            print(f"   ⚠️ Demographics cache warning: {e}")
     
-    # Load user data (uses load_users which handles S3)
-    try:
-        load_users()
-        print("   ✅ User data loaded")
-    except Exception as e:
-        print(f"   ⚠️ User data load warning: {e}")
-    
-    print("🎉 Caches ready!")
+    cache_loading_complete = True
+    print("🎉 Background cache loading complete!")
 
 
-# Preload caches when module loads (for gunicorn workers)
-preload_caches()
+# Start background cache loading (non-blocking)
+print("🚀 App starting - cache will load in background")
+cache_thread = threading.Thread(target=preload_caches_background, daemon=True)
+cache_thread.start()
 
 
 # ============================================================================

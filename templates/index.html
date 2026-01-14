@@ -6979,6 +6979,8 @@
             return 'OTHER';
         }
         
+        let cachePollingInterval = null;
+        
         async function loadJobs(showLoading = true) {
             const container = document.getElementById('jobsList');
             const cacheStatus = document.getElementById('cacheStatus');
@@ -6990,6 +6992,27 @@
             try {
                 const response = await fetch('/api/jobs');
                 const data = await response.json();
+                
+                // Handle loading state - poll until ready
+                if (data.loading) {
+                    if (container) {
+                        container.innerHTML = '<div style="padding: 1rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Loading profiles from cloud...</div>';
+                    }
+                    if (cacheStatus) {
+                        cacheStatus.innerHTML = '<span style="color: var(--accent-orange); font-size: 0.7rem;">⏳ Cache loading...</span>';
+                    }
+                    // Poll every 2 seconds until cache is ready
+                    if (!cachePollingInterval) {
+                        cachePollingInterval = setInterval(() => loadJobs(false), 2000);
+                    }
+                    return;
+                }
+                
+                // Cache is ready - stop polling
+                if (cachePollingInterval) {
+                    clearInterval(cachePollingInterval);
+                    cachePollingInterval = null;
+                }
                 
                 allJobs = data.jobs || [];
                 allCategories = data.categories || [];
