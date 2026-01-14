@@ -365,6 +365,192 @@
             border-radius: 10px;
         }
         
+        /* Tab Actions Bar */
+        .tab-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .tab-actions-left, .tab-actions-right {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        
+        .action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.4rem 0.75rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .action-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+            border-color: var(--accent-blue);
+        }
+        
+        .action-btn.primary {
+            background: linear-gradient(135deg, var(--accent-lime), #84cc16);
+            color: var(--bg-dark);
+            border-color: var(--accent-lime);
+            font-weight: 600;
+        }
+        
+        .action-btn.primary:hover {
+            background: linear-gradient(135deg, #b5e34c, var(--accent-lime));
+            transform: translateY(-1px);
+        }
+        
+        /* Deck Notification */
+        .deck-notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #1a1f35 0%, #0d1020 100%);
+            border: 1px solid var(--accent-lime);
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            z-index: 10000;
+            animation: slideInRight 0.3s ease;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+        
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        /* Deck Workspace Modal */
+        .deck-workspace-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10001;
+        }
+        
+        .deck-workspace-content {
+            background: var(--bg-card);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 700px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+        }
+        
+        .deck-workspace-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .deck-workspace-header h2 {
+            margin: 0;
+            font-size: 1.25rem;
+        }
+        
+        .deck-workspace-items {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            min-height: 200px;
+        }
+        
+        .deck-empty {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 3rem 1rem;
+            font-size: 0.9rem;
+        }
+        
+        .deck-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: var(--bg-input);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            border: 1px solid var(--border-color);
+            cursor: grab;
+            transition: all 0.2s;
+        }
+        
+        .deck-item:hover {
+            border-color: var(--accent-blue);
+            background: rgba(99, 102, 241, 0.1);
+        }
+        
+        .deck-item-handle {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            cursor: grab;
+        }
+        
+        .deck-item-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+        
+        .deck-item-content strong {
+            font-size: 0.9rem;
+        }
+        
+        .deck-item-date {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+        
+        .deck-item-remove {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .deck-item-remove:hover {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.2);
+        }
+        
+        .deck-workspace-actions {
+            display: flex;
+            gap: 0.75rem;
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--border-color);
+            justify-content: flex-end;
+        }
+        
         .explainer-text {
             color: #c5c7d4;
             font-size: 13px;
@@ -4097,6 +4283,16 @@
                         <strong>Demographics</strong> — Your audience breakdown by gender, age, income, etc. <strong>Colors:</strong> <span class="highlight-green">Green = over-indexes</span> (higher than Gen Pop) | <span class="highlight-red">Red = under-indexes</span> (lower than Gen Pop). Second % shows Gen Pop baseline for comparison.
                     </div>
                 </div>
+                <div class="tab-actions">
+                    <div class="tab-actions-left">
+                        <button class="action-btn" onclick="downloadTabCSV('demographics')" title="Download as CSV">📄 CSV</button>
+                        <button class="action-btn" onclick="downloadTabChart('demographics', 'png')" title="Download as PNG">🖼️ PNG</button>
+                        <button class="action-btn" onclick="downloadTabChart('demographics', 'pdf')" title="Download as PDF">📑 PDF</button>
+                    </div>
+                    <div class="tab-actions-right">
+                        <button class="action-btn primary" onclick="addToWorkspace('demographics')" title="Add to deck workspace">➕ Add to Deck</button>
+                    </div>
+                </div>
                 <div class="demo-grid">
                     <div class="demo-sidebar">
                         <div class="selected-profile-info">
@@ -4140,6 +4336,16 @@
                         <strong>Behavioral</strong> — What your audience does, watches, buys. <strong>First %</strong> = your audience. <strong>Second %</strong> = Gen Pop. <strong>Colors:</strong> <span class="highlight-green">Green = over-indexes</span> | <span class="highlight-red">Red = under-indexes</span>. <em>Most Purchased Brands</em> = confirmed purchases; others = digital touchpoint.
                     </div>
                 </div>
+                <div class="tab-actions">
+                    <div class="tab-actions-left">
+                        <button class="action-btn" onclick="downloadTabCSV('behavioral')" title="Download as CSV">📄 CSV</button>
+                        <button class="action-btn" onclick="downloadTabChart('behavioral', 'png')" title="Download as PNG">🖼️ PNG</button>
+                        <button class="action-btn" onclick="downloadTabChart('behavioral', 'pdf')" title="Download as PDF">📑 PDF</button>
+                    </div>
+                    <div class="tab-actions-right">
+                        <button class="action-btn primary" onclick="addToWorkspace('behavioral')" title="Add to deck workspace">➕ Add to Deck</button>
+                    </div>
+                </div>
                 
                 <!-- Category Reorder Controls -->
                 <div class="behavioral-controls">
@@ -4161,6 +4367,16 @@
                     <div class="explainer-icon">🗺️</div>
                     <div class="explainer-text">
                         <strong>Location</strong> — Where your audience lives. <strong>Heat map:</strong> darker = higher concentration. <strong>Index:</strong> <span class="highlight-green">100+ = over-indexes</span> | <span class="highlight-red">&lt;100 = under-indexes</span>. DMAs = metro areas ranked by audience density.
+                    </div>
+                </div>
+                <div class="tab-actions">
+                    <div class="tab-actions-left">
+                        <button class="action-btn" onclick="downloadTabCSV('location')" title="Download as CSV">📄 CSV</button>
+                        <button class="action-btn" onclick="downloadTabChart('location', 'png')" title="Download as PNG">🖼️ PNG</button>
+                        <button class="action-btn" onclick="downloadTabChart('location', 'pdf')" title="Download as PDF">📑 PDF</button>
+                    </div>
+                    <div class="tab-actions-right">
+                        <button class="action-btn primary" onclick="addToWorkspace('location')" title="Add to deck workspace">➕ Add to Deck</button>
                     </div>
                 </div>
                 <div class="location-header">
@@ -6740,6 +6956,270 @@
             trackActivity('download_csv', currentS3Key || currentJobId);
             if (currentS3Key) window.location.href = `/api/download-cached/${encodeURIComponent(currentS3Key)}`;
             else if (currentJobId) window.location.href = `/api/download/${currentJobId}`;
+        }
+        
+        // ============================================================================
+        // TAB-SPECIFIC DOWNLOAD & WORKSPACE FUNCTIONS
+        // ============================================================================
+        
+        function downloadTabCSV(tabName) {
+            if (!currentDashboardData) {
+                alert('Please select a profile first');
+                return;
+            }
+            
+            trackActivity('download_tab_csv', tabName);
+            
+            let csvContent = '';
+            const profileName = currentProfileData?.name || 'Profile';
+            
+            if (tabName === 'demographics') {
+                csvContent = generateDemographicsCSV();
+            } else if (tabName === 'behavioral') {
+                csvContent = generateBehavioralCSV();
+            } else if (tabName === 'location') {
+                csvContent = generateLocationCSV();
+            }
+            
+            // Download the CSV
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${profileName}_${tabName}_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+        }
+        
+        function generateDemographicsCSV() {
+            const data = currentDashboardData;
+            let csv = 'Category,Value,Audience %,Gen Pop %,Index\n';
+            
+            if (data.demographics) {
+                Object.entries(data.demographics).forEach(([category, values]) => {
+                    Object.entries(values).forEach(([value, pct]) => {
+                        const genPop = data.demographicsGenPop?.[category]?.[value] || 0;
+                        const index = data.demographicsIndex?.[category]?.[value] || 0;
+                        csv += `${category},${value},${pct.toFixed(2)},${genPop.toFixed(2)},${index}\n`;
+                    });
+                });
+            }
+            return csv;
+        }
+        
+        function generateBehavioralCSV() {
+            const data = currentDashboardData;
+            let csv = 'Category,Item,Audience %,Gen Pop %,Index\n';
+            
+            if (data.behavioral) {
+                Object.entries(data.behavioral).forEach(([category, items]) => {
+                    items.forEach(item => {
+                        csv += `${category},"${item.name}",${item.pct.toFixed(2)},${(item.genPopPct || 0).toFixed(2)},${item.index || 0}\n`;
+                    });
+                });
+            }
+            return csv;
+        }
+        
+        function generateLocationCSV() {
+            const data = currentDashboardData;
+            let csv = 'DMA,Audience %,Gen Pop %,Index\n';
+            
+            if (data.locations) {
+                data.locations.forEach(loc => {
+                    csv += `"${loc.name}",${loc.pct.toFixed(2)},${(loc.genPopPct || 0).toFixed(2)},${loc.index || 0}\n`;
+                });
+            }
+            return csv;
+        }
+        
+        function downloadTabChart(tabName, format) {
+            if (!currentDashboardData) {
+                alert('Please select a profile first');
+                return;
+            }
+            
+            trackActivity('download_tab_chart', `${tabName}_${format}`);
+            
+            // Get the tab content element
+            const tabElement = document.getElementById('tab-' + tabName);
+            if (!tabElement) return;
+            
+            // Use html2canvas to capture the tab content
+            if (typeof html2canvas === 'undefined') {
+                // Load html2canvas if not available
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                script.onload = () => captureAndDownload(tabElement, tabName, format);
+                document.head.appendChild(script);
+            } else {
+                captureAndDownload(tabElement, tabName, format);
+            }
+        }
+        
+        function captureAndDownload(element, tabName, format) {
+            const profileName = currentProfileData?.name || 'Profile';
+            
+            html2canvas(element, {
+                backgroundColor: '#0d1117',
+                scale: 2,
+                logging: false,
+                useCORS: true
+            }).then(canvas => {
+                if (format === 'png') {
+                    const link = document.createElement('a');
+                    link.download = `${profileName}_${tabName}_${new Date().toISOString().split('T')[0]}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                } else if (format === 'pdf') {
+                    // For PDF, open in new window for printing
+                    const imgData = canvas.toDataURL('image/png');
+                    const printWindow = window.open('', '_blank');
+                    printWindow.document.write(`
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title>${profileName} - ${tabName}</title>
+                            <style>
+                                body { margin: 0; padding: 20px; background: #0d1117; }
+                                img { max-width: 100%; height: auto; }
+                                @media print { body { background: white; } }
+                            </style>
+                        </head>
+                        <body>
+                            <img src="${imgData}" />
+                        </body>
+                        </html>
+                    `);
+                    printWindow.document.close();
+                    setTimeout(() => printWindow.print(), 500);
+                }
+            });
+        }
+        
+        // Workspace/Deck items storage
+        let deckWorkspaceItems = JSON.parse(localStorage.getItem('deckWorkspaceItems') || '[]');
+        
+        function addToWorkspace(tabName) {
+            if (!currentDashboardData || !currentProfileData) {
+                alert('Please select a profile first');
+                return;
+            }
+            
+            trackActivity('add_to_deck', tabName);
+            
+            const item = {
+                id: Date.now(),
+                type: tabName,
+                profileName: currentProfileData.name || 'Profile',
+                profileKey: currentS3Key,
+                dateAdded: new Date().toISOString(),
+                data: null
+            };
+            
+            // Store relevant data based on tab type
+            if (tabName === 'demographics') {
+                item.data = {
+                    demographics: currentDashboardData.demographics,
+                    demographicsIndex: currentDashboardData.demographicsIndex,
+                    demographicsGenPop: currentDashboardData.demographicsGenPop,
+                    sampleSize: currentDashboardData.sampleSize
+                };
+                item.title = `${item.profileName} - Demographics`;
+            } else if (tabName === 'behavioral') {
+                item.data = {
+                    behavioral: currentDashboardData.behavioral,
+                    sampleSize: currentDashboardData.sampleSize
+                };
+                item.title = `${item.profileName} - Behavioral`;
+            } else if (tabName === 'location') {
+                item.data = {
+                    locations: currentDashboardData.locations,
+                    sampleSize: currentDashboardData.sampleSize
+                };
+                item.title = `${item.profileName} - Location`;
+            }
+            
+            deckWorkspaceItems.push(item);
+            localStorage.setItem('deckWorkspaceItems', JSON.stringify(deckWorkspaceItems));
+            
+            showDeckNotification(item.title);
+        }
+        
+        function showDeckNotification(title) {
+            // Create notification
+            const notification = document.createElement('div');
+            notification.className = 'deck-notification';
+            notification.innerHTML = `
+                <span>✅ Added to Deck: ${title}</span>
+                <button onclick="openDeckWorkspace()" style="background: var(--accent-lime); color: var(--bg-dark); border: none; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; margin-left: 0.5rem;">View Deck (${deckWorkspaceItems.length})</button>
+            `;
+            document.body.appendChild(notification);
+            
+            // Auto-remove after 4 seconds
+            setTimeout(() => notification.remove(), 4000);
+        }
+        
+        function openDeckWorkspace() {
+            // Create modal for deck workspace
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.innerHTML = `
+                <div class="deck-workspace-content">
+                    <div class="deck-workspace-header">
+                        <h2>📊 Deck Workspace</h2>
+                        <button onclick="this.parentElement.parentElement.parentElement.remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div class="deck-workspace-items" id="deckWorkspaceItems">
+                        ${renderDeckItems()}
+                    </div>
+                    <div class="deck-workspace-actions">
+                        <button class="btn btn-secondary" onclick="clearDeckWorkspace()">🗑️ Clear All</button>
+                        <button class="btn btn-primary" onclick="exportDeckAsPDF()">📑 Export as PDF</button>
+                        <button class="btn btn-primary" onclick="exportDeckAsPPT()">📊 Export as Slides</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function renderDeckItems() {
+            if (deckWorkspaceItems.length === 0) {
+                return '<div class="deck-empty">No items in deck. Add items from Demographics, Behavioral, or Location tabs.</div>';
+            }
+            
+            return deckWorkspaceItems.map((item, idx) => `
+                <div class="deck-item" draggable="true" data-idx="${idx}">
+                    <div class="deck-item-handle">⋮⋮</div>
+                    <div class="deck-item-content">
+                        <strong>${item.title}</strong>
+                        <span class="deck-item-date">${new Date(item.dateAdded).toLocaleDateString()}</span>
+                    </div>
+                    <button class="deck-item-remove" onclick="removeDeckItem(${idx})">✕</button>
+                </div>
+            `).join('');
+        }
+        
+        function removeDeckItem(idx) {
+            deckWorkspaceItems.splice(idx, 1);
+            localStorage.setItem('deckWorkspaceItems', JSON.stringify(deckWorkspaceItems));
+            document.getElementById('deckWorkspaceItems').innerHTML = renderDeckItems();
+        }
+        
+        function clearDeckWorkspace() {
+            if (confirm('Clear all items from deck workspace?')) {
+                deckWorkspaceItems = [];
+                localStorage.setItem('deckWorkspaceItems', JSON.stringify(deckWorkspaceItems));
+                document.getElementById('deckWorkspaceItems').innerHTML = renderDeckItems();
+            }
+        }
+        
+        function exportDeckAsPDF() {
+            alert('Generating PDF deck with ' + deckWorkspaceItems.length + ' slides...\n\nThis feature will compile all your saved items into a presentation deck.');
+            // TODO: Implement full PDF generation with stored data
+        }
+        
+        function exportDeckAsPPT() {
+            alert('Generating PowerPoint deck with ' + deckWorkspaceItems.length + ' slides...\n\nThis feature will create a .pptx file with all your saved charts and data.');
+            // TODO: Implement PPT generation
         }
 
         // ============================================================================
