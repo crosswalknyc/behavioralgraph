@@ -316,6 +316,48 @@
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
+        /* Tab Explainer Boxes */
+        .tab-explainer {
+            background: linear-gradient(135deg, #1a1f35 0%, #0d1020 100%);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .explainer-icon {
+            font-size: 28px;
+            flex-shrink: 0;
+            background: rgba(99, 102, 241, 0.2);
+            padding: 10px;
+            border-radius: 10px;
+        }
+        
+        .explainer-text {
+            color: #c5c7d4;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        
+        .explainer-text strong {
+            color: #fff;
+            font-weight: 600;
+        }
+        
+        .explainer-text .highlight-green {
+            color: #10b981;
+            font-weight: 500;
+        }
+        
+        .explainer-text .highlight-red {
+            color: #ef4444;
+            font-weight: 500;
+        }
+
         /* Demographics Tab */
         .demo-grid {
             display: grid;
@@ -2646,6 +2688,9 @@
                     <h3>🧪 Business Intelligence Lab</h3>
                     <button onclick="toggleAIPanel()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem;">✕</button>
                 </div>
+                <div class="ai-explainer" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 12px; font-size: 12px; color: #c5c7d4;">
+                    <strong style="color: #a78bfa;">💡 How to use:</strong> Ask business questions about this audience data. The AI analyzes demographics, behaviors, and locations to provide actionable insights. Try: <em>"What media channels should we prioritize?"</em> or <em>"Create a marketing strategy for this audience."</em>
+                </div>
                 <div class="ai-tabs">
                     <button class="ai-tab active" onclick="showAITab('business')">🎯 Business Q&A</button>
                     <button class="ai-tab" onclick="showAITab('insights')">💡 Insights</button>
@@ -2719,6 +2764,12 @@
 
             <!-- Demographics Tab -->
             <div id="tab-demographics" class="tab-content active">
+                <div class="tab-explainer">
+                    <div class="explainer-icon">👥</div>
+                    <div class="explainer-text">
+                        <strong>Demographics Overview</strong> — This tab shows the demographic breakdown of your selected audience. Each chart displays what percentage of your audience falls into each category (e.g., 45% Female). <span class="highlight-green">Green percentages</span> indicate over-indexing vs. General Population (your audience skews higher), while <span class="highlight-red">red percentages</span> show under-indexing. The Gen Pop % shown is the baseline comparison.
+                    </div>
+                </div>
                 <div class="demo-grid">
                     <div class="demo-sidebar">
                         <div class="selected-profile-info">
@@ -2756,11 +2807,23 @@
 
             <!-- Behavioral Tab -->
             <div id="tab-behavioral" class="tab-content">
+                <div class="tab-explainer">
+                    <div class="explainer-icon">📊</div>
+                    <div class="explainer-text">
+                        <strong>Behavioral Patterns</strong> — This tab reveals what your audience does, watches, buys, and engages with. Data is organized by category (Streaming, Social Media, Retail, etc.). Each item shows: the audience percentage, the <span class="highlight-green">Gen Pop Index</span> (100 = same as general population, >100 = over-indexes, <100 = under-indexes). Use the search bar to find specific behaviors. <span class="highlight-green">Higher indexes</span> indicate distinctive audience traits worth targeting.
+                    </div>
+                </div>
                 <div class="behavioral-grid" id="behavioralGrid"></div>
             </div>
 
             <!-- Location Tab -->
             <div id="tab-location" class="tab-content">
+                <div class="tab-explainer">
+                    <div class="explainer-icon">🗺️</div>
+                    <div class="explainer-text">
+                        <strong>Geographic Distribution</strong> — See where your audience lives across the US. The heat map shows concentration by state (darker = higher concentration). The regional breakdown shows % by region (Northeast, Midwest, South, West). Use this data to plan regional campaigns, identify key markets, and understand geographic reach. Top DMAs (Designated Market Areas) show the specific metro areas with highest audience density.
+                    </div>
+                </div>
                 <div class="location-header">
                     <h2>📍 Geographic Distribution</h2>
                     <div class="location-stats" id="locationStats"></div>
@@ -2798,6 +2861,12 @@
 
             <!-- Affinity Map Tab -->
             <div id="tab-affinity" class="tab-content">
+                <div class="tab-explainer">
+                    <div class="explainer-icon">🔗</div>
+                    <div class="explainer-text">
+                        <strong>Audience Affinity Map</strong> — Discover what else your audience loves. This shows brands, content, and talent that share significant audience overlap. Higher affinity scores indicate stronger crossover potential. Use this to identify: partnership opportunities, content integrations, and adjacent audiences to target. The affinity percentage represents how much more likely your audience is to engage with each item vs. general population.
+                    </div>
+                </div>
                 <div class="affinity-container">
                     <div class="affinity-header">
                         <h2>🔗 Audience Affinity Map</h2>
@@ -2840,6 +2909,12 @@
 
             <!-- Sponsorship Match Tab -->
             <div id="tab-sponsorship" class="tab-content">
+                <div class="tab-explainer">
+                    <div class="explainer-icon">💰</div>
+                    <div class="explainer-text">
+                        <strong>Sponsorship Match Finder</strong> — Find the best brand partnership opportunities. This analyzes your audience's purchasing behavior, brand affinity, and lifestyle to surface ideal sponsor categories. <strong>Top Sponsor Categories</strong> show industries where your audience over-indexes (e.g., Luxury Auto at 145 index = 45% more likely than Gen Pop). Use the <strong>Revenue Potential</strong> estimates to prioritize outreach. <strong>Match Score</strong> combines affinity + spending power + brand safety.
+                    </div>
+                </div>
                 <div class="sponsorship-container">
                     <div class="sponsorship-header">
                         <h2>💰 Sponsorship Match Finder</h2>
@@ -2881,6 +2956,12 @@
 
             <!-- Talent Assessment Tab -->
             <div id="tab-talent" class="tab-content">
+                <div class="tab-explainer">
+                    <div class="explainer-icon">⭐</div>
+                    <div class="explainer-text">
+                        <strong>Talent Assessment Dashboard</strong> — Evaluate talent for endorsements, sponsorships, or content partnerships. The <strong>Partnership Score</strong> (0-100) measures how well talent resonates with your audience based on demographic alignment and behavioral overlap. <strong>Audience Reach</strong> shows estimated reach potential. <strong>Demographic Fit</strong> breaks down how well talent's fanbase matches your target. Higher scores = better talent fit. Use this to make data-driven casting and partnership decisions.
+                    </div>
+                </div>
                 <div class="talent-container">
                     <div class="talent-header">
                         <h2>⭐ Talent Assessment Dashboard</h2>
@@ -2939,6 +3020,12 @@
 
             <!-- Media Optimizer Tab -->
             <div id="tab-media" class="tab-content">
+                <div class="tab-explainer">
+                    <div class="explainer-icon">📺</div>
+                    <div class="explainer-text">
+                        <strong>Media Channel Optimizer</strong> — Plan your media buy with precision. This shows which channels and platforms your audience actually uses. <strong>Channel Reach</strong> compares % reach across Linear TV, Streaming, Social, and Digital. <strong>Platform Index</strong> shows over/under-indexing vs. Gen Pop. <strong>Primary Channels</strong> are where you'll find the highest concentration of your audience. Use this to optimize media spend and maximize reach efficiency.
+                    </div>
+                </div>
                 <div class="media-container">
                     <div class="media-header">
                         <h2>📺 Media Channel Optimizer</h2>
@@ -2993,6 +3080,12 @@
 
             <!-- Content Development Tab -->
             <div id="tab-content" class="tab-content">
+                <div class="tab-explainer">
+                    <div class="explainer-icon">🎬</div>
+                    <div class="explainer-text">
+                        <strong>Content Development Lab</strong> — Create data-driven content strategies. Select your target demographics and platform, then analyze: <strong>Recommended Shows</strong> (series that resonate with your audience, sorted by fit score), <strong>Recommended Talent</strong> (actors/emerging talent matching your demo, with sample size "n" showing data confidence), <strong>Brand Partners</strong> (sponsors for content integration). <strong>Fit Score</strong> measures demographic alignment (higher = better match). Use <strong>Generate Logline</strong> for AI-powered concept ideas.
+                    </div>
+                </div>
                 <div class="content-dev-container">
                     <div class="content-dev-header">
                         <h2>🎬 Content Development Lab</h2>
@@ -3148,6 +3241,12 @@
 
             <!-- Top Insights Tab -->
             <div id="tab-insights" class="tab-content">
+                <div class="tab-explainer">
+                    <div class="explainer-icon">🔥</div>
+                    <div class="explainer-text">
+                        <strong>Top Over-Indexing Insights</strong> — Instantly see what makes this audience unique. Items are ranked by <strong>Index</strong> (how much more likely than Gen Pop). An index of 200 means 2x more likely; 150 means 50% more likely. <strong>Biggest Over-Indexers</strong> are your key differentiators—use these for targeting, messaging, and creative development. <strong>Hidden Gems</strong> show unexpected affinities that could unlock new strategies. Focus on items with high index AND meaningful audience %.
+                    </div>
+                </div>
                 <div class="insights-container">
                     <div class="insights-header">
                         <h2>🔥 Top Over-Indexing Insights</h2>
@@ -3193,6 +3292,12 @@
             
             <!-- Segmentation Builder Tab -->
             <div id="tab-segmentation" class="tab-content">
+                <div class="tab-explainer">
+                    <div class="explainer-icon">🎯</div>
+                    <div class="explainer-text">
+                        <strong>Audience Segment Builder</strong> — Slice the data by demographics to discover segment-specific insights. Select filters (e.g., Female 25-34, $100K+ Income) and see how behaviors change for that sub-group. This reveals: <strong>What do high-income viewers watch differently?</strong> <strong>How do younger audiences behave vs. older?</strong> The <strong>Segment Size</strong> shows what % of the total audience matches your filters. Use this for persona development and targeted campaign planning.
+                    </div>
+                </div>
                 <div class="segmentation-container">
                     <div class="seg-header">
                         <h2>🎯 Audience Segment Builder</h2>
@@ -3317,6 +3422,12 @@
 
             <!-- Comparison Tab -->
             <div id="tab-comparison" class="tab-content">
+                <div class="tab-explainer">
+                    <div class="explainer-icon">⚖️</div>
+                    <div class="explainer-text">
+                        <strong>Profile Comparison</strong> — Compare multiple audience profiles side-by-side. Select 2+ profiles from the left panel, then view demographics, behaviors, and locations in parallel. <strong>Use the toggle</strong> to switch between percentages (%) and US Population projection numbers. Tables are sortable—click any column header to sort by that profile's values. This helps identify: audience overlap, unique differentiators between brands/shows, and competitive positioning insights.
+                    </div>
+                </div>
                 <div class="comparison-header">
                     <div class="comp-logo">
                         <img src="/static/crosswalk-logo.svg" alt="Crosswalk" style="height: 30px;">
