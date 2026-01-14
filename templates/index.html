@@ -6251,7 +6251,11 @@
         }
 
         // Load profiles when dashboard tab is shown
+        let dashboardProfilePolling = null;
+        
         async function loadDashboardProfiles() {
+            const container = document.getElementById('dashProfileTree');
+            
             try {
                 const response = await fetch('/api/jobs', { credentials: 'same-origin' });
                 
@@ -6263,14 +6267,35 @@
                 
                 if (!response.ok) {
                     console.error('Failed to load profiles:', response.status);
+                    if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Failed to load profiles</div>';
                     return;
                 }
                 
                 const data = await response.json();
+                
+                // Handle loading state - cache is still loading
+                if (data.loading) {
+                    if (container) {
+                        container.innerHTML = '<div style="padding: 1rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Loading profiles from cloud...</div>';
+                    }
+                    // Poll every 2 seconds until ready
+                    if (!dashboardProfilePolling) {
+                        dashboardProfilePolling = setInterval(() => loadDashboardProfiles(), 2000);
+                    }
+                    return;
+                }
+                
+                // Clear polling interval once loaded
+                if (dashboardProfilePolling) {
+                    clearInterval(dashboardProfilePolling);
+                    dashboardProfilePolling = null;
+                }
+                
                 const profiles = data.jobs || [];
                 renderDashboardProfileTree(profiles);
             } catch (error) {
                 console.error('Failed to load profiles:', error);
+                if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Error loading profiles</div>';
             }
         }
 
