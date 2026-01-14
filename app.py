@@ -2073,22 +2073,13 @@ def list_jobs():
         })
         categories.add('LOCAL')
     
-    # Check if we need to refresh S3 cache
-    now = time.time()
-    
-    # If cache is empty, try to load persisted cache first
+    # Use persisted cache only - no S3 scanning on page load for speed
+    # If cache is empty, try to load persisted cache
     if not s3_cache['jobs'] and s3_client:
         load_persisted_cache()
     
-    # Determine if we need any refresh
-    need_refresh = (
-        s3_cache['last_updated'] is None or
-        (now - s3_cache['last_updated']) > S3_CACHE_TTL
-    )
-    
-    if need_refresh and s3_client:
-        # Use incremental refresh - much faster!
-        refresh_s3_cache(incremental=True)
+    # Don't auto-refresh - user can manually refresh if needed
+    # This makes page loads instant
     
     # Add cached S3 jobs
     job_list.extend(s3_cache['jobs'])
@@ -2520,41 +2511,33 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
 
 
 # ============================================================================
-# STARTUP CACHE LOADING (Background)
+# STARTUP CACHE LOADING (Fast sync load of persisted cache)
 # ============================================================================
-
-import threading
 
 cache_loading_complete = False
 
-def preload_caches_background():
-    """Preload caches in background thread so app starts immediately."""
+def quick_startup_cache():
+    """Quick startup - just load the pre-built JSON cache (fast!)."""
     global cache_loading_complete
-    print("🚀 Starting background cache loading...")
+    import time
+    start = time.time()
     
-    # Load persisted file list cache
+    print("🚀 Quick startup cache loading...")
+    
+    # Load persisted file list cache (single JSON file - should be <1 sec)
     if s3_client:
         try:
-            if load_persisted_cache():
-                print(f"   ✅ File list cache: {len(s3_cache.get('jobs', []))} profiles")
+            load_persisted_cache()
+            print(f"   ✅ Loaded {len(s3_cache.get('jobs', []))} profiles in {time.time()-start:.2f}s")
         except Exception as e:
-            print(f"   ⚠️ File cache warning: {e}")
-        
-        # Load demographics cache (optional - not blocking)
-        try:
-            if load_demographics_cache():
-                print(f"   ✅ Demographics cache: {len(demographics_cache)} profiles")
-        except Exception as e:
-            print(f"   ⚠️ Demographics cache warning: {e}")
+            print(f"   ⚠️ Cache load error: {e}")
     
     cache_loading_complete = True
-    print("🎉 Background cache loading complete!")
+    print(f"🎉 Startup complete in {time.time()-start:.2f}s")
 
 
-# Start background cache loading (non-blocking)
-print("🚀 App starting - cache will load in background")
-cache_thread = threading.Thread(target=preload_caches_background, daemon=True)
-cache_thread.start()
+# Load cache at startup (fast - just reads a JSON file)
+quick_startup_cache()
 
 
 # ============================================================================
