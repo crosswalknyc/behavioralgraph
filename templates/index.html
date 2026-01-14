@@ -261,6 +261,33 @@
             padding: 0.75rem 1rem;
             background: var(--bg-card);
             border-radius: 8px;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .dash-profile-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .dash-brand-box {
+            background: linear-gradient(135deg, #c8e600, #a0d911);
+            color: #1a1a1a;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .dash-date-box {
+            background: var(--bg-input);
+            color: var(--text-secondary);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
         }
 
         .dashboard-header h2 {
@@ -3238,7 +3265,15 @@
 
         <!-- DASHBOARD VIEW -->
         <div id="dashboardView">
+            <!-- Profile Info + Action Buttons Row -->
             <div class="dashboard-header">
+                <!-- Profile Info (Left) -->
+                <div class="dash-profile-info">
+                    <div class="dash-brand-box" id="dashBrandNameHeader">Select a profile</div>
+                    <div class="dash-date-box" id="dashDateRangeHeader">Date Range: --</div>
+                </div>
+                
+                <!-- Action Buttons (Right) -->
                 <div style="display: flex; gap: 0.75rem; align-items: center;">
                     <button class="btn btn-small" style="background: linear-gradient(135deg, #8b5cf6, #ec4899);" onclick="toggleAIPanel()">🧪 Business Intelligence Lab</button>
                     <button class="btn btn-small" id="favoriteBtn" onclick="toggleFavorite()" title="Add to favorites">⭐</button>
@@ -3257,7 +3292,7 @@
                         </div>
                     </div>
                     <button class="btn btn-small" onclick="toggleSavedViews()" title="Saved Views">💾 Saved</button>
-                    <button class="btn btn-small" style="background: var(--bg-input);" onclick="showFormView()">← Back</button>
+                    <button class="btn btn-small" style="background: white; color: #1a1a1a;" onclick="showFormView()">← Back</button>
                 </div>
             </div>
             
@@ -4693,7 +4728,11 @@
         }
 
         function renderDashboard(csvData, brandName, dateRange) {
-            // Title removed from header per user request
+            // Update header profile info
+            document.getElementById('dashBrandNameHeader').textContent = (brandName || 'Brand').toUpperCase();
+            document.getElementById('dashDateRangeHeader').textContent = 'Date Range: ' + (dateRange || '--');
+            
+            // Also update sidebar (legacy)
             document.getElementById('dashBrandName').textContent = brandName || 'Brand';
             document.getElementById('dashDateRange').textContent = 'Date Range: ' + (dateRange || '--');
 
@@ -4985,6 +5024,11 @@
                     const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === profileId);
                     const brandName = data.brand || (profile ? getProfileFullName(profile) : 'Unknown');
                     
+                    // Update header profile info
+                    document.getElementById('dashBrandNameHeader').textContent = brandName.toUpperCase();
+                    document.getElementById('dashDateRangeHeader').textContent = data.date_range ? `Date Range: ${data.date_range}` : 'Date Range: --';
+                    
+                    // Update sidebar (legacy)
                     document.getElementById('dashBrandName').textContent = brandName.toUpperCase();
                     document.getElementById('dashDateRange').textContent = data.date_range ? `Date Range: ${data.date_range}` : 'Date Range: --';
                     document.getElementById('dashSampleSize').textContent = formatNumber(parsed.sampleSize);
