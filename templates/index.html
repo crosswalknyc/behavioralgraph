@@ -5590,17 +5590,26 @@
                 const data = await response.json();
                 if (data.success) {
                     contentDevCache = data.profiles || [];
-                    const withDemo = contentDevCache.filter(p => p.hasDemoData).length;
+                    const withDemo = contentDevCache.filter(p => p.hasDemoData && p.sampleSize > 0).length;
                     const missing = contentDevCache.length - withDemo;
                     
                     console.log(`✅ Loaded ${contentDevCache.length} profiles (${withDemo} with demographics)`);
                     
-                    if (missing > 0 && missing < contentDevCache.length * 0.5) {
-                        updateCacheStatus('partial', `⚡ ${withDemo}/${contentDevCache.length} profiles cached`, missing);
+                    // Check for talent specifically
+                    const talentProfiles = contentDevCache.filter(p => {
+                        const cat = (p.category || '').toUpperCase();
+                        return cat === 'ACTOR' || cat === 'EMERGING TALENT' || cat.includes('TALENT');
+                    });
+                    const talentWithDemo = talentProfiles.filter(p => p.hasDemoData && p.sampleSize > 0).length;
+                    
+                    if (withDemo === 0) {
+                        updateCacheStatus('needs-build', `⚠️ Demographics cache empty - click to build`, contentDevCache.length);
+                    } else if (missing > contentDevCache.length * 0.7) {
+                        updateCacheStatus('needs-build', `⚠️ Only ${withDemo}/${contentDevCache.length} cached`, missing);
                     } else if (missing > 0) {
-                        updateCacheStatus('needs-build', `⚠️ ${missing} profiles need caching`, missing);
+                        updateCacheStatus('partial', `⚡ ${withDemo}/${contentDevCache.length} profiles cached`, missing);
                     } else {
-                        updateCacheStatus('ready', `✅ ${withDemo} profiles ready for instant analysis`);
+                        updateCacheStatus('ready', `✅ ${withDemo} profiles ready`);
                     }
                 }
             } catch (e) {
@@ -5745,8 +5754,14 @@
                     }
                 }
                 
-                // Analyze talent using CACHED data - instant!
-                for (const profile of actorProfiles) {
+                // Analyze talent - check if we have cached demographics
+                const talentWithData = actorProfiles.filter(p => p.hasDemoData && p.sampleSize > 0);
+                const talentWithoutData = actorProfiles.filter(p => !p.hasDemoData || p.sampleSize === 0);
+                
+                console.log(`Talent: ${talentWithData.length} with cached data, ${talentWithoutData.length} without`);
+                
+                // For talent WITH cached data, use fast calculation
+                for (const profile of talentWithData) {
                     const score = calculateCachedAudienceFit(profile, { gender, age, income });
                     const talentGender = detectTalentGenderFromCache(profile);
                     talentData.push({
@@ -5756,6 +5771,31 @@
                         demographics: profile.demographics,
                         sampleSize: profile.sampleSize
                     });
+                }
+                
+                // For talent WITHOUT cached data, fetch a sample of actual profiles
+                if (talentWithoutData.length > 0 && talentData.length < 10) {
+                    status.textContent = `⚡ Loading ${Math.min(15, talentWithoutData.length)} talent profiles...`;
+                    const talentToFetch = talentWithoutData.slice(0, 15);
+                    
+                    for (const profile of talentToFetch) {
+                        try {
+                            const profileData = await fetchProfileData(profile.key);
+                            if (profileData && profileData.sampleSize > 0) {
+                                const score = calculateAudienceFit(profileData, { gender, age, income });
+                                const talentGender = detectTalentGender(profile.name, profileData);
+                                talentData.push({
+                                    name: profile.name,
+                                    gender: talentGender,
+                                    score: score,
+                                    demographics: profileData.demographics,
+                                    sampleSize: profileData.sampleSize
+                                });
+                            }
+                        } catch (e) {
+                            console.log('Error loading talent:', profile.name);
+                        }
+                    }
                 }
                 
                 // Analyze brands using CACHED data - instant!
@@ -5770,10 +5810,12 @@
                     });
                 }
                 
-                // Sort by score
+                // Sort by score (highest first) and filter out zero scores
                 showsData.sort((a, b) => b.score - a.score);
-                talentData.sort((a, b) => b.score - a.score);
+                talentData = talentData.filter(t => t.sampleSize > 0).sort((a, b) => b.score - a.score);
                 brandsData.sort((a, b) => b.score - a.score);
+                
+                console.log(`📊 Results: ${showsData.length} shows, ${talentData.length} talent, ${brandsData.length} brands`);
                 
                 // Store results
                 contentAnalysisData = {
