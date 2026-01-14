@@ -6702,11 +6702,11 @@
             });
             const topSponsorCats = Object.entries(sponsorCategories).filter(([_, d]) => d.avgIndex > 100).sort((a, b) => b[1].avgIndex - a[1].avgIndex).slice(0, 6);
             
-            return \`
+            return `
 <!DOCTYPE html>
 <html>
 <head>
-    <title>\${profileName} - Audience Profile</title>
+    <title>${profileName} - Audience Profile</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1a1a1a; }
@@ -6732,12 +6732,12 @@
     <!-- Slide 1: Title -->
     <div class="slide">
         <div class="logo">CROSSWALK+ | Audience Intelligence</div>
-        <h1 class="slide-title" style="font-size: 48px; margin-top: 100px;">\${profileName}</h1>
+        <h1 class="slide-title" style="font-size: 48px; margin-top: 100px;">${profileName}</h1>
         <p class="slide-subtitle" style="font-size: 24px;">Audience Profile & Sponsorship Opportunities</p>
         <div style="margin-top: 60px; color: #64748b;">
-            <p>Generated: \${new Date().toLocaleDateString()}</p>
-            <p>Sample Size: n=\${formatNumber(currentProfileData.sampleSize || 0)}</p>
-            <p>Projected US Reach: \${formatNumber(currentProfileData.projectedUS || 0)}</p>
+            <p>Generated: ${new Date().toLocaleDateString()}</p>
+            <p>Sample Size: n=${formatNumber(currentProfileData.sampleSize || 0)}</p>
+            <p>Projected US Reach: ${formatNumber(currentProfileData.projectedUS || 0)}</p>
         </div>
     </div>
     
@@ -6746,26 +6746,26 @@
         <h2 class="slide-title">Audience Overview</h2>
         <div class="stat-grid">
             <div class="stat-box">
-                <div class="stat-value">\${formatNumber(currentProfileData.sampleSize || 0)}</div>
+                <div class="stat-value">${formatNumber(currentProfileData.sampleSize || 0)}</div>
                 <div class="stat-label">Sample Size</div>
             </div>
             <div class="stat-box">
-                <div class="stat-value">\${formatNumber(currentProfileData.projectedUS || 0)}</div>
+                <div class="stat-value">${formatNumber(currentProfileData.projectedUS || 0)}</div>
                 <div class="stat-label">US Reach</div>
             </div>
             <div class="stat-box">
-                <div class="stat-value">\${allItems.length}</div>
+                <div class="stat-value">${allItems.length}</div>
                 <div class="stat-label">Data Points Analyzed</div>
             </div>
         </div>
         <h3 style="margin: 30px 0 15px 0; color: #1e3a5f;">Top Audience Affinities</h3>
         <div class="insight-grid">
-            \${topAffinities.map(item => \`
+            ${topAffinities.map(item => `
                 <div class="insight-item">
-                    <span class="insight-name">\${item.name}</span>
-                    <span class="insight-index">+\${item.index - 100}%</span>
+                    <span class="insight-name">${item.name}</span>
+                    <span class="insight-index">+${item.index - 100}%</span>
                 </div>
-            \`).join('')}
+            `).join('')}
         </div>
     </div>
     
@@ -6774,7 +6774,7 @@
         <h2 class="slide-title">Sponsorship Opportunities</h2>
         <p class="slide-subtitle">Categories where this audience significantly over-indexes</p>
         <div style="margin-top: 40px;">
-            \${topSponsorCats.map(([cat, data]) => \`<span class="sponsor-item">\${cat} (+\${data.avgIndex - 100}%)</span>\`).join('')}
+            ${topSponsorCats.map(([cat, data]) => `<span class="sponsor-item">${cat} (+${data.avgIndex - 100}%)</span>`).join('')}
         </div>
         <h3 style="margin: 50px 0 20px 0; color: #1e3a5f;">Recommended Actions</h3>
         <ul style="font-size: 18px; line-height: 2; margin-left: 20px;">
@@ -6794,7 +6794,7 @@
         </div>
     </div>
 </body>
-</html>\`;
+</html>`;
         }
         
         // ============================================================================
@@ -6814,16 +6814,16 @@
             panel.id = 'savedViewsPanel';
             panel.style.cssText = 'position: fixed; top: 100px; right: 20px; width: 300px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem; z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.3);';
             
-            panel.innerHTML = \`
+            panel.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                     <h3 style="margin: 0;">💾 Saved Views</h3>
                     <button onclick="document.getElementById('savedViewsPanel').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem;">×</button>
                 </div>
                 <button class="btn btn-primary btn-small" onclick="saveCurrentView()" style="width: 100%; margin-bottom: 1rem;">+ Save Current View</button>
                 <div id="savedViewsList" style="max-height: 300px; overflow-y: auto;">
-                    \${renderSavedViewsList()}
+                    ${renderSavedViewsList()}
                 </div>
-            \`;
+            `;
             
             document.body.appendChild(panel);
         }
@@ -6832,12 +6832,12 @@
             if (savedViews.length === 0) {
                 return '<p style="color: var(--text-secondary); text-align: center; padding: 1rem;">No saved views yet</p>';
             }
-            return savedViews.map((view, i) => \`
+            return savedViews.map((view, i) => `
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: var(--bg-input); border-radius: 6px; margin-bottom: 0.5rem;">
-                    <span style="cursor: pointer; flex: 1;" onclick="loadSavedView(\${i})">\${view.name}</span>
-                    <button onclick="deleteSavedView(\${i})" style="background: none; border: none; color: #ef4444; cursor: pointer;">🗑</button>
+                    <span style="cursor: pointer; flex: 1;" onclick="loadSavedView(${i})">${view.name}</span>
+                    <button onclick="deleteSavedView(${i})" style="background: none; border: none; color: #ef4444; cursor: pointer;">🗑</button>
                 </div>
-            \`).join('');
+            `).join('');
         }
         
         function saveCurrentView() {
