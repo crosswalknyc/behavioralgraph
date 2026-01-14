@@ -1957,6 +1957,59 @@
         .matrix-cell.medium { background: rgba(245, 158, 11, 0.3); }
         .matrix-cell.low { background: rgba(239, 68, 68, 0.2); }
         
+        /* Matrix Legend */
+        .matrix-legend {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.75rem;
+            border: 1px solid var(--border-color);
+        }
+        .legend-header {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 0.5rem;
+        }
+        .legend-col {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+        .legend-explainer {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .legend-item {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        .legend-item strong {
+            color: var(--text-primary);
+        }
+        .legend-high {
+            color: #10b981;
+            font-weight: 600;
+        }
+        .legend-med {
+            color: #f59e0b;
+            font-weight: 600;
+        }
+        .legend-low {
+            color: #ef4444;
+            font-weight: 600;
+        }
+        .legend-value {
+            color: var(--accent-lime);
+            font-weight: 600;
+        }
+        
         /* Content Development Tab */
         .content-dev-container {
             padding: 1rem;
@@ -4184,6 +4237,19 @@
                         
                         <div class="sponsor-card wide">
                             <h3>📊 Sponsorship Opportunity Matrix</h3>
+                            <div class="matrix-legend">
+                                <div class="legend-header">
+                                    <span class="legend-col">Category</span>
+                                    <span class="legend-col">Affinity</span>
+                                    <span class="legend-col">Avg Index</span>
+                                    <span class="legend-col">Value</span>
+                                </div>
+                                <div class="legend-explainer">
+                                    <div class="legend-item"><strong>Affinity:</strong> <span class="legend-high">High</span> = 150+ index | <span class="legend-med">Medium</span> = 120-149 | <span class="legend-low">Low</span> = 100-119</div>
+                                    <div class="legend-item"><strong>Avg Index:</strong> Combined index score for all items in category. Higher = stronger audience affinity.</div>
+                                    <div class="legend-item"><strong>Value:</strong> <span class="legend-value">$$$</span> = Premium tier | <span class="legend-value">$$</span> = Standard | <span class="legend-value">$</span> = Budget-friendly</div>
+                                </div>
+                            </div>
                             <div id="sponsorMatrix" class="sponsor-matrix"></div>
                         </div>
                     </div>
@@ -7656,16 +7722,37 @@
         }
         
         function renderSponsorMatrix(categories) {
-            const matrixLabels = ['Reach', 'Affinity', 'Brand Fit', 'CPM Est.'];
             let html = '';
             
-            categories.slice(0, 4).forEach(([cat, data]) => {
-                const affinity = data.avgIndex > 150 ? 'high' : data.avgIndex > 110 ? 'medium' : 'low';
+            categories.slice(0, 6).forEach(([cat, data]) => {
+                // Determine affinity level based on index
+                let affinity, affinityLabel;
+                if (data.avgIndex >= 150) {
+                    affinity = 'high';
+                    affinityLabel = 'High';
+                } else if (data.avgIndex >= 120) {
+                    affinity = 'medium';
+                    affinityLabel = 'Medium';
+                } else {
+                    affinity = 'low';
+                    affinityLabel = 'Low';
+                }
+                
+                // Determine value tier based on index (higher affinity = more valuable/premium)
+                let valueTier;
+                if (data.avgIndex >= 180) {
+                    valueTier = '$$$';
+                } else if (data.avgIndex >= 130) {
+                    valueTier = '$$';
+                } else {
+                    valueTier = '$';
+                }
+                
                 html += `
-                    <div class="matrix-cell" style="font-weight: 600; background: var(--bg-input);">${cat.substring(0, 10)}</div>
-                    <div class="matrix-cell ${affinity}">High</div>
+                    <div class="matrix-cell" style="font-weight: 600; background: var(--bg-input);">${cat.substring(0, 12)}</div>
+                    <div class="matrix-cell ${affinity}">${affinityLabel}</div>
                     <div class="matrix-cell ${affinity}">${data.avgIndex}</div>
-                    <div class="matrix-cell ${affinity}">$$</div>
+                    <div class="matrix-cell ${affinity}">${valueTier}</div>
                 `;
             });
             
