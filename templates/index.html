@@ -4783,6 +4783,32 @@
             const skipCategories = ['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'];
             const US_POPULATION = 324700000;
             
+            // HARDCODED GEN POP DMA PERCENTAGES (Nielsen DMA household distribution)
+            const GENPOP_DMA = {
+                'NEW YORK NY': 6.4, 'LOS ANGELES CA': 4.8, 'CHICAGO IL': 3.0, 'PHILADELPHIA PA': 2.5,
+                'DALLAS FORT WORTH TX': 2.4, 'SAN FRANCISCO OAKLAND SAN JOSE CA': 2.2, 'WASHINGTON DC': 2.2,
+                'HOUSTON TX': 2.2, 'BOSTON MA': 2.1, 'ATLANTA GA': 2.0, 'PHOENIX AZ': 1.7,
+                'TAMPA ST PETERSBURG FL': 1.6, 'SEATTLE TACOMA WA': 1.6, 'DETROIT MI': 1.6,
+                'MINNEAPOLIS ST PAUL MN': 1.5, 'MIAMI FT LAUDERDALE FL': 1.5, 'DENVER CO': 1.4,
+                'ORLANDO FL': 1.3, 'CLEVELAND OH': 1.2, 'SACRAMENTO CA': 1.2,
+                'ST LOUIS MO': 1.1, 'PORTLAND OR': 1.0, 'CHARLOTTE NC': 1.0, 'PITTSBURGH PA': 1.0,
+                'RALEIGH DURHAM NC': 1.0, 'INDIANAPOLIS IN': 0.9, 'BALTIMORE MD': 0.9,
+                'SAN DIEGO CA': 0.9, 'NASHVILLE TN': 0.9, 'HARTFORD CT': 0.8,
+                'KANSAS CITY MO': 0.8, 'COLUMBUS OH': 0.8, 'SALT LAKE CITY UT': 0.8,
+                'MILWAUKEE WI': 0.7, 'SAN ANTONIO TX': 0.7, 'AUSTIN TX': 0.7, 'LAS VEGAS NV': 0.7,
+                'CINCINNATI OH': 0.7, 'GREENVILLE SC': 0.6, 'WEST PALM BEACH FL': 0.6,
+                'JACKSONVILLE FL': 0.6, 'GRAND RAPIDS MI': 0.6, 'BIRMINGHAM AL': 0.6,
+                'OKLAHOMA CITY OK': 0.6, 'HARRISBURG PA': 0.6, 'NORFOLK VA': 0.5,
+                'ALBUQUERQUE SANTA FE NM': 0.5, 'MEMPHIS TN': 0.5, 'LOUISVILLE KY': 0.5,
+                'NEW ORLEANS LA': 0.5, 'PROVIDENCE RI': 0.5, 'BUFFALO NY': 0.5,
+                'GREENSBORO NC': 0.5, 'FRESNO CA': 0.4, 'RICHMOND VA': 0.4, 'KNOXVILLE TN': 0.4,
+                'LITTLE ROCK AR': 0.4, 'TULSA OK': 0.4, 'LEXINGTON KY': 0.4, 'DAYTON OH': 0.4,
+                'CHARLESTON SC': 0.4, 'WICHITA KS': 0.3, 'MOBILE AL': 0.3, 'FLINT MI': 0.3,
+                'TUCSON AZ': 0.3, 'TOLEDO OH': 0.3, 'HONOLULU HI': 0.3, 'DES MOINES IA': 0.3,
+                'SPOKANE WA': 0.3, 'OMAHA NE': 0.3, 'ROCHESTER NY': 0.3, 'SPRINGFIELD MO': 0.3,
+                'SHREVEPORT LA': 0.2, 'SYRACUSE NY': 0.2, 'PADUCAH KY': 0.2, 'MADISON WI': 0.2
+            };
+            
             // HARDCODED GEN POP DEMOGRAPHICS (US Census-based, from bg.py GENPOP_DEMOGRAPHICS)
             const GENPOP_DEMOGRAPHICS = {
                 'AGE': {
@@ -4814,16 +4840,34 @@
                 const usProjection = parseInt(row['US Gen Pop Projection'] || 0);
                 
                 // For DEMOGRAPHICS: Use hardcoded Gen Pop percentages
+                // For LOCATION: Use hardcoded Gen Pop DMA percentages
                 // For BEHAVIORAL: Category Share IS the Gen Pop percentage
                 let genPopPct = 0;
                 if (demoCategories.includes(category) && GENPOP_DEMOGRAPHICS[category]) {
                     // Look up hardcoded Gen Pop value for this demographic
                     genPopPct = GENPOP_DEMOGRAPHICS[category][value] || 0;
+                } else if (category === 'LOCATION' && value) {
+                    // Look up hardcoded Gen Pop value for this DMA
+                    const dmaKey = value.toUpperCase();
+                    // Try exact match first, then try partial matches
+                    genPopPct = GENPOP_DMA[dmaKey] || 0;
+                    if (genPopPct === 0) {
+                        // Try to match by first part of DMA name
+                        const dmaFirstPart = dmaKey.split(' ')[0];
+                        for (const [key, val] of Object.entries(GENPOP_DMA)) {
+                            if (key.startsWith(dmaFirstPart) || key.includes(dmaFirstPart)) {
+                                genPopPct = val;
+                                break;
+                            }
+                        }
+                    }
+                    // Default to 0.2% for unlisted DMAs (small markets)
+                    if (genPopPct === 0) genPopPct = 0.2;
                 } else {
                     // For behavioral items, Category Share is the Gen Pop percentage
                     genPopPct = catShare > 0 ? catShare : 0;
                 }
-                const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
+                const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 100;
 
                 // Sample size is in Original Raw Numbers OR Category Share column for SAMPLE SIZE row
                 if (category === 'SAMPLE SIZE') {
