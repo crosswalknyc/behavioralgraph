@@ -8156,10 +8156,29 @@
             
             document.getElementById('affinityBrands').innerHTML = renderAffinityList(brandItems);
             
-            // Digital Platforms
-            const platformCategories = ['APP', 'PLATFORM', 'SOCIAL MEDIA', 'WEBSITE'];
+            // Digital Platforms - strict filtering for actual tech platforms
+            const knownPlatforms = [
+                'FACEBOOK', 'INSTAGRAM', 'TIKTOK', 'TWITTER', 'X', 'SNAPCHAT', 'LINKEDIN', 'PINTEREST', 'REDDIT', 'DISCORD', 'WHATSAPP', 'TELEGRAM', 'SIGNAL',
+                'YOUTUBE', 'NETFLIX', 'HULU', 'DISNEY+', 'DISNEY PLUS', 'HBO MAX', 'MAX', 'PEACOCK', 'PARAMOUNT+', 'PARAMOUNT PLUS', 'AMAZON PRIME', 'PRIME VIDEO', 'APPLE TV', 'APPLE TV+',
+                'SPOTIFY', 'APPLE MUSIC', 'PANDORA', 'SOUNDCLOUD', 'TIDAL', 'DEEZER', 'AMAZON MUSIC', 'YOUTUBE MUSIC', 'IHEART',
+                'UBER', 'LYFT', 'DOORDASH', 'UBER EATS', 'GRUBHUB', 'INSTACART', 'POSTMATES',
+                'AIRBNB', 'VRBO', 'BOOKING.COM', 'EXPEDIA', 'KAYAK', 'TRIPADVISOR',
+                'GOOGLE', 'AMAZON', 'EBAY', 'ETSY', 'WALMART', 'TARGET', 'SHEIN', 'TEMU',
+                'VENMO', 'PAYPAL', 'CASH APP', 'ZELLE', 'COINBASE', 'ROBINHOOD',
+                'ZOOM', 'SLACK', 'TEAMS', 'WEBEX', 'NOTION', 'CANVA', 'FIGMA',
+                'TWITCH', 'KICK', 'STEAM', 'PLAYSTATION', 'XBOX', 'NINTENDO', 'ROBLOX', 'FORTNITE', 'EPIC GAMES',
+                'DUOLINGO', 'COURSERA', 'UDEMY', 'KHAN ACADEMY', 'LINKEDIN LEARNING',
+                'TINDER', 'BUMBLE', 'HINGE', 'MATCH', 'EHARMONY', 'GRINDR',
+                'STRAVA', 'PELOTON', 'FITBIT', 'MYFITNESSPAL', 'HEADSPACE', 'CALM',
+                'NEXTDOOR', 'YELP', 'GLASSDOOR', 'INDEED', 'ZILLOW', 'REDFIN', 'TRULIA'
+            ];
+            
             const platformItems = allItems
-                .filter(i => platformCategories.some(c => i.category.toUpperCase().includes(c)))
+                .filter(i => {
+                    const name = i.name.toUpperCase();
+                    // Check if it matches a known platform
+                    return knownPlatforms.some(p => name.includes(p) || name === p);
+                })
                 .sort((a, b) => b.index - a.index)
                 .slice(0, 15);
             
