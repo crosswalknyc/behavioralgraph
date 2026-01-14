@@ -1192,18 +1192,34 @@ def delete_user(username):
 @requires_admin
 def get_admin_content():
     """Get all content files grouped by category, including archived."""
+    print("📂 Admin content request received")
+    
+    # Check AWS credentials
+    aws_key = os.environ.get('AWS_ACCESS_KEY_ID')
+    aws_secret = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    
+    if not aws_key or not aws_secret:
+        print("❌ AWS credentials not configured")
+        return jsonify({'success': False, 'error': 'AWS credentials not configured'})
+    
     try:
         s3 = boto3.client('s3',
-                          aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-                          aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                          aws_access_key_id=aws_key,
+                          aws_secret_access_key=aws_secret,
                           region_name='us-east-1')
         
         bucket_name = 'dashboard-inputs'
+        print(f"📂 Scanning S3 bucket: {bucket_name}")
         
         # Build a lookup from cached jobs for proper categories
         cached_lookup = {}
         for job in s3_cache.get('jobs', []):
-            cached_lookup[job.get('key', '')] = job
+            # Jobs use 's3_key' as the key field
+            job_key = job.get('s3_key', job.get('key', ''))
+            if job_key:
+                cached_lookup[job_key] = job
+        
+        print(f"📋 Cache lookup built with {len(cached_lookup)} entries")
         
         # Get active files
         active_files = []
@@ -1222,6 +1238,7 @@ def get_admin_content():
                 cached = cached_lookup.get(key, {})
                 category = cached.get('category', 'Uncategorized')
                 project_name = cached.get('project_name', filename.replace('.csv', '').replace('_', ' ').title())
+                last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
                 
                 active_files.append({
                     'key': key,
@@ -1229,8 +1246,11 @@ def get_admin_content():
                     'project_name': project_name,
                     'category': category,
                     'size': obj.get('Size', 0),
-                    'last_modified': obj['LastModified'].isoformat() if obj.get('LastModified') else None
+                    'last_modified': last_modified,
+                    'created_at': last_modified  # Also include as created_at for sorting
                 })
+        
+        print(f"✅ Found {len(active_files)} active files")
         
         # Get archived files
         archived_files = []
@@ -1242,6 +1262,7 @@ def get_admin_content():
                 
                 filename = key.split('/')[-1]
                 project_name = filename.replace('.csv', '').replace('_', ' ').title()
+                last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
                 
                 archived_files.append({
                     'key': key,
@@ -1249,8 +1270,11 @@ def get_admin_content():
                     'project_name': project_name,
                     'category': 'Archived',
                     'size': obj.get('Size', 0),
-                    'last_modified': obj['LastModified'].isoformat() if obj.get('LastModified') else None
+                    'last_modified': last_modified,
+                    'created_at': last_modified
                 })
+        
+        print(f"✅ Found {len(archived_files)} archived files")
         
         return jsonify({
             'success': True,
@@ -1259,7 +1283,9 @@ def get_admin_content():
         })
         
     except Exception as e:
-        print(f"Error getting admin content: {e}")
+        import traceback
+        print(f"❌ Error getting admin content: {e}")
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/admin/content/archive', methods=['POST'])
