@@ -69,8 +69,19 @@ def get_openai_client():
     if openai_client is None:
         try:
             from openai import OpenAI
-            openai_client = OpenAI(api_key=api_key)
-            print("✅ OpenAI client initialized successfully")
+            # Create client without any proxy settings
+            # Clear any proxy environment variables that might interfere
+            http_proxy = os.environ.pop('HTTP_PROXY', None)
+            https_proxy = os.environ.pop('HTTPS_PROXY', None)
+            try:
+                openai_client = OpenAI(api_key=api_key)
+                print("✅ OpenAI client initialized successfully")
+            finally:
+                # Restore proxy settings if they were set
+                if http_proxy:
+                    os.environ['HTTP_PROXY'] = http_proxy
+                if https_proxy:
+                    os.environ['HTTPS_PROXY'] = https_proxy
         except Exception as e:
             print(f"❌ OpenAI client initialization failed: {e}")
             return None
@@ -2506,9 +2517,13 @@ def preload_caches():
         if load_demographics_cache():
             print(f"   ✅ Demographics cache: {len(demographics_cache)} profiles")
     
-    # Load user data
-    load_users_from_s3()
-    print("   ✅ User data loaded")
+    # Load user data (uses load_users which handles S3)
+    try:
+        load_users()
+        print("   ✅ User data loaded")
+    except Exception as e:
+        print(f"   ⚠️ User data load warning: {e}")
+    
     print("🎉 Caches ready!")
 
 
