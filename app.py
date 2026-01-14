@@ -2341,15 +2341,16 @@ def list_jobs():
 @app.route('/api/refresh-cache')
 @requires_auth
 def force_refresh_cache():
-    """Smart refresh - only updates new/modified files."""
+    """Smart refresh - adds new, updates modified, removes deleted files."""
     if s3_client:
         result = smart_cache_update()
         return jsonify({
             'success': True,
             'new_files': result.get('new', 0),
             'updated_files': result.get('updated', 0),
+            'deleted_files': result.get('deleted', 0),
             'total': result.get('total', 0),
-            'message': f"Found {result.get('new', 0)} new, {result.get('updated', 0)} modified files"
+            'message': f"Added {result.get('new', 0)}, updated {result.get('updated', 0)}, removed {result.get('deleted', 0)} files"
         })
     return jsonify({'success': False, 'error': 'S3 not configured'})
 
@@ -2485,35 +2486,31 @@ def build_demographics_cache():
 
 def smart_cache_update():
     """
-    Smart incremental cache update - only fetches NEW or MODIFIED files.
+    Smart incremental cache update - adds NEW, updates MODIFIED, removes DELETED files.
     
     How it works:
     1. Cache stores last_modified timestamp for each file
-    2. S3 list only checks files modified AFTER last cache update
+    2. S3 list checks all current files
     3. New files are added, modified files are updated
-    4. Unchanged files are never re-fetched
+    4. Files in cache but NOT in S3 are REMOVED
     
-    This makes updates nearly instant even with 1000+ files.
+    This keeps cache in sync with actual S3 contents.
     """
     import time
     from datetime import datetime, timezone, timedelta
     
     if not s3_client:
-        return {'new': 0, 'updated': 0, 'total': 0}
-    
-    # Get last update time from cache
-    last_update = s3_cache.get('last_updated')
-    if last_update:
-        # Check for files modified in the last hour (buffer for timezone issues)
-        since_time = datetime.fromtimestamp(last_update, tz=timezone.utc) - timedelta(hours=1)
-    else:
-        since_time = None
+        return {'new': 0, 'updated': 0, 'deleted': 0, 'total': 0}
     
     # Build lookup of existing files by key -> last_modified
     existing = {job['s3_key']: job.get('last_modified', '') for job in s3_cache.get('jobs', []) if job.get('s3_key')}
     
+    # Track which S3 keys we see (to detect deleted files)
+    current_s3_keys = set()
+    
     new_count = 0
     updated_count = 0
+    deleted_count = 0
     
     try:
         paginator = s3_client.get_paginator('list_objects_v2')
@@ -2521,9 +2518,10 @@ def smart_cache_update():
         for page in paginator.paginate(Bucket=S3_BUCKET):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                if not key.endswith('.csv') or key.startswith('system/'):
+                if not key.endswith('.csv') or key.startswith('system/') or key.startswith('historic/'):
                     continue
                 
+                current_s3_keys.add(key)
                 obj_modified = obj['LastModified'].isoformat()
                 
                 # Check if this is a new or modified file
@@ -2549,18 +2547,29 @@ def smart_cache_update():
                     updated_count += 1
                     print(f"   🔄 Updated: {key}")
         
+        # REMOVE files that are in cache but NOT in S3 (deleted files)
+        original_count = len(s3_cache['jobs'])
+        s3_cache['jobs'] = [job for job in s3_cache['jobs'] if job.get('s3_key') in current_s3_keys or job.get('source') == 'local']
+        deleted_count = original_count - len(s3_cache['jobs'])
+        
+        if deleted_count > 0:
+            print(f"   🗑️ Removed {deleted_count} deleted files from cache")
+        
+        # Rebuild categories from remaining jobs
+        s3_cache['categories'] = list(set(job.get('category', 'Uncategorized') for job in s3_cache['jobs']))
+        
         # Update cache metadata
         s3_cache['last_updated'] = time.time()
         s3_cache['file_count'] = len(s3_cache['jobs'])
         
-        # Save if there were changes
-        if new_count > 0 or updated_count > 0:
+        # Save if there were any changes
+        if new_count > 0 or updated_count > 0 or deleted_count > 0:
             save_persisted_cache()
-            print(f"✅ Smart update: {new_count} new, {updated_count} modified, {len(s3_cache['jobs'])} total")
+            print(f"✅ Smart update: {new_count} new, {updated_count} modified, {deleted_count} removed, {len(s3_cache['jobs'])} total")
         else:
             print(f"✅ No changes detected ({len(s3_cache['jobs'])} files cached)")
         
-        return {'new': new_count, 'updated': updated_count, 'total': len(s3_cache['jobs'])}
+        return {'new': new_count, 'updated': updated_count, 'deleted': deleted_count, 'total': len(s3_cache['jobs'])}
         
     except Exception as e:
         print(f"Error in smart cache update: {e}")
