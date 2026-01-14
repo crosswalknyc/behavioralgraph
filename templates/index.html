@@ -1155,6 +1155,607 @@
         .insight-item .index.high { background: rgba(16, 185, 129, 0.2); color: #10b981; }
         .insight-item .index.low { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
         
+        /* Enhanced Insights Tab V2 */
+        .insights-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+        .insights-tab {
+            padding: 0.6rem 1rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .insights-tab:hover {
+            background: rgba(255,255,255,0.1);
+            color: var(--text-primary);
+        }
+        .insights-tab.active {
+            background: var(--accent-lime);
+            color: var(--bg-dark);
+            border-color: var(--accent-lime);
+            font-weight: 600;
+        }
+        .insights-tab-content {
+            display: none;
+        }
+        .insights-tab-content.active {
+            display: block;
+        }
+        .insights-summary-grid, .insights-grid-v2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+        .insight-card-v2 {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+        }
+        .insight-card-v2.full-width {
+            grid-column: span 2;
+        }
+        .insight-card-v2.highlight {
+            border-color: #10b981;
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.02));
+        }
+        .insight-card-v2 h3 {
+            margin: 0 0 0.75rem 0;
+            font-size: 1rem;
+            color: var(--text-primary);
+        }
+        .insight-card-v2 .card-desc {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            margin: -0.5rem 0 0.75rem 0;
+        }
+        .insight-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .insight-card-header h3 {
+            margin: 0;
+        }
+        .data-quality-badge {
+            font-size: 0.75rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 20px;
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            font-weight: 600;
+        }
+        .data-quality-badge.medium {
+            background: rgba(234, 179, 8, 0.2);
+            color: #eab308;
+        }
+        .data-quality-badge.low {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        
+        /* Audience Snapshot */
+        .audience-snapshot {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+        .snapshot-item {
+            text-align: center;
+            padding: 0.75rem;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+        }
+        .snapshot-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .snapshot-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent-lime);
+            margin-top: 0.25rem;
+        }
+        .snapshot-subtext {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        
+        /* Metrics Row */
+        .metrics-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            grid-column: span 2;
+        }
+        .metric-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .metric-icon {
+            font-size: 1.5rem;
+            opacity: 0.8;
+        }
+        .metric-content {
+            display: flex;
+            flex-direction: column;
+        }
+        .metric-content .metric-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--accent-lime);
+        }
+        .metric-content .metric-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        
+        /* Highlight List */
+        .highlight-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .highlight-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.6rem 0.75rem;
+            background: rgba(255,255,255,0.03);
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+        .highlight-item .label {
+            color: var(--text-secondary);
+        }
+        .highlight-item .value {
+            font-weight: 600;
+            color: var(--accent-lime);
+        }
+        .highlight-item .value.under {
+            color: #ef4444;
+        }
+        
+        /* Differentiator List */
+        .differentiator-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+        .differentiator-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.6rem;
+            background: rgba(255,255,255,0.03);
+            border-radius: 6px;
+        }
+        .differentiator-rank {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--accent-lime);
+            min-width: 24px;
+        }
+        .differentiator-name {
+            flex: 1;
+            font-size: 0.85rem;
+        }
+        .differentiator-index {
+            font-weight: 700;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            min-width: 50px;
+            text-align: center;
+        }
+        .differentiator-index.high {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+        
+        /* Key Stats Grid */
+        .key-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 0.75rem;
+        }
+        .key-stat-item {
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            padding: 0.75rem;
+            text-align: center;
+        }
+        .key-stat-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+        }
+        .key-stat-value {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--accent-lime);
+        }
+        .key-stat-value.neutral {
+            color: var(--text-primary);
+        }
+        
+        /* Insight List V2 */
+        .insight-list-v2 {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            max-height: 350px;
+            overflow-y: auto;
+        }
+        .insight-item-v2 {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(255,255,255,0.03);
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+        .insight-item-v2:hover {
+            background: rgba(255,255,255,0.06);
+        }
+        .insight-item-v2 .rank {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            min-width: 20px;
+        }
+        .insight-item-v2 .name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .insight-item-v2 .category-tag {
+            font-size: 0.65rem;
+            padding: 0.15rem 0.4rem;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            color: var(--text-secondary);
+        }
+        .insight-item-v2 .index-badge {
+            font-weight: 700;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            min-width: 45px;
+            text-align: center;
+            font-size: 0.8rem;
+        }
+        .insight-item-v2 .index-badge.high {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+        .insight-item-v2 .index-badge.low {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        
+        /* Champions Grid */
+        .champions-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .champion-item {
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            padding: 0.75rem;
+            text-align: center;
+            border: 1px solid transparent;
+        }
+        .champion-item:hover {
+            border-color: var(--accent-lime);
+        }
+        .champion-category {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.5rem;
+        }
+        .champion-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .champion-index {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #10b981;
+        }
+        
+        /* Media Preference List */
+        .media-preference-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+        .media-pref-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(255,255,255,0.03);
+            border-radius: 6px;
+        }
+        .media-pref-icon {
+            font-size: 1rem;
+        }
+        .media-pref-name {
+            flex: 1;
+            font-size: 0.85rem;
+        }
+        .media-pref-bar {
+            width: 80px;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .media-pref-bar-fill {
+            height: 100%;
+            background: var(--accent-lime);
+            border-radius: 3px;
+        }
+        .media-pref-pct {
+            font-size: 0.8rem;
+            font-weight: 600;
+            min-width: 45px;
+            text-align: right;
+        }
+        
+        /* Media Summary Grid */
+        .media-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 1rem;
+        }
+        .media-summary-item {
+            background: rgba(255,255,255,0.03);
+            border-radius: 10px;
+            padding: 1rem;
+            text-align: center;
+        }
+        .media-summary-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .media-summary-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        .media-summary-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent-lime);
+        }
+        
+        /* Opportunity List */
+        .opportunity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .opportunity-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            border-left: 3px solid var(--accent-lime);
+        }
+        .opportunity-rank {
+            font-weight: 700;
+            color: var(--accent-lime);
+            font-size: 0.9rem;
+        }
+        .opportunity-content {
+            flex: 1;
+        }
+        .opportunity-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .opportunity-reason {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        .opportunity-score {
+            font-weight: 700;
+            color: #10b981;
+        }
+        
+        /* Geo Opportunities Grid */
+        .geo-opportunities-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 0.75rem;
+        }
+        .geo-opportunity {
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            padding: 0.75rem;
+            text-align: center;
+        }
+        .geo-name {
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        .geo-index {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #10b981;
+        }
+        .geo-pct {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+        
+        /* Activation Container */
+        .activation-container {
+            padding: 0.5rem 0;
+        }
+        .activation-header {
+            margin-bottom: 1.5rem;
+        }
+        .activation-header h2 {
+            margin: 0 0 0.5rem 0;
+        }
+        .activation-header p {
+            color: var(--text-secondary);
+            margin: 0;
+        }
+        .activation-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+        .activation-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+        }
+        .activation-card.primary {
+            border-color: var(--accent-lime);
+            background: linear-gradient(135deg, rgba(163, 230, 53, 0.1), rgba(163, 230, 53, 0.02));
+        }
+        .activation-card.full-width {
+            grid-column: span 2;
+        }
+        .activation-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .activation-card h3 {
+            margin: 0 0 0.75rem 0;
+            font-size: 1rem;
+        }
+        .activation-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .activation-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            padding: 0.5rem;
+            background: rgba(255,255,255,0.03);
+            border-radius: 6px;
+        }
+        .activation-item::before {
+            content: "✓";
+            color: #10b981;
+            font-weight: bold;
+        }
+        
+        /* Targeting Checklist */
+        .targeting-checklist {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+        }
+        .checklist-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem;
+            background: rgba(16, 185, 129, 0.1);
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+        .checklist-item::before {
+            content: "✓";
+            color: #10b981;
+            font-weight: bold;
+        }
+        
+        /* Avoid List */
+        .avoid-list {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+        }
+        .avoid-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            color: #ef4444;
+        }
+        .avoid-item::before {
+            content: "✗";
+            font-weight: bold;
+        }
+
+        @media (max-width: 1200px) {
+            .insights-summary-grid, .insights-grid-v2 {
+                grid-template-columns: 1fr;
+            }
+            .insight-card-v2.full-width, .activation-card.full-width {
+                grid-column: span 1;
+            }
+            .metrics-row {
+                grid-template-columns: repeat(2, 1fr);
+                grid-column: span 1;
+            }
+            .audience-snapshot {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .champions-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .key-stats-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .geo-opportunities-grid, .media-summary-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .targeting-checklist, .avoid-list, .activation-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
         /* Affinity Map Tab */
         .affinity-container, .sponsorship-container, .talent-container, .media-container {
             padding: 1rem;
@@ -3366,7 +3967,7 @@
                 <button class="tab-btn active" onclick="showTab('demographics')">Demographics</button>
                 <button class="tab-btn" onclick="showTab('behavioral')">Behavioral</button>
                 <button class="tab-btn" onclick="showTab('location')">Location</button>
-                <button class="tab-btn" onclick="showTab('insights')">📊 Index Insights</button>
+                <button class="tab-btn" onclick="showTab('insights')">💡 Insights</button>
                 <button class="tab-btn" onclick="showTab('affinity')">🔗 Affinity Map</button>
                 <button class="tab-btn" onclick="showTab('sponsorship')">💰 Sponsorship</button>
                 <button class="tab-btn" onclick="showTab('talent')">📈 Partnership Value</button>
@@ -3875,49 +4476,233 @@
             <!-- Top Insights Tab -->
             <div id="tab-insights" class="tab-content">
                 <div class="tab-explainer">
-                    <div class="explainer-icon">🔥</div>
+                    <div class="explainer-icon">💡</div>
                     <div class="explainer-text">
-                        <strong>Index Insights</strong> — What makes this audience unique. <strong>Over-Index:</strong> <span class="highlight-green">150+ = 50%+ more likely</span> | <span class="highlight-green">200+ = 2x+</span> → target these. <strong>Under-Index:</strong> <span class="highlight-red">&lt;50 = half as likely</span> | <span class="highlight-red">&lt;25 = avoid</span> → exclude from campaigns.
+                        <strong>Insights</strong> — Complete audience intelligence. <strong>Index Scale:</strong> <span class="highlight-green">150+ = target</span> | <span class="highlight-yellow">100-149 = neutral</span> | <span class="highlight-red">&lt;100 = deprioritize</span>. <strong>Data Quality:</strong> Higher sample sizes = more reliable insights.
                     </div>
                 </div>
                 <div class="insights-container">
-                    <div class="insights-header">
-                        <h2>🔥 Indexing Insights</h2>
-                        <p>Items where this audience significantly over-indexes or under-indexes vs General Population</p>
+                    <!-- Insights Sub-tabs -->
+                    <div class="insights-tabs">
+                        <button class="insights-tab active" onclick="showInsightsTab('summary')">📋 Summary</button>
+                        <button class="insights-tab" onclick="showInsightsTab('behavioral')">🎯 Behavioral DNA</button>
+                        <button class="insights-tab" onclick="showInsightsTab('media')">📺 Media Patterns</button>
+                        <button class="insights-tab" onclick="showInsightsTab('opportunities')">💰 Opportunities</button>
+                        <button class="insights-tab" onclick="showInsightsTab('activation')">🚀 Activation</button>
                     </div>
                     
-                    <div class="insights-grid">
-                        <div class="insight-card highlight">
-                            <h3>📈 Biggest Over-Indexers</h3>
-                            <p class="insight-desc">Top 20 items with highest index vs Gen Pop</p>
-                            <div id="topOverIndexers" class="insight-list"></div>
+                    <!-- Summary Tab -->
+                    <div id="insights-tab-summary" class="insights-tab-content active">
+                        <div class="insights-summary-grid">
+                            <!-- Audience Snapshot -->
+                            <div class="insight-card-v2 full-width">
+                                <div class="insight-card-header">
+                                    <h3>👤 Audience Snapshot</h3>
+                                    <span class="data-quality-badge" id="dataQualityBadge">High Confidence</span>
+                                </div>
+                                <div id="audienceSnapshot" class="audience-snapshot">
+                                    <div class="snapshot-loading">Loading audience profile...</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Key Metrics Row -->
+                            <div class="metrics-row">
+                                <div class="metric-card">
+                                    <div class="metric-icon">📊</div>
+                                    <div class="metric-content">
+                                        <span class="metric-value" id="insightsSampleSize">--</span>
+                                        <span class="metric-label">Sample Size</span>
+                                    </div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-icon">🇺🇸</div>
+                                    <div class="metric-content">
+                                        <span class="metric-value" id="insightsProjectedUS">--</span>
+                                        <span class="metric-label">US Projection</span>
+                                    </div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-icon">📈</div>
+                                    <div class="metric-content">
+                                        <span class="metric-value" id="avgOverIndex">--</span>
+                                        <span class="metric-label">Avg Over-Index</span>
+                                    </div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-icon">🎯</div>
+                                    <div class="metric-content">
+                                        <span class="metric-value" id="uniquenesScore">--</span>
+                                        <span class="metric-label">Uniqueness Score</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Demographic Highlights -->
+                            <div class="insight-card-v2">
+                                <h3>👥 Demographic Highlights</h3>
+                                <div id="demoHighlights" class="highlight-list"></div>
+                            </div>
+                            
+                            <!-- Top Differentiators -->
+                            <div class="insight-card-v2">
+                                <h3>🔥 Top Differentiators</h3>
+                                <p class="card-desc">What makes this audience unique</p>
+                                <div id="topDifferentiators" class="differentiator-list"></div>
+                            </div>
+                            
+                            <!-- Key Statistics -->
+                            <div class="insight-card-v2 full-width">
+                                <h3>📊 At-a-Glance Statistics</h3>
+                                <div id="keyStatsGrid" class="key-stats-grid"></div>
+                            </div>
                         </div>
-                        
-                        <div class="insight-card">
-                            <h3>📉 Biggest Under-Indexers</h3>
-                            <p class="insight-desc">Top 20 items where audience under-indexes</p>
-                            <div id="topUnderIndexers" class="insight-list"></div>
+                    </div>
+                    
+                    <!-- Behavioral DNA Tab -->
+                    <div id="insights-tab-behavioral" class="insights-tab-content">
+                        <div class="insights-grid-v2">
+                            <div class="insight-card-v2 highlight">
+                                <h3>📈 Biggest Over-Indexers</h3>
+                                <p class="card-desc">Top 25 items with highest index vs Gen Pop</p>
+                                <div id="topOverIndexers" class="insight-list-v2"></div>
+                            </div>
+                            
+                            <div class="insight-card-v2">
+                                <h3>📉 Biggest Under-Indexers</h3>
+                                <p class="card-desc">Top 25 items where audience under-indexes</p>
+                                <div id="topUnderIndexers" class="insight-list-v2"></div>
+                            </div>
+                            
+                            <div class="insight-card-v2 full-width">
+                                <h3>🏆 Category Champions</h3>
+                                <p class="card-desc">Highest indexing item in each behavioral category</p>
+                                <div id="categoryChampions" class="champions-grid"></div>
+                            </div>
+                            
+                            <div class="insight-card-v2">
+                                <h3>💎 Hidden Gems</h3>
+                                <p class="card-desc">High-index items with lower competition</p>
+                                <div id="hiddenGems" class="insight-list-v2"></div>
+                            </div>
+                            
+                            <div class="insight-card-v2">
+                                <h3>⚡ Rising Behaviors</h3>
+                                <p class="card-desc">Emerging categories with strong indexing</p>
+                                <div id="risingBehaviors" class="insight-list-v2"></div>
+                            </div>
                         </div>
-                        
-                        <div class="insight-card wide">
-                            <h3>🎯 Category Champions</h3>
-                            <p class="insight-desc">Highest indexing item in each behavioral category</p>
-                            <div id="categoryChampions" class="insight-grid-small"></div>
+                    </div>
+                    
+                    <!-- Media Patterns Tab -->
+                    <div id="insights-tab-media" class="insights-tab-content">
+                        <div class="insights-grid-v2">
+                            <div class="insight-card-v2">
+                                <h3>📺 Streaming Preferences</h3>
+                                <div id="streamingPreferences" class="media-preference-list"></div>
+                            </div>
+                            
+                            <div class="insight-card-v2">
+                                <h3>📱 Social Media Usage</h3>
+                                <div id="socialMediaUsage" class="media-preference-list"></div>
+                            </div>
+                            
+                            <div class="insight-card-v2">
+                                <h3>🎵 Audio & Music</h3>
+                                <div id="audioPreferences" class="media-preference-list"></div>
+                            </div>
+                            
+                            <div class="insight-card-v2">
+                                <h3>🎮 Gaming Affinity</h3>
+                                <div id="gamingAffinity" class="media-preference-list"></div>
+                            </div>
+                            
+                            <div class="insight-card-v2 full-width">
+                                <h3>📊 Media Consumption Summary</h3>
+                                <div id="mediaConsumptionSummary" class="media-summary-grid"></div>
+                            </div>
                         </div>
-                        
-                        <div class="insight-card">
-                            <h3>📊 Key Statistics</h3>
-                            <div id="keyStats" class="stats-list"></div>
+                    </div>
+                    
+                    <!-- Opportunities Tab -->
+                    <div id="insights-tab-opportunities" class="insights-tab-content">
+                        <div class="insights-grid-v2">
+                            <div class="insight-card-v2 highlight">
+                                <h3>💰 Brand Partnership Opportunities</h3>
+                                <p class="card-desc">Brands with highest affinity for sponsorship</p>
+                                <div id="brandOpportunities" class="opportunity-list"></div>
+                            </div>
+                            
+                            <div class="insight-card-v2">
+                                <h3>🎯 Untapped Categories</h3>
+                                <p class="card-desc">Categories with potential for growth</p>
+                                <div id="untappedCategories" class="opportunity-list"></div>
+                            </div>
+                            
+                            <div class="insight-card-v2">
+                                <h3>🛒 Shopping & Retail</h3>
+                                <div id="shoppingAffinity" class="insight-list-v2"></div>
+                            </div>
+                            
+                            <div class="insight-card-v2">
+                                <h3>🎬 Content Partnerships</h3>
+                                <p class="card-desc">Shows, movies, and content for collaborations</p>
+                                <div id="contentPartnerships" class="opportunity-list"></div>
+                            </div>
+                            
+                            <div class="insight-card-v2 full-width">
+                                <h3>📍 Geographic Opportunities</h3>
+                                <p class="card-desc">Top markets for activation</p>
+                                <div id="geoOpportunities" class="geo-opportunities-grid"></div>
+                            </div>
                         </div>
-                        
-                        <div class="insight-card">
-                            <h3>🎬 Media & Entertainment Affinity</h3>
-                            <div id="mediaAffinity" class="insight-list"></div>
-                        </div>
-                        
-                        <div class="insight-card">
-                            <h3>🛒 Shopping & Brand Affinity</h3>
-                            <div id="shoppingAffinity" class="insight-list"></div>
+                    </div>
+                    
+                    <!-- Activation Tab -->
+                    <div id="insights-tab-activation" class="insights-tab-content">
+                        <div class="activation-container">
+                            <div class="activation-header">
+                                <h2>🚀 Activation Playbook</h2>
+                                <p>Data-driven recommendations for reaching this audience</p>
+                            </div>
+                            
+                            <div class="activation-grid">
+                                <div class="activation-card primary">
+                                    <div class="activation-icon">📺</div>
+                                    <h3>Media Buying</h3>
+                                    <div id="mediaBuyingRecs" class="activation-content"></div>
+                                </div>
+                                
+                                <div class="activation-card">
+                                    <div class="activation-icon">🎨</div>
+                                    <h3>Creative Strategy</h3>
+                                    <div id="creativeStrategyRecs" class="activation-content"></div>
+                                </div>
+                                
+                                <div class="activation-card">
+                                    <div class="activation-icon">🤝</div>
+                                    <h3>Partnership Ideas</h3>
+                                    <div id="partnershipRecs" class="activation-content"></div>
+                                </div>
+                                
+                                <div class="activation-card">
+                                    <div class="activation-icon">📍</div>
+                                    <h3>Geographic Focus</h3>
+                                    <div id="geoFocusRecs" class="activation-content"></div>
+                                </div>
+                                
+                                <div class="activation-card full-width">
+                                    <div class="activation-icon">📋</div>
+                                    <h3>Targeting Checklist</h3>
+                                    <div id="targetingChecklist" class="targeting-checklist"></div>
+                                </div>
+                                
+                                <div class="activation-card full-width">
+                                    <div class="activation-icon">⚠️</div>
+                                    <h3>Things to Avoid</h3>
+                                    <p class="card-desc">Channels and approaches that won't resonate</p>
+                                    <div id="thingsToAvoid" class="avoid-list"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -6314,6 +7099,14 @@
         // TOP INSIGHTS FUNCTIONS
         // ============================================================================
         
+        // Show insights sub-tabs
+        function showInsightsTab(tabName) {
+            document.querySelectorAll('.insights-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.insights-tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`.insights-tab[onclick*="${tabName}"]`).classList.add('active');
+            document.getElementById(`insights-tab-${tabName}`).classList.add('active');
+        }
+        
         function renderTopInsights(data) {
             if (!data || !data.behavioral) return;
             
@@ -6337,92 +7130,373 @@
                 }
             });
             
-            // Sort by index
+            // Calculate key metrics
             const sortedByIndex = [...allItems].sort((a, b) => b.index - a.index);
-            const topOverIndexers = sortedByIndex.filter(i => i.index > 100).slice(0, 20);
-            const topUnderIndexers = sortedByIndex.filter(i => i.index < 100).sort((a, b) => a.index - b.index).slice(0, 20);
+            const topOverIndexers = sortedByIndex.filter(i => i.index > 100).slice(0, 25);
+            const topUnderIndexers = sortedByIndex.filter(i => i.index < 100).sort((a, b) => a.index - b.index).slice(0, 25);
+            const avgOverIndex = topOverIndexers.length > 0 ? Math.round(topOverIndexers.reduce((s,i) => s + i.index, 0) / topOverIndexers.length) : 0;
+            const uniquenessScore = Math.min(100, Math.round((topOverIndexers.filter(i => i.index > 150).length / Math.max(1, topOverIndexers.length)) * 100));
+            const categoryCount = Object.keys(data.behavioral).length;
+            const over100Count = allItems.filter(i => i.index > 100).length;
+            const under100Count = allItems.filter(i => i.index < 100).length;
+            
+            // Data quality badge
+            const sampleSize = data.sampleSize || 0;
+            let qualityClass = '', qualityText = 'High Confidence';
+            if (sampleSize < 1000) { qualityClass = 'low'; qualityText = 'Low Sample'; }
+            else if (sampleSize < 10000) { qualityClass = 'medium'; qualityText = 'Moderate'; }
+            const badge = document.getElementById('dataQualityBadge');
+            if (badge) {
+                badge.className = 'data-quality-badge ' + qualityClass;
+                badge.textContent = qualityText;
+            }
+            
+            // ===== SUMMARY TAB =====
+            
+            // Audience Snapshot - determine top demographic characteristics
+            const demoInsights = [];
+            if (data.demographics) {
+                // Top gender
+                const topGender = Object.entries(data.demographics.gender || {}).sort((a,b) => b[1] - a[1])[0];
+                if (topGender) demoInsights.push({ label: 'Dominant Gender', value: topGender[0], sub: topGender[1].toFixed(1) + '%' });
+                
+                // Top age group
+                const topAge = Object.entries(data.demographics.age || {}).sort((a,b) => b[1] - a[1])[0];
+                if (topAge) demoInsights.push({ label: 'Largest Age Group', value: topAge[0], sub: topAge[1].toFixed(1) + '%' });
+                
+                // Top ethnicity
+                const topEth = Object.entries(data.demographics.ethnicity || {}).sort((a,b) => b[1] - a[1])[0];
+                if (topEth) demoInsights.push({ label: 'Top Ethnicity', value: topEth[0], sub: topEth[1].toFixed(1) + '%' });
+                
+                // Top income
+                const topIncome = Object.entries(data.demographics.income || {}).sort((a,b) => b[1] - a[1])[0];
+                if (topIncome) demoInsights.push({ label: 'Top Income', value: topIncome[0], sub: topIncome[1].toFixed(1) + '%' });
+            }
+            
+            document.getElementById('audienceSnapshot').innerHTML = demoInsights.map(d => `
+                <div class="snapshot-item">
+                    <div class="snapshot-label">${d.label}</div>
+                    <div class="snapshot-value">${d.value}</div>
+                    <div class="snapshot-subtext">${d.sub}</div>
+                </div>
+            `).join('') || '<div class="snapshot-loading">No demographic data</div>';
+            
+            // Metrics row
+            document.getElementById('insightsSampleSize').textContent = formatNumber(data.sampleSize || 0);
+            document.getElementById('insightsProjectedUS').textContent = formatNumber(data.projectedUS || 0);
+            document.getElementById('avgOverIndex').textContent = avgOverIndex;
+            document.getElementById('uniquenesScore').textContent = uniquenessScore + '%';
+            
+            // Demographic highlights - top over/under indexing demographics
+            const demoHighlights = [];
+            if (data.demographicsIndex) {
+                Object.entries(data.demographicsIndex).forEach(([cat, values]) => {
+                    Object.entries(values).forEach(([val, idx]) => {
+                        if (idx > 110) demoHighlights.push({ label: `${cat}: ${val}`, value: idx, type: 'over' });
+                        else if (idx < 80) demoHighlights.push({ label: `${cat}: ${val}`, value: idx, type: 'under' });
+                    });
+                });
+            }
+            document.getElementById('demoHighlights').innerHTML = demoHighlights
+                .sort((a,b) => b.value - a.value)
+                .slice(0, 6)
+                .map(h => `
+                    <div class="highlight-item">
+                        <span class="label">${h.label}</span>
+                        <span class="value ${h.type === 'under' ? 'under' : ''}">${h.value} index</span>
+                    </div>
+                `).join('') || '<p style="color: var(--text-secondary);">No significant demographic differences</p>';
+            
+            // Top differentiators
+            document.getElementById('topDifferentiators').innerHTML = topOverIndexers.slice(0, 10).map((item, i) => `
+                <div class="differentiator-item">
+                    <span class="differentiator-rank">#${i + 1}</span>
+                    <span class="differentiator-name">${item.name}</span>
+                    <span class="differentiator-index high">${item.index}</span>
+                </div>
+            `).join('');
+            
+            // Key stats grid
+            document.getElementById('keyStatsGrid').innerHTML = `
+                <div class="key-stat-item"><div class="key-stat-label">Total Items</div><div class="key-stat-value neutral">${allItems.length.toLocaleString()}</div></div>
+                <div class="key-stat-item"><div class="key-stat-label">Categories</div><div class="key-stat-value neutral">${categoryCount}</div></div>
+                <div class="key-stat-item"><div class="key-stat-label">Over-Index</div><div class="key-stat-value">${over100Count.toLocaleString()}</div></div>
+                <div class="key-stat-item"><div class="key-stat-label">Under-Index</div><div class="key-stat-value" style="color:#ef4444">${under100Count.toLocaleString()}</div></div>
+                <div class="key-stat-item"><div class="key-stat-label">Avg Index</div><div class="key-stat-value neutral">${Math.round(allItems.reduce((s,i) => s+i.index, 0) / Math.max(1, allItems.length))}</div></div>
+                <div class="key-stat-item"><div class="key-stat-label">Max Index</div><div class="key-stat-value">${sortedByIndex[0]?.index || 0}</div></div>
+            `;
+            
+            // ===== BEHAVIORAL DNA TAB =====
             
             // Render top over-indexers
-            document.getElementById('topOverIndexers').innerHTML = topOverIndexers.map(item => `
-                <div class="insight-item">
+            document.getElementById('topOverIndexers').innerHTML = topOverIndexers.map((item, i) => `
+                <div class="insight-item-v2">
+                    <span class="rank">${i + 1}</span>
                     <span class="name">${item.name}</span>
-                    <span class="category">${item.category}</span>
-                    <span class="index high">${item.index}</span>
+                    <span class="category-tag">${item.category}</span>
+                    <span class="index-badge high">${item.index}</span>
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No over-indexing items found</p>';
+            `).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No over-indexing items</p>';
             
-            // Render top under-indexers
-            document.getElementById('topUnderIndexers').innerHTML = topUnderIndexers.map(item => `
-                <div class="insight-item">
+            // Render under-indexers
+            document.getElementById('topUnderIndexers').innerHTML = topUnderIndexers.map((item, i) => `
+                <div class="insight-item-v2">
+                    <span class="rank">${i + 1}</span>
                     <span class="name">${item.name}</span>
-                    <span class="category">${item.category}</span>
-                    <span class="index low">${item.index}</span>
+                    <span class="category-tag">${item.category}</span>
+                    <span class="index-badge low">${item.index}</span>
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No under-indexing items found</p>';
+            `).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No under-indexing items</p>';
             
-            // Category champions - highest indexer in each category
+            // Category champions
             const categoryChampions = {};
             allItems.forEach(item => {
                 if (!categoryChampions[item.category] || item.index > categoryChampions[item.category].index) {
                     categoryChampions[item.category] = item;
                 }
             });
-            
-            const championsHtml = Object.entries(categoryChampions)
+            document.getElementById('categoryChampions').innerHTML = Object.entries(categoryChampions)
                 .sort((a, b) => b[1].index - a[1].index)
                 .slice(0, 24)
                 .map(([cat, item]) => `
-                    <div class="champion-card">
-                        <div class="cat-name">${cat}</div>
-                        <div class="item-name">${item.name}</div>
-                        <div class="item-index">Index: ${item.index}</div>
+                    <div class="champion-item">
+                        <div class="champion-category">${cat}</div>
+                        <div class="champion-name" title="${item.name}">${item.name}</div>
+                        <div class="champion-index">${item.index}</div>
                     </div>
                 `).join('');
-            document.getElementById('categoryChampions').innerHTML = championsHtml;
             
-            // Key statistics
-            const avgIndex = allItems.length > 0 ? Math.round(allItems.reduce((sum, i) => sum + i.index, 0) / allItems.length) : 0;
-            const over100Count = allItems.filter(i => i.index > 100).length;
-            const under100Count = allItems.filter(i => i.index < 100).length;
-            const categoryCount = Object.keys(data.behavioral).length;
-            
-            document.getElementById('keyStats').innerHTML = `
-                <div class="stat-row"><span class="label">Total Items Analyzed</span><span class="value">${allItems.length.toLocaleString()}</span></div>
-                <div class="stat-row"><span class="label">Categories</span><span class="value">${categoryCount}</span></div>
-                <div class="stat-row"><span class="label">Over-Indexing Items</span><span class="value" style="color: #10b981;">${over100Count.toLocaleString()}</span></div>
-                <div class="stat-row"><span class="label">Under-Indexing Items</span><span class="value" style="color: #ef4444;">${under100Count.toLocaleString()}</span></div>
-                <div class="stat-row"><span class="label">Average Index</span><span class="value">${avgIndex}</span></div>
-            `;
-            
-            // Media affinity (filter media-related categories)
-            const mediaCategories = ['SOCIAL MEDIA', 'STREAMING/PLATFORM', 'STREAMING/MUSIC', 'BROADCAST/CABLE', 'APP/PLATFORM USAGE', 'PODCAST', 'MEDIA'];
-            const mediaItems = allItems
-                .filter(i => mediaCategories.some(mc => i.category.toUpperCase().includes(mc) || mc.includes(i.category.toUpperCase())))
+            // Hidden gems - high index but lower visibility categories
+            const nicheCategories = ['PODCAST', 'GAMING', 'EMERGING', 'NICHE', 'LOCAL'];
+            const hiddenGems = allItems
+                .filter(i => i.index > 130 && (i.pct < 5 || nicheCategories.some(n => i.category.toUpperCase().includes(n))))
                 .sort((a, b) => b.index - a.index)
-                .slice(0, 15);
-            
-            document.getElementById('mediaAffinity').innerHTML = mediaItems.map(item => `
-                <div class="insight-item">
+                .slice(0, 12);
+            document.getElementById('hiddenGems').innerHTML = hiddenGems.map((item, i) => `
+                <div class="insight-item-v2">
+                    <span class="rank">${i + 1}</span>
                     <span class="name">${item.name}</span>
-                    <span class="index ${item.index >= 100 ? 'high' : 'low'}">${item.index}</span>
+                    <span class="index-badge high">${item.index}</span>
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No media data</p>';
+            `).join('') || '<p style="color: var(--text-secondary);">No hidden gems found</p>';
+            
+            // Rising behaviors (emerging categories)
+            const emergingCats = ['STREAMING', 'APP', 'SOCIAL', 'GAMING', 'CRYPTO', 'WELLNESS'];
+            const risingBehaviors = allItems
+                .filter(i => i.index > 110 && emergingCats.some(e => i.category.toUpperCase().includes(e)))
+                .sort((a, b) => b.index - a.index)
+                .slice(0, 12);
+            document.getElementById('risingBehaviors').innerHTML = risingBehaviors.map((item, i) => `
+                <div class="insight-item-v2">
+                    <span class="rank">${i + 1}</span>
+                    <span class="name">${item.name}</span>
+                    <span class="category-tag">${item.category}</span>
+                    <span class="index-badge high">${item.index}</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No rising behaviors detected</p>';
+            
+            // ===== MEDIA PATTERNS TAB =====
+            
+            // Streaming preferences
+            const streamingItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('STREAMING') || 
+                ['NETFLIX', 'HULU', 'DISNEY', 'HBO', 'AMAZON PRIME', 'APPLE TV', 'PARAMOUNT', 'PEACOCK'].some(s => i.name.toUpperCase().includes(s))
+            ).sort((a, b) => b.index - a.index).slice(0, 10);
+            const maxStreamPct = Math.max(...streamingItems.map(i => i.pct), 1);
+            document.getElementById('streamingPreferences').innerHTML = streamingItems.map(item => `
+                <div class="media-pref-item">
+                    <span class="media-pref-icon">📺</span>
+                    <span class="media-pref-name">${item.name}</span>
+                    <div class="media-pref-bar"><div class="media-pref-bar-fill" style="width: ${(item.pct / maxStreamPct) * 100}%"></div></div>
+                    <span class="media-pref-pct">${item.pct.toFixed(1)}%</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No streaming data</p>';
+            
+            // Social media usage
+            const socialItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('SOCIAL') ||
+                ['INSTAGRAM', 'TIKTOK', 'FACEBOOK', 'TWITTER', 'YOUTUBE', 'SNAPCHAT', 'LINKEDIN', 'PINTEREST', 'REDDIT'].some(s => i.name.toUpperCase().includes(s))
+            ).sort((a, b) => b.index - a.index).slice(0, 10);
+            const maxSocialPct = Math.max(...socialItems.map(i => i.pct), 1);
+            document.getElementById('socialMediaUsage').innerHTML = socialItems.map(item => `
+                <div class="media-pref-item">
+                    <span class="media-pref-icon">📱</span>
+                    <span class="media-pref-name">${item.name}</span>
+                    <div class="media-pref-bar"><div class="media-pref-bar-fill" style="width: ${(item.pct / maxSocialPct) * 100}%"></div></div>
+                    <span class="media-pref-pct">${item.pct.toFixed(1)}%</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No social media data</p>';
+            
+            // Audio preferences
+            const audioItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('MUSIC') || i.category.toUpperCase().includes('PODCAST') || i.category.toUpperCase().includes('AUDIO') ||
+                ['SPOTIFY', 'APPLE MUSIC', 'PANDORA', 'SIRIUS', 'IHEART', 'PODCAST'].some(s => i.name.toUpperCase().includes(s))
+            ).sort((a, b) => b.index - a.index).slice(0, 10);
+            const maxAudioPct = Math.max(...audioItems.map(i => i.pct), 1);
+            document.getElementById('audioPreferences').innerHTML = audioItems.map(item => `
+                <div class="media-pref-item">
+                    <span class="media-pref-icon">🎵</span>
+                    <span class="media-pref-name">${item.name}</span>
+                    <div class="media-pref-bar"><div class="media-pref-bar-fill" style="width: ${(item.pct / maxAudioPct) * 100}%"></div></div>
+                    <span class="media-pref-pct">${item.pct.toFixed(1)}%</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No audio data</p>';
+            
+            // Gaming affinity
+            const gamingItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('GAMING') || i.category.toUpperCase().includes('GAME') ||
+                ['PLAYSTATION', 'XBOX', 'NINTENDO', 'STEAM', 'TWITCH', 'EPIC', 'ROBLOX'].some(s => i.name.toUpperCase().includes(s))
+            ).sort((a, b) => b.index - a.index).slice(0, 10);
+            const maxGamingPct = Math.max(...gamingItems.map(i => i.pct), 1);
+            document.getElementById('gamingAffinity').innerHTML = gamingItems.map(item => `
+                <div class="media-pref-item">
+                    <span class="media-pref-icon">🎮</span>
+                    <span class="media-pref-name">${item.name}</span>
+                    <div class="media-pref-bar"><div class="media-pref-bar-fill" style="width: ${(item.pct / maxGamingPct) * 100}%"></div></div>
+                    <span class="media-pref-pct">${item.pct.toFixed(1)}%</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No gaming data</p>';
+            
+            // Media consumption summary
+            const mediaCategories = ['STREAMING', 'SOCIAL', 'BROADCAST', 'PODCAST', 'GAMING'];
+            const mediaSummary = mediaCategories.map(cat => {
+                const catItems = allItems.filter(i => i.category.toUpperCase().includes(cat));
+                const avgIdx = catItems.length ? Math.round(catItems.reduce((s,i) => s + i.index, 0) / catItems.length) : 0;
+                const icons = { 'STREAMING': '📺', 'SOCIAL': '📱', 'BROADCAST': '📡', 'PODCAST': '🎙️', 'GAMING': '🎮' };
+                return { category: cat, avgIndex: avgIdx, icon: icons[cat] || '📊' };
+            }).filter(m => m.avgIndex > 0);
+            document.getElementById('mediaConsumptionSummary').innerHTML = mediaSummary.map(m => `
+                <div class="media-summary-item">
+                    <div class="media-summary-icon">${m.icon}</div>
+                    <div class="media-summary-label">${m.category}</div>
+                    <div class="media-summary-value">${m.avgIndex}</div>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No media summary available</p>';
+            
+            // ===== OPPORTUNITIES TAB =====
+            
+            // Brand partnership opportunities
+            const brandItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('BRAND') || i.category.toUpperCase().includes('SHOP') || i.category.toUpperCase().includes('APPAREL')
+            ).sort((a, b) => b.index - a.index).slice(0, 10);
+            document.getElementById('brandOpportunities').innerHTML = brandItems.map((item, i) => `
+                <div class="opportunity-item">
+                    <span class="opportunity-rank">#${i + 1}</span>
+                    <div class="opportunity-content">
+                        <div class="opportunity-name">${item.name}</div>
+                        <div class="opportunity-reason">${item.category} • ${item.pct.toFixed(1)}% audience reach</div>
+                    </div>
+                    <span class="opportunity-score">${item.index}</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No brand opportunities found</p>';
+            
+            // Untapped categories - categories with fewer items but high indexes
+            const categoryStats = {};
+            allItems.forEach(item => {
+                if (!categoryStats[item.category]) categoryStats[item.category] = { items: [], totalIndex: 0 };
+                categoryStats[item.category].items.push(item);
+                categoryStats[item.category].totalIndex += item.index;
+            });
+            const untappedCats = Object.entries(categoryStats)
+                .map(([cat, stats]) => ({ category: cat, avgIndex: Math.round(stats.totalIndex / stats.items.length), count: stats.items.length }))
+                .filter(c => c.avgIndex > 110 && c.count < 20)
+                .sort((a, b) => b.avgIndex - a.avgIndex)
+                .slice(0, 10);
+            document.getElementById('untappedCategories').innerHTML = untappedCats.map((cat, i) => `
+                <div class="opportunity-item">
+                    <span class="opportunity-rank">#${i + 1}</span>
+                    <div class="opportunity-content">
+                        <div class="opportunity-name">${cat.category}</div>
+                        <div class="opportunity-reason">${cat.count} items • Niche opportunity</div>
+                    </div>
+                    <span class="opportunity-score">${cat.avgIndex}</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No untapped categories</p>';
             
             // Shopping affinity
             const shoppingCategories = ['WHERE THEY SHOP', 'MOST PURCHASED BRANDS', 'MOST PURCHASED CATEGORIES', 'APPAREL', 'BEAUTY'];
             const shoppingItems = allItems
-                .filter(i => shoppingCategories.some(sc => i.category.toUpperCase().includes(sc) || sc.includes(i.category.toUpperCase())))
+                .filter(i => shoppingCategories.some(sc => i.category.toUpperCase().includes(sc)))
                 .sort((a, b) => b.index - a.index)
-                .slice(0, 15);
-            
-            document.getElementById('shoppingAffinity').innerHTML = shoppingItems.map(item => `
-                <div class="insight-item">
+                .slice(0, 12);
+            document.getElementById('shoppingAffinity').innerHTML = shoppingItems.map((item, i) => `
+                <div class="insight-item-v2">
+                    <span class="rank">${i + 1}</span>
                     <span class="name">${item.name}</span>
-                    <span class="index ${item.index >= 100 ? 'high' : 'low'}">${item.index}</span>
+                    <span class="index-badge ${item.index >= 100 ? 'high' : 'low'}">${item.index}</span>
                 </div>
             `).join('') || '<p style="color: var(--text-secondary);">No shopping data</p>';
             
-            // Also render the new tabs when insights are rendered
+            // Content partnerships
+            const contentItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('BROADCAST') || i.category.toUpperCase().includes('SERIES') || i.category.toUpperCase().includes('MOVIE') || i.category.toUpperCase().includes('CHANNEL')
+            ).sort((a, b) => b.index - a.index).slice(0, 10);
+            document.getElementById('contentPartnerships').innerHTML = contentItems.map((item, i) => `
+                <div class="opportunity-item">
+                    <span class="opportunity-rank">#${i + 1}</span>
+                    <div class="opportunity-content">
+                        <div class="opportunity-name">${item.name}</div>
+                        <div class="opportunity-reason">${item.category}</div>
+                    </div>
+                    <span class="opportunity-score">${item.index}</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No content data</p>';
+            
+            // Geographic opportunities
+            const topLocations = (data.locations || []).filter(l => l.index > 100).sort((a, b) => b.index - a.index).slice(0, 10);
+            document.getElementById('geoOpportunities').innerHTML = topLocations.map(loc => `
+                <div class="geo-opportunity">
+                    <div class="geo-name">${loc.name}</div>
+                    <div class="geo-index">${loc.index}</div>
+                    <div class="geo-pct">${loc.pct.toFixed(1)}%</div>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No geographic data</p>';
+            
+            // ===== ACTIVATION TAB =====
+            
+            // Media buying recommendations
+            const topMedia = allItems.filter(i => 
+                ['STREAMING', 'BROADCAST', 'SOCIAL', 'PODCAST', 'CABLE'].some(m => i.category.toUpperCase().includes(m))
+            ).sort((a, b) => b.index - a.index).slice(0, 5);
+            document.getElementById('mediaBuyingRecs').innerHTML = topMedia.map(item => `
+                <div class="activation-item">Prioritize ${item.name} (Index: ${item.index})</div>
+            `).join('') || '<div class="activation-item">Analyze media patterns for recommendations</div>';
+            
+            // Creative strategy recommendations
+            const topBehaviors = topOverIndexers.slice(0, 3);
+            document.getElementById('creativeStrategyRecs').innerHTML = `
+                <div class="activation-item">Feature themes around: ${topBehaviors.map(b => b.name).join(', ')}</div>
+                <div class="activation-item">Target age group: ${demoInsights.find(d => d.label.includes('Age'))?.value || 'All ages'}</div>
+                <div class="activation-item">Tone: ${uniquenessScore > 60 ? 'Bold and distinctive' : 'Broad and inclusive'}</div>
+            `;
+            
+            // Partnership recommendations
+            document.getElementById('partnershipRecs').innerHTML = brandItems.slice(0, 3).map(item => `
+                <div class="activation-item">Partner with ${item.name} for audience alignment</div>
+            `).join('') || '<div class="activation-item">Explore brand partnerships based on affinities</div>';
+            
+            // Geographic focus
+            document.getElementById('geoFocusRecs').innerHTML = topLocations.slice(0, 3).map(loc => `
+                <div class="activation-item">Focus on ${loc.name} (${loc.index} index)</div>
+            `).join('') || '<div class="activation-item">National campaign recommended</div>';
+            
+            // Targeting checklist
+            const targetingItems = [
+                ...topOverIndexers.slice(0, 3).map(i => i.name),
+                ...demoInsights.slice(0, 2).map(d => d.value),
+                ...topLocations.slice(0, 2).map(l => l.name)
+            ].slice(0, 9);
+            document.getElementById('targetingChecklist').innerHTML = targetingItems.map(item => `
+                <div class="checklist-item">${item}</div>
+            `).join('') || '<div class="checklist-item">Build targeting based on insights</div>';
+            
+            // Things to avoid
+            const avoidItems = topUnderIndexers.slice(0, 6).map(i => i.name);
+            document.getElementById('thingsToAvoid').innerHTML = avoidItems.map(item => `
+                <div class="avoid-item">${item}</div>
+            `).join('') || '<div class="avoid-item">No significant items to avoid</div>';
+            
+            // Also render the other tabs when insights are rendered
             renderAffinityMap(data);
             renderSponsorshipFinder(data);
             renderTalentAssessment(data);
