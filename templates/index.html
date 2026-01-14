@@ -1003,6 +1003,207 @@
         }
         .insight-item .index.high { background: rgba(16, 185, 129, 0.2); color: #10b981; }
         .insight-item .index.low { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        
+        /* Affinity Map Tab */
+        .affinity-container, .sponsorship-container, .talent-container, .media-container {
+            padding: 1rem;
+        }
+        .affinity-header, .sponsorship-header, .talent-header, .media-header {
+            margin-bottom: 1.5rem;
+        }
+        .affinity-header h2, .sponsorship-header h2, .talent-header h2, .media-header h2 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.5rem;
+        }
+        .affinity-header p, .sponsorship-header p, .talent-header p, .media-header p {
+            color: var(--text-secondary);
+            margin: 0;
+        }
+        .affinity-grid, .sponsorship-grid, .talent-grid, .media-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+        .affinity-card, .sponsor-card, .talent-card, .media-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem;
+        }
+        .affinity-card.wide, .sponsor-card.wide, .talent-card.wide, .media-card.wide {
+            grid-column: span 2;
+        }
+        .affinity-card h3, .sponsor-card h3, .talent-card h3, .media-card h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1rem;
+        }
+        .affinity-desc, .sponsor-desc {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            margin: 0 0 0.75rem 0;
+        }
+        .affinity-list, .sponsor-list, .talent-list, .media-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .affinity-item, .sponsor-item, .talent-item, .media-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            margin-bottom: 0.35rem;
+            background: rgba(255,255,255,0.03);
+            font-size: 0.85rem;
+        }
+        .affinity-item:hover, .sponsor-item:hover, .media-item:hover {
+            background: rgba(74, 138, 201, 0.15);
+        }
+        .affinity-item .name, .sponsor-item .name, .media-item .name {
+            flex: 1;
+        }
+        .affinity-item .index, .sponsor-item .index, .media-item .index {
+            font-weight: 600;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        .sponsor-card.highlight {
+            border-color: #f59e0b;
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.02));
+        }
+        .sponsor-list.negative .sponsor-item {
+            background: rgba(239, 68, 68, 0.1);
+        }
+        
+        /* Talent Assessment */
+        .talent-summary {
+            display: flex;
+            gap: 2rem;
+            margin-bottom: 1.5rem;
+            padding: 1.5rem;
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+        .talent-score-card {
+            text-align: center;
+            padding: 1rem 2rem;
+            background: linear-gradient(135deg, #10b981, #059669);
+            border-radius: 10px;
+        }
+        .talent-score {
+            font-size: 3rem;
+            font-weight: 700;
+            color: white;
+        }
+        .talent-score-label {
+            color: rgba(255,255,255,0.8);
+            font-size: 0.85rem;
+        }
+        .talent-metrics {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+            flex: 1;
+            justify-content: space-around;
+        }
+        .talent-metric {
+            text-align: center;
+        }
+        .talent-metric .metric-value {
+            display: block;
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: var(--accent-cyan);
+        }
+        .talent-metric .metric-label {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+        .talent-list.warning .talent-item {
+            background: rgba(239, 68, 68, 0.1);
+            border-left: 3px solid #ef4444;
+        }
+        .talent-comparison {
+            margin-top: 1.5rem;
+            background: var(--bg-card);
+            border-radius: 10px;
+            padding: 1rem;
+        }
+        
+        /* Media Optimizer */
+        .media-summary {
+            margin-bottom: 1.5rem;
+        }
+        .media-summary-card {
+            background: var(--bg-card);
+            border-radius: 10px;
+            padding: 1rem;
+        }
+        .channel-badges {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 0.5rem;
+        }
+        .channel-badge {
+            padding: 0.35rem 0.75rem;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        /* Affinity Network Visualization */
+        .affinity-network {
+            height: 300px;
+            background: var(--bg-dark);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .network-node {
+            position: absolute;
+            padding: 0.5rem 1rem;
+            background: var(--bg-card);
+            border: 2px solid var(--accent-blue);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .network-node:hover {
+            background: var(--accent-blue);
+            transform: scale(1.1);
+        }
+        .network-node.center {
+            background: linear-gradient(135deg, #10b981, #059669);
+            border-color: #10b981;
+            font-weight: 600;
+            z-index: 10;
+        }
+        
+        /* Sponsor Matrix */
+        .sponsor-matrix {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+        .matrix-cell {
+            padding: 0.75rem;
+            text-align: center;
+            border-radius: 6px;
+            font-size: 0.75rem;
+        }
+        .matrix-cell.high { background: rgba(16, 185, 129, 0.3); }
+        .matrix-cell.medium { background: rgba(245, 158, 11, 0.3); }
+        .matrix-cell.low { background: rgba(239, 68, 68, 0.2); }
         .insight-grid-small {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -2069,11 +2270,13 @@
                         <button class="btn btn-small btn-primary" onclick="toggleExportMenu()">📥 Export ▾</button>
                         <div id="exportMenu" class="export-menu" style="display: none;">
                             <button onclick="downloadCurrentCSV()">📄 Download CSV</button>
+                            <button onclick="exportSalesDeck()">📊 Sales Deck (PDF)</button>
                             <button onclick="exportForAdPlatform('meta')">📘 Meta Ads Format</button>
                             <button onclick="exportForAdPlatform('google')">🔍 Google Ads Format</button>
                             <button onclick="exportForAdPlatform('tiktok')">🎵 TikTok Ads Format</button>
                         </div>
                     </div>
+                    <button class="btn btn-small" onclick="toggleSavedViews()" title="Saved Views">💾 Saved</button>
                     <button class="btn btn-small" style="background: var(--bg-input);" onclick="showFormView()">← Back</button>
                 </div>
             </div>
@@ -2146,6 +2349,10 @@
                 <button class="tab-btn" onclick="showTab('behavioral')">Behavioral</button>
                 <button class="tab-btn" onclick="showTab('location')">Location</button>
                 <button class="tab-btn" onclick="showTab('insights')">🔥 Top Insights</button>
+                <button class="tab-btn" onclick="showTab('affinity')">🔗 Affinity Map</button>
+                <button class="tab-btn" onclick="showTab('sponsorship')">💰 Sponsorship</button>
+                <button class="tab-btn" onclick="showTab('talent')">⭐ Talent Assessment</button>
+                <button class="tab-btn" onclick="showTab('media')">📺 Media Optimizer</button>
                 <button class="tab-btn" onclick="showTab('segmentation')">🎯 Segment Builder</button>
                 <button class="tab-btn" onclick="showTab('comparison')">📊 Comparison</button>
             </div>
@@ -2226,6 +2433,201 @@
                 <div class="regional-breakdown">
                     <h3>📊 Regional Breakdown</h3>
                     <div id="regionalBreakdown" class="regional-grid"></div>
+                </div>
+            </div>
+
+            <!-- Affinity Map Tab -->
+            <div id="tab-affinity" class="tab-content">
+                <div class="affinity-container">
+                    <div class="affinity-header">
+                        <h2>🔗 Audience Affinity Map</h2>
+                        <p>Discover brands, shows, and talent that share audiences with this profile</p>
+                    </div>
+                    
+                    <div class="affinity-grid">
+                        <div class="affinity-card">
+                            <h3>🎬 Content & Entertainment</h3>
+                            <p class="affinity-desc">Shows, movies, and streaming platforms this audience loves</p>
+                            <div id="affinityContent" class="affinity-list"></div>
+                        </div>
+                        
+                        <div class="affinity-card">
+                            <h3>🛍️ Brand Affinities</h3>
+                            <p class="affinity-desc">Brands this audience over-indexes for</p>
+                            <div id="affinityBrands" class="affinity-list"></div>
+                        </div>
+                        
+                        <div class="affinity-card">
+                            <h3>📱 Digital Platforms</h3>
+                            <p class="affinity-desc">Apps, websites, and social platforms they use</p>
+                            <div id="affinityPlatforms" class="affinity-list"></div>
+                        </div>
+                        
+                        <div class="affinity-card">
+                            <h3>🎵 Music & Audio</h3>
+                            <p class="affinity-desc">Music genres, artists, and podcasts</p>
+                            <div id="affinityMusic" class="affinity-list"></div>
+                        </div>
+                        
+                        <div class="affinity-card wide">
+                            <h3>🌐 Affinity Network</h3>
+                            <p class="affinity-desc">Visual map of audience connections</p>
+                            <div id="affinityNetwork" class="affinity-network"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sponsorship Match Tab -->
+            <div id="tab-sponsorship" class="tab-content">
+                <div class="sponsorship-container">
+                    <div class="sponsorship-header">
+                        <h2>💰 Sponsorship Match Finder</h2>
+                        <p>Identify brand categories and companies that align with this audience</p>
+                    </div>
+                    
+                    <div class="sponsorship-grid">
+                        <div class="sponsor-card highlight">
+                            <h3>🏆 Top Sponsor Categories</h3>
+                            <p class="sponsor-desc">Categories where this audience significantly over-indexes</p>
+                            <div id="sponsorCategories" class="sponsor-list"></div>
+                        </div>
+                        
+                        <div class="sponsor-card">
+                            <h3>🎯 Ideal Brand Partners</h3>
+                            <p class="sponsor-desc">Specific brands with highest audience overlap</p>
+                            <div id="sponsorBrands" class="sponsor-list"></div>
+                        </div>
+                        
+                        <div class="sponsor-card">
+                            <h3>💳 Purchase Behaviors</h3>
+                            <p class="sponsor-desc">What this audience buys</p>
+                            <div id="sponsorPurchase" class="sponsor-list"></div>
+                        </div>
+                        
+                        <div class="sponsor-card">
+                            <h3>🚫 Avoid These Categories</h3>
+                            <p class="sponsor-desc">Categories where audience under-indexes</p>
+                            <div id="sponsorAvoid" class="sponsor-list negative"></div>
+                        </div>
+                        
+                        <div class="sponsor-card wide">
+                            <h3>📊 Sponsorship Opportunity Matrix</h3>
+                            <div id="sponsorMatrix" class="sponsor-matrix"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Talent Assessment Tab -->
+            <div id="tab-talent" class="tab-content">
+                <div class="talent-container">
+                    <div class="talent-header">
+                        <h2>⭐ Talent Assessment Dashboard</h2>
+                        <p>Evaluate talent and influencer partnership potential</p>
+                    </div>
+                    
+                    <div class="talent-summary">
+                        <div class="talent-score-card">
+                            <div class="talent-score" id="talentScore">--</div>
+                            <div class="talent-score-label">Partnership Score</div>
+                        </div>
+                        <div class="talent-metrics">
+                            <div class="talent-metric">
+                                <span class="metric-value" id="talentReach">--</span>
+                                <span class="metric-label">Est. Reach</span>
+                            </div>
+                            <div class="talent-metric">
+                                <span class="metric-value" id="talentEngagement">--</span>
+                                <span class="metric-label">Engagement Index</span>
+                            </div>
+                            <div class="talent-metric">
+                                <span class="metric-value" id="talentBrandSafety">--</span>
+                                <span class="metric-label">Brand Safety</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="talent-grid">
+                        <div class="talent-card">
+                            <h3>👥 Audience Quality</h3>
+                            <div id="talentAudienceQuality" class="talent-list"></div>
+                        </div>
+                        
+                        <div class="talent-card">
+                            <h3>🎯 Brand Alignment</h3>
+                            <div id="talentBrandAlignment" class="talent-list"></div>
+                        </div>
+                        
+                        <div class="talent-card">
+                            <h3>📈 Growth Indicators</h3>
+                            <div id="talentGrowth" class="talent-list"></div>
+                        </div>
+                        
+                        <div class="talent-card">
+                            <h3>⚠️ Risk Factors</h3>
+                            <div id="talentRisks" class="talent-list warning"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="talent-comparison">
+                        <h3>📊 Compare with Similar Talent</h3>
+                        <div id="talentComparison" class="talent-comparison-table"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Media Optimizer Tab -->
+            <div id="tab-media" class="tab-content">
+                <div class="media-container">
+                    <div class="media-header">
+                        <h2>📺 Media Channel Optimizer</h2>
+                        <p>Find the best channels and platforms to reach this audience</p>
+                    </div>
+                    
+                    <div class="media-summary">
+                        <div class="media-summary-card">
+                            <h4>Primary Channels</h4>
+                            <div id="primaryChannels" class="channel-badges"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="media-grid">
+                        <div class="media-card">
+                            <h3>📺 Traditional TV</h3>
+                            <div id="mediaTV" class="media-list"></div>
+                        </div>
+                        
+                        <div class="media-card">
+                            <h3>📱 Streaming</h3>
+                            <div id="mediaStreaming" class="media-list"></div>
+                        </div>
+                        
+                        <div class="media-card">
+                            <h3>💻 Social Media</h3>
+                            <div id="mediaSocial" class="media-list"></div>
+                        </div>
+                        
+                        <div class="media-card">
+                            <h3>🎮 Gaming</h3>
+                            <div id="mediaGaming" class="media-list"></div>
+                        </div>
+                        
+                        <div class="media-card">
+                            <h3>🎧 Audio/Podcasts</h3>
+                            <div id="mediaAudio" class="media-list"></div>
+                        </div>
+                        
+                        <div class="media-card">
+                            <h3>📰 News & Publishing</h3>
+                            <div id="mediaNews" class="media-list"></div>
+                        </div>
+                        
+                        <div class="media-card wide">
+                            <h3>📊 Channel Reach Comparison</h3>
+                            <canvas id="mediaReachChart"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -4137,6 +4539,393 @@
                     <span class="index ${item.index >= 100 ? 'high' : 'low'}">${item.index}</span>
                 </div>
             `).join('') || '<p style="color: var(--text-secondary);">No shopping data</p>';
+            
+            // Also render the new tabs when insights are rendered
+            renderAffinityMap(data);
+            renderSponsorshipFinder(data);
+            renderTalentAssessment(data);
+            renderMediaOptimizer(data);
+        }
+        
+        // ============================================================================
+        // AFFINITY MAP FUNCTIONS
+        // ============================================================================
+        
+        function renderAffinityMap(data) {
+            if (!data || !data.behavioral) return;
+            
+            const allItems = collectAllBehavioralItems(data);
+            
+            // Content & Entertainment
+            const contentCategories = ['STREAMING', 'BROADCAST', 'CABLE', 'MOVIES', 'TV SHOWS', 'ENTERTAINMENT'];
+            const contentItems = allItems
+                .filter(i => contentCategories.some(c => i.category.toUpperCase().includes(c)))
+                .sort((a, b) => b.index - a.index)
+                .slice(0, 15);
+            
+            document.getElementById('affinityContent').innerHTML = renderAffinityList(contentItems);
+            
+            // Brand Affinities
+            const brandCategories = ['BRAND', 'WHERE THEY SHOP', 'MOST PURCHASED', 'APPAREL', 'AUTOMOTIVE'];
+            const brandItems = allItems
+                .filter(i => brandCategories.some(c => i.category.toUpperCase().includes(c)))
+                .sort((a, b) => b.index - a.index)
+                .slice(0, 15);
+            
+            document.getElementById('affinityBrands').innerHTML = renderAffinityList(brandItems);
+            
+            // Digital Platforms
+            const platformCategories = ['APP', 'PLATFORM', 'SOCIAL MEDIA', 'WEBSITE'];
+            const platformItems = allItems
+                .filter(i => platformCategories.some(c => i.category.toUpperCase().includes(c)))
+                .sort((a, b) => b.index - a.index)
+                .slice(0, 15);
+            
+            document.getElementById('affinityPlatforms').innerHTML = renderAffinityList(platformItems);
+            
+            // Music & Audio
+            const musicCategories = ['MUSIC', 'PODCAST', 'AUDIO', 'RADIO', 'LISTENING'];
+            const musicItems = allItems
+                .filter(i => musicCategories.some(c => i.category.toUpperCase().includes(c)))
+                .sort((a, b) => b.index - a.index)
+                .slice(0, 15);
+            
+            document.getElementById('affinityMusic').innerHTML = renderAffinityList(musicItems);
+            
+            // Render network visualization
+            renderAffinityNetwork(allItems.sort((a, b) => b.index - a.index).slice(0, 12));
+        }
+        
+        function renderAffinityList(items) {
+            if (!items.length) return '<p style="color: var(--text-secondary); padding: 0.5rem;">No data available</p>';
+            return items.map(item => `
+                <div class="affinity-item">
+                    <span class="name">${item.name}</span>
+                    <span class="index" style="background: ${item.index >= 100 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}; color: ${item.index >= 100 ? '#10b981' : '#ef4444'};">${item.index}</span>
+                </div>
+            `).join('');
+        }
+        
+        function renderAffinityNetwork(topItems) {
+            const container = document.getElementById('affinityNetwork');
+            const profileName = currentProfileData?.name || 'Profile';
+            
+            // Create network visualization
+            const centerX = 200, centerY = 150;
+            const radius = 120;
+            
+            let html = `<div class="network-node center" style="left: ${centerX - 50}px; top: ${centerY - 15}px;">${profileName.substring(0, 15)}</div>`;
+            
+            topItems.forEach((item, i) => {
+                const angle = (i / topItems.length) * 2 * Math.PI - Math.PI/2;
+                const x = centerX + radius * Math.cos(angle) - 40;
+                const y = centerY + radius * Math.sin(angle) - 12;
+                const opacity = 0.5 + (item.index / 200) * 0.5;
+                html += `<div class="network-node" style="left: ${x}px; top: ${y}px; opacity: ${opacity};" title="Index: ${item.index}">${item.name.substring(0, 12)}</div>`;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        // ============================================================================
+        // SPONSORSHIP FINDER FUNCTIONS
+        // ============================================================================
+        
+        function renderSponsorshipFinder(data) {
+            if (!data || !data.behavioral) return;
+            
+            const allItems = collectAllBehavioralItems(data);
+            
+            // Categorize by sponsor potential
+            const sponsorCategories = {};
+            allItems.forEach(item => {
+                const baseCat = item.category.split('/')[0].toUpperCase();
+                if (!sponsorCategories[baseCat]) {
+                    sponsorCategories[baseCat] = { items: [], avgIndex: 0 };
+                }
+                sponsorCategories[baseCat].items.push(item);
+            });
+            
+            // Calculate average index per category
+            Object.keys(sponsorCategories).forEach(cat => {
+                const items = sponsorCategories[cat].items;
+                sponsorCategories[cat].avgIndex = Math.round(items.reduce((sum, i) => sum + i.index, 0) / items.length);
+            });
+            
+            // Top sponsor categories
+            const topCategories = Object.entries(sponsorCategories)
+                .filter(([_, data]) => data.avgIndex > 100)
+                .sort((a, b) => b[1].avgIndex - a[1].avgIndex)
+                .slice(0, 10);
+            
+            document.getElementById('sponsorCategories').innerHTML = topCategories.map(([cat, data]) => `
+                <div class="sponsor-item">
+                    <span class="name">${cat}</span>
+                    <span class="index" style="background: rgba(245,158,11,0.2); color: #f59e0b;">+${data.avgIndex - 100}%</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No high-indexing categories</p>';
+            
+            // Top specific brands
+            const brandItems = allItems
+                .filter(i => i.category.toUpperCase().includes('BRAND') || i.category.toUpperCase().includes('SHOP'))
+                .filter(i => i.index > 120)
+                .sort((a, b) => b.index - a.index)
+                .slice(0, 15);
+            
+            document.getElementById('sponsorBrands').innerHTML = renderAffinityList(brandItems);
+            
+            // Purchase behaviors
+            const purchaseItems = allItems
+                .filter(i => i.category.toUpperCase().includes('PURCHASED') || i.category.toUpperCase().includes('BUY'))
+                .sort((a, b) => b.index - a.index)
+                .slice(0, 15);
+            
+            document.getElementById('sponsorPurchase').innerHTML = renderAffinityList(purchaseItems);
+            
+            // Categories to avoid
+            const avoidCategories = Object.entries(sponsorCategories)
+                .filter(([_, data]) => data.avgIndex < 80)
+                .sort((a, b) => a[1].avgIndex - b[1].avgIndex)
+                .slice(0, 8);
+            
+            document.getElementById('sponsorAvoid').innerHTML = avoidCategories.map(([cat, data]) => `
+                <div class="sponsor-item">
+                    <span class="name">${cat}</span>
+                    <span class="index" style="background: rgba(239,68,68,0.2); color: #ef4444;">${data.avgIndex - 100}%</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No under-indexing categories</p>';
+            
+            // Sponsor matrix
+            renderSponsorMatrix(topCategories);
+        }
+        
+        function renderSponsorMatrix(categories) {
+            const matrixLabels = ['Reach', 'Affinity', 'Brand Fit', 'CPM Est.'];
+            let html = '';
+            
+            categories.slice(0, 4).forEach(([cat, data]) => {
+                const affinity = data.avgIndex > 150 ? 'high' : data.avgIndex > 110 ? 'medium' : 'low';
+                html += `
+                    <div class="matrix-cell" style="font-weight: 600; background: var(--bg-input);">${cat.substring(0, 10)}</div>
+                    <div class="matrix-cell ${affinity}">High</div>
+                    <div class="matrix-cell ${affinity}">${data.avgIndex}</div>
+                    <div class="matrix-cell ${affinity}">$$</div>
+                `;
+            });
+            
+            document.getElementById('sponsorMatrix').innerHTML = html || '<p style="color: var(--text-secondary); grid-column: span 4;">Select a profile to see sponsor matrix</p>';
+        }
+        
+        // ============================================================================
+        // TALENT ASSESSMENT FUNCTIONS
+        // ============================================================================
+        
+        function renderTalentAssessment(data) {
+            if (!data) return;
+            
+            const allItems = collectAllBehavioralItems(data);
+            const demographics = data.demographics || {};
+            const sampleSize = data.sampleSize || 0;
+            const projectedUS = data.projectedUS || 0;
+            
+            // Calculate partnership score (0-100)
+            const avgIndex = allItems.length > 0 ? allItems.reduce((sum, i) => sum + i.index, 0) / allItems.length : 0;
+            const diversityScore = Object.keys(demographics).length * 10;
+            const reachScore = Math.min(100, Math.log10(projectedUS || 1) * 10);
+            const partnershipScore = Math.round((avgIndex / 2) + diversityScore + reachScore) / 3;
+            
+            document.getElementById('talentScore').textContent = Math.round(Math.min(100, partnershipScore));
+            document.getElementById('talentReach').textContent = formatNumber(projectedUS);
+            document.getElementById('talentEngagement').textContent = Math.round(avgIndex);
+            document.getElementById('talentBrandSafety').textContent = avgIndex > 80 ? 'High' : avgIndex > 50 ? 'Medium' : 'Low';
+            
+            // Audience quality
+            const qualityMetrics = [
+                { label: 'Sample Size', value: formatNumber(sampleSize), good: sampleSize > 10000 },
+                { label: 'Age Diversity', value: Object.keys(demographics.age || {}).length + ' groups', good: true },
+                { label: 'Income Distribution', value: Object.keys(demographics.income || {}).length + ' brackets', good: true },
+                { label: 'Geographic Spread', value: (data.locations?.length || 0) + ' DMAs', good: (data.locations?.length || 0) > 10 }
+            ];
+            
+            document.getElementById('talentAudienceQuality').innerHTML = qualityMetrics.map(m => `
+                <div class="talent-item" style="background: ${m.good ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'};">
+                    <span>${m.label}</span>
+                    <span style="color: ${m.good ? '#10b981' : '#ef4444'};">${m.value}</span>
+                </div>
+            `).join('');
+            
+            // Brand alignment - top affinities
+            const topAffinities = allItems
+                .filter(i => i.index > 120)
+                .sort((a, b) => b.index - a.index)
+                .slice(0, 8);
+            
+            document.getElementById('talentBrandAlignment').innerHTML = topAffinities.map(item => `
+                <div class="talent-item">
+                    <span>${item.name}</span>
+                    <span style="color: #10b981;">+${item.index - 100}%</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">Select a profile</p>';
+            
+            // Growth indicators
+            const growthMetrics = [
+                { label: 'Young Adult Reach (18-34)', value: calculateAgeGroupPct(demographics.age, ['18-20', '21-25', '26-30']) + '%' },
+                { label: 'Streaming Adoption', value: allItems.filter(i => i.category.includes('STREAMING')).length > 5 ? 'High' : 'Medium' },
+                { label: 'Social Media Presence', value: allItems.filter(i => i.category.includes('SOCIAL')).length > 3 ? 'Strong' : 'Growing' }
+            ];
+            
+            document.getElementById('talentGrowth').innerHTML = growthMetrics.map(m => `
+                <div class="talent-item">
+                    <span>${m.label}</span>
+                    <span style="color: var(--accent-cyan);">${m.value}</span>
+                </div>
+            `).join('');
+            
+            // Risk factors
+            const risks = [];
+            if (sampleSize < 5000) risks.push({ label: 'Small Sample Size', desc: 'May not be statistically significant' });
+            if (avgIndex < 80) risks.push({ label: 'Low Engagement', desc: 'Audience shows weak affinity' });
+            if (!data.locations || data.locations.length < 5) risks.push({ label: 'Limited Geographic Data', desc: 'May have regional bias' });
+            
+            document.getElementById('talentRisks').innerHTML = risks.length > 0 
+                ? risks.map(r => `<div class="talent-item"><span>${r.label}</span><span style="font-size: 0.75rem; color: var(--text-secondary);">${r.desc}</span></div>`).join('')
+                : '<div class="talent-item" style="background: rgba(16,185,129,0.1);"><span>No significant risks identified</span><span style="color: #10b981;">✓</span></div>';
+        }
+        
+        function calculateAgeGroupPct(ageData, groups) {
+            if (!ageData) return 0;
+            let total = 0;
+            groups.forEach(g => { total += ageData[g] || 0; });
+            return total.toFixed(1);
+        }
+        
+        // ============================================================================
+        // MEDIA OPTIMIZER FUNCTIONS
+        // ============================================================================
+        
+        function renderMediaOptimizer(data) {
+            if (!data || !data.behavioral) return;
+            
+            const allItems = collectAllBehavioralItems(data);
+            
+            // Categorize by media type
+            const mediaTypes = {
+                tv: { keywords: ['BROADCAST', 'CABLE', 'NETWORK', 'TV'], items: [], label: 'Traditional TV' },
+                streaming: { keywords: ['STREAMING', 'OTT', 'NETFLIX', 'HULU', 'DISNEY', 'HBO', 'PEACOCK'], items: [], label: 'Streaming' },
+                social: { keywords: ['SOCIAL', 'FACEBOOK', 'INSTAGRAM', 'TIKTOK', 'TWITTER', 'YOUTUBE'], items: [], label: 'Social Media' },
+                gaming: { keywords: ['GAMING', 'GAME', 'ESPORTS', 'XBOX', 'PLAYSTATION', 'NINTENDO'], items: [], label: 'Gaming' },
+                audio: { keywords: ['PODCAST', 'MUSIC', 'SPOTIFY', 'RADIO', 'AUDIO'], items: [], label: 'Audio/Podcasts' },
+                news: { keywords: ['NEWS', 'PUBLISH', 'MAGAZINE', 'NEWSPAPER'], items: [], label: 'News & Publishing' }
+            };
+            
+            allItems.forEach(item => {
+                Object.entries(mediaTypes).forEach(([type, config]) => {
+                    if (config.keywords.some(k => item.category.toUpperCase().includes(k) || item.name.toUpperCase().includes(k))) {
+                        config.items.push(item);
+                    }
+                });
+            });
+            
+            // Render each media type
+            Object.entries(mediaTypes).forEach(([type, config]) => {
+                const sorted = config.items.sort((a, b) => b.index - a.index).slice(0, 10);
+                const elementId = type === 'tv' ? 'mediaTV' : type === 'audio' ? 'mediaAudio' : `media${type.charAt(0).toUpperCase() + type.slice(1)}`;
+                const element = document.getElementById(elementId);
+                if (element) {
+                    element.innerHTML = renderMediaList(sorted);
+                }
+            });
+            
+            // Primary channels (top indexing media types)
+            const channelScores = Object.entries(mediaTypes).map(([type, config]) => ({
+                type,
+                label: config.label,
+                avgIndex: config.items.length > 0 ? Math.round(config.items.reduce((sum, i) => sum + i.index, 0) / config.items.length) : 0,
+                count: config.items.length
+            })).filter(c => c.avgIndex > 100).sort((a, b) => b.avgIndex - a.avgIndex);
+            
+            document.getElementById('primaryChannels').innerHTML = channelScores.slice(0, 4).map(c => `
+                <span class="channel-badge">${c.label} (+${c.avgIndex - 100}%)</span>
+            `).join('') || '<span style="color: var(--text-secondary);">Select a profile to see channels</span>';
+            
+            // Render reach chart
+            renderMediaReachChart(channelScores);
+        }
+        
+        function renderMediaList(items) {
+            if (!items.length) return '<p style="color: var(--text-secondary); padding: 0.5rem;">No data available</p>';
+            return items.map(item => `
+                <div class="media-item">
+                    <span class="name">${item.name}</span>
+                    <span class="index" style="background: ${item.index >= 100 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}; color: ${item.index >= 100 ? '#10b981' : '#ef4444'};">${item.index}</span>
+                </div>
+            `).join('');
+        }
+        
+        function renderMediaReachChart(channelScores) {
+            const canvas = document.getElementById('mediaReachChart');
+            if (!canvas) return;
+            
+            // Destroy existing chart if any
+            if (window.mediaReachChartInstance) {
+                window.mediaReachChartInstance.destroy();
+            }
+            
+            const ctx = canvas.getContext('2d');
+            window.mediaReachChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: channelScores.map(c => c.label),
+                    datasets: [{
+                        label: 'Index vs Gen Pop',
+                        data: channelScores.map(c => c.avgIndex),
+                        backgroundColor: channelScores.map(c => c.avgIndex >= 100 ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)'),
+                        borderColor: channelScores.map(c => c.avgIndex >= 100 ? '#10b981' : '#ef4444'),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#94a3b8', maxRotation: 45 }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Helper function to collect all behavioral items
+        function collectAllBehavioralItems(data) {
+            const items = [];
+            if (data && data.behavioral) {
+                Object.entries(data.behavioral).forEach(([category, catItems]) => {
+                    if (Array.isArray(catItems)) {
+                        catItems.forEach(item => {
+                            if (item.index && item.index > 0) {
+                                items.push({
+                                    name: item.name || item.value,
+                                    category: category,
+                                    index: item.index,
+                                    pct: item.pct || 0,
+                                    genPopPct: item.genPopPct || 0
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+            return items;
         }
         
         // ============================================================================
@@ -4660,6 +5449,225 @@
         function toggleExportMenu() {
             const menu = document.getElementById('exportMenu');
             menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        // ============================================================================
+        // SALES DECK EXPORT
+        // ============================================================================
+        
+        async function exportSalesDeck() {
+            if (!currentProfileData) {
+                alert('Please select a profile first');
+                return;
+            }
+            
+            const profileName = currentProfileData.name || 'Profile';
+            const allItems = collectAllBehavioralItems(currentDashboardData);
+            const demographics = currentProfileData.demographics || {};
+            
+            // Generate deck content
+            const deckContent = generateSalesDeckHTML(profileName, allItems, demographics);
+            
+            // Open in new window for printing/saving as PDF
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(deckContent);
+            printWindow.document.close();
+            
+            // Auto-trigger print dialog after a short delay
+            setTimeout(() => {
+                printWindow.print();
+            }, 500);
+        }
+        
+        function generateSalesDeckHTML(profileName, allItems, demographics) {
+            const topAffinities = allItems.filter(i => i.index > 100).sort((a, b) => b.index - a.index).slice(0, 10);
+            const sponsorCategories = {};
+            allItems.forEach(item => {
+                const cat = item.category.split('/')[0];
+                if (!sponsorCategories[cat]) sponsorCategories[cat] = { items: [], avgIndex: 0 };
+                sponsorCategories[cat].items.push(item);
+            });
+            Object.keys(sponsorCategories).forEach(cat => {
+                sponsorCategories[cat].avgIndex = Math.round(sponsorCategories[cat].items.reduce((sum, i) => sum + i.index, 0) / sponsorCategories[cat].items.length);
+            });
+            const topSponsorCats = Object.entries(sponsorCategories).filter(([_, d]) => d.avgIndex > 100).sort((a, b) => b[1].avgIndex - a[1].avgIndex).slice(0, 6);
+            
+            return \`
+<!DOCTYPE html>
+<html>
+<head>
+    <title>\${profileName} - Audience Profile</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1a1a1a; }
+        .slide { page-break-after: always; padding: 60px; min-height: 100vh; }
+        .slide:last-child { page-break-after: avoid; }
+        .slide-title { font-size: 36px; font-weight: 700; margin-bottom: 40px; color: #1e3a5f; }
+        .slide-subtitle { font-size: 18px; color: #64748b; margin-bottom: 30px; }
+        .logo { font-size: 14px; color: #64748b; margin-bottom: 20px; }
+        .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin: 40px 0; }
+        .stat-box { background: #f8fafc; padding: 30px; border-radius: 12px; text-align: center; }
+        .stat-value { font-size: 42px; font-weight: 700; color: #10b981; }
+        .stat-label { font-size: 14px; color: #64748b; margin-top: 10px; }
+        .insight-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        .insight-item { display: flex; justify-content: space-between; padding: 15px; background: #f8fafc; border-radius: 8px; margin-bottom: 8px; }
+        .insight-name { font-weight: 500; }
+        .insight-index { font-weight: 700; color: #10b981; }
+        .sponsor-item { display: inline-block; padding: 10px 20px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border-radius: 20px; margin: 5px; font-weight: 500; }
+        .footer { position: fixed; bottom: 30px; left: 60px; right: 60px; font-size: 12px; color: #94a3b8; display: flex; justify-content: space-between; }
+        @media print { .slide { page-break-after: always; } }
+    </style>
+</head>
+<body>
+    <!-- Slide 1: Title -->
+    <div class="slide">
+        <div class="logo">CROSSWALK+ | Audience Intelligence</div>
+        <h1 class="slide-title" style="font-size: 48px; margin-top: 100px;">\${profileName}</h1>
+        <p class="slide-subtitle" style="font-size: 24px;">Audience Profile & Sponsorship Opportunities</p>
+        <div style="margin-top: 60px; color: #64748b;">
+            <p>Generated: \${new Date().toLocaleDateString()}</p>
+            <p>Sample Size: n=\${formatNumber(currentProfileData.sampleSize || 0)}</p>
+            <p>Projected US Reach: \${formatNumber(currentProfileData.projectedUS || 0)}</p>
+        </div>
+    </div>
+    
+    <!-- Slide 2: Key Stats -->
+    <div class="slide">
+        <h2 class="slide-title">Audience Overview</h2>
+        <div class="stat-grid">
+            <div class="stat-box">
+                <div class="stat-value">\${formatNumber(currentProfileData.sampleSize || 0)}</div>
+                <div class="stat-label">Sample Size</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value">\${formatNumber(currentProfileData.projectedUS || 0)}</div>
+                <div class="stat-label">US Reach</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value">\${allItems.length}</div>
+                <div class="stat-label">Data Points Analyzed</div>
+            </div>
+        </div>
+        <h3 style="margin: 30px 0 15px 0; color: #1e3a5f;">Top Audience Affinities</h3>
+        <div class="insight-grid">
+            \${topAffinities.map(item => \`
+                <div class="insight-item">
+                    <span class="insight-name">\${item.name}</span>
+                    <span class="insight-index">+\${item.index - 100}%</span>
+                </div>
+            \`).join('')}
+        </div>
+    </div>
+    
+    <!-- Slide 3: Sponsorship Opportunities -->
+    <div class="slide">
+        <h2 class="slide-title">Sponsorship Opportunities</h2>
+        <p class="slide-subtitle">Categories where this audience significantly over-indexes</p>
+        <div style="margin-top: 40px;">
+            \${topSponsorCats.map(([cat, data]) => \`<span class="sponsor-item">\${cat} (+\${data.avgIndex - 100}%)</span>\`).join('')}
+        </div>
+        <h3 style="margin: 50px 0 20px 0; color: #1e3a5f;">Recommended Actions</h3>
+        <ul style="font-size: 18px; line-height: 2; margin-left: 20px;">
+            <li>Target audiences on streaming platforms where they over-index</li>
+            <li>Partner with brands in high-affinity categories</li>
+            <li>Focus media spend on channels with highest engagement</li>
+        </ul>
+    </div>
+    
+    <!-- Slide 4: Contact -->
+    <div class="slide" style="display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+        <h2 class="slide-title">Ready to Activate?</h2>
+        <p style="font-size: 20px; color: #64748b; margin-top: 20px;">Contact your Crosswalk representative for custom audience activation</p>
+        <div style="margin-top: 60px; padding: 40px; background: #f8fafc; border-radius: 16px;">
+            <p style="font-size: 24px; font-weight: 600; color: #1e3a5f;">CROSSWALK+</p>
+            <p style="color: #64748b;">Audience Intelligence Platform</p>
+        </div>
+    </div>
+</body>
+</html>\`;
+        }
+        
+        // ============================================================================
+        // SAVED VIEWS
+        // ============================================================================
+        
+        let savedViews = JSON.parse(localStorage.getItem('savedViews') || '[]');
+        
+        function toggleSavedViews() {
+            const existing = document.getElementById('savedViewsPanel');
+            if (existing) {
+                existing.remove();
+                return;
+            }
+            
+            const panel = document.createElement('div');
+            panel.id = 'savedViewsPanel';
+            panel.style.cssText = 'position: fixed; top: 100px; right: 20px; width: 300px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem; z-index: 1000; box-shadow: 0 4px 20px rgba(0,0,0,0.3);';
+            
+            panel.innerHTML = \`
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="margin: 0;">💾 Saved Views</h3>
+                    <button onclick="document.getElementById('savedViewsPanel').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem;">×</button>
+                </div>
+                <button class="btn btn-primary btn-small" onclick="saveCurrentView()" style="width: 100%; margin-bottom: 1rem;">+ Save Current View</button>
+                <div id="savedViewsList" style="max-height: 300px; overflow-y: auto;">
+                    \${renderSavedViewsList()}
+                </div>
+            \`;
+            
+            document.body.appendChild(panel);
+        }
+        
+        function renderSavedViewsList() {
+            if (savedViews.length === 0) {
+                return '<p style="color: var(--text-secondary); text-align: center; padding: 1rem;">No saved views yet</p>';
+            }
+            return savedViews.map((view, i) => \`
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: var(--bg-input); border-radius: 6px; margin-bottom: 0.5rem;">
+                    <span style="cursor: pointer; flex: 1;" onclick="loadSavedView(\${i})">\${view.name}</span>
+                    <button onclick="deleteSavedView(\${i})" style="background: none; border: none; color: #ef4444; cursor: pointer;">🗑</button>
+                </div>
+            \`).join('');
+        }
+        
+        function saveCurrentView() {
+            if (!currentS3Key && !currentProfileData) {
+                alert('Please select a profile first');
+                return;
+            }
+            
+            const name = prompt('Enter a name for this view:', currentProfileData?.name || 'My View');
+            if (!name) return;
+            
+            savedViews.push({
+                name,
+                profileKey: currentS3Key,
+                profileData: currentProfileData,
+                tab: document.querySelector('.tab-btn.active')?.textContent || 'Demographics',
+                savedAt: new Date().toISOString()
+            });
+            
+            localStorage.setItem('savedViews', JSON.stringify(savedViews));
+            document.getElementById('savedViewsList').innerHTML = renderSavedViewsList();
+            alert('View saved!');
+        }
+        
+        function loadSavedView(index) {
+            const view = savedViews[index];
+            if (!view) return;
+            
+            if (view.profileKey) {
+                loadCachedResult(view.profileKey);
+            }
+            document.getElementById('savedViewsPanel')?.remove();
+        }
+        
+        function deleteSavedView(index) {
+            if (confirm('Delete this saved view?')) {
+                savedViews.splice(index, 1);
+                localStorage.setItem('savedViews', JSON.stringify(savedViews));
+                document.getElementById('savedViewsList').innerHTML = renderSavedViewsList();
+            }
         }
         
         // Close export menu when clicking elsewhere
