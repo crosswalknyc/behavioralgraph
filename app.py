@@ -1219,7 +1219,13 @@ def index():
 
 @app.route('/api/health')
 def health_check():
-    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
+    """Quick health check endpoint."""
+    return jsonify({
+        'status': 'healthy', 
+        'timestamp': datetime.now().isoformat(),
+        'cache_ready': cache_loading_complete,
+        'cache_size': len(s3_cache.get('jobs', []))
+    })
 
 
 @app.route('/api/check-cache', methods=['POST'])
@@ -2023,15 +2029,6 @@ def extract_demographics_summary(csv_content):
 # Try to load persisted cache on startup
 if s3_client:
     load_persisted_cache()
-
-@app.route('/api/health')
-def health_check():
-    """Quick health check endpoint."""
-    return jsonify({
-        'status': 'ok',
-        'cache_ready': cache_loading_complete,
-        'cache_size': len(s3_cache.get('jobs', []))
-    })
 
 
 @app.route('/api/jobs')
