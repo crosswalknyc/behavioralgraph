@@ -343,26 +343,21 @@
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
-        /* Tab Explainer Boxes */
+        /* Tab Explainer - Minimal text only */
         .tab-explainer {
-            background: linear-gradient(135deg, #1a1f35 0%, #0d1020 100%);
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            border-radius: 12px;
-            padding: 16px 20px;
-            margin-top: 15px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: flex-start;
-            gap: 15px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            padding: 8px 0;
+            margin-bottom: 8px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
         }
         
         .explainer-icon {
-            font-size: 28px;
-            flex-shrink: 0;
-            background: rgba(99, 102, 241, 0.2);
-            padding: 10px;
-            border-radius: 10px;
+            display: none;
+        }
+        
+        .explainer-text strong {
+            color: var(--text-primary);
         }
         
         /* Tab Actions Bar */
