@@ -62,21 +62,26 @@ def get_openai_client():
     """Get or create OpenAI client - checks for API key at runtime."""
     global openai_client
     api_key = os.environ.get('OPENAI_API_KEY')
+    print(f"🔍 Checking OPENAI_API_KEY: {'Found (' + api_key[:20] + '...)' if api_key else 'NOT FOUND'}")
     if not api_key:
+        print("❌ No API key found in environment")
         return None
     if openai_client is None:
         try:
             from openai import OpenAI
             openai_client = OpenAI(api_key=api_key)
-            print("✅ OpenAI client initialized")
+            print("✅ OpenAI client initialized successfully")
         except Exception as e:
-            print(f"Warning: OpenAI client initialization failed: {e}")
+            print(f"❌ OpenAI client initialization failed: {e}")
             return None
     return openai_client
 
 # Try to initialize at startup if key exists
+print(f"🚀 Startup: OPENAI_API_KEY present = {bool(os.environ.get('OPENAI_API_KEY'))}")
 if os.environ.get('OPENAI_API_KEY'):
     get_openai_client()
+else:
+    print("⚠️ OPENAI_API_KEY not set at startup - will check at runtime")
 
 def generate_ai_insights(profile_data):
     """Generate AI-powered insights from profile data."""
