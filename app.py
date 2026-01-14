@@ -2509,6 +2509,47 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
             update_job_status(job_id, progress=85, message='Processing results...')
             
             if result_file and os.path.exists(result_file):
+                # Apply frequency analysis if requested (matches bg.py terminal behavior)
+                if include_frequency and not is_genpop:
+                    try:
+                        print("📊 Adding frequency metrics...")
+                        update_job_status(job_id, progress=87, message='Adding frequency analysis...')
+                        
+                        import pandas as pd
+                        df = pd.read_csv(result_file)
+                        
+                        # Run frequency analysis using bg module
+                        if hasattr(bg, 'get_frequency_data'):
+                            freq_df = bg.get_frequency_data(conn, brands, sample_start, sample_end)
+                            if freq_df is not None and not freq_df.empty:
+                                # Merge frequency data
+                                df = bg.merge_frequency_data(df, freq_df) if hasattr(bg, 'merge_frequency_data') else df
+                        
+                        # Apply listener/watcher/player adjustments
+                        if is_listener_watcher:
+                            if hasattr(bg, 'set_brand_input_to_csv'):
+                                df = bg.set_brand_input_to_csv(df)
+                            if platform_name and hasattr(bg, 'adjust_platform_to_100_percent'):
+                                df = bg.adjust_platform_to_100_percent(df, platform_name)
+                        
+                        df.to_csv(result_file, index=False)
+                        print("✅ Frequency analysis complete")
+                    except Exception as e:
+                        print(f"⚠️ Frequency analysis error: {e}")
+                
+                # Apply listener/watcher adjustments even without frequency analysis
+                elif is_listener_watcher:
+                    try:
+                        import pandas as pd
+                        df = pd.read_csv(result_file)
+                        if hasattr(bg, 'set_brand_input_to_csv'):
+                            df = bg.set_brand_input_to_csv(df)
+                        if platform_name and hasattr(bg, 'adjust_platform_to_100_percent'):
+                            df = bg.adjust_platform_to_100_percent(df, platform_name)
+                        df.to_csv(result_file, index=False)
+                    except Exception as e:
+                        print(f"⚠️ Listener/watcher adjustment error: {e}")
+                
                 # Validate demographics against reference if provided
                 demographic_validation = None
                 if reference_demographics:
