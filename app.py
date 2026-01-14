@@ -1773,6 +1773,57 @@ def delete_content():
         print(f"Delete error: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/admin/activity-log')
+@requires_auth
+def get_activity_log():
+    """Get activity log for collaboration hub."""
+    try:
+        limit = request.args.get('limit', 50, type=int)
+        activities = []
+        
+        # Collect activity from all users
+        data = load_users()
+        for username, user in data.get('users', {}).items():
+            user_activity = user.get('activity', {})
+            recent_actions = user_activity.get('recent_actions', [])
+            
+            for action in recent_actions:
+                activities.append({
+                    'user': username,
+                    'action': action.get('action', 'unknown'),
+                    'details': action.get('details', ''),
+                    'timestamp': action.get('timestamp', '')
+                })
+        
+        # Sort by timestamp (newest first) and limit
+        activities.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+        activities = activities[:limit]
+        
+        return jsonify({
+            'success': True,
+            'activities': activities
+        })
+        
+    except Exception as e:
+        print(f"Activity log error: {e}")
+        return jsonify({'success': False, 'error': str(e), 'activities': []})
+
+@app.route('/api/admin/users-list')
+@requires_auth
+def get_users_list():
+    """Get simple list of users for collaboration hub (non-admin can access)."""
+    try:
+        data = load_users()
+        users = []
+        for username, user in data.get('users', {}).items():
+            users.append({
+                'username': username,
+                'role': user.get('role', 'user')
+            })
+        return jsonify({'success': True, 'users': users})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'users': []})
+
 @app.route('/api/user/info')
 @requires_auth
 def get_user_info():

@@ -2287,6 +2287,505 @@
             letter-spacing: 0.5px;
         }
 
+        /* Comparison Analysis Tabs */
+        .comp-analysis-tabs {
+            display: flex;
+            gap: 0.25rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .comp-tab {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.8rem;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .comp-tab:hover {
+            background: var(--bg-input);
+            color: var(--text-primary);
+        }
+
+        .comp-tab.active {
+            background: var(--accent-cyan);
+            color: #1a1a1a;
+            font-weight: 600;
+        }
+
+        .comp-tab-content {
+            display: none;
+        }
+
+        .comp-tab-content.active {
+            display: block;
+        }
+
+        /* Overlap Analysis Styles */
+        .overlap-analysis {
+            padding: 1rem;
+        }
+
+        .overlap-header {
+            margin-bottom: 1.5rem;
+        }
+
+        .overlap-header h3 {
+            font-size: 1.2rem;
+            color: var(--accent-cyan);
+        }
+
+        .overlap-header p {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .overlap-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+
+        .overlap-card {
+            background: var(--bg-input);
+            border-radius: 8px;
+            padding: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .overlap-card h4 {
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .overlap-stat {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-lime);
+            margin-bottom: 0.5rem;
+        }
+
+        .overlap-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .overlap-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.3rem 0;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.8rem;
+        }
+
+        .overlap-item:last-child {
+            border-bottom: none;
+        }
+
+        /* Benchmark Styles */
+        .benchmark-analysis {
+            padding: 1rem;
+        }
+
+        .benchmark-header {
+            margin-bottom: 1.5rem;
+        }
+
+        .benchmark-header h3 {
+            font-size: 1.2rem;
+            color: var(--accent-cyan);
+        }
+
+        .benchmark-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .benchmark-card {
+            background: var(--bg-input);
+            border-radius: 8px;
+            padding: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .benchmark-card h4 {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .benchmark-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .benchmark-value.positive {
+            color: var(--accent-green);
+        }
+
+        .benchmark-value.negative {
+            color: var(--accent-red);
+        }
+
+        .radar-chart-container {
+            height: 300px;
+            margin: 1rem 0;
+        }
+
+        /* Key Insights Styles */
+        .key-insights-analysis {
+            padding: 1rem;
+        }
+
+        .insights-header {
+            margin-bottom: 1.5rem;
+        }
+
+        .insight-card {
+            background: var(--bg-input);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--accent-cyan);
+        }
+
+        .insight-card h4 {
+            font-size: 0.9rem;
+            color: var(--accent-cyan);
+            margin-bottom: 0.5rem;
+        }
+
+        .insight-card p {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .insight-action {
+            background: rgba(200, 255, 0, 0.1);
+            border: 1px solid rgba(200, 255, 0, 0.3);
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-top: 0.75rem;
+        }
+
+        .insight-action strong {
+            color: var(--accent-lime);
+        }
+
+        /* Collaboration Hub Styles */
+        .collab-container {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            gap: 1rem;
+            min-height: 70vh;
+        }
+
+        .collab-sidebar {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .collab-sidebar h3 {
+            font-size: 0.9rem;
+            color: var(--accent-cyan);
+            margin-bottom: 0.75rem;
+        }
+
+        .workspace-list {
+            margin-bottom: 0.5rem;
+        }
+
+        .workspace-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .workspace-item:hover {
+            background: var(--bg-input);
+        }
+
+        .workspace-item.active {
+            background: rgba(0, 217, 255, 0.1);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+        }
+
+        .team-members-list {
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .team-member {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem;
+            font-size: 0.85rem;
+        }
+
+        .team-member-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .collab-main {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .collab-tabs {
+            display: flex;
+            gap: 0.25rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+
+        .collab-tab {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.85rem;
+            border-radius: 4px;
+        }
+
+        .collab-tab:hover {
+            background: var(--bg-input);
+        }
+
+        .collab-tab.active {
+            background: var(--accent-cyan);
+            color: #1a1a1a;
+            font-weight: 600;
+        }
+
+        .collab-tab-content {
+            display: none;
+        }
+
+        .collab-tab-content.active {
+            display: block;
+        }
+
+        .collab-empty {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+
+        .shared-profiles-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .shared-profiles-list {
+            min-height: 200px;
+        }
+
+        .shared-profile-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background: var(--bg-input);
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+        }
+
+        .shared-profile-info h4 {
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+
+        .shared-profile-info p {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .comments-section {
+            min-height: 400px;
+        }
+
+        .comments-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .comments-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+        }
+
+        .comment-item {
+            background: var(--bg-input);
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .comment-author {
+            font-weight: 600;
+            color: var(--accent-cyan);
+            font-size: 0.85rem;
+        }
+
+        .comment-time {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+        }
+
+        .comment-text {
+            font-size: 0.85rem;
+            color: var(--text-primary);
+        }
+
+        .add-comment-form {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .add-comment-form textarea {
+            flex: 1;
+            min-height: 60px;
+            resize: vertical;
+        }
+
+        .activity-log {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .activity-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .activity-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-input);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .activity-content {
+            flex: 1;
+        }
+
+        .activity-content p {
+            font-size: 0.85rem;
+            color: var(--text-primary);
+        }
+
+        .activity-time {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* Executive Summary Modal */
+        .summary-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .summary-modal-content {
+            background: var(--bg-card);
+            border-radius: 12px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 2rem;
+        }
+
+        .summary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .summary-section {
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .summary-section h3 {
+            color: var(--accent-cyan);
+            margin-bottom: 0.75rem;
+        }
+
+        .summary-bullets {
+            list-style: none;
+            padding: 0;
+        }
+
+        .summary-bullets li {
+            padding: 0.4rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+            color: var(--text-secondary);
+        }
+
+        .summary-bullets li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: var(--accent-lime);
+        }
+
         /* Profile Report Styles */
         .profile-report-container {
             display: grid;
@@ -2840,6 +3339,7 @@
                 <button class="tab-btn" onclick="showTab('content')">🎬 Content Dev</button>
                 <button class="tab-btn" onclick="showTab('segmentation')">🎯 Segment Builder</button>
                 <button class="tab-btn" onclick="showTab('comparison')">📊 Comparison</button>
+                <button class="tab-btn" onclick="showTab('collaboration')">👥 Collaborate</button>
             </div>
 
             <!-- Demographics Tab -->
@@ -3523,21 +4023,37 @@
                 <div class="tab-explainer">
                     <div class="explainer-icon">⚖️</div>
                     <div class="explainer-text">
-                        <strong>Comparison</strong> — Compare 2+ profiles side-by-side. Select profiles from left panel, view demographics/behaviors in parallel. Click column headers to sort. Toggle between % and US population numbers.
+                        <strong>Comparison</strong> — Compare profiles side-by-side with overlap analysis. Current profile and Gen Pop are auto-selected. View shared behaviors, unique traits, and benchmark against population. Use <strong>📊 Executive Summary</strong> for one-click reports.
                     </div>
                 </div>
                 <div class="comparison-header">
                     <h1 class="comp-title">COMPARISON</h1>
-                    <div class="comp-mode-toggle" id="displayModeToggle" onclick="toggleDisplayMode()" title="Click to toggle between percentages and US population numbers">
-                        <span id="displayModeLabel">US %</span>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <button class="btn btn-small" onclick="generateExecutiveSummary()" title="Generate Executive Summary">📄 Executive Summary</button>
+                        <button class="btn btn-small" onclick="shareComparison()" title="Share this comparison">🔗 Share</button>
+                        <div class="comp-mode-toggle" id="displayModeToggle" onclick="toggleDisplayMode()" title="Click to toggle between percentages and US population numbers">
+                            <span id="displayModeLabel">US %</span>
+                        </div>
                     </div>
                 </div>
+                
+                <!-- Comparison Analysis Tabs -->
+                <div class="comp-analysis-tabs">
+                    <button class="comp-tab active" onclick="showCompTab('tables')">📊 Side-by-Side</button>
+                    <button class="comp-tab" onclick="showCompTab('overlap')">🔄 Overlap Analysis</button>
+                    <button class="comp-tab" onclick="showCompTab('benchmark')">📈 Benchmarking</button>
+                    <button class="comp-tab" onclick="showCompTab('insights')">💡 Key Insights</button>
+                </div>
+                
                 <!-- Comparison Report View -->
                 <div id="comparisonReportView" class="report-view" style="display: block;">
                     <div class="comparison-container">
                         <div class="comparison-sidebar">
                             <div class="sidebar-section">
-                                <h3>Category + Profile</h3>
+                                <h3>Select Profiles</h3>
+                                <div style="background: rgba(0,217,255,0.1); border: 1px solid rgba(0,217,255,0.3); border-radius: 6px; padding: 0.5rem; margin-bottom: 0.75rem; font-size: 0.75rem;">
+                                    💡 <strong>Current profile</strong> and <strong>Gen Pop</strong> are auto-selected for comparison
+                                </div>
                                 <div style="position: relative; margin-bottom: 0.75rem;">
                                     <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
                                     <input type="text" id="compSearchInput" placeholder="Search profiles" oninput="filterComparisonProfiles()" style="padding-left: 32px; width: 100%; box-sizing: border-box;">
@@ -3565,15 +4081,145 @@
                             <button class="btn btn-small" style="margin-top: 0.5rem; width: 100%; background: var(--bg-dark);" onclick="clearComparison()">CLEAR ALL</button>
                         </div>
                         <div class="comparison-main">
-                            <div id="comparisonResults">
-                                <div class="comparison-empty">
-                                    <p>Select profiles from the left and click "Compare Selected"</p>
+                            <!-- Side-by-Side Tables Tab -->
+                            <div id="comp-tab-tables" class="comp-tab-content active">
+                                <div id="comparisonResults">
+                                    <div class="comparison-empty">
+                                        <p>Select profiles from the left and click "Compare Selected"</p>
+                                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Current profile and Gen Pop are auto-selected when you switch to this tab</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Overlap Analysis Tab -->
+                            <div id="comp-tab-overlap" class="comp-tab-content">
+                                <div class="overlap-analysis">
+                                    <div class="overlap-header">
+                                        <h3>🔄 Audience Overlap Analysis</h3>
+                                        <p>Discover shared behaviors and unique differentiators between profiles</p>
+                                    </div>
+                                    <div id="overlapContent">
+                                        <div class="comparison-empty">
+                                            <p>Run a comparison to see overlap analysis</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Benchmarking Tab -->
+                            <div id="comp-tab-benchmark" class="comp-tab-content">
+                                <div class="benchmark-analysis">
+                                    <div class="benchmark-header">
+                                        <h3>📈 Competitive Benchmarking</h3>
+                                        <p>Compare selected profiles against General Population and category averages</p>
+                                    </div>
+                                    <div id="benchmarkContent">
+                                        <div class="comparison-empty">
+                                            <p>Run a comparison to see benchmarking data</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Key Insights Tab -->
+                            <div id="comp-tab-insights" class="comp-tab-content">
+                                <div class="key-insights-analysis">
+                                    <div class="insights-header">
+                                        <h3>💡 Key Insights & Action Items</h3>
+                                        <p>AI-generated insights based on comparison data</p>
+                                    </div>
+                                    <div id="compInsightsContent">
+                                        <div class="comparison-empty">
+                                            <p>Run a comparison to generate insights</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
+            </div>
+            
+            <!-- Collaboration Hub Tab -->
+            <div id="tab-collaboration" class="tab-content">
+                <div class="tab-explainer">
+                    <div class="explainer-icon">👥</div>
+                    <div class="explainer-text">
+                        <strong>Collaboration Hub</strong> — Share profiles with team members, add comments and annotations, track who viewed what. <span class="highlight-cyan">Create shared workspaces</span> for cross-team collaboration.
+                    </div>
+                </div>
+                <div class="collab-container">
+                    <div class="collab-sidebar">
+                        <h3>📁 Shared Workspaces</h3>
+                        <div id="workspaceList" class="workspace-list">
+                            <div class="workspace-item active" onclick="selectWorkspace('default')">
+                                <span class="workspace-icon">🏠</span>
+                                <span class="workspace-name">My Workspace</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-small" style="width: 100%; margin-top: 0.5rem;" onclick="createWorkspace()">+ New Workspace</button>
+                        
+                        <h3 style="margin-top: 1.5rem;">👤 Team Members</h3>
+                        <div id="teamMembersList" class="team-members-list">
+                            <div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">Loading team...</div>
+                        </div>
+                        <button class="btn btn-small" style="width: 100%; margin-top: 0.5rem;" onclick="inviteTeamMember()">+ Invite Member</button>
+                    </div>
+                    
+                    <div class="collab-main">
+                        <div class="collab-tabs">
+                            <button class="collab-tab active" onclick="showCollabTab('shared')">📤 Shared Profiles</button>
+                            <button class="collab-tab" onclick="showCollabTab('comments')">💬 Comments</button>
+                            <button class="collab-tab" onclick="showCollabTab('activity')">📋 Activity Log</button>
+                        </div>
+                        
+                        <div id="collab-tab-shared" class="collab-tab-content active">
+                            <div class="shared-profiles-header">
+                                <h3>Shared Profiles</h3>
+                                <button class="btn btn-primary btn-small" onclick="shareCurrentProfile()">+ Share Profile</button>
+                            </div>
+                            <div id="sharedProfilesList" class="shared-profiles-list">
+                                <div class="collab-empty">
+                                    <p>No shared profiles yet</p>
+                                    <p style="font-size: 0.8rem; color: var(--text-secondary);">Click "Share Profile" to share the current profile with your team</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="collab-tab-comments" class="collab-tab-content">
+                            <div class="comments-section">
+                                <div class="comments-header">
+                                    <h3>Comments & Annotations</h3>
+                                    <select id="commentProfileFilter" onchange="filterComments()">
+                                        <option value="all">All Profiles</option>
+                                    </select>
+                                </div>
+                                <div id="commentsList" class="comments-list">
+                                    <div class="collab-empty">
+                                        <p>No comments yet</p>
+                                    </div>
+                                </div>
+                                <div class="add-comment-form">
+                                    <textarea id="newCommentText" placeholder="Add a comment or annotation..."></textarea>
+                                    <button class="btn btn-primary" onclick="addComment()">Post Comment</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="collab-tab-activity" class="collab-tab-content">
+                            <div class="activity-section">
+                                <h3>Activity Log</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Track who viewed, shared, and exported profiles</p>
+                                <div id="activityLog" class="activity-log">
+                                    <div class="collab-empty">
+                                        <p>No activity recorded yet</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -3665,6 +4311,10 @@
                 // Default to comparison report view
                 setCompReportType('comparison');
                 loadComparisonProfiles();
+            }
+            
+            if (tabName === 'collaboration') {
+                initCollaboration();
             }
         }
 
@@ -7904,7 +8554,34 @@
             }
             
             comparisonProfiles = allJobs.filter(j => j.status === 'cached' || j.status === 'completed');
+            
+            // Auto-select current profile + GenPop if available
+            autoSelectDefaultProfiles();
+            
             renderComparisonProfiles(comparisonProfiles);
+        }
+        
+        function autoSelectDefaultProfiles() {
+            // Clear existing selections first time only
+            if (selectedForComparison.size === 0) {
+                // Add current profile if we have one
+                if (currentS3Key) {
+                    selectedForComparison.add(currentS3Key);
+                }
+                
+                // Try to find and add Gen Pop profile
+                const genPopProfile = comparisonProfiles.find(p => {
+                    const name = (p.project_name || p.s3_key || '').toLowerCase();
+                    return name.includes('gen pop') || name.includes('genpop') || name.includes('general population') || name.includes('us_population');
+                });
+                
+                if (genPopProfile) {
+                    const genPopId = genPopProfile.s3_key || genPopProfile.job_id;
+                    selectedForComparison.add(genPopId);
+                }
+                
+                updateSelectedCount();
+            }
         }
 
         function getProfileFullName(profile) {
@@ -9249,6 +9926,677 @@
                     </tr>
                 `;
             }).join('');
+        }
+
+        // ============================================================================
+        // COMPARISON TAB SWITCHING & ANALYSIS
+        // ============================================================================
+        
+        function showCompTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.comp-tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Update tab content
+            document.querySelectorAll('.comp-tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById('comp-tab-' + tabName).classList.add('active');
+            
+            // Generate content if needed
+            if (tabName === 'overlap' && window.comparisonProfilesData) {
+                renderOverlapAnalysis(window.comparisonProfilesData);
+            } else if (tabName === 'benchmark' && window.comparisonProfilesData) {
+                renderBenchmarkAnalysis(window.comparisonProfilesData);
+            } else if (tabName === 'insights' && window.comparisonProfilesData) {
+                renderComparisonInsights(window.comparisonProfilesData);
+            }
+        }
+        
+        function renderOverlapAnalysis(profiles) {
+            if (!profiles || profiles.length < 2) {
+                document.getElementById('overlapContent').innerHTML = '<div class="comparison-empty"><p>Select at least 2 profiles to see overlap analysis</p></div>';
+                return;
+            }
+            
+            // Find shared behaviors (present in all profiles with index > 100)
+            const allBehaviors = {};
+            profiles.forEach(p => {
+                if (p.behavioral) {
+                    Object.entries(p.behavioral).forEach(([cat, items]) => {
+                        items.forEach(item => {
+                            const key = cat + '|' + item.name;
+                            if (!allBehaviors[key]) {
+                                allBehaviors[key] = { name: item.name, category: cat, profiles: [], avgIndex: 0 };
+                            }
+                            if (item.index > 100) {
+                                allBehaviors[key].profiles.push(p.name);
+                                allBehaviors[key].avgIndex += item.index;
+                            }
+                        });
+                    });
+                }
+            });
+            
+            // Shared = present in ALL profiles
+            const shared = Object.values(allBehaviors)
+                .filter(b => b.profiles.length === profiles.length)
+                .map(b => ({ ...b, avgIndex: Math.round(b.avgIndex / b.profiles.length) }))
+                .sort((a, b) => b.avgIndex - a.avgIndex)
+                .slice(0, 15);
+            
+            // Unique to each profile
+            const uniqueByProfile = {};
+            profiles.forEach(p => {
+                uniqueByProfile[p.name] = Object.values(allBehaviors)
+                    .filter(b => b.profiles.length === 1 && b.profiles[0] === p.name)
+                    .sort((a, b) => b.avgIndex - a.avgIndex)
+                    .slice(0, 10);
+            });
+            
+            // Calculate overlap percentage
+            const totalBehaviors = Object.keys(allBehaviors).length;
+            const sharedCount = shared.length;
+            const overlapPct = totalBehaviors > 0 ? Math.round((sharedCount / totalBehaviors) * 100) : 0;
+            
+            let html = `
+                <div class="overlap-grid">
+                    <div class="overlap-card" style="grid-column: 1 / -1;">
+                        <h4>📊 Overlap Summary</h4>
+                        <div style="display: flex; gap: 2rem; align-items: center;">
+                            <div>
+                                <div class="overlap-stat">${overlapPct}%</div>
+                                <div style="color: var(--text-secondary); font-size: 0.85rem;">Behavioral Overlap</div>
+                            </div>
+                            <div style="flex: 1;">
+                                <div style="background: var(--bg-dark); height: 20px; border-radius: 10px; overflow: hidden;">
+                                    <div style="width: ${overlapPct}%; height: 100%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-lime));"></div>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-secondary);">
+                                    <span>${sharedCount} shared behaviors</span>
+                                    <span>${totalBehaviors} total analyzed</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="overlap-card">
+                        <h4>🤝 Shared Over-Indexing Behaviors</h4>
+                        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                            Behaviors where ALL selected profiles over-index (index > 100)
+                        </p>
+                        <div class="overlap-list">
+                            ${shared.length ? shared.map(b => `
+                                <div class="overlap-item">
+                                    <span>${b.name}</span>
+                                    <span style="color: var(--accent-green); font-weight: 600;">${b.avgIndex}</span>
+                                </div>
+                            `).join('') : '<div style="color: var(--text-secondary); font-size: 0.8rem;">No shared over-indexing behaviors found</div>'}
+                        </div>
+                    </div>
+                    
+                    ${profiles.map(p => `
+                        <div class="overlap-card">
+                            <h4 style="color: ${p.color};">🎯 Unique to ${p.name}</h4>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                                Behaviors where ONLY this profile over-indexes
+                            </p>
+                            <div class="overlap-list">
+                                ${uniqueByProfile[p.name]?.length ? uniqueByProfile[p.name].map(b => `
+                                    <div class="overlap-item">
+                                        <span>${b.name}</span>
+                                        <span style="color: var(--accent-green); font-weight: 600;">${b.avgIndex}</span>
+                                    </div>
+                                `).join('') : '<div style="color: var(--text-secondary); font-size: 0.8rem;">No unique behaviors</div>'}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            document.getElementById('overlapContent').innerHTML = html;
+        }
+        
+        function renderBenchmarkAnalysis(profiles) {
+            if (!profiles || profiles.length < 1) {
+                document.getElementById('benchmarkContent').innerHTML = '<div class="comparison-empty"><p>Run a comparison to see benchmarking data</p></div>';
+                return;
+            }
+            
+            // Calculate aggregate metrics for each profile
+            const benchmarks = profiles.map(p => {
+                const allItems = [];
+                if (p.behavioral) {
+                    Object.values(p.behavioral).forEach(items => {
+                        items.forEach(item => allItems.push(item));
+                    });
+                }
+                
+                const avgIndex = allItems.length ? Math.round(allItems.reduce((sum, i) => sum + (i.index || 0), 0) / allItems.length) : 0;
+                const overIndexCount = allItems.filter(i => i.index > 100).length;
+                const underIndexCount = allItems.filter(i => i.index < 100).length;
+                const strongOverIndex = allItems.filter(i => i.index > 200).length;
+                
+                return {
+                    name: p.name,
+                    color: p.color,
+                    sampleSize: p.sampleSize || 0,
+                    avgIndex,
+                    overIndexCount,
+                    underIndexCount,
+                    strongOverIndex,
+                    totalBehaviors: allItems.length
+                };
+            });
+            
+            let html = `
+                <div class="benchmark-grid">
+                    ${benchmarks.map(b => `
+                        <div class="overlap-card">
+                            <h4 style="color: ${b.color};">${b.name}</h4>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                                <div>
+                                    <div class="benchmark-value ${b.avgIndex >= 100 ? 'positive' : 'negative'}">${b.avgIndex}</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Avg Index</div>
+                                </div>
+                                <div>
+                                    <div class="benchmark-value" style="color: var(--accent-cyan);">${formatNumber(b.sampleSize)}</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Sample Size</div>
+                                </div>
+                                <div>
+                                    <div class="benchmark-value positive">+${b.overIndexCount}</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Over-Indexing</div>
+                                </div>
+                                <div>
+                                    <div class="benchmark-value negative">-${b.underIndexCount}</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Under-Indexing</div>
+                                </div>
+                            </div>
+                            <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                                <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                                    <span>Strong Over-Index (200+)</span>
+                                    <span style="color: var(--accent-lime); font-weight: 600;">${b.strongOverIndex}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div class="overlap-card" style="margin-top: 1rem;">
+                    <h4>📈 Comparative Metrics</h4>
+                    <table class="comp-table" style="width: 100%; margin-top: 1rem;">
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                ${benchmarks.map(b => `<th style="color: ${b.color};">${b.name.substring(0, 15)}...</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Average Index</td>
+                                ${benchmarks.map(b => `<td style="color: ${b.avgIndex >= 100 ? 'var(--accent-green)' : 'var(--accent-red)'}; font-weight: 600;">${b.avgIndex}</td>`).join('')}
+                            </tr>
+                            <tr>
+                                <td>Behaviors Analyzed</td>
+                                ${benchmarks.map(b => `<td>${b.totalBehaviors}</td>`).join('')}
+                            </tr>
+                            <tr>
+                                <td>Over vs Under Ratio</td>
+                                ${benchmarks.map(b => {
+                                    const ratio = b.underIndexCount > 0 ? (b.overIndexCount / b.underIndexCount).toFixed(1) : b.overIndexCount;
+                                    return `<td style="color: ${ratio >= 1 ? 'var(--accent-green)' : 'var(--accent-red)'};">${ratio}:1</td>`;
+                                }).join('')}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            document.getElementById('benchmarkContent').innerHTML = html;
+        }
+        
+        function renderComparisonInsights(profiles) {
+            if (!profiles || profiles.length < 1) {
+                document.getElementById('compInsightsContent').innerHTML = '<div class="comparison-empty"><p>Run a comparison to generate insights</p></div>';
+                return;
+            }
+            
+            const insights = [];
+            
+            // Analyze shared behaviors
+            if (profiles.length >= 2) {
+                const sharedBehaviors = findSharedBehaviors(profiles);
+                if (sharedBehaviors.length > 0) {
+                    insights.push({
+                        title: '🤝 Cross-Audience Opportunity',
+                        text: `These audiences share strong affinity for: ${sharedBehaviors.slice(0, 5).map(b => b.name).join(', ')}. This suggests potential for cross-promotional campaigns or shared sponsorship targeting.`,
+                        action: `Consider unified campaigns targeting these shared interests to maximize reach across both audiences.`
+                    });
+                }
+            }
+            
+            // Find biggest differentiators
+            profiles.forEach(p => {
+                const topBehaviors = getTopBehaviors(p, 3);
+                if (topBehaviors.length > 0) {
+                    insights.push({
+                        title: `🎯 ${p.name} Key Differentiator`,
+                        text: `This audience distinctively over-indexes on: ${topBehaviors.map(b => b.name + ' (' + b.index + ')').join(', ')}.`,
+                        action: `Target these specific behaviors for ${p.name}-focused campaigns.`
+                    });
+                }
+            });
+            
+            // Sample size comparison
+            const sampleSizes = profiles.map(p => ({ name: p.name, size: p.sampleSize || 0 }));
+            const maxSample = Math.max(...sampleSizes.map(s => s.size));
+            const minSample = Math.min(...sampleSizes.map(s => s.size));
+            if (maxSample > minSample * 2) {
+                insights.push({
+                    title: '📊 Sample Size Variance',
+                    text: `Significant sample size difference detected. ${sampleSizes.find(s => s.size === maxSample).name} has ${formatNumber(maxSample)} vs ${sampleSizes.find(s => s.size === minSample).name} with ${formatNumber(minSample)}.`,
+                    action: `Consider statistical confidence when comparing smaller sample audiences.`
+                });
+            }
+            
+            const html = `
+                <div>
+                    ${insights.map(i => `
+                        <div class="insight-card">
+                            <h4>${i.title}</h4>
+                            <p>${i.text}</p>
+                            <div class="insight-action">
+                                <strong>Action:</strong> ${i.action}
+                            </div>
+                        </div>
+                    `).join('')}
+                    
+                    ${insights.length === 0 ? '<div class="comparison-empty"><p>Add more profiles to generate comparison insights</p></div>' : ''}
+                </div>
+            `;
+            
+            document.getElementById('compInsightsContent').innerHTML = html;
+        }
+        
+        function findSharedBehaviors(profiles) {
+            const behaviorCounts = {};
+            profiles.forEach(p => {
+                if (p.behavioral) {
+                    Object.values(p.behavioral).forEach(items => {
+                        items.forEach(item => {
+                            if (item.index > 100) {
+                                if (!behaviorCounts[item.name]) {
+                                    behaviorCounts[item.name] = { name: item.name, count: 0, totalIndex: 0 };
+                                }
+                                behaviorCounts[item.name].count++;
+                                behaviorCounts[item.name].totalIndex += item.index;
+                            }
+                        });
+                    });
+                }
+            });
+            return Object.values(behaviorCounts)
+                .filter(b => b.count === profiles.length)
+                .map(b => ({ ...b, avgIndex: Math.round(b.totalIndex / b.count) }))
+                .sort((a, b) => b.avgIndex - a.avgIndex);
+        }
+        
+        function getTopBehaviors(profile, count) {
+            const allItems = [];
+            if (profile.behavioral) {
+                Object.values(profile.behavioral).forEach(items => {
+                    items.forEach(item => allItems.push(item));
+                });
+            }
+            return allItems.sort((a, b) => (b.index || 0) - (a.index || 0)).slice(0, count);
+        }
+        
+        // ============================================================================
+        // EXECUTIVE SUMMARY GENERATOR
+        // ============================================================================
+        
+        function generateExecutiveSummary() {
+            if (!window.comparisonProfilesData || window.comparisonProfilesData.length === 0) {
+                alert('Please run a comparison first to generate an executive summary.');
+                return;
+            }
+            
+            const profiles = window.comparisonProfilesData;
+            const shared = findSharedBehaviors(profiles);
+            
+            // Build summary content
+            let summaryHTML = `
+                <div class="summary-modal" onclick="if(event.target === this) closeSummaryModal()">
+                    <div class="summary-modal-content">
+                        <div class="summary-header">
+                            <h2>📄 Executive Summary</h2>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-small" onclick="copySummaryToClipboard()">📋 Copy</button>
+                                <button class="btn btn-small" onclick="printSummary()">🖨️ Print</button>
+                                <button class="btn btn-small" onclick="closeSummaryModal()">✕ Close</button>
+                            </div>
+                        </div>
+                        
+                        <div class="summary-section">
+                            <h3>Overview</h3>
+                            <p>Comparison of ${profiles.length} audience profiles: ${profiles.map(p => p.name).join(', ')}</p>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem;">Generated on ${new Date().toLocaleDateString()}</p>
+                        </div>
+                        
+                        <div class="summary-section">
+                            <h3>Key Metrics</h3>
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="border-bottom: 1px solid var(--border-color);">
+                                        <th style="text-align: left; padding: 0.5rem;">Profile</th>
+                                        <th style="text-align: right; padding: 0.5rem;">Sample Size</th>
+                                        <th style="text-align: right; padding: 0.5rem;">Avg Index</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${profiles.map(p => {
+                                        const items = [];
+                                        if (p.behavioral) Object.values(p.behavioral).forEach(arr => arr.forEach(i => items.push(i)));
+                                        const avgIndex = items.length ? Math.round(items.reduce((sum, i) => sum + (i.index || 0), 0) / items.length) : 0;
+                                        return `
+                                            <tr style="border-bottom: 1px solid var(--border-color);">
+                                                <td style="padding: 0.5rem;">${p.name}</td>
+                                                <td style="text-align: right; padding: 0.5rem;">${formatNumber(p.sampleSize || 0)}</td>
+                                                <td style="text-align: right; padding: 0.5rem; color: ${avgIndex >= 100 ? 'var(--accent-green)' : 'var(--accent-red)'};">${avgIndex}</td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        ${profiles.length >= 2 ? `
+                        <div class="summary-section">
+                            <h3>Shared Characteristics</h3>
+                            <p>Top behaviors where all profiles over-index:</p>
+                            <ul class="summary-bullets">
+                                ${shared.slice(0, 8).map(b => `<li>${b.name} (avg index: ${b.avgIndex})</li>`).join('')}
+                                ${shared.length === 0 ? '<li>No shared over-indexing behaviors found</li>' : ''}
+                            </ul>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="summary-section">
+                            <h3>Profile Highlights</h3>
+                            ${profiles.map(p => {
+                                const top = getTopBehaviors(p, 5);
+                                return `
+                                    <div style="margin-bottom: 1rem;">
+                                        <h4 style="color: ${p.color}; font-size: 0.95rem;">${p.name}</h4>
+                                        <ul class="summary-bullets">
+                                            ${top.map(b => `<li>${b.name} - Index: ${b.index}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        
+                        <div class="summary-section" style="border-bottom: none;">
+                            <h3>Recommendations</h3>
+                            <ul class="summary-bullets">
+                                ${shared.length > 3 ? `<li>Strong overlap detected - consider unified cross-audience campaigns</li>` : ''}
+                                <li>Focus media spend on channels with highest behavioral indexes</li>
+                                <li>Use shared behaviors for broad reach, unique behaviors for targeted messaging</li>
+                                ${profiles.some(p => (p.sampleSize || 0) < 5000) ? `<li>Some profiles have smaller sample sizes - validate with additional data sources</li>` : ''}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Add to page
+            document.body.insertAdjacentHTML('beforeend', summaryHTML);
+        }
+        
+        function closeSummaryModal() {
+            const modal = document.querySelector('.summary-modal');
+            if (modal) modal.remove();
+        }
+        
+        function copySummaryToClipboard() {
+            const content = document.querySelector('.summary-modal-content');
+            const text = content.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Summary copied to clipboard!');
+            });
+        }
+        
+        function printSummary() {
+            const content = document.querySelector('.summary-modal-content').innerHTML;
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html>
+                <head>
+                    <title>Executive Summary</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 2rem; }
+                        h2, h3, h4 { color: #1a1a1a; }
+                        table { width: 100%; border-collapse: collapse; }
+                        th, td { padding: 0.5rem; border-bottom: 1px solid #ddd; }
+                        .summary-bullets { list-style: disc; margin-left: 1.5rem; }
+                        .summary-bullets li { margin-bottom: 0.3rem; }
+                    </style>
+                </head>
+                <body>${content}</body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
+        }
+        
+        function shareComparison() {
+            const profiles = Array.from(selectedForComparison);
+            if (profiles.length === 0) {
+                alert('Please select profiles and run a comparison first.');
+                return;
+            }
+            
+            // Create shareable link with profile IDs
+            const shareUrl = window.location.origin + '/comparison?profiles=' + encodeURIComponent(profiles.join(','));
+            navigator.clipboard.writeText(shareUrl).then(() => {
+                alert('Share link copied to clipboard!\n\n' + shareUrl);
+            }).catch(() => {
+                prompt('Copy this share link:', shareUrl);
+            });
+        }
+        
+        // ============================================================================
+        // COLLABORATION HUB FUNCTIONS
+        // ============================================================================
+        
+        let currentWorkspace = 'default';
+        let workspaceData = {
+            shared: [],
+            comments: [],
+            activity: []
+        };
+        
+        function showCollabTab(tabName) {
+            document.querySelectorAll('.collab-tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            document.querySelectorAll('.collab-tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById('collab-tab-' + tabName).classList.add('active');
+            
+            if (tabName === 'activity') {
+                loadActivityLog();
+            }
+        }
+        
+        function selectWorkspace(id) {
+            currentWorkspace = id;
+            document.querySelectorAll('.workspace-item').forEach(w => w.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            loadWorkspaceData();
+        }
+        
+        function createWorkspace() {
+            const name = prompt('Enter workspace name:');
+            if (name && name.trim()) {
+                const id = 'ws_' + Date.now();
+                const html = `
+                    <div class="workspace-item" onclick="selectWorkspace('${id}')">
+                        <span class="workspace-icon">📁</span>
+                        <span class="workspace-name">${name}</span>
+                    </div>
+                `;
+                document.getElementById('workspaceList').insertAdjacentHTML('beforeend', html);
+                alert('Workspace "' + name + '" created!');
+            }
+        }
+        
+        function inviteTeamMember() {
+            const email = prompt('Enter team member email:');
+            if (email && email.includes('@')) {
+                // Add to team list
+                const initials = email.substring(0, 2).toUpperCase();
+                const html = `
+                    <div class="team-member">
+                        <div class="team-member-avatar">${initials}</div>
+                        <span>${email.split('@')[0]}</span>
+                    </div>
+                `;
+                document.getElementById('teamMembersList').innerHTML = html + document.getElementById('teamMembersList').innerHTML;
+                alert('Invitation sent to ' + email);
+            }
+        }
+        
+        function shareCurrentProfile() {
+            if (!currentProfileData && !currentS3Key) {
+                alert('Please select a profile to share.');
+                return;
+            }
+            
+            const profileName = currentProfileData?.name || currentS3Key || 'Unknown Profile';
+            const html = `
+                <div class="shared-profile-item">
+                    <div class="shared-profile-info">
+                        <h4>${profileName}</h4>
+                        <p>Shared by {{ username }} • ${new Date().toLocaleDateString()}</p>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-small" onclick="viewSharedProfile('${currentS3Key}')">View</button>
+                    </div>
+                </div>
+            `;
+            
+            const list = document.getElementById('sharedProfilesList');
+            if (list.querySelector('.collab-empty')) {
+                list.innerHTML = '';
+            }
+            list.insertAdjacentHTML('afterbegin', html);
+            
+            // Track activity
+            workspaceData.activity.unshift({
+                action: 'shared',
+                user: '{{ username }}',
+                profile: profileName,
+                time: new Date().toISOString()
+            });
+            
+            alert('Profile shared with workspace!');
+        }
+        
+        function viewSharedProfile(key) {
+            if (key) {
+                loadExistingResultToCompare(key);
+            }
+        }
+        
+        function addComment() {
+            const text = document.getElementById('newCommentText').value.trim();
+            if (!text) {
+                alert('Please enter a comment.');
+                return;
+            }
+            
+            const comment = {
+                author: '{{ username }}',
+                text: text,
+                time: new Date().toISOString(),
+                profile: currentProfileData?.name || 'General'
+            };
+            
+            workspaceData.comments.unshift(comment);
+            
+            const html = `
+                <div class="comment-item">
+                    <div class="comment-header">
+                        <span class="comment-author">${comment.author}</span>
+                        <span class="comment-time">${new Date(comment.time).toLocaleString()}</span>
+                    </div>
+                    <div class="comment-text">${comment.text}</div>
+                    <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                        Re: ${comment.profile}
+                    </div>
+                </div>
+            `;
+            
+            const list = document.getElementById('commentsList');
+            if (list.querySelector('.collab-empty')) {
+                list.innerHTML = '';
+            }
+            list.insertAdjacentHTML('afterbegin', html);
+            
+            document.getElementById('newCommentText').value = '';
+        }
+        
+        function loadActivityLog() {
+            const log = document.getElementById('activityLog');
+            
+            // Fetch from backend
+            fetch('/api/admin/activity-log?limit=50').then(r => r.json()).then(data => {
+                if (data.activities && data.activities.length > 0) {
+                    log.innerHTML = data.activities.map(a => `
+                        <div class="activity-item">
+                            <div class="activity-icon">${getActivityIcon(a.action)}</div>
+                            <div class="activity-content">
+                                <p><strong>${a.user || 'Unknown'}</strong> ${a.action.replace(/_/g, ' ')}</p>
+                                <span class="activity-time">${new Date(a.timestamp).toLocaleString()}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    log.innerHTML = '<div class="collab-empty"><p>No recent activity</p></div>';
+                }
+            }).catch(() => {
+                log.innerHTML = '<div class="collab-empty"><p>Could not load activity log</p></div>';
+            });
+        }
+        
+        function getActivityIcon(action) {
+            const icons = {
+                'view_profile': '👁️',
+                'export_data': '📥',
+                'run_analysis': '🔬',
+                'shared': '📤',
+                'login': '🔐',
+                'comment': '💬'
+            };
+            return icons[action] || '📋';
+        }
+        
+        function loadWorkspaceData() {
+            // Load team members
+            fetch('/api/admin/users').then(r => r.json()).then(data => {
+                if (data.users) {
+                    const list = document.getElementById('teamMembersList');
+                    list.innerHTML = data.users.map(u => `
+                        <div class="team-member">
+                            <div class="team-member-avatar">${u.username.substring(0, 2).toUpperCase()}</div>
+                            <span>${u.username}</span>
+                            ${u.role === 'admin' ? '<span style="font-size: 0.6rem; color: var(--accent-lime);">ADMIN</span>' : ''}
+                        </div>
+                    `).join('');
+                }
+            }).catch(() => {});
+        }
+        
+        // Initialize collaboration when tab is shown
+        function initCollaboration() {
+            loadWorkspaceData();
         }
 
         async function refreshCache() {
