@@ -2938,15 +2938,23 @@
                 </div>
                 
                 <div class="location-grid">
-                    <div class="location-table">
-                        <h3>🔥 Top DMAs by Index</h3>
+                    <div class="location-table" style="flex: 1;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <h3 style="margin: 0;">🔥 Over-Indexing DMAs (≥100)</h3>
+                            <input type="text" id="locationSearchTop" placeholder="🔍 Search DMAs..." oninput="filterLocationList('top')" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; width: 150px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                        </div>
                         <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
-                        <div id="locationList"></div>
+                        <div id="locationList" style="max-height: 500px; overflow-y: auto;"></div>
+                        <div id="locationCountTop" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
                     </div>
-                    <div class="location-table">
-                        <h3>❄️ Bottom DMAs by Index</h3>
+                    <div class="location-table" style="flex: 1;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <h3 style="margin: 0;">❄️ Under-Indexing DMAs (&lt;100)</h3>
+                            <input type="text" id="locationSearchBottom" placeholder="🔍 Search DMAs..." oninput="filterLocationList('bottom')" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; width: 150px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                        </div>
                         <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
-                        <div id="locationListBottom"></div>
+                        <div id="locationListBottom" style="max-height: 500px; overflow-y: auto;"></div>
+                        <div id="locationCountBottom" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
                     </div>
                 </div>
             </div>
@@ -4929,23 +4937,32 @@
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No matches</div>';
         }
 
+        // Store location data for filtering
+        let allLocationData = { overIndexing: [], underIndexing: [] };
+        
         function renderLocationTable(locations) {
             const isProjection = dashDisplayMode === 'projection';
             // Sort by index for ranking (higher index = over-indexes more)
             const sorted = [...locations].sort((a, b) => b.index - a.index);
-            const top = sorted.slice(0, 25);
-            const bottom = sorted.slice(-25).reverse();
+            
+            // Split into over-indexing (>=100) and under-indexing (<100)
+            const overIndexing = sorted.filter(loc => loc.index >= 100);
+            const underIndexing = sorted.filter(loc => loc.index < 100);
+            
+            // Store for filtering
+            allLocationData = { overIndexing, underIndexing };
             
             // Render heat map
             renderHeatmap(locations);
 
-            document.getElementById('locationList').innerHTML = top.map((loc, i) => {
-                const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
+            // Render over-indexing DMAs (all of them)
+            document.getElementById('locationList').innerHTML = overIndexing.map((loc, i) => {
+                const indexColor = '#10b981'; // Green for over-indexing
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
                     : loc.pct.toFixed(2) + '%';
                 return `
-                    <div class="location-row">
+                    <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span>${i + 1}</span>
                         <span>${loc.name}</span>
                         <span>${displayValue}</span>
@@ -4953,21 +4970,83 @@
                     </div>
                 `;
             }).join('');
+            
+            // Update count
+            document.getElementById('locationCountTop').textContent = `Showing ${overIndexing.length} DMAs`;
 
-            document.getElementById('locationListBottom').innerHTML = bottom.map((loc, i) => {
-                const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
+            // Render under-indexing DMAs (all of them, sorted worst first)
+            const underSorted = [...underIndexing].sort((a, b) => a.index - b.index);
+            document.getElementById('locationListBottom').innerHTML = underSorted.map((loc, i) => {
+                const indexColor = '#ef4444'; // Red for under-indexing
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
                     : loc.pct.toFixed(2) + '%';
                 return `
-                    <div class="location-row">
-                        <span>${sorted.length - 24 + i}</span>
+                    <div class="location-row" data-name="${loc.name.toLowerCase()}">
+                        <span>${i + 1}</span>
                         <span>${loc.name}</span>
                         <span>${displayValue}</span>
                         <span style="color: ${indexColor}; font-weight: 600;">${loc.index}</span>
                     </div>
                 `;
             }).join('');
+            
+            // Update count
+            document.getElementById('locationCountBottom').textContent = `Showing ${underIndexing.length} DMAs`;
+            
+            // Clear search inputs
+            const searchTop = document.getElementById('locationSearchTop');
+            const searchBottom = document.getElementById('locationSearchBottom');
+            if (searchTop) searchTop.value = '';
+            if (searchBottom) searchBottom.value = '';
+        }
+        
+        function filterLocationList(which) {
+            const isProjection = dashDisplayMode === 'projection';
+            const searchInput = which === 'top' 
+                ? document.getElementById('locationSearchTop')
+                : document.getElementById('locationSearchBottom');
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            
+            const data = which === 'top' ? allLocationData.overIndexing : allLocationData.underIndexing;
+            const listEl = which === 'top' 
+                ? document.getElementById('locationList')
+                : document.getElementById('locationListBottom');
+            const countEl = which === 'top'
+                ? document.getElementById('locationCountTop')
+                : document.getElementById('locationCountBottom');
+            
+            // Filter data
+            const filtered = searchTerm 
+                ? data.filter(loc => loc.name.toLowerCase().includes(searchTerm))
+                : data;
+            
+            // Sort: over-indexing by highest index, under-indexing by lowest index
+            const sorted = which === 'top' 
+                ? [...filtered].sort((a, b) => b.index - a.index)
+                : [...filtered].sort((a, b) => a.index - b.index);
+            
+            // Render filtered results
+            listEl.innerHTML = sorted.map((loc, i) => {
+                const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
+                const displayValue = isProjection 
+                    ? formatNumber(Math.round(loc.projection || 0))
+                    : loc.pct.toFixed(2) + '%';
+                return `
+                    <div class="location-row" data-name="${loc.name.toLowerCase()}">
+                        <span>${i + 1}</span>
+                        <span>${loc.name}</span>
+                        <span>${displayValue}</span>
+                        <span style="color: ${indexColor}; font-weight: 600;">${loc.index}</span>
+                    </div>
+                `;
+            }).join('');
+            
+            // Update count
+            const totalCount = which === 'top' ? allLocationData.overIndexing.length : allLocationData.underIndexing.length;
+            countEl.textContent = searchTerm 
+                ? `Showing ${filtered.length} of ${totalCount} DMAs`
+                : `Showing ${totalCount} DMAs`;
         }
 
         function downloadCurrentCSV() {
