@@ -2735,8 +2735,14 @@
                     selectedDashProfile = fileKey; // Set selected profile for sidebar
                     renderDashboard(data.data, data.brand, data.date_range);
                     showDashboardView();
+                } else {
+                    console.error('API returned error:', data.error);
+                    alert('Failed to load: ' + (data.error || 'Unknown error'));
                 }
-            } catch (error) { console.error('Failed to load:', error); alert('Failed to load result'); }
+            } catch (error) { 
+                console.error('Failed to load:', error); 
+                alert('Failed to load result: ' + error.message);
+            }
         }
 
         async function submitNewAnalysis() {
