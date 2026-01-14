@@ -564,6 +564,40 @@
             width: 100%;
         }
 
+        .behavioral-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
+            background: var(--bg-card);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .reorder-control {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .reorder-control label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin: 0;
+            white-space: nowrap;
+        }
+        
+        .reorder-control select {
+            padding: 0.5rem 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            min-width: 200px;
+        }
+
         .behavioral-card {
             background: var(--bg-card);
             border-radius: 8px;
@@ -572,6 +606,12 @@
             display: flex;
             flex-direction: column;
             min-width: 0;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .behavioral-card.highlighted {
+            border: 2px solid var(--accent-lime);
+            box-shadow: 0 0 20px rgba(200, 255, 0, 0.2);
         }
 
         .behavioral-card h3 {
@@ -2813,6 +2853,18 @@
                         <strong>Behavioral Patterns</strong> — This tab reveals what your audience does, watches, buys, and engages with. Data is organized by category (Streaming, Social Media, Retail, etc.). Each item shows the audience percentage and the <span class="highlight-green">Gen Pop Index</span>. <strong>Index Scale:</strong> 100 = same as Gen Pop | <span class="highlight-green">101-149 = slightly over-indexes</span> | <span class="highlight-green">150-299 = strong over-index</span> | <span class="highlight-green">300+ = exceptional (3x+ more likely)</span> | <span class="highlight-red">&lt;100 = under-indexes</span>. <strong>Note:</strong> <em>Most Purchased Brands</em> data is tied to confirmed purchases; all other behavioral data is based on one digital touchpoint online to the value.
                     </div>
                 </div>
+                
+                <!-- Category Reorder Controls -->
+                <div class="behavioral-controls">
+                    <div class="reorder-control">
+                        <label>📌 Move to top:</label>
+                        <select id="categoryReorderSelect" onchange="moveCategoryToTop(this.value)">
+                            <option value="">-- Select category --</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-small btn-secondary" onclick="resetCategoryOrder()">↻ Reset Order</button>
+                </div>
+                
                 <div class="behavioral-grid" id="behavioralGrid"></div>
             </div>
 
@@ -4517,31 +4569,49 @@
         }
 
         let allBehavioralData = {};
+        let currentCategoryOrder = [];
+        const defaultPriorityCategories = ['APPAREL/FOOTWEAR', 'RETAIL', 'APPS/PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING/VIDEO', 'STREAMING/MUSIC', 'QSR', 'TECHNOLOGY/DEVICE', 'GAMES', 'SPORTS', 'MEDIA'];
 
-        function renderBehavioralCards(behavioral) {
+        function renderBehavioralCards(behavioral, highlightCategory = null) {
             allBehavioralData = behavioral;
             const container = document.getElementById('behavioralGrid');
             
-            const priorityCategories = ['APPAREL/FOOTWEAR', 'RETAIL', 'APPS/PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING/VIDEO', 'STREAMING/MUSIC', 'QSR', 'TECHNOLOGY/DEVICE', 'GAMES', 'SPORTS', 'MEDIA'];
+            // Get all categories and sort them
+            let sortedCats;
+            if (currentCategoryOrder.length > 0) {
+                // Use custom order, add any missing categories at the end
+                const allCats = Object.keys(behavioral);
+                const orderedCats = currentCategoryOrder.filter(c => allCats.includes(c));
+                const newCats = allCats.filter(c => !currentCategoryOrder.includes(c));
+                sortedCats = [...orderedCats, ...newCats.sort()];
+            } else {
+                // Use default priority order
+                sortedCats = Object.keys(behavioral).sort((a, b) => {
+                    const aIdx = defaultPriorityCategories.indexOf(a);
+                    const bIdx = defaultPriorityCategories.indexOf(b);
+                    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+                    if (aIdx !== -1) return -1;
+                    if (bIdx !== -1) return 1;
+                    return a.localeCompare(b);
+                });
+            }
+            
+            // Save current order
+            currentCategoryOrder = [...sortedCats];
+            
+            // Populate the dropdown
+            populateCategoryDropdown(sortedCats);
 
-            // Sort categories
-            const sortedCats = Object.keys(behavioral).sort((a, b) => {
-                const aIdx = priorityCategories.indexOf(a);
-                const bIdx = priorityCategories.indexOf(b);
-                if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-                if (aIdx !== -1) return -1;
-                if (bIdx !== -1) return 1;
-                return a.localeCompare(b);
-            });
-
-            container.innerHTML = sortedCats.map(cat => {
+            container.innerHTML = sortedCats.map((cat, idx) => {
                 const catId = cat.replace(/[^a-zA-Z0-9]/g, '');
                 const items = behavioral[cat];
                 const displayItems = items.slice(0, 30);
                 const maxPct = Math.max(...displayItems.map(i => i.pct), 1);
+                const isHighlighted = cat === highlightCategory;
+                const positionBadge = idx === 0 ? '<span style="background: var(--accent-lime); color: #000; padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.6rem; margin-left: 0.5rem;">1ST</span>' : '';
                 return `
-                    <div class="behavioral-card">
-                        <h3>${cat} <span class="count">${items.length}</span></h3>
+                    <div class="behavioral-card ${isHighlighted ? 'highlighted' : ''}" data-category="${cat}">
+                        <h3>${cat} ${positionBadge}<span class="count">${items.length}</span></h3>
                         <div class="behavioral-filter">
                             <input type="text" placeholder="🔍 Search..." oninput="searchInCard('${catId}', this.value)" style="font-size: 0.75rem; padding: 0.35rem;">
                         </div>
@@ -4551,6 +4621,43 @@
                     </div>
                 `;
             }).join('');
+            
+            // Remove highlight after animation
+            if (highlightCategory) {
+                setTimeout(() => {
+                    document.querySelectorAll('.behavioral-card.highlighted').forEach(el => el.classList.remove('highlighted'));
+                }, 2000);
+            }
+        }
+        
+        function populateCategoryDropdown(categories) {
+            const select = document.getElementById('categoryReorderSelect');
+            if (!select) return;
+            
+            select.innerHTML = '<option value="">-- Select category to move to top --</option>' + 
+                categories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+        }
+        
+        function moveCategoryToTop(category) {
+            if (!category || !allBehavioralData[category]) return;
+            
+            // Remove from current position and add to front
+            currentCategoryOrder = currentCategoryOrder.filter(c => c !== category);
+            currentCategoryOrder.unshift(category);
+            
+            // Re-render with highlight
+            renderBehavioralCards(allBehavioralData, category);
+            
+            // Reset dropdown
+            document.getElementById('categoryReorderSelect').value = '';
+            
+            // Scroll to top of grid
+            document.getElementById('behavioralGrid').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        function resetCategoryOrder() {
+            currentCategoryOrder = [];
+            renderBehavioralCards(allBehavioralData);
         }
 
         function renderBehavioralItems(items, maxPct) {
