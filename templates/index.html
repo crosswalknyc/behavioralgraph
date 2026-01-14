@@ -5174,6 +5174,7 @@
         function trackActivity(action, details = '') {
             fetch('/api/track-activity', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action, details })
             }).catch(() => {}); // Silent fail - don't disrupt UX
@@ -5305,7 +5306,7 @@
 
         async function populatePreviousFiles() {
             try {
-                const response = await fetch('/api/jobs');
+                const response = await fetch('/api/jobs', { credentials: 'same-origin' });
                 if (response.status === 401) {
                     window.location.href = '/login';
                     return;
@@ -5367,6 +5368,7 @@
                 console.log('🔍 Checking cache...');
                 const cacheResponse = await fetch('/api/check-cache', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ brands, start_date: startDate, end_date: endDate })
                 });
@@ -5395,7 +5397,8 @@
 
         async function loadCachedResult(fileKey) {
             try {
-                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(fileKey)}`);
+                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(fileKey)}`, { credentials: 'same-origin' });
+                if (response.status === 401) { window.location.href = '/login'; return; }
                 const data = await response.json();
                 if (data.success) {
                     currentCSVData = data.data;
@@ -5478,6 +5481,7 @@
             try {
                 const response = await fetch('/api/submit', { 
                     method: 'POST', 
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' }, 
                     body: JSON.stringify(formData) 
                 });
@@ -5907,7 +5911,8 @@
             
             // Load and display the profile data
             try {
-                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(profileId)}`);
+                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(profileId)}`, { credentials: 'same-origin' });
+                if (response.status === 401) { window.location.href = '/login'; return; }
                 const data = await response.json();
                 
                 if (data.success && data.data) {
@@ -5964,7 +5969,7 @@
         // Load profiles when dashboard tab is shown
         async function loadDashboardProfiles() {
             try {
-                const response = await fetch('/api/jobs');
+                const response = await fetch('/api/jobs', { credentials: 'same-origin' });
                 
                 // Handle authentication errors
                 if (response.status === 401) {
@@ -6702,6 +6707,7 @@
             try {
                 const response = await fetch('/api/ai/insights', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ profile: currentProfileData })
                 });
@@ -6742,6 +6748,7 @@
             try {
                 const response = await fetch('/api/ai/persona', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ profile: currentProfileData })
                 });
@@ -6797,6 +6804,7 @@
             try {
                 const response = await fetch('/api/ai/marketing', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ profile: currentProfileData })
                 });
@@ -6842,6 +6850,7 @@
             try {
                 const response = await fetch('/api/ai/chat', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         profile: currentProfileData,
@@ -6918,6 +6927,7 @@
             try {
                 const response = await fetch('/api/ai/business', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         profile: currentProfileData,
@@ -7018,6 +7028,7 @@
             try {
                 const response = await fetch('/api/ai/business', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         profile: currentProfileData,
@@ -7093,6 +7104,7 @@
             try {
                 const response = await fetch('/api/ai/deck', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         profile: currentProfileData,
@@ -8426,7 +8438,8 @@
         
         async function fetchProfileData(key) {
             try {
-                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(key)}`);
+                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(key)}`, { credentials: 'same-origin' });
+                if (response.status === 401) { return null; }
                 const data = await response.json();
                 if (data.success) {
                     const parsed = parseAllData(data.data);
@@ -8754,6 +8767,7 @@
             try {
                 const response = await fetch('/api/ai/generate-logline', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         targetDemo: contentAnalysisData.targetDemo,
@@ -9559,7 +9573,7 @@
         
         async function loadFavorites() {
             try {
-                const response = await fetch('/api/favorites');
+                const response = await fetch('/api/favorites', { credentials: 'same-origin' });
                 const data = await response.json();
                 userFavorites = data.favorites || [];
                 updateFavoriteButton();
@@ -9592,6 +9606,7 @@
                 } else {
                     const response = await fetch('/api/favorites', {
                         method: 'POST',
+                        credentials: 'same-origin',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ 
                             key: currentS3Key,
@@ -9620,6 +9635,7 @@
             try {
                 const response = await fetch('/api/share', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ key: currentS3Key, expires_days: 7 })
                 });
@@ -9693,7 +9709,7 @@
             }
             
             try {
-                const response = await fetch('/api/jobs');
+                const response = await fetch('/api/jobs', { credentials: 'same-origin' });
                 
                 // Handle authentication errors
                 if (response.status === 401) {
@@ -10277,7 +10293,8 @@
             container.innerHTML = '<div class="comparison-empty"><p>Loading profile...</p></div>';
             
             try {
-                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(id)}`);
+                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(id)}`, { credentials: 'same-origin' });
+                if (response.status === 401) { window.location.href = '/login'; return; }
                 const data = await response.json();
                 
                 if (data.success && data.data) {
@@ -10646,8 +10663,13 @@
                     const url = `/api/get-csv-data/${encodeURIComponent(id)}`;
                     console.log('Fetch URL:', url);
                     
-                    const response = await fetch(url);
+                    const response = await fetch(url, { credentials: 'same-origin' });
                     console.log(`Response status for ${id}:`, response.status);
+                    
+                    if (response.status === 401) {
+                        window.location.href = '/login';
+                        return;
+                    }
                     
                     if (!response.ok) {
                         const errorText = await response.text();
@@ -11874,7 +11896,7 @@
             const log = document.getElementById('activityLog');
             
             // Fetch from backend
-            fetch('/api/admin/activity-log?limit=50').then(r => r.json()).then(data => {
+            fetch('/api/admin/activity-log?limit=50', { credentials: 'same-origin' }).then(r => r.json()).then(data => {
                 if (data.activities && data.activities.length > 0) {
                     log.innerHTML = data.activities.map(a => `
                         <div class="activity-item">
@@ -11907,7 +11929,7 @@
         
         function loadWorkspaceData() {
             // Load team members
-            fetch('/api/admin/users').then(r => r.json()).then(data => {
+            fetch('/api/admin/users', { credentials: 'same-origin' }).then(r => r.json()).then(data => {
                 if (data.users) {
                     const list = document.getElementById('teamMembersList');
                     list.innerHTML = data.users.map(u => `
@@ -11933,7 +11955,7 @@
             btn.textContent = '⏳';
             
             try {
-                const response = await fetch('/api/refresh-cache');
+                const response = await fetch('/api/refresh-cache', { credentials: 'same-origin' });
                 
                 // Handle authentication errors
                 if (response.status === 401) {
