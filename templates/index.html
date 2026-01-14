@@ -3574,6 +3574,8 @@
         // Form submission
         document.getElementById('analysisForm').addEventListener('submit', async function(e) {
             e.preventDefault();
+            console.log('📋 Form submitted');
+            
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.disabled = true;
             submitBtn.innerHTML = 'Checking...';
@@ -3581,26 +3583,48 @@
             const brands = document.getElementById('brands').value.trim();
             const startDate = document.getElementById('start_date').value;
             const endDate = document.getElementById('end_date').value;
+            
+            console.log('📋 Form values:', { brands, startDate, endDate });
+            
+            // Validate required fields
+            if (!brands) {
+                alert('Please enter at least one brand');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '🚀 Run Analysis';
+                return;
+            }
+            if (!startDate || !endDate) {
+                alert('Please select start and end dates');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '🚀 Run Analysis';
+                return;
+            }
 
             // Check cache first
             try {
+                console.log('🔍 Checking cache...');
                 const cacheResponse = await fetch('/api/check-cache', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ brands, start_date: startDate, end_date: endDate })
                 });
                 const cacheData = await cacheResponse.json();
+                console.log('📦 Cache response:', cacheData);
 
                 // Only use cached result if it's an EXACT match (same brand AND same dates)
                 if (cacheData.found && cacheData.type === 'exact') {
+                    console.log('✅ Found exact cache match');
                     await loadCachedResult(cacheData.file);
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = '🚀 Run Analysis';
                     return;
                 }
                 // If only similar files found (different dates), proceed with new analysis
-            } catch (error) { console.log('Cache check failed:', error); }
+            } catch (error) { 
+                console.log('⚠️ Cache check failed:', error); 
+            }
 
+            console.log('🚀 Submitting new analysis...');
             submitBtn.innerHTML = 'Submitting...';
             await submitNewAnalysis();
             submitBtn.disabled = false;
@@ -3685,11 +3709,22 @@
                 previous_file: document.getElementById('previous_file')?.value || ''
             };
 
+            console.log('📤 Sending form data:', formData);
+            
             try {
-                const response = await fetch('/api/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
+                const response = await fetch('/api/submit', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify(formData) 
+                });
+                console.log('📥 Response status:', response.status);
+                
                 const data = await response.json();
+                console.log('📥 Response data:', data);
+                
                 if (response.ok) {
                     currentJobId = data.job_id;
+                    console.log('✅ Job started:', currentJobId);
                     // Update credits display
                     if (data.credits_left !== undefined) {
                         updateCreditsDisplay(data.credits_left);
@@ -3698,14 +3733,18 @@
                     startPolling();
                     loadJobs();
                 } else { 
+                    console.error('❌ Submit failed:', data);
                     if (response.status === 403 && data.credits_left === 0) {
                         alert('❌ No credits remaining!\n\nPlease contact an administrator to get more credits.');
                         updateCreditsDisplay(0);
                     } else {
-                        alert(data.error || 'Failed'); 
+                        alert(data.error || 'Failed to submit analysis'); 
                     }
                 }
-            } catch (error) { alert('Network error: ' + error.message); }
+            } catch (error) { 
+                console.error('❌ Network error:', error);
+                alert('Network error: ' + error.message); 
+            }
         }
 
         function updateCreditsDisplay(credits) {
