@@ -2676,9 +2676,7 @@ def extract_demographics_summary(csv_content):
         print(f"Error extracting demographics: {e}")
         return None
 
-# Try to load persisted cache on startup
-if s3_client:
-    load_persisted_cache()
+# Cache loading is handled in background thread - see quick_startup_cache()
 
 
 @app.route('/api/jobs')
@@ -3286,7 +3284,7 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
 
 
 # ============================================================================
-# STARTUP CACHE LOADING (Fast sync load of persisted cache)
+# STARTUP CACHE LOADING (Async - doesn't block app startup)
 # ============================================================================
 
 import threading
@@ -3295,15 +3293,18 @@ import time as time_module
 cache_loading_complete = False
 BACKGROUND_CHECK_INTERVAL = 300  # Check for new files every 5 minutes
 
-def quick_startup_cache():
-    """Quick startup - just load the pre-built JSON cache (fast!)."""
+def async_cache_loader():
+    """Load cache in background - doesn't block app startup."""
     global cache_loading_complete
     import time
+    
+    # Small delay to ensure app is ready
+    time_module.sleep(1)
+    
     start = time.time()
+    print("🚀 Background cache loading started...")
     
-    print("🚀 Quick startup cache loading...")
-    
-    # Load persisted file list cache (single JSON file - should be <1 sec)
+    # Load persisted file list cache (single JSON file)
     if s3_client:
         try:
             load_persisted_cache()
@@ -3312,11 +3313,15 @@ def quick_startup_cache():
             print(f"   ⚠️ Cache load error: {e}")
     
     cache_loading_complete = True
-    print(f"🎉 Startup complete in {time.time()-start:.2f}s")
+    print(f"🎉 Cache ready in {time.time()-start:.2f}s")
 
 
 def background_cache_checker():
     """Background thread that checks for new/modified files every 5 minutes."""
+    # Wait for initial cache load
+    while not cache_loading_complete:
+        time_module.sleep(1)
+    
     print("🔄 Starting background cache checker (every 5 min)...")
     while True:
         time_module.sleep(BACKGROUND_CHECK_INTERVAL)
@@ -3329,8 +3334,10 @@ def background_cache_checker():
             print(f"   ⚠️ Background check error: {e}")
 
 
-# Load cache at startup (fast - just reads a JSON file)
-quick_startup_cache()
+# Start cache loader in background (doesn't block startup!)
+print("🚀 App starting - cache will load in background...")
+cache_thread = threading.Thread(target=async_cache_loader, daemon=True)
+cache_thread.start()
 
 # Start background checker thread
 bg_checker = threading.Thread(target=background_cache_checker, daemon=True)
