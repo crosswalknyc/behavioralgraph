@@ -1888,6 +1888,10 @@ s3_cache = {
 }
 S3_CACHE_TTL = 300  # 5 minutes cache
 S3_CACHE_KEY = 'system/s3_cache.json'  # Persisted cache location
+S3_DEMO_CACHE_KEY = 'system/demographics_cache.json'  # Cached demographic summaries
+
+# Demographics cache - stores pre-computed demographic summaries for each profile
+demographics_cache = {}
 
 def load_persisted_cache():
     """Load the S3 file cache from S3 storage."""
@@ -1932,6 +1936,78 @@ def save_persisted_cache():
         print(f"💾 Saved cache to S3: {len(s3_cache['jobs'])} files")
     except Exception as e:
         print(f"⚠️ Error saving persisted cache: {e}")
+
+
+def load_demographics_cache():
+    """Load pre-computed demographics summaries from S3."""
+    global demographics_cache
+    if not s3_client:
+        return False
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_DEMO_CACHE_KEY)
+        demographics_cache = json.loads(response['Body'].read().decode('utf-8'))
+        print(f"✅ Loaded demographics cache: {len(demographics_cache)} profiles")
+        return True
+    except s3_client.exceptions.NoSuchKey:
+        print("📂 No demographics cache found")
+        return False
+    except Exception as e:
+        print(f"⚠️ Error loading demographics cache: {e}")
+        return False
+
+
+def save_demographics_cache():
+    """Save demographics cache to S3."""
+    if not s3_client or not demographics_cache:
+        return
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=S3_DEMO_CACHE_KEY,
+            Body=json.dumps(demographics_cache),
+            ContentType='application/json'
+        )
+        print(f"💾 Saved demographics cache: {len(demographics_cache)} profiles")
+    except Exception as e:
+        print(f"⚠️ Error saving demographics cache: {e}")
+
+
+def extract_demographics_summary(csv_content):
+    """Extract demographic summary from CSV content."""
+    try:
+        df = pd.read_csv(io.StringIO(csv_content))
+        
+        summary = {
+            'gender': {},
+            'age': {},
+            'income': {},
+            'ethnicity': {},
+            'sampleSize': 0,
+            'projectedUS': 0
+        }
+        
+        for _, row in df.iterrows():
+            category = str(row.get('Column', '')).upper()
+            value = row.get('Value', '')
+            pct = float(row.get('Brand Penetration (Row)', 0) or 0)
+            
+            if category == 'SAMPLE SIZE':
+                summary['sampleSize'] = int(row.get('Original Raw Numbers', 0) or row.get('Category Share', 0) or 0)
+            elif category == 'BRAND INPUT':
+                summary['projectedUS'] = int(row.get('US Gen Pop Projection', 0) or 0)
+            elif category == 'GENDER' and value:
+                summary['gender'][value] = pct
+            elif category == 'AGE' and value:
+                summary['age'][value] = pct
+            elif category == 'INCOME' and value:
+                summary['income'][value] = pct
+            elif category == 'ETHNICITY' and value:
+                summary['ethnicity'][value] = pct
+        
+        return summary
+    except Exception as e:
+        print(f"Error extracting demographics: {e}")
+        return None
 
 # Try to load persisted cache on startup
 if s3_client:
@@ -2039,6 +2115,96 @@ def get_cached_files():
         'success': True,
         'files': files,
         'count': len(files)
+    })
+
+
+@app.route('/api/demographics-cache')
+@requires_auth
+def get_demographics_cache():
+    """Get all cached demographics for fast Content Dev analysis."""
+    global demographics_cache
+    
+    # Load from S3 if empty
+    if not demographics_cache:
+        load_demographics_cache()
+    
+    # Also return the jobs list with categories
+    if not s3_cache['jobs']:
+        load_persisted_cache()
+    
+    # Merge jobs with demographics
+    profiles_with_demo = []
+    for job in s3_cache.get('jobs', []):
+        key = job.get('s3_key', job.get('job_id', ''))
+        demo = demographics_cache.get(key, {})
+        profiles_with_demo.append({
+            'key': key,
+            'name': job.get('project_name', 'Unknown'),
+            'category': job.get('category', 'Uncategorized'),
+            'demographics': demo.get('gender', {}),
+            'age': demo.get('age', {}),
+            'income': demo.get('income', {}),
+            'sampleSize': demo.get('sampleSize', 0),
+            'projectedUS': demo.get('projectedUS', 0),
+            'hasDemoData': bool(demo)
+        })
+    
+    return jsonify({
+        'success': True,
+        'profiles': profiles_with_demo,
+        'cacheSize': len(demographics_cache),
+        'totalProfiles': len(profiles_with_demo)
+    })
+
+
+@app.route('/api/build-demographics-cache', methods=['POST'])
+@requires_auth
+def build_demographics_cache():
+    """Build/update demographics cache for all profiles."""
+    global demographics_cache
+    
+    if not s3_client:
+        return jsonify({'error': 'S3 not configured'}), 500
+    
+    # Load existing cache
+    load_demographics_cache()
+    
+    # Get all jobs
+    if not s3_cache['jobs']:
+        load_persisted_cache()
+    
+    updated = 0
+    errors = 0
+    
+    for job in s3_cache.get('jobs', []):
+        key = job.get('s3_key')
+        if not key or key.startswith('system/'):
+            continue
+        
+        # Skip if already cached
+        if key in demographics_cache:
+            continue
+        
+        try:
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+            csv_content = response['Body'].read().decode('utf-8')
+            summary = extract_demographics_summary(csv_content)
+            if summary:
+                demographics_cache[key] = summary
+                updated += 1
+        except Exception as e:
+            print(f"Error caching {key}: {e}")
+            errors += 1
+    
+    # Save updated cache
+    if updated > 0:
+        save_demographics_cache()
+    
+    return jsonify({
+        'success': True,
+        'updated': updated,
+        'errors': errors,
+        'totalCached': len(demographics_cache)
     })
 
 
@@ -2321,6 +2487,33 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 
     except Exception as e:
         update_job_status(job_id, status='failed', error=str(e))
+
+
+# ============================================================================
+# STARTUP CACHE LOADING
+# ============================================================================
+
+def preload_caches():
+    """Preload caches at startup for fast initial page load."""
+    print("🚀 Preloading caches...")
+    
+    # Load persisted file list cache
+    if s3_client:
+        if load_persisted_cache():
+            print(f"   ✅ File list cache: {len(s3_cache.get('jobs', []))} profiles")
+        
+        # Load demographics cache
+        if load_demographics_cache():
+            print(f"   ✅ Demographics cache: {len(demographics_cache)} profiles")
+    
+    # Load user data
+    load_users_from_s3()
+    print("   ✅ User data loaded")
+    print("🎉 Caches ready!")
+
+
+# Preload caches when module loads (for gunicorn workers)
+preload_caches()
 
 
 # ============================================================================

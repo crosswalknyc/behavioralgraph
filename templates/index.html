@@ -2978,6 +2978,17 @@
                             </button>
                             
                             <div id="contentAnalysisStatus" class="analysis-status"></div>
+                            
+                            <!-- Cache Status -->
+                            <div id="contentDevCacheStatus" class="cache-status-box" style="margin-top: 1rem; padding: 0.75rem; background: rgba(var(--accent-rgb), 0.1); border-radius: 8px; font-size: 0.8rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span id="cacheStatusIcon">⏳</span>
+                                    <span id="cacheStatusText">Loading cache...</span>
+                                </div>
+                                <button id="buildCacheBtn" onclick="buildDemographicsCache()" class="btn btn-sm" style="margin-top: 0.5rem; display: none; font-size: 0.75rem;">
+                                    🔧 Build Missing Cache
+                                </button>
+                            </div>
                         </div>
                         
                         <!-- Results Panel -->
@@ -5363,6 +5374,103 @@
             gaps: []
         };
         
+        // Cached demographics for fast Content Dev analysis
+        let contentDevCache = null;
+        let contentDevCacheLoading = false;
+        
+        // Load demographics cache on page load (in background)
+        async function preloadDemographicsCache() {
+            if (contentDevCache || contentDevCacheLoading) return;
+            contentDevCacheLoading = true;
+            updateCacheStatus('loading', '⏳ Loading demographics cache...');
+            
+            try {
+                const response = await fetch('/api/demographics-cache');
+                const data = await response.json();
+                if (data.success) {
+                    contentDevCache = data.profiles || [];
+                    const withDemo = contentDevCache.filter(p => p.hasDemoData).length;
+                    const missing = contentDevCache.length - withDemo;
+                    
+                    console.log(`✅ Loaded ${contentDevCache.length} profiles (${withDemo} with demographics)`);
+                    
+                    if (missing > 0 && missing < contentDevCache.length * 0.5) {
+                        updateCacheStatus('partial', `⚡ ${withDemo}/${contentDevCache.length} profiles cached`, missing);
+                    } else if (missing > 0) {
+                        updateCacheStatus('needs-build', `⚠️ ${missing} profiles need caching`, missing);
+                    } else {
+                        updateCacheStatus('ready', `✅ ${withDemo} profiles ready for instant analysis`);
+                    }
+                }
+            } catch (e) {
+                console.log('Could not preload demographics cache:', e);
+                updateCacheStatus('error', '❌ Cache unavailable');
+            }
+            contentDevCacheLoading = false;
+        }
+        
+        function updateCacheStatus(status, text, missing = 0) {
+            const icon = document.getElementById('cacheStatusIcon');
+            const textEl = document.getElementById('cacheStatusText');
+            const buildBtn = document.getElementById('buildCacheBtn');
+            
+            if (!icon || !textEl) return;
+            
+            textEl.textContent = text;
+            
+            if (status === 'ready') {
+                icon.textContent = '⚡';
+                if (buildBtn) buildBtn.style.display = 'none';
+            } else if (status === 'partial' || status === 'needs-build') {
+                icon.textContent = '⚠️';
+                if (buildBtn) {
+                    buildBtn.style.display = 'block';
+                    buildBtn.textContent = `🔧 Cache ${missing} missing profiles`;
+                }
+            } else if (status === 'loading') {
+                icon.textContent = '⏳';
+                if (buildBtn) buildBtn.style.display = 'none';
+            } else {
+                icon.textContent = '❌';
+                if (buildBtn) buildBtn.style.display = 'block';
+            }
+        }
+        
+        async function buildDemographicsCache() {
+            const btn = document.getElementById('buildCacheBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = '🔄 Building cache (this may take a while)...';
+            }
+            updateCacheStatus('loading', '🔄 Building demographics cache...');
+            
+            try {
+                const response = await fetch('/api/build-demographics-cache', { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    updateCacheStatus('ready', `✅ Built ${data.updated} profiles, ${data.totalCached} total`);
+                    // Reload the cache
+                    contentDevCache = null;
+                    await preloadDemographicsCache();
+                } else {
+                    updateCacheStatus('error', '❌ Failed to build cache');
+                }
+            } catch (e) {
+                console.error('Cache build error:', e);
+                updateCacheStatus('error', '❌ Error building cache');
+            }
+            
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '🔧 Build Missing Cache';
+            }
+        }
+        
+        // Start preloading when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(preloadDemographicsCache, 2000); // Delay to not block initial load
+        });
+        
         async function runContentAnalysis() {
             const status = document.getElementById('contentAnalysisStatus');
             const resultsPanel = document.getElementById('contentResultsPanel');
@@ -5382,98 +5490,81 @@
             }
             
             status.className = 'analysis-status loading';
-            status.textContent = '🔄 Analyzing content across ' + platforms.length + ' platform(s)...';
+            status.textContent = '⚡ Loading cached data...';
             
             try {
-                // Fetch all cached files to analyze
-                const response = await fetch('/api/jobs');
-                const data = await response.json();
-                const allJobs = data.jobs || [];
+                // Use cached demographics for instant analysis
+                if (!contentDevCache) {
+                    status.textContent = '🔄 Loading demographics cache (first time, may take a moment)...';
+                    const response = await fetch('/api/demographics-cache');
+                    const data = await response.json();
+                    if (data.success) {
+                        contentDevCache = data.profiles || [];
+                    }
+                }
                 
-                // Filter for series and relevant profiles
-                const seriesProfiles = allJobs.filter(job => {
-                    const cat = (job.category || '').toUpperCase();
+                const allProfiles = contentDevCache || [];
+                status.textContent = `⚡ Analyzing ${allProfiles.length} profiles instantly...`;
+                
+                // Filter for series and relevant profiles - using cached demographics
+                const seriesProfiles = allProfiles.filter(p => {
+                    const cat = (p.category || '').toUpperCase();
                     return cat.startsWith('SERIES') || cat.includes('SERIES -') || cat.includes('TV');
                 });
                 
-                const actorProfiles = allJobs.filter(job => {
-                    const cat = (job.category || '').toUpperCase();
+                const actorProfiles = allProfiles.filter(p => {
+                    const cat = (p.category || '').toUpperCase();
                     return cat === 'ACTOR' || cat === 'ACTRESS' || cat.includes('TALENT') || cat.includes('CELEBRITY');
                 });
                 
-                const brandProfiles = allJobs.filter(job => {
-                    const cat = (job.category || '').toUpperCase();
+                const brandProfiles = allProfiles.filter(p => {
+                    const cat = (p.category || '').toUpperCase();
                     return cat.includes('BRAND') || cat.includes('RETAIL') || cat.includes('CPG') || cat.includes('APPAREL');
                 });
-                
-                // Load and analyze each profile
-                status.textContent = '🔄 Loading ' + seriesProfiles.length + ' series profiles...';
                 
                 const showsData = [];
                 const talentData = [];
                 const brandsData = [];
                 
-                // Analyze top series (limit to prevent overload)
-                for (const show of seriesProfiles.slice(0, 30)) {
-                    try {
-                        const profileData = await fetchProfileData(show.s3_key || show.job_id);
-                        if (profileData) {
-                            const score = calculateAudienceFit(profileData, { gender, age, income });
-                            const platform = detectPlatform(show.project_name, show.category);
-                            
-                            if (platforms.length === 0 || platforms.some(p => platform.toUpperCase().includes(p))) {
-                                showsData.push({
-                                    name: show.project_name,
-                                    platform: platform,
-                                    score: score,
-                                    demographics: profileData.demographics,
-                                    category: show.category
-                                });
-                            }
-                        }
-                    } catch (e) {
-                        console.log('Error loading show:', show.project_name, e);
+                // Analyze series using CACHED data - instant!
+                for (const profile of seriesProfiles) {
+                    const platform = detectPlatform(profile.name, profile.category);
+                    if (platforms.length === 0 || platforms.some(p => platform.toUpperCase().includes(p))) {
+                        const score = calculateCachedAudienceFit(profile, { gender, age, income });
+                        showsData.push({
+                            name: profile.name,
+                            platform: platform,
+                            score: score,
+                            demographics: profile.demographics,
+                            category: profile.category,
+                            sampleSize: profile.sampleSize
+                        });
                     }
                 }
                 
-                // Analyze talent
-                status.textContent = '🔄 Analyzing talent profiles...';
-                for (const talent of actorProfiles.slice(0, 30)) {
-                    try {
-                        const profileData = await fetchProfileData(talent.s3_key || talent.job_id);
-                        if (profileData) {
-                            const score = calculateAudienceFit(profileData, { gender, age, income });
-                            const talentGender = detectTalentGender(talent.project_name, profileData);
-                            talentData.push({
-                                name: talent.project_name,
-                                gender: talentGender,
-                                score: score,
-                                demographics: profileData.demographics,
-                                sampleSize: profileData.sampleSize
-                            });
-                        }
-                    } catch (e) {
-                        console.log('Error loading talent:', talent.project_name, e);
-                    }
+                // Analyze talent using CACHED data - instant!
+                for (const profile of actorProfiles) {
+                    const score = calculateCachedAudienceFit(profile, { gender, age, income });
+                    const talentGender = detectTalentGenderFromCache(profile);
+                    talentData.push({
+                        name: profile.name,
+                        gender: talentGender,
+                        score: score,
+                        demographics: profile.demographics,
+                        sampleSize: profile.sampleSize
+                    });
                 }
                 
-                // Analyze brands for integration
-                status.textContent = '🔄 Identifying brand opportunities...';
-                for (const brand of brandProfiles.slice(0, 20)) {
-                    try {
-                        const profileData = await fetchProfileData(brand.s3_key || brand.job_id);
-                        if (profileData) {
-                            const score = calculateAudienceFit(profileData, { gender, age, income });
-                            brandsData.push({
-                                name: brand.project_name,
-                                category: brand.category,
-                                score: score,
-                                demographics: profileData.demographics
-                            });
-                        }
-                    } catch (e) {
-                        console.log('Error loading brand:', brand.project_name, e);
-                    }
+                // Analyze brands using CACHED data - instant!
+                for (const profile of brandProfiles) {
+                    const score = calculateCachedAudienceFit(profile, { gender, age, income });
+                    brandsData.push({
+                        name: profile.name,
+                        category: profile.category,
+                        score: score,
+                        demographics: profile.demographics,
+                        sampleSize: profile.sampleSize
+                    });
                 }
                 
                 // Sort by score
@@ -5521,6 +5612,47 @@
                 console.log('Fetch error:', e);
             }
             return null;
+        }
+        
+        // Calculate audience fit using CACHED demographics (fast)
+        function calculateCachedAudienceFit(cachedProfile, targetDemo) {
+            let score = 50; // Base score
+            
+            // Gender fit - using cached demographics object
+            if (targetDemo.gender && targetDemo.gender.length > 0 && cachedProfile.demographics) {
+                const genderPct = targetDemo.gender.reduce((sum, g) => sum + (cachedProfile.demographics[g] || 0), 0);
+                score += genderPct * 0.3;
+            }
+            
+            // Age fit - using cached age object
+            if (targetDemo.age && targetDemo.age.length > 0 && cachedProfile.age) {
+                const agePct = targetDemo.age.reduce((sum, a) => sum + (cachedProfile.age[a] || 0), 0);
+                score += agePct * 0.3;
+            }
+            
+            // Income fit - using cached income object
+            if (targetDemo.income && targetDemo.income.length > 0 && cachedProfile.income) {
+                const incomePct = targetDemo.income.reduce((sum, i) => sum + (cachedProfile.income[i] || 0), 0);
+                score += incomePct * 0.4;
+            }
+            
+            // Boost for larger sample sizes (more reliable)
+            if (cachedProfile.sampleSize > 10000) score += 5;
+            if (cachedProfile.sampleSize > 50000) score += 5;
+            
+            return Math.min(100, Math.max(0, score));
+        }
+        
+        // Detect talent gender from cached profile
+        function detectTalentGenderFromCache(profile) {
+            const demo = profile.demographics || {};
+            const female = demo['Female'] || demo['female'] || 0;
+            const male = demo['Male'] || demo['male'] || 0;
+            
+            // If the audience is heavily one gender, talent likely appeals to that
+            if (female > 60) return 'female-appeal';
+            if (male > 60) return 'male-appeal';
+            return 'neutral';
         }
         
         function calculateAudienceFit(profileData, targetDemo) {
@@ -6687,6 +6819,8 @@
         let allCategories = [];
         let cacheInfo = null;
 
+        let jobsDisplayLimit = 50; // Initial display limit for performance
+        
         async function loadJobs(showLoading = true) {
             const container = document.getElementById('jobsList');
             const cacheStatus = document.getElementById('cacheStatus');
@@ -6715,6 +6849,8 @@
                 categorySelect.innerHTML = '<option value="">All Categories</option>' + 
                     allCategories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
                 
+                // Reset display limit when loading fresh data
+                jobsDisplayLimit = 50;
                 renderJobs(allJobs);
             } catch (error) { 
                 console.error('Failed to load jobs:', error);
@@ -6722,6 +6858,11 @@
                     container.innerHTML = '<div style="padding: 1rem; color: var(--accent-red); font-size: 0.8rem;">Failed to load</div>';
                 }
             }
+        }
+        
+        function loadMoreJobs() {
+            jobsDisplayLimit += 50;
+            renderJobs(allJobs);
         }
         
         function getTimeAgo(date) {
@@ -6761,8 +6902,12 @@
                 container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No results found</div>';
                 return;
             }
+            
+            // Limit display for performance
+            const displayJobs = jobs.slice(0, jobsDisplayLimit);
+            const hasMore = jobs.length > jobsDisplayLimit;
 
-            container.innerHTML = jobs.map(job => {
+            let html = displayJobs.map(job => {
                 const isS3 = job.source === 's3';
                 const isCompleted = job.status === 'completed' || job.status === 'cached';
                 // Get full display name
@@ -6782,6 +6927,17 @@
                     </div>
                 `;
             }).join('');
+            
+            // Add "Load more" button if there are more jobs
+            if (hasMore) {
+                html += `<div style="padding: 0.75rem; text-align: center;">
+                    <button class="btn btn-small" onclick="loadMoreJobs()" style="background: var(--bg-lighter); width: 100%;">
+                        📋 Load ${Math.min(50, jobs.length - jobsDisplayLimit)} more (${jobs.length - jobsDisplayLimit} remaining)
+                    </button>
+                </div>`;
+            }
+            
+            container.innerHTML = html;
         }
 
         function downloadS3File(s3Key) { window.location.href = `/api/download-cached/${encodeURIComponent(s3Key)}`; }
