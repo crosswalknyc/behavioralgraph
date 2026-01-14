@@ -2739,12 +2739,37 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             
             total_active_uids = len(all_uids_result)
             print(f"📊 Found {total_active_uids:,} total active UIDs after applying filters")
+            
+            # If 0 results with SAMPLE, try without SAMPLE as fallback
+            if total_active_uids == 0:
+                print("⚠️ No results with SAMPLE clause, trying without sampling...")
+                try:
+                    fallback_query = f"""
+                        SELECT UID, COUNT(*) as visit_count
+                        FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
+                        WHERE DELIVERED >= '{master_start_date}'::DATE 
+                          AND DELIVERED <= '{master_end_date}'::DATE
+                          AND ({brand_filter})
+                          AND COMMON_NAME IS NOT NULL
+                          AND COMMON_NAME != ''
+                        GROUP BY UID
+                        HAVING COUNT(*) >= 1
+                        ORDER BY COUNT(*) DESC
+                        LIMIT {max_uids}
+                    """
+                    all_uids_result = cur.execute(fallback_query).fetchall()
+                    total_active_uids = len(all_uids_result)
+                    print(f"📊 Found {total_active_uids:,} UIDs WITHOUT sampling")
+                except Exception as fallback_error:
+                    print(f"❌ Fallback query also failed: {fallback_error}")
+            
             if total_active_uids == 0:
                 print("❌ WARNING: No UIDs found! Possible causes:")
                 print("   1. Brand name doesn't match anything in database")
                 print("   2. Date range has no data")
                 print("   3. Brand filter is too restrictive")
                 print(f"   DEBUG - Brand filter used: {brand_filter[:300]}...")
+                
             if demo_filter_clause != "1=1":
                 print(f"   ✅ These UIDs match the demographic filter: {demo_filter_clause}")
             else:
