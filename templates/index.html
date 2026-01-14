@@ -7851,61 +7851,106 @@
             
             const allItems = collectAllBehavioralItems(data);
             
-            // Define actual media platform names for accurate categorization
-            const streamingPlatforms = ['NETFLIX', 'HULU', 'DISNEY+', 'DISNEY PLUS', 'HBO MAX', 'HBO', 'PEACOCK', 'PARAMOUNT+', 'PARAMOUNT PLUS', 'APPLE TV', 'AMAZON PRIME VIDEO', 'PRIME VIDEO', 'DISCOVERY+', 'TUBI', 'PLUTO TV', 'CRACKLE', 'VUDU', 'ROKU', 'FUBO', 'SLING', 'YOUTUBE TV', 'PHILO', 'STARZ', 'SHOWTIME', 'EPIX', 'MGM+', 'BRITBOX', 'ACORN TV', 'SHUDDER', 'CRITERION', 'MUBI', 'KANOPY', 'CRUNCHYROLL', 'FUNIMATION', 'ESPN+', 'DAZN', 'MAX', 'FREEVEE', 'IMDB TV'];
-            const tvNetworks = ['ABC', 'NBC', 'CBS', 'FOX', 'PBS', 'CW', 'TNT', 'TBS', 'USA', 'FX', 'AMC', 'A&E', 'BRAVO', 'HGTV', 'TLC', 'HISTORY', 'DISCOVERY', 'FOOD NETWORK', 'NATIONAL GEOGRAPHIC', 'MTV', 'VH1', 'BET', 'COMEDY CENTRAL', 'SYFY', 'HALLMARK', 'LIFETIME', 'OXYGEN', 'E!', 'ESPN', 'FS1', 'NBCSN', 'NFL NETWORK', 'MLB NETWORK', 'NBA TV', 'GOLF CHANNEL', 'TENNIS CHANNEL', 'CNN', 'MSNBC', 'FOX NEWS', 'CNBC', 'BLOOMBERG', 'BBC', 'METV', 'ANTENNA TV', 'COMET', 'CHARGE', 'WILLOW TV', 'DRAFTKINGS NETWORK', 'FANDUELTV', 'CANADIAN BROADCASTING'];
-            const socialPlatforms = ['FACEBOOK', 'INSTAGRAM', 'TIKTOK', 'TWITTER', 'X', 'YOUTUBE', 'SNAPCHAT', 'PINTEREST', 'LINKEDIN', 'REDDIT', 'DISCORD', 'TWITCH', 'THREADS', 'WHATSAPP', 'TELEGRAM', 'WECHAT', 'CLUBHOUSE', 'NEXTDOOR', 'TUMBLR', 'QUORA'];
-            const gamingPlatforms = ['XBOX', 'PLAYSTATION', 'NINTENDO', 'STEAM', 'EPIC GAMES', 'EA', 'ACTIVISION', 'BLIZZARD', 'RIOT GAMES', 'ROBLOX', 'MINECRAFT', 'FORTNITE', 'CALL OF DUTY', 'FIFA', 'MADDEN', 'NBA 2K', 'TWITCH', 'DISCORD'];
-            const audioPlatforms = ['SPOTIFY', 'APPLE MUSIC', 'AMAZON MUSIC', 'PANDORA', 'SOUNDCLOUD', 'TIDAL', 'DEEZER', 'IHEART', 'SIRIUS', 'AUDIBLE', 'STITCHER', 'PODCAST', 'NPR', 'LAST.FM', 'YOUTUBE MUSIC', 'TUNEIN'];
-            const newsPlatforms = ['CNN', 'MSNBC', 'FOX NEWS', 'BBC', 'NYT', 'NEW YORK TIMES', 'WASHINGTON POST', 'WSJ', 'WALL STREET JOURNAL', 'USA TODAY', 'AP NEWS', 'REUTERS', 'NPR', 'POLITICO', 'THE ATLANTIC', 'BUZZFEED NEWS', 'HUFFPOST', 'FORBES', 'BLOOMBERG', 'BUSINESS INSIDER', 'VICE', 'VOX', 'AXIOS'];
+            // Define EXACT media platform names - must be whole word or exact match
+            // Using a Set for O(1) lookup and adding word boundary matching
+            const streamingExact = new Set(['NETFLIX', 'HULU', 'DISNEY+', 'DISNEY PLUS', 'HBO MAX', 'HBO', 'PEACOCK', 'PARAMOUNT+', 'PARAMOUNT PLUS', 'APPLE TV', 'APPLE TV+', 'AMAZON PRIME VIDEO', 'PRIME VIDEO', 'DISCOVERY+', 'TUBI', 'PLUTO TV', 'PLUTO', 'CRACKLE', 'VUDU', 'ROKU', 'ROKU CHANNEL', 'FUBO', 'FUBOTV', 'SLING', 'SLING TV', 'YOUTUBE TV', 'PHILO', 'STARZ', 'SHOWTIME', 'EPIX', 'MGM+', 'BRITBOX', 'ACORN TV', 'SHUDDER', 'CRITERION', 'CRITERION CHANNEL', 'MUBI', 'KANOPY', 'CRUNCHYROLL', 'FUNIMATION', 'ESPN+', 'DAZN', 'FREEVEE', 'IMDB TV', 'BET+', 'HALLMARK MOVIES NOW', 'AMC+']);
+            const tvExact = new Set(['ABC', 'NBC', 'CBS', 'FOX', 'PBS', 'CW', 'THE CW', 'TNT', 'TBS', 'USA NETWORK', 'FX', 'FXX', 'AMC', 'A&E', 'BRAVO', 'HGTV', 'TLC', 'HISTORY', 'HISTORY CHANNEL', 'DISCOVERY CHANNEL', 'FOOD NETWORK', 'NATIONAL GEOGRAPHIC', 'NAT GEO', 'MTV', 'VH1', 'BET', 'COMEDY CENTRAL', 'SYFY', 'HALLMARK CHANNEL', 'LIFETIME', 'OXYGEN', 'E!', 'ESPN', 'ESPN2', 'FS1', 'FOX SPORTS', 'NBCSN', 'NFL NETWORK', 'MLB NETWORK', 'NBA TV', 'GOLF CHANNEL', 'TENNIS CHANNEL', 'CNN', 'MSNBC', 'FOX NEWS', 'CNBC', 'BLOOMBERG TV', 'BBC AMERICA', 'METV', 'ANTENNA TV', 'COMET', 'ION', 'OWN', 'REELZ', 'WE TV', 'FREEFORM', 'NICK', 'NICKELODEON', 'CARTOON NETWORK', 'DISNEY CHANNEL', 'DISNEY XD']);
+            const socialExact = new Set(['FACEBOOK', 'INSTAGRAM', 'TIKTOK', 'TWITTER', 'YOUTUBE', 'SNAPCHAT', 'PINTEREST', 'LINKEDIN', 'REDDIT', 'DISCORD', 'TWITCH', 'THREADS', 'WHATSAPP', 'TELEGRAM', 'WECHAT', 'CLUBHOUSE', 'NEXTDOOR', 'TUMBLR', 'QUORA', 'BEREAL', 'MASTODON', 'BLUESKY']);
+            const gamingExact = new Set(['XBOX', 'XBOX GAME PASS', 'PLAYSTATION', 'PLAYSTATION PLUS', 'PS5', 'PS4', 'NINTENDO', 'NINTENDO SWITCH', 'STEAM', 'EPIC GAMES', 'EPIC GAMES STORE', 'EA PLAY', 'EA SPORTS', 'ACTIVISION', 'BLIZZARD', 'RIOT GAMES', 'ROBLOX', 'MINECRAFT', 'FORTNITE', 'CALL OF DUTY', 'FIFA', 'MADDEN', 'NBA 2K', 'VALORANT', 'LEAGUE OF LEGENDS', 'APEX LEGENDS', 'OVERWATCH', 'WORLD OF WARCRAFT', 'GENSHIN IMPACT', 'CANDY CRUSH']);
+            const audioExact = new Set(['SPOTIFY', 'APPLE MUSIC', 'AMAZON MUSIC', 'PANDORA RADIO', 'PANDORA MUSIC', 'SOUNDCLOUD', 'TIDAL', 'DEEZER', 'IHEARTRADIO', 'IHEART', 'SIRIUSXM', 'SIRIUS XM', 'AUDIBLE', 'STITCHER', 'PODCAST', 'PODCASTS', 'NPR', 'LAST.FM', 'YOUTUBE MUSIC', 'TUNEIN', 'POCKET CASTS', 'OVERCAST', 'CASTBOX']);
+            const newsExact = new Set(['CNN', 'MSNBC', 'FOX NEWS', 'BBC NEWS', 'BBC', 'NEW YORK TIMES', 'NYT', 'WASHINGTON POST', 'WALL STREET JOURNAL', 'WSJ', 'USA TODAY', 'AP NEWS', 'ASSOCIATED PRESS', 'REUTERS', 'NPR NEWS', 'POLITICO', 'THE ATLANTIC', 'BUZZFEED NEWS', 'HUFFPOST', 'HUFFINGTON POST', 'FORBES', 'BLOOMBERG NEWS', 'BUSINESS INSIDER', 'VICE NEWS', 'VOX', 'AXIOS', 'THE GUARDIAN', 'LA TIMES', 'CHICAGO TRIBUNE', 'DAILY MAIL']);
             
-            // Categorize by media type - match on item NAME only for accuracy
-            const mediaTypes = {
-                tv: { platforms: tvNetworks, categoryKeywords: ['TRADITIONAL TV', 'BROADCAST', 'CABLE', 'NETWORK TV'], items: [], label: 'Traditional TV' },
-                streaming: { platforms: streamingPlatforms, categoryKeywords: ['VIRTUAL MVPD', 'FAST'], items: [], label: 'Streaming' },
-                social: { platforms: socialPlatforms, categoryKeywords: ['SOCIAL MEDIA'], items: [], label: 'Social Media' },
-                gaming: { platforms: gamingPlatforms, categoryKeywords: ['GAMES', 'GAMING', 'ESPORTS'], items: [], label: 'Gaming' },
-                audio: { platforms: audioPlatforms, categoryKeywords: ['STREAMING/MUSIC', 'PODCAST', 'RADIO'], items: [], label: 'Audio/Podcasts' },
-                news: { platforms: newsPlatforms, categoryKeywords: ['NEWS', 'MEDIA', 'PUBLISHING'], items: [], label: 'News & Publishing' }
-            };
+            // Known NON-media brands that might match keywords (blacklist)
+            const notMediaBrands = new Set(['PANDORA JEWELRY', 'PANDORA', 'MAX MARA', 'MAXAROMA', 'MAXBONE', 'MAXIM', 'PIMAX', 'SMASHBOX', 'USA PANS', 'FOX RACING', 'DISCOVERY CLOTHING', 'HISTORY COMPANY', 'LIFETIME FITNESS', 'MTV CRIBS FURNITURE', 'A&E BATH', 'BRAVO SIERRA', 'TLC CANDLES', 'SLING BAG', 'MUJI', 'MUJI USA', 'CHICWISH', 'WILDFOX', 'WILDFOX COUTURE', 'BETTY CROCKER', 'DREAMCLOUD', 'BETSEY JOHNSON', 'HALLMARK CARDS', 'PLAYTEX', 'HAWX', 'OXY', 'DUXIANA', 'LENOX', 'LUXY', 'SMASHBOX', 'REFRESH HEALTH', 'NANOLEAF', 'KOPARI', 'KOPARI BEAUTY', 'DOVE BEAUTY', 'DOVE', 'BIME BEAUTY', 'KRUSTEAZ', 'MUD JEANS']);
             
-            // Helper to detect retail brands that shouldn't be in media categories
-            function isRetailBrand(name) {
-                const retailKeywords = ['COFFEE', 'BOTTLE', 'WATER', 'CLOTHING', 'APPAREL', 'SHOES', 'JEWELRY', 'BEAUTY', 'COSMETIC', 'FASHION', 'RETAIL', 'STORE', 'SHOP', 'MART', 'DEPOT', 'FOODS', 'RESTAURANT', 'HOTEL', 'AIRLINE', 'TILBURY', 'SCOTT', 'POTTERY', 'BARN', 'COTTON'];
-                return retailKeywords.some(k => name.includes(k));
+            // Function to check if name EXACTLY matches a platform (not partial)
+            function exactMatchPlatform(itemName, platformSet) {
+                const nameUpper = itemName.toUpperCase().trim();
+                // Check if it's in the blacklist first
+                if (notMediaBrands.has(nameUpper)) return false;
+                // Check for exact match
+                if (platformSet.has(nameUpper)) return true;
+                // Check if name starts with platform name followed by space or end
+                for (const platform of platformSet) {
+                    // Exact match at start (e.g., "NETFLIX ORIGINAL" matches "NETFLIX")
+                    if (nameUpper === platform || nameUpper.startsWith(platform + ' ') || nameUpper.startsWith(platform + ':')) {
+                        return true;
+                    }
+                }
+                return false;
             }
             
+            // Categorize items
+            const mediaTypes = {
+                tv: { items: [], label: 'Traditional TV' },
+                streaming: { items: [], label: 'Streaming' },
+                social: { items: [], label: 'Social Media' },
+                gaming: { items: [], label: 'Gaming' },
+                audio: { items: [], label: 'Audio/Podcasts' },
+                news: { items: [], label: 'News & Publishing' }
+            };
+            
+            // Also categorize by CSV category field as backup
+            const categoryMap = {
+                'STREAMING/PLATFORM': 'streaming',
+                'STREAMING/CHANNEL': 'streaming',
+                'STREAMING/MUSIC': 'audio',
+                'BROADCAST/CABLE': 'tv',
+                'TRADITIONAL TV': 'tv',
+                'CABLE TV': 'tv',
+                'NETWORK TV': 'tv',
+                'SOCIAL MEDIA': 'social',
+                'GAMING': 'gaming',
+                'GAMES': 'gaming',
+                'PODCAST': 'audio',
+                'PODCASTS': 'audio',
+                'RADIO': 'audio',
+                'NEWS': 'news',
+                'MEDIA': 'news'
+            };
+            
             allItems.forEach(item => {
-                const itemNameUpper = item.name.toUpperCase();
+                const nameUpper = item.name.toUpperCase().trim();
                 const catUpper = item.category.toUpperCase();
                 
-                Object.entries(mediaTypes).forEach(([type, config]) => {
-                    // First check if item name matches known platforms
-                    const nameMatch = config.platforms.some(p => {
-                        const pUpper = p.toUpperCase();
-                        return itemNameUpper.includes(pUpper) || itemNameUpper === pUpper;
-                    });
-                    
-                    // Then check if category matches (but only for certain categories)
-                    const categoryMatch = config.categoryKeywords.some(k => catUpper === k || catUpper.includes(k));
-                    
-                    // For TV and Streaming, prioritize platform name matches ONLY
-                    // Don't add retail brands just because they're in a STREAMING category
-                    if (type === 'tv' || type === 'streaming') {
-                        if (nameMatch && !isRetailBrand(itemNameUpper)) {
-                            config.items.push(item);
-                        }
-                    } else if (type === 'social' || type === 'gaming' || type === 'audio') {
-                        // For these, also accept category matches but still prefer name matches
-                        if (nameMatch || (categoryMatch && !isRetailBrand(itemNameUpper))) {
-                            config.items.push(item);
-                        }
-                    } else {
-                        // For news, be more lenient
-                        if (nameMatch || categoryMatch) {
-                            config.items.push(item);
+                // Skip if it's a known non-media brand
+                if (notMediaBrands.has(nameUpper)) return;
+                
+                // Try exact platform matching first
+                if (exactMatchPlatform(item.name, streamingExact)) {
+                    mediaTypes.streaming.items.push(item);
+                } else if (exactMatchPlatform(item.name, tvExact)) {
+                    mediaTypes.tv.items.push(item);
+                } else if (exactMatchPlatform(item.name, socialExact)) {
+                    mediaTypes.social.items.push(item);
+                } else if (exactMatchPlatform(item.name, gamingExact)) {
+                    mediaTypes.gaming.items.push(item);
+                } else if (exactMatchPlatform(item.name, audioExact)) {
+                    mediaTypes.audio.items.push(item);
+                } else if (exactMatchPlatform(item.name, newsExact)) {
+                    mediaTypes.news.items.push(item);
+                } else {
+                    // Fall back to category-based assignment if the category is media-related
+                    const mappedType = categoryMap[catUpper];
+                    if (mappedType && mediaTypes[mappedType]) {
+                        // Only add if item name looks like media (not retail)
+                        const retailWords = ['BEAUTY', 'JEWELRY', 'CLOTHING', 'FASHION', 'APPAREL', 'COSMETIC', 'FURNITURE', 'FOOD', 'RESTAURANT', 'HOTEL', 'HEALTH', 'FITNESS', 'CROCKER', 'COUTURE', 'MARA', 'AROMA'];
+                        const hasRetailWord = retailWords.some(w => nameUpper.includes(w));
+                        if (!hasRetailWord) {
+                            mediaTypes[mappedType].items.push(item);
                         }
                     }
+                }
+            });
+            
+            // Remove duplicates from each category
+            Object.values(mediaTypes).forEach(config => {
+                const seen = new Set();
+                config.items = config.items.filter(item => {
+                    const key = item.name.toUpperCase();
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
                 });
             });
             
@@ -7915,7 +7960,7 @@
                 const elementId = type === 'tv' ? 'mediaTV' : type === 'audio' ? 'mediaAudio' : `media${type.charAt(0).toUpperCase() + type.slice(1)}`;
                 const element = document.getElementById(elementId);
                 if (element) {
-                    element.innerHTML = renderMediaList(sorted);
+                    element.innerHTML = sorted.length > 0 ? renderMediaList(sorted) : '<p style="color: var(--text-secondary); padding: 0.5rem;">No matching media platforms in this profile</p>';
                 }
             });
             
@@ -7925,11 +7970,11 @@
                 label: config.label,
                 avgIndex: config.items.length > 0 ? Math.round(config.items.reduce((sum, i) => sum + i.index, 0) / config.items.length) : 0,
                 count: config.items.length
-            })).filter(c => c.avgIndex > 100).sort((a, b) => b.avgIndex - a.avgIndex);
+            })).filter(c => c.count > 0 && c.avgIndex > 0).sort((a, b) => b.avgIndex - a.avgIndex);
             
             document.getElementById('primaryChannels').innerHTML = channelScores.slice(0, 4).map(c => `
-                <span class="channel-badge">${c.label} (+${c.avgIndex - 100}%)</span>
-            `).join('') || '<span style="color: var(--text-secondary);">Select a profile to see channels</span>';
+                <span class="channel-badge">${c.label} (+${Math.max(0, c.avgIndex - 100)}%)</span>
+            `).join('') || '<span style="color: var(--text-secondary);">No media platform data found</span>';
             
             // Render reach chart
             renderMediaReachChart(channelScores);
