@@ -2400,7 +2400,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         previous_demo_lookup, previous_behavioral_lookup, previous_sample_dates, previous_behavior_dates, previous_brand_input = load_previous_run_data(previous_file_path)
 
     print("📦 Creating sample UID group...")
+    print(f"🔍 DEBUG - Input brands: {brands}")
     cleaned_brands = [clean_brand(b) for b in brands]
+    print(f"🔍 DEBUG - Cleaned brands: {cleaned_brands}")
     
     # Show which processing approach will be used
     if use_full_population_fastpath and not is_genpop:
@@ -2419,6 +2421,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             brand_filter = "1=1"
     else:
         brand_filter = "1=1"
+    
+    print(f"🔍 DEBUG - Brand filter: {brand_filter[:500]}..." if len(brand_filter) > 500 else f"🔍 DEBUG - Brand filter: {brand_filter}")
 
     if use_full_population_fastpath and not is_genpop:
         # Fast path: streaming aggregation optimized for 3XL warehouse and millions of UIDs
@@ -2692,8 +2696,13 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             else:
                 # No demographic filters specified - use original query
                 print(f"⚠️  NO DEMOGRAPHIC FILTERS - Using ALL UIDs (no demographic filtering)")
+                print(f"🔍 DEBUG - Query parameters:")
+                print(f"   - sample_rate: {sample_rate*100}%")
+                print(f"   - master_start_date: {master_start_date}")
+                print(f"   - master_end_date: {master_end_date}")
+                print(f"   - max_uids: {max_uids}")
                 try:
-                    all_uids_result = cur.execute(f"""
+                    query = f"""
                         SELECT UID, COUNT(*) as visit_count
                         FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL SAMPLE ({sample_rate*100})
                         WHERE DELIVERED >= '{master_start_date}'::DATE 
@@ -2706,7 +2715,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         HAVING COUNT(*) >= 1
                         ORDER BY COUNT(*) DESC
                         LIMIT {max_uids}
-                    """).fetchall()
+                    """
+                    print(f"🔍 DEBUG - Executing query (first 500 chars): {query[:500]}...")
+                    all_uids_result = cur.execute(query).fetchall()
                 except Exception as e:
                     if not SILENCE_VERBOSE_OUTPUT:
                         print(f"⚠️ Sampling failed, using direct query: {e}")
@@ -2728,6 +2739,12 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             
             total_active_uids = len(all_uids_result)
             print(f"📊 Found {total_active_uids:,} total active UIDs after applying filters")
+            if total_active_uids == 0:
+                print("❌ WARNING: No UIDs found! Possible causes:")
+                print("   1. Brand name doesn't match anything in database")
+                print("   2. Date range has no data")
+                print("   3. Brand filter is too restrictive")
+                print(f"   DEBUG - Brand filter used: {brand_filter[:300]}...")
             if demo_filter_clause != "1=1":
                 print(f"   ✅ These UIDs match the demographic filter: {demo_filter_clause}")
             else:
