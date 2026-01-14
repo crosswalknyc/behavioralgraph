@@ -2327,7 +2327,88 @@
                                 </div>
                                 <div class="form-group">
                                     <label>Category</label>
-                                    <input type="text" id="brand_category" placeholder="e.g., FOOTWEAR">
+                                    <select id="brand_category" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                        <option value="">-- Select Category --</option>
+                                        <optgroup label="📦 BRAND">
+                                            <option value="ACCESSORIES">Accessories</option>
+                                            <option value="ACTIVEWEAR">Activewear</option>
+                                            <option value="AMUSEMENT PARKS">Amusement Parks</option>
+                                            <option value="APPAREL">Apparel</option>
+                                            <option value="AUTOMOBILE">Automobile</option>
+                                            <option value="B2B">B2B</option>
+                                            <option value="BANKS">Banks</option>
+                                            <option value="BEAUTY">Beauty</option>
+                                            <option value="BETTING">Betting</option>
+                                            <option value="BEVERAGE">Beverage</option>
+                                            <option value="CASUAL DINING">Casual Dining</option>
+                                            <option value="DIGITAL BANKING">Digital Banking</option>
+                                            <option value="EVENTS">Events</option>
+                                            <option value="FOOTWEAR">Footwear</option>
+                                            <option value="GROCERY">Grocery</option>
+                                            <option value="INTIMATES">Intimates</option>
+                                            <option value="JEWELRY">Jewelry</option>
+                                            <option value="MEMBERSHIP">Membership</option>
+                                            <option value="NON PROFIT/CHARITY">Non Profit/Charity</option>
+                                            <option value="PHARMA">Pharma</option>
+                                            <option value="QSR">QSR</option>
+                                            <option value="RETAILERS">Retailers</option>
+                                            <option value="TELECOM">Telecom</option>
+                                            <option value="TICKETING">Ticketing</option>
+                                            <option value="TOY">Toy</option>
+                                            <option value="TRAVEL">Travel</option>
+                                            <option value="VENUE">Venue</option>
+                                            <option value="WORKOUT FACILITY">Workout Facility</option>
+                                        </optgroup>
+                                        <optgroup label="🎬 CONTENT">
+                                            <option value="GAME PLAYERS">Game Players</option>
+                                            <option value="GAMES">Games</option>
+                                            <option value="MOVIE THEATER">Movie Theater</option>
+                                            <option value="PODCAST">Podcast</option>
+                                            <option value="SERIES - APPLE">Series - Apple</option>
+                                            <option value="SERIES - FXP">Series - FXP</option>
+                                            <option value="SERIES - HBO ENTERTAINMENT">Series - HBO Entertainment</option>
+                                            <option value="SERIES - HBO MAX">Series - HBO Max</option>
+                                            <option value="SERIES - NETFLIX">Series - Netflix</option>
+                                            <option value="SERIES - PARAMOUNT TV STUDIOS">Series - Paramount TV Studios</option>
+                                            <option value="SERIES - SONY">Series - Sony</option>
+                                            <option value="SERIES - UNIVERSAL TV">Series - Universal TV</option>
+                                            <option value="SERIES - WBD">Series - WBD</option>
+                                        </optgroup>
+                                        <optgroup label="📊 GEN POP">
+                                            <option value="GEN POP">Gen Pop</option>
+                                        </optgroup>
+                                        <optgroup label="🎵 MUSIC">
+                                            <option value="MUSICIAN/BAND">Musician/Band</option>
+                                        </optgroup>
+                                        <optgroup label="📺 PLATFORMS">
+                                            <option value="APP/PLATFORM">App/Platform</option>
+                                            <option value="BROADCAST/CABLE">Broadcast/Cable</option>
+                                            <option value="CREDIT PROVIDERS">Credit Providers</option>
+                                            <option value="MEDIA">Media</option>
+                                            <option value="SEARCH ENGINE/AI">Search Engine/AI</option>
+                                            <option value="SOCIAL MEDIA">Social Media</option>
+                                            <option value="STREAMING MUSIC">Streaming Music</option>
+                                            <option value="STREAMING VIDEO">Streaming Video</option>
+                                            <option value="VIRTUAL MVPD/FAST">Virtual MVPD/FAST</option>
+                                        </optgroup>
+                                        <optgroup label="⚽ SPORT">
+                                            <option value="MILB">MiLB</option>
+                                            <option value="MLB">MLB</option>
+                                            <option value="NBA">NBA</option>
+                                            <option value="NFL">NFL</option>
+                                            <option value="SPORTS ORGANIZATIONS">Sports Organizations</option>
+                                            <option value="WNBA">WNBA</option>
+                                        </optgroup>
+                                        <optgroup label="⭐ TALENT">
+                                            <option value="ACTOR">Actor</option>
+                                            <option value="ATHLETE">Athlete</option>
+                                            <option value="CREATOR/INFLUENCER">Creator/Influencer</option>
+                                            <option value="EMERGING TALENT">Emerging Talent</option>
+                                            <option value="HOST/PERSONALITY">Host/Personality</option>
+                                            <option value="POLITICS/ACTIVIST">Politics/Activist</option>
+                                            <option value="WRITER/DIRECTOR/AUTHOR/ARTIST">Writer/Director/Author/Artist</option>
+                                        </optgroup>
+                                    </select>
                                 </div>
                             </div>
                             <div class="form-group">
@@ -3863,47 +3944,91 @@
             
             const searchTerm = (document.getElementById('dashProfileSearchInput')?.value || '').toLowerCase();
             
-            // Group by category
-            const byCategory = {};
+            // Group by master category, then by sub-category
+            const byMasterCategory = {};
             profiles.forEach(p => {
                 const cat = p.category || 'UNCATEGORIZED';
-                if (!byCategory[cat]) byCategory[cat] = [];
-                byCategory[cat].push(p);
+                const masterCat = getMasterCategory(cat);
+                if (!byMasterCategory[masterCat]) byMasterCategory[masterCat] = {};
+                if (!byMasterCategory[masterCat][cat]) byMasterCategory[masterCat][cat] = [];
+                byMasterCategory[masterCat][cat].push(p);
             });
 
-            // Filter by search and build HTML
+            // Define master category order
+            const masterOrder = ['BRAND', 'CONTENT', 'GEN POP', 'MUSIC', 'PLATFORMS', 'SPORT', 'TALENT', 'OTHER'];
+            
+            // Build HTML with master categories
             let html = '';
-            Object.keys(byCategory).sort().forEach(cat => {
-                const items = byCategory[cat].filter(p => {
-                    if (!searchTerm) return true;
-                    const fullName = getProfileFullName(p).toLowerCase();
-                    return fullName.includes(searchTerm) || cat.toLowerCase().includes(searchTerm);
+            masterOrder.forEach(master => {
+                const subcats = byMasterCategory[master];
+                if (!subcats) return;
+                
+                const icon = MASTER_CATEGORY_ICONS[master] || '📁';
+                const masterId = 'master_' + master.replace(/[^a-zA-Z0-9]/g, '_');
+                const isMasterExpanded = expandedDashCategories.has(masterId);
+                
+                // Count total items in master category
+                let totalInMaster = 0;
+                Object.values(subcats).forEach(items => totalInMaster += items.length);
+                
+                // Filter check - does any profile in this master category match?
+                let hasMatchingItems = false;
+                if (searchTerm) {
+                    Object.entries(subcats).forEach(([cat, items]) => {
+                        items.forEach(p => {
+                            const fullName = getProfileFullName(p).toLowerCase();
+                            if (fullName.includes(searchTerm) || cat.toLowerCase().includes(searchTerm) || master.toLowerCase().includes(searchTerm)) {
+                                hasMatchingItems = true;
+                            }
+                        });
+                    });
+                    if (!hasMatchingItems) return;
+                }
+                
+                html += `
+                    <div class="profile-cat-item master-cat ${isMasterExpanded ? 'open' : ''}" onclick="toggleDashCategory('${masterId}')" style="background: rgba(90, 154, 217, 0.1); font-weight: 600;">
+                        <span class="cat-arrow">▸</span>
+                        <span class="profile-cat-label">${icon} ${master}</span>
+                        <span class="profile-cat-count">(${totalInMaster})</span>
+                    </div>
+                    <div class="profile-cat-children ${isMasterExpanded ? 'open' : ''}" id="cat-${masterId}" style="padding-left: 0.5rem;">
+                `;
+                
+                // Sub-categories within master
+                Object.keys(subcats).sort().forEach(cat => {
+                    const items = subcats[cat].filter(p => {
+                        if (!searchTerm) return true;
+                        const fullName = getProfileFullName(p).toLowerCase();
+                        return fullName.includes(searchTerm) || cat.toLowerCase().includes(searchTerm);
+                    });
+                    
+                    if (items.length === 0) return;
+                    
+                    const catId = 'dash_' + cat.replace(/[^a-zA-Z0-9]/g, '_');
+                    const isExpanded = expandedDashCategories.has(catId);
+
+                    html += `
+                        <div class="profile-cat-item ${isExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleDashCategory('${catId}')">
+                            <span class="cat-arrow">▸</span>
+                            <span class="profile-cat-label">${cat}</span>
+                            <span class="profile-cat-count">(${items.length})</span>
+                        </div>
+                        <div class="profile-cat-children ${isExpanded ? 'open' : ''}" id="cat-${catId}">
+                            ${items.map(p => {
+                                const id = p.s3_key || p.job_id;
+                                const isActive = selectedDashProfile === id;
+                                const fullName = getProfileFullName(p);
+                                return `
+                                    <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${id}')" title="${fullName}">
+                                        ${fullName}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
                 });
                 
-                if (items.length === 0) return;
-                
-                const catId = 'dash_' + cat.replace(/[^a-zA-Z0-9]/g, '_');
-                const isExpanded = expandedDashCategories.has(catId);
-
-                html += `
-                    <div class="profile-cat-item ${isExpanded ? 'open' : ''}" onclick="toggleDashCategory('${catId}')">
-                        <span class="cat-arrow">▸</span>
-                        <span class="profile-cat-label">${cat}</span>
-                        <span class="profile-cat-count">(${items.length})</span>
-                    </div>
-                    <div class="profile-cat-children ${isExpanded ? 'open' : ''}" id="cat-${catId}">
-                        ${items.map(p => {
-                            const id = p.s3_key || p.job_id;
-                            const isActive = selectedDashProfile === id;
-                            const fullName = getProfileFullName(p);
-                            return `
-                                <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="selectDashboardProfile('${id}')" title="${fullName}">
-                                    ${fullName}
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                `;
+                html += `</div>`;
             });
 
             container.innerHTML = html || '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No profiles found</div>';
@@ -5514,7 +5639,9 @@
                 
                 const actorProfiles = allProfiles.filter(p => {
                     const cat = (p.category || '').toUpperCase();
-                    return cat === 'ACTOR' || cat === 'ACTRESS' || cat.includes('TALENT') || cat.includes('CELEBRITY');
+                    return cat === 'ACTOR' || cat === 'ACTRESS' || cat === 'EMERGING TALENT' || 
+                           cat.includes('TALENT') || cat.includes('CELEBRITY') || cat.includes('HOST') ||
+                           cat.includes('CREATOR') || cat.includes('INFLUENCER');
                 });
                 
                 const brandProfiles = allProfiles.filter(p => {
@@ -6821,6 +6948,37 @@
 
         let jobsDisplayLimit = 50; // Initial display limit for performance
         
+        // Master category mapping for organized display
+        const MASTER_CATEGORIES = {
+            'BRAND': ['ACCESSORIES', 'ACTIVEWEAR', 'AMUSEMENT PARKS', 'APPAREL', 'AUTOMOBILE', 'B2B', 'BANKS', 'BEAUTY', 'BETTING', 'BEVERAGE', 'CASUAL DINING', 'DIGITAL BANKING', 'EVENTS', 'FOOTWEAR', 'GROCERY', 'INTIMATES', 'JEWELRY', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY'],
+            'CONTENT': ['GAME PLAYERS', 'GAMES', 'MOVIE THEATER', 'PODCAST', 'SERIES - APPLE', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'],
+            'GEN POP': ['GEN POP'],
+            'MUSIC': ['MUSICIAN/BAND'],
+            'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'CREDIT PROVIDERS', 'MEDIA', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING VIDEO', 'VIRTUAL MVPD/FAST'],
+            'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'WNBA'],
+            'TALENT': ['ACTOR', 'ATHLETE', 'CREATOR/INFLUENCER', 'EMERGING TALENT', 'HOST/PERSONALITY', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST']
+        };
+        
+        const MASTER_CATEGORY_ICONS = {
+            'BRAND': '📦',
+            'CONTENT': '🎬',
+            'GEN POP': '📊',
+            'MUSIC': '🎵',
+            'PLATFORMS': '📺',
+            'SPORT': '⚽',
+            'TALENT': '⭐'
+        };
+        
+        function getMasterCategory(category) {
+            const cat = (category || '').toUpperCase();
+            for (const [master, subs] of Object.entries(MASTER_CATEGORIES)) {
+                if (subs.includes(cat)) return master;
+                // Also check partial matches for series variations
+                if (cat.startsWith('SERIES')) return 'CONTENT';
+            }
+            return 'OTHER';
+        }
+        
         async function loadJobs(showLoading = true) {
             const container = document.getElementById('jobsList');
             const cacheStatus = document.getElementById('cacheStatus');
@@ -6844,10 +7002,31 @@
                     cacheStatus.innerHTML = `<span style="color: var(--text-secondary); font-size: 0.7rem;">⚡ ${cacheInfo.file_count} files • Updated ${timeAgo}</span>`;
                 }
                 
-                // Populate category filter
+                // Populate category filter with master category grouping
                 const categorySelect = document.getElementById('categoryFilter');
-                categorySelect.innerHTML = '<option value="">All Categories</option>' + 
-                    allCategories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+                let categoryOptions = '<option value="">All Categories</option>';
+                
+                // Group categories by master category
+                const masterOrder = ['BRAND', 'CONTENT', 'GEN POP', 'MUSIC', 'PLATFORMS', 'SPORT', 'TALENT', 'OTHER'];
+                const categoriesByMaster = {};
+                allCategories.forEach(cat => {
+                    const master = getMasterCategory(cat);
+                    if (!categoriesByMaster[master]) categoriesByMaster[master] = [];
+                    categoriesByMaster[master].push(cat);
+                });
+                
+                masterOrder.forEach(master => {
+                    const cats = categoriesByMaster[master];
+                    if (!cats || cats.length === 0) return;
+                    const icon = MASTER_CATEGORY_ICONS[master] || '📁';
+                    categoryOptions += `<optgroup label="${icon} ${master}">`;
+                    cats.sort().forEach(cat => {
+                        categoryOptions += `<option value="${cat}">${cat}</option>`;
+                    });
+                    categoryOptions += '</optgroup>';
+                });
+                
+                categorySelect.innerHTML = categoryOptions;
                 
                 // Reset display limit when loading fresh data
                 jobsDisplayLimit = 50;
@@ -6984,15 +7163,16 @@
         function renderComparisonProfiles(profiles) {
             const container = document.getElementById('compProfileList');
             
-            // Group by category
-            const byCategory = {};
+            // Group by master category, then by sub-category
+            const byMasterCategory = {};
             profiles.forEach(p => {
                 const cat = p.category || 'UNCATEGORIZED';
-                if (!byCategory[cat]) byCategory[cat] = [];
-                byCategory[cat].push(p);
+                const masterCat = getMasterCategory(cat);
+                if (!byMasterCategory[masterCat]) byMasterCategory[masterCat] = {};
+                if (!byMasterCategory[masterCat][cat]) byMasterCategory[masterCat][cat] = [];
+                byMasterCategory[masterCat][cat].push(p);
             });
 
-            const categories = Object.keys(byCategory).sort();
             const totalProfiles = profiles.length;
 
             // Check if all profiles are selected
@@ -7002,55 +7182,87 @@
             let html = `
                 <div class="tree-root">
                     <div class="tree-item" onclick="toggleAllCategories()">
-                        <span class="tree-arrow ${expandedCategories.has('BRAND') ? 'expanded' : ''}">▶</span>
+                        <span class="tree-arrow">▶</span>
                         <input type="checkbox" class="tree-checkbox" ${allSelected ? 'checked' : ''} ${someSelected && !allSelected ? 'indeterminate' : ''} onclick="event.stopPropagation(); selectAllComparison(this.checked)">
-                        <span class="tree-label" style="font-weight: 600;">Select all</span>
+                        <span class="tree-label" style="font-weight: 600;">Select all (${totalProfiles})</span>
                     </div>
                 </div>
-                <div class="tree-item category-item" onclick="toggleBrandCategory()">
-                    <span class="tree-arrow ${expandedCategories.has('BRAND') ? 'expanded' : ''}" id="brand-arrow">▶</span>
-                    <input type="checkbox" class="tree-checkbox" ${allSelected ? 'checked' : ''} onclick="event.stopPropagation(); selectAllComparison(this.checked)">
-                    <span class="tree-label">BRAND</span>
-                </div>
-                <div class="tree-children ${expandedCategories.has('BRAND') ? 'open' : ''}" id="brand-children">
             `;
 
-            categories.forEach(cat => {
-                const items = byCategory[cat];
-                const catId = cat.replace(/[^a-zA-Z0-9]/g, '_');
-                const isExpanded = expandedCategories.has(catId);
+            // Define master category order
+            const masterOrder = ['BRAND', 'CONTENT', 'GEN POP', 'MUSIC', 'PLATFORMS', 'SPORT', 'TALENT', 'OTHER'];
+            
+            masterOrder.forEach(master => {
+                const subcats = byMasterCategory[master];
+                if (!subcats) return;
                 
-                // Check category selection state
-                const catAllSelected = items.every(p => selectedForComparison.has(p.s3_key || p.job_id));
-                const catSomeSelected = items.some(p => selectedForComparison.has(p.s3_key || p.job_id));
+                const icon = MASTER_CATEGORY_ICONS[master] || '📁';
+                const masterId = 'comp_master_' + master.replace(/[^a-zA-Z0-9]/g, '_');
+                const isMasterExpanded = expandedCategories.has(masterId);
+                
+                // Count total items and check selection state
+                let totalInMaster = 0;
+                let allInMasterSelected = true;
+                let someInMasterSelected = false;
+                Object.values(subcats).forEach(items => {
+                    totalInMaster += items.length;
+                    items.forEach(p => {
+                        const id = p.s3_key || p.job_id;
+                        if (selectedForComparison.has(id)) someInMasterSelected = true;
+                        else allInMasterSelected = false;
+                    });
+                });
+                if (totalInMaster === 0) allInMasterSelected = false;
                 
                 html += `
-                    <div class="tree-item category-item" onclick="toggleCategoryGroup('${catId}')">
-                        <span class="tree-arrow ${isExpanded ? 'expanded' : ''}" id="arrow-${catId}">▶</span>
-                        <input type="checkbox" class="tree-checkbox" ${catAllSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleCategorySelection('${cat}')">
-                        <span class="tree-label">${cat}</span>
-                        <span class="tree-count">(${items.length})</span>
+                    <div class="tree-item category-item" onclick="toggleCategoryGroup('${masterId}')" style="background: rgba(90, 154, 217, 0.1);">
+                        <span class="tree-arrow ${isMasterExpanded ? 'expanded' : ''}" id="arrow-${masterId}">▶</span>
+                        <input type="checkbox" class="tree-checkbox" ${allInMasterSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleMasterCategorySelection('${master}')">
+                        <span class="tree-label" style="font-weight: 600;">${icon} ${master}</span>
+                        <span class="tree-count">(${totalInMaster})</span>
                     </div>
-                    <div class="tree-children ${isExpanded ? 'open' : ''}" id="cat-${catId}">
-                        ${items.map(p => {
-                            const id = p.s3_key || p.job_id;
-                            const isSelected = selectedForComparison.has(id);
-                            const colorIdx = Array.from(selectedForComparison).indexOf(id);
-                            const color = isSelected && colorIdx >= 0 ? profileColors[colorIdx % profileColors.length] : '#555';
-                            const fullName = getProfileFullName(p);
-                            return `
-                                <div class="tree-item profile-item ${isSelected ? 'selected' : ''}" onclick="toggleComparisonProfile('${id}')" title="${fullName}">
-                                    <input type="checkbox" class="tree-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleComparisonProfile('${id}')">
-                                    <span class="tree-color" style="background: ${color}"></span>
-                                    <span class="tree-label">${fullName}</span>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
+                    <div class="tree-children ${isMasterExpanded ? 'open' : ''}" id="cat-${masterId}" style="padding-left: 0.5rem;">
                 `;
+                
+                // Sub-categories within master
+                Object.keys(subcats).sort().forEach(cat => {
+                    const items = subcats[cat];
+                    const catId = cat.replace(/[^a-zA-Z0-9]/g, '_');
+                    const isExpanded = expandedCategories.has(catId);
+                    
+                    // Check category selection state
+                    const catAllSelected = items.every(p => selectedForComparison.has(p.s3_key || p.job_id));
+                    const catSomeSelected = items.some(p => selectedForComparison.has(p.s3_key || p.job_id));
+                    
+                    html += `
+                        <div class="tree-item category-item" onclick="event.stopPropagation(); toggleCategoryGroup('${catId}')">
+                            <span class="tree-arrow ${isExpanded ? 'expanded' : ''}" id="arrow-${catId}">▶</span>
+                            <input type="checkbox" class="tree-checkbox" ${catAllSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleCategorySelection('${cat}')">
+                            <span class="tree-label">${cat}</span>
+                            <span class="tree-count">(${items.length})</span>
+                        </div>
+                        <div class="tree-children ${isExpanded ? 'open' : ''}" id="cat-${catId}">
+                            ${items.map(p => {
+                                const id = p.s3_key || p.job_id;
+                                const isSelected = selectedForComparison.has(id);
+                                const colorIdx = Array.from(selectedForComparison).indexOf(id);
+                                const color = isSelected && colorIdx >= 0 ? profileColors[colorIdx % profileColors.length] : '#555';
+                                const fullName = getProfileFullName(p);
+                                return `
+                                    <div class="tree-item profile-item ${isSelected ? 'selected' : ''}" onclick="event.stopPropagation(); toggleComparisonProfile('${id}')" title="${fullName}">
+                                        <input type="checkbox" class="tree-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleComparisonProfile('${id}')">
+                                        <span class="tree-color" style="background: ${color}"></span>
+                                        <span class="tree-label">${fullName}</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
+                });
+                
+                html += `</div>`;
             });
 
-            html += '</div>';
             container.innerHTML = html || '<div style="padding: 1rem; color: var(--text-secondary);">No profiles found</div>';
         }
 
@@ -7084,6 +7296,27 @@
 
         function toggleCategorySelection(category) {
             const items = comparisonProfiles.filter(p => (p.category || 'UNCATEGORIZED') === category);
+            const allSelected = items.every(p => selectedForComparison.has(p.s3_key || p.job_id));
+            
+            items.forEach(p => {
+                const id = p.s3_key || p.job_id;
+                if (allSelected) {
+                    selectedForComparison.delete(id);
+                } else {
+                    selectedForComparison.add(id);
+                }
+            });
+            updateSelectedCount();
+            renderComparisonProfiles(comparisonProfiles);
+        }
+        
+        function toggleMasterCategorySelection(masterCategory) {
+            // Get all profiles in this master category
+            const items = comparisonProfiles.filter(p => {
+                const cat = p.category || 'UNCATEGORIZED';
+                return getMasterCategory(cat) === masterCategory;
+            });
+            
             const allSelected = items.every(p => selectedForComparison.has(p.s3_key || p.job_id));
             
             items.forEach(p => {
