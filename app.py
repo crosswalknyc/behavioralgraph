@@ -1914,6 +1914,31 @@ def force_refresh_cache():
     return jsonify({'success': False, 'error': 'S3 not configured'})
 
 
+@app.route('/api/cached_files')
+@requires_auth
+def get_cached_files():
+    """Get list of cached S3 files for admin panel."""
+    # Make sure cache is loaded
+    if not s3_cache['jobs'] and s3_client:
+        load_persisted_cache()
+    
+    files = []
+    for job in s3_cache.get('jobs', []):
+        files.append({
+            'key': job.get('s3_key', job.get('job_id')),
+            'project_name': job.get('project_name', 'Unknown'),
+            'category': job.get('category', 'Uncategorized'),
+            'created_at': job.get('created_at', ''),
+            'status': job.get('status', 'cached')
+        })
+    
+    return jsonify({
+        'success': True,
+        'files': files,
+        'count': len(files)
+    })
+
+
 def refresh_s3_cache(incremental=True):
     """Refresh the S3 file cache - incremental by default for speed."""
     import time
