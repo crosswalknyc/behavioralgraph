@@ -2436,11 +2436,14 @@ def get_demographics_cache():
 @app.route('/api/build-demographics-cache', methods=['POST'])
 @requires_auth
 def build_demographics_cache():
-    """Build/update demographics cache for all profiles."""
+    """Build/update demographics cache for all profiles - processes in batches to avoid timeout."""
     global demographics_cache
     
     if not s3_client:
         return jsonify({'error': 'S3 not configured'}), 500
+    
+    # Get batch size from request (default 50 to avoid timeout)
+    batch_size = request.args.get('batch', 50, type=int)
     
     # Load existing cache
     load_demographics_cache()
@@ -2449,18 +2452,22 @@ def build_demographics_cache():
     if not s3_cache['jobs']:
         load_persisted_cache()
     
-    updated = 0
-    errors = 0
-    
+    # Find jobs that need caching
+    jobs_to_process = []
     for job in s3_cache.get('jobs', []):
         key = job.get('s3_key')
         if not key or key.startswith('system/'):
             continue
-        
-        # Skip if already cached
-        if key in demographics_cache:
-            continue
-        
+        if key not in demographics_cache:
+            jobs_to_process.append(job)
+    
+    # Process only a batch to avoid timeout
+    batch = jobs_to_process[:batch_size]
+    updated = 0
+    errors = 0
+    
+    for job in batch:
+        key = job.get('s3_key')
         try:
             response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
             csv_content = response['Body'].read().decode('utf-8')
@@ -2476,11 +2483,15 @@ def build_demographics_cache():
     if updated > 0:
         save_demographics_cache()
     
+    remaining = len(jobs_to_process) - len(batch)
+    
     return jsonify({
         'success': True,
         'updated': updated,
         'errors': errors,
-        'totalCached': len(demographics_cache)
+        'totalCached': len(demographics_cache),
+        'remaining': remaining,
+        'needsMore': remaining > 0
     })
 
 

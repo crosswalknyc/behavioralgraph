@@ -5871,24 +5871,44 @@
             const btn = document.getElementById('buildCacheBtn');
             if (btn) {
                 btn.disabled = true;
-                btn.textContent = '🔄 Building cache (this may take a while)...';
             }
-            updateCacheStatus('loading', '🔄 Building demographics cache...');
+            
+            let totalUpdated = 0;
+            let batchNum = 0;
+            let remaining = 1; // Start with 1 to enter loop
             
             try {
-                const response = await fetch('/api/build-demographics-cache', { method: 'POST' });
-                const data = await response.json();
-                if (data.success) {
-                    updateCacheStatus('ready', `✅ Built ${data.updated} profiles, ${data.totalCached} total`);
-                    // Reload the cache
-                    contentDevCache = null;
-                    await preloadDemographicsCache();
-                } else {
-                    updateCacheStatus('error', '❌ Failed to build cache');
+                while (remaining > 0) {
+                    batchNum++;
+                    updateCacheStatus('loading', `🔄 Building cache batch ${batchNum}... (${totalUpdated} done)`);
+                    
+                    const response = await fetch('/api/build-demographics-cache?batch=50', { method: 'POST' });
+                    const data = await response.json();
+                    
+                    if (!data.success) {
+                        throw new Error(data.error || 'Build failed');
+                    }
+                    
+                    totalUpdated += data.updated || 0;
+                    remaining = data.remaining || 0;
+                    
+                    updateCacheStatus('loading', `🔄 Building... ${data.totalCached} cached, ${remaining} remaining`);
+                    
+                    // If no more remaining, we're done
+                    if (!data.needsMore) break;
+                    
+                    // Small delay between batches
+                    await new Promise(r => setTimeout(r, 100));
                 }
+                
+                updateCacheStatus('ready', `✅ Built ${totalUpdated} profiles successfully`);
+                // Reload the cache
+                contentDevCache = null;
+                await preloadDemographicsCache();
+                
             } catch (e) {
                 console.error('Cache build error:', e);
-                updateCacheStatus('error', '❌ Error building cache');
+                updateCacheStatus('error', `❌ Error: ${e.message}`);
             }
             
             if (btn) {
