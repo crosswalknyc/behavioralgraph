@@ -741,11 +741,11 @@
                         <thead>
                             <tr>
                                 <th>Username</th>
-                                <th>Email</th>
+                                <th>Company</th>
+                                <th>Department</th>
                                 <th>Role</th>
                                 <th>Credits</th>
                                 <th>Usage</th>
-                                <th>Last Login</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -880,6 +880,17 @@
                             <input type="checkbox" id="sendWelcomeEmail" checked>
                             <span>Send welcome email with login details</span>
                         </label>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Company</label>
+                        <input type="text" id="newCompany" placeholder="Company name">
+                    </div>
+                    <div class="form-group">
+                        <label>Department / Team</label>
+                        <input type="text" id="newDepartment" placeholder="e.g. Analytics, Marketing">
                     </div>
                 </div>
 
@@ -1034,7 +1045,8 @@
                 const creditsLeft = user.credits === -1 ? '∞' : user.credits;
                 const creditsClass = user.credits === -1 ? 'unlimited' : (user.credits <= 1 ? 'low' : (user.credits === 0 ? 'empty' : ''));
                 const usagePercent = user.credits === -1 ? 0 : (user.credits_used / (user.credits + user.credits_used) * 100) || 0;
-                const email = user.email || '-';
+                const company = user.company || '-';
+                const department = user.department || '-';
                 
                 const row = document.createElement('tr');
                 row.innerHTML = `
@@ -1044,7 +1056,8 @@
                             <span class="view-stats-hint">📊 View Stats</span>
                         </a>
                     </td>
-                    <td style="font-size: 0.75rem; color: var(--text-secondary); max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${email}</td>
+                    <td style="font-size: 0.75rem; color: var(--text-secondary);">${company}</td>
+                    <td style="font-size: 0.75rem; color: var(--text-secondary);">${department}</td>
                     <td><span class="badge badge-${user.role}">${user.role}</span></td>
                     <td>
                         <span class="credits-display ${creditsClass}">${creditsLeft}</span>
@@ -1055,7 +1068,6 @@
                             <div class="usage-fill" style="width: ${usagePercent}%"></div>
                         </div>
                     </td>
-                    <td style="font-size: 0.75rem; color: var(--text-secondary);">${user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}</td>
                     <td>
                         <div class="action-buttons">
                             <button class="btn btn-small btn-secondary" onclick="editUser('${username}')">Edit</button>
@@ -1105,6 +1117,8 @@
             document.getElementById('newPassword').placeholder = 'Auto-generated if empty';
             document.getElementById('sendWelcomeEmail').checked = true;
             document.getElementById('sendWelcomeEmail').parentElement.parentElement.style.display = 'flex';
+            document.getElementById('newCompany').value = '';
+            document.getElementById('newDepartment').value = '';
             document.getElementById('newRole').value = 'user';
             document.getElementById('newCredits').value = '5';
             document.getElementById('unlimitedCredits').checked = false;
@@ -1132,6 +1146,8 @@
             document.getElementById('newPassword').placeholder = 'Leave blank to keep current';
             document.getElementById('sendWelcomeEmail').checked = false;
             document.getElementById('sendWelcomeEmail').parentElement.parentElement.style.display = 'none';
+            document.getElementById('newCompany').value = user.company || '';
+            document.getElementById('newDepartment').value = user.department || '';
             document.getElementById('newRole').value = user.role;
             document.getElementById('newCredits').value = user.credits === -1 ? '0' : user.credits;
             document.getElementById('unlimitedCredits').checked = user.credits === -1;
@@ -1425,6 +1441,8 @@
             const userData = {
                 username: document.getElementById('newUsername').value,
                 email: document.getElementById('newEmail').value,
+                company: document.getElementById('newCompany').value,
+                department: document.getElementById('newDepartment').value,
                 role: document.getElementById('newRole').value,
                 credits: document.getElementById('unlimitedCredits').checked ? -1 : parseInt(document.getElementById('newCredits').value),
                 allowed_categories: document.getElementById('allCategories').checked ? ['*'] : 

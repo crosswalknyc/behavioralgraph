@@ -1309,6 +1309,8 @@ def create_user():
         data['users'][username] = {
             'password_hash': hash_password(password),
             'email': email,
+            'company': req_data.get('company', ''),
+            'department': req_data.get('department', ''),
             'role': role,
             'credits': req_data.get('credits', 5),
             'credits_used': 0,
@@ -1363,6 +1365,10 @@ def update_user(username):
             user['password_hash'] = hash_password(req_data['password'])
         if 'email' in req_data:
             user['email'] = req_data['email']
+        if 'company' in req_data:
+            user['company'] = req_data['company']
+        if 'department' in req_data:
+            user['department'] = req_data['department']
         if 'role' in req_data:
             user['role'] = req_data['role']
         if 'credits' in req_data:
@@ -1818,7 +1824,9 @@ def get_users_list():
         for username, user in data.get('users', {}).items():
             users.append({
                 'username': username,
-                'role': user.get('role', 'user')
+                'role': user.get('role', 'user'),
+                'company': user.get('company', ''),
+                'department': user.get('department', '')
             })
         return jsonify({'success': True, 'users': users})
     except Exception as e:
@@ -1836,6 +1844,8 @@ def get_user_info():
         'success': True,
         'username': session['username'],
         'role': user.get('role', 'user'),
+        'company': user.get('company', ''),
+        'department': user.get('department', ''),
         'credits': user.get('credits', 0),
         'credits_used': user.get('credits_used', 0),
         'allowed_categories': user.get('allowed_categories', ['*']),

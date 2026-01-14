@@ -3221,8 +3221,8 @@
         }
 
         .team-member-avatar {
-            width: 24px;
-            height: 24px;
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
             background: var(--accent-blue);
             display: flex;
@@ -3231,6 +3231,60 @@
             font-size: 0.7rem;
             font-weight: 600;
             color: white;
+            flex-shrink: 0;
+        }
+        
+        .team-member-info {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .team-member-name {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .team-member-dept {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+        }
+        
+        .same-team-badge {
+            font-size: 0.55rem;
+            background: var(--accent-lime);
+            color: var(--bg-dark);
+            padding: 0.15rem 0.35rem;
+            border-radius: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        
+        /* Team Info Box */
+        .team-info-box {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        .team-info-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            padding: 0.25rem 0;
+        }
+        
+        .team-label {
+            color: var(--text-secondary);
+        }
+        
+        .team-info-row span:last-child {
+            font-weight: 500;
+            color: var(--accent-lime);
         }
 
         .collab-main {
@@ -5046,11 +5100,15 @@
                         </div>
                         <button class="btn btn-small" style="width: 100%; margin-top: 0.5rem;" onclick="createWorkspace()">+ New Workspace</button>
                         
-                        <h3 style="margin-top: 1.5rem;">👤 Team Members</h3>
+                        <h3 style="margin-top: 1.5rem;">👤 Your Team</h3>
+                        <div id="userTeamInfo" class="team-info-box">
+                            <div class="team-info-row"><span class="team-label">Company:</span> <span id="userCompany">--</span></div>
+                            <div class="team-info-row"><span class="team-label">Department:</span> <span id="userDepartment">--</span></div>
+                        </div>
                         <div id="teamMembersList" class="team-members-list">
                             <div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">Loading team...</div>
                         </div>
-                        <button class="btn btn-small" style="width: 100%; margin-top: 0.5rem;" onclick="inviteTeamMember()">+ Invite Member</button>
+                        <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.5rem;">Teams are managed by administrators</p>
                     </div>
                     
                     <div class="collab-main">
@@ -11796,22 +11854,6 @@
             }
         }
         
-        function inviteTeamMember() {
-            const email = prompt('Enter team member email:');
-            if (email && email.includes('@')) {
-                // Add to team list
-                const initials = email.substring(0, 2).toUpperCase();
-                const html = `
-                    <div class="team-member">
-                        <div class="team-member-avatar">${initials}</div>
-                        <span>${email.split('@')[0]}</span>
-                    </div>
-                `;
-                document.getElementById('teamMembersList').innerHTML = html + document.getElementById('teamMembersList').innerHTML;
-                alert('Invitation sent to ' + email);
-            }
-        }
-        
         function shareCurrentProfile() {
             if (!currentProfileData && !currentS3Key) {
                 alert('Please select a profile to share.');
@@ -11927,20 +11969,60 @@
             return icons[action] || '📋';
         }
         
-        function loadWorkspaceData() {
-            // Load team members
-            fetch('/api/admin/users', { credentials: 'same-origin' }).then(r => r.json()).then(data => {
-                if (data.users) {
-                    const list = document.getElementById('teamMembersList');
-                    list.innerHTML = data.users.map(u => `
-                        <div class="team-member">
-                            <div class="team-member-avatar">${u.username.substring(0, 2).toUpperCase()}</div>
-                            <span>${u.username}</span>
-                            ${u.role === 'admin' ? '<span style="font-size: 0.6rem; color: var(--accent-lime);">ADMIN</span>' : ''}
-                        </div>
-                    `).join('');
+        async function loadWorkspaceData() {
+            // Get current user info first
+            try {
+                const userResponse = await fetch('/api/user/info', { credentials: 'same-origin' });
+                if (userResponse.ok) {
+                    const userData = await userResponse.json();
+                    if (userData.success) {
+                        // Display user's company and department
+                        document.getElementById('userCompany').textContent = userData.company || 'Not assigned';
+                        document.getElementById('userDepartment').textContent = userData.department || 'Not assigned';
+                        
+                        // Load team members from same company/department
+                        const usersResponse = await fetch('/api/admin/users-list', { credentials: 'same-origin' });
+                        if (usersResponse.ok) {
+                            const usersData = await usersResponse.json();
+                            if (usersData.users) {
+                                const currentCompany = userData.company || '';
+                                const currentDept = userData.department || '';
+                                
+                                // Filter to show teammates (same company AND department)
+                                let teammates = usersData.users.filter(u => 
+                                    u.username !== userData.username && 
+                                    u.company && u.company === currentCompany
+                                );
+                                
+                                // Sort by department match first
+                                teammates.sort((a, b) => {
+                                    const aDept = a.department === currentDept ? 0 : 1;
+                                    const bDept = b.department === currentDept ? 0 : 1;
+                                    return aDept - bDept || a.username.localeCompare(b.username);
+                                });
+                                
+                                const list = document.getElementById('teamMembersList');
+                                if (teammates.length === 0) {
+                                    list.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">No teammates found</div>';
+                                } else {
+                                    list.innerHTML = teammates.map(u => `
+                                        <div class="team-member">
+                                            <div class="team-member-avatar">${u.username.substring(0, 2).toUpperCase()}</div>
+                                            <div class="team-member-info">
+                                                <span class="team-member-name">${u.username}</span>
+                                                <span class="team-member-dept">${u.department || ''}</span>
+                                            </div>
+                                            ${u.department === currentDept ? '<span class="same-team-badge">Same Team</span>' : ''}
+                                        </div>
+                                    `).join('');
+                                }
+                            }
+                        }
+                    }
                 }
-            }).catch(() => {});
+            } catch (e) {
+                console.log('Error loading workspace data:', e);
+            }
         }
         
         // Initialize collaboration when tab is shown
