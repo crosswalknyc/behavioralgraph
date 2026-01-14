@@ -741,9 +741,9 @@
                         <thead>
                             <tr>
                                 <th>Username</th>
+                                <th>Email</th>
                                 <th>Role</th>
-                                <th>Credits Left</th>
-                                <th>Credits Used</th>
+                                <th>Credits</th>
                                 <th>Usage</th>
                                 <th>Last Login</th>
                                 <th>Actions</th>
@@ -864,8 +864,22 @@
                         <input type="text" id="newUsername" placeholder="Enter username" required>
                     </div>
                     <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="newEmail" placeholder="user@company.com" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
                         <label>Password</label>
-                        <input type="password" id="newPassword" placeholder="Enter password">
+                        <input type="password" id="newPassword" placeholder="Auto-generated if empty">
+                        <small style="color: var(--text-secondary); font-size: 0.65rem;">Leave blank to auto-generate and email to user</small>
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: flex-end;">
+                        <label class="checkbox-group" style="margin-bottom: 0.5rem;">
+                            <input type="checkbox" id="sendWelcomeEmail" checked>
+                            <span>Send welcome email with login details</span>
+                        </label>
                     </div>
                 </div>
 
@@ -1020,6 +1034,7 @@
                 const creditsLeft = user.credits === -1 ? '∞' : user.credits;
                 const creditsClass = user.credits === -1 ? 'unlimited' : (user.credits <= 1 ? 'low' : (user.credits === 0 ? 'empty' : ''));
                 const usagePercent = user.credits === -1 ? 0 : (user.credits_used / (user.credits + user.credits_used) * 100) || 0;
+                const email = user.email || '-';
                 
                 const row = document.createElement('tr');
                 row.innerHTML = `
@@ -1029,9 +1044,12 @@
                             <span class="view-stats-hint">📊 View Stats</span>
                         </a>
                     </td>
+                    <td style="font-size: 0.75rem; color: var(--text-secondary); max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${email}</td>
                     <td><span class="badge badge-${user.role}">${user.role}</span></td>
-                    <td><span class="credits-display ${creditsClass}">${creditsLeft}</span></td>
-                    <td>${user.credits_used || 0}</td>
+                    <td>
+                        <span class="credits-display ${creditsClass}">${creditsLeft}</span>
+                        <span style="font-size: 0.65rem; color: var(--text-secondary);">/ ${user.credits_used || 0} used</span>
+                    </td>
                     <td style="min-width: 80px;">
                         <div class="usage-bar">
                             <div class="usage-fill" style="width: ${usagePercent}%"></div>
@@ -1080,8 +1098,13 @@
             document.getElementById('editUsername').value = '';
             document.getElementById('newUsername').value = '';
             document.getElementById('newUsername').disabled = false;
+            document.getElementById('newEmail').value = '';
+            document.getElementById('newEmail').required = true;
             document.getElementById('newPassword').value = '';
-            document.getElementById('newPassword').required = true;
+            document.getElementById('newPassword').required = false;
+            document.getElementById('newPassword').placeholder = 'Auto-generated if empty';
+            document.getElementById('sendWelcomeEmail').checked = true;
+            document.getElementById('sendWelcomeEmail').parentElement.parentElement.style.display = 'flex';
             document.getElementById('newRole').value = 'user';
             document.getElementById('newCredits').value = '5';
             document.getElementById('unlimitedCredits').checked = false;
@@ -1102,9 +1125,13 @@
             document.getElementById('editUsername').value = username;
             document.getElementById('newUsername').value = username;
             document.getElementById('newUsername').disabled = true;
+            document.getElementById('newEmail').value = user.email || '';
+            document.getElementById('newEmail').required = false;
             document.getElementById('newPassword').value = '';
             document.getElementById('newPassword').required = false;
             document.getElementById('newPassword').placeholder = 'Leave blank to keep current';
+            document.getElementById('sendWelcomeEmail').checked = false;
+            document.getElementById('sendWelcomeEmail').parentElement.parentElement.style.display = 'none';
             document.getElementById('newRole').value = user.role;
             document.getElementById('newCredits').value = user.credits === -1 ? '0' : user.credits;
             document.getElementById('unlimitedCredits').checked = user.credits === -1;
@@ -1397,12 +1424,14 @@
 
             const userData = {
                 username: document.getElementById('newUsername').value,
+                email: document.getElementById('newEmail').value,
                 role: document.getElementById('newRole').value,
                 credits: document.getElementById('unlimitedCredits').checked ? -1 : parseInt(document.getElementById('newCredits').value),
                 allowed_categories: document.getElementById('allCategories').checked ? ['*'] : 
                     Array.from(document.querySelectorAll('#categoryCheckboxes input:checked')).map(cb => cb.value),
                 allowed_runs: document.getElementById('allRuns').checked ? ['*'] : 
-                    Array.from(document.querySelectorAll('#runCheckboxes input:checked')).map(cb => cb.value)
+                    Array.from(document.querySelectorAll('#runCheckboxes input:checked')).map(cb => cb.value),
+                send_welcome_email: document.getElementById('sendWelcomeEmail').checked
             };
 
             const password = document.getElementById('newPassword').value;
@@ -1423,7 +1452,25 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast(isEdit ? 'User updated successfully!' : 'User created successfully!');
+                    let message = isEdit ? 'User updated successfully!' : 'User created successfully!';
+                    
+                    // Show email status if available
+                    if (data.email_status) {
+                        if (data.email_status === 'sent') {
+                            message += ' 📧 Welcome email sent!';
+                        } else {
+                            message += ` ⚠️ Email: ${data.email_status}`;
+                        }
+                    }
+                    
+                    // If password was generated but not emailed, show it
+                    if (data.generated_password && !data.email_status?.includes('sent')) {
+                        showToast(message);
+                        alert(`⚠️ Auto-generated password for ${userData.username}:\n\n${data.generated_password}\n\n${data.note || 'Please share this with the user securely.'}`);
+                    } else {
+                        showToast(message);
+                    }
+                    
                     closeModal();
                     loadUsers();
                 } else {

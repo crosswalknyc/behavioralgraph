@@ -1115,29 +1115,159 @@ def get_all_users():
         safe_users[username] = {k: v for k, v in user.items() if k != 'password_hash'}
     return jsonify({'success': True, 'users': safe_users})
 
+def generate_random_password(length=12):
+    """Generate a secure random password."""
+    import string
+    chars = string.ascii_letters + string.digits + "!@#$%"
+    return ''.join(secrets.choice(chars) for _ in range(length))
+
+def send_welcome_email(email, username, password, role):
+    """Send welcome email with login credentials."""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    
+    # Get email config from environment
+    smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+    smtp_port = int(os.environ.get('SMTP_PORT', 587))
+    smtp_user = os.environ.get('SMTP_USER', '')
+    smtp_password = os.environ.get('SMTP_PASSWORD', '')
+    from_email = os.environ.get('FROM_EMAIL', smtp_user)
+    app_url = os.environ.get('APP_URL', 'https://behavioralgraph.onrender.com')
+    
+    if not smtp_user or not smtp_password:
+        print(f"⚠️ SMTP not configured - skipping welcome email for {username}")
+        return False, "SMTP not configured"
+    
+    try:
+        # Create message
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = '🎉 Welcome to Crosswalk Behavioral Graph'
+        msg['From'] = from_email
+        msg['To'] = email
+        
+        # Plain text version
+        text = f"""
+Welcome to Crosswalk Behavioral Graph!
+
+Your account has been created. Here are your login details:
+
+Username: {username}
+Password: {password}
+Role: {role}
+
+Login URL: {app_url}/login
+
+You can change your password after logging in by going to your profile settings.
+
+If you have any questions, please contact your administrator.
+
+Best regards,
+Crosswalk Team
+        """
+        
+        # HTML version
+        html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 20px; }}
+        .container {{ max-width: 600px; margin: 0 auto; background: #16213e; border-radius: 12px; padding: 30px; }}
+        h1 {{ color: #00d9ff; margin-bottom: 20px; }}
+        .credentials {{ background: #0f3460; border-radius: 8px; padding: 20px; margin: 20px 0; }}
+        .field {{ margin: 10px 0; }}
+        .label {{ color: #888; font-size: 12px; text-transform: uppercase; }}
+        .value {{ font-size: 18px; font-weight: bold; color: #fff; font-family: monospace; }}
+        .btn {{ display: inline-block; background: linear-gradient(135deg, #00d9ff, #0099cc); color: #000; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 20px; }}
+        .footer {{ margin-top: 30px; font-size: 12px; color: #666; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎉 Welcome to Crosswalk!</h1>
+        <p>Your account has been created. Here are your login details:</p>
+        
+        <div class="credentials">
+            <div class="field">
+                <div class="label">Username</div>
+                <div class="value">{username}</div>
+            </div>
+            <div class="field">
+                <div class="label">Password</div>
+                <div class="value">{password}</div>
+            </div>
+            <div class="field">
+                <div class="label">Role</div>
+                <div class="value">{role.upper()}</div>
+            </div>
+        </div>
+        
+        <a href="{app_url}/login" class="btn">Login Now →</a>
+        
+        <p style="margin-top: 20px;">You can change your password after logging in if you'd like.</p>
+        
+        <div class="footer">
+            <p>If you have any questions, please contact your administrator.</p>
+            <p>— Crosswalk Team</p>
+        </div>
+    </div>
+</body>
+</html>
+        """
+        
+        part1 = MIMEText(text, 'plain')
+        part2 = MIMEText(html, 'html')
+        msg.attach(part1)
+        msg.attach(part2)
+        
+        # Send email
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.sendmail(from_email, email, msg.as_string())
+        
+        print(f"✅ Welcome email sent to {email} for user {username}")
+        return True, "Email sent successfully"
+        
+    except Exception as e:
+        print(f"❌ Failed to send welcome email to {email}: {e}")
+        return False, str(e)
+
 @app.route('/api/admin/users', methods=['POST'])
 @requires_admin
 def create_user():
-    """Create a new user."""
+    """Create a new user with optional email welcome."""
     try:
         req_data = request.json
         username = req_data.get('username', '').strip().lower()
+        email = req_data.get('email', '').strip().lower()
         password = req_data.get('password', '')
+        send_welcome = req_data.get('send_welcome_email', False)
         
-        if not username or not password:
-            return jsonify({'success': False, 'error': 'Username and password required'})
+        if not username:
+            return jsonify({'success': False, 'error': 'Username required'})
         
         if len(username) < 2:
             return jsonify({'success': False, 'error': 'Username must be at least 2 characters'})
+        
+        # Auto-generate password if not provided
+        generated_password = False
+        if not password:
+            password = generate_random_password()
+            generated_password = True
         
         data = load_users()
         
         if username in data['users']:
             return jsonify({'success': False, 'error': 'Username already exists'})
         
+        role = req_data.get('role', 'user')
+        
         data['users'][username] = {
             'password_hash': hash_password(password),
-            'role': req_data.get('role', 'user'),
+            'email': email,
+            'role': role,
             'credits': req_data.get('credits', 5),
             'credits_used': 0,
             'created_at': datetime.now().isoformat(),
@@ -1147,7 +1277,28 @@ def create_user():
         }
         
         save_users(data)
-        return jsonify({'success': True, 'message': f'User {username} created'})
+        
+        # Send welcome email if requested and email provided
+        email_status = None
+        if send_welcome and email:
+            email_sent, email_message = send_welcome_email(email, username, password, role)
+            email_status = 'sent' if email_sent else f'failed: {email_message}'
+        
+        response = {
+            'success': True, 
+            'message': f'User {username} created',
+            'password_generated': generated_password
+        }
+        
+        if email_status:
+            response['email_status'] = email_status
+        
+        if generated_password and not send_welcome:
+            # If password was generated but no email sent, include it in response for admin
+            response['generated_password'] = password
+            response['note'] = 'Password was auto-generated. Share it with the user securely.'
+        
+        return jsonify(response)
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -1168,6 +1319,8 @@ def update_user(username):
         # Update allowed fields
         if 'password' in req_data and req_data['password']:
             user['password_hash'] = hash_password(req_data['password'])
+        if 'email' in req_data:
+            user['email'] = req_data['email']
         if 'role' in req_data:
             user['role'] = req_data['role']
         if 'credits' in req_data:
