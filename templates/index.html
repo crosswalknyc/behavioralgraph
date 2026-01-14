@@ -176,8 +176,8 @@
             background: rgba(74, 138, 201, 0.2);
         }
 
-        #formView { display: block; }
-        #dashboardView { display: none; }
+        #formView { display: none; }
+        #dashboardView { display: block; }
         #adminView { display: none; }
         
         #adminView iframe {
@@ -3661,8 +3661,10 @@
                 </div>
             </div>
             <div class="view-toggle">
-                <button class="view-btn active" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
-                <button class="view-btn" id="dashboardViewBtn" onclick="showDashboardView()">📊 Dashboard</button>
+                <button class="view-btn active" id="dashboardViewBtn" onclick="showDashboardView()">📊 Dashboard</button>
+                {% if role == 'admin' or role == 'enterprise' %}
+                <button class="view-btn" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
+                {% endif %}
                 {% if role == 'admin' %}
                 <button class="view-btn" id="adminViewBtn" onclick="showAdminView()">🔐 Admin</button>
                 {% endif %}
@@ -4000,7 +4002,9 @@
                         </div>
                     </div>
                     <button class="btn btn-small" onclick="toggleSavedViews()" title="Saved Views">💾 Saved</button>
-                    <button class="btn btn-small" style="background: white; color: #1a1a1a;" onclick="showFormView()">← Back</button>
+                    {% if role == 'admin' or role == 'enterprise' %}
+                    <button class="btn btn-small" style="background: white; color: #1a1a1a;" onclick="showFormView()">+ New Analysis</button>
+                    {% endif %}
                 </div>
             </div>
             
@@ -5185,47 +5189,58 @@
         document.addEventListener('DOMContentLoaded', function() {
             const today = new Date();
             const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-            document.getElementById('end_date').value = formatDate(today);
-            document.getElementById('start_date').value = formatDate(thirtyDaysAgo);
+            const startDateInput = document.getElementById('start_date');
+            const endDateInput = document.getElementById('end_date');
+            if (startDateInput) startDateInput.value = formatDate(thirtyDaysAgo);
+            if (endDateInput) endDateInput.value = formatDate(today);
             loadJobs();
+            // Dashboard is default view - load profiles immediately
+            loadDashboardProfiles();
         });
 
         function formatDate(date) { return date.toISOString().split('T')[0]; }
         function formatNumber(num) { return num ? num.toLocaleString() : '0'; }
 
         function showFormView() {
-            document.getElementById('formView').style.display = 'block';
+            const formView = document.getElementById('formView');
+            if (!formView) return; // Not available for this user role
+            formView.style.display = 'block';
             document.getElementById('dashboardView').style.display = 'none';
             const adminView = document.getElementById('adminView');
             if (adminView) adminView.style.display = 'none';
-            document.getElementById('formViewBtn').classList.add('active');
+            const formBtn = document.getElementById('formViewBtn');
+            if (formBtn) formBtn.classList.add('active');
             document.getElementById('dashboardViewBtn').classList.remove('active');
             const adminBtn = document.getElementById('adminViewBtn');
             if (adminBtn) adminBtn.classList.remove('active');
         }
 
         function showDashboardView() {
-            document.getElementById('formView').style.display = 'none';
+            const formView = document.getElementById('formView');
+            if (formView) formView.style.display = 'none';
             document.getElementById('dashboardView').style.display = 'block';
             const adminView = document.getElementById('adminView');
             if (adminView) adminView.style.display = 'none';
-            document.getElementById('formViewBtn').classList.remove('active');
+            const formBtn = document.getElementById('formViewBtn');
+            if (formBtn) formBtn.classList.remove('active');
             document.getElementById('dashboardViewBtn').classList.add('active');
             const adminBtn = document.getElementById('adminViewBtn');
             if (adminBtn) adminBtn.classList.remove('active');
+            // Auto-load profiles when switching to dashboard
+            loadDashboardProfiles();
         }
 
         function showAdminView() {
-            document.getElementById('formView').style.display = 'none';
+            const formView = document.getElementById('formView');
+            if (formView) formView.style.display = 'none';
             document.getElementById('dashboardView').style.display = 'none';
             const adminView = document.getElementById('adminView');
             if (adminView) adminView.style.display = 'block';
-            document.getElementById('formViewBtn').classList.remove('active');
+            const formBtn = document.getElementById('formViewBtn');
+            if (formBtn) formBtn.classList.remove('active');
             document.getElementById('dashboardViewBtn').classList.remove('active');
             const adminBtn = document.getElementById('adminViewBtn');
             if (adminBtn) adminBtn.classList.add('active');
-            // Load profiles in sidebar when showing dashboard
-            loadDashboardProfiles();
         }
 
         // Activity tracking helper (non-blocking)
