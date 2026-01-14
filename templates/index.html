@@ -2409,38 +2409,8 @@
                         <span id="displayModeLabel">US %</span>
                     </div>
                 </div>
-                <div class="comparison-report-tabs">
-                    <button class="comp-report-tab active" id="profileReportTab" onclick="setCompReportType('profile')">PROFILE REPORT</button>
-                    <button class="comp-report-tab" id="comparisonReportTab" onclick="setCompReportType('comparison')">COMPARISON REPORT</button>
-                    <button class="comp-report-tab" id="rankersReportTab" onclick="setCompReportType('rankers')">RANKERS REPORT</button>
-                </div>
-                <!-- Profile Report View -->
-                <div id="profileReportView" class="report-view" style="display: none;">
-                    <div class="comparison-container">
-                        <div class="comparison-sidebar">
-                            <div class="sidebar-section">
-                                <h3>Category + Profile</h3>
-                                <div style="position: relative; margin-bottom: 0.75rem;">
-                                    <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
-                                    <input type="text" id="profileSearchInput" placeholder="Search" oninput="filterProfileList()" style="padding-left: 32px; width: 100%; box-sizing: border-box;">
-                                </div>
-                                <div class="comparison-profile-list" id="profileSelectList" style="max-height: 500px;">
-                                    <div style="padding: 1rem; color: var(--text-secondary);">Loading profiles...</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="comparison-main" style="padding: 0;">
-                            <div id="profileReportContent">
-                                <div class="comparison-empty">
-                                    <p>Select a profile from the left to view details</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Comparison Report View -->
-                <div id="comparisonReportView" class="report-view">
+                <div id="comparisonReportView" class="report-view" style="display: block;">
                     <div class="comparison-container">
                         <div class="comparison-sidebar">
                             <div class="sidebar-section">
@@ -2481,12 +2451,6 @@
                     </div>
                 </div>
 
-                <!-- Rankers Report View (placeholder) -->
-                <div id="rankersReportView" class="report-view" style="display: none;">
-                    <div class="comparison-empty" style="height: 400px;">
-                        <p>Rankers Report - Coming Soon</p>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -5129,20 +5093,8 @@
 
         function setCompReportType(type) {
             currentReportType = type;
-            document.querySelectorAll('.comp-report-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.report-view').forEach(v => v.style.display = 'none');
-            
-            if (type === 'profile') {
-                document.getElementById('profileReportTab').classList.add('active');
-                document.getElementById('profileReportView').style.display = 'block';
-                loadProfileSelectList();
-            } else if (type === 'comparison') {
-                document.getElementById('comparisonReportTab').classList.add('active');
-                document.getElementById('comparisonReportView').style.display = 'block';
-            } else if (type === 'rankers') {
-                document.getElementById('rankersReportTab').classList.add('active');
-                document.getElementById('rankersReportView').style.display = 'block';
-            }
+            // Show comparison report view (the only view now)
+            document.getElementById('comparisonReportView').style.display = 'block';
         }
 
         function loadProfileSelectList() {
