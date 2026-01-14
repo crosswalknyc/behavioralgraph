@@ -383,6 +383,125 @@
             transition: width 0.3s;
         }
 
+        /* User Link Styles */
+        .user-link {
+            display: flex;
+            flex-direction: column;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.2s;
+        }
+        .user-link:hover {
+            color: var(--accent-cyan);
+        }
+        .view-stats-hint {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .user-link:hover .view-stats-hint {
+            opacity: 1;
+            color: var(--accent-cyan);
+        }
+
+        /* User Details Modal Content */
+        .user-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .user-stat-card {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+        .user-stat-card .stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+        }
+        .user-stat-card .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+        .activity-section {
+            margin-top: 1.5rem;
+        }
+        .activity-section h4 {
+            font-size: 0.9rem;
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .feature-usage-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+        }
+        .feature-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.6rem 0.75rem;
+            background: var(--bg-dark);
+            border-radius: 6px;
+            font-size: 0.8rem;
+        }
+        .feature-item .count {
+            font-weight: 600;
+            color: var(--accent-lime);
+        }
+        .feature-item.low-usage .count {
+            color: var(--text-secondary);
+        }
+        .recent-activity-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .activity-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-dark);
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            font-size: 0.8rem;
+        }
+        .activity-item .time {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+        .user-details-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+        .user-detail-tab {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.85rem;
+            border-radius: 6px 6px 0 0;
+        }
+        .user-detail-tab:hover {
+            background: var(--bg-dark);
+        }
+        .user-detail-tab.active {
+            background: var(--accent-cyan);
+            color: #1a1a1a;
+        }
+
         /* Admin Tabs */
         .admin-tabs {
             display: flex;
@@ -802,6 +921,19 @@
         </div>
     </div>
 
+    <!-- User Details Modal -->
+    <div class="modal" id="userDetailsModal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h2 id="userDetailsTitle">User Details</h2>
+                <button class="modal-close" onclick="closeUserDetails()">&times;</button>
+            </div>
+            <div id="userDetailsContent">
+                <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div class="toast" id="toast"></div>
 
@@ -891,7 +1023,12 @@
                 
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td><strong>${username}</strong></td>
+                    <td>
+                        <a href="#" class="user-link" onclick="showUserDetails('${username}'); return false;">
+                            <strong>${username}</strong>
+                            <span class="view-stats-hint">📊 View Stats</span>
+                        </a>
+                    </td>
                     <td><span class="badge badge-${user.role}">${user.role}</span></td>
                     <td><span class="credits-display ${creditsClass}">${creditsLeft}</span></td>
                     <td>${user.credits_used || 0}</td>
@@ -982,6 +1119,219 @@
 
         function closeModal() {
             document.getElementById('userModal').classList.remove('show');
+        }
+
+        function closeUserDetails() {
+            document.getElementById('userDetailsModal').classList.remove('show');
+        }
+
+        async function showUserDetails(username) {
+            document.getElementById('userDetailsModal').classList.add('show');
+            document.getElementById('userDetailsTitle').textContent = `User Details: ${username}`;
+            document.getElementById('userDetailsContent').innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading user analytics...</div>';
+            
+            try {
+                const response = await fetch(`/api/admin/users/${username}/stats`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    renderUserDetails(username, data);
+                } else {
+                    document.getElementById('userDetailsContent').innerHTML = `<div style="text-align: center; padding: 2rem; color: #ef4444;">Error: ${data.error}</div>`;
+                }
+            } catch (e) {
+                console.error('Error loading user stats:', e);
+                document.getElementById('userDetailsContent').innerHTML = `<div style="text-align: center; padding: 2rem; color: #ef4444;">Failed to load user data</div>`;
+            }
+        }
+
+        function renderUserDetails(username, data) {
+            const user = data.user;
+            const activity = data.activity || {};
+            const featureUsage = activity.feature_usage || {};
+            const profilesViewed = activity.profiles_viewed || [];
+            const recentActions = activity.recent_actions || [];
+            
+            // Calculate most/least used features
+            const featureList = Object.entries(featureUsage).sort((a, b) => b[1] - a[1]);
+            const mostUsed = featureList.slice(0, 5);
+            const leastUsed = featureList.slice(-5).reverse().filter(f => f[1] > 0);
+            
+            // Total actions
+            const totalActions = Object.values(featureUsage).reduce((a, b) => a + b, 0);
+            
+            const content = `
+                <div class="user-stats-grid">
+                    <div class="user-stat-card">
+                        <div class="stat-value">${user.credits === -1 ? '∞' : user.credits}</div>
+                        <div class="stat-label">Credits Remaining</div>
+                    </div>
+                    <div class="user-stat-card">
+                        <div class="stat-value">${user.credits_used || 0}</div>
+                        <div class="stat-label">Runs Executed</div>
+                    </div>
+                    <div class="user-stat-card">
+                        <div class="stat-value">${profilesViewed.length}</div>
+                        <div class="stat-label">Profiles Viewed</div>
+                    </div>
+                    <div class="user-stat-card">
+                        <div class="stat-value">${totalActions}</div>
+                        <div class="stat-label">Total Actions</div>
+                    </div>
+                </div>
+
+                <div class="user-details-tabs">
+                    <button class="user-detail-tab active" onclick="showUserDetailTab('overview', this)">📊 Overview</button>
+                    <button class="user-detail-tab" onclick="showUserDetailTab('features', this)">⚡ Features</button>
+                    <button class="user-detail-tab" onclick="showUserDetailTab('profiles', this)">👁️ Profiles</button>
+                    <button class="user-detail-tab" onclick="showUserDetailTab('activity', this)">🕐 Activity</button>
+                </div>
+
+                <div id="userDetailTab-overview" class="user-detail-content">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                        <div class="activity-section">
+                            <h4>🔥 Most Used Features</h4>
+                            <div class="feature-usage-grid" style="display: block;">
+                                ${mostUsed.length > 0 ? mostUsed.map(([feature, count], i) => `
+                                    <div class="feature-item" style="margin-bottom: 0.5rem;">
+                                        <span>${getFeatureIcon(feature)} ${formatFeatureName(feature)}</span>
+                                        <span class="count">${count} uses</span>
+                                    </div>
+                                `).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem;">No activity yet</div>'}
+                            </div>
+                        </div>
+                        <div class="activity-section">
+                            <h4>❄️ Least Used Features</h4>
+                            <div class="feature-usage-grid" style="display: block;">
+                                ${leastUsed.length > 0 ? leastUsed.map(([feature, count]) => `
+                                    <div class="feature-item low-usage" style="margin-bottom: 0.5rem;">
+                                        <span>${getFeatureIcon(feature)} ${formatFeatureName(feature)}</span>
+                                        <span class="count">${count} uses</span>
+                                    </div>
+                                `).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem;">No data</div>'}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="activity-section">
+                        <h4>📅 Account Info</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div class="feature-item">
+                                <span>Role</span>
+                                <span class="badge badge-${user.role}">${user.role}</span>
+                            </div>
+                            <div class="feature-item">
+                                <span>Last Login</span>
+                                <span>${user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}</span>
+                            </div>
+                            <div class="feature-item">
+                                <span>Account Created</span>
+                                <span>${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown'}</span>
+                            </div>
+                            <div class="feature-item">
+                                <span>Sessions</span>
+                                <span>${activity.total_sessions || 1}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="userDetailTab-features" class="user-detail-content" style="display: none;">
+                    <div class="activity-section">
+                        <h4>⚡ All Feature Usage</h4>
+                        <div class="feature-usage-grid">
+                            ${featureList.length > 0 ? featureList.map(([feature, count]) => `
+                                <div class="feature-item ${count === 0 ? 'low-usage' : ''}">
+                                    <span>${getFeatureIcon(feature)} ${formatFeatureName(feature)}</span>
+                                    <span class="count">${count}</span>
+                                </div>
+                            `).join('') : '<div style="grid-column: span 2; color: var(--text-secondary); font-size: 0.85rem; padding: 1rem; text-align: center;">No feature usage recorded yet</div>'}
+                        </div>
+                    </div>
+                </div>
+
+                <div id="userDetailTab-profiles" class="user-detail-content" style="display: none;">
+                    <div class="activity-section">
+                        <h4>👁️ Profiles Viewed (${profilesViewed.length})</h4>
+                        <div class="recent-activity-list">
+                            ${profilesViewed.length > 0 ? profilesViewed.slice(0, 20).map(p => `
+                                <div class="activity-item">
+                                    <span>📊 ${p.name || p.key}</span>
+                                    <span class="time">${p.viewed_at ? new Date(p.viewed_at).toLocaleString() : ''}</span>
+                                </div>
+                            `).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem; text-align: center;">No profiles viewed yet</div>'}
+                        </div>
+                    </div>
+                </div>
+
+                <div id="userDetailTab-activity" class="user-detail-content" style="display: none;">
+                    <div class="activity-section">
+                        <h4>🕐 Recent Activity</h4>
+                        <div class="recent-activity-list">
+                            ${recentActions.length > 0 ? recentActions.slice(0, 30).map(a => `
+                                <div class="activity-item">
+                                    <span>${getActionIcon(a.action)} ${formatActionName(a.action)}${a.details ? ': ' + a.details : ''}</span>
+                                    <span class="time">${a.timestamp ? new Date(a.timestamp).toLocaleString() : ''}</span>
+                                </div>
+                            `).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem; text-align: center;">No recent activity</div>'}
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 1.5rem; display: flex; gap: 1rem;">
+                    <button class="btn btn-secondary" onclick="closeUserDetails()" style="flex: 1;">Close</button>
+                    <button class="btn btn-primary" onclick="closeUserDetails(); editUser('${username}');" style="flex: 1;">Edit User</button>
+                </div>
+            `;
+            
+            document.getElementById('userDetailsContent').innerHTML = content;
+        }
+
+        function showUserDetailTab(tabName, btn) {
+            document.querySelectorAll('.user-detail-content').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.user-detail-tab').forEach(el => el.classList.remove('active'));
+            document.getElementById('userDetailTab-' + tabName).style.display = 'block';
+            btn.classList.add('active');
+        }
+
+        function getFeatureIcon(feature) {
+            const icons = {
+                'dashboard_view': '📊',
+                'comparison': '⚖️',
+                'demographics': '👥',
+                'behavioral': '🎯',
+                'location': '📍',
+                'affinity': '🎪',
+                'sponsorship': '💰',
+                'talent': '⭐',
+                'media': '📺',
+                'content_dev': '🎬',
+                'segmentation': '🔀',
+                'ai_insights': '🧠',
+                'ai_persona': '🎭',
+                'ai_strategy': '📈',
+                'ai_chat': '💬',
+                'business_intel': '🧪',
+                'export_pdf': '📄',
+                'export_ppt': '📑',
+                'run_analysis': '▶️',
+                'download': '⬇️',
+                'search': '🔍',
+                'login': '🔐',
+                'favorites': '⭐'
+            };
+            return icons[feature] || '📌';
+        }
+
+        function formatFeatureName(feature) {
+            return feature.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
+
+        function getActionIcon(action) {
+            return getFeatureIcon(action.split('_')[0] || action);
+        }
+
+        function formatActionName(action) {
+            return formatFeatureName(action);
         }
 
         function toggleUnlimited() {

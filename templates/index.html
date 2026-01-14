@@ -3595,11 +3595,23 @@
             loadDashboardProfiles();
         }
 
+        // Activity tracking helper (non-blocking)
+        function trackActivity(action, details = '') {
+            fetch('/api/track-activity', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, details })
+            }).catch(() => {}); // Silent fail - don't disrupt UX
+        }
+
         function showTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('tab-' + tabName).classList.add('active');
             event.target.classList.add('active');
+            
+            // Track tab usage
+            trackActivity(tabName);
             
             if (tabName === 'demographics') {
                 // Load profile selector in sidebar
@@ -3815,6 +3827,8 @@
         }
 
         async function submitNewAnalysis() {
+            trackActivity('run_analysis', document.getElementById('brands').value);
+            
             const sameDates = document.getElementById('same_dates').checked;
             
             // Get dates based on same/different dates selection
@@ -4252,6 +4266,9 @@
         async function selectDashboardProfile(profileId) {
             selectedDashProfile = profileId;
             renderDashboardProfileTree(dashboardProfiles);
+            
+            // Track profile view
+            trackActivity('profile_view', profileId);
             
             // Load and display the profile data
             try {
@@ -4749,6 +4766,7 @@
         }
 
         function downloadCurrentCSV() {
+            trackActivity('download_csv', currentS3Key || currentJobId);
             if (currentS3Key) window.location.href = `/api/download-cached/${encodeURIComponent(currentS3Key)}`;
             else if (currentJobId) window.location.href = `/api/download/${currentJobId}`;
         }
@@ -4777,6 +4795,8 @@
                 alert('Please select a profile first');
                 return;
             }
+            
+            trackActivity('ai_insights', currentProfileData.name);
             
             const btn = document.getElementById('insightsBtn');
             const result = document.getElementById('insightsResult');
@@ -4815,6 +4835,8 @@
                 alert('Please select a profile first');
                 return;
             }
+            
+            trackActivity('ai_persona', currentProfileData.name);
             
             const btn = document.getElementById('personaBtn');
             const result = document.getElementById('personaResult');
@@ -4868,6 +4890,8 @@
                 alert('Please select a profile first');
                 return;
             }
+            
+            trackActivity('ai_strategy', currentProfileData.name);
             
             const btn = document.getElementById('strategyBtn');
             const result = document.getElementById('strategyResult');
@@ -6988,6 +7012,8 @@
                 return;
             }
             
+            trackActivity('export_sales_deck', currentProfileData.name);
+            
             const profileName = currentProfileData.name || 'Profile';
             const allItems = collectAllBehavioralItems(currentDashboardData);
             const demographics = currentProfileData.demographics || {};
@@ -8232,6 +8258,8 @@
                 alert('Please select at least 1 profile to compare');
                 return;
             }
+            
+            trackActivity('comparison', `${selectedForComparison.size} profiles`);
 
             const resultsContainer = document.getElementById('comparisonResults');
             const selectedIds = Array.from(selectedForComparison);

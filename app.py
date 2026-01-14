@@ -1060,6 +1060,25 @@ def login_page():
         
         # Update last login
         user['last_login'] = datetime.now().isoformat()
+        
+        # Track session count
+        if 'activity' not in user:
+            user['activity'] = {
+                'feature_usage': {},
+                'profiles_viewed': [],
+                'recent_actions': [],
+                'total_sessions': 0
+            }
+        user['activity']['total_sessions'] = user['activity'].get('total_sessions', 0) + 1
+        
+        # Add login to recent actions
+        user['activity']['recent_actions'].insert(0, {
+            'action': 'login',
+            'details': f'Session #{user["activity"]["total_sessions"]}',
+            'timestamp': datetime.now().isoformat()
+        })
+        user['activity']['recent_actions'] = user['activity']['recent_actions'][:100]
+        
         save_users(users_data)
         
         # Set session
@@ -1182,6 +1201,117 @@ def delete_user(username):
         return jsonify({'success': True, 'message': f'User {username} deleted'})
         
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/users/<username>/stats', methods=['GET'])
+@requires_admin
+def get_user_stats(username):
+    """Get detailed stats and activity for a user."""
+    try:
+        data = load_users()
+        
+        if username not in data['users']:
+            return jsonify({'success': False, 'error': 'User not found'})
+        
+        user = data['users'][username]
+        
+        # Get user activity (stored in user data or separate activity log)
+        activity = user.get('activity', {})
+        
+        # Initialize default activity structure if not present
+        if not activity:
+            activity = {
+                'feature_usage': {},
+                'profiles_viewed': [],
+                'recent_actions': [],
+                'total_sessions': 0
+            }
+        
+        # Return user info (without password) and activity
+        safe_user = {k: v for k, v in user.items() if k not in ['password_hash', 'activity']}
+        
+        return jsonify({
+            'success': True,
+            'user': safe_user,
+            'activity': activity
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/track-activity', methods=['POST'])
+@requires_auth
+def track_user_activity():
+    """Track user activity for analytics."""
+    try:
+        username = session.get('username')
+        if not username:
+            return jsonify({'success': False, 'error': 'Not logged in'})
+        
+        req_data = request.json or {}
+        action = req_data.get('action', '')
+        details = req_data.get('details', '')
+        
+        if not action:
+            return jsonify({'success': False, 'error': 'No action specified'})
+        
+        data = load_users()
+        if username not in data['users']:
+            return jsonify({'success': False, 'error': 'User not found'})
+        
+        user = data['users'][username]
+        
+        # Initialize activity structure if needed
+        if 'activity' not in user:
+            user['activity'] = {
+                'feature_usage': {},
+                'profiles_viewed': [],
+                'recent_actions': [],
+                'total_sessions': 0
+            }
+        
+        activity = user['activity']
+        
+        # Update feature usage count
+        if action in activity['feature_usage']:
+            activity['feature_usage'][action] += 1
+        else:
+            activity['feature_usage'][action] = 1
+        
+        # Add to recent actions (keep last 100)
+        activity['recent_actions'].insert(0, {
+            'action': action,
+            'details': details,
+            'timestamp': datetime.now().isoformat()
+        })
+        activity['recent_actions'] = activity['recent_actions'][:100]
+        
+        # If it's a profile view, track it
+        if action == 'profile_view' and details:
+            # Check if already in list
+            existing = next((p for p in activity['profiles_viewed'] if p.get('key') == details), None)
+            if existing:
+                existing['viewed_at'] = datetime.now().isoformat()
+                existing['view_count'] = existing.get('view_count', 1) + 1
+            else:
+                activity['profiles_viewed'].insert(0, {
+                    'key': details,
+                    'name': details.replace('.csv', '').replace('_', ' '),
+                    'viewed_at': datetime.now().isoformat(),
+                    'view_count': 1
+                })
+            # Keep last 50 profiles
+            activity['profiles_viewed'] = activity['profiles_viewed'][:50]
+        
+        # Save
+        save_users(data)
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        print(f"Activity tracking error: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 # ============================================================================
