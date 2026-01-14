@@ -1262,6 +1262,7 @@ def get_admin_content():
 @requires_admin
 def archive_content():
     """Move files to historic/ folder."""
+    global s3_cache
     try:
         keys = request.json.get('keys', [])
         if not keys:
@@ -1294,9 +1295,8 @@ def archive_content():
                 # Delete original
                 s3.delete_object(Bucket=bucket_name, Key=key)
                 
-                # Update cache
-                if key in s3_cache:
-                    del s3_cache[key]
+                # Remove from cache jobs list
+                s3_cache['jobs'] = [j for j in s3_cache.get('jobs', []) if j.get('key') != key]
                 
                 archived_count += 1
                 print(f"Archived: {key} -> {new_key}")
@@ -1304,7 +1304,8 @@ def archive_content():
             except Exception as e:
                 print(f"Failed to archive {key}: {e}")
         
-        # Persist cache after changes
+        # Update cache counts and persist
+        s3_cache['file_count'] = len(s3_cache.get('jobs', []))
         persist_s3_cache()
         
         return jsonify({
@@ -1376,6 +1377,7 @@ def restore_content():
 @requires_admin
 def delete_content():
     """Permanently delete files from S3."""
+    global s3_cache
     try:
         keys = request.json.get('keys', [])
         if not keys:
@@ -1393,9 +1395,8 @@ def delete_content():
             try:
                 s3.delete_object(Bucket=bucket_name, Key=key)
                 
-                # Update cache
-                if key in s3_cache:
-                    del s3_cache[key]
+                # Remove from cache jobs list
+                s3_cache['jobs'] = [j for j in s3_cache.get('jobs', []) if j.get('key') != key]
                 
                 deleted_count += 1
                 print(f"Deleted permanently: {key}")
@@ -1403,7 +1404,8 @@ def delete_content():
             except Exception as e:
                 print(f"Failed to delete {key}: {e}")
         
-        # Persist cache after changes
+        # Update cache counts and persist
+        s3_cache['file_count'] = len(s3_cache.get('jobs', []))
         persist_s3_cache()
         
         return jsonify({
