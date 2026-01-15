@@ -4290,10 +4290,6 @@
                 </div>
                 <div class="demo-grid">
                     <div class="demo-sidebar">
-                        <div class="selected-profile-info">
-                            <div class="brand-box"><h2 id="dashBrandName">Select a profile</h2></div>
-                            <div class="date-range-box" id="dashDateRange">Date Range: --</div>
-                        </div>
                         <div class="sidebar-header-section">
                             <h3>Select Profile</h3>
                             <input type="text" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search" onkeyup="filterDashboardProfiles()">
@@ -5870,10 +5866,6 @@
             // Update header profile info
             document.getElementById('dashBrandNameHeader').textContent = (brandName || 'Brand').toUpperCase();
             document.getElementById('dashDateRangeHeader').textContent = 'Date Range: ' + (dateRange || '--');
-            
-            // Also update sidebar (legacy)
-            document.getElementById('dashBrandName').textContent = brandName || 'Brand';
-            document.getElementById('dashDateRange').textContent = 'Date Range: ' + (dateRange || '--');
 
             const parsed = parseAllData(csvData);
             
@@ -6211,10 +6203,6 @@
                     // Update header profile info
                     document.getElementById('dashBrandNameHeader').textContent = brandName.toUpperCase();
                     document.getElementById('dashDateRangeHeader').textContent = data.date_range ? `Date Range: ${data.date_range}` : 'Date Range: --';
-                    
-                    // Update sidebar (legacy)
-                    document.getElementById('dashBrandName').textContent = brandName.toUpperCase();
-                    document.getElementById('dashDateRange').textContent = data.date_range ? `Date Range: ${data.date_range}` : 'Date Range: --';
                     document.getElementById('dashSampleSize').textContent = formatNumber(parsed.sampleSize);
                     document.getElementById('dashProjectedUS').textContent = formatNumber(parsed.projectedUS);
                     
