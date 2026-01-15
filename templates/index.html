@@ -6695,7 +6695,7 @@
                 plugins: [ChartDataLabels]
             });
             
-            // Education - horizontal bar
+            // Education - horizontal bar with Gen Pop
             if (demographics.education && Object.keys(demographics.education).length > 0) {
                 const eduLabels = Object.keys(demographics.education);
                 const eduGenPop = eduLabels.map(k => demographicsGenPop.education?.[k] || 0);
@@ -6707,51 +6707,174 @@
                     data: { labels: eduLabels, datasets: [{ data: eduData, backgroundColor: '#a6e22e', borderRadius: 4 }] },
                     options: { 
                         indexAxis: 'y', responsive: true, maintainAspectRatio: false, 
-                        plugins: { legend: { display: false }, datalabels: { anchor: 'end', align: 'end', font: { size: 9 }, color: (ctx) => (eduGenPop[ctx.dataIndex] > 0 && eduPcts[ctx.dataIndex] >= eduGenPop[ctx.dataIndex]) ? '#10b981' : '#ef4444', formatter: (v, ctx) => isProjection ? formatNumber(Math.round(v)) : eduPcts[ctx.dataIndex].toFixed(1) + '%' } }, 
+                        plugins: { 
+                            legend: { display: false }, 
+                            datalabels: { 
+                                anchor: 'end', 
+                                align: 'end', 
+                                font: { size: 9, weight: 'bold' }, 
+                                color: (ctx) => {
+                                    const pct = eduPcts[ctx.dataIndex] || 0;
+                                    const genPop = eduGenPop[ctx.dataIndex] || 0;
+                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
+                                },
+                                formatter: (v, ctx) => {
+                                    const pct = eduPcts[ctx.dataIndex] || 0;
+                                    const genPop = eduGenPop[ctx.dataIndex] || 0;
+                                    const genPopProj = Math.round((genPop / 100) * US_POPULATION);
+                                    if (isProjection) {
+                                        return genPop > 0 ? `${formatNumber(Math.round(v))} (GP: ${formatNumber(genPopProj)})` : formatNumber(Math.round(v));
+                                    }
+                                    return genPop > 0 ? `${pct.toFixed(1)}% (GP: ${genPop.toFixed(1)}%)` : pct.toFixed(1) + '%';
+                                }
+                            } 
+                        }, 
                         scales: { x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 9 } } } } 
                     },
                     plugins: [ChartDataLabels]
                 });
             }
             
-            // Relationship - doughnut
+            // Relationship - doughnut with Gen Pop
             if (demographics.relationship && Object.keys(demographics.relationship).length > 0) {
                 const relLabels = Object.keys(demographics.relationship);
+                const relGenPop = relLabels.map(k => demographicsGenPop.relationship?.[k] || 0);
                 const relPcts = Object.values(demographics.relationship);
                 const relData = isProjection ? relLabels.map(k => demographicsProjection.relationship?.[k] || 0) : relPcts;
                 
                 charts.relationship = new Chart(document.getElementById('relationshipChart'), {
                     type: 'doughnut',
                     data: { labels: relLabels, datasets: [{ data: relData, backgroundColor: colors }] },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 9 } } }, datalabels: { display: false } } },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        plugins: { 
+                            legend: { 
+                                position: 'right', 
+                                labels: { 
+                                    color: '#e6f1ff', 
+                                    font: { size: 9 },
+                                    generateLabels: (chart) => {
+                                        const data = chart.data;
+                                        return data.labels.map((label, i) => {
+                                            const pct = relPcts[i] || 0;
+                                            const genPop = relGenPop[i] || 0;
+                                            const genPopProj = Math.round((genPop / 100) * US_POPULATION);
+                                            const val = data.datasets[0].data[i];
+                                            const valStr = isProjection ? formatNumber(Math.round(val)) : pct.toFixed(1) + '%';
+                                            const gpStr = genPop > 0 
+                                                ? (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${genPop.toFixed(1)}%)`)
+                                                : '';
+                                            const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
+                                            return {
+                                                text: `${label} ${valStr}${gpStr}`,
+                                                fillStyle: data.datasets[0].backgroundColor[i],
+                                                fontColor: indexColor,
+                                                index: i
+                                            };
+                                        });
+                                    }
+                                } 
+                            }, 
+                            datalabels: { display: false } 
+                        } 
+                    },
                     plugins: [ChartDataLabels]
                 });
             }
             
-            // Sexual Orientation - doughnut
+            // Sexual Orientation - doughnut with Gen Pop
             if (demographics.sexual_orientation && Object.keys(demographics.sexual_orientation).length > 0) {
                 const soLabels = Object.keys(demographics.sexual_orientation);
+                const soGenPop = soLabels.map(k => demographicsGenPop.sexual_orientation?.[k] || 0);
                 const soPcts = Object.values(demographics.sexual_orientation);
                 const soData = isProjection ? soLabels.map(k => demographicsProjection.sexual_orientation?.[k] || 0) : soPcts;
                 
                 charts.sexualOrientation = new Chart(document.getElementById('sexualOrientationChart'), {
                     type: 'doughnut',
                     data: { labels: soLabels, datasets: [{ data: soData, backgroundColor: colors }] },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 9 } } }, datalabels: { display: false } } },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        plugins: { 
+                            legend: { 
+                                position: 'right', 
+                                labels: { 
+                                    color: '#e6f1ff', 
+                                    font: { size: 9 },
+                                    generateLabels: (chart) => {
+                                        const data = chart.data;
+                                        return data.labels.map((label, i) => {
+                                            const pct = soPcts[i] || 0;
+                                            const genPop = soGenPop[i] || 0;
+                                            const genPopProj = Math.round((genPop / 100) * US_POPULATION);
+                                            const val = data.datasets[0].data[i];
+                                            const valStr = isProjection ? formatNumber(Math.round(val)) : pct.toFixed(1) + '%';
+                                            const gpStr = genPop > 0 
+                                                ? (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${genPop.toFixed(1)}%)`)
+                                                : '';
+                                            const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
+                                            return {
+                                                text: `${label} ${valStr}${gpStr}`,
+                                                fillStyle: data.datasets[0].backgroundColor[i],
+                                                fontColor: indexColor,
+                                                index: i
+                                            };
+                                        });
+                                    }
+                                } 
+                            }, 
+                            datalabels: { display: false } 
+                        } 
+                    },
                     plugins: [ChartDataLabels]
                 });
             }
             
-            // Parental Status - doughnut
+            // Parental Status - doughnut with Gen Pop
             if (demographics.parental_status && Object.keys(demographics.parental_status).length > 0) {
                 const psLabels = Object.keys(demographics.parental_status);
+                const psGenPop = psLabels.map(k => demographicsGenPop.parental_status?.[k] || 0);
                 const psPcts = Object.values(demographics.parental_status);
                 const psData = isProjection ? psLabels.map(k => demographicsProjection.parental_status?.[k] || 0) : psPcts;
                 
                 charts.parentalStatus = new Chart(document.getElementById('parentalStatusChart'), {
                     type: 'doughnut',
                     data: { labels: psLabels, datasets: [{ data: psData, backgroundColor: colors }] },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#e6f1ff', font: { size: 9 } } }, datalabels: { display: false } } },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        plugins: { 
+                            legend: { 
+                                position: 'right', 
+                                labels: { 
+                                    color: '#e6f1ff', 
+                                    font: { size: 9 },
+                                    generateLabels: (chart) => {
+                                        const data = chart.data;
+                                        return data.labels.map((label, i) => {
+                                            const pct = psPcts[i] || 0;
+                                            const genPop = psGenPop[i] || 0;
+                                            const genPopProj = Math.round((genPop / 100) * US_POPULATION);
+                                            const val = data.datasets[0].data[i];
+                                            const valStr = isProjection ? formatNumber(Math.round(val)) : pct.toFixed(1) + '%';
+                                            const gpStr = genPop > 0 
+                                                ? (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${genPop.toFixed(1)}%)`)
+                                                : '';
+                                            const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
+                                            return {
+                                                text: `${label} ${valStr}${gpStr}`,
+                                                fillStyle: data.datasets[0].backgroundColor[i],
+                                                fontColor: indexColor,
+                                                index: i
+                                            };
+                                        });
+                                    }
+                                } 
+                            }, 
+                            datalabels: { display: false } 
+                        } 
+                    },
                     plugins: [ChartDataLabels]
                 });
             }
