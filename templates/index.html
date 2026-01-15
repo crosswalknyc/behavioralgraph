@@ -6207,8 +6207,8 @@
                     result.demographicsProjection.parental_status[value] = usProjection;
                 }
                 
-                // Interests category
-                if (category === 'INTERESTS' && value) {
+                // Interests category (handle both singular and plural)
+                if ((category === 'INTEREST' || category === 'INTERESTS') && value) {
                     if (!result.interests[value]) {
                         result.interests[value] = { pct, index, genPopPct };
                     }
