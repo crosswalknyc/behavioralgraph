@@ -736,19 +736,12 @@ def connect_snowflake():
         print("🔌 Connecting to Snowflake...")
     
     # Load credentials from config or environment variables
+    from config import SNOWFLAKE_CONFIG
     import os
     
-    # Try to load from config.py, fall back to empty dict if not available
-    try:
-        from config import SNOWFLAKE_CONFIG
-    except ImportError:
-        print("⚠️ config.py not found, using environment variables only")
-        SNOWFLAKE_CONFIG = {}
-    
-    # Environment variables take precedence over config file
-    user = os.environ.get('SNOWFLAKE_USER') or SNOWFLAKE_CONFIG.get('user', 'hotdogsandcheezeits')
+    user = os.environ.get('SNOWFLAKE_USER') or SNOWFLAKE_CONFIG.get('user', '')
     password = os.environ.get('SNOWFLAKE_PASSWORD') or SNOWFLAKE_CONFIG.get('password', '')
-    account = os.environ.get('SNOWFLAKE_ACCOUNT') or SNOWFLAKE_CONFIG.get('account', 'qsodrkt-hgb46445')
+    account = os.environ.get('SNOWFLAKE_ACCOUNT') or SNOWFLAKE_CONFIG.get('account', '')
     warehouse = os.environ.get('SNOWFLAKE_WAREHOUSE') or SNOWFLAKE_CONFIG.get('warehouse', 'BEHAVIORGRAPH6X')
     database = os.environ.get('SNOWFLAKE_DATABASE') or SNOWFLAKE_CONFIG.get('database', 'BEHAVIORALGRAPH')
     schema = os.environ.get('SNOWFLAKE_SCHEMA') or SNOWFLAKE_CONFIG.get('schema', 'PUBLIC')
@@ -758,20 +751,9 @@ def connect_snowflake():
     if not user or not account:
         raise ValueError("SNOWFLAKE_USER and SNOWFLAKE_ACCOUNT must be set as environment variables")
     
-    if not token and not password:
-        raise ValueError("Either SNOWFLAKE_TOKEN or SNOWFLAKE_PASSWORD must be set in environment variables")
-    
-    conn = None
-    
-    # Disable OCSP/SSL checking via environment variables (fixes certificate errors)
-    os.environ['SF_OCSP_RESPONSE_CACHE_SERVER_ENABLED'] = 'false'
-    os.environ['SF_OCSP_FAIL_OPEN'] = 'true'
-    os.environ['SNOWFLAKE_INSECURE_MODE'] = 'true'
-    
-    # Try programmatic access token first
-    if token:
-        try:
-            print(f"🔑 Attempting PAT authentication for user: {user}")
+    # Try programmatic access token first, fallback to password if needed
+    try:
+        if token:
             conn = snowflake.connector.connect(
                 user=user,
                 token=token,
@@ -779,41 +761,29 @@ def connect_snowflake():
                 warehouse=warehouse,
                 database=database,
                 schema=schema,
-                role=role,
-                authenticator='PROGRAMMATIC_ACCESS_TOKEN',
-                # Completely disable SSL verification to fix certificate errors
-                insecure_mode=True,
-                client_session_keep_alive=True
+                role=role
             )
             if not SILENCE_VERBOSE_OUTPUT:
                 print("✅ Connected using programmatic access token")
-        except Exception as token_error:
+        else:
+            raise Exception("No token provided, using password auth")
+    except Exception as token_error:
+        if not SILENCE_VERBOSE_OUTPUT:
             print(f"⚠️ Token authentication failed: {token_error}")
-            conn = None
-    
-    # Fallback to password if token failed or wasn't provided
-    if conn is None and password:
-        try:
-            print(f"🔄 Attempting password authentication for user: {user}")
-            conn = snowflake.connector.connect(
-                user=user,
-                password=password,
-                account=account,
-                warehouse=warehouse,
-                database=database,
-                schema=schema,
-                role=role,
-                # Completely disable SSL verification to fix certificate errors
-                insecure_mode=True,
-                client_session_keep_alive=True
-            )
-            if not SILENCE_VERBOSE_OUTPUT:
-                print("✅ Connected using password authentication")
-        except Exception as pwd_error:
-            raise ValueError(f"Password authentication also failed: {pwd_error}")
-    
-    if conn is None:
-        raise ValueError("All authentication methods failed. Check SNOWFLAKE_TOKEN and SNOWFLAKE_PASSWORD.")
+            print("🔄 Falling back to password authentication...")
+        if not password:
+            raise ValueError("SNOWFLAKE_PASSWORD must be set as environment variable")
+        conn = snowflake.connector.connect(
+            user=user,
+            password=password,
+            account=account,
+            warehouse=warehouse,
+            database=database,
+            schema=schema,
+            role=role
+        )
+        if not SILENCE_VERBOSE_OUTPUT:
+            print("✅ Connected using password authentication")
     with conn.cursor() as cur:
         cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
         # INTELLIGENT WAREHOUSE SCALING: Match warehouse size to data volume
@@ -2400,9 +2370,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         previous_demo_lookup, previous_behavioral_lookup, previous_sample_dates, previous_behavior_dates, previous_brand_input = load_previous_run_data(previous_file_path)
 
     print("📦 Creating sample UID group...")
-    print(f"🔍 DEBUG - Input brands: {brands}")
     cleaned_brands = [clean_brand(b) for b in brands]
-    print(f"🔍 DEBUG - Cleaned brands: {cleaned_brands}")
     
     # Show which processing approach will be used
     if use_full_population_fastpath and not is_genpop:
@@ -2421,8 +2389,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             brand_filter = "1=1"
     else:
         brand_filter = "1=1"
-    
-    print(f"🔍 DEBUG - Brand filter: {brand_filter[:500]}..." if len(brand_filter) > 500 else f"🔍 DEBUG - Brand filter: {brand_filter}")
 
     if use_full_population_fastpath and not is_genpop:
         # Fast path: streaming aggregation optimized for 3XL warehouse and millions of UIDs
@@ -2696,13 +2662,8 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             else:
                 # No demographic filters specified - use original query
                 print(f"⚠️  NO DEMOGRAPHIC FILTERS - Using ALL UIDs (no demographic filtering)")
-                print(f"🔍 DEBUG - Query parameters:")
-                print(f"   - sample_rate: {sample_rate*100}%")
-                print(f"   - master_start_date: {master_start_date}")
-                print(f"   - master_end_date: {master_end_date}")
-                print(f"   - max_uids: {max_uids}")
                 try:
-                    query = f"""
+                    all_uids_result = cur.execute(f"""
                         SELECT UID, COUNT(*) as visit_count
                         FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL SAMPLE ({sample_rate*100})
                         WHERE DELIVERED >= '{master_start_date}'::DATE 
@@ -2715,9 +2676,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                         HAVING COUNT(*) >= 1
                         ORDER BY COUNT(*) DESC
                         LIMIT {max_uids}
-                    """
-                    print(f"🔍 DEBUG - Executing query (first 500 chars): {query[:500]}...")
-                    all_uids_result = cur.execute(query).fetchall()
+                    """).fetchall()
                 except Exception as e:
                     if not SILENCE_VERBOSE_OUTPUT:
                         print(f"⚠️ Sampling failed, using direct query: {e}")
@@ -2739,37 +2698,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             
             total_active_uids = len(all_uids_result)
             print(f"📊 Found {total_active_uids:,} total active UIDs after applying filters")
-            
-            # If 0 results with SAMPLE, try without SAMPLE as fallback
-            if total_active_uids == 0:
-                print("⚠️ No results with SAMPLE clause, trying without sampling...")
-                try:
-                    fallback_query = f"""
-                        SELECT UID, COUNT(*) as visit_count
-                        FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-                        WHERE DELIVERED >= '{master_start_date}'::DATE 
-                          AND DELIVERED <= '{master_end_date}'::DATE
-                          AND ({brand_filter})
-                          AND COMMON_NAME IS NOT NULL
-                          AND COMMON_NAME != ''
-                        GROUP BY UID
-                        HAVING COUNT(*) >= 1
-                        ORDER BY COUNT(*) DESC
-                        LIMIT {max_uids}
-                    """
-                    all_uids_result = cur.execute(fallback_query).fetchall()
-                    total_active_uids = len(all_uids_result)
-                    print(f"📊 Found {total_active_uids:,} UIDs WITHOUT sampling")
-                except Exception as fallback_error:
-                    print(f"❌ Fallback query also failed: {fallback_error}")
-            
-            if total_active_uids == 0:
-                print("❌ WARNING: No UIDs found! Possible causes:")
-                print("   1. Brand name doesn't match anything in database")
-                print("   2. Date range has no data")
-                print("   3. Brand filter is too restrictive")
-                print(f"   DEBUG - Brand filter used: {brand_filter[:300]}...")
-                
             if demo_filter_clause != "1=1":
                 print(f"   ✅ These UIDs match the demographic filter: {demo_filter_clause}")
             else:
@@ -3842,20 +3770,6 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         inflated_sample_size = bounded * INFLATION_FACTOR
         final_sample_size = min(inflated_sample_size, GENPOP_SAMPLE_CAP)
         final_sample_size = (final_sample_size // 10) * 10
-    
-    # SAMPLE SIZE CONSISTENCY: If updating from previous run, ensure within ±2%
-    if previous_file_path:
-        try:
-            previous_sample_size = get_previous_sample_size(previous_file_path)
-            if previous_sample_size:
-                final_sample_size = ensure_sample_size_consistency(
-                    final_sample_size, 
-                    previous_sample_size, 
-                    tolerance=2.0
-                )
-                print(f"✅ Sample size consistency applied: {final_sample_size:,}")
-        except Exception as e:
-            print(f"⚠️ Could not apply sample size consistency: {e}")
     
     df_sample = pd.DataFrame([
         {
@@ -8753,78 +8667,20 @@ def load_previous_run_data(file_path):
         
     except Exception as e:
         print(f"❌ Error processing previous run data: {e}")
-        return {}, {}, "", "", ""
-
-def ensure_sample_size_consistency(new_sample_size, previous_sample_size, tolerance=2.0):
-    """
-    Ensure sample size is within ±tolerance% of the previous run's sample size.
-    If outside tolerance, adjust to be within the allowed range.
-    Returns the adjusted sample size.
-    """
-    if not previous_sample_size or previous_sample_size == 0:
-        return new_sample_size
-    
-    print(f"🔍 Checking sample size consistency...")
-    print(f"   Previous: {previous_sample_size:,}")
-    print(f"   New: {new_sample_size:,}")
-    
-    # Calculate allowed range
-    min_allowed = int(previous_sample_size * (1 - tolerance / 100))
-    max_allowed = int(previous_sample_size * (1 + tolerance / 100))
-    
-    print(f"   Allowed range (±{tolerance}%): {min_allowed:,} to {max_allowed:,}")
-    
-    # Check if new sample size is within tolerance
-    if min_allowed <= new_sample_size <= max_allowed:
-        print(f"   ✅ Sample size within tolerance")
-        return new_sample_size
-    
-    # Adjust sample size to be within tolerance
-    if new_sample_size < min_allowed:
-        adjusted = min_allowed + np.random.randint(0, int(previous_sample_size * 0.005))  # Small random variation
-        print(f"   📏 Adjusted sample size: {new_sample_size:,} → {adjusted:,} (was below minimum)")
-    else:
-        adjusted = max_allowed - np.random.randint(0, int(previous_sample_size * 0.005))  # Small random variation
-        print(f"   📏 Adjusted sample size: {new_sample_size:,} → {adjusted:,} (was above maximum)")
-    
-    return adjusted
-
-def get_previous_sample_size(previous_file_path):
-    """Extract sample size from a previous run CSV file."""
-    if not previous_file_path or not os.path.exists(previous_file_path):
-        return None
-    
-    try:
-        df = pd.read_csv(previous_file_path)
-        sample_mask = df['Column'].str.upper() == 'SAMPLE SIZE'
-        if sample_mask.any():
-            # Try Category Share column first, then Percentage
-            for col in ['Category Share', 'Percentage', 'Original Raw Numbers']:
-                if col in df.columns and sample_mask.any():
-                    val = df.loc[sample_mask, col].iloc[0]
-                    if pd.notna(val):
-                        sample_size = int(float(str(val).replace(',', '').replace('%', '')))
-                        if col == 'Percentage' and sample_size < 1000:
-                            continue  # This is a percentage, not a count
-                        print(f"📊 Previous sample size from {col}: {sample_size:,}")
-                        return sample_size
-    except Exception as e:
-        print(f"⚠️ Could not extract previous sample size: {e}")
-    
-    return None
+        return {}, {}, "", ""
 
 def ensure_demographic_consistency(df_demo, previous_demo_lookup):
     """
     Ensure demographic percentages are consistent with previous run (small fluctuations only).
-    Adjusts new demographics to be within ±2% of previous values.
-    Uses constrained renormalization to maintain ±2% rule while getting close to 100% totals.
+    Adjusts new demographics to be within ±2.3% of previous values.
+    Uses constrained renormalization to maintain ±2.3% rule while getting close to 100% totals.
     """
     if not previous_demo_lookup:
         return df_demo
     
-    print("🔄 Ensuring demographic consistency with previous run (±2% rule)...")
+    print("🔄 Ensuring demographic consistency with previous run (±2.3% rule)...")
     
-    # Process each category separately to maintain ±2% constraints
+    # Process each category separately to maintain ±2.3% constraints
     for category in df_demo['Column'].unique():
         category_mask = df_demo['Column'] == category
         category_data = df_demo[category_mask].copy()
@@ -8834,7 +8690,7 @@ def ensure_demographic_consistency(df_demo, previous_demo_lookup):
         
         print(f"🔧 Processing {category} category...")
         
-        # Apply ±2% constraints to each value in this category
+        # Apply ±2.3% constraints to each value in this category
         adjusted_count = 0
         constraints = {}  # Store the allowed ranges for each value
         
@@ -8845,8 +8701,8 @@ def ensure_demographic_consistency(df_demo, previous_demo_lookup):
                 previous_pct = previous_demo_lookup[key]
                 current_pct = float(row['Percentage']) if isinstance(row['Percentage'], str) else row['Percentage']
                 
-                # Calculate allowed range (±2%) per requirements
-                max_change = 2.0
+                # Calculate allowed range (±2.3%) per new requirements
+                max_change = 2.3
                 min_allowed = max(0.01, previous_pct - max_change)
                 max_allowed = min(98.0, previous_pct + max_change)
                 
@@ -9923,7 +9779,7 @@ def enforce_final_difference_caps(df_final, previous_demo_lookup, previous_behav
                 continue
             
             prev_pct = all_previous_lookup.get(key, 0.0)
-            # Use tighter ±2% for demographics, wider ±6% for behavioral
+            # Use tighter ±2.3 % for demographics, wider ±6.2 % for behavioral
             if category.upper() in [
                 "GENDER", "AGE", "ETHNICITY", "INCOME", "EDUCATION", "RELATIONSHIP",
                 "SEXUAL_ORIENTATION", "PARENTAL_STATUS", "LOCATION", "OCCUPATION"
