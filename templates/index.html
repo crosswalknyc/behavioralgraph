@@ -763,11 +763,40 @@
             font-size: 0.85rem;
             color: var(--text-secondary);
             margin-bottom: 0.75rem;
-            text-align: center;
             text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .chart-container { height: 180px; }
+        
+        /* Module Add to Deck Button */
+        .module-deck-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 0.15rem 0.35rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            transition: all 0.2s;
+            opacity: 0.6;
+        }
+        
+        .module-deck-btn:hover {
+            background: var(--accent-lime);
+            color: var(--bg-dark);
+            border-color: var(--accent-lime);
+            opacity: 1;
+        }
+        
+        .chart-card:hover .module-deck-btn,
+        .behavioral-card:hover .module-deck-btn,
+        .location-section:hover .module-deck-btn,
+        .affinity-card:hover .module-deck-btn {
+            opacity: 1;
+        }
 
         /* Behavioral Tab */
         .behavioral-grid {
@@ -4310,10 +4339,10 @@
                             </div>
                         </div>
                         <div class="charts-grid">
-                            <div class="chart-card"><h3>Age</h3><div class="chart-container"><canvas id="ageChart"></canvas></div></div>
-                            <div class="chart-card"><h3>Gender</h3><div class="chart-container"><canvas id="genderChart"></canvas></div></div>
-                            <div class="chart-card"><h3>Ethnicity</h3><div class="chart-container"><canvas id="ethnicityChart"></canvas></div></div>
-                            <div class="chart-card"><h3>Income</h3><div class="chart-container"><canvas id="incomeChart"></canvas></div></div>
+                            <div class="chart-card"><h3><span>Age</span><button class="module-deck-btn" onclick="addModuleToDeck('demographic', 'Age')" title="Add to Deck">➕</button></h3><div class="chart-container"><canvas id="ageChart"></canvas></div></div>
+                            <div class="chart-card"><h3><span>Gender</span><button class="module-deck-btn" onclick="addModuleToDeck('demographic', 'Gender')" title="Add to Deck">➕</button></h3><div class="chart-container"><canvas id="genderChart"></canvas></div></div>
+                            <div class="chart-card"><h3><span>Ethnicity</span><button class="module-deck-btn" onclick="addModuleToDeck('demographic', 'Ethnicity')" title="Add to Deck">➕</button></h3><div class="chart-container"><canvas id="ethnicityChart"></canvas></div></div>
+                            <div class="chart-card"><h3><span>Income</span><button class="module-deck-btn" onclick="addModuleToDeck('demographic', 'Income')" title="Add to Deck">➕</button></h3><div class="chart-container"><canvas id="incomeChart"></canvas></div></div>
                         </div>
                     </div>
                 </div>
@@ -4376,13 +4405,14 @@
                 </div>
                 
                 <!-- Regional Breakdown - at top for quick overview -->
-                <div class="regional-breakdown">
-                    <h3>📊 Regional Breakdown</h3>
+                <div class="regional-breakdown location-section">
+                    <h3 style="display: flex; justify-content: space-between; align-items: center;">📊 Regional Breakdown <button class="module-deck-btn" onclick="addModuleToDeck('location', 'Regional Breakdown')" title="Add to Deck">➕</button></h3>
                     <div id="regionalBreakdown" class="regional-grid"></div>
                 </div>
                 
                 <!-- US Heat Map -->
-                <div class="heatmap-container">
+                <div class="heatmap-container location-section">
+                    <h3 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">🗺️ Heat Map <button class="module-deck-btn" onclick="addModuleToDeck('location', 'Heat Map')" title="Add to Deck">➕</button></h3>
                     <div class="heatmap-legend">
                         <span class="legend-label">Low</span>
                         <div class="legend-gradient"></div>
@@ -4392,18 +4422,18 @@
                 </div>
                 
                 <div class="location-grid">
-                    <div class="location-table" style="flex: 1;">
+                    <div class="location-table location-section" style="flex: 1;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
-                            <h3 style="margin: 0;">🔥 Over-Indexing DMAs (≥100)</h3>
+                            <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">🔥 Over-Indexing DMAs (≥100) <button class="module-deck-btn" onclick="addModuleToDeck('location', 'Over-Indexing DMAs')" title="Add to Deck">➕</button></h3>
                             <input type="text" id="locationSearchTop" placeholder="🔍 Search DMAs..." oninput="filterLocationList('top')" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; width: 150px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                         </div>
                         <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
                         <div id="locationList" style="max-height: 500px; overflow-y: auto;"></div>
                         <div id="locationCountTop" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
                     </div>
-                    <div class="location-table" style="flex: 1;">
+                    <div class="location-table location-section" style="flex: 1;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
-                            <h3 style="margin: 0;">❄️ Under-Indexing DMAs (&lt;100)</h3>
+                            <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">❄️ Under-Indexing DMAs (&lt;100) <button class="module-deck-btn" onclick="addModuleToDeck('location', 'Under-Indexing DMAs')" title="Add to Deck">➕</button></h3>
                             <input type="text" id="locationSearchBottom" placeholder="🔍 Search DMAs..." oninput="filterLocationList('bottom')" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; width: 150px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                         </div>
                         <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
@@ -4429,31 +4459,31 @@
                     
                     <div class="affinity-grid">
                         <div class="affinity-card">
-                            <h3>🎬 Content & Entertainment</h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">🎬 Content & Entertainment <button class="module-deck-btn" onclick="addModuleToDeck('affinity', 'Content & Entertainment')" title="Add to Deck">➕</button></h3>
                             <p class="affinity-desc">Shows, movies, and streaming platforms this audience loves</p>
                             <div id="affinityContent" class="affinity-list"></div>
                         </div>
                         
                         <div class="affinity-card">
-                            <h3>🛍️ Brand Affinities</h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">🛍️ Brand Affinities <button class="module-deck-btn" onclick="addModuleToDeck('affinity', 'Brand Affinities')" title="Add to Deck">➕</button></h3>
                             <p class="affinity-desc">Brands this audience over-indexes for</p>
                             <div id="affinityBrands" class="affinity-list"></div>
                         </div>
                         
                         <div class="affinity-card">
-                            <h3>📱 Digital Platforms</h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">📱 Digital Platforms <button class="module-deck-btn" onclick="addModuleToDeck('affinity', 'Digital Platforms')" title="Add to Deck">➕</button></h3>
                             <p class="affinity-desc">Apps, websites, and social platforms they use</p>
                             <div id="affinityPlatforms" class="affinity-list"></div>
                         </div>
                         
                         <div class="affinity-card">
-                            <h3>🎵 Music & Audio</h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">🎵 Music & Audio <button class="module-deck-btn" onclick="addModuleToDeck('affinity', 'Music & Audio')" title="Add to Deck">➕</button></h3>
                             <p class="affinity-desc">Music genres, artists, and podcasts</p>
                             <div id="affinityMusic" class="affinity-list"></div>
                         </div>
                         
                         <div class="affinity-card wide">
-                            <h3>🌐 Affinity Network</h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">🌐 Affinity Network <button class="module-deck-btn" onclick="addModuleToDeck('affinity', 'Affinity Network')" title="Add to Deck">➕</button></h3>
                             <p class="affinity-desc">Visual map of audience connections</p>
                             <div id="affinityNetwork" class="affinity-network"></div>
                         </div>
@@ -6593,7 +6623,10 @@
                                 <span class="drag-handle" title="Drag to reorder">⋮⋮</span>
                                 ${cat} ${positionBadge}
                             </span>
-                            <span class="count">${items.length}</span>
+                            <span style="display: flex; align-items: center; gap: 0.5rem;">
+                                <button class="module-deck-btn" onclick="event.stopPropagation(); addModuleToDeck('behavioral', '${cat}')" title="Add to Deck">➕</button>
+                                <span class="count">${items.length}</span>
+                            </span>
                         </h3>
                         <div class="behavioral-filter">
                             <input type="text" placeholder="🔍 Search..." oninput="searchInCard('${catId}', this.value)" style="font-size: 0.75rem; padding: 0.35rem;">
@@ -7105,6 +7138,91 @@
         
         // Workspace/Deck items storage
         let deckWorkspaceItems = JSON.parse(localStorage.getItem('deckWorkspaceItems') || '[]');
+        
+        function addModuleToDeck(type, category) {
+            if (!currentDashboardData || !currentProfileData) {
+                alert('Please select a profile first');
+                return;
+            }
+            
+            trackActivity('add_module_to_deck', `${type}:${category}`);
+            
+            const item = {
+                id: Date.now(),
+                type: type,
+                category: category,
+                profileName: currentProfileData.name || 'Profile',
+                profileKey: currentS3Key,
+                dateAdded: new Date().toISOString(),
+                data: null
+            };
+            
+            // Store specific module data
+            if (type === 'demographic') {
+                const catLower = category.toLowerCase();
+                item.data = {
+                    values: currentDashboardData.demographics[catLower] || {},
+                    index: currentDashboardData.demographicsIndex[catLower] || {},
+                    genPop: currentDashboardData.demographicsGenPop[catLower] || {},
+                    projection: currentDashboardData.demographicsProjection?.[catLower] || {}
+                };
+                item.title = `${item.profileName} - ${category}`;
+            } else if (type === 'behavioral') {
+                item.data = {
+                    items: currentDashboardData.behavioral[category] || []
+                };
+                item.title = `${item.profileName} - ${category}`;
+            } else if (type === 'location') {
+                if (category === 'Regional Breakdown') {
+                    // Get regional data from the DOM
+                    const regions = [];
+                    document.querySelectorAll('#regionalBreakdown .regional-stat').forEach(el => {
+                        regions.push({
+                            name: el.querySelector('.regional-name')?.textContent || '',
+                            value: el.querySelector('.regional-value')?.textContent || ''
+                        });
+                    });
+                    item.data = { regions };
+                } else if (category === 'Over-Indexing DMAs') {
+                    item.data = {
+                        locations: currentDashboardData.locations?.filter(l => l.index >= 100) || []
+                    };
+                } else if (category === 'Under-Indexing DMAs') {
+                    item.data = {
+                        locations: currentDashboardData.locations?.filter(l => l.index < 100) || []
+                    };
+                } else {
+                    item.data = { locations: currentDashboardData.locations || [] };
+                }
+                item.title = `${item.profileName} - ${category}`;
+            } else if (type === 'affinity') {
+                // Get affinity data from the DOM element
+                const elementId = {
+                    'Content & Entertainment': 'affinityContent',
+                    'Brand Affinities': 'affinityBrands',
+                    'Digital Platforms': 'affinityPlatforms',
+                    'Music & Audio': 'affinityMusic',
+                    'Affinity Network': 'affinityNetwork'
+                }[category];
+                
+                const items = [];
+                if (elementId && elementId !== 'affinityNetwork') {
+                    document.querySelectorAll(`#${elementId} .affinity-item`).forEach(el => {
+                        items.push({
+                            name: el.querySelector('.affinity-name')?.textContent || '',
+                            index: el.querySelector('.affinity-index')?.textContent || ''
+                        });
+                    });
+                }
+                item.data = { items };
+                item.title = `${item.profileName} - ${category}`;
+            }
+            
+            deckWorkspaceItems.push(item);
+            localStorage.setItem('deckWorkspaceItems', JSON.stringify(deckWorkspaceItems));
+            
+            showDeckNotification(item.title);
+        }
         
         function addToWorkspace(tabName) {
             if (!currentDashboardData || !currentProfileData) {
