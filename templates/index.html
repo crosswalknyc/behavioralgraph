@@ -1640,12 +1640,22 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
-        .insight-item-v2 .category-tag {
+        .insight-item-v2 .category-tag, .category-tag {
             font-size: 0.65rem;
             padding: 0.15rem 0.4rem;
             background: rgba(255,255,255,0.1);
             border-radius: 4px;
             color: var(--text-secondary);
+            margin-left: 0.25rem;
+        }
+        .category-tag-small {
+            font-size: 0.6rem;
+            padding: 0.1rem 0.3rem;
+            background: rgba(255,255,255,0.08);
+            border-radius: 3px;
+            color: var(--text-secondary);
+            margin-left: 0.25rem;
+            opacity: 0.8;
         }
         .insight-item-v2 .index-badge {
             font-weight: 700;
@@ -7968,7 +7978,7 @@
             document.getElementById('topDifferentiators').innerHTML = topOverIndexers.slice(0, 10).map((item, i) => `
                 <div class="differentiator-item">
                     <span class="differentiator-rank">#${i + 1}</span>
-                    <span class="differentiator-name">${item.name}</span>
+                    <span class="differentiator-name">${item.name} <span class="category-tag">${item.category}</span></span>
                     <span class="differentiator-index high">${item.index}</span>
                 </div>
             `).join('');
@@ -8032,7 +8042,7 @@
             document.getElementById('hiddenGems').innerHTML = hiddenGems.map((item, i) => `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
-                    <span class="name">${item.name}</span>
+                    <span class="name">${item.name} <span class="category-tag">${item.category}</span></span>
                     <span class="index-badge high">${item.index}</span>
                 </div>
             `).join('') || '<p style="color: var(--text-secondary);">No hidden gems found</p>';
@@ -8063,7 +8073,7 @@
             document.getElementById('streamingPreferences').innerHTML = streamingItems.map(item => `
                 <div class="media-pref-item">
                     <span class="media-pref-icon">📺</span>
-                    <span class="media-pref-name">${item.name}</span>
+                    <span class="media-pref-name">${item.name} <span class="category-tag-small">${item.category}</span></span>
                     <div class="media-pref-bar"><div class="media-pref-bar-fill" style="width: ${(item.pct / maxStreamPct) * 100}%"></div></div>
                     <span class="media-pref-pct">${item.pct.toFixed(1)}%</span>
                 </div>
@@ -8078,7 +8088,7 @@
             document.getElementById('socialMediaUsage').innerHTML = socialItems.map(item => `
                 <div class="media-pref-item">
                     <span class="media-pref-icon">📱</span>
-                    <span class="media-pref-name">${item.name}</span>
+                    <span class="media-pref-name">${item.name} <span class="category-tag-small">${item.category}</span></span>
                     <div class="media-pref-bar"><div class="media-pref-bar-fill" style="width: ${(item.pct / maxSocialPct) * 100}%"></div></div>
                     <span class="media-pref-pct">${item.pct.toFixed(1)}%</span>
                 </div>
@@ -8093,7 +8103,7 @@
             document.getElementById('audioPreferences').innerHTML = audioItems.map(item => `
                 <div class="media-pref-item">
                     <span class="media-pref-icon">🎵</span>
-                    <span class="media-pref-name">${item.name}</span>
+                    <span class="media-pref-name">${item.name} <span class="category-tag-small">${item.category}</span></span>
                     <div class="media-pref-bar"><div class="media-pref-bar-fill" style="width: ${(item.pct / maxAudioPct) * 100}%"></div></div>
                     <span class="media-pref-pct">${item.pct.toFixed(1)}%</span>
                 </div>
@@ -8108,7 +8118,7 @@
             document.getElementById('gamingAffinity').innerHTML = gamingItems.map(item => `
                 <div class="media-pref-item">
                     <span class="media-pref-icon">🎮</span>
-                    <span class="media-pref-name">${item.name}</span>
+                    <span class="media-pref-name">${item.name} <span class="category-tag-small">${item.category}</span></span>
                     <div class="media-pref-bar"><div class="media-pref-bar-fill" style="width: ${(item.pct / maxGamingPct) * 100}%"></div></div>
                     <span class="media-pref-pct">${item.pct.toFixed(1)}%</span>
                 </div>
@@ -8332,7 +8342,7 @@
             if (!items.length) return '<p style="color: var(--text-secondary); padding: 0.5rem;">No data available</p>';
             return items.map(item => `
                 <div class="affinity-item">
-                    <span class="name">${item.name}</span>
+                    <span class="name">${item.name} <span class="category-tag-small">${item.category}</span></span>
                     <span class="index" style="background: ${item.index >= 100 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}; color: ${item.index >= 100 ? '#10b981' : '#ef4444'};">${item.index}</span>
                 </div>
             `).join('');
