@@ -269,6 +269,7 @@
             display: flex;
             align-items: center;
             gap: 1rem;
+            justify-content: flex-start;
         }
 
         .dash-brand-box {
@@ -4251,14 +4252,14 @@
 
         <!-- DASHBOARD VIEW -->
         <div id="dashboardView">
-            <!-- Profile Info + Action Buttons Row -->
-            <div class="dashboard-header">
-                <!-- Profile Info (Left) -->
-                <div class="dash-profile-info">
-                    <div class="dash-brand-box" id="dashBrandNameHeader">Select a profile</div>
-                    <div class="dash-date-box" id="dashDateRangeHeader">Date Range: --</div>
-                </div>
-                
+            <!-- Profile Info Row (aligned with tabs) -->
+            <div class="dash-profile-info" style="margin-bottom: 0.5rem;">
+                <div class="dash-brand-box" id="dashBrandNameHeader">Select a profile</div>
+                <div class="dash-date-box" id="dashDateRangeHeader">Date Range: --</div>
+            </div>
+            
+            <!-- Action Buttons Row -->
+            <div class="dashboard-header" style="justify-content: flex-end; background: transparent; padding: 0.5rem 0; margin-bottom: 0.5rem;">
                 <!-- Action Buttons (Right) -->
                 <div style="display: flex; gap: 0.75rem; align-items: center;">
                     <button class="btn btn-small" style="background: linear-gradient(135deg, #8b5cf6, #ec4899);" onclick="toggleAIPanel()">🧪 Business Intelligence Lab</button>
