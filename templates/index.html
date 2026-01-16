@@ -4265,9 +4265,6 @@
                     <button class="btn btn-small" style="background: linear-gradient(135deg, #8b5cf6, #ec4899);" onclick="toggleAIPanel()">🧪 Business Intelligence Lab</button>
                     <button class="btn btn-small" id="favoriteBtn" onclick="toggleFavorite()" title="Add to favorites">⭐</button>
                     <button class="btn btn-small" onclick="shareProfile()" title="Share profile">🔗 Share</button>
-                    <div class="display-mode-toggle" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" title="Toggle between percentages and US population numbers">
-                        <span id="dashDisplayLabel">US %</span>
-                    </div>
                     <div class="export-dropdown">
                         <button class="btn btn-small btn-primary" onclick="toggleExportMenu()">📥 Export ▾</button>
                         <div id="exportMenu" class="export-menu" style="display: none;">
@@ -4279,6 +4276,9 @@
                         </div>
                     </div>
                     <button class="btn btn-small" onclick="addCurrentTabToDeck()" title="Add current tab to deck" style="background: var(--accent-lime); color: #1a1a1a;">➕ Add to Deck</button>
+                    <div class="display-mode-toggle" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" title="Toggle between percentages and US population numbers">
+                        <span id="dashDisplayLabel">US %</span>
+                    </div>
                     <button class="btn btn-small" id="deckBtn" onclick="openDeckWorkspace()" title="View Deck Workspace" style="background: var(--accent-purple);">📊 Deck Builder (<span id="deckCount">0</span>)</button>
                     <button class="btn btn-small" onclick="toggleSavedViews()" title="Saved Views">💾 Saved</button>
                 </div>
