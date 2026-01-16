@@ -7777,21 +7777,76 @@
         
         function categorizeInterest(name) {
             const lower = name.toLowerCase();
-            if (lower.includes('sport') || lower.includes('fitness') || lower.includes('gym') || lower.includes('running') || lower.includes('yoga') || lower.includes('hiking') || lower.includes('golf') || lower.includes('tennis')) return 'Sports & Fitness';
-            if (lower.includes('travel') || lower.includes('vacation') || lower.includes('adventure') || lower.includes('camping')) return 'Travel & Adventure';
-            if (lower.includes('food') || lower.includes('cooking') || lower.includes('restaurant') || lower.includes('wine') || lower.includes('coffee') || lower.includes('dining')) return 'Food & Dining';
-            if (lower.includes('fashion') || lower.includes('beauty') || lower.includes('style') || lower.includes('makeup') || lower.includes('skincare')) return 'Fashion & Beauty';
-            if (lower.includes('tech') || lower.includes('gaming') || lower.includes('video game') || lower.includes('computer') || lower.includes('gadget')) return 'Tech & Gaming';
-            if (lower.includes('music') || lower.includes('concert') || lower.includes('festival')) return 'Music & Entertainment';
-            if (lower.includes('movie') || lower.includes('film') || lower.includes('tv') || lower.includes('streaming') || lower.includes('netflix')) return 'Movies & TV';
-            if (lower.includes('read') || lower.includes('book') || lower.includes('education') || lower.includes('learn')) return 'Reading & Education';
-            if (lower.includes('home') || lower.includes('garden') || lower.includes('diy') || lower.includes('decor') || lower.includes('interior')) return 'Home & Garden';
-            if (lower.includes('pet') || lower.includes('dog') || lower.includes('cat') || lower.includes('animal')) return 'Pets & Animals';
-            if (lower.includes('health') || lower.includes('wellness') || lower.includes('meditation') || lower.includes('organic')) return 'Health & Wellness';
-            if (lower.includes('art') || lower.includes('photo') || lower.includes('craft') || lower.includes('creative')) return 'Arts & Crafts';
-            if (lower.includes('finance') || lower.includes('invest') || lower.includes('money') || lower.includes('business')) return 'Finance & Business';
-            if (lower.includes('family') || lower.includes('parent') || lower.includes('kid') || lower.includes('child')) return 'Family & Parenting';
-            if (lower.includes('car') || lower.includes('auto') || lower.includes('motor')) return 'Automotive';
+            
+            // Sports & Outdoors
+            if (lower.includes('sport') || lower.includes('fitness') || lower.includes('gym') || lower.includes('running') || lower.includes('yoga') || lower.includes('hiking') || lower.includes('golf') || lower.includes('tennis') || lower.includes('basketball') || lower.includes('football') || lower.includes('soccer') || lower.includes('baseball') || lower.includes('hockey') || lower.includes('swimming') || lower.includes('cycling') || lower.includes('marathon') || lower.includes('triathlon') || lower.includes('crossfit') || lower.includes('pickleball') || lower.includes('skiing') || lower.includes('snowboard')) return 'Sports & Fitness';
+            
+            // Outdoor & Nature
+            if (lower.includes('outdoor') || lower.includes('nature') || lower.includes('camping') || lower.includes('fishing') || lower.includes('hunting') || lower.includes('bird') || lower.includes('wildlife') || lower.includes('national park') || lower.includes('beach') || lower.includes('mountain')) return 'Outdoor & Nature';
+            
+            // Travel
+            if (lower.includes('travel') || lower.includes('vacation') || lower.includes('adventure') || lower.includes('cruise') || lower.includes('hotel') || lower.includes('flight') || lower.includes('destination') || lower.includes('backpack') || lower.includes('tourism')) return 'Travel & Adventure';
+            
+            // Food & Beverage
+            if (lower.includes('food') || lower.includes('cooking') || lower.includes('restaurant') || lower.includes('wine') || lower.includes('coffee') || lower.includes('dining') || lower.includes('beer') || lower.includes('cocktail') || lower.includes('baking') || lower.includes('chef') || lower.includes('recipe') || lower.includes('cuisine') || lower.includes('vegan') || lower.includes('vegetarian')) return 'Food & Dining';
+            
+            // Fashion & Beauty
+            if (lower.includes('fashion') || lower.includes('beauty') || lower.includes('style') || lower.includes('makeup') || lower.includes('skincare') || lower.includes('clothing') || lower.includes('shoes') || lower.includes('jewelry') || lower.includes('accessori') || lower.includes('designer') || lower.includes('luxury') || lower.includes('goth') || lower.includes('influencer style')) return 'Fashion & Beauty';
+            
+            // Technology
+            if (lower.includes('tech') || lower.includes('computer') || lower.includes('gadget') || lower.includes('software') || lower.includes('programm') || lower.includes('coding') || lower.includes('ai') || lower.includes('artificial intelligence') || lower.includes('crypto') || lower.includes('blockchain') || lower.includes('digital') || lower.includes('news-tech')) return 'Technology';
+            
+            // Gaming
+            if (lower.includes('gaming') || lower.includes('video game') || lower.includes('esport') || lower.includes('playstation') || lower.includes('xbox') || lower.includes('nintendo') || lower.includes('pc gaming') || lower.includes('mobile game')) return 'Gaming';
+            
+            // Music
+            if (lower.includes('music') || lower.includes('concert') || lower.includes('festival') || lower.includes('band') || lower.includes('singer') || lower.includes('hip hop') || lower.includes('rock') || lower.includes('pop') || lower.includes('jazz') || lower.includes('country') || lower.includes('classical') || lower.includes('edm') || lower.includes('reggae') || lower.includes('folk') || lower.includes('latin') || lower.includes('musical')) return 'Music';
+            
+            // Movies & TV
+            if (lower.includes('movie') || lower.includes('film') || lower.includes('tv') || lower.includes('streaming') || lower.includes('netflix') || lower.includes('hulu') || lower.includes('disney') || lower.includes('hbo') || lower.includes('cinema') || lower.includes('theater') || lower.includes('documentary') || lower.includes('series') || lower.includes('reality')) return 'Movies & TV';
+            
+            // Reading & Education
+            if (lower.includes('read') || lower.includes('book') || lower.includes('education') || lower.includes('learn') || lower.includes('language') || lower.includes('writing') || lower.includes('literature') || lower.includes('library') || lower.includes('podcast') || lower.includes('audiobook')) return 'Reading & Education';
+            
+            // Home & Garden
+            if (lower.includes('home') || lower.includes('garden') || lower.includes('diy') || lower.includes('decor') || lower.includes('interior') || lower.includes('furniture') || lower.includes('renovation') || lower.includes('real estate') || lower.includes('landscap')) return 'Home & Garden';
+            
+            // Pets & Animals
+            if (lower.includes('pet') || lower.includes('dog') || lower.includes('cat') || lower.includes('animal') || lower.includes('horse') || lower.includes('aquarium') || lower.includes('reptile') || lower.includes('veterinar')) return 'Pets & Animals';
+            
+            // Health & Wellness
+            if (lower.includes('health') || lower.includes('wellness') || lower.includes('meditation') || lower.includes('organic') || lower.includes('mental health') || lower.includes('therapy') || lower.includes('nutrition') || lower.includes('diet') || lower.includes('supplement') || lower.includes('spa') || lower.includes('self-care') || lower.includes('mindful')) return 'Health & Wellness';
+            
+            // Arts & Crafts
+            if (lower.includes('art') || lower.includes('photo') || lower.includes('craft') || lower.includes('creative') || lower.includes('painting') || lower.includes('drawing') || lower.includes('sculpture') || lower.includes('design') || lower.includes('museum') || lower.includes('gallery') || lower.includes('beadwork') || lower.includes('knitting') || lower.includes('sewing') || lower.includes('scrapbook')) return 'Arts & Crafts';
+            
+            // Finance & Business
+            if (lower.includes('finance') || lower.includes('invest') || lower.includes('money') || lower.includes('business') || lower.includes('entrepreneur') || lower.includes('stock') || lower.includes('real estate invest') || lower.includes('career') || lower.includes('startup') || lower.includes('marketing')) return 'Finance & Business';
+            
+            // Family & Parenting
+            if (lower.includes('family') || lower.includes('parent') || lower.includes('kid') || lower.includes('child') || lower.includes('baby') || lower.includes('mom') || lower.includes('dad') || lower.includes('pregnan') || lower.includes('toddler') || lower.includes('teen')) return 'Family & Parenting';
+            
+            // Automotive
+            if (lower.includes('car') || lower.includes('auto') || lower.includes('motor') || lower.includes('vehicle') || lower.includes('truck') || lower.includes('motorcycle') || lower.includes('racing') || lower.includes('electric vehicle') || lower.includes('ev') || lower.includes('suv')) return 'Automotive';
+            
+            // Social & Dating
+            if (lower.includes('dating') || lower.includes('relationship') || lower.includes('social') || lower.includes('network') || lower.includes('friend') || lower.includes('community') || lower.includes('meetup')) return 'Social & Dating';
+            
+            // News & Politics
+            if (lower.includes('news') || lower.includes('politic') || lower.includes('current event') || lower.includes('government') || lower.includes('election') || lower.includes('activist') || lower.includes('social issue')) return 'News & Politics';
+            
+            // Religion & Spirituality
+            if (lower.includes('religion') || lower.includes('spiritual') || lower.includes('church') || lower.includes('faith') || lower.includes('prayer') || lower.includes('bible') || lower.includes('christian') || lower.includes('buddhis') || lower.includes('hindu') || lower.includes('islam') || lower.includes('jewish')) return 'Religion & Spirituality';
+            
+            // Science & Environment
+            if (lower.includes('science') || lower.includes('environment') || lower.includes('climate') || lower.includes('sustainab') || lower.includes('eco') || lower.includes('green') || lower.includes('space') || lower.includes('astronomy') || lower.includes('biology') || lower.includes('physics')) return 'Science & Environment';
+            
+            // Shopping & Retail
+            if (lower.includes('shop') || lower.includes('retail') || lower.includes('deal') || lower.includes('coupon') || lower.includes('bargain') || lower.includes('online shopping') || lower.includes('mall')) return 'Shopping & Retail';
+            
+            // Scuba & Water Sports
+            if (lower.includes('scuba') || lower.includes('diving') || lower.includes('snorkel') || lower.includes('surfing') || lower.includes('kayak') || lower.includes('sailing') || lower.includes('boating') || lower.includes('water sport')) return 'Water Sports';
+            
             return 'Other';
         }
         
