@@ -7180,7 +7180,7 @@
         // Profile image cache to avoid repeated API calls
         const profileImageCache = {};
         
-        async function fetchProfileImage(profileName) {
+        async function fetchProfileImage(profileName, retryCount = 0) {
             const imageContainer = document.getElementById('dashProfileImage');
             const img = imageContainer?.querySelector('img');
             if (!imageContainer || !img) return;
@@ -7190,16 +7190,18 @@
             img.src = '';
             
             // Check cache first
-            if (profileImageCache[profileName]) {
+            if (profileImageCache[profileName] && profileImageCache[profileName] !== 'pending') {
                 if (profileImageCache[profileName] !== 'none') {
                     img.src = profileImageCache[profileName];
-                    imageContainer.classList.add('loaded');
+                    img.onload = () => imageContainer.classList.add('loaded');
+                    img.onerror = () => imageContainer.classList.remove('loaded');
                 }
                 return;
             }
             
             // Show loading state
             imageContainer.classList.add('loading');
+            profileImageCache[profileName] = 'pending';
             
             try {
                 const response = await fetch(`/api/wiki-image/${encodeURIComponent(profileName)}`);
@@ -7209,12 +7211,27 @@
                 
                 if (data.success && data.image_url) {
                     profileImageCache[profileName] = data.image_url;
-                    img.src = data.image_url;
-                    img.onload = () => imageContainer.classList.add('loaded');
-                    img.onerror = () => {
-                        imageContainer.classList.remove('loaded');
-                        profileImageCache[profileName] = 'none';
+                    
+                    // Create new image to preload
+                    const tempImg = new Image();
+                    tempImg.onload = () => {
+                        img.src = data.image_url;
+                        imageContainer.classList.add('loaded');
                     };
+                    tempImg.onerror = () => {
+                        // Retry once if image fails to load
+                        if (retryCount < 2) {
+                            console.log(`Retrying image load for ${profileName} (attempt ${retryCount + 1})`);
+                            setTimeout(() => {
+                                profileImageCache[profileName] = null;
+                                fetchProfileImage(profileName, retryCount + 1);
+                            }, 500);
+                        } else {
+                            imageContainer.classList.remove('loaded');
+                            profileImageCache[profileName] = 'none';
+                        }
+                    };
+                    tempImg.src = data.image_url;
                 } else {
                     profileImageCache[profileName] = 'none';
                 }
