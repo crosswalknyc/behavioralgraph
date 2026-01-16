@@ -317,46 +317,49 @@
         /* Main IQ Tabs */
         .iq-tabs-container {
             display: flex;
-            gap: 0;
-            margin-bottom: 1rem;
-            border-bottom: 2px solid var(--border-color);
+            gap: 0.25rem;
+            margin-bottom: 0;
+            padding-left: 0.5rem;
         }
         .iq-tab {
-            padding: 0.75rem 2rem;
+            padding: 0.6rem 1.5rem;
             font-family: 'Space Mono', monospace;
-            font-size: 1rem;
-            font-weight: 700;
-            background: transparent;
-            border: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
             color: var(--text-secondary);
             cursor: pointer;
             transition: all 0.2s;
             position: relative;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
+            margin-bottom: -1px;
         }
         .iq-tab:hover {
             color: var(--text-primary);
-            background: rgba(200, 230, 0, 0.05);
+            background: var(--bg-card);
         }
         .iq-tab.active {
             color: var(--accent-lime);
-        }
-        .iq-tab.active::after {
-            content: '';
-            position: absolute;
-            bottom: -2px;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: var(--accent-lime);
+            background: var(--bg-card);
+            border-color: var(--accent-lime);
+            border-bottom: 1px solid var(--bg-card);
+            z-index: 1;
         }
         .iq-tab.disabled {
-            opacity: 0.4;
+            opacity: 0.35;
             cursor: not-allowed;
         }
         .iq-tab .tab-icon {
-            margin-right: 0.5rem;
+            margin-right: 0.4rem;
+        }
+        
+        /* Tab content area border */
+        #dashboardView, #subscriberIQView {
+            border-top: 1px solid var(--accent-lime);
         }
         
         /* Subscriber IQ Dashboard */
@@ -5252,9 +5255,6 @@
     <div class="container">
         <header>
             <img src="/static/crosswalk-logo-stacked.svg" alt="Crosswalk Logo" class="logo" style="height: 80px; width: auto;">
-            <div class="header-text">
-                <h1>PROFILE IQ</h1>
-            </div>
             <div class="header-right-section">
                 <div class="user-info-bar">
                     <div class="credits-display" id="creditsDisplay">
