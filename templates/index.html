@@ -1461,21 +1461,47 @@
         }
 
         .behavioral-card h3 {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             color: var(--text-primary);
             margin-bottom: 0.5rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-shrink: 0;
+            gap: 0.25rem;
+            flex-wrap: nowrap;
+            overflow: hidden;
+        }
+        
+        .behavioral-card h3 > span:first-child {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .behavioral-card h3 > span:last-child {
+            flex-shrink: 0;
         }
 
         .behavioral-card .count {
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             color: var(--text-secondary);
             background: var(--bg-input);
-            padding: 0.1rem 0.4rem;
+            padding: 0.1rem 0.35rem;
             border-radius: 10px;
+            flex-shrink: 0;
+        }
+        
+        .behavioral-sort-select {
+            font-size: 0.6rem;
+            padding: 0.15rem 0.25rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            cursor: pointer;
         }
 
         .behavioral-filter {
@@ -8022,7 +8048,7 @@
                 const displayItems = items.slice(0, 30);
                 const maxPct = Math.max(...displayItems.map(i => i.pct), 1);
                 const isHighlighted = cat === highlightCategory;
-                const positionBadge = idx === 0 ? '<span style="background: var(--accent-lime); color: #000; padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.6rem; margin-left: 0.5rem;">1ST</span>' : '';
+                const positionBadge = idx === 0 ? '<span style="background: var(--accent-lime); color: #000; padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.55rem;">1ST</span>' : '';
                 return `
                     <div class="behavioral-card ${isHighlighted ? 'highlighted' : ''}" 
                          data-category="${cat}" 
@@ -8034,11 +8060,12 @@
                          ondragleave="handleDragLeave(event)"
                          ondrop="handleDrop(event)">
                         <h3>
-                            <span style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="display: flex; align-items: center; gap: 0.3rem; min-width: 0;">
                                 <span class="drag-handle" title="Drag to reorder">⋮⋮</span>
-                                ${cat} ${positionBadge}
+                                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${cat}</span>
+                                ${positionBadge}
                             </span>
-                            <span style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0;">
                                 <span class="module-action-btns">
                                     <button class="module-btn csv-btn" onclick="event.stopPropagation(); exportModuleCSV('behavioral', '${cat}')" title="CSV">CSV</button>
                                     <button class="module-btn png-btn" onclick="event.stopPropagation(); exportModulePNG('behavioral', '${cat}')" title="PNG">PNG</button>
@@ -8047,8 +8074,13 @@
                                 <span class="count">${items.length}</span>
                             </span>
                         </h3>
-                        <div class="behavioral-filter">
-                            <input type="text" placeholder="🔍 Search..." oninput="searchInCard('${catId}', this.value)" style="font-size: 0.75rem; padding: 0.35rem;">
+                        <div class="behavioral-filter" style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="text" placeholder="🔍 Search..." oninput="searchInCard('${catId}', this.value)" style="font-size: 0.7rem; padding: 0.3rem; flex: 1;">
+                            <select class="behavioral-sort-select" onchange="sortBehavioralCard('${catId}', '${cat}', this.value)">
+                                <option value="index">Sort: Index ↓</option>
+                                <option value="pct">Sort: % ↓</option>
+                                <option value="alpha">Sort: A-Z</option>
+                            </select>
                         </div>
                         <div class="behavioral-list" id="list-${catId}" data-cat="${cat}">
                             ${renderBehavioralItems(displayItems, maxPct)}
@@ -8300,6 +8332,30 @@
             listEl.innerHTML = filtered.length > 0 
                 ? renderBehavioralItems(filtered.slice(0, 50), maxPct)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No matches</div>';
+        }
+        
+        function sortBehavioralCard(catId, cat, sortBy) {
+            const listEl = document.getElementById('list-' + catId);
+            const items = [...(allBehavioralData[cat] || [])];
+            
+            // Sort based on selection
+            let sorted;
+            switch (sortBy) {
+                case 'alpha':
+                    sorted = items.sort((a, b) => a.name.localeCompare(b.name));
+                    break;
+                case 'pct':
+                    sorted = items.sort((a, b) => b.pct - a.pct);
+                    break;
+                case 'index':
+                default:
+                    sorted = items.sort((a, b) => b.index - a.index);
+                    break;
+            }
+            
+            const displayItems = sorted.slice(0, 30);
+            const maxPct = Math.max(...displayItems.map(i => i.pct), 1);
+            listEl.innerHTML = renderBehavioralItems(displayItems, maxPct);
         }
 
         // Store location data for filtering
