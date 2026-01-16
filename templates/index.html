@@ -744,6 +744,31 @@
             border-radius: 8px;
             padding: 1rem;
         }
+        
+        /* Dashboard Layout - Sidebar + Content */
+        .dashboard-layout {
+            display: flex;
+            gap: 1rem;
+            min-height: calc(100vh - 200px);
+        }
+        
+        .persistent-sidebar {
+            width: 260px;
+            min-width: 260px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 1rem;
+            position: sticky;
+            top: 1rem;
+            height: fit-content;
+            max-height: calc(100vh - 180px);
+            overflow-y: auto;
+        }
+        
+        .dashboard-tab-content {
+            flex: 1;
+            min-width: 0;
+        }
 
         .brand-box {
             background: var(--accent-lime);
@@ -4746,26 +4771,29 @@
                 </div>
                 <button class="deck-builder-btn btn btn-small" id="deckBtn" onclick="openDeckWorkspace()" title="View Deck Workspace">📊 Deck Builder (<span id="deckCount">0</span>)</button>
             </div>
+            
+            <!-- Dashboard Layout: Fixed Sidebar + Tab Content -->
+            <div class="dashboard-layout">
+                <!-- Persistent Sidebar - Always Visible -->
+                <div class="persistent-sidebar">
+                    <div class="sidebar-header-section">
+                        <h3>Select Profile</h3>
+                        <input type="text" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search" onkeyup="filterDashboardProfiles()">
+                    </div>
+                    <div class="profile-select-tree" id="dashProfileTree">
+                        <!-- Profiles will be loaded here -->
+                    </div>
+                </div>
+                
+                <!-- Tab Content Area -->
+                <div class="dashboard-tab-content">
 
             <!-- Demographics Tab -->
             <div id="tab-demographics" class="tab-content">
                 <div class="tab-explainer">
-                    <div class="explainer-icon">👥</div>
-                    <div class="explainer-text">
-                        <strong>Demographics</strong> — Your audience breakdown by gender, age, income, etc. <strong>Colors:</strong> <span class="highlight-green">Green = over-indexes</span> (higher than Gen Pop) | <span class="highlight-red">Red = under-indexes</span> (lower than Gen Pop). Second % shows Gen Pop baseline for comparison.
-                    </div>
+                    <strong>Demographics</strong> — Your audience breakdown by gender, age, income, etc. <strong>Colors:</strong> <span class="highlight-green">Green = over-indexes</span> | <span class="highlight-red">Red = under-indexes</span>. Second % shows Gen Pop baseline.
                 </div>
-                <div class="demo-grid">
-                    <div class="demo-sidebar">
-                        <div class="sidebar-header-section">
-                            <h3>Select Profile</h3>
-                            <input type="text" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search" onkeyup="filterDashboardProfiles()">
-                        </div>
-                        <div class="profile-select-tree" id="dashProfileTree">
-                            <!-- Profiles will be loaded here -->
-                        </div>
-                    </div>
-                    <div class="demo-main">
+                <div class="demo-main">
                         <div class="stats-row">
                             <div class="stat-card">
                                 <div class="stat-label">Crosswalk Respondents</div>
@@ -4803,7 +4831,6 @@
                             <div class="chart-card"><h3><span>Parental Status</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Parental Status')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Parental Status')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Parental Status')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="parentalStatusChart"></canvas></div></div>
                         </div>
                     </div>
-                </div>
             </div>
 
             <!-- Behavioral Tab -->
@@ -5935,7 +5962,9 @@
                     </div>
                 </div>
             </div>
-        </div>
+                </div><!-- End dashboard-tab-content -->
+            </div><!-- End dashboard-layout -->
+        </div><!-- End dashboardView -->
 
         <!-- ADMIN VIEW (only for admin users) -->
         {% if role == 'admin' %}
