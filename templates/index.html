@@ -722,6 +722,54 @@
             color: white;
             border-color: var(--accent-blue);
         }
+        
+        /* Action buttons grouped on right side of tabs */
+        .tabs-action-buttons {
+            display: flex;
+            gap: 0.35rem;
+            margin-left: auto;
+            align-items: center;
+        }
+        
+        .tabs-action-buttons .tab-btn.action-tab {
+            background: var(--bg-card);
+            border-color: var(--accent-lime);
+        }
+        
+        .tabs-action-buttons .tab-btn.action-tab:hover {
+            background: var(--accent-lime);
+            color: #1a1a1a;
+        }
+        
+        .tabs-action-buttons .dash-dropdown {
+            position: relative;
+        }
+        
+        .tabs-action-buttons .dash-dropdown-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 0.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            min-width: 180px;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        .tabs-action-buttons .dash-dropdown-menu a {
+            display: block;
+            padding: 0.75rem 1rem;
+            color: var(--text-primary);
+            text-decoration: none;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        
+        .tabs-action-buttons .dash-dropdown-menu a:hover {
+            background: var(--bg-input);
+        }
 
         .tab-content { display: none; padding: 0; margin: 0; }
         .tab-content.active { display: block; }
@@ -5553,26 +5601,13 @@
 
         <!-- DASHBOARD VIEW -->
         <div id="dashboardView">
-            <!-- Row 1: Profile Info + Action Buttons -->
+            <!-- Row 1: Profile Info -->
             <div class="dash-header-row">
                 <div class="dash-profile-info" id="dashProfileInfo" style="display: none;">
                     <div class="dash-profile-image" id="dashProfileImage"><img src="" alt="Profile" onerror="this.parentElement.classList.remove('loaded')"></div>
                     <div class="dash-brand-container">
                         <div class="dash-brand-box" id="dashBrandNameHeader"></div>
                         <div class="dash-date-box" id="dashDateRangeHeader"></div>
-                    </div>
-                </div>
-                <div class="dash-action-buttons">
-                    <button class="dash-action-btn primary" onclick="toggleAIPanel()" title="AI Lab">🧪 AI LAB</button>
-                    <button class="dash-action-btn" onclick="toggleFavorite()" title="Favorite" id="favBtn">⭐</button>
-                    <button class="dash-action-btn" onclick="toggleSavedViews()" title="Saved Views" id="savedBtn">💾</button>
-                    <div class="dash-dropdown">
-                        <button class="dash-action-btn" onclick="toggleExportMenu()">📥 EXPORT ▾</button>
-                        <div id="exportDropdown" class="dash-dropdown-menu" style="display: none;">
-                            <a onclick="exportAllCSV()">📄 All Data (CSV)</a>
-                            <a onclick="exportAllPNG()">🖼️ All Charts (PNG)</a>
-                            <a onclick="exportPDF()">📑 Full Report (PDF)</a>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -5644,7 +5679,7 @@
                 </div>
             </div>
 
-            <!-- Row 2: Tab Navigation -->
+            <!-- Row 2: Tab Navigation + Action Buttons -->
             <div class="dashboard-tabs">
                 <button class="tab-btn active" onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
                 <button class="tab-btn" onclick="showTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
@@ -5660,6 +5695,21 @@
                 <button class="tab-btn" onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span></button>
                 <button class="tab-btn" onclick="showTab('collaboration')"><span class="tab-icon">👥</span><span class="tab-label">COLLABORATE</span></button>
                 <button class="tab-btn" onclick="openDeckWorkspace()"><span class="tab-icon">📊</span><span class="tab-label">DECK BUILDER</span></button>
+                
+                <!-- Action Buttons (right side) -->
+                <div class="tabs-action-buttons">
+                    <button class="tab-btn action-tab" onclick="toggleAIPanel()" title="AI Lab"><span class="tab-icon">🧪</span><span class="tab-label">AI LAB</span></button>
+                    <button class="tab-btn action-tab" onclick="toggleFavorite()" title="Favorite" id="tabFavBtn"><span class="tab-icon">⭐</span><span class="tab-label">FAVORITE</span></button>
+                    <button class="tab-btn action-tab" onclick="toggleSavedViews()" title="Saved Views" id="tabSavedBtn"><span class="tab-icon">💾</span><span class="tab-label">SAVE</span></button>
+                    <div class="dash-dropdown">
+                        <button class="tab-btn action-tab" onclick="toggleExportMenu()"><span class="tab-icon">📥</span><span class="tab-label">EXPORT</span></button>
+                        <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
+                            <a onclick="exportAllCSV()">📄 All Data (CSV)</a>
+                            <a onclick="exportAllPNG()">🖼️ All Charts (PNG)</a>
+                            <a onclick="exportPDF()">📑 Full Report (PDF)</a>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <!-- Row 3: Tab Info + Display Toggle + Add to Deck -->
@@ -14099,7 +14149,7 @@
         }
         
         function toggleExportMenu() {
-            const dropdown = document.getElementById('exportDropdown');
+            const dropdown = document.getElementById('tabExportDropdown');
             if (dropdown) {
                 dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
             }
@@ -14107,7 +14157,7 @@
         
         // Close dropdown when clicking outside
         document.addEventListener('click', function(e) {
-            const dropdown = document.getElementById('exportDropdown');
+            const dropdown = document.getElementById('tabExportDropdown');
             if (dropdown && !e.target.closest('.dash-dropdown')) {
                 dropdown.style.display = 'none';
             }
