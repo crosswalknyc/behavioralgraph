@@ -7333,6 +7333,19 @@
             document.getElementById('tab-' + tabName).classList.add('active');
             event.target.classList.add('active');
             
+            // Scroll to top of the tab content when switching tabs
+            const tabContent = document.getElementById('tab-' + tabName);
+            if (tabContent) {
+                tabContent.scrollTop = 0;
+            }
+            // Also scroll the main dashboard area to top
+            const dashboardMain = document.querySelector('.dashboard-main');
+            if (dashboardMain) {
+                dashboardMain.scrollTop = 0;
+            }
+            // Scroll window to top as well for good measure
+            window.scrollTo(0, 0);
+            
             // Update tab info text
             const infoEl = document.getElementById('dashTabInfo');
             if (infoEl && TAB_INFO[tabName]) {
