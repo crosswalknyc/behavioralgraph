@@ -2613,10 +2613,10 @@
         
         /* Affinity Map Tab */
         .affinity-container, .sponsorship-container, .talent-container, .media-container {
-            padding: 1rem;
+            padding: 0;
         }
         .affinity-header, .sponsorship-header, .talent-header, .media-header {
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
         }
         .affinity-header h2, .sponsorship-header h2, .talent-header h2, .media-header h2 {
             margin: 0 0 0.5rem 0;
@@ -2626,6 +2626,126 @@
             color: var(--text-secondary);
             margin: 0;
         }
+        
+        /* Affinity Insights Row */
+        .affinity-insights-row, .sponsor-summary-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .affinity-insight-card, .sponsor-summary-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem;
+        }
+        .affinity-insight-card.highlight, .sponsor-summary-card.executive {
+            border-color: var(--accent-lime);
+            background: linear-gradient(135deg, rgba(200, 230, 0, 0.05), transparent);
+        }
+        .affinity-insight-card h4, .sponsor-summary-card h4 {
+            margin: 0 0 0.75rem 0;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+        .insight-bullets { font-size: 0.8rem; line-height: 1.6; }
+        .insight-bullet { display: flex; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.5rem; }
+        .insight-bullet::before { content: "•"; color: var(--accent-lime); font-weight: bold; }
+        
+        .scorecard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+        .scorecard-item {
+            text-align: center;
+            padding: 0.5rem;
+            background: var(--bg-input);
+            border-radius: 6px;
+        }
+        .scorecard-value {
+            display: block;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+        }
+        .scorecard-value.positive { color: var(--accent-lime); }
+        .scorecard-label {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        
+        .cross-sell-list { font-size: 0.8rem; }
+        .cross-sell-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .cross-sell-item:last-child { border-bottom: none; }
+        
+        /* ROI Metrics */
+        .roi-metrics { display: flex; flex-direction: column; gap: 0.75rem; }
+        .roi-item { display: flex; align-items: center; gap: 0.5rem; }
+        .roi-label { font-size: 0.75rem; color: var(--text-secondary); flex: 1; }
+        .roi-bar { flex: 1; height: 8px; background: var(--bg-input); border-radius: 4px; overflow: hidden; }
+        .roi-fill { height: 100%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-lime)); border-radius: 4px; transition: width 0.5s; }
+        .roi-value { font-size: 0.8rem; font-weight: 600; color: var(--accent-lime); min-width: 35px; text-align: right; }
+        
+        /* Activation Ideas */
+        .activation-ideas-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .activation-ideas-section h4 { margin: 0 0 1rem 0; }
+        .activation-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
+        }
+        .activation-idea {
+            background: var(--bg-input);
+            border-radius: 8px;
+            padding: 0.75rem;
+            text-align: center;
+        }
+        .activation-icon { font-size: 1.5rem; margin-bottom: 0.3rem; }
+        .activation-title { font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem; }
+        .activation-desc { font-size: 0.65rem; color: var(--text-secondary); }
+        
+        /* Executive Summary */
+        .exec-summary-content { font-size: 0.8rem; line-height: 1.6; }
+        .exec-highlight { color: var(--accent-lime); font-weight: 600; }
+        .recommendations-list { font-size: 0.8rem; }
+        .recommendation-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            padding: 0.4rem;
+            background: var(--bg-input);
+            border-radius: 4px;
+        }
+        .rec-icon { font-size: 0.9rem; }
+        .rec-text { flex: 1; }
+        
+        .loading-placeholder {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-style: italic;
+        }
+        
+        @media (max-width: 1200px) {
+            .affinity-insights-row, .sponsor-summary-row { grid-template-columns: 1fr; }
+            .activation-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        
         .affinity-grid, .sponsorship-grid, .talent-grid, .media-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -5220,6 +5340,43 @@
                         <p>Discover brands, shows, and talent that share audiences with this profile</p>
                     </div>
                     
+                    <!-- Affinity Insights Summary -->
+                    <div class="affinity-insights-row">
+                        <div class="affinity-insight-card highlight">
+                            <h4>🎯 Key Affinity Insights</h4>
+                            <div id="affinityKeyInsights" class="insight-bullets">
+                                <div class="loading-placeholder">Loading insights...</div>
+                            </div>
+                        </div>
+                        <div class="affinity-insight-card">
+                            <h4>📊 Affinity Scorecard</h4>
+                            <div class="scorecard-grid" id="affinityScorecard">
+                                <div class="scorecard-item">
+                                    <span class="scorecard-value" id="affTotalItems">--</span>
+                                    <span class="scorecard-label">Total Affinities</span>
+                                </div>
+                                <div class="scorecard-item">
+                                    <span class="scorecard-value positive" id="affHighIndex">--</span>
+                                    <span class="scorecard-label">High Index (150+)</span>
+                                </div>
+                                <div class="scorecard-item">
+                                    <span class="scorecard-value" id="affAvgIndex">--</span>
+                                    <span class="scorecard-label">Avg Index</span>
+                                </div>
+                                <div class="scorecard-item">
+                                    <span class="scorecard-value" id="affTopCategory">--</span>
+                                    <span class="scorecard-label">Strongest Category</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="affinity-insight-card">
+                            <h4>💡 Cross-Sell Opportunities</h4>
+                            <div id="affinityCrossSell" class="cross-sell-list">
+                                <div class="loading-placeholder">Analyzing opportunities...</div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="affinity-grid">
                         <div class="affinity-card">
                             <h3 style="display: flex; justify-content: space-between; align-items: center;">🎬 Content & Entertainment <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Content & Entertainment')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Content & Entertainment')" title="Add to Deck">➕</button></span></h3>
@@ -5260,6 +5417,50 @@
                     <div class="sponsorship-header">
                         <h2>💰 Sponsorship Match Finder</h2>
                         <p>Identify brand categories and companies that align with this audience</p>
+                    </div>
+                    
+                    <!-- Executive Summary Row -->
+                    <div class="sponsor-summary-row">
+                        <div class="sponsor-summary-card executive">
+                            <h4>📋 Executive Summary</h4>
+                            <div id="sponsorExecSummary" class="exec-summary-content">
+                                <div class="loading-placeholder">Generating summary...</div>
+                            </div>
+                        </div>
+                        <div class="sponsor-summary-card">
+                            <h4>🎯 Key Recommendations</h4>
+                            <div id="sponsorRecommendations" class="recommendations-list">
+                                <div class="loading-placeholder">Analyzing data...</div>
+                            </div>
+                        </div>
+                        <div class="sponsor-summary-card">
+                            <h4>💵 ROI Potential</h4>
+                            <div class="roi-metrics" id="sponsorROI">
+                                <div class="roi-item">
+                                    <span class="roi-label">Audience Reach Quality</span>
+                                    <div class="roi-bar"><div class="roi-fill" id="roiReach" style="width: 0%"></div></div>
+                                    <span class="roi-value" id="roiReachValue">--</span>
+                                </div>
+                                <div class="roi-item">
+                                    <span class="roi-label">Brand Alignment Score</span>
+                                    <div class="roi-bar"><div class="roi-fill" id="roiAlignment" style="width: 0%"></div></div>
+                                    <span class="roi-value" id="roiAlignmentValue">--</span>
+                                </div>
+                                <div class="roi-item">
+                                    <span class="roi-label">Activation Potential</span>
+                                    <div class="roi-bar"><div class="roi-fill" id="roiActivation" style="width: 0%"></div></div>
+                                    <span class="roi-value" id="roiActivationValue">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Activation Ideas -->
+                    <div class="activation-ideas-section">
+                        <h4>🚀 Activation Ideas</h4>
+                        <div id="sponsorActivations" class="activation-grid">
+                            <div class="loading-placeholder">Generating ideas...</div>
+                        </div>
                     </div>
                     
                     <div class="sponsorship-grid">
@@ -10182,6 +10383,52 @@
             
             const allItems = collectAllBehavioralItems(data);
             
+            // === AFFINITY INSIGHTS ===
+            const highIndexItems = allItems.filter(i => i.index >= 150);
+            const avgIndex = Math.round(allItems.reduce((s, i) => s + i.index, 0) / allItems.length);
+            
+            // Find strongest category
+            const categoryStats = {};
+            allItems.forEach(i => {
+                const cat = i.category.split('/')[0];
+                if (!categoryStats[cat]) categoryStats[cat] = { total: 0, count: 0 };
+                categoryStats[cat].total += i.index;
+                categoryStats[cat].count++;
+            });
+            const topCategory = Object.entries(categoryStats)
+                .map(([cat, stats]) => ({ cat, avg: Math.round(stats.total / stats.count) }))
+                .sort((a, b) => b.avg - a.avg)[0];
+            
+            // Update scorecard
+            document.getElementById('affTotalItems').textContent = allItems.length;
+            document.getElementById('affHighIndex').textContent = highIndexItems.length;
+            document.getElementById('affAvgIndex').textContent = avgIndex;
+            document.getElementById('affTopCategory').textContent = topCategory?.cat || '--';
+            
+            // Generate key insights
+            const topItems = allItems.sort((a, b) => b.index - a.index).slice(0, 5);
+            const insights = [];
+            if (topItems[0]) insights.push(`Strongest affinity: <span class="exec-highlight">${topItems[0].name}</span> with ${topItems[0].index} index`);
+            if (highIndexItems.length > 10) insights.push(`<span class="exec-highlight">${highIndexItems.length}</span> items with strong over-indexing (150+) - significant partnership potential`);
+            if (topCategory) insights.push(`<span class="exec-highlight">${topCategory.cat}</span> category shows highest engagement (avg ${topCategory.avg})`);
+            const contentAffinities = allItems.filter(i => i.category.toUpperCase().includes('STREAMING') || i.category.toUpperCase().includes('SERIES')).length;
+            if (contentAffinities > 5) insights.push(`Strong streaming/content appetite with ${contentAffinities} relevant affinities`);
+            
+            document.getElementById('affinityKeyInsights').innerHTML = insights.map(i => `<div class="insight-bullet">${i}</div>`).join('') || '<p>Loading insights...</p>';
+            
+            // Cross-sell opportunities
+            const crossSellCats = Object.entries(categoryStats)
+                .filter(([_, stats]) => stats.count >= 3 && (stats.total / stats.count) >= 120)
+                .sort((a, b) => (b[1].total / b[1].count) - (a[1].total / a[1].count))
+                .slice(0, 5);
+            
+            document.getElementById('affinityCrossSell').innerHTML = crossSellCats.map(([cat, stats]) => `
+                <div class="cross-sell-item">
+                    <span>${cat}</span>
+                    <span style="color: var(--accent-lime); font-weight: 600;">${Math.round(stats.total / stats.count)}</span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">Analyzing opportunities...</p>';
+            
             // Content & Entertainment - only actual streaming/content categories
             const contentCategories = [
                 'SERIES', 'STREAMING VIDEO', 'STREAMING/PLATFORM', 'BROADCAST/CABLE', 
@@ -10291,6 +10538,7 @@
             if (!data || !data.behavioral) return;
             
             const allItems = collectAllBehavioralItems(data);
+            const profileName = currentProfileData?.name || 'This audience';
             
             // Categorize by sponsor potential
             const sponsorCategories = {};
@@ -10313,6 +10561,70 @@
                 .filter(([_, data]) => data.avgIndex > 100)
                 .sort((a, b) => b[1].avgIndex - a[1].avgIndex)
                 .slice(0, 10);
+            
+            // === EXECUTIVE SUMMARY ===
+            const topCat = topCategories[0];
+            const highIndexCount = allItems.filter(i => i.index >= 150).length;
+            const brandItems = allItems.filter(i => i.category.toUpperCase().includes('BRAND') || i.category.toUpperCase().includes('SHOP'));
+            const topBrand = brandItems.sort((a, b) => b.index - a.index)[0];
+            
+            document.getElementById('sponsorExecSummary').innerHTML = `
+                <p><span class="exec-highlight">${profileName}</span> presents strong sponsorship potential with 
+                <span class="exec-highlight">${highIndexCount}</span> high-indexing affinities.</p>
+                <p>Top opportunity: <span class="exec-highlight">${topCat ? topCat[0] : 'Multiple categories'}</span> 
+                ${topCat ? `(+${topCat[1].avgIndex - 100}% above average)` : ''}.</p>
+                ${topBrand ? `<p>Leading brand alignment: <span class="exec-highlight">${topBrand.name}</span> with ${topBrand.index} index.</p>` : ''}
+            `;
+            
+            // === KEY RECOMMENDATIONS ===
+            const recommendations = [];
+            if (topCategories.length > 0) {
+                recommendations.push({ icon: '🎯', text: `Prioritize ${topCategories.slice(0, 3).map(c => c[0]).join(', ')} sponsorships` });
+            }
+            if (topBrand) {
+                recommendations.push({ icon: '🤝', text: `Pursue partnership with ${topBrand.name} (${topBrand.index} index)` });
+            }
+            const streamingItems = allItems.filter(i => i.category.toUpperCase().includes('STREAMING'));
+            if (streamingItems.length > 0) {
+                const topStreaming = streamingItems.sort((a, b) => b.index - a.index)[0];
+                recommendations.push({ icon: '📺', text: `Content integration via ${topStreaming.name}` });
+            }
+            recommendations.push({ icon: '⚡', text: `Leverage ${highIndexCount} high-index items for authentic activations` });
+            
+            document.getElementById('sponsorRecommendations').innerHTML = recommendations.slice(0, 4).map(r => `
+                <div class="recommendation-item">
+                    <span class="rec-icon">${r.icon}</span>
+                    <span class="rec-text">${r.text}</span>
+                </div>
+            `).join('');
+            
+            // === ROI METRICS ===
+            const reachScore = Math.min(100, Math.round((data.sampleSize || 0) / 10000));
+            const alignmentScore = Math.min(100, Math.round(highIndexCount / 2));
+            const activationScore = Math.min(100, topCategories.length * 10);
+            
+            document.getElementById('roiReach').style.width = `${reachScore}%`;
+            document.getElementById('roiReachValue').textContent = `${reachScore}%`;
+            document.getElementById('roiAlignment').style.width = `${alignmentScore}%`;
+            document.getElementById('roiAlignmentValue').textContent = `${alignmentScore}%`;
+            document.getElementById('roiActivation').style.width = `${activationScore}%`;
+            document.getElementById('roiActivationValue').textContent = `${activationScore}%`;
+            
+            // === ACTIVATION IDEAS ===
+            const activations = [
+                { icon: '🎤', title: 'Event Sponsorship', desc: `Partner at ${topCat ? topCat[0].toLowerCase() : ''} events` },
+                { icon: '📱', title: 'Social Campaign', desc: 'Influencer partnerships on key platforms' },
+                { icon: '🎁', title: 'Product Integration', desc: `Co-branded products with top brands` },
+                { icon: '🏆', title: 'Loyalty Program', desc: 'Exclusive rewards for this audience segment' }
+            ];
+            
+            document.getElementById('sponsorActivations').innerHTML = activations.map(a => `
+                <div class="activation-idea">
+                    <div class="activation-icon">${a.icon}</div>
+                    <div class="activation-title">${a.title}</div>
+                    <div class="activation-desc">${a.desc}</div>
+                </div>
+            `).join('');
             
             document.getElementById('sponsorCategories').innerHTML = topCategories.map(([cat, data]) => `
                 <div class="sponsor-item">
