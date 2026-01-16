@@ -1040,22 +1040,21 @@
         .interests-grid {
             background: var(--bg-card);
             border-radius: 8px;
-            padding: 0.75rem;
-            max-height: 600px;
+            padding: 0.5rem;
+            max-height: 500px;
             overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 0;
         }
         
         .interest-item {
             display: flex;
             align-items: center;
-            padding: 0.4rem 0.5rem;
-            border-bottom: 1px solid var(--border-color);
-            gap: 0.5rem;
+            padding: 0.25rem 0.4rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            gap: 0.35rem;
             transition: all 0.15s;
-        }
-        
-        .interest-item:last-child {
-            border-bottom: none;
         }
         
         .interest-item:hover {
@@ -1063,16 +1062,16 @@
         }
         
         .interest-rank {
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             color: var(--text-secondary);
-            width: 22px;
+            width: 18px;
             text-align: right;
             flex-shrink: 0;
         }
         
         .interest-name {
             flex: 1;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -1080,10 +1079,10 @@
         }
         
         .interest-bar-container {
-            width: 120px;
-            height: 14px;
+            width: 60px;
+            height: 10px;
             background: var(--bg-dark);
-            border-radius: 3px;
+            border-radius: 2px;
             overflow: hidden;
             flex-shrink: 0;
         }
@@ -1091,31 +1090,31 @@
         .interest-bar {
             height: 100%;
             background: linear-gradient(90deg, #5a9ad9, #7fb8e8);
-            border-radius: 3px;
+            border-radius: 2px;
         }
         
         .interest-index {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             font-weight: 700;
-            min-width: 40px;
+            min-width: 36px;
             text-align: center;
-            padding: 2px 6px;
-            border-radius: 4px;
+            padding: 1px 4px;
+            border-radius: 3px;
             background: rgba(0, 0, 0, 0.3);
             flex-shrink: 0;
         }
         
         .interest-pct {
-            font-size: 0.7rem;
-            min-width: 50px;
+            font-size: 0.65rem;
+            min-width: 42px;
             text-align: right;
             flex-shrink: 0;
         }
         
         .interest-genpop {
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             color: var(--text-secondary);
-            min-width: 50px;
+            min-width: 40px;
             text-align: right;
             flex-shrink: 0;
         }
