@@ -10289,17 +10289,22 @@
             };
             
             // Also categorize by CSV category field as backup
+            // VMVPD & Broadcast ONLY includes: BROADCAST/CABLE, STREAMING/PLATFORM, VIRTUAL MVPD/FAST
             const categoryMap = {
-                'STREAMING/PLATFORM': 'streaming',
-                'STREAMING/CHANNEL': 'streaming',
-                'STREAMING/MUSIC': 'audio',
                 'BROADCAST/CABLE': 'tv',
-                'VMVPD': 'tv', 'BROADCAST': 'tv', 'TRADITIONAL TV': 'tv',
-                'CABLE TV': 'tv',
-                'NETWORK TV': 'tv',
+                'VIRTUAL MVPD/FAST': 'tv',
+                'VIRTUAL MVPD FAST': 'tv',
+                'VMVPD/FAST': 'tv',
+                'VMVPD': 'tv',
+                'STREAMING/PLATFORM': 'tv',
+                'STREAMING/CHANNEL': 'streaming',
+                'STREAMING VIDEO': 'streaming',
+                'STREAMING/MUSIC': 'audio',
+                'STREAMING MUSIC': 'audio',
                 'SOCIAL MEDIA': 'social',
                 'GAMING': 'gaming',
                 'GAMES': 'gaming',
+                'GAMES - PLAYERS': 'gaming',
                 'PODCAST': 'audio',
                 'PODCASTS': 'audio',
                 'RADIO': 'audio',
