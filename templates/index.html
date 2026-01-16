@@ -305,13 +305,13 @@
         #formView { display: none; flex: 1; overflow-y: auto; }
         #dashboardView { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
         #subscriberIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
-        #adminView { display: none; flex: 1; }
+        #adminView { display: none; flex: 1; overflow: hidden; }
         
         #adminView iframe {
             width: 100%;
-            height: calc(100vh - 120px);
+            height: calc(100vh - 80px);
             border: none;
-            border-radius: 12px;
+            border-radius: 0;
         }
         
         /* Main IQ Tabs */
@@ -5288,7 +5288,7 @@
         </header>
 
         <!-- Main IQ Dashboard Tabs -->
-        <div class="iq-tabs-container">
+        <div class="iq-tabs-container" id="iqTabsContainer">
             <button class="iq-tab active {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" onclick="showProfileIQ()" {% if not has_profile_iq_access %}disabled{% endif %}>
                 <span class="tab-icon">🎯</span>Profile IQ
             </button>
@@ -7286,6 +7286,7 @@
             if (!formView) return; // Not available for this user role
             formView.style.display = 'block';
             document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('subscriberIQView').style.display = 'none';
             const adminView = document.getElementById('adminView');
             if (adminView) adminView.style.display = 'none';
             const formBtn = document.getElementById('formViewBtn');
@@ -7293,12 +7294,17 @@
             document.getElementById('dashboardViewBtn').classList.remove('active');
             const adminBtn = document.getElementById('adminViewBtn');
             if (adminBtn) adminBtn.classList.remove('active');
+            
+            // Hide IQ tabs when in form view
+            const iqTabs = document.getElementById('iqTabsContainer');
+            if (iqTabs) iqTabs.style.display = 'none';
         }
 
         function showDashboardView() {
             const formView = document.getElementById('formView');
             if (formView) formView.style.display = 'none';
-            document.getElementById('dashboardView').style.display = 'block';
+            document.getElementById('dashboardView').style.display = 'flex';
+            document.getElementById('subscriberIQView').style.display = 'none';
             const adminView = document.getElementById('adminView');
             if (adminView) adminView.style.display = 'none';
             const formBtn = document.getElementById('formViewBtn');
@@ -7306,6 +7312,15 @@
             document.getElementById('dashboardViewBtn').classList.add('active');
             const adminBtn = document.getElementById('adminViewBtn');
             if (adminBtn) adminBtn.classList.remove('active');
+            
+            // Show IQ tabs when in dashboard view
+            const iqTabs = document.getElementById('iqTabsContainer');
+            if (iqTabs) iqTabs.style.display = 'flex';
+            
+            // Set Profile IQ tab as active
+            document.getElementById('profileIQTab').classList.add('active');
+            document.getElementById('subscriberIQTab').classList.remove('active');
+            
             // Auto-load profiles when switching to dashboard
             loadDashboardProfiles();
         }
@@ -7316,12 +7331,16 @@
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'none';
             const adminView = document.getElementById('adminView');
-            if (adminView) adminView.style.display = 'block';
+            if (adminView) adminView.style.display = 'flex';
             const formBtn = document.getElementById('formViewBtn');
             if (formBtn) formBtn.classList.remove('active');
             document.getElementById('dashboardViewBtn').classList.remove('active');
             const adminBtn = document.getElementById('adminViewBtn');
             if (adminBtn) adminBtn.classList.add('active');
+            
+            // Hide IQ tabs when in admin view
+            const iqTabs = document.getElementById('iqTabsContainer');
+            if (iqTabs) iqTabs.style.display = 'none';
         }
         
         // Main IQ Tab Switching
@@ -7333,10 +7352,21 @@
             document.getElementById('subscriberIQTab').classList.remove('active');
             document.getElementById('dashboardView').style.display = 'flex';
             document.getElementById('subscriberIQView').style.display = 'none';
+            const adminView = document.getElementById('adminView');
+            if (adminView) adminView.style.display = 'none';
+            
+            // Show IQ tabs
+            const iqTabs = document.getElementById('iqTabsContainer');
+            if (iqTabs) iqTabs.style.display = 'flex';
             
             // Show Profile IQ header buttons
             const viewToggle = document.querySelector('.view-toggle');
             if (viewToggle) viewToggle.style.display = 'flex';
+            
+            // Update header buttons
+            document.getElementById('dashboardViewBtn').classList.add('active');
+            const adminBtn = document.getElementById('adminViewBtn');
+            if (adminBtn) adminBtn.classList.remove('active');
         }
         
         function showSubscriberIQ() {
@@ -7347,10 +7377,21 @@
             document.getElementById('subscriberIQTab').classList.add('active');
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'flex';
+            const adminView = document.getElementById('adminView');
+            if (adminView) adminView.style.display = 'none';
+            
+            // Show IQ tabs
+            const iqTabs = document.getElementById('iqTabsContainer');
+            if (iqTabs) iqTabs.style.display = 'flex';
             
             // Hide Profile IQ specific buttons when on Subscriber IQ
             const formView = document.getElementById('formView');
             if (formView) formView.style.display = 'none';
+            
+            // Update header buttons
+            document.getElementById('dashboardViewBtn').classList.add('active');
+            const adminBtn = document.getElementById('adminViewBtn');
+            if (adminBtn) adminBtn.classList.remove('active');
         }
 
         // Activity tracking helper (non-blocking)
