@@ -2907,7 +2907,7 @@ def serve_profile_image(s3_key):
             image_data,
             mimetype=content_type,
             headers={
-                'Cache-Control': 'public, max-age=86400',  # Cache for 1 day
+                'Cache-Control': 'public, max-age=31536000, immutable',  # Cache indefinitely (1 year, immutable)
                 'Content-Type': content_type
             }
         )
