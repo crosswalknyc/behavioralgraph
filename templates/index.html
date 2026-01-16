@@ -2944,6 +2944,74 @@
             color: var(--accent-lime);
             white-space: nowrap;
         }
+        .media-insight-item.clickable {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .media-insight-item.clickable:hover {
+            background: var(--bg-card);
+            border-left: 3px solid var(--accent-lime);
+            transform: translateX(2px);
+        }
+        .media-insight-details {
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background: var(--bg-card);
+            border: 1px solid var(--accent-lime);
+            border-radius: 8px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .media-insight-details-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .media-insight-details-header span {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--accent-lime);
+        }
+        .close-details-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 0.25rem;
+        }
+        .close-details-btn:hover { color: var(--text-primary); }
+        .media-insight-details-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .media-detail-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.35rem 0.5rem;
+            background: var(--bg-input);
+            border-radius: 4px;
+            font-size: 0.75rem;
+        }
+        .media-detail-item .name { flex: 1; }
+        .media-detail-item .category { 
+            color: var(--text-secondary); 
+            font-size: 0.65rem;
+            margin-left: 0.5rem;
+        }
+        .media-detail-item .idx {
+            font-weight: 700;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+        }
+        .media-detail-item .idx.high { background: rgba(16,185,129,0.2); color: #10b981; }
+        .media-detail-item .idx.low { background: rgba(239,68,68,0.2); color: #ef4444; }
         
         .media-metrics-row {
             display: grid;
@@ -5822,8 +5890,16 @@
                             </div>
                             <div class="media-reach-insights-card">
                                 <h3>💡 Media Mix Insights</h3>
+                                <p style="font-size: 0.65rem; color: var(--text-secondary); margin: 0 0 0.5rem 0;">Click any insight to see details</p>
                                 <div id="mediaKeyInsights" class="media-insights-list">
                                     <div class="loading-placeholder">Analyzing channels...</div>
+                                </div>
+                                <div id="mediaInsightDetails" class="media-insight-details" style="display: none;">
+                                    <div class="media-insight-details-header">
+                                        <span id="mediaInsightDetailsTitle"></span>
+                                        <button onclick="closeMediaInsightDetails()" class="close-details-btn">✕</button>
+                                    </div>
+                                    <div id="mediaInsightDetailsList" class="media-insight-details-list"></div>
                                 </div>
                             </div>
                         </div>
@@ -11213,62 +11289,86 @@
                 <span class="channel-badge">${c.label} (+${Math.max(0, c.avgIndex - 100)}%)</span>
             `).join('') || '<span style="color: var(--text-secondary);">No media platform data found</span>';
             
-            // === MEDIA INSIGHTS ===
-            const topChannel = channelScores[0];
+            // === MEDIA INSIGHTS (SMART SCORING) ===
+            // Score channels by QUALITY not just count: weighted avg index with top-performer bonus
+            const scoredChannels = channelScores.map(c => {
+                const topItems = c.items.sort((a, b) => b.index - a.index);
+                const topPerformer = topItems[0];
+                const top3Avg = topItems.slice(0, 3).reduce((s, i) => s + i.index, 0) / Math.min(3, topItems.length) || 0;
+                // Quality score = weighted: 60% avg index + 30% top3 avg + 10% penetration bonus
+                const penetrationBonus = Math.min(c.count / 5, 2) * 10; // Small bonus for variety, capped
+                const qualityScore = Math.round((c.avgIndex * 0.6) + (top3Avg * 0.3) + penetrationBonus);
+                return { ...c, qualityScore, topPerformer, top3Avg };
+            }).sort((a, b) => b.qualityScore - a.qualityScore);
+            
+            const topChannel = scoredChannels[0];
             const allMediaItems = Object.values(mediaTypes).flatMap(m => m.items);
             const highPerformers = allMediaItems.filter(i => i.index >= 150);
             const avgMediaIndex = allMediaItems.length > 0 ? Math.round(allMediaItems.reduce((s, i) => s + i.index, 0) / allMediaItems.length) : 0;
             
+            // Store channel data globally for click handlers
+            window.mediaChannelData = scoredChannels;
+            window.mediaHighPerformers = highPerformers;
+            
             // Update metrics
             document.getElementById('mediaDominantChannel').textContent = topChannel?.label || '--';
-            document.getElementById('mediaChannelCount').textContent = channelScores.length;
+            document.getElementById('mediaChannelCount').textContent = scoredChannels.filter(c => c.count > 0).length;
             document.getElementById('mediaAvgIndex').textContent = avgMediaIndex;
             document.getElementById('mediaHighPerformers').textContent = highPerformers.length;
             
-            // Generate key insights
+            // Generate SMARTER key insights with clickable data
             const insights = [];
-            if (topChannel) {
-                const topItem = topChannel.items.sort((a, b) => b.index - a.index)[0];
+            if (topChannel && topChannel.avgIndex > 0) {
                 insights.push({
                     icon: '🏆',
-                    text: `<strong>${topChannel.label}</strong> is your dominant channel with ${topChannel.count} platforms`,
-                    value: `+${topChannel.avgIndex - 100}%`
+                    text: `<strong>${topChannel.label}</strong> is your strongest channel (avg ${topChannel.avgIndex} idx)`,
+                    value: `+${Math.round(topChannel.avgIndex - 100)}%`,
+                    clickType: 'channel',
+                    clickData: topChannel.type
                 });
-                if (topItem) {
+                if (topChannel.topPerformer) {
                     insights.push({
                         icon: '⭐',
-                        text: `Top performer: <strong>${topItem.name}</strong>`,
-                        value: `${topItem.index} idx`
+                        text: `Top performer: <strong>${topChannel.topPerformer.name}</strong> <span style="color: var(--text-secondary); font-size: 0.75rem;">(${topChannel.label})</span>`,
+                        value: `${topChannel.topPerformer.index} idx`,
+                        clickType: 'channel',
+                        clickData: topChannel.type
                     });
                 }
             }
-            if (channelScores.length >= 2) {
-                const second = channelScores[1];
+            if (scoredChannels.length >= 2 && scoredChannels[1].avgIndex > 0) {
+                const second = scoredChannels[1];
                 insights.push({
                     icon: '📈',
-                    text: `Second strongest: <strong>${second.label}</strong>`,
-                    value: `+${second.avgIndex - 100}%`
+                    text: `Second strongest: <strong>${second.label}</strong> (avg ${second.avgIndex} idx)`,
+                    value: `+${Math.round(second.avgIndex - 100)}%`,
+                    clickType: 'channel',
+                    clickData: second.type
                 });
             }
-            if (highPerformers.length > 5) {
+            if (highPerformers.length > 3) {
                 insights.push({
                     icon: '🎯',
-                    text: `${highPerformers.length} high-performing platforms (150+ index)`,
-                    value: 'Strong'
+                    text: `<strong>${highPerformers.length}</strong> high-index platforms (150+)`,
+                    value: 'Strong',
+                    clickType: 'highPerformers',
+                    clickData: null
                 });
             }
-            const lowChannels = channelScores.filter(c => c.avgIndex < 110);
+            const lowChannels = scoredChannels.filter(c => c.avgIndex > 0 && c.avgIndex < 110);
             if (lowChannels.length > 0) {
                 insights.push({
                     icon: '⚠️',
-                    text: `Underperforming: ${lowChannels.map(c => c.label).join(', ')}`,
-                    value: 'Low'
+                    text: `Below average: ${lowChannels.map(c => c.label).join(', ')}`,
+                    value: 'Review',
+                    clickType: 'lowChannels',
+                    clickData: null
                 });
             }
             
             document.getElementById('mediaKeyInsights').innerHTML = insights.length > 0 
-                ? insights.map(i => `
-                    <div class="media-insight-item">
+                ? insights.map((i, idx) => `
+                    <div class="media-insight-item clickable" onclick="showMediaInsightDetails('${i.clickType}', '${i.clickData || ''}', ${idx})">
                         <span class="insight-icon">${i.icon}</span>
                         <span class="insight-text">${i.text}</span>
                         <span class="insight-value">${i.value}</span>
@@ -11319,6 +11419,50 @@
                     <span class="index" style="background: ${item.index >= 100 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}; color: ${item.index >= 100 ? '#10b981' : '#ef4444'};">${item.index}</span>
                 </div>
             `).join('');
+        }
+        
+        function showMediaInsightDetails(clickType, clickData, idx) {
+            const detailsPanel = document.getElementById('mediaInsightDetails');
+            const titleEl = document.getElementById('mediaInsightDetailsTitle');
+            const listEl = document.getElementById('mediaInsightDetailsList');
+            
+            let items = [];
+            let title = '';
+            
+            if (clickType === 'channel' && clickData && window.mediaChannelData) {
+                const channel = window.mediaChannelData.find(c => c.type === clickData);
+                if (channel) {
+                    title = `${channel.label} - ${channel.items.length} platforms (avg ${channel.avgIndex} idx)`;
+                    items = channel.items.sort((a, b) => b.index - a.index);
+                }
+            } else if (clickType === 'highPerformers' && window.mediaHighPerformers) {
+                title = `High-Performing Platforms (150+ index)`;
+                items = window.mediaHighPerformers.sort((a, b) => b.index - a.index);
+            } else if (clickType === 'lowChannels' && window.mediaChannelData) {
+                title = 'Below Average Channels - Platforms';
+                const lowChannels = window.mediaChannelData.filter(c => c.avgIndex > 0 && c.avgIndex < 110);
+                items = lowChannels.flatMap(c => c.items.map(i => ({ ...i, channelLabel: c.label }))).sort((a, b) => a.index - b.index);
+            }
+            
+            if (items.length === 0) {
+                detailsPanel.style.display = 'none';
+                return;
+            }
+            
+            titleEl.textContent = title;
+            listEl.innerHTML = items.slice(0, 20).map(item => `
+                <div class="media-detail-item">
+                    <span class="name">${item.name}</span>
+                    <span class="category">${item.category || item.channelLabel || ''}</span>
+                    <span class="idx ${item.index >= 150 ? 'high' : item.index < 100 ? 'low' : 'high'}">${item.index}</span>
+                </div>
+            `).join('') + (items.length > 20 ? `<div style="text-align: center; color: var(--text-secondary); font-size: 0.7rem; padding-top: 0.5rem;">+ ${items.length - 20} more</div>` : '');
+            
+            detailsPanel.style.display = 'block';
+        }
+        
+        function closeMediaInsightDetails() {
+            document.getElementById('mediaInsightDetails').style.display = 'none';
         }
         
         function renderMediaReachChart(channelScores) {
