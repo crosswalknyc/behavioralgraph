@@ -2249,10 +2249,7 @@
         }
         .has-tooltip::after {
             content: attr(data-tooltip);
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
+            position: fixed;
             background: var(--bg-card);
             color: var(--text-primary);
             padding: 0.75rem 1rem;
@@ -2260,20 +2257,23 @@
             font-size: 0.75rem;
             line-height: 1.4;
             width: 280px;
+            max-width: 90vw;
             text-align: left;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            border: 1px solid var(--accent-lime);
             opacity: 0;
             visibility: hidden;
-            transition: all 0.2s ease;
-            z-index: 1000;
+            transition: opacity 0.2s ease;
+            z-index: 999999;
             pointer-events: none;
             white-space: normal;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
         }
         .has-tooltip:hover::after {
             opacity: 1;
             visibility: visible;
-            bottom: calc(100% + 10px);
         }
         .metric-icon {
             font-size: 1.5rem;
