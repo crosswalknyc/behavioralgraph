@@ -10996,14 +10996,23 @@
                 </div>
             `).join('') || '<p style="color: var(--text-secondary);">No gaming data</p>';
             
-            // Media consumption summary
-            const mediaCategories = ['STREAMING', 'SOCIAL', 'BROADCAST', 'PODCAST', 'GAMING'];
-            const mediaSummary = mediaCategories.map(cat => {
-                const catItems = allItems.filter(i => i.category.toUpperCase().includes(cat));
+            // Media consumption summary - use proper category matching and labels
+            const mediaCategoryConfig = [
+                { key: 'STREAMING', match: ['STREAMING VIDEO', 'STREAMING/PLATFORM', 'STREAMING'], label: 'Streaming', icon: '📺' },
+                { key: 'SOCIAL', match: ['SOCIAL MEDIA', 'SOCIAL'], label: 'Social Media', icon: '📱' },
+                { key: 'TV', match: ['BROADCAST/CABLE', 'VIRTUAL MVPD', 'VMVPD', 'CABLE'], label: 'TV & Cable', icon: '📡' },
+                { key: 'PODCAST', match: ['PODCAST', 'PODCASTER'], label: 'Podcasts', icon: '🎙️' },
+                { key: 'GAMING', match: ['GAMES', 'GAMING', 'GAME PLAYERS'], label: 'Gaming', icon: '🎮' },
+                { key: 'MUSIC', match: ['STREAMING MUSIC', 'MUSIC', 'MUSICIAN'], label: 'Music', icon: '🎵' }
+            ];
+            const mediaSummary = mediaCategoryConfig.map(cfg => {
+                const catItems = allItems.filter(i => {
+                    const cat = i.category.toUpperCase();
+                    return cfg.match.some(m => cat.includes(m));
+                });
                 const avgIdx = catItems.length ? Math.round(catItems.reduce((s,i) => s + i.index, 0) / catItems.length) : 0;
-                const icons = { 'STREAMING': '📺', 'SOCIAL': '📱', 'BROADCAST': '📡', 'PODCAST': '🎙️', 'GAMING': '🎮' };
-                return { category: cat, avgIndex: avgIdx, icon: icons[cat] || '📊' };
-            }).filter(m => m.avgIndex > 0);
+                return { category: cfg.label, avgIndex: avgIdx, icon: cfg.icon, count: catItems.length };
+            }).filter(m => m.avgIndex > 0 && m.count > 0);
             document.getElementById('mediaConsumptionSummary').innerHTML = mediaSummary.map(m => `
                 <div class="media-summary-item">
                     <div class="media-summary-icon">${m.icon}</div>
