@@ -253,6 +253,17 @@
         /* ============================================
            DASHBOARD STYLES
            ============================================ */
+        /* Dashboard Header Row */
+        .dash-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+            padding: 0.5rem 0;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
         .dashboard-header {
             display: flex;
             justify-content: space-between;
@@ -268,27 +279,121 @@
         .dash-profile-info {
             display: flex;
             align-items: center;
-            gap: 1rem;
-            justify-content: flex-start;
+            gap: 0.75rem;
         }
 
         .dash-brand-box {
-            background: linear-gradient(135deg, #c8e600, #a0d911);
-            color: #1a1a1a;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            font-size: 1.1rem;
+            background: linear-gradient(135deg, #22d3ee, #06b6d4);
+            color: #0a0a0a;
+            padding: 0.6rem 1.25rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .dash-brand-box:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(34, 211, 238, 0.3);
         }
 
         .dash-date-box {
-            background: var(--bg-input);
             color: var(--text-secondary);
-            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+            background: var(--bg-input);
+            padding: 0.5rem 0.75rem;
             border-radius: 6px;
-            font-size: 0.85rem;
+            border: 1px solid var(--border-color);
+        }
+
+        /* Action Buttons */
+        .dash-action-buttons {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .dash-action-btn {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.45rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .dash-action-btn:hover {
+            background: var(--bg-card);
+            border-color: var(--text-secondary);
+        }
+
+        .dash-action-btn.primary {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            border-color: #8b5cf6;
+            color: white;
+        }
+
+        .dash-action-btn.primary:hover {
+            background: linear-gradient(135deg, #a78bfa, #8b5cf6);
+        }
+
+        .dash-action-btn.accent {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            border-color: #22c55e;
+            color: white;
+        }
+
+        .dash-action-btn.accent:hover {
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+        }
+
+        /* Export Dropdown */
+        .dash-dropdown {
+            position: relative;
+        }
+
+        .dash-dropdown-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            min-width: 160px;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .dash-dropdown-menu a {
+            display: block;
+            padding: 0.5rem 0.75rem;
+            color: var(--text-primary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .dash-dropdown-menu a:hover {
+            background: var(--bg-input);
+        }
+
+        /* Bottom Row (US% and Deck Builder) */
+        .dash-bottom-row {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+            padding: 0.25rem 0;
         }
 
         .dashboard-header h2 {
@@ -4344,17 +4449,26 @@
 
         <!-- DASHBOARD VIEW -->
         <div id="dashboardView">
-            <!-- Row 1: Profile Info + US% / Deck Builder -->
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <!-- Row 1: Profile Info + Action Buttons -->
+            <div class="dash-header-row">
                 <div class="dash-profile-info">
-                    <div class="dash-brand-box" id="dashBrandNameHeader">Select a profile</div>
-                    <div class="dash-date-box" id="dashDateRangeHeader">Date Range: --</div>
+                    <div class="dash-brand-box" id="dashBrandNameHeader">SELECT A PROFILE</div>
+                    <div class="dash-date-box" id="dashDateRangeHeader">Date Range: —</div>
                 </div>
-                <div style="display: flex; gap: 0.75rem; align-items: center;">
-                    <div class="display-mode-toggle" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" title="Toggle between percentages and US population numbers">
-                        <span id="dashDisplayLabel">US %</span>
+                <div class="dash-action-buttons">
+                    <button class="dash-action-btn primary" onclick="toggleAIPanel()" title="Business Intelligence Lab">🧪 BI LAB</button>
+                    <button class="dash-action-btn" onclick="toggleFavorite()" title="Favorite" id="favBtn">⭐</button>
+                    <button class="dash-action-btn" onclick="shareProfile()" title="Share">📤</button>
+                    <div class="dash-dropdown">
+                        <button class="dash-action-btn" onclick="toggleExportMenu()">📥 EXPORT ▾</button>
+                        <div id="exportDropdown" class="dash-dropdown-menu" style="display: none;">
+                            <a onclick="exportAllCSV()">📄 All Data (CSV)</a>
+                            <a onclick="exportAllPNG()">🖼️ All Charts (PNG)</a>
+                            <a onclick="exportPDF()">📑 Full Report (PDF)</a>
+                        </div>
                     </div>
-                    <button class="btn btn-small deck-builder-btn" id="deckBtn" onclick="openDeckWorkspace()" title="View Deck Workspace">📊 Deck Builder (<span id="deckCount">0</span>)</button>
+                    <button class="dash-action-btn accent" onclick="addCurrentTabToDeck()" title="Add to Deck">+ ADD</button>
+                    <button class="dash-action-btn" onclick="toggleSavedViews()" title="Saved Views" id="savedBtn">💾</button>
                 </div>
             </div>
             
@@ -4425,20 +4539,29 @@
                 </div>
             </div>
 
+            <!-- Row 2: Tab Navigation -->
             <div class="dashboard-tabs">
-                <button class="tab-btn active" onclick="showTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">Demographics</span></button>
-                <button class="tab-btn" onclick="showTab('behavioral')"><span class="tab-icon">📊</span><span class="tab-label">Behavioral</span></button>
-                <button class="tab-btn" onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">Interests</span></button>
-                <button class="tab-btn" onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">Location</span></button>
-                <button class="tab-btn" onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">Insights</span></button>
-                <button class="tab-btn" onclick="showTab('affinity')"><span class="tab-icon">🔗</span><span class="tab-label">Affinity</span></button>
-                <button class="tab-btn" onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">Sponsorship</span></button>
-                <button class="tab-btn" onclick="showTab('talent')"><span class="tab-icon">🤝</span><span class="tab-label">Partnership</span></button>
-                <button class="tab-btn" onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">Media</span></button>
-                <button class="tab-btn" onclick="showTab('content')"><span class="tab-icon">🎬</span><span class="tab-label">Content</span></button>
-                <button class="tab-btn" onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">Segment</span></button>
-                <button class="tab-btn" onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">Compare</span></button>
-                <button class="tab-btn" onclick="showTab('collaboration')"><span class="tab-icon">👥</span><span class="tab-label">Collaborate</span></button>
+                <button class="tab-btn active" onclick="showTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
+                <button class="tab-btn" onclick="showTab('behavioral')"><span class="tab-icon">📊</span><span class="tab-label">BEHAVIORAL</span></button>
+                <button class="tab-btn" onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
+                <button class="tab-btn" onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
+                <button class="tab-btn" onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
+                <button class="tab-btn" onclick="showTab('affinity')"><span class="tab-icon">🔗</span><span class="tab-label">AFFINITY</span></button>
+                <button class="tab-btn" onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span></button>
+                <button class="tab-btn" onclick="showTab('talent')"><span class="tab-icon">🤝</span><span class="tab-label">PARTNERSHIP</span></button>
+                <button class="tab-btn" onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">MEDIA</span></button>
+                <button class="tab-btn" onclick="showTab('content')"><span class="tab-icon">🎬</span><span class="tab-label">CONTENT</span></button>
+                <button class="tab-btn" onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span></button>
+                <button class="tab-btn" onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span></button>
+                <button class="tab-btn" onclick="showTab('collaboration')"><span class="tab-icon">👥</span><span class="tab-label">COLLABORATE</span></button>
+            </div>
+            
+            <!-- Row 3: US% Toggle (right aligned) -->
+            <div class="dash-bottom-row">
+                <div class="display-mode-toggle" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" title="Toggle between percentages and US population numbers">
+                    <span id="dashDisplayLabel">US %</span>
+                </div>
+                <button class="deck-builder-btn btn btn-small" id="deckBtn" onclick="openDeckWorkspace()" title="View Deck Workspace">📊 Deck Builder (<span id="deckCount">0</span>)</button>
             </div>
             
             <!-- Global Action Bar -->
@@ -11086,6 +11209,21 @@
             btn.textContent = isFavorite ? '⭐' : '☆';
             btn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
         }
+        
+        function toggleExportMenu() {
+            const dropdown = document.getElementById('exportDropdown');
+            if (dropdown) {
+                dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            const dropdown = document.getElementById('exportDropdown');
+            if (dropdown && !e.target.closest('.dash-dropdown')) {
+                dropdown.style.display = 'none';
+            }
+        });
         
         async function toggleFavorite() {
             if (!currentS3Key) {
