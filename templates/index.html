@@ -1142,6 +1142,64 @@
         .stat-label { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem; }
         .stat-value { font-family: 'Space Mono', monospace; font-size: 2rem; font-weight: 700; }
         .stat-prefix { font-size: 1.25rem; color: var(--text-secondary); }
+        
+        /* Demographics Insights Row */
+        .demo-insights-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        @media (max-width: 1200px) {
+            .demo-insights-row { grid-template-columns: 1fr; }
+        }
+        .demo-insight-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .demo-insight-card h4 {
+            margin: 0 0 0.75rem 0;
+            font-size: 0.85rem;
+            color: var(--accent-lime);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .demo-insight-content {
+            font-size: 0.8rem;
+            line-height: 1.5;
+        }
+        .demo-insight-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            padding: 0.4rem 0.5rem;
+            background: var(--bg-input);
+            border-radius: 4px;
+        }
+        .demo-insight-item .icon { font-size: 0.9rem; }
+        .demo-insight-item .text { flex: 1; }
+        .demo-insight-item .value {
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .demo-insight-item .value.positive { color: #10b981; }
+        .demo-insight-item .value.negative { color: #ef4444; }
+        .demo-insight-item .value.neutral { color: var(--text-secondary); }
+        .demo-highlight { color: var(--accent-lime); font-weight: 600; }
+        .demo-skew-tag {
+            display: inline-block;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-left: 0.25rem;
+        }
+        .demo-skew-tag.over { background: rgba(16,185,129,0.2); color: #10b981; }
+        .demo-skew-tag.under { background: rgba(239,68,68,0.2); color: #ef4444; }
 
         .charts-grid {
             display: grid;
@@ -5435,6 +5493,29 @@
                                 <div class="stat-value" id="dashProjectedUS">0</div>
                             </div>
                         </div>
+                        
+                        <!-- Demographics Insights Row -->
+                        <div class="demo-insights-row" id="demoInsightsRow">
+                            <div class="demo-insight-card">
+                                <h4>🎯 Demographic Profile Summary</h4>
+                                <div id="demoProfileSummary" class="demo-insight-content">
+                                    <div class="loading-placeholder">Analyzing demographics...</div>
+                                </div>
+                            </div>
+                            <div class="demo-insight-card">
+                                <h4>📊 Key Differentiators vs Gen Pop</h4>
+                                <div id="demoDifferentiators" class="demo-insight-content">
+                                    <div class="loading-placeholder">Loading...</div>
+                                </div>
+                            </div>
+                            <div class="demo-insight-card">
+                                <h4>💡 Targeting Recommendations</h4>
+                                <div id="demoTargetingRecs" class="demo-insight-content">
+                                    <div class="loading-placeholder">Loading...</div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div class="charts-grid">
                             <div class="chart-card">
                                 <h3>
@@ -7238,6 +7319,9 @@
             renderBehavioralCards(parsed.behavioral);
             renderLocationTable(parsed.locations);
             
+            // Render demographic insights
+            renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop);
+            
             // Render top insights for this profile
             renderTopInsights(parsed);
         }
@@ -7649,6 +7733,9 @@
                     renderBehavioralCards(parsed.behavioral);
                     renderLocationTable(parsed.locations);
                     
+                    // Render demographic insights
+                    renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop);
+                    
                     // Render top insights
                     renderTopInsights(parsed);
                     
@@ -7750,6 +7837,223 @@
                 renderSponsorshipFinder(currentDashboardData);
                 renderMediaOptimizer(currentDashboardData);
             }
+        }
+        
+        // ============================================================================
+        // DEMOGRAPHIC INSIGHTS
+        // ============================================================================
+        function renderDemoInsights(demographics, demographicsIndex, demographicsGenPop) {
+            if (!demographics || !demographicsIndex) {
+                return;
+            }
+            
+            // === PROFILE SUMMARY ===
+            const summaryItems = [];
+            
+            // Find dominant gender
+            const genderData = demographics.gender || {};
+            const genderEntries = Object.entries(genderData).filter(([k, v]) => v > 0);
+            if (genderEntries.length > 0) {
+                const topGender = genderEntries.sort((a, b) => b[1] - a[1])[0];
+                const genderIdx = demographicsIndex.gender?.[topGender[0]] || 100;
+                summaryItems.push({
+                    icon: topGender[0].toLowerCase().includes('female') ? '👩' : topGender[0].toLowerCase().includes('male') ? '👨' : '👤',
+                    text: `<span class="demo-highlight">${topGender[1].toFixed(0)}%</span> ${topGender[0]}`,
+                    value: genderIdx > 100 ? `+${(genderIdx - 100).toFixed(0)}` : `${(genderIdx - 100).toFixed(0)}`,
+                    valueClass: genderIdx >= 100 ? 'positive' : 'negative'
+                });
+            }
+            
+            // Find dominant age range
+            const ageData = demographics.age || {};
+            const ageEntries = Object.entries(ageData).filter(([k, v]) => v > 0);
+            if (ageEntries.length > 0) {
+                const topAge = ageEntries.sort((a, b) => b[1] - a[1])[0];
+                const ageIdx = demographicsIndex.age?.[topAge[0]] || 100;
+                summaryItems.push({
+                    icon: '📅',
+                    text: `Core age: <span class="demo-highlight">${topAge[0]}</span> (${topAge[1].toFixed(0)}%)`,
+                    value: ageIdx > 100 ? `+${(ageIdx - 100).toFixed(0)}` : `${(ageIdx - 100).toFixed(0)}`,
+                    valueClass: ageIdx >= 100 ? 'positive' : 'negative'
+                });
+            }
+            
+            // Find dominant income
+            const incomeData = demographics.income || {};
+            const incomeEntries = Object.entries(incomeData).filter(([k, v]) => v > 0);
+            if (incomeEntries.length > 0) {
+                const topIncome = incomeEntries.sort((a, b) => b[1] - a[1])[0];
+                const incomeIdx = demographicsIndex.income?.[topIncome[0]] || 100;
+                summaryItems.push({
+                    icon: '💰',
+                    text: `Top income: <span class="demo-highlight">${topIncome[0]}</span>`,
+                    value: incomeIdx > 100 ? `+${(incomeIdx - 100).toFixed(0)}` : `${(incomeIdx - 100).toFixed(0)}`,
+                    valueClass: incomeIdx >= 100 ? 'positive' : 'negative'
+                });
+            }
+            
+            // Find dominant ethnicity
+            const ethData = demographics.ethnicity || {};
+            const ethEntries = Object.entries(ethData).filter(([k, v]) => v > 0);
+            if (ethEntries.length > 0) {
+                const topEth = ethEntries.sort((a, b) => b[1] - a[1])[0];
+                summaryItems.push({
+                    icon: '🌍',
+                    text: `<span class="demo-highlight">${topEth[1].toFixed(0)}%</span> ${topEth[0]}`,
+                    value: '',
+                    valueClass: 'neutral'
+                });
+            }
+            
+            document.getElementById('demoProfileSummary').innerHTML = summaryItems.length > 0
+                ? summaryItems.map(i => `
+                    <div class="demo-insight-item">
+                        <span class="icon">${i.icon}</span>
+                        <span class="text">${i.text}</span>
+                        ${i.value ? `<span class="value ${i.valueClass}">${i.value}</span>` : ''}
+                    </div>
+                `).join('')
+                : '<p style="color: var(--text-secondary);">No data available</p>';
+            
+            // === KEY DIFFERENTIATORS ===
+            const differentiators = [];
+            
+            // Collect all over-indexing demographics
+            const allIndexes = [];
+            ['gender', 'age', 'income', 'ethnicity', 'education', 'relationship'].forEach(cat => {
+                const catIdx = demographicsIndex[cat] || {};
+                const catData = demographics[cat] || {};
+                Object.entries(catIdx).forEach(([key, idx]) => {
+                    if (idx > 110 && catData[key] > 2) { // Over-index by 10%+ with at least 2% of audience
+                        allIndexes.push({ category: cat, key, idx, pct: catData[key] });
+                    }
+                });
+            });
+            
+            // Sort by index and take top differentiators
+            const topDiffs = allIndexes.sort((a, b) => b.idx - a.idx).slice(0, 5);
+            
+            topDiffs.forEach(d => {
+                const catEmoji = {
+                    gender: '👤', age: '📅', income: '💰', ethnicity: '🌍', 
+                    education: '🎓', relationship: '💑'
+                }[d.category] || '📊';
+                
+                differentiators.push({
+                    icon: catEmoji,
+                    text: `${d.key}`,
+                    value: `+${(d.idx - 100).toFixed(0)}%`,
+                    valueClass: 'positive'
+                });
+            });
+            
+            // Also find under-indexing items
+            const underIndexes = [];
+            ['gender', 'age', 'income', 'ethnicity'].forEach(cat => {
+                const catIdx = demographicsIndex[cat] || {};
+                const catGenPop = demographicsGenPop[cat] || {};
+                Object.entries(catIdx).forEach(([key, idx]) => {
+                    if (idx < 80 && catGenPop[key] > 10) { // Under-index by 20%+ for segments that are 10%+ of Gen Pop
+                        underIndexes.push({ category: cat, key, idx });
+                    }
+                });
+            });
+            
+            const topUnder = underIndexes.sort((a, b) => a.idx - b.idx).slice(0, 2);
+            topUnder.forEach(u => {
+                differentiators.push({
+                    icon: '⚠️',
+                    text: `Under-indexes: ${u.key}`,
+                    value: `${(u.idx - 100).toFixed(0)}%`,
+                    valueClass: 'negative'
+                });
+            });
+            
+            document.getElementById('demoDifferentiators').innerHTML = differentiators.length > 0
+                ? differentiators.map(i => `
+                    <div class="demo-insight-item">
+                        <span class="icon">${i.icon}</span>
+                        <span class="text">${i.text}</span>
+                        <span class="value ${i.valueClass}">${i.value}</span>
+                    </div>
+                `).join('')
+                : '<p style="color: var(--text-secondary);">Similar to general population</p>';
+            
+            // === TARGETING RECOMMENDATIONS ===
+            const recommendations = [];
+            
+            // Gender-based rec
+            if (genderEntries.length > 0) {
+                const dominant = genderEntries.sort((a, b) => b[1] - a[1])[0];
+                if (dominant[1] > 55) {
+                    recommendations.push({
+                        icon: '🎯',
+                        text: `Target ${dominant[0].toLowerCase()}-focused channels and messaging`
+                    });
+                }
+            }
+            
+            // Age-based rec
+            if (ageEntries.length > 0) {
+                const topAges = ageEntries.sort((a, b) => b[1] - a[1]).slice(0, 2);
+                const youngSkew = topAges.some(a => a[0].includes('16') || a[0].includes('18') || a[0].includes('21'));
+                const olderSkew = topAges.some(a => a[0].includes('41') || a[0].includes('60'));
+                
+                if (youngSkew) {
+                    recommendations.push({
+                        icon: '📱',
+                        text: 'Prioritize digital-first, social media channels'
+                    });
+                } else if (olderSkew) {
+                    recommendations.push({
+                        icon: '📺',
+                        text: 'Include traditional media mix (TV, print)'
+                    });
+                }
+            }
+            
+            // Income-based rec
+            const highIncome = incomeEntries.filter(([k]) => k.includes('100') || k.includes('150') || k.includes('200'));
+            const lowIncome = incomeEntries.filter(([k]) => k.includes('<') || k.includes('25') || k.includes('35'));
+            
+            if (highIncome.reduce((s, [, v]) => s + v, 0) > 30) {
+                recommendations.push({
+                    icon: '💎',
+                    text: 'Premium positioning and aspirational messaging work well'
+                });
+            } else if (lowIncome.reduce((s, [, v]) => s + v, 0) > 40) {
+                recommendations.push({
+                    icon: '💵',
+                    text: 'Value-focused messaging and promotions recommended'
+                });
+            }
+            
+            // Education-based rec
+            const eduData = demographics.education || {};
+            const collegeEdu = Object.entries(eduData).filter(([k]) => 
+                k.toLowerCase().includes('college') || k.toLowerCase().includes('graduate') || k.toLowerCase().includes('bachelor')
+            );
+            if (collegeEdu.reduce((s, [, v]) => s + v, 0) > 50) {
+                recommendations.push({
+                    icon: '📚',
+                    text: 'Content can be more sophisticated and detail-rich'
+                });
+            }
+            
+            // Default if no specific recs
+            if (recommendations.length === 0) {
+                recommendations.push({
+                    icon: '📊',
+                    text: 'Broad demographic appeal - test multiple approaches'
+                });
+            }
+            
+            document.getElementById('demoTargetingRecs').innerHTML = recommendations.map(r => `
+                <div class="demo-insight-item">
+                    <span class="icon">${r.icon}</span>
+                    <span class="text">${r.text}</span>
+                </div>
+            `).join('');
         }
         
         function renderCharts(demographics, demographicsIndex = {}, demographicsProjection = {}, demographicsGenPop = {}) {
