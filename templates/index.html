@@ -6931,6 +6931,12 @@
                         resetBusinessConversation();
                     }
                     
+                    // Hide empty state, show dashboard content
+                    const emptyState = document.getElementById('dashboardEmptyState');
+                    const dashContent = document.getElementById('dashboardContent');
+                    if (emptyState) emptyState.style.display = 'none';
+                    if (dashContent) dashContent.style.display = 'block';
+                    
                     // Render charts and data
                     renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
                     renderBehavioralCards(parsed.behavioral);
@@ -6938,6 +6944,11 @@
                     
                     // Render top insights
                     renderTopInsights(parsed);
+                    
+                    // Render interests
+                    if (parsed.interests) {
+                        renderInterests(parsed.interests);
+                    }
                 }
             } catch (error) {
                 console.error('Error loading profile:', error);
@@ -7062,7 +7073,7 @@
                         datalabels: {
                             anchor: 'end',
                             align: 'end',
-                            font: { size: 9, weight: 'bold' },
+                            font: { size: 11, weight: 'bold' },
                             color: (ctx) => {
                                 const pct = agePcts[ctx.dataIndex] || 0;
                                 const genPop = ageGenPop[ctx.dataIndex] || 0;
@@ -7080,8 +7091,8 @@
                         }
                     }, 
                     scales: { 
-                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' }, suggestedMax: ageMax }, 
-                        y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 10 } } } 
+                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 11 } }, suggestedMax: ageMax }, 
+                        y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 12 } } } 
                     } 
                 },
                 plugins: [ChartDataLabels]
@@ -7106,7 +7117,7 @@
                             position: 'right', 
                             labels: { 
                                 color: '#e6f1ff', 
-                                font: { size: 9 },
+                                font: { size: 12 },
                                 generateLabels: (chart) => {
                                     const data = chart.data;
                                     return data.labels.map((label, i) => {
@@ -7155,7 +7166,7 @@
                             position: 'right', 
                             labels: { 
                                 color: '#e6f1ff', 
-                                font: { size: 9 },
+                                font: { size: 12 },
                                 generateLabels: (chart) => {
                                     const data = chart.data;
                                     return data.labels.map((label, i) => {
@@ -7208,7 +7219,7 @@
                         datalabels: {
                             anchor: 'end',
                             align: 'top',
-                            font: { size: 8, weight: 'bold' },
+                            font: { size: 10, weight: 'bold' },
                             color: (ctx) => {
                                 const pct = incomePcts[ctx.dataIndex] || 0;
                                 const genPop = incomeGenPop[ctx.dataIndex] || 0;
@@ -7226,8 +7237,8 @@
                         }
                     }, 
                     scales: { 
-                        x: { grid: { display: false }, ticks: { color: '#8892b0', font: { size: 8 }, maxRotation: 45 } }, 
-                        y: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' }, suggestedMax: incomeMax } 
+                        x: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 10 }, maxRotation: 45 } }, 
+                        y: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 11 } }, suggestedMax: incomeMax } 
                     } 
                 },
                 plugins: [ChartDataLabels]
@@ -7252,7 +7263,7 @@
                             datalabels: { 
                                 anchor: 'end', 
                                 align: 'end', 
-                                font: { size: 9, weight: 'bold' }, 
+                                font: { size: 11, weight: 'bold' }, 
                                 color: (ctx) => {
                                     const pct = eduPcts[ctx.dataIndex] || 0;
                                     const genPop = eduGenPop[ctx.dataIndex] || 0;
@@ -7270,8 +7281,8 @@
                             } 
                         }, 
                         scales: { 
-                            x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' }, suggestedMax: eduMax }, 
-                            y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 9 } } } 
+                            x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 11 } }, suggestedMax: eduMax }, 
+                            y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 12 } } } 
                         } 
                     },
                     plugins: [ChartDataLabels]
@@ -7296,7 +7307,7 @@
                                 position: 'right', 
                                 labels: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 9 },
+                                    font: { size: 12 },
                                     generateLabels: (chart) => {
                                         const data = chart.data;
                                         return data.labels.map((label, i) => {
@@ -7344,7 +7355,7 @@
                                 position: 'right', 
                                 labels: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 9 },
+                                    font: { size: 12 },
                                     generateLabels: (chart) => {
                                         const data = chart.data;
                                         return data.labels.map((label, i) => {
@@ -7392,7 +7403,7 @@
                                 position: 'right', 
                                 labels: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 9 },
+                                    font: { size: 12 },
                                     generateLabels: (chart) => {
                                         const data = chart.data;
                                         return data.labels.map((label, i) => {
