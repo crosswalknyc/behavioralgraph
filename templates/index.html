@@ -1242,13 +1242,13 @@
         }
 
         .behavioral-controls {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 1rem;
+            gap: 0.5rem;
             margin-bottom: 1rem;
-            padding: 0.75rem 1rem;
+            padding: 0.5rem 0.75rem;
             background: var(--bg-card);
-            border-radius: 8px;
+            border-radius: 6px;
             border: 1px solid var(--border-color);
         }
         
@@ -4817,10 +4817,10 @@
                 
                 <!-- Category Reorder Controls -->
                 <div class="behavioral-controls">
-                    <select id="categoryReorderSelect" onchange="moveCategoryToTop(this.value)" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); min-width: 180px;">
-                        <option value="">📌 Move category to top...</option>
+                    <select id="categoryReorderSelect" onchange="moveCategoryToTop(this.value)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                        <option value="">📌 Move to top...</option>
                     </select>
-                    <button class="btn btn-small btn-secondary" onclick="resetCategoryOrder()">↻ Reset</button>
+                    <button class="btn btn-small btn-secondary" onclick="resetCategoryOrder()" style="padding: 0.3rem 0.5rem; font-size: 0.7rem;">↻</button>
                 </div>
                 
                 <div class="behavioral-grid" id="behavioralGrid"></div>
@@ -7735,7 +7735,7 @@
             const select = document.getElementById('categoryReorderSelect');
             if (!select) return;
             
-            select.innerHTML = '<option value="">📌 Move category to top...</option>' + 
+            select.innerHTML = '<option value="">📌 Move to top...</option>' + 
                 categories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
         }
         
