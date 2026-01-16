@@ -2274,54 +2274,114 @@ shared_links = {}  # In production, store in database/S3
 
 @app.route('/api/wiki-image/<path:name>')
 def get_wiki_image(name):
-    """Fetch Wikipedia image for a profile/brand name."""
+    """Fetch profile image - checks social media first if handle present, then Wikipedia."""
     import urllib.parse
     import urllib.request
+    import re
     
     try:
-        # Clean and format the name for Wikipedia search
-        search_name = name.replace('_', ' ').replace('-', ' ').strip()
+        # Check if name contains a social media handle (@username)
+        handle_match = re.search(r'@(\w+)', name)
         
-        # Try Wikipedia API to get page image
-        wiki_api_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(search_name)}"
+        if handle_match:
+            handle = handle_match.group(1)
+            
+            # Try TikTok first
+            try:
+                tiktok_url = f"https://www.tiktok.com/@{handle}"
+                req = urllib.request.Request(tiktok_url, headers={
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                })
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    html = response.read().decode('utf-8', errors='ignore')
+                    # Look for og:image meta tag
+                    og_match = re.search(r'<meta[^>]*property=["\']og:image["\'][^>]*content=["\']([^"\']+)["\']', html)
+                    if not og_match:
+                        og_match = re.search(r'<meta[^>]*content=["\']([^"\']+)["\'][^>]*property=["\']og:image["\']', html)
+                    if og_match:
+                        image_url = og_match.group(1)
+                        # Filter out generic TikTok logos
+                        if image_url and 'tiktok' not in image_url.lower().split('/')[-1] and 'logo' not in image_url.lower():
+                            return jsonify({
+                                'success': True,
+                                'image_url': image_url,
+                                'title': f'@{handle}',
+                                'source': 'tiktok'
+                            })
+            except Exception as e:
+                pass
+            
+            # Try Instagram
+            try:
+                instagram_url = f"https://www.instagram.com/{handle}/"
+                req = urllib.request.Request(instagram_url, headers={
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                })
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    html = response.read().decode('utf-8', errors='ignore')
+                    # Look for og:image meta tag
+                    og_match = re.search(r'<meta[^>]*property=["\']og:image["\'][^>]*content=["\']([^"\']+)["\']', html)
+                    if not og_match:
+                        og_match = re.search(r'<meta[^>]*content=["\']([^"\']+)["\'][^>]*property=["\']og:image["\']', html)
+                    if og_match:
+                        image_url = og_match.group(1)
+                        if image_url:
+                            return jsonify({
+                                'success': True,
+                                'image_url': image_url,
+                                'title': f'@{handle}',
+                                'source': 'instagram'
+                            })
+            except Exception as e:
+                pass
         
-        req = urllib.request.Request(wiki_api_url, headers={'User-Agent': 'CrosswalkIQ/1.0'})
+        # Clean and format the name for Wikipedia search (remove handle if present)
+        search_name = re.sub(r'@\w+', '', name).replace('_', ' ').replace('-', ' ').strip()
         
-        try:
-            with urllib.request.urlopen(req, timeout=3) as response:
-                data = json.loads(response.read().decode())
-                
-                # Get thumbnail or original image
-                if 'thumbnail' in data:
-                    return jsonify({
-                        'success': True,
-                        'image_url': data['thumbnail'].get('source'),
-                        'title': data.get('title', name)
-                    })
-                elif 'originalimage' in data:
-                    return jsonify({
-                        'success': True,
-                        'image_url': data['originalimage'].get('source'),
-                        'title': data.get('title', name)
-                    })
-        except:
-            pass
-        
-        # Fallback: Try Clearbit logo API for brands
-        domain_name = search_name.lower().replace(' ', '') + '.com'
-        clearbit_url = f"https://logo.clearbit.com/{domain_name}"
-        
-        try:
-            req = urllib.request.Request(clearbit_url, method='HEAD', headers={'User-Agent': 'CrosswalkIQ/1.0'})
-            with urllib.request.urlopen(req, timeout=2) as response:
-                if response.status == 200:
-                    return jsonify({
-                        'success': True,
-                        'image_url': clearbit_url,
-                        'title': name
-                    })
-        except:
-            pass
+        if search_name:
+            # Try Wikipedia API to get page image
+            wiki_api_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(search_name)}"
+            
+            req = urllib.request.Request(wiki_api_url, headers={'User-Agent': 'CrosswalkIQ/1.0'})
+            
+            try:
+                with urllib.request.urlopen(req, timeout=3) as response:
+                    data = json.loads(response.read().decode())
+                    
+                    # Get thumbnail or original image
+                    if 'thumbnail' in data:
+                        return jsonify({
+                            'success': True,
+                            'image_url': data['thumbnail'].get('source'),
+                            'title': data.get('title', name),
+                            'source': 'wikipedia'
+                        })
+                    elif 'originalimage' in data:
+                        return jsonify({
+                            'success': True,
+                            'image_url': data['originalimage'].get('source'),
+                            'title': data.get('title', name),
+                            'source': 'wikipedia'
+                        })
+            except:
+                pass
+            
+            # Fallback: Try Clearbit logo API for brands
+            domain_name = search_name.lower().replace(' ', '') + '.com'
+            clearbit_url = f"https://logo.clearbit.com/{domain_name}"
+            
+            try:
+                req = urllib.request.Request(clearbit_url, method='HEAD', headers={'User-Agent': 'CrosswalkIQ/1.0'})
+                with urllib.request.urlopen(req, timeout=2) as response:
+                    if response.status == 200:
+                        return jsonify({
+                            'success': True,
+                            'image_url': clearbit_url,
+                            'title': name,
+                            'source': 'clearbit'
+                        })
+            except:
+                pass
         
         return jsonify({'success': False, 'error': 'No image found'})
         
