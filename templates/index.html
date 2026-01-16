@@ -7117,6 +7117,17 @@
                 renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
                 renderBehavioralCards(currentDashboardData.behavioral);
                 renderLocationTable(currentDashboardData.locations);
+                
+                // Re-render interests
+                if (currentDashboardData.interests) {
+                    renderInterests(currentDashboardData.interests);
+                }
+                
+                // Re-render insights and other tabs
+                renderTopInsights(currentDashboardData);
+                renderAffinityMap(currentDashboardData);
+                renderSponsorshipFinder(currentDashboardData);
+                renderMediaOptimizer(currentDashboardData);
             }
         }
         
