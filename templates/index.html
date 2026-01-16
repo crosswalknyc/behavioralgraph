@@ -5562,6 +5562,11 @@
                     <!-- Media Patterns Tab -->
                     <div id="insights-tab-media" class="insights-tab-content">
                         <div class="insights-grid-v2">
+                            <div class="insight-card-v2 full-width">
+                                <h3>📊 Media Consumption Summary</h3>
+                                <div id="mediaConsumptionSummary" class="media-summary-grid"></div>
+                            </div>
+                            
                             <div class="insight-card-v2">
                                 <h3>📺 Streaming Preferences</h3>
                                 <div id="streamingPreferences" class="media-preference-list"></div>
@@ -5580,11 +5585,6 @@
                             <div class="insight-card-v2">
                                 <h3>🎮 Gaming Affinity</h3>
                                 <div id="gamingAffinity" class="media-preference-list"></div>
-                            </div>
-                            
-                            <div class="insight-card-v2 full-width">
-                                <h3>📊 Media Consumption Summary</h3>
-                                <div id="mediaConsumptionSummary" class="media-summary-grid"></div>
                             </div>
                         </div>
                     </div>
@@ -9553,10 +9553,16 @@
             // ===== MEDIA PATTERNS TAB =====
             
             // Streaming preferences
-            const streamingItems = allItems.filter(i => 
-                i.category.toUpperCase().includes('STREAMING') || 
-                ['NETFLIX', 'HULU', 'DISNEY', 'HBO', 'AMAZON PRIME', 'APPLE TV', 'PARAMOUNT', 'PEACOCK'].some(s => i.name.toUpperCase().includes(s))
-            ).sort((a, b) => b.index - a.index).slice(0, 10);
+            // Media categories filter - only include items from actual media-related categories
+            const STREAMING_CATEGORIES = ['STREAMING VIDEO', 'STREAMING MUSIC', 'VIRTUAL MVPD/FAST', 'BROADCAST/CABLE', 'MEDIA'];
+            const SOCIAL_CATEGORIES = ['SOCIAL MEDIA'];
+            const AUDIO_CATEGORIES = ['STREAMING MUSIC', 'PODCAST'];
+            const GAMING_CATEGORIES = ['GAMES', 'GAMES - PLAYERS', 'GAME PLAYERS'];
+            
+            const streamingItems = allItems.filter(i => {
+                const cat = i.category.toUpperCase();
+                return STREAMING_CATEGORIES.some(c => cat.includes(c)) || cat.includes('STREAMING');
+            }).sort((a, b) => b.index - a.index).slice(0, 10);
             const maxStreamPct = Math.max(...streamingItems.map(i => i.pct), 1);
             document.getElementById('streamingPreferences').innerHTML = streamingItems.map(item => `
                 <div class="media-pref-item">
@@ -9567,11 +9573,11 @@
                 </div>
             `).join('') || '<p style="color: var(--text-secondary);">No streaming data</p>';
             
-            // Social media usage
-            const socialItems = allItems.filter(i => 
-                i.category.toUpperCase().includes('SOCIAL') ||
-                ['INSTAGRAM', 'TIKTOK', 'FACEBOOK', 'TWITTER', 'YOUTUBE', 'SNAPCHAT', 'LINKEDIN', 'PINTEREST', 'REDDIT'].some(s => i.name.toUpperCase().includes(s))
-            ).sort((a, b) => b.index - a.index).slice(0, 10);
+            // Social media usage - only from SOCIAL MEDIA category
+            const socialItems = allItems.filter(i => {
+                const cat = i.category.toUpperCase();
+                return SOCIAL_CATEGORIES.some(c => cat.includes(c)) || cat === 'SOCIAL MEDIA';
+            }).sort((a, b) => b.index - a.index).slice(0, 10);
             const maxSocialPct = Math.max(...socialItems.map(i => i.pct), 1);
             document.getElementById('socialMediaUsage').innerHTML = socialItems.map(item => `
                 <div class="media-pref-item">
@@ -9582,11 +9588,11 @@
                 </div>
             `).join('') || '<p style="color: var(--text-secondary);">No social media data</p>';
             
-            // Audio preferences
-            const audioItems = allItems.filter(i => 
-                i.category.toUpperCase().includes('MUSIC') || i.category.toUpperCase().includes('PODCAST') || i.category.toUpperCase().includes('AUDIO') ||
-                ['SPOTIFY', 'APPLE MUSIC', 'PANDORA', 'SIRIUS', 'IHEART', 'PODCAST'].some(s => i.name.toUpperCase().includes(s))
-            ).sort((a, b) => b.index - a.index).slice(0, 10);
+            // Audio preferences - only from music/podcast categories
+            const audioItems = allItems.filter(i => {
+                const cat = i.category.toUpperCase();
+                return AUDIO_CATEGORIES.some(c => cat.includes(c)) || cat.includes('MUSIC') || cat.includes('PODCAST');
+            }).sort((a, b) => b.index - a.index).slice(0, 10);
             const maxAudioPct = Math.max(...audioItems.map(i => i.pct), 1);
             document.getElementById('audioPreferences').innerHTML = audioItems.map(item => `
                 <div class="media-pref-item">
@@ -9597,11 +9603,11 @@
                 </div>
             `).join('') || '<p style="color: var(--text-secondary);">No audio data</p>';
             
-            // Gaming affinity
-            const gamingItems = allItems.filter(i => 
-                i.category.toUpperCase().includes('GAMING') || i.category.toUpperCase().includes('GAME') ||
-                ['PLAYSTATION', 'XBOX', 'NINTENDO', 'STEAM', 'TWITCH', 'EPIC', 'ROBLOX'].some(s => i.name.toUpperCase().includes(s))
-            ).sort((a, b) => b.index - a.index).slice(0, 10);
+            // Gaming affinity - only from gaming categories
+            const gamingItems = allItems.filter(i => {
+                const cat = i.category.toUpperCase();
+                return GAMING_CATEGORIES.some(c => cat.includes(c)) || cat.includes('GAME');
+            }).sort((a, b) => b.index - a.index).slice(0, 10);
             const maxGamingPct = Math.max(...gamingItems.map(i => i.pct), 1);
             document.getElementById('gamingAffinity').innerHTML = gamingItems.map(item => `
                 <div class="media-pref-item">
