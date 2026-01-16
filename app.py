@@ -2274,10 +2274,71 @@ shared_links = {}  # In production, store in database/S3
 
 @app.route('/api/wiki-image/<path:name>')
 def get_wiki_image(name):
-    """Fetch profile image - checks social media first if handle present, then Wikipedia."""
+    """Fetch profile image - checks cache first, then social media, then Wikipedia."""
     import urllib.parse
     import urllib.request
     import re
+    from datetime import datetime, timedelta
+    global profile_image_cache, profile_image_cache_dirty
+    
+    # Load cache if empty
+    if not profile_image_cache:
+        load_profile_image_cache()
+    
+    # Normalize the cache key
+    cache_key = name.lower().strip()
+    
+    # Check cache first
+    if cache_key in profile_image_cache:
+        cached = profile_image_cache[cache_key]
+        if cached.get('image_url'):
+            return jsonify({
+                'success': True,
+                'image_url': cached['image_url'],
+                'title': cached.get('title', name),
+                'source': cached.get('source', 'cache'),
+                'cached': True
+            })
+        elif cached.get('not_found'):
+            # We previously tried and failed - don't retry for 24 hours
+            cached_time = cached.get('cached_at', '')
+            if cached_time:
+                try:
+                    cached_dt = datetime.fromisoformat(cached_time)
+                    if datetime.now() - cached_dt < timedelta(hours=24):
+                        return jsonify({'success': False, 'error': 'No image found', 'cached': True})
+                except:
+                    pass
+    
+    # Helper to cache and return result
+    def cache_result(image_url, title, source):
+        global profile_image_cache, profile_image_cache_dirty
+        profile_image_cache[cache_key] = {
+            'image_url': image_url,
+            'title': title,
+            'source': source,
+            'cached_at': datetime.now().isoformat()
+        }
+        profile_image_cache_dirty = True
+        # Save cache periodically (every 5 new entries)
+        if len(profile_image_cache) % 5 == 0:
+            save_profile_image_cache()
+        return jsonify({
+            'success': True,
+            'image_url': image_url,
+            'title': title,
+            'source': source
+        })
+    
+    def cache_not_found():
+        global profile_image_cache, profile_image_cache_dirty
+        profile_image_cache[cache_key] = {
+            'not_found': True,
+            'cached_at': datetime.now().isoformat()
+        }
+        profile_image_cache_dirty = True
+        save_profile_image_cache()
+        return jsonify({'success': False, 'error': 'No image found'})
     
     try:
         # Check if name contains a social media handle (@username)
@@ -2294,21 +2355,14 @@ def get_wiki_image(name):
                 })
                 with urllib.request.urlopen(req, timeout=5) as response:
                     html = response.read().decode('utf-8', errors='ignore')
-                    # Look for og:image meta tag
                     og_match = re.search(r'<meta[^>]*property=["\']og:image["\'][^>]*content=["\']([^"\']+)["\']', html)
                     if not og_match:
                         og_match = re.search(r'<meta[^>]*content=["\']([^"\']+)["\'][^>]*property=["\']og:image["\']', html)
                     if og_match:
                         image_url = og_match.group(1)
-                        # Filter out generic TikTok logos
                         if image_url and 'tiktok' not in image_url.lower().split('/')[-1] and 'logo' not in image_url.lower():
-                            return jsonify({
-                                'success': True,
-                                'image_url': image_url,
-                                'title': f'@{handle}',
-                                'source': 'tiktok'
-                            })
-            except Exception as e:
+                            return cache_result(image_url, f'@{handle}', 'tiktok')
+            except:
                 pass
             
             # Try Instagram
@@ -2319,20 +2373,14 @@ def get_wiki_image(name):
                 })
                 with urllib.request.urlopen(req, timeout=5) as response:
                     html = response.read().decode('utf-8', errors='ignore')
-                    # Look for og:image meta tag
                     og_match = re.search(r'<meta[^>]*property=["\']og:image["\'][^>]*content=["\']([^"\']+)["\']', html)
                     if not og_match:
                         og_match = re.search(r'<meta[^>]*content=["\']([^"\']+)["\'][^>]*property=["\']og:image["\']', html)
                     if og_match:
                         image_url = og_match.group(1)
                         if image_url:
-                            return jsonify({
-                                'success': True,
-                                'image_url': image_url,
-                                'title': f'@{handle}',
-                                'source': 'instagram'
-                            })
-            except Exception as e:
+                            return cache_result(image_url, f'@{handle}', 'instagram')
+            except:
                 pass
         
         # Clean and format the name for Wikipedia search (remove handle if present)
@@ -2341,28 +2389,15 @@ def get_wiki_image(name):
         if search_name:
             # Try Wikipedia API to get page image
             wiki_api_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(search_name)}"
-            
             req = urllib.request.Request(wiki_api_url, headers={'User-Agent': 'CrosswalkIQ/1.0'})
             
             try:
                 with urllib.request.urlopen(req, timeout=3) as response:
                     data = json.loads(response.read().decode())
-                    
-                    # Get thumbnail or original image
                     if 'thumbnail' in data:
-                        return jsonify({
-                            'success': True,
-                            'image_url': data['thumbnail'].get('source'),
-                            'title': data.get('title', name),
-                            'source': 'wikipedia'
-                        })
+                        return cache_result(data['thumbnail'].get('source'), data.get('title', name), 'wikipedia')
                     elif 'originalimage' in data:
-                        return jsonify({
-                            'success': True,
-                            'image_url': data['originalimage'].get('source'),
-                            'title': data.get('title', name),
-                            'source': 'wikipedia'
-                        })
+                        return cache_result(data['originalimage'].get('source'), data.get('title', name), 'wikipedia')
             except:
                 pass
             
@@ -2374,16 +2409,11 @@ def get_wiki_image(name):
                 req = urllib.request.Request(clearbit_url, method='HEAD', headers={'User-Agent': 'CrosswalkIQ/1.0'})
                 with urllib.request.urlopen(req, timeout=2) as response:
                     if response.status == 200:
-                        return jsonify({
-                            'success': True,
-                            'image_url': clearbit_url,
-                            'title': name,
-                            'source': 'clearbit'
-                        })
+                        return cache_result(clearbit_url, name, 'clearbit')
             except:
                 pass
         
-        return jsonify({'success': False, 'error': 'No image found'})
+        return cache_not_found()
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -2756,9 +2786,45 @@ s3_cache = {
 S3_CACHE_TTL = 300  # 5 minutes cache
 S3_CACHE_KEY = 'system/s3_cache.json'  # Persisted cache location
 S3_DEMO_CACHE_KEY = 'system/demographics_cache.json'  # Cached demographic summaries
+S3_IMAGE_CACHE_KEY = 'system/profile_images_cache.json'  # Cached profile images
 
 # Demographics cache - stores pre-computed demographic summaries for each profile
 demographics_cache = {}
+
+# Profile image cache - stores image URLs to avoid repeated API calls
+profile_image_cache = {}
+profile_image_cache_dirty = False  # Track if cache needs saving
+
+def load_profile_image_cache():
+    """Load profile image cache from S3."""
+    global profile_image_cache
+    if not s3_client:
+        return False
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_IMAGE_CACHE_KEY)
+        profile_image_cache = json.loads(response['Body'].read().decode('utf-8'))
+        print(f"✅ Loaded profile image cache: {len(profile_image_cache)} images")
+        return True
+    except:
+        print("📂 No profile image cache found")
+        return False
+
+def save_profile_image_cache():
+    """Save profile image cache to S3."""
+    global profile_image_cache_dirty
+    if not s3_client or not profile_image_cache_dirty:
+        return
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=S3_IMAGE_CACHE_KEY,
+            Body=json.dumps(profile_image_cache),
+            ContentType='application/json'
+        )
+        profile_image_cache_dirty = False
+        print(f"💾 Saved profile image cache: {len(profile_image_cache)} images")
+    except Exception as e:
+        print(f"⚠️ Error saving profile image cache: {e}")
 
 def load_persisted_cache():
     """Load the S3 file cache from S3 storage."""
@@ -3521,6 +3587,12 @@ def async_cache_loader():
             print(f"   ✅ Loaded {len(s3_cache.get('jobs', []))} profiles in {time.time()-start:.2f}s")
         except Exception as e:
             print(f"   ⚠️ Cache load error: {e}")
+        
+        # Load profile image cache
+        try:
+            load_profile_image_cache()
+        except Exception as e:
+            print(f"   ⚠️ Image cache load error: {e}")
     
     cache_loading_complete = True
     print(f"🎉 Cache ready in {time.time()-start:.2f}s")
