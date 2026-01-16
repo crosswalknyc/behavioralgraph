@@ -3459,6 +3459,17 @@
         .tree-item:hover {
             background: var(--bg-input);
         }
+        
+        .tree-label {
+            flex: 1;
+            text-align: left;
+        }
+        
+        .tree-count {
+            margin-left: auto;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
 
         .tree-arrow {
             width: 16px;
@@ -3467,6 +3478,7 @@
             align-items: center;
             justify-content: center;
             font-size: 0.7rem;
+            flex-shrink: 0;
             color: var(--text-secondary);
             transition: transform 0.2s;
         }
