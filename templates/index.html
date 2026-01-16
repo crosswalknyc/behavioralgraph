@@ -6996,12 +6996,25 @@
                 // Sort by value descending
                 entries.sort((a, b) => b[1] - a[1]);
             } else {
-                // Sort by age label (natural order: 18-20, 21-25, etc.)
-                const ageOrder = ['UNDER 18', '18-20', '21-25', '26-30', '31-35', '36-40', '41-45', '46-50', '51-55', '56-60', '61-65', '65+', 'OVER 65'];
+                // Sort by age - extract the starting number from each age label
                 entries.sort((a, b) => {
-                    const aIdx = ageOrder.findIndex(o => a[0].toUpperCase().includes(o) || o.includes(a[0].toUpperCase()));
-                    const bIdx = ageOrder.findIndex(o => b[0].toUpperCase().includes(o) || o.includes(b[0].toUpperCase()));
-                    return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
+                    const getAgeValue = (label) => {
+                        const upperLabel = label.toUpperCase();
+                        // Handle special cases first
+                        if (upperLabel.includes('UNDER') || upperLabel.startsWith('<')) {
+                            // Extract number after < or from "UNDER X"
+                            const match = upperLabel.match(/(\d+)/);
+                            return match ? parseInt(match[1]) - 1 : 0; // Under 18 = 17, <16 = 15
+                        }
+                        if (upperLabel.includes('OVER') || upperLabel.includes('+') || upperLabel === '65+' || upperLabel === '60+') {
+                            const match = upperLabel.match(/(\d+)/);
+                            return match ? parseInt(match[1]) + 1 : 999; // 65+ = 66, 60+ = 61
+                        }
+                        // For ranges like "18-20", "21-25", extract first number
+                        const match = upperLabel.match(/(\d+)/);
+                        return match ? parseInt(match[1]) : 999;
+                    };
+                    return getAgeValue(a[0]) - getAgeValue(b[0]);
                 });
             }
             
