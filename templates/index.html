@@ -4653,13 +4653,10 @@
                 
                 <!-- Category Reorder Controls -->
                 <div class="behavioral-controls">
-                    <div class="reorder-control">
-                        <label>📌 Move to top:</label>
-                        <select id="categoryReorderSelect" onchange="moveCategoryToTop(this.value)">
-                            <option value="">-- Select category --</option>
-                        </select>
-                    </div>
-                    <button class="btn btn-small btn-secondary" onclick="resetCategoryOrder()">↻ Reset Order</button>
+                    <select id="categoryReorderSelect" onchange="moveCategoryToTop(this.value)" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); min-width: 180px;">
+                        <option value="">📌 Move category to top...</option>
+                    </select>
+                    <button class="btn btn-small btn-secondary" onclick="resetCategoryOrder()">↻ Reset</button>
                 </div>
                 
                 <div class="behavioral-grid" id="behavioralGrid"></div>
@@ -7316,7 +7313,7 @@
             const select = document.getElementById('categoryReorderSelect');
             if (!select) return;
             
-            select.innerHTML = '<option value="">-- Select category to move to top --</option>' + 
+            select.innerHTML = '<option value="">📌 Move category to top...</option>' + 
                 categories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
         }
         
