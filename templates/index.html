@@ -771,13 +771,26 @@
         }
         
         .persistent-sidebar {
-            width: 260px;
-            min-width: 260px;
+            width: 280px;
+            min-width: 280px;
             background: var(--bg-card);
             border-radius: 8px;
             padding: 1rem;
             overflow-y: auto;
             flex-shrink: 0;
+        }
+        
+        .sidebar-tab-info {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            padding-bottom: 0.75rem;
+            margin-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .sidebar-tab-info strong {
+            color: var(--text-primary);
         }
         
         .dashboard-tab-content {
@@ -4843,12 +4856,9 @@
                 <button class="tab-btn" onclick="showTab('collaboration')"><span class="tab-icon">👥</span><span class="tab-label">COLLABORATE</span></button>
             </div>
             
-            <!-- Row 3: Tab Info + Buttons -->
+            <!-- Row 3: Buttons only -->
             <div class="dash-bottom-row">
-                <div class="row-left" id="dashTabInfo">
-                    <strong>Insights</strong> — Complete audience intelligence. <strong>Index Scale:</strong> <span class="highlight-green">150+ = target</span> | <span class="highlight-yellow">100-149 = neutral</span> | <span class="highlight-red">&lt;100 = deprioritize</span>. <strong>Data Quality:</strong> Higher sample sizes = more reliable insights.
-                </div>
-                <div class="row-right">
+                <div class="row-right" style="margin-left: auto;">
                     <div class="display-mode-toggle" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" title="Toggle between percentages and US population numbers">
                         <span id="dashDisplayLabel">US %</span>
                     </div>
@@ -4860,6 +4870,10 @@
             <div class="dashboard-layout">
                 <!-- Persistent Sidebar - Always Visible -->
                 <div class="persistent-sidebar">
+                    <!-- Tab Info - Above Select Profile -->
+                    <div class="sidebar-tab-info" id="dashTabInfo">
+                        <strong>Insights</strong> — Complete audience intelligence. <strong>Index Scale:</strong> <span class="highlight-green">150+ = target</span> | <span class="highlight-yellow">100-149 = neutral</span> | <span class="highlight-red">&lt;100 = deprioritize</span>.
+                    </div>
                     <div class="sidebar-header-section">
                         <h3>Select Profile</h3>
                         <input type="text" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search" onkeyup="filterDashboardProfiles()">
