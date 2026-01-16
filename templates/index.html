@@ -5762,13 +5762,13 @@
                     <!-- Affinity Insights Summary -->
                     <div class="affinity-insights-row">
                         <div class="affinity-insight-card highlight">
-                            <h4>🎯 Key Affinity Insights</h4>
+                            <h4 class="has-tooltip" data-tooltip="Key Affinity Insights: Summarizes the most important findings about your audience's brand and content preferences. Shows strongest affinities, over-indexing categories, and partnership opportunities.">🎯 Key Affinity Insights</h4>
                             <div id="affinityKeyInsights" class="insight-bullets">
                                 <div class="loading-placeholder">Loading insights...</div>
                             </div>
                         </div>
                         <div class="affinity-insight-card">
-                            <h4>📊 Affinity Scorecard</h4>
+                            <h4 class="has-tooltip" data-tooltip="Affinity Scorecard: Quick metrics showing total affinities found, how many have high indexes (150+), average index score, and the strongest category overall.">📊 Affinity Scorecard</h4>
                             <div class="scorecard-grid" id="affinityScorecard">
                                 <div class="scorecard-item">
                                     <span class="scorecard-value" id="affTotalItems">--</span>
@@ -5789,7 +5789,7 @@
                             </div>
                         </div>
                         <div class="affinity-insight-card">
-                            <h4>💡 Cross-Sell Opportunities</h4>
+                            <h4 class="has-tooltip" data-tooltip="Cross-Sell Opportunities: Categories where this audience consistently over-indexes, indicating strong potential for partnerships, sponsorships, or cross-promotional campaigns.">💡 Cross-Sell Opportunities</h4>
                             <div id="affinityCrossSell" class="cross-sell-list">
                                 <div class="loading-placeholder">Analyzing opportunities...</div>
                             </div>
@@ -5798,31 +5798,31 @@
                     
                     <div class="affinity-grid">
                         <div class="affinity-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">🎬 Content & Entertainment <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Content & Entertainment')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Content & Entertainment')" title="Add to Deck">➕</button></span></h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Content & Entertainment: Shows, movies, streaming services, and entertainment content this audience engages with significantly more than the general population. Higher index = stronger affinity.">🎬 Content & Entertainment</span> <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Content & Entertainment')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Content & Entertainment')" title="Add to Deck">➕</button></span></h3>
                             <p class="affinity-desc">Shows, movies, and streaming platforms this audience loves</p>
                             <div id="affinityContent" class="affinity-list"></div>
                         </div>
                         
                         <div class="affinity-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">🛍️ Brand Affinities <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Brand Affinities')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Brand Affinities')" title="Add to Deck">➕</button></span></h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Brand Affinities: Consumer brands this audience over-indexes for based on purchase behavior and engagement. Great for identifying sponsorship and partnership opportunities.">🛍️ Brand Affinities</span> <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Brand Affinities')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Brand Affinities')" title="Add to Deck">➕</button></span></h3>
                             <p class="affinity-desc">Brands this audience over-indexes for</p>
                             <div id="affinityBrands" class="affinity-list"></div>
                         </div>
                         
                         <div class="affinity-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">📱 Digital Platforms <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Digital Platforms')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Digital Platforms')" title="Add to Deck">➕</button></span></h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Digital Platforms: Social media, apps, streaming services, and digital platforms this audience uses more than the general population. Useful for digital media planning and targeting.">📱 Digital Platforms</span> <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Digital Platforms')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Digital Platforms')" title="Add to Deck">➕</button></span></h3>
                             <p class="affinity-desc">Apps, websites, and social platforms they use</p>
                             <div id="affinityPlatforms" class="affinity-list"></div>
                         </div>
                         
                         <div class="affinity-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">🎵 Music & Audio <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Music & Audio')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Music & Audio')" title="Add to Deck">➕</button></span></h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Music & Audio: Music streaming services, genres, artists, and podcast preferences. Shows audio content affinities for media planning and sponsorship opportunities.">🎵 Music & Audio</span> <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Music & Audio')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Music & Audio')" title="Add to Deck">➕</button></span></h3>
                             <p class="affinity-desc">Music genres, artists, and podcasts</p>
                             <div id="affinityMusic" class="affinity-list"></div>
                         </div>
                         
                         <div class="affinity-card wide">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">🌐 Affinity Network <span class="module-action-btns"><button class="module-btn png-btn" onclick="exportModulePNG('affinity', 'Affinity Network')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Affinity Network')" title="Add to Deck">➕</button></span></h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Affinity Network: Visual representation showing the strongest brand and content connections for this audience. The central node is your profile, surrounded by top affinities sized by index strength.">🌐 Affinity Network</span> <span class="module-action-btns"><button class="module-btn png-btn" onclick="exportModulePNG('affinity', 'Affinity Network')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Affinity Network')" title="Add to Deck">➕</button></span></h3>
                             <p class="affinity-desc">Visual map of audience connections</p>
                             <div id="affinityNetwork" class="affinity-network"></div>
                         </div>
