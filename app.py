@@ -2272,6 +2272,63 @@ def remove_favorite(profile_key):
 
 shared_links = {}  # In production, store in database/S3
 
+@app.route('/api/wiki-image/<path:name>')
+def get_wiki_image(name):
+    """Fetch Wikipedia image for a profile/brand name."""
+    import urllib.parse
+    import urllib.request
+    
+    try:
+        # Clean and format the name for Wikipedia search
+        search_name = name.replace('_', ' ').replace('-', ' ').strip()
+        
+        # Try Wikipedia API to get page image
+        wiki_api_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(search_name)}"
+        
+        req = urllib.request.Request(wiki_api_url, headers={'User-Agent': 'CrosswalkIQ/1.0'})
+        
+        try:
+            with urllib.request.urlopen(req, timeout=3) as response:
+                data = json.loads(response.read().decode())
+                
+                # Get thumbnail or original image
+                if 'thumbnail' in data:
+                    return jsonify({
+                        'success': True,
+                        'image_url': data['thumbnail'].get('source'),
+                        'title': data.get('title', name)
+                    })
+                elif 'originalimage' in data:
+                    return jsonify({
+                        'success': True,
+                        'image_url': data['originalimage'].get('source'),
+                        'title': data.get('title', name)
+                    })
+        except:
+            pass
+        
+        # Fallback: Try Clearbit logo API for brands
+        domain_name = search_name.lower().replace(' ', '') + '.com'
+        clearbit_url = f"https://logo.clearbit.com/{domain_name}"
+        
+        try:
+            req = urllib.request.Request(clearbit_url, method='HEAD', headers={'User-Agent': 'CrosswalkIQ/1.0'})
+            with urllib.request.urlopen(req, timeout=2) as response:
+                if response.status == 200:
+                    return jsonify({
+                        'success': True,
+                        'image_url': clearbit_url,
+                        'title': name
+                    })
+        except:
+            pass
+        
+        return jsonify({'success': False, 'error': 'No image found'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @app.route('/api/share', methods=['POST'])
 @requires_auth
 def create_share_link():
