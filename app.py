@@ -2893,6 +2893,30 @@ def get_profile_image_info(name):
     return jsonify({'success': False, 'error': 'No image found'})
 
 
+@app.route('/api/profile-image-file/<path:s3_key>')
+@requires_auth
+def serve_profile_image(s3_key):
+    """Proxy endpoint to serve profile images from S3 (avoids public access issues)."""
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        content_type = response.get('ContentType', 'image/jpeg')
+        image_data = response['Body'].read()
+        
+        from flask import Response
+        return Response(
+            image_data,
+            mimetype=content_type,
+            headers={
+                'Cache-Control': 'public, max-age=86400',  # Cache for 1 day
+                'Content-Type': content_type
+            }
+        )
+    except Exception as e:
+        print(f"Error serving profile image {s3_key}: {e}")
+        # Return a 1x1 transparent pixel as fallback
+        return Response(status=404)
+
+
 @app.route('/api/admin/profile-image', methods=['POST'])
 @requires_admin
 def set_profile_image():
@@ -2943,8 +2967,9 @@ def set_profile_image():
                         Body=file_data,
                         ContentType=content_type
                     )
-                    image_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{s3_key}"
-                    print(f"   ✅ Uploaded to: {image_url}")
+                    # Use our proxy endpoint for serving the image (avoids S3 public access issues)
+                    image_url = f"/api/profile-image-file/{s3_key}"
+                    print(f"   ✅ Uploaded to S3: {s3_key}, serving via: {image_url}")
                 except Exception as s3_err:
                     print(f"   ❌ S3 upload failed: {s3_err}")
                     return jsonify({'success': False, 'error': f'S3 upload failed: {str(s3_err)}'})
