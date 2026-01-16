@@ -263,12 +263,19 @@
         /* Dashboard Header Row */
         .dash-header-row {
             display: flex;
-            justify-content: flex-start;
+            justify-content: space-between;
             align-items: center;
             margin-bottom: 0.75rem;
             padding: 0.5rem 0;
             flex-wrap: wrap;
             gap: 0.75rem;
+        }
+        
+        .dash-action-buttons {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: auto;
         }
 
         .dashboard-header {
@@ -318,12 +325,7 @@
             border: 1px solid var(--border-color);
         }
 
-        /* Action Buttons */
-        .dash-action-buttons {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
+        /* Action Buttons - already defined above with margin-left: auto */
 
         .dash-action-btn {
             background: var(--bg-card);
