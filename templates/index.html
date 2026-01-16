@@ -5088,17 +5088,17 @@
                     <div class="insight-card">
                         <div class="insight-icon">⬆️</div>
                         <div class="insight-content">
-                            <div class="insight-label">Over-Indexing</div>
+                            <div class="insight-label">OVER-INDEXING</div>
                             <div class="insight-value" id="overIndexCount">--</div>
-                            <div class="insight-detail">interests above 100</div>
+                            <div class="insight-detail">above median</div>
                         </div>
                     </div>
                     <div class="insight-card">
                         <div class="insight-icon">⬇️</div>
                         <div class="insight-content">
-                            <div class="insight-label">Under-Indexing</div>
+                            <div class="insight-label">UNDER-INDEXING</div>
                             <div class="insight-value" id="underIndexCount">--</div>
-                            <div class="insight-detail">interests below 100</div>
+                            <div class="insight-detail">below median</div>
                         </div>
                     </div>
                 </div>
@@ -7796,16 +7796,30 @@
         }
         
         function renderInterestsInsights(items) {
-            const overIndexing = items.filter(i => i.index >= 100).sort((a, b) => b.index - a.index);
-            const underIndexing = items.filter(i => i.index < 100);
             const avgIndex = Math.round(items.reduce((sum, i) => sum + i.index, 0) / items.length);
             const maxIndex = Math.max(...items.map(i => i.index));
             const minIndex = Math.min(...items.map(i => i.index));
             
-            document.getElementById('topOverIndexInterest').textContent = overIndexing[0]?.name || '--';
-            document.getElementById('topOverIndexDetail').textContent = `Index: ${overIndexing[0]?.index || '--'}`;
+            // Use relative thresholds based on median/average for over/under indexing
+            // This matches how the heatmap categorizes items
+            const sortedItems = [...items].sort((a, b) => a.index - b.index);
+            const medianIndex = sortedItems[Math.floor(sortedItems.length / 2)]?.index || avgIndex;
+            
+            // Over-indexing: items above the median (top 50%)
+            // Under-indexing: items below the median (bottom 50%)
+            const overIndexing = items.filter(i => i.index > medianIndex).sort((a, b) => b.index - a.index);
+            const underIndexing = items.filter(i => i.index < medianIndex);
+            
+            // Also count absolute over/under 100 for display
+            const absoluteOver = items.filter(i => i.index >= 100).length;
+            const absoluteUnder = items.filter(i => i.index < 100).length;
+            
+            document.getElementById('topOverIndexInterest').textContent = overIndexing[0]?.name || sortedItems[sortedItems.length - 1]?.name || '--';
+            document.getElementById('topOverIndexDetail').textContent = `Index: ${overIndexing[0]?.index || sortedItems[sortedItems.length - 1]?.index || '--'}`;
             document.getElementById('avgInterestIndex').textContent = avgIndex;
             document.getElementById('interestIndexRange').textContent = `Range: ${minIndex} - ${maxIndex}`;
+            
+            // Show relative counts (above/below median) with absolute in parentheses if different
             document.getElementById('overIndexCount').textContent = overIndexing.length;
             document.getElementById('underIndexCount').textContent = underIndexing.length;
         }
