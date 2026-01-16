@@ -132,7 +132,8 @@
         .user-role-badge.enterprise { background: rgba(253, 151, 31, 0.2); color: #fd971f; }
         .user-role-badge.user { background: rgba(90, 154, 217, 0.2); color: var(--accent-blue); }
 
-        .view-toggle { display: flex; gap: 0.5rem; margin-left: auto; }
+        .view-toggle { display: flex; gap: 0.5rem; }
+        .user-info-bar { margin-left: auto; }
         .view-btn {
             padding: 0.5rem 1rem;
             background: var(--bg-input);
@@ -4465,6 +4466,15 @@
             <div class="header-text">
                 <h1>BEHAVIORAL GRAPH</h1>
             </div>
+            <div class="view-toggle">
+                <button class="view-btn active" id="dashboardViewBtn" onclick="showDashboardView()">📊 Dashboard</button>
+                {% if role == 'admin' or role == 'enterprise' %}
+                <button class="view-btn" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
+                {% endif %}
+                {% if role == 'admin' %}
+                <button class="view-btn" id="adminViewBtn" onclick="showAdminView()">🔐 Admin</button>
+                {% endif %}
+            </div>
             <div class="user-info-bar">
                 <div class="credits-display" id="creditsDisplay">
                     <span class="credits-icon">💳</span>
@@ -4476,15 +4486,6 @@
                     <span class="user-role-badge {{ role }}">{{ role }}</span>
                     <a href="/logout" class="header-btn logout-btn">Logout</a>
                 </div>
-            </div>
-            <div class="view-toggle">
-                <button class="view-btn active" id="dashboardViewBtn" onclick="showDashboardView()">📊 Dashboard</button>
-                {% if role == 'admin' or role == 'enterprise' %}
-                <button class="view-btn" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
-                {% endif %}
-                {% if role == 'admin' %}
-                <button class="view-btn" id="adminViewBtn" onclick="showAdminView()">🔐 Admin</button>
-                {% endif %}
             </div>
         </header>
 
