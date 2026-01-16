@@ -25,6 +25,30 @@ import pandas as pd
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 
+# Load environment variables from .env file
+def load_env_file():
+    """Load .env file manually if dotenv not available."""
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+    if os.path.exists(env_path):
+        with open(env_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ.setdefault(key.strip(), value.strip())
+        return True
+    return False
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("✅ Loaded environment variables from .env (dotenv)")
+except ImportError:
+    if load_env_file():
+        print("✅ Loaded environment variables from .env (manual)")
+    else:
+        print("⚠️ No .env file found, using system environment variables only")
+
 # Add parent directory to path for importing bg module
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
