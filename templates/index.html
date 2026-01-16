@@ -1013,46 +1013,86 @@
         }
         
         .interests-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1rem;
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 0.75rem;
+            max-height: 600px;
+            overflow-y: auto;
         }
         
         .interest-item {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            padding: 0.75rem 1rem;
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            transition: all 0.2s;
+            padding: 0.4rem 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+            gap: 0.5rem;
+            transition: all 0.15s;
+        }
+        
+        .interest-item:last-child {
+            border-bottom: none;
         }
         
         .interest-item:hover {
-            border-color: var(--accent-blue);
-            background: rgba(99, 102, 241, 0.1);
+            background: var(--bg-input);
+        }
+        
+        .interest-rank {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            width: 22px;
+            text-align: right;
+            flex-shrink: 0;
         }
         
         .interest-name {
             flex: 1;
-            font-weight: 500;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
         }
         
-        .interest-stats {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
+        .interest-bar-container {
+            width: 120px;
+            height: 14px;
+            background: var(--bg-dark);
+            border-radius: 3px;
+            overflow: hidden;
+            flex-shrink: 0;
         }
         
-        .interest-pct {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
+        .interest-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #5a9ad9, #7fb8e8);
+            border-radius: 3px;
         }
         
         .interest-index {
+            font-size: 0.7rem;
             font-weight: 700;
-            padding: 0.2rem 0.5rem;
+            min-width: 40px;
+            text-align: center;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.3);
+            flex-shrink: 0;
+        }
+        
+        .interest-pct {
+            font-size: 0.7rem;
+            min-width: 50px;
+            text-align: right;
+            flex-shrink: 0;
+        }
+        
+        .interest-genpop {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            min-width: 50px;
+            text-align: right;
+            flex-shrink: 0;
             border-radius: 4px;
             min-width: 50px;
             text-align: center;
@@ -7171,25 +7211,45 @@
             if (!container) return;
             
             if (!interests || Object.keys(interests).length === 0) {
-                container.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-secondary); grid-column: 1/-1;">No interests data available for this profile</div>';
+                container.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-secondary);">No interests data available for this profile</div>';
                 return;
             }
             
+            const isProjection = dashDisplayMode === 'projection';
+            const US_POP = 324700000;
+            
             // Convert to array and sort by index descending
             const interestItems = Object.entries(interests)
-                .map(([name, data]) => ({ name, pct: data.pct || 0, index: data.index || 100 }))
+                .map(([name, data]) => ({ 
+                    name, 
+                    pct: data.pct || 0, 
+                    index: data.index || 100,
+                    genPopPct: data.genPopPct || 0,
+                    projection: data.projection || 0
+                }))
                 .sort((a, b) => b.index - a.index);
             
-            container.innerHTML = interestItems.map(item => {
+            const maxPct = Math.max(...interestItems.map(i => i.pct), 1);
+            
+            container.innerHTML = interestItems.map((item, idx) => {
                 const indexColor = item.index >= 100 ? '#10b981' : '#ef4444';
-                const indexBg = item.index >= 100 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)';
+                const profileDisplay = isProjection 
+                    ? formatNumber(Math.round(item.projection || (item.pct / 100) * US_POP))
+                    : item.pct.toFixed(2) + '%';
+                const genPopDisplay = isProjection 
+                    ? formatNumber(Math.round((item.genPopPct / 100) * US_POP))
+                    : item.genPopPct.toFixed(1) + '%';
+                
                 return `
                     <div class="interest-item" data-name="${item.name.toLowerCase()}">
-                        <span class="interest-name">${item.name}</span>
-                        <div class="interest-stats">
-                            <span class="interest-pct">${item.pct.toFixed(1)}%</span>
-                            <span class="interest-index" style="background: ${indexBg}; color: ${indexColor};">${item.index}</span>
+                        <span class="interest-rank">${idx + 1}</span>
+                        <span class="interest-name" title="${item.name}">${item.name}</span>
+                        <div class="interest-bar-container">
+                            <div class="interest-bar" style="width: ${(item.pct / maxPct) * 100}%"></div>
                         </div>
+                        <span class="interest-index" style="color: ${indexColor};">${item.index}</span>
+                        <span class="interest-pct">${profileDisplay}</span>
+                        <span class="interest-genpop">(${genPopDisplay})</span>
                     </div>
                 `;
             }).join('');
