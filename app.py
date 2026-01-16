@@ -1464,7 +1464,7 @@ def send_welcome_email_sync(email, username, password, role):
     
     # Build email content
     text = f"""
-Welcome to Crosswalk Behavioral Graph!
+Welcome to Crosswalk's IQ Laboratory!
 
 Your account has been created. Here are your login details:
 
@@ -1537,7 +1537,7 @@ Crosswalk Team
         print(f"📧 Sending email via Gmail API to {email}...")
         success, message = send_email_via_gmail(
             email,
-            '🎉 Welcome to Crosswalk Behavioral Graph',
+            "🎉 Welcome to Crosswalk's IQ Laboratory",
             html,
             text
         )
@@ -1560,7 +1560,7 @@ Crosswalk Team
     try:
         # Create message
         msg = MIMEMultipart('alternative')
-        msg['Subject'] = '🎉 Welcome to Crosswalk Behavioral Graph'
+        msg['Subject'] = "🎉 Welcome to Crosswalk's IQ Laboratory"
         msg['From'] = from_email
         msg['To'] = email
         
