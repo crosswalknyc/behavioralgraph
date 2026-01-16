@@ -1337,6 +1337,21 @@
             align-items: center;
             text-align: left;
         }
+        
+        .chart-type-select {
+            font-size: 0.65rem;
+            padding: 0.15rem 0.3rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            min-width: 40px;
+        }
+        .chart-type-select:hover {
+            border-color: var(--accent-lime);
+            color: var(--text-primary);
+        }
 
         .chart-container { height: 250px; }
         
@@ -5786,9 +5801,16 @@
                                 <h3>
                                     <span>📅 AGE</span>
                                     <div style="display: flex; gap: 0.25rem; align-items: center;">
-                                        <select id="ageSortSelect" onchange="sortAgeChart(this.value)" style="font-size: 0.65rem; padding: 0.15rem 0.3rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-secondary);">
-                                            <option value="age">Sort: Age ↓</option>
-                                            <option value="value">Sort: Value ↓</option>
+                                        <select id="ageChartType" onchange="changeChartType('age', this.value)" class="chart-type-select" title="Chart Type">
+                                            <option value="bar">📊</option>
+                                            <option value="doughnut">🍩</option>
+                                            <option value="pie">🥧</option>
+                                            <option value="polarArea">🎯</option>
+                                            <option value="line">📈</option>
+                                        </select>
+                                        <select id="ageSortSelect" onchange="sortAgeChart(this.value)" class="chart-type-select">
+                                            <option value="age">Age ↓</option>
+                                            <option value="value">Val ↓</option>
                                         </select>
                                         <span class="module-action-btns">
                                             <button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Age')" title="CSV">CSV</button>
@@ -5799,15 +5821,50 @@
                                 </h3>
                                 <div class="chart-container"><canvas id="ageChart"></canvas></div>
                             </div>
-                            <div class="chart-card"><h3><span>👫 GENDER</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Gender')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Gender')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Gender')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="genderChart"></canvas></div></div>
-                            <div class="chart-card"><h3><span>🌍 ETHNICITY</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Ethnicity')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Ethnicity')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Ethnicity')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="ethnicityChart"></canvas></div></div>
+                            <div class="chart-card">
+                                <h3>
+                                    <span>👫 GENDER</span>
+                                    <div style="display: flex; gap: 0.25rem; align-items: center;">
+                                        <select id="genderChartType" onchange="changeChartType('gender', this.value)" class="chart-type-select" title="Chart Type">
+                                            <option value="doughnut">🍩</option>
+                                            <option value="pie">🥧</option>
+                                            <option value="bar">📊</option>
+                                            <option value="polarArea">🎯</option>
+                                        </select>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Gender')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Gender')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Gender')" title="Add to Deck">➕</button></span>
+                                    </div>
+                                </h3>
+                                <div class="chart-container"><canvas id="genderChart"></canvas></div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>
+                                    <span>🌍 ETHNICITY</span>
+                                    <div style="display: flex; gap: 0.25rem; align-items: center;">
+                                        <select id="ethnicityChartType" onchange="changeChartType('ethnicity', this.value)" class="chart-type-select" title="Chart Type">
+                                            <option value="doughnut">🍩</option>
+                                            <option value="pie">🥧</option>
+                                            <option value="bar">📊</option>
+                                            <option value="polarArea">🎯</option>
+                                        </select>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Ethnicity')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Ethnicity')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Ethnicity')" title="Add to Deck">➕</button></span>
+                                    </div>
+                                </h3>
+                                <div class="chart-container"><canvas id="ethnicityChart"></canvas></div>
+                            </div>
                             <div class="chart-card">
                                 <h3>
                                     <span>💰 INCOME</span>
                                     <div style="display: flex; gap: 0.25rem; align-items: center;">
-                                        <select id="incomeSortSelect" onchange="sortIncomeChart(this.value)" style="font-size: 0.65rem; padding: 0.15rem 0.3rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-secondary);">
-                                            <option value="income">Sort: Income ↓</option>
-                                            <option value="value">Sort: Value ↓</option>
+                                        <select id="incomeChartType" onchange="changeChartType('income', this.value)" class="chart-type-select" title="Chart Type">
+                                            <option value="bar">📊</option>
+                                            <option value="doughnut">🍩</option>
+                                            <option value="pie">🥧</option>
+                                            <option value="polarArea">🎯</option>
+                                            <option value="line">📈</option>
+                                        </select>
+                                        <select id="incomeSortSelect" onchange="sortIncomeChart(this.value)" class="chart-type-select">
+                                            <option value="income">Inc ↓</option>
+                                            <option value="value">Val ↓</option>
                                         </select>
                                         <span class="module-action-btns">
                                             <button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Income')" title="CSV">CSV</button>
@@ -5818,10 +5875,66 @@
                                 </h3>
                                 <div class="chart-container"><canvas id="incomeChart"></canvas></div>
                             </div>
-                            <div class="chart-card"><h3><span>🎓 EDUCATION</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Education')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Education')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Education')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="educationChart"></canvas></div></div>
-                            <div class="chart-card"><h3><span>💑 RELATIONSHIP</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Relationship')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Relationship')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Relationship')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="relationshipChart"></canvas></div></div>
-                            <div class="chart-card"><h3><span>🏳️‍🌈 SEXUAL ORIENTATION</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Sexual Orientation')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Sexual Orientation')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Sexual Orientation')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="sexualOrientationChart"></canvas></div></div>
-                            <div class="chart-card"><h3><span>👶 PARENTAL STATUS</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Parental Status')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Parental Status')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Parental Status')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="parentalStatusChart"></canvas></div></div>
+                            <div class="chart-card">
+                                <h3>
+                                    <span>🎓 EDUCATION</span>
+                                    <div style="display: flex; gap: 0.25rem; align-items: center;">
+                                        <select id="educationChartType" onchange="changeChartType('education', this.value)" class="chart-type-select" title="Chart Type">
+                                            <option value="bar">📊</option>
+                                            <option value="doughnut">🍩</option>
+                                            <option value="pie">🥧</option>
+                                            <option value="polarArea">🎯</option>
+                                        </select>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Education')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Education')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Education')" title="Add to Deck">➕</button></span>
+                                    </div>
+                                </h3>
+                                <div class="chart-container"><canvas id="educationChart"></canvas></div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>
+                                    <span>💑 RELATIONSHIP</span>
+                                    <div style="display: flex; gap: 0.25rem; align-items: center;">
+                                        <select id="relationshipChartType" onchange="changeChartType('relationship', this.value)" class="chart-type-select" title="Chart Type">
+                                            <option value="doughnut">🍩</option>
+                                            <option value="pie">🥧</option>
+                                            <option value="bar">📊</option>
+                                            <option value="polarArea">🎯</option>
+                                        </select>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Relationship')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Relationship')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Relationship')" title="Add to Deck">➕</button></span>
+                                    </div>
+                                </h3>
+                                <div class="chart-container"><canvas id="relationshipChart"></canvas></div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>
+                                    <span>🏳️‍🌈 ORIENTATION</span>
+                                    <div style="display: flex; gap: 0.25rem; align-items: center;">
+                                        <select id="sexualOrientationChartType" onchange="changeChartType('sexualOrientation', this.value)" class="chart-type-select" title="Chart Type">
+                                            <option value="doughnut">🍩</option>
+                                            <option value="pie">🥧</option>
+                                            <option value="bar">📊</option>
+                                            <option value="polarArea">🎯</option>
+                                        </select>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Sexual Orientation')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Sexual Orientation')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Sexual Orientation')" title="Add to Deck">➕</button></span>
+                                    </div>
+                                </h3>
+                                <div class="chart-container"><canvas id="sexualOrientationChart"></canvas></div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>
+                                    <span>👶 PARENTAL</span>
+                                    <div style="display: flex; gap: 0.25rem; align-items: center;">
+                                        <select id="parentalStatusChartType" onchange="changeChartType('parentalStatus', this.value)" class="chart-type-select" title="Chart Type">
+                                            <option value="doughnut">🍩</option>
+                                            <option value="pie">🥧</option>
+                                            <option value="bar">📊</option>
+                                            <option value="polarArea">🎯</option>
+                                        </select>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Parental Status')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Parental Status')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Parental Status')" title="Add to Deck">➕</button></span>
+                                    </div>
+                                </h3>
+                                <div class="chart-container"><canvas id="parentalStatusChart"></canvas></div>
+                            </div>
                         </div>
                     </div>
             </div>
@@ -8665,20 +8778,30 @@
             // Calculate max for x-axis with padding for labels (horizontal bar)
             const ageMax = Math.max(...ageData) * 1.5; // 50% padding for horizontal labels
             
+            const ageChartType = chartTypePrefs.age || 'bar';
+            const ageIsCircular = ['doughnut', 'pie', 'polarArea'].includes(ageChartType);
+            
             charts.age = new Chart(document.getElementById('ageChart'), {
-                type: 'bar',
+                type: ageChartType,
                 data: { 
                     labels: ageLabels, 
-                    datasets: [{ data: ageData, backgroundColor: '#5a9ad9', borderRadius: 4 }] 
+                    datasets: [{ 
+                        data: ageData, 
+                        backgroundColor: ageIsCircular ? colors : '#5a9ad9', 
+                        borderRadius: ageIsCircular ? 0 : 4,
+                        borderColor: ageChartType === 'line' ? '#5a9ad9' : undefined,
+                        fill: ageChartType === 'line' ? false : undefined,
+                        tension: ageChartType === 'line' ? 0.3 : undefined
+                    }] 
                 },
                 options: { 
-                    indexAxis: 'y', 
+                    indexAxis: ageIsCircular || ageChartType === 'line' ? 'x' : 'y', 
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: { right: 30 } },
+                    layout: { padding: ageIsCircular ? {} : { right: 30 } },
                     plugins: { 
-                        legend: { display: false },
-                        datalabels: {
+                        legend: { display: ageIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: 11 } } },
+                        datalabels: ageIsCircular ? { display: false } : {
                             anchor: 'end',
                             align: 'end',
                             font: { size: 14, weight: 'bold' },
@@ -8696,7 +8819,7 @@
                             }
                         }
                     }, 
-                    scales: { 
+                    scales: ageIsCircular ? {} : { 
                         x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 13 } }, suggestedMax: ageMax }, 
                         y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 14 } } } 
                     } 
@@ -8712,42 +8835,49 @@
                 ? genderLabels.map(k => demographicsProjection.gender?.[k] || 0)
                 : genderPcts;
             
+            const genderChartType = chartTypePrefs.gender || 'doughnut';
+            const genderIsCircular = ['doughnut', 'pie', 'polarArea'].includes(genderChartType);
+            
             charts.gender = new Chart(document.getElementById('genderChart'), {
-                type: 'doughnut',
-                data: { labels: genderLabels, datasets: [{ data: genderData, backgroundColor: colors }] },
+                type: genderChartType,
+                data: { labels: genderLabels, datasets: [{ data: genderData, backgroundColor: colors, borderRadius: genderChartType === 'bar' ? 4 : 0 }] },
                 options: { 
+                    indexAxis: genderChartType === 'bar' ? 'y' : 'x',
                     responsive: true, 
                     maintainAspectRatio: false, 
                     plugins: { 
                         legend: { 
+                            display: genderIsCircular,
                             position: 'right', 
                             labels: { 
                                 color: '#e6f1ff', 
                                 font: { size: 12 },
-                                generateLabels: (chart) => {
+                                generateLabels: genderIsCircular ? (chart) => {
                                     const data = chart.data;
                                     return data.labels.map((label, i) => {
                                         const pct = genderPcts[i] || 0;
                                         const genPop = genderGenPop[i] || 0;
-                                        const genPopProj = Math.round((genPop / 100) * US_POPULATION);
                                         const val = data.datasets[0].data[i];
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : pct.toFixed(1) + '%';
-                                        const gpStr = genPop > 0 
-                                            ? (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${genPop.toFixed(1)}%)`)
-                                            : '';
-                                        // Green if over-indexing, red if under
                                         const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
                                         return {
-                                            text: `${label} ${valStr}${gpStr}`,
+                                            text: `${label} ${valStr}`,
                                             fillStyle: data.datasets[0].backgroundColor[i],
                                             fontColor: indexColor,
                                             index: i
                                         };
                                     });
-                                }
+                                } : undefined
                             } 
                         },
-                        datalabels: { display: false }
+                        datalabels: genderChartType === 'bar' ? {
+                            anchor: 'end', align: 'end', font: { size: 12, weight: 'bold' }, color: '#fff',
+                            formatter: (v) => isProjection ? formatNumber(Math.round(v)) : v.toFixed(1) + '%'
+                        } : { display: false }
+                    },
+                    scales: genderIsCircular ? {} : {
+                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } },
+                        y: { grid: { display: false }, ticks: { color: '#e6f1ff' } }
                     }
                 },
                 plugins: [ChartDataLabels]
@@ -8761,42 +8891,49 @@
                 ? ethLabels.map(k => demographicsProjection.ethnicity?.[k] || 0)
                 : ethPcts;
             
+            const ethnicityChartType = chartTypePrefs.ethnicity || 'doughnut';
+            const ethnicityIsCircular = ['doughnut', 'pie', 'polarArea'].includes(ethnicityChartType);
+            
             charts.ethnicity = new Chart(document.getElementById('ethnicityChart'), {
-                type: 'doughnut',
-                data: { labels: ethLabels, datasets: [{ data: ethData, backgroundColor: colors }] },
+                type: ethnicityChartType,
+                data: { labels: ethLabels, datasets: [{ data: ethData, backgroundColor: colors, borderRadius: ethnicityChartType === 'bar' ? 4 : 0 }] },
                 options: { 
+                    indexAxis: ethnicityChartType === 'bar' ? 'y' : 'x',
                     responsive: true, 
                     maintainAspectRatio: false, 
                     plugins: { 
                         legend: { 
+                            display: ethnicityIsCircular,
                             position: 'right', 
                             labels: { 
                                 color: '#e6f1ff', 
-                                font: { size: 12 },
-                                generateLabels: (chart) => {
+                                font: { size: 11 },
+                                generateLabels: ethnicityIsCircular ? (chart) => {
                                     const data = chart.data;
                                     return data.labels.map((label, i) => {
                                         const pct = ethPcts[i] || 0;
                                         const genPop = ethGenPop[i] || 0;
-                                        const genPopProj = Math.round((genPop / 100) * US_POPULATION);
                                         const val = data.datasets[0].data[i];
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : pct.toFixed(1) + '%';
-                                        const gpStr = genPop > 0 
-                                            ? (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${genPop.toFixed(1)}%)`)
-                                            : '';
-                                        // Green if over-indexing, red if under
                                         const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
                                         return {
-                                            text: `${label} ${valStr}${gpStr}`,
+                                            text: `${label} ${valStr}`,
                                             fillStyle: data.datasets[0].backgroundColor[i],
                                             fontColor: indexColor,
                                             index: i
                                         };
                                     });
-                                }
+                                } : undefined
                             } 
                         },
-                        datalabels: { display: false }
+                        datalabels: ethnicityChartType === 'bar' ? {
+                            anchor: 'end', align: 'end', font: { size: 12, weight: 'bold' }, color: '#fff',
+                            formatter: (v) => isProjection ? formatNumber(Math.round(v)) : v.toFixed(1) + '%'
+                        } : { display: false }
+                    },
+                    scales: ethnicityIsCircular ? {} : {
+                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } },
+                        y: { grid: { display: false }, ticks: { color: '#e6f1ff' } }
                     }
                 },
                 plugins: [ChartDataLabels]
@@ -8817,20 +8954,30 @@
             // Calculate max for x-axis with padding for labels (horizontal bar)
             const incomeMax = Math.max(...incomeData) * 1.5; // 50% padding for horizontal labels
             
+            const incomeChartType = chartTypePrefs.income || 'bar';
+            const incomeIsCircular = ['doughnut', 'pie', 'polarArea'].includes(incomeChartType);
+            
             charts.income = new Chart(document.getElementById('incomeChart'), {
-                type: 'bar',
+                type: incomeChartType,
                 data: { 
                     labels: incomeLabels, 
-                    datasets: [{ data: incomeData, backgroundColor: '#66d9ef', borderRadius: 4 }] 
+                    datasets: [{ 
+                        data: incomeData, 
+                        backgroundColor: incomeIsCircular ? colors : '#66d9ef', 
+                        borderRadius: incomeIsCircular ? 0 : 4,
+                        borderColor: incomeChartType === 'line' ? '#66d9ef' : undefined,
+                        fill: incomeChartType === 'line' ? false : undefined,
+                        tension: incomeChartType === 'line' ? 0.3 : undefined
+                    }] 
                 },
                 options: { 
-                    indexAxis: 'y', // Horizontal bars
+                    indexAxis: incomeIsCircular || incomeChartType === 'line' ? 'x' : 'y',
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: { right: 30 } },
+                    layout: { padding: incomeIsCircular ? {} : { right: 30 } },
                     plugins: { 
-                        legend: { display: false },
-                        datalabels: {
+                        legend: { display: incomeIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: 10 } } },
+                        datalabels: incomeIsCircular ? { display: false } : {
                             anchor: 'end',
                             align: 'right',
                             font: { size: 14, weight: 'bold' },
@@ -8848,7 +8995,7 @@
                             }
                         }
                     }, 
-                    scales: { 
+                    scales: incomeIsCircular ? {} : { 
                         y: { 
                             grid: { display: false }, 
                             ticks: { color: '#e6f1ff', font: { size: 14 } },
@@ -8868,15 +9015,18 @@
                 const eduData = isProjection ? eduLabels.map(k => demographicsProjection.education?.[k] || 0) : eduPcts;
                 const eduMax = Math.max(...eduData) * 1.5; // 50% padding for labels
                 
+                const educationChartType = chartTypePrefs.education || 'bar';
+                const educationIsCircular = ['doughnut', 'pie', 'polarArea'].includes(educationChartType);
+                
                 charts.education = new Chart(document.getElementById('educationChart'), {
-                    type: 'bar',
-                    data: { labels: eduLabels, datasets: [{ data: eduData, backgroundColor: '#a6e22e', borderRadius: 4 }] },
+                    type: educationChartType,
+                    data: { labels: eduLabels, datasets: [{ data: eduData, backgroundColor: educationIsCircular ? colors : '#a6e22e', borderRadius: educationIsCircular ? 0 : 4 }] },
                     options: { 
-                        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-                        layout: { padding: { right: 30 } },
+                        indexAxis: educationIsCircular ? 'x' : 'y', responsive: true, maintainAspectRatio: false,
+                        layout: { padding: educationIsCircular ? {} : { right: 30 } },
                         plugins: { 
-                            legend: { display: false }, 
-                            datalabels: { 
+                            legend: { display: educationIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: 10 } } }, 
+                            datalabels: educationIsCircular ? { display: false } : { 
                                 anchor: 'end', 
                                 align: 'end', 
                                 font: { size: 14, weight: 'bold' }, 
@@ -8892,7 +9042,7 @@
                                 }
                             } 
                         }, 
-                        scales: { 
+                        scales: educationIsCircular ? {} : { 
                             x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 13 } }, suggestedMax: eduMax }, 
                             y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 14 } } } 
                         } 
@@ -8908,42 +9058,44 @@
                 const relPcts = Object.values(demographics.relationship);
                 const relData = isProjection ? relLabels.map(k => demographicsProjection.relationship?.[k] || 0) : relPcts;
                 
+                const relationshipChartType = chartTypePrefs.relationship || 'doughnut';
+                const relationshipIsCircular = ['doughnut', 'pie', 'polarArea'].includes(relationshipChartType);
+                
                 charts.relationship = new Chart(document.getElementById('relationshipChart'), {
-                    type: 'doughnut',
-                    data: { labels: relLabels, datasets: [{ data: relData, backgroundColor: colors }] },
+                    type: relationshipChartType,
+                    data: { labels: relLabels, datasets: [{ data: relData, backgroundColor: colors, borderRadius: relationshipChartType === 'bar' ? 4 : 0 }] },
                     options: { 
+                        indexAxis: relationshipChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false, 
                         plugins: { 
                             legend: { 
+                                display: relationshipIsCircular,
                                 position: 'right', 
                                 labels: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 12 },
-                                    generateLabels: (chart) => {
+                                    font: { size: 11 },
+                                    generateLabels: relationshipIsCircular ? (chart) => {
                                         const data = chart.data;
                                         return data.labels.map((label, i) => {
                                             const pct = relPcts[i] || 0;
                                             const genPop = relGenPop[i] || 0;
-                                            const genPopProj = Math.round((genPop / 100) * US_POPULATION);
-                                            const val = data.datasets[0].data[i];
-                                            const valStr = isProjection ? formatNumber(Math.round(val)) : pct.toFixed(1) + '%';
-                                            const gpStr = genPop > 0 
-                                                ? (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${genPop.toFixed(1)}%)`)
-                                                : '';
+                                            const valStr = isProjection ? formatNumber(Math.round(data.datasets[0].data[i])) : pct.toFixed(1) + '%';
                                             const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
-                                            return {
-                                                text: `${label} ${valStr}${gpStr}`,
-                                                fillStyle: data.datasets[0].backgroundColor[i],
-                                                fontColor: indexColor,
-                                                index: i
-                                            };
+                                            return { text: `${label} ${valStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
-                                    }
+                                    } : undefined
                                 } 
                             }, 
-                            datalabels: { display: false } 
-                        } 
+                            datalabels: relationshipChartType === 'bar' ? {
+                                anchor: 'end', align: 'end', font: { size: 12, weight: 'bold' }, color: '#fff',
+                                formatter: (v) => isProjection ? formatNumber(Math.round(v)) : v.toFixed(1) + '%'
+                            } : { display: false }
+                        },
+                        scales: relationshipIsCircular ? {} : {
+                            x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } },
+                            y: { grid: { display: false }, ticks: { color: '#e6f1ff' } }
+                        }
                     },
                     plugins: [ChartDataLabels]
                 });
@@ -8956,42 +9108,44 @@
                 const soPcts = Object.values(demographics.sexual_orientation);
                 const soData = isProjection ? soLabels.map(k => demographicsProjection.sexual_orientation?.[k] || 0) : soPcts;
                 
+                const soChartType = chartTypePrefs.sexualOrientation || 'doughnut';
+                const soIsCircular = ['doughnut', 'pie', 'polarArea'].includes(soChartType);
+                
                 charts.sexualOrientation = new Chart(document.getElementById('sexualOrientationChart'), {
-                    type: 'doughnut',
-                    data: { labels: soLabels, datasets: [{ data: soData, backgroundColor: colors }] },
+                    type: soChartType,
+                    data: { labels: soLabels, datasets: [{ data: soData, backgroundColor: colors, borderRadius: soChartType === 'bar' ? 4 : 0 }] },
                     options: { 
+                        indexAxis: soChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false, 
                         plugins: { 
                             legend: { 
+                                display: soIsCircular,
                                 position: 'right', 
                                 labels: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 12 },
-                                    generateLabels: (chart) => {
+                                    font: { size: 11 },
+                                    generateLabels: soIsCircular ? (chart) => {
                                         const data = chart.data;
                                         return data.labels.map((label, i) => {
                                             const pct = soPcts[i] || 0;
                                             const genPop = soGenPop[i] || 0;
-                                            const genPopProj = Math.round((genPop / 100) * US_POPULATION);
-                                            const val = data.datasets[0].data[i];
-                                            const valStr = isProjection ? formatNumber(Math.round(val)) : pct.toFixed(1) + '%';
-                                            const gpStr = genPop > 0 
-                                                ? (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${genPop.toFixed(1)}%)`)
-                                                : '';
+                                            const valStr = isProjection ? formatNumber(Math.round(data.datasets[0].data[i])) : pct.toFixed(1) + '%';
                                             const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
-                                            return {
-                                                text: `${label} ${valStr}${gpStr}`,
-                                                fillStyle: data.datasets[0].backgroundColor[i],
-                                                fontColor: indexColor,
-                                                index: i
-                                            };
+                                            return { text: `${label} ${valStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
-                                    }
+                                    } : undefined
                                 } 
                             }, 
-                            datalabels: { display: false } 
-                        } 
+                            datalabels: soChartType === 'bar' ? {
+                                anchor: 'end', align: 'end', font: { size: 12, weight: 'bold' }, color: '#fff',
+                                formatter: (v) => isProjection ? formatNumber(Math.round(v)) : v.toFixed(1) + '%'
+                            } : { display: false }
+                        },
+                        scales: soIsCircular ? {} : {
+                            x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } },
+                            y: { grid: { display: false }, ticks: { color: '#e6f1ff' } }
+                        }
                     },
                     plugins: [ChartDataLabels]
                 });
@@ -9004,42 +9158,44 @@
                 const psPcts = Object.values(demographics.parental_status);
                 const psData = isProjection ? psLabels.map(k => demographicsProjection.parental_status?.[k] || 0) : psPcts;
                 
+                const psChartType = chartTypePrefs.parentalStatus || 'doughnut';
+                const psIsCircular = ['doughnut', 'pie', 'polarArea'].includes(psChartType);
+                
                 charts.parentalStatus = new Chart(document.getElementById('parentalStatusChart'), {
-                    type: 'doughnut',
-                    data: { labels: psLabels, datasets: [{ data: psData, backgroundColor: colors }] },
+                    type: psChartType,
+                    data: { labels: psLabels, datasets: [{ data: psData, backgroundColor: colors, borderRadius: psChartType === 'bar' ? 4 : 0 }] },
                     options: { 
+                        indexAxis: psChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false, 
                         plugins: { 
                             legend: { 
+                                display: psIsCircular,
                                 position: 'right', 
                                 labels: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 12 },
-                                    generateLabels: (chart) => {
+                                    font: { size: 11 },
+                                    generateLabels: psIsCircular ? (chart) => {
                                         const data = chart.data;
                                         return data.labels.map((label, i) => {
                                             const pct = psPcts[i] || 0;
                                             const genPop = psGenPop[i] || 0;
-                                            const genPopProj = Math.round((genPop / 100) * US_POPULATION);
-                                            const val = data.datasets[0].data[i];
-                                            const valStr = isProjection ? formatNumber(Math.round(val)) : pct.toFixed(1) + '%';
-                                            const gpStr = genPop > 0 
-                                                ? (isProjection ? ` (GP: ${formatNumber(genPopProj)})` : ` (GP: ${genPop.toFixed(1)}%)`)
-                                                : '';
+                                            const valStr = isProjection ? formatNumber(Math.round(data.datasets[0].data[i])) : pct.toFixed(1) + '%';
                                             const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
-                                            return {
-                                                text: `${label} ${valStr}${gpStr}`,
-                                                fillStyle: data.datasets[0].backgroundColor[i],
-                                                fontColor: indexColor,
-                                                index: i
-                                            };
+                                            return { text: `${label} ${valStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
-                                    }
+                                    } : undefined
                                 } 
                             }, 
-                            datalabels: { display: false } 
-                        } 
+                            datalabels: psChartType === 'bar' ? {
+                                anchor: 'end', align: 'end', font: { size: 12, weight: 'bold' }, color: '#fff',
+                                formatter: (v) => isProjection ? formatNumber(Math.round(v)) : v.toFixed(1) + '%'
+                            } : { display: false }
+                        },
+                        scales: psIsCircular ? {} : {
+                            x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } },
+                            y: { grid: { display: false }, ticks: { color: '#e6f1ff' } }
+                        }
                     },
                     plugins: [ChartDataLabels]
                 });
@@ -9053,6 +9209,31 @@
         
         // Age sorting variables
         let currentAgeSortMode = 'age'; // 'age' or 'value'
+        
+        // Chart type preferences (stored per chart)
+        const chartTypePrefs = {
+            age: 'bar',
+            gender: 'doughnut',
+            ethnicity: 'doughnut',
+            income: 'bar',
+            education: 'bar',
+            relationship: 'doughnut',
+            sexualOrientation: 'doughnut',
+            parentalStatus: 'doughnut'
+        };
+        
+        function changeChartType(chartName, newType) {
+            chartTypePrefs[chartName] = newType;
+            // Re-render charts with new type
+            if (currentDashboardData) {
+                renderCharts(
+                    currentDashboardData.demographics, 
+                    currentDashboardData.demographicsIndex, 
+                    currentDashboardData.demographicsProjection, 
+                    currentDashboardData.demographicsGenPop
+                );
+            }
+        }
         
         function sortAgeChart(sortMode) {
             currentAgeSortMode = sortMode;
