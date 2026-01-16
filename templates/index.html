@@ -826,7 +826,43 @@
 
         .chart-container { height: 180px; }
         
-        /* Module Add to Deck Button */
+        /* Module Action Buttons (Add to Deck, CSV, PNG, PDF) */
+        .module-action-btns {
+            display: flex;
+            gap: 0.2rem;
+            align-items: center;
+        }
+        
+        .module-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 0.1rem 0.25rem;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.6rem;
+            transition: all 0.2s;
+            opacity: 0.5;
+        }
+        
+        .module-btn:hover {
+            opacity: 1;
+            transform: scale(1.05);
+        }
+        
+        .module-btn.csv-btn:hover { background: #4ade80; color: #000; border-color: #4ade80; }
+        .module-btn.png-btn:hover { background: #60a5fa; color: #000; border-color: #60a5fa; }
+        .module-btn.pdf-btn:hover { background: #f87171; color: #fff; border-color: #f87171; }
+        .module-btn.deck-btn:hover { background: var(--accent-lime); color: #000; border-color: var(--accent-lime); }
+        
+        .chart-card:hover .module-btn,
+        .behavioral-card:hover .module-btn,
+        .location-section:hover .module-btn,
+        .affinity-card:hover .module-btn {
+            opacity: 0.8;
+        }
+        
+        /* Keep old class for backwards compatibility */
         .module-deck-btn {
             background: transparent;
             border: 1px solid var(--border-color);
@@ -4432,13 +4468,6 @@
                         <strong>Demographics</strong> — Your audience breakdown by gender, age, income, etc. <strong>Colors:</strong> <span class="highlight-green">Green = over-indexes</span> (higher than Gen Pop) | <span class="highlight-red">Red = under-indexes</span> (lower than Gen Pop). Second % shows Gen Pop baseline for comparison.
                     </div>
                 </div>
-                <div class="tab-actions">
-                    <div class="tab-actions-left">
-                        <button class="action-btn" onclick="downloadTabCSV('demographics')" title="Download as CSV">📄 CSV</button>
-                        <button class="action-btn" onclick="downloadTabChart('demographics', 'png')" title="Download as PNG">🖼️ PNG</button>
-                        <button class="action-btn" onclick="downloadTabChart('demographics', 'pdf')" title="Download as PDF">📑 PDF</button>
-                    </div>
-                </div>
                 <div class="demo-grid">
                     <div class="demo-sidebar">
                         <div class="sidebar-header-section">
@@ -4469,18 +4498,22 @@
                                             <option value="age">Sort: Age ↓</option>
                                             <option value="value">Sort: Value ↓</option>
                                         </select>
-                                        <button class="module-deck-btn" onclick="addModuleToDeck('demographic', 'Age')" title="Add to Deck">➕</button>
+                                        <span class="module-action-btns">
+                                            <button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Age')" title="CSV">CSV</button>
+                                            <button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Age')" title="PNG">PNG</button>
+                                            <button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Age')" title="Add to Deck">➕</button>
+                                        </span>
                                     </div>
                                 </h3>
                                 <div class="chart-container"><canvas id="ageChart"></canvas></div>
                             </div>
-                            <div class="chart-card"><h3><span>Gender</span><button class="module-deck-btn" onclick="addModuleToDeck('demographic', 'Gender')" title="Add to Deck">➕</button></h3><div class="chart-container"><canvas id="genderChart"></canvas></div></div>
-                            <div class="chart-card"><h3><span>Ethnicity</span><button class="module-deck-btn" onclick="addModuleToDeck('demographic', 'Ethnicity')" title="Add to Deck">➕</button></h3><div class="chart-container"><canvas id="ethnicityChart"></canvas></div></div>
-                            <div class="chart-card"><h3><span>Income</span><button class="module-deck-btn" onclick="addModuleToDeck('demographic', 'Income')" title="Add to Deck">➕</button></h3><div class="chart-container"><canvas id="incomeChart"></canvas></div></div>
-                            <div class="chart-card"><h3><span>Education</span><button class="module-deck-btn" onclick="addModuleToDeck('demographic', 'Education')" title="Add to Deck">➕</button></h3><div class="chart-container"><canvas id="educationChart"></canvas></div></div>
-                            <div class="chart-card"><h3><span>Relationship</span><button class="module-deck-btn" onclick="addModuleToDeck('demographic', 'Relationship')" title="Add to Deck">➕</button></h3><div class="chart-container"><canvas id="relationshipChart"></canvas></div></div>
-                            <div class="chart-card"><h3><span>Sexual Orientation</span><button class="module-deck-btn" onclick="addModuleToDeck('demographic', 'Sexual Orientation')" title="Add to Deck">➕</button></h3><div class="chart-container"><canvas id="sexualOrientationChart"></canvas></div></div>
-                            <div class="chart-card"><h3><span>Parental Status</span><button class="module-deck-btn" onclick="addModuleToDeck('demographic', 'Parental Status')" title="Add to Deck">➕</button></h3><div class="chart-container"><canvas id="parentalStatusChart"></canvas></div></div>
+                            <div class="chart-card"><h3><span>Gender</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Gender')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Gender')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Gender')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="genderChart"></canvas></div></div>
+                            <div class="chart-card"><h3><span>Ethnicity</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Ethnicity')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Ethnicity')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Ethnicity')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="ethnicityChart"></canvas></div></div>
+                            <div class="chart-card"><h3><span>Income</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Income')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Income')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Income')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="incomeChart"></canvas></div></div>
+                            <div class="chart-card"><h3><span>Education</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Education')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Education')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Education')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="educationChart"></canvas></div></div>
+                            <div class="chart-card"><h3><span>Relationship</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Relationship')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Relationship')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Relationship')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="relationshipChart"></canvas></div></div>
+                            <div class="chart-card"><h3><span>Sexual Orientation</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Sexual Orientation')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Sexual Orientation')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Sexual Orientation')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="sexualOrientationChart"></canvas></div></div>
+                            <div class="chart-card"><h3><span>Parental Status</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Parental Status')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Parental Status')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Parental Status')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="parentalStatusChart"></canvas></div></div>
                         </div>
                     </div>
                 </div>
@@ -4492,13 +4525,6 @@
                     <div class="explainer-icon">📊</div>
                     <div class="explainer-text">
                         <strong>Behavioral</strong> — What your audience does, watches, buys. <strong>First %</strong> = your audience. <strong>Second %</strong> = Gen Pop. <strong>Colors:</strong> <span class="highlight-green">Green = over-indexes</span> | <span class="highlight-red">Red = under-indexes</span>. <em>Most Purchased Brands</em> = confirmed purchases; others = digital touchpoint.
-                    </div>
-                </div>
-                <div class="tab-actions">
-                    <div class="tab-actions-left">
-                        <button class="action-btn" onclick="downloadTabCSV('behavioral')" title="Download as CSV">📄 CSV</button>
-                        <button class="action-btn" onclick="downloadTabChart('behavioral', 'png')" title="Download as PNG">🖼️ PNG</button>
-                        <button class="action-btn" onclick="downloadTabChart('behavioral', 'pdf')" title="Download as PDF">📑 PDF</button>
                     </div>
                 </div>
                 
@@ -4524,13 +4550,6 @@
                         <strong>Interests</strong> — What your audience is interested in. Categories like hobbies, activities, passions, and lifestyle preferences. <strong>Index:</strong> <span class="highlight-green">100+ = over-indexes</span> | <span class="highlight-red">&lt;100 = under-indexes</span>.
                     </div>
                 </div>
-                <div class="tab-actions">
-                    <div class="tab-actions-left">
-                        <button class="action-btn" onclick="downloadTabCSV('interests')" title="Download as CSV">📄 CSV</button>
-                        <button class="action-btn" onclick="downloadTabChart('interests', 'png')" title="Download as PNG">🖼️ PNG</button>
-                        <button class="action-btn" onclick="downloadTabChart('interests', 'pdf')" title="Download as PDF">📑 PDF</button>
-                    </div>
-                </div>
                 <div class="interests-header">
                     <h2>🎯 Audience Interests</h2>
                     <div class="interests-filter">
@@ -4550,13 +4569,6 @@
                         <strong>Location</strong> — Where your audience lives. <strong>Heat map:</strong> darker = higher concentration. <strong>Index:</strong> <span class="highlight-green">100+ = over-indexes</span> | <span class="highlight-red">&lt;100 = under-indexes</span>. DMAs = metro areas ranked by audience density.
                     </div>
                 </div>
-                <div class="tab-actions">
-                    <div class="tab-actions-left">
-                        <button class="action-btn" onclick="downloadTabCSV('location')" title="Download as CSV">📄 CSV</button>
-                        <button class="action-btn" onclick="downloadTabChart('location', 'png')" title="Download as PNG">🖼️ PNG</button>
-                        <button class="action-btn" onclick="downloadTabChart('location', 'pdf')" title="Download as PDF">📑 PDF</button>
-                    </div>
-                </div>
                 <div class="location-header">
                     <h2>📍 Geographic Distribution</h2>
                     <div class="location-stats" id="locationStats"></div>
@@ -4564,13 +4576,13 @@
                 
                 <!-- Regional Breakdown - at top for quick overview -->
                 <div class="regional-breakdown location-section">
-                    <h3 style="display: flex; justify-content: space-between; align-items: center;">📊 Regional Breakdown <button class="module-deck-btn" onclick="addModuleToDeck('location', 'Regional Breakdown')" title="Add to Deck">➕</button></h3>
+                    <h3 style="display: flex; justify-content: space-between; align-items: center;">📊 Regional Breakdown <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('location', 'Regional Breakdown')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'Regional Breakdown')" title="Add to Deck">➕</button></span></h3>
                     <div id="regionalBreakdown" class="regional-grid"></div>
                 </div>
                 
                 <!-- US Heat Map -->
                 <div class="heatmap-container location-section">
-                    <h3 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">🗺️ Heat Map <button class="module-deck-btn" onclick="addModuleToDeck('location', 'Heat Map')" title="Add to Deck">➕</button></h3>
+                    <h3 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">🗺️ Heat Map <span class="module-action-btns"><button class="module-btn png-btn" onclick="exportModulePNG('location', 'Heat Map')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'Heat Map')" title="Add to Deck">➕</button></span></h3>
                     <div class="heatmap-legend">
                         <span class="legend-label">Low</span>
                         <div class="legend-gradient"></div>
@@ -4582,7 +4594,7 @@
                 <div class="location-grid">
                     <div class="location-table location-section" style="flex: 1;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
-                            <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">🔥 Over-Indexing DMAs (≥100) <button class="module-deck-btn" onclick="addModuleToDeck('location', 'Over-Indexing DMAs')" title="Add to Deck">➕</button></h3>
+                            <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">🔥 Over-Indexing DMAs (≥100) <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('location', 'Over-Indexing DMAs')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'Over-Indexing DMAs')" title="Add to Deck">➕</button></span></h3>
                             <input type="text" id="locationSearchTop" placeholder="🔍 Search DMAs..." oninput="filterLocationList('top')" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; width: 150px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                         </div>
                         <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
@@ -4591,7 +4603,7 @@
                     </div>
                     <div class="location-table location-section" style="flex: 1;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
-                            <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">❄️ Under-Indexing DMAs (&lt;100) <button class="module-deck-btn" onclick="addModuleToDeck('location', 'Under-Indexing DMAs')" title="Add to Deck">➕</button></h3>
+                            <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">❄️ Under-Indexing DMAs (&lt;100) <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('location', 'Under-Indexing DMAs')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'Under-Indexing DMAs')" title="Add to Deck">➕</button></span></h3>
                             <input type="text" id="locationSearchBottom" placeholder="🔍 Search DMAs..." oninput="filterLocationList('bottom')" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; width: 150px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                         </div>
                         <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
@@ -4617,31 +4629,31 @@
                     
                     <div class="affinity-grid">
                         <div class="affinity-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">🎬 Content & Entertainment <button class="module-deck-btn" onclick="addModuleToDeck('affinity', 'Content & Entertainment')" title="Add to Deck">➕</button></h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">🎬 Content & Entertainment <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Content & Entertainment')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Content & Entertainment')" title="Add to Deck">➕</button></span></h3>
                             <p class="affinity-desc">Shows, movies, and streaming platforms this audience loves</p>
                             <div id="affinityContent" class="affinity-list"></div>
                         </div>
                         
                         <div class="affinity-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">🛍️ Brand Affinities <button class="module-deck-btn" onclick="addModuleToDeck('affinity', 'Brand Affinities')" title="Add to Deck">➕</button></h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">🛍️ Brand Affinities <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Brand Affinities')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Brand Affinities')" title="Add to Deck">➕</button></span></h3>
                             <p class="affinity-desc">Brands this audience over-indexes for</p>
                             <div id="affinityBrands" class="affinity-list"></div>
                         </div>
                         
                         <div class="affinity-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">📱 Digital Platforms <button class="module-deck-btn" onclick="addModuleToDeck('affinity', 'Digital Platforms')" title="Add to Deck">➕</button></h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">📱 Digital Platforms <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Digital Platforms')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Digital Platforms')" title="Add to Deck">➕</button></span></h3>
                             <p class="affinity-desc">Apps, websites, and social platforms they use</p>
                             <div id="affinityPlatforms" class="affinity-list"></div>
                         </div>
                         
                         <div class="affinity-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">🎵 Music & Audio <button class="module-deck-btn" onclick="addModuleToDeck('affinity', 'Music & Audio')" title="Add to Deck">➕</button></h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">🎵 Music & Audio <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Music & Audio')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Music & Audio')" title="Add to Deck">➕</button></span></h3>
                             <p class="affinity-desc">Music genres, artists, and podcasts</p>
                             <div id="affinityMusic" class="affinity-list"></div>
                         </div>
                         
                         <div class="affinity-card wide">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">🌐 Affinity Network <button class="module-deck-btn" onclick="addModuleToDeck('affinity', 'Affinity Network')" title="Add to Deck">➕</button></h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">🌐 Affinity Network <span class="module-action-btns"><button class="module-btn png-btn" onclick="exportModulePNG('affinity', 'Affinity Network')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Affinity Network')" title="Add to Deck">➕</button></span></h3>
                             <p class="affinity-desc">Visual map of audience connections</p>
                             <div id="affinityNetwork" class="affinity-network"></div>
                         </div>
@@ -7110,7 +7122,11 @@
                                 ${cat} ${positionBadge}
                             </span>
                             <span style="display: flex; align-items: center; gap: 0.5rem;">
-                                <button class="module-deck-btn" onclick="event.stopPropagation(); addModuleToDeck('behavioral', '${cat}')" title="Add to Deck">➕</button>
+                                <span class="module-action-btns">
+                                    <button class="module-btn csv-btn" onclick="event.stopPropagation(); exportModuleCSV('behavioral', '${cat}')" title="CSV">CSV</button>
+                                    <button class="module-btn png-btn" onclick="event.stopPropagation(); exportModulePNG('behavioral', '${cat}')" title="PNG">PNG</button>
+                                    <button class="module-btn deck-btn" onclick="event.stopPropagation(); addModuleToDeck('behavioral', '${cat}')" title="Add to Deck">➕</button>
+                                </span>
                                 <span class="count">${items.length}</span>
                             </span>
                         </h3>
@@ -7723,6 +7739,141 @@
             updateDeckCount();
             
             showDeckNotification(item.title);
+        }
+        
+        // Export module as CSV
+        function exportModuleCSV(type, category) {
+            if (!currentDashboardData || !currentProfileData) {
+                alert('Please select a profile first');
+                return;
+            }
+            
+            trackActivity('export_module_csv', `${type}:${category}`);
+            
+            let csvContent = '';
+            const profileName = currentProfileData.name || 'Profile';
+            
+            if (type === 'demographic') {
+                const catLower = category.toLowerCase();
+                const data = currentDashboardData.demographics[catLower] || {};
+                const index = currentDashboardData.demographicsIndex[catLower] || {};
+                const genPop = currentDashboardData.demographicsGenPop[catLower] || {};
+                
+                csvContent = `${profileName} - ${category}\n`;
+                csvContent += `Label,Profile %,Gen Pop %,Index\n`;
+                Object.keys(data).forEach(label => {
+                    const val = (parseFloat(data[label]) || 0).toFixed(1);
+                    const gp = (parseFloat(genPop[label]) || 0).toFixed(1);
+                    const idx = Math.round(parseFloat(index[label]) || 100);
+                    csvContent += `"${label}",${val}%,${gp}%,${idx}\n`;
+                });
+            } else if (type === 'behavioral') {
+                const items = currentDashboardData.behavioral[category] || [];
+                csvContent = `${profileName} - ${category}\n`;
+                csvContent += `Name,Audience %,Index\n`;
+                items.forEach(item => {
+                    csvContent += `"${item.name} - ${category}",${item.pct.toFixed(1)}%,${item.index}\n`;
+                });
+            } else if (type === 'location') {
+                const locations = currentDashboardData.locations || [];
+                csvContent = `${profileName} - ${category}\n`;
+                csvContent += `DMA,Audience %,Gen Pop %,Index\n`;
+                const filteredLocs = category.includes('Over') 
+                    ? locations.filter(l => l.index >= 100) 
+                    : category.includes('Under')
+                    ? locations.filter(l => l.index < 100)
+                    : locations;
+                filteredLocs.forEach(loc => {
+                    csvContent += `"${loc.name}",${loc.pct.toFixed(1)}%,${loc.genPopPct?.toFixed(1) || 0}%,${loc.index}\n`;
+                });
+            } else if (type === 'affinity') {
+                const elementId = {
+                    'Content & Entertainment': 'affinityContent',
+                    'Brand Affinities': 'affinityBrands',
+                    'Digital Platforms': 'affinityPlatforms',
+                    'Sports & Fitness': 'affinitySports',
+                    'Talent': 'affinityTalent'
+                };
+                const el = document.getElementById(elementId[category]);
+                if (el) {
+                    csvContent = `${profileName} - ${category}\n`;
+                    csvContent += `Name,Score\n`;
+                    el.querySelectorAll('.affinity-item').forEach(item => {
+                        const name = item.querySelector('.affinity-name')?.textContent || '';
+                        const score = item.querySelector('.affinity-score')?.textContent || '';
+                        csvContent += `"${name}",${score}\n`;
+                    });
+                }
+            }
+            
+            // Download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const filename = `${profileName.replace(/[^a-zA-Z0-9]/g, '_')}_${category.replace(/[^a-zA-Z0-9]/g, '_')}.csv`;
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+        }
+        
+        // Export module as PNG
+        function exportModulePNG(type, category) {
+            if (!currentDashboardData || !currentProfileData) {
+                alert('Please select a profile first');
+                return;
+            }
+            
+            trackActivity('export_module_png', `${type}:${category}`);
+            
+            const profileName = currentProfileData.name || 'Profile';
+            let element = null;
+            
+            if (type === 'demographic') {
+                const chartMap = {
+                    'Age': 'ageChart',
+                    'Gender': 'genderChart',
+                    'Ethnicity': 'ethnicityChart',
+                    'Income': 'incomeChart',
+                    'Education': 'educationChart',
+                    'Relationship': 'relationshipChart',
+                    'Sexual Orientation': 'sexualOrientationChart',
+                    'Parental Status': 'parentalStatusChart'
+                };
+                const canvas = document.getElementById(chartMap[category]);
+                if (canvas) {
+                    const link = document.createElement('a');
+                    link.download = `${profileName.replace(/[^a-zA-Z0-9]/g, '_')}_${category.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                    return;
+                }
+            } else if (type === 'behavioral') {
+                const catId = category.replace(/[^a-zA-Z0-9]/g, '');
+                element = document.querySelector(`.behavioral-card[data-category="${category}"]`);
+            } else if (type === 'location') {
+                element = document.querySelector('.location-section');
+            } else if (type === 'affinity') {
+                const elementId = {
+                    'Content & Entertainment': 'affinityContent',
+                    'Brand Affinities': 'affinityBrands',
+                    'Digital Platforms': 'affinityPlatforms'
+                };
+                element = document.getElementById(elementId[category])?.closest('.affinity-card');
+            }
+            
+            if (element) {
+                // Use html2canvas if available, otherwise fallback
+                if (typeof html2canvas !== 'undefined') {
+                    html2canvas(element, { backgroundColor: '#1a1a2e' }).then(canvas => {
+                        const link = document.createElement('a');
+                        link.download = `${profileName.replace(/[^a-zA-Z0-9]/g, '_')}_${category.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+                        link.href = canvas.toDataURL('image/png');
+                        link.click();
+                    });
+                } else {
+                    alert('PNG export requires html2canvas library. Exporting CSV instead.');
+                    exportModuleCSV(type, category);
+                }
+            }
         }
         
         function addCurrentTabToDeck() {
