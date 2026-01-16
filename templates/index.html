@@ -4992,7 +4992,23 @@
                             </div>
                             <div class="chart-card"><h3><span>👫 GENDER</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Gender')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Gender')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Gender')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="genderChart"></canvas></div></div>
                             <div class="chart-card"><h3><span>🌍 ETHNICITY</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Ethnicity')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Ethnicity')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Ethnicity')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="ethnicityChart"></canvas></div></div>
-                            <div class="chart-card"><h3><span>💰 INCOME</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Income')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Income')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Income')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="incomeChart"></canvas></div></div>
+                            <div class="chart-card">
+                                <h3>
+                                    <span>💰 INCOME</span>
+                                    <div style="display: flex; gap: 0.25rem; align-items: center;">
+                                        <select id="incomeSortSelect" onchange="sortIncomeChart(this.value)" style="font-size: 0.65rem; padding: 0.15rem 0.3rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-secondary);">
+                                            <option value="income">Sort: Income ↓</option>
+                                            <option value="value">Sort: Value ↓</option>
+                                        </select>
+                                        <span class="module-action-btns">
+                                            <button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Income')" title="CSV">CSV</button>
+                                            <button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Income')" title="PNG">PNG</button>
+                                            <button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Income')" title="Add to Deck">➕</button>
+                                        </span>
+                                    </div>
+                                </h3>
+                                <div class="chart-container"><canvas id="incomeChart"></canvas></div>
+                            </div>
                             <div class="chart-card"><h3><span>🎓 EDUCATION</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Education')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Education')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Education')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="educationChart"></canvas></div></div>
                             <div class="chart-card"><h3><span>💑 RELATIONSHIP</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Relationship')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Relationship')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Relationship')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="relationshipChart"></canvas></div></div>
                             <div class="chart-card"><h3><span>🏳️‍🌈 SEXUAL ORIENTATION</span><span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Sexual Orientation')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Sexual Orientation')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Sexual Orientation')" title="Add to Deck">➕</button></span></h3><div class="chart-container"><canvas id="sexualOrientationChart"></canvas></div></div>
@@ -7263,29 +7279,37 @@
             });
 
             // Income - horizontal bar with Gen Pop in data labels (green/red based on index)
-            const incomeLabels = Object.keys(demographics.income);
-            const incomeGenPop = incomeLabels.map(k => demographicsGenPop.income?.[k] || 0);
-            const incomePcts = Object.values(demographics.income);
-            const incomeData = isProjection
-                ? incomeLabels.map(k => demographicsProjection.income?.[k] || 0)
+            // Income - horizontal bar with Gen Pop in data labels (green/red based on index)
+            // Apply sorting based on user selection
+            const sortedIncomeResult = getSortedIncomeData(demographics.income);
+            const incomeLabels = Object.keys(sortedIncomeResult.display);
+            const incomeOriginalKeys = sortedIncomeResult.originalKeys;
+            const incomeGenPop = incomeOriginalKeys.map(k => demographicsGenPop.income?.[k] || 0);
+            const incomePcts = incomeLabels.map((k, i) => sortedIncomeResult.display[k]);
+            const incomeData = isProjection 
+                ? incomeOriginalKeys.map(k => demographicsProjection.income?.[k] || 0)
                 : incomePcts;
             
-            // Calculate max value for y-axis with padding for labels
-            const incomeMax = Math.max(...incomeData) * 1.35; // 35% padding for labels
+            // Calculate max for x-axis with padding for labels (horizontal bar)
+            const incomeMax = Math.max(...incomeData) * 1.5; // 50% padding for horizontal labels
             
             charts.income = new Chart(document.getElementById('incomeChart'), {
                 type: 'bar',
-                data: { labels: incomeLabels, datasets: [{ data: incomeData, backgroundColor: '#66d9ef', borderRadius: 4 }] },
+                data: { 
+                    labels: incomeLabels, 
+                    datasets: [{ data: incomeData, backgroundColor: '#66d9ef', borderRadius: 4 }] 
+                },
                 options: { 
+                    indexAxis: 'y', // Horizontal bars
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: { top: 30 } },
+                    layout: { padding: { right: 20 } },
                     plugins: { 
                         legend: { display: false },
                         datalabels: {
                             anchor: 'end',
-                            align: 'top',
-                            font: { size: 10, weight: 'bold' },
+                            align: 'right',
+                            font: { size: 11, weight: 'bold' },
                             color: (ctx) => {
                                 const pct = incomePcts[ctx.dataIndex] || 0;
                                 const genPop = incomeGenPop[ctx.dataIndex] || 0;
@@ -7296,15 +7320,19 @@
                                 const genPop = incomeGenPop[ctx.dataIndex] || 0;
                                 const genPopProj = Math.round((genPop / 100) * US_POPULATION);
                                 if (isProjection) {
-                                    return genPop > 0 ? `${formatNumber(Math.round(value))}\n(GP: ${formatNumber(genPopProj)})` : formatNumber(Math.round(value));
+                                    return genPop > 0 ? `${formatNumber(Math.round(value))} (GP: ${formatNumber(genPopProj)})` : formatNumber(Math.round(value));
                                 }
-                                return genPop > 0 ? `${pct.toFixed(1)}%\n(GP: ${genPop.toFixed(1)}%)` : pct.toFixed(1) + '%';
+                                return genPop > 0 ? `${pct.toFixed(1)}% (GP: ${genPop.toFixed(1)}%)` : pct.toFixed(1) + '%';
                             }
                         }
                     }, 
                     scales: { 
-                        x: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 10 }, maxRotation: 45 } }, 
-                        y: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 11 } }, suggestedMax: incomeMax } 
+                        y: { 
+                            grid: { display: false }, 
+                            ticks: { color: '#e6f1ff', font: { size: 12 } },
+                            afterFit: (scale) => { scale.width = Math.max(scale.width, 120); }
+                        }, 
+                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 11 } }, suggestedMax: incomeMax } 
                     } 
                 },
                 plugins: [ChartDataLabels]
@@ -7533,6 +7561,78 @@
         function getAgeDisplayLabel(originalLabel) {
             const lower = originalLabel.toLowerCase();
             return AGE_DISPLAY_LABELS[lower] || AGE_DISPLAY_LABELS[originalLabel] || originalLabel;
+        }
+        
+        // Map original income labels to display labels
+        const INCOME_DISPLAY_LABELS = {
+            '$40k-$60k': '$40K - $59,999',
+            '$40k - $60k': '$40K - $59,999',
+            '$40,000-$60,000': '$40K - $59,999',
+            '$60k-$75k': '$60K - $74,999',
+            '$60k - $75k': '$60K - $74,999',
+            '$60,000-$75,000': '$60K - $74,999',
+            '$75k-$100k': '$75K - $99,999',
+            '$75k - $100k': '$75K - $99,999',
+            '$75,000-$100,000': '$75K - $99,999',
+            '$100k-$150k': '$100K - $149,999',
+            '$100k - $150k': '$100K - $149,999',
+            '$100,000-$150,000': '$100K - $149,999',
+            '$150k-$250k': '$150K - $249,999',
+            '$150k - $250k': '$150K - $249,999',
+            '$150,000-$250,000': '$150K - $249,999',
+            '$250k+': '$250K+',
+            '$250k +': '$250K+',
+            '$250,000+': '$250K+'
+        };
+        
+        // Income level order (lowest to highest)
+        const INCOME_ORDER = ['$40k-$60k', '$40k - $60k', '$60k-$75k', '$60k - $75k', '$75k-$100k', '$75k - $100k', '$100k-$150k', '$100k - $150k', '$150k-$250k', '$150k - $250k', '$250k+', '$250k +'];
+        
+        function getIncomeDisplayLabel(originalLabel) {
+            const lower = originalLabel.toLowerCase();
+            return INCOME_DISPLAY_LABELS[lower] || INCOME_DISPLAY_LABELS[originalLabel] || originalLabel;
+        }
+        
+        let currentIncomeSortMode = 'income'; // 'income' or 'value'
+        
+        function getSortedIncomeData(incomeData) {
+            const entries = Object.entries(incomeData);
+            
+            if (currentIncomeSortMode === 'value') {
+                // Sort by value descending
+                entries.sort((a, b) => b[1] - a[1]);
+            } else {
+                // Sort by income level order (ascending)
+                entries.sort((a, b) => {
+                    const getOrderIndex = (label) => {
+                        const lower = label.toLowerCase();
+                        let idx = INCOME_ORDER.findIndex(o => o.toLowerCase() === lower || lower.includes(o.toLowerCase().replace(/[\$\,\s\+]/g, '')));
+                        if (idx !== -1) return idx;
+                        // Extract numeric value for fallback
+                        const match = lower.match(/(\d+)/);
+                        return match ? parseInt(match[1]) : 999;
+                    };
+                    return getOrderIndex(a[0]) - getOrderIndex(b[0]);
+                });
+            }
+            
+            // Build result with display labels
+            const display = {};
+            const originalKeys = [];
+            entries.forEach(([key, value]) => {
+                const displayLabel = getIncomeDisplayLabel(key);
+                display[displayLabel] = value;
+                originalKeys.push(key);
+            });
+            
+            return { display, originalKeys };
+        }
+        
+        function sortIncomeChart(mode) {
+            currentIncomeSortMode = mode;
+            if (currentDashboardData) {
+                renderCharts(currentDashboardData);
+            }
         }
         
         function getSortedAgeData(ageData) {
