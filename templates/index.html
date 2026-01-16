@@ -1693,18 +1693,45 @@
         }
         
         .behavioral-sort-select {
-            font-size: 0.6rem;
-            padding: 0.15rem 0.25rem;
+            font-size: 0.65rem;
+            padding: 0.25rem 0.4rem;
             background: var(--bg-input);
             border: 1px solid var(--border-color);
             border-radius: 4px;
-            color: var(--text-secondary);
+            color: var(--text-primary);
             cursor: pointer;
+            min-width: 90px;
+            max-width: 100px;
+            appearance: auto;
+        }
+        .behavioral-sort-select:focus {
+            outline: none;
+            border-color: var(--accent-lime);
         }
 
         .behavioral-filter {
+            display: flex;
+            gap: 0.35rem;
+            align-items: center;
             margin-bottom: 0.5rem;
             flex-shrink: 0;
+        }
+        .behavioral-filter input {
+            flex: 1;
+            min-width: 0;
+            font-size: 0.65rem;
+            padding: 0.25rem 0.4rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+        }
+        .behavioral-filter input:focus {
+            outline: none;
+            border-color: var(--accent-lime);
+        }
+        .behavioral-filter input::placeholder {
+            color: var(--text-secondary);
         }
 
         .behavioral-list {
@@ -9009,12 +9036,12 @@
                                 <span class="count">${items.length}</span>
                             </span>
                         </h3>
-                        <div class="behavioral-filter" style="display: flex; gap: 0.5rem; align-items: center;">
-                            <input type="text" placeholder="🔍 Search..." oninput="searchInCard('${catId}', this.value)" style="font-size: 0.7rem; padding: 0.3rem; flex: 1;">
+                        <div class="behavioral-filter">
+                            <input type="text" placeholder="Search..." oninput="searchInCard('${catId}', this.value)">
                             <select class="behavioral-sort-select" onchange="sortBehavioralCard('${catId}', '${cat}', this.value)">
-                                <option value="index">Sort: Index ↓</option>
-                                <option value="pct">Sort: % ↓</option>
-                                <option value="alpha">Sort: A-Z</option>
+                                <option value="index">Index ↓</option>
+                                <option value="pct">% ↓</option>
+                                <option value="alpha">A-Z</option>
                             </select>
                         </div>
                         <div class="behavioral-list" id="list-${catId}" data-cat="${cat}">
