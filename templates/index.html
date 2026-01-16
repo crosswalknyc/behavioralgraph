@@ -8795,7 +8795,7 @@
                         datalabels: ageIsCircular ? { display: false } : {
                             anchor: 'end',
                             align: 'end',
-                            font: { size: 14, weight: 'bold' },
+                            font: { size: 12, weight: 'bold' },
                             color: (ctx) => {
                                 const pct = agePcts[ctx.dataIndex] || 0;
                                 const genPop = ageGenPop[ctx.dataIndex] || 0;
@@ -8803,10 +8803,12 @@
                             },
                             formatter: (value, ctx) => {
                                 const pct = agePcts[ctx.dataIndex] || 0;
+                                const genPop = ageGenPop[ctx.dataIndex] || 0;
                                 if (isProjection) {
-                                    return formatNumber(Math.round(value));
+                                    const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                    return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                 }
-                                return pct.toFixed(1) + '%';
+                                return pct.toFixed(1) + '%' + (genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '');
                             }
                         }
                     }, 
@@ -8850,9 +8852,10 @@
                                         const genPop = genderGenPop[i] || 0;
                                         const val = data.datasets[0].data[i];
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : pct.toFixed(1) + '%';
+                                        const gpStr = genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '';
                                         const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
                                         return {
-                                            text: `${label} ${valStr}`,
+                                            text: `${label} ${valStr}${gpStr}`,
                                             fillStyle: data.datasets[0].backgroundColor[i],
                                             fontColor: indexColor,
                                             index: i
@@ -8862,8 +8865,21 @@
                             } 
                         },
                         datalabels: genderChartType === 'bar' ? {
-                            anchor: 'end', align: 'end', font: { size: 12, weight: 'bold' }, color: '#fff',
-                            formatter: (v) => isProjection ? formatNumber(Math.round(v)) : v.toFixed(1) + '%'
+                            anchor: 'end', align: 'end', font: { size: 11, weight: 'bold' },
+                            color: (ctx) => {
+                                const pct = genderPcts[ctx.dataIndex] || 0;
+                                const genPop = genderGenPop[ctx.dataIndex] || 0;
+                                return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
+                            },
+                            formatter: (v, ctx) => {
+                                const pct = genderPcts[ctx.dataIndex] || 0;
+                                const genPop = genderGenPop[ctx.dataIndex] || 0;
+                                if (isProjection) {
+                                    const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                    return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                }
+                                return pct.toFixed(1) + '%' + (genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '');
+                            }
                         } : { display: false }
                     },
                     scales: genderIsCircular ? {} : {
@@ -8906,9 +8922,10 @@
                                         const genPop = ethGenPop[i] || 0;
                                         const val = data.datasets[0].data[i];
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : pct.toFixed(1) + '%';
+                                        const gpStr = genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '';
                                         const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
                                         return {
-                                            text: `${label} ${valStr}`,
+                                            text: `${label} ${valStr}${gpStr}`,
                                             fillStyle: data.datasets[0].backgroundColor[i],
                                             fontColor: indexColor,
                                             index: i
@@ -8918,8 +8935,21 @@
                             } 
                         },
                         datalabels: ethnicityChartType === 'bar' ? {
-                            anchor: 'end', align: 'end', font: { size: 12, weight: 'bold' }, color: '#fff',
-                            formatter: (v) => isProjection ? formatNumber(Math.round(v)) : v.toFixed(1) + '%'
+                            anchor: 'end', align: 'end', font: { size: 11, weight: 'bold' },
+                            color: (ctx) => {
+                                const pct = ethPcts[ctx.dataIndex] || 0;
+                                const genPop = ethGenPop[ctx.dataIndex] || 0;
+                                return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
+                            },
+                            formatter: (v, ctx) => {
+                                const pct = ethPcts[ctx.dataIndex] || 0;
+                                const genPop = ethGenPop[ctx.dataIndex] || 0;
+                                if (isProjection) {
+                                    const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                    return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                }
+                                return pct.toFixed(1) + '%' + (genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '');
+                            }
                         } : { display: false }
                     },
                     scales: ethnicityIsCircular ? {} : {
@@ -8971,7 +9001,7 @@
                         datalabels: incomeIsCircular ? { display: false } : {
                             anchor: 'end',
                             align: 'right',
-                            font: { size: 14, weight: 'bold' },
+                            font: { size: 12, weight: 'bold' },
                             color: (ctx) => {
                                 const pct = incomePcts[ctx.dataIndex] || 0;
                                 const genPop = incomeGenPop[ctx.dataIndex] || 0;
@@ -8979,10 +9009,12 @@
                             },
                             formatter: (value, ctx) => {
                                 const pct = incomePcts[ctx.dataIndex] || 0;
+                                const genPop = incomeGenPop[ctx.dataIndex] || 0;
                                 if (isProjection) {
-                                    return formatNumber(Math.round(value));
+                                    const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                    return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                 }
-                                return pct.toFixed(1) + '%';
+                                return pct.toFixed(1) + '%' + (genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '');
                             }
                         }
                     }, 
@@ -9020,7 +9052,7 @@
                             datalabels: educationIsCircular ? { display: false } : { 
                                 anchor: 'end', 
                                 align: 'end', 
-                                font: { size: 14, weight: 'bold' }, 
+                                font: { size: 11, weight: 'bold' }, 
                                 color: (ctx) => {
                                     const pct = eduPcts[ctx.dataIndex] || 0;
                                     const genPop = eduGenPop[ctx.dataIndex] || 0;
@@ -9028,8 +9060,12 @@
                                 },
                                 formatter: (v, ctx) => {
                                     const pct = eduPcts[ctx.dataIndex] || 0;
-                                    if (isProjection) return formatNumber(Math.round(v));
-                                    return pct.toFixed(1) + '%';
+                                    const genPop = eduGenPop[ctx.dataIndex] || 0;
+                                    if (isProjection) {
+                                        const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                        return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                    }
+                                    return pct.toFixed(1) + '%' + (genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '');
                                 }
                             } 
                         }, 
