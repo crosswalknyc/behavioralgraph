@@ -323,16 +323,41 @@
         .dashboard-tabs {
             display: flex;
             gap: 0.5rem;
+            flex-wrap: wrap;
         }
 
         .tab-btn {
-            padding: 0.5rem 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 0.75rem;
             background: var(--bg-input);
             border: 1px solid var(--border-color);
             color: var(--text-secondary);
-            border-radius: 6px;
+            border-radius: 8px;
             cursor: pointer;
-            font-size: 0.8rem;
+            font-size: 0.7rem;
+            min-width: 70px;
+            gap: 0.2rem;
+            transition: all 0.2s;
+        }
+        
+        .tab-btn .tab-icon {
+            font-size: 1.1rem;
+            line-height: 1;
+        }
+        
+        .tab-btn .tab-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        .tab-btn:hover {
+            background: rgba(74, 138, 201, 0.2);
+            border-color: var(--accent-blue);
         }
 
         .tab-btn.active {
@@ -4351,19 +4376,19 @@
             </div>
 
             <div class="dashboard-tabs">
-                <button class="tab-btn active" onclick="showTab('demographics')">Demographics</button>
-                <button class="tab-btn" onclick="showTab('behavioral')">Behavioral</button>
-                <button class="tab-btn" onclick="showTab('interests')">🎯 Interests</button>
-                <button class="tab-btn" onclick="showTab('location')">Location</button>
-                <button class="tab-btn" onclick="showTab('insights')">💡 Insights</button>
-                <button class="tab-btn" onclick="showTab('affinity')">🔗 Affinity Map</button>
-                <button class="tab-btn" onclick="showTab('sponsorship')">💰 Sponsorship</button>
-                <button class="tab-btn" onclick="showTab('talent')">📈 Partnership Value</button>
-                <button class="tab-btn" onclick="showTab('media')">📺 Media Optimizer</button>
-                <button class="tab-btn" onclick="showTab('content')">🎬 Content Dev</button>
-                <button class="tab-btn" onclick="showTab('segmentation')">🎯 Segment Builder</button>
-                <button class="tab-btn" onclick="showTab('comparison')">📊 Comparison</button>
-                <button class="tab-btn" onclick="showTab('collaboration')">👥 Collaborate</button>
+                <button class="tab-btn active" onclick="showTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">Demographics</span></button>
+                <button class="tab-btn" onclick="showTab('behavioral')"><span class="tab-icon">📊</span><span class="tab-label">Behavioral</span></button>
+                <button class="tab-btn" onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">Interests</span></button>
+                <button class="tab-btn" onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">Location</span></button>
+                <button class="tab-btn" onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">Insights</span></button>
+                <button class="tab-btn" onclick="showTab('affinity')"><span class="tab-icon">🔗</span><span class="tab-label">Affinity</span></button>
+                <button class="tab-btn" onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">Sponsorship</span></button>
+                <button class="tab-btn" onclick="showTab('talent')"><span class="tab-icon">🤝</span><span class="tab-label">Partnership</span></button>
+                <button class="tab-btn" onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">Media</span></button>
+                <button class="tab-btn" onclick="showTab('content')"><span class="tab-icon">🎬</span><span class="tab-label">Content</span></button>
+                <button class="tab-btn" onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">Segment</span></button>
+                <button class="tab-btn" onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">Compare</span></button>
+                <button class="tab-btn" onclick="showTab('collaboration')"><span class="tab-icon">👥</span><span class="tab-label">Collaborate</span></button>
             </div>
 
             <!-- Demographics Tab -->
