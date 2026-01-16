@@ -6951,6 +6951,13 @@
                     const catId = 'dash_' + cat.replace(/[^a-zA-Z0-9]/g, '_');
                     const isExpanded = expandedDashCategories.has(catId);
 
+                    // Sort items alphabetically by name
+                    const sortedItems = [...items].sort((a, b) => {
+                        const nameA = getProfileFullName(a).toLowerCase();
+                        const nameB = getProfileFullName(b).toLowerCase();
+                        return nameA.localeCompare(nameB);
+                    });
+                    
                     html += `
                         <div class="profile-cat-item ${isExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleDashCategory('${catId}')">
                             <span class="cat-arrow">▸</span>
@@ -6958,7 +6965,7 @@
                             <span class="profile-cat-count">(${items.length})</span>
                         </div>
                         <div class="profile-cat-children ${isExpanded ? 'open' : ''}" id="cat-${catId}">
-                            ${items.map(p => {
+                            ${sortedItems.map(p => {
                                 const id = p.s3_key || p.job_id;
                                 const isActive = selectedDashProfile === id;
                                 const fullName = getProfileFullName(p);
