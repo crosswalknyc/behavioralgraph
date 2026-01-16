@@ -31,9 +31,10 @@
             color: var(--text-primary);
             min-height: 100vh;
             line-height: 1.6;
+            overflow: hidden;
         }
 
-        .container { max-width: 100%; margin: 0 auto; padding: 1rem; overflow-x: hidden; }
+        .container { max-width: 100%; margin: 0 auto; padding: 1rem; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
 
         header {
             display: flex;
@@ -174,9 +175,9 @@
             background: rgba(74, 138, 201, 0.2);
         }
 
-        #formView { display: none; }
-        #dashboardView { display: block; }
-        #adminView { display: none; }
+        #formView { display: none; flex: 1; overflow-y: auto; }
+        #dashboardView { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+        #adminView { display: none; flex: 1; }
         
         #adminView iframe {
             width: 100%;
@@ -765,7 +766,8 @@
         .dashboard-layout {
             display: flex;
             gap: 1rem;
-            min-height: calc(100vh - 200px);
+            flex: 1;
+            overflow: hidden;
         }
         
         .persistent-sidebar {
@@ -774,16 +776,60 @@
             background: var(--bg-card);
             border-radius: 8px;
             padding: 1rem;
-            position: sticky;
-            top: 1rem;
-            height: fit-content;
-            max-height: calc(100vh - 180px);
             overflow-y: auto;
+            flex-shrink: 0;
         }
         
         .dashboard-tab-content {
             flex: 1;
             min-width: 0;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+        
+        .dashboard-empty-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            min-height: 400px;
+        }
+        
+        .empty-state-content {
+            text-align: center;
+            padding: 3rem;
+            max-width: 500px;
+        }
+        
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            opacity: 0.8;
+        }
+        
+        .empty-state-content h2 {
+            font-size: 1.5rem;
+            color: var(--accent-lime);
+            margin-bottom: 1rem;
+        }
+        
+        .empty-state-content p {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+        }
+        
+        .empty-state-hint {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--bg-card);
+            padding: 0.75rem 1.25rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
         }
 
         .brand-box {
@@ -4825,6 +4871,21 @@
                 
                 <!-- Tab Content Area -->
                 <div class="dashboard-tab-content">
+                    
+                    <!-- Empty State - Show when no profile selected -->
+                    <div id="dashboardEmptyState" class="dashboard-empty-state">
+                        <div class="empty-state-content">
+                            <div class="empty-state-icon">📊</div>
+                            <h2>Select a Profile to Begin</h2>
+                            <p>Choose a profile from the sidebar to view audience insights, demographics, behavioral patterns, and more.</p>
+                            <div class="empty-state-hint">
+                                <span>💡</span> Use the search box or browse by category
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Dashboard Content - Hidden until profile selected -->
+                    <div id="dashboardContent" style="display: none;">
 
             <!-- Demographics Tab -->
             <div id="tab-demographics" class="tab-content">
@@ -5925,6 +5986,7 @@
                     </div>
                 </div>
             </div>
+                    </div><!-- End dashboardContent -->
                 </div><!-- End dashboard-tab-content -->
             </div><!-- End dashboard-layout -->
         </div><!-- End dashboardView -->
@@ -6439,6 +6501,12 @@
         }
 
         function renderDashboard(csvData, brandName, dateRange) {
+            // Hide empty state, show dashboard content
+            const emptyState = document.getElementById('dashboardEmptyState');
+            const dashContent = document.getElementById('dashboardContent');
+            if (emptyState) emptyState.style.display = 'none';
+            if (dashContent) dashContent.style.display = 'block';
+            
             // Update header profile info
             document.getElementById('dashBrandNameHeader').textContent = (brandName || 'Brand').toUpperCase();
             document.getElementById('dashDateRangeHeader').textContent = 'Date Range: ' + (dateRange || '--');
