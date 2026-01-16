@@ -4746,25 +4746,6 @@
                 </div>
                 <button class="deck-builder-btn btn btn-small" id="deckBtn" onclick="openDeckWorkspace()" title="View Deck Workspace">📊 Deck Builder (<span id="deckCount">0</span>)</button>
             </div>
-            
-            <!-- Global Action Bar -->
-            <div class="global-action-bar" style="display: flex; justify-content: flex-end; gap: 0.5rem; align-items: center; padding: 0.5rem 0; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">
-                <button class="btn btn-small" style="background: linear-gradient(135deg, #8b5cf6, #ec4899); font-size: 0.7rem;" onclick="toggleAIPanel()">🧪 BI Lab</button>
-                <button class="btn btn-small" id="favoriteBtn" onclick="toggleFavorite()" title="Add to favorites" style="font-size: 0.7rem;">⭐</button>
-                <button class="btn btn-small" onclick="shareProfile()" title="Share profile" style="font-size: 0.7rem;">🔗</button>
-                <div class="export-dropdown">
-                    <button class="btn btn-small btn-primary" onclick="toggleExportMenu()" style="font-size: 0.7rem;">📥 Export ▾</button>
-                    <div id="exportMenu" class="export-menu" style="display: none;">
-                        <button onclick="downloadCurrentCSV()">📄 Download CSV</button>
-                        <button onclick="exportSalesDeck()">📊 Sales Deck (PDF)</button>
-                        <button onclick="exportForAdPlatform('meta')">📘 Meta Ads Format</button>
-                        <button onclick="exportForAdPlatform('google')">🔍 Google Ads Format</button>
-                        <button onclick="exportForAdPlatform('tiktok')">🎵 TikTok Ads Format</button>
-                    </div>
-                </div>
-                <button class="btn btn-small" onclick="addCurrentTabToDeck()" title="Add current tab to deck" style="background: var(--accent-lime); color: #1a1a1a; font-size: 0.7rem;">➕ Add</button>
-                <button class="btn btn-small" onclick="toggleSavedViews()" title="Saved Views" style="font-size: 0.7rem;">💾</button>
-            </div>
 
             <!-- Demographics Tab -->
             <div id="tab-demographics" class="tab-content">
