@@ -10693,7 +10693,7 @@
             // Generate key insights
             const topItems = allItems.sort((a, b) => b.index - a.index).slice(0, 5);
             const insights = [];
-            if (topItems[0]) insights.push(`Strongest affinity: <span class="exec-highlight">${topItems[0].name}</span> with ${topItems[0].index} index`);
+            if (topItems[0]) insights.push(`Strongest affinity: <span class="exec-highlight">${topItems[0].name}</span> <span style="color: var(--text-secondary);">(${topItems[0].category})</span> with ${topItems[0].index} index`);
             if (highIndexItems.length > 10) insights.push(`<span class="exec-highlight">${highIndexItems.length}</span> items with strong over-indexing (150+) - significant partnership potential`);
             if (topCategory) insights.push(`<span class="exec-highlight">${topCategory.cat}</span> category shows highest engagement (avg ${topCategory.avg})`);
             const contentAffinities = allItems.filter(i => i.category.toUpperCase().includes('STREAMING') || i.category.toUpperCase().includes('SERIES')).length;
