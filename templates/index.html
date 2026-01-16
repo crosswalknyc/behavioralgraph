@@ -10779,13 +10779,13 @@
             `).join('') || '<p style="color: var(--text-secondary);">No high-indexing categories</p>';
             
             // Top specific brands
-            const brandItems = allItems
+            const sponsorBrandItems = allItems
                 .filter(i => i.category.toUpperCase().includes('BRAND') || i.category.toUpperCase().includes('SHOP'))
                 .filter(i => i.index > 120)
                 .sort((a, b) => b.index - a.index)
                 .slice(0, 15);
             
-            document.getElementById('sponsorBrands').innerHTML = renderAffinityList(brandItems);
+            document.getElementById('sponsorBrands').innerHTML = renderAffinityList(sponsorBrandItems);
             
             // Purchase behaviors
             const purchaseItems = allItems
