@@ -1665,6 +1665,18 @@ def get_admin_content():
         
         print(f"✅ Found {len(active_files)} active files")
         
+        # Load profile image cache to check for custom images
+        if not profile_image_cache:
+            load_profile_image_cache()
+        
+        # Add custom image info to each file
+        for f in active_files:
+            cache_key = f.get('project_name', '').lower().strip()
+            if cache_key in profile_image_cache:
+                cached = profile_image_cache[cache_key]
+                if cached.get('is_custom'):
+                    f['custom_image'] = cached.get('image_url')
+        
         # Get archived files
         archived_files = []
         for page in paginator.paginate(Bucket=bucket_name, Prefix='historic/'):
@@ -2855,6 +2867,131 @@ def trigger_image_prefetch():
         'message': 'Image prefetch started in background',
         'cached_count': len(profile_image_cache)
     })
+
+
+@app.route('/api/profile-image-info/<path:name>')
+@requires_auth
+def get_profile_image_info(name):
+    """Get current profile image info including source."""
+    global profile_image_cache
+    
+    if not profile_image_cache:
+        load_profile_image_cache()
+    
+    cache_key = name.lower().strip()
+    
+    if cache_key in profile_image_cache:
+        cached = profile_image_cache[cache_key]
+        return jsonify({
+            'success': True,
+            'image_url': cached.get('image_url'),
+            'source': cached.get('source', 'unknown'),
+            'is_custom': cached.get('is_custom', False),
+            'cached_at': cached.get('cached_at')
+        })
+    
+    return jsonify({'success': False, 'error': 'No image found'})
+
+
+@app.route('/api/admin/profile-image', methods=['POST'])
+@requires_admin
+def set_profile_image():
+    """Set a custom profile image (upload or URL)."""
+    global profile_image_cache, profile_image_cache_dirty
+    from datetime import datetime
+    
+    try:
+        profile_name = None
+        image_url = None
+        
+        # Handle file upload
+        if 'file' in request.files:
+            file = request.files['file']
+            profile_name = request.form.get('profile_name')
+            
+            if file and file.filename:
+                # Validate file
+                if file.content_length and file.content_length > 2 * 1024 * 1024:
+                    return jsonify({'success': False, 'error': 'File too large (max 2MB)'})
+                
+                # Upload to S3
+                import uuid
+                ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else 'jpg'
+                if ext not in ['jpg', 'jpeg', 'png', 'webp', 'gif']:
+                    ext = 'jpg'
+                
+                s3_key = f"profile-images/{uuid.uuid4().hex}.{ext}"
+                
+                s3_client.upload_fileobj(
+                    file,
+                    S3_BUCKET,
+                    s3_key,
+                    ExtraArgs={
+                        'ContentType': f'image/{ext}',
+                        'ACL': 'public-read'
+                    }
+                )
+                
+                image_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{s3_key}"
+        else:
+            # Handle JSON with URL
+            data = request.get_json()
+            profile_name = data.get('profile_name')
+            image_url = data.get('image_url')
+        
+        if not profile_name or not image_url:
+            return jsonify({'success': False, 'error': 'Profile name and image required'})
+        
+        # Update cache with custom image
+        cache_key = profile_name.lower().strip()
+        profile_image_cache[cache_key] = {
+            'image_url': image_url,
+            'title': profile_name,
+            'source': 'custom',
+            'is_custom': True,
+            'cached_at': datetime.now().isoformat()
+        }
+        profile_image_cache_dirty = True
+        save_profile_image_cache()
+        
+        return jsonify({
+            'success': True,
+            'image_url': image_url,
+            'message': 'Profile image saved'
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/admin/profile-image', methods=['DELETE'])
+@requires_admin
+def remove_profile_image():
+    """Remove custom profile image, allowing auto-source to be used."""
+    global profile_image_cache, profile_image_cache_dirty
+    
+    try:
+        data = request.get_json()
+        profile_name = data.get('profile_name')
+        
+        if not profile_name:
+            return jsonify({'success': False, 'error': 'Profile name required'})
+        
+        cache_key = profile_name.lower().strip()
+        
+        # Remove from cache
+        if cache_key in profile_image_cache:
+            del profile_image_cache[cache_key]
+            profile_image_cache_dirty = True
+            save_profile_image_cache()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Custom image removed'
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 
 @app.route('/api/image-cache-stats')

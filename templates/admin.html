@@ -1023,6 +1023,41 @@
         </div>
     </div>
 
+    <!-- Profile Image Modal -->
+    <div class="modal" id="profileImageModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 id="profileImageTitle">Set Profile Image</h2>
+                <button class="modal-close" onclick="closeProfileImageModal()">&times;</button>
+            </div>
+            <input type="hidden" id="profileImageKey">
+            <input type="hidden" id="profileImageName">
+            
+            <div style="text-align: center; margin-bottom: 1.5rem;">
+                <div id="profileImagePreview" style="width: 120px; height: 120px; border-radius: 50%; background: var(--bg-input); margin: 0 auto 1rem; overflow: hidden; border: 3px solid var(--border-color);">
+                    <img id="profileImagePreviewImg" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                </div>
+                <div id="currentImageSource" style="font-size: 0.75rem; color: var(--text-secondary);"></div>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Upload Custom Image</label>
+                <input type="file" id="profileImageFile" accept="image/*" onchange="previewProfileImage(this)" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                <small style="color: var(--text-secondary); font-size: 0.7rem;">JPG, PNG, WebP. Max 2MB.</small>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Or Enter Image URL</label>
+                <input type="text" id="profileImageUrl" placeholder="https://example.com/image.jpg" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+            </div>
+            
+            <div style="display: flex; gap: 0.75rem;">
+                <button class="btn btn-secondary" onclick="removeProfileImage()" style="flex: 1;">🗑️ Remove Custom</button>
+                <button class="btn btn-success" onclick="saveProfileImage()" style="flex: 1;">💾 Save Image</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div class="toast" id="toast"></div>
 
@@ -1607,6 +1642,139 @@
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
 
+        // ============ PROFILE IMAGE MANAGEMENT ============
+        
+        async function openProfileImageModal(profileName, fileKey) {
+            document.getElementById('profileImageKey').value = fileKey;
+            document.getElementById('profileImageName').value = profileName;
+            document.getElementById('profileImageTitle').textContent = `Set Image: ${profileName}`;
+            document.getElementById('profileImageFile').value = '';
+            document.getElementById('profileImageUrl').value = '';
+            
+            // Check for existing custom image
+            try {
+                const response = await fetch(`/api/profile-image-info/${encodeURIComponent(profileName)}`);
+                const data = await response.json();
+                
+                const preview = document.getElementById('profileImagePreviewImg');
+                const sourceLabel = document.getElementById('currentImageSource');
+                
+                if (data.success && data.image_url) {
+                    preview.src = data.image_url;
+                    preview.style.display = 'block';
+                    sourceLabel.innerHTML = `Current source: <strong style="color: ${data.is_custom ? 'var(--accent-lime)' : 'var(--accent-blue)'}">${data.source || 'auto'}</strong>`;
+                    if (data.is_custom) {
+                        document.getElementById('profileImageUrl').value = data.image_url;
+                    }
+                } else {
+                    preview.style.display = 'none';
+                    sourceLabel.textContent = 'No image found';
+                }
+            } catch (e) {
+                console.error('Error loading profile image info:', e);
+            }
+            
+            document.getElementById('profileImageModal').classList.add('show');
+        }
+        
+        function closeProfileImageModal() {
+            document.getElementById('profileImageModal').classList.remove('show');
+        }
+        
+        function previewProfileImage(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const preview = document.getElementById('profileImagePreviewImg');
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+        
+        async function saveProfileImage() {
+            const profileName = document.getElementById('profileImageName').value;
+            const fileInput = document.getElementById('profileImageFile');
+            const urlInput = document.getElementById('profileImageUrl').value.trim();
+            
+            if (!profileName) {
+                showToast('No profile selected', true);
+                return;
+            }
+            
+            try {
+                let response;
+                
+                if (fileInput.files && fileInput.files[0]) {
+                    // Upload file
+                    const formData = new FormData();
+                    formData.append('file', fileInput.files[0]);
+                    formData.append('profile_name', profileName);
+                    
+                    response = await fetch('/api/admin/profile-image', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } else if (urlInput) {
+                    // Set URL
+                    response = await fetch('/api/admin/profile-image', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            profile_name: profileName,
+                            image_url: urlInput
+                        })
+                    });
+                } else {
+                    showToast('Please select an image or enter a URL', true);
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Profile image saved!');
+                    closeProfileImageModal();
+                    loadContentFiles(); // Refresh to show new image
+                } else {
+                    showToast(data.error || 'Failed to save image', true);
+                }
+            } catch (e) {
+                showToast('Error saving image: ' + e.message, true);
+            }
+        }
+        
+        async function removeProfileImage() {
+            const profileName = document.getElementById('profileImageName').value;
+            
+            if (!profileName) return;
+            
+            if (!confirm(`Remove custom image for "${profileName}"? Auto-sourced images will be used instead.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/profile-image', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ profile_name: profileName })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Custom image removed');
+                    closeProfileImageModal();
+                    loadContentFiles();
+                } else {
+                    showToast(data.error || 'Failed to remove image', true);
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, true);
+            }
+        }
+
         // ============ CONTENT MANAGEMENT ============
         
         let currentSort = 'date-desc';
@@ -1773,16 +1941,25 @@
         function renderFileRow(file) {
             const isSelected = selectedFiles.has(file.key);
             const dateStr = file.last_modified ? new Date(file.last_modified).toLocaleDateString() : '--';
+            const hasCustomImage = file.custom_image ? true : false;
             
             return `
                 <tr data-key="${file.key}" class="${isSelected ? 'selected' : ''}">
                     <td><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleFileSelection('${file.key}')"></td>
-                    <td class="file-name" title="${file.key}">${file.key.split('/').pop()}</td>
+                    <td class="file-name" title="${file.key}">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div class="profile-thumb" id="thumb-${file.key.replace(/[^a-zA-Z0-9]/g, '_')}" style="width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: var(--bg-input); flex-shrink: 0; border: 2px solid ${hasCustomImage ? 'var(--accent-lime)' : 'var(--border-color)'};">
+                                ${hasCustomImage ? `<img src="${file.custom_image}" style="width: 100%; height: 100%; object-fit: cover;">` : ''}
+                            </div>
+                            <span>${file.key.split('/').pop()}</span>
+                        </div>
+                    </td>
                     <td>${file.project_name || '--'}</td>
                     <td style="font-size: 0.75rem; color: var(--text-secondary);">${dateStr}</td>
                     <td style="font-size: 0.75rem;">${formatBytes(file.size)}</td>
                     <td>
                         <div class="action-buttons">
+                            <button class="btn btn-small btn-icon" onclick="openProfileImageModal('${file.project_name || file.key}', '${file.key}')" title="Set Profile Image" style="background: ${hasCustomImage ? 'var(--accent-lime)' : 'var(--bg-input)'}; color: ${hasCustomImage ? '#1a1a1a' : 'var(--text-primary)'};">🖼️</button>
                             ${showingArchived ? 
                                 `<button class="btn btn-small btn-success btn-icon" onclick="restoreFile('${file.key}')" title="Restore">↩️</button>` :
                                 `<button class="btn btn-small btn-archive btn-icon" onclick="archiveFile('${file.key}')" title="Archive">📦</button>`
