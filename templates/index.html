@@ -449,19 +449,6 @@
             border-color: var(--accent-cyan);
         }
         
-        .tab-btn.deck-tab {
-            border-color: #9333ea;
-            color: #a855f7;
-        }
-        .tab-btn.deck-tab:hover {
-            background: rgba(147, 51, 234, 0.15);
-            border-color: #a855f7;
-        }
-        .tab-btn.deck-tab.active {
-            background: rgba(147, 51, 234, 0.2);
-            border-color: #a855f7;
-            color: #c4b5fd;
-        }
         
         .deck-builder-btn {
             background: var(--bg-card) !important;
@@ -4919,7 +4906,7 @@
                 <button class="tab-btn" onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span></button>
                 <button class="tab-btn" onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span></button>
                 <button class="tab-btn" onclick="showTab('collaboration')"><span class="tab-icon">👥</span><span class="tab-label">COLLABORATE</span></button>
-                <button class="tab-btn deck-tab" onclick="openDeckWorkspace()"><span class="tab-icon">📊</span><span class="tab-label">DECK (<span id="deckCountTab">0</span>)</span></button>
+                <button class="tab-btn" onclick="openDeckWorkspace()"><span class="tab-icon">📊</span><span class="tab-label">DECK BUILDER</span></button>
             </div>
             
             <!-- Row 3: Tab Info + Display Toggle + Add to Deck -->
