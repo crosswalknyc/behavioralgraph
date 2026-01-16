@@ -2109,12 +2109,13 @@
             border-color: var(--accent);
             box-shadow: 0 4px 12px rgba(200, 230, 0, 0.2);
         }
-        /* Custom tooltip styling */
+        /* Custom tooltip styling - uses data-tooltip to avoid native browser tooltip */
         .has-tooltip {
             position: relative;
+            cursor: help;
         }
         .has-tooltip::after {
-            content: attr(title);
+            content: attr(data-tooltip);
             position: absolute;
             bottom: 100%;
             left: 50%;
@@ -5217,11 +5218,11 @@
             <div id="tab-demographics" class="tab-content">
                 <div class="demo-main">
                         <div class="stats-row">
-                            <div class="stat-card">
+                            <div class="stat-card has-tooltip" data-tooltip="Sample Size: Number of matched respondents in this profile. Larger samples (10,000+) = higher confidence. Calculated from unique user IDs matching search criteria.">
                                 <div class="stat-label">📊 Crosswalk Respondents</div>
                                 <div class="stat-value"><span class="stat-prefix">n=</span><span id="dashSampleSize">0</span></div>
                             </div>
-                            <div class="stat-card">
+                            <div class="stat-card has-tooltip" data-tooltip="US Projection: Estimated total US population represented. Calculated by applying panel weighting factors to sample size based on census data.">
                                 <div class="stat-label">🇺🇸 Projected US</div>
                                 <div class="stat-value" id="dashProjectedUS">0</div>
                             </div>
@@ -5401,7 +5402,7 @@
                 <div class="location-grid">
                     <div class="location-table location-section" style="flex: 1;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
-                            <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">🔥 Over-Indexing DMAs (≥100) <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('location', 'Over-Indexing DMAs')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'Over-Indexing DMAs')" title="Add to Deck">➕</button></span></h3>
+                            <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;" class="has-tooltip" data-tooltip="Over-Indexing DMAs: Markets where your audience is more concentrated than Gen Pop. Index ≥100 means equal to or higher concentration. Target these for media buys and activations.">🔥 Over-Indexing DMAs (≥100) <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('location', 'Over-Indexing DMAs')">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'Over-Indexing DMAs')">➕</button></span></h3>
                             <input type="text" id="locationSearchTop" placeholder="🔍 Search DMAs..." oninput="filterLocationList('top')" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; width: 150px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                         </div>
                         <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
@@ -5410,7 +5411,7 @@
                     </div>
                     <div class="location-table location-section" style="flex: 1;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
-                            <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">❄️ Under-Indexing DMAs (&lt;100) <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('location', 'Under-Indexing DMAs')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'Under-Indexing DMAs')" title="Add to Deck">➕</button></span></h3>
+                            <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;" class="has-tooltip" data-tooltip="Under-Indexing DMAs: Markets where your audience is less concentrated than Gen Pop. Index <100 means lower concentration. Consider reducing spend or using different messaging in these areas.">❄️ Under-Indexing DMAs (&lt;100) <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('location', 'Under-Indexing DMAs')">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'Under-Indexing DMAs')">➕</button></span></h3>
                             <input type="text" id="locationSearchBottom" placeholder="🔍 Search DMAs..." oninput="filterLocationList('bottom')" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; width: 150px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                         </div>
                         <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
@@ -5946,28 +5947,28 @@
                             
                             <!-- Key Metrics Row -->
                             <div class="metrics-row">
-                                <div class="metric-card has-tooltip" title="Sample Size: The number of matched respondents in this audience profile. Larger samples (10,000+) provide higher statistical confidence. Calculated from unique user IDs that match the search criteria.">
+                                <div class="metric-card has-tooltip" data-tooltip="Sample Size: The number of matched respondents in this audience profile. Larger samples (10,000+) provide higher statistical confidence. Calculated from unique user IDs that match the search criteria.">
                                     <div class="metric-icon">📊</div>
                                     <div class="metric-content">
                                         <span class="metric-value" id="insightsSampleSize">--</span>
                                         <span class="metric-label">Sample Size</span>
                                     </div>
                                 </div>
-                                <div class="metric-card has-tooltip" title="US Projection: Estimated total US population represented by this audience. Calculated by applying panel weighting factors to the sample size based on census data.">
+                                <div class="metric-card has-tooltip" data-tooltip="US Projection: Estimated total US population represented by this audience. Calculated by applying panel weighting factors to the sample size based on census data.">
                                     <div class="metric-icon">🇺🇸</div>
                                     <div class="metric-content">
                                         <span class="metric-value" id="insightsProjectedUS">--</span>
                                         <span class="metric-label">US Projection</span>
                                     </div>
                                 </div>
-                                <div class="metric-card has-tooltip" title="Average Over-Index: The mean index value of all items where this audience over-indexes vs. general population. Index of 100 = same as Gen Pop. Values above 100 indicate higher affinity. Calculated as: (Audience % ÷ Gen Pop %) × 100.">
+                                <div class="metric-card has-tooltip" data-tooltip="Average Over-Index: The mean index value of all items where this audience over-indexes vs. general population. Index of 100 = same as Gen Pop. Values above 100 indicate higher affinity. Calculated as: (Audience % ÷ Gen Pop %) × 100.">
                                     <div class="metric-icon">📈</div>
                                     <div class="metric-content">
                                         <span class="metric-value" id="avgOverIndex">--</span>
                                         <span class="metric-label">Avg Over-Index</span>
                                     </div>
                                 </div>
-                                <div class="metric-card has-tooltip" title="Uniqueness Score: How distinctive this audience is compared to the general population. Calculated as the percentage of over-indexing items that have an index above 150 (strongly differentiated). 100% = highly unique, 0% = similar to Gen Pop.">
+                                <div class="metric-card has-tooltip" data-tooltip="Uniqueness Score: How distinctive this audience is compared to the general population. Calculated as the percentage of over-indexing items that have an index above 150 (strongly differentiated). 100% = highly unique, 0% = similar to Gen Pop.">
                                     <div class="metric-icon">🎯</div>
                                     <div class="metric-content">
                                         <span class="metric-value" id="uniquenesScore">--</span>
@@ -5978,20 +5979,20 @@
                             
                             <!-- Demographic Highlights -->
                             <div class="insight-card-v2">
-                                <h3 class="has-tooltip" title="Demographic Highlights: Shows which demographic segments (age, gender, income, etc.) significantly over-index (>110) or under-index (<80) compared to Gen Pop. Helps identify who your core audience is.">👥 Demographic Highlights</h3>
+                                <h3 class="has-tooltip" data-tooltip="Demographic Highlights: Shows which demographic segments (age, gender, income, etc.) significantly over-index (>110) or under-index (<80) compared to Gen Pop. Helps identify who your core audience is.">👥 Demographic Highlights</h3>
                                 <div id="demoHighlights" class="highlight-list"></div>
                             </div>
                             
                             <!-- Top Differentiators -->
                             <div class="insight-card-v2">
-                                <h3 class="has-tooltip" title="Top Differentiators: The highest-indexing item from each behavioral category. Shows what truly sets this audience apart from the general population across diverse interests.">🔥 Top Differentiators</h3>
+                                <h3 class="has-tooltip" data-tooltip="Top Differentiators: The highest-indexing item from each behavioral category. Shows what truly sets this audience apart from the general population across diverse interests.">🔥 Top Differentiators</h3>
                                 <p class="card-desc">What makes this audience unique</p>
                                 <div id="topDifferentiators" class="differentiator-list"></div>
                             </div>
                             
                             <!-- Key Statistics -->
                             <div class="insight-card-v2 full-width">
-                                <h3 class="has-tooltip" title="At-a-Glance Statistics: Summary metrics including total behavioral items tracked, number of categories, and counts of items where this audience over/under-indexes vs. Gen Pop.">📊 At-a-Glance Statistics</h3>
+                                <h3 class="has-tooltip" data-tooltip="At-a-Glance Statistics: Summary metrics including total behavioral items tracked, number of categories, and counts of items where this audience over/under-indexes vs. Gen Pop.">📊 At-a-Glance Statistics</h3>
                                 <div id="keyStatsGrid" class="key-stats-grid"></div>
                             </div>
                         </div>
@@ -6001,31 +6002,31 @@
                     <div id="insights-tab-behavioral" class="insights-tab-content">
                         <div class="insights-grid-v2">
                             <div class="insight-card-v2 full-width">
-                                <h3 class="has-tooltip" title="Category Champions: The single highest-indexing item within each behavioral category. Shows what this audience is MOST into within each interest area. Index = (Audience % ÷ Gen Pop %) × 100.">🏆 Category Champions</h3>
+                                <h3 class="has-tooltip" data-tooltip="Category Champions: The single highest-indexing item within each behavioral category. Shows what this audience is MOST into within each interest area. Index = (Audience % ÷ Gen Pop %) × 100.">🏆 Category Champions</h3>
                                 <p class="card-desc">Highest indexing item in each behavioral category</p>
                                 <div id="categoryChampions" class="champions-grid"></div>
                             </div>
                             
                             <div class="insight-card-v2 highlight">
-                                <h3 class="has-tooltip" title="Biggest Over-Indexers: The top 25 items across ALL categories with the highest index values. An index of 200 means this audience is 2x more likely to engage vs. Gen Pop.">📈 Biggest Over-Indexers</h3>
+                                <h3 class="has-tooltip" data-tooltip="Biggest Over-Indexers: The top 25 items across ALL categories with the highest index values. An index of 200 means this audience is 2x more likely to engage vs. Gen Pop.">📈 Biggest Over-Indexers</h3>
                                 <p class="card-desc">Top 25 items with highest index vs Gen Pop</p>
                                 <div id="topOverIndexers" class="insight-list-v2"></div>
                             </div>
                             
                             <div class="insight-card-v2">
-                                <h3>📉 Biggest Under-Indexers</h3>
+                                <h3 class="has-tooltip" data-tooltip="Biggest Under-Indexers: Top 25 items where this audience indexes below Gen Pop. An index of 50 means 50% less likely to engage. Use to identify what this audience DOESN'T care about.">📉 Biggest Under-Indexers</h3>
                                 <p class="card-desc">Top 25 items where audience under-indexes</p>
                                 <div id="topUnderIndexers" class="insight-list-v2"></div>
                             </div>
                             
                             <div class="insight-card-v2">
-                                <h3 class="has-tooltip" title="Hidden Gems: High-indexing items (130+) in niche or emerging categories that may have lower audience reach (<5%). Great for targeted activations with less competitive clutter.">💎 Hidden Gems</h3>
+                                <h3 class="has-tooltip" data-tooltip="Hidden Gems: High-indexing items (130+) in niche or emerging categories that may have lower audience reach (<5%). Great for targeted activations with less competitive clutter.">💎 Hidden Gems</h3>
                                 <p class="card-desc">High-index items with lower competition</p>
                                 <div id="hiddenGems" class="insight-list-v2"></div>
                             </div>
                             
                             <div class="insight-card-v2">
-                                <h3 class="has-tooltip" title="Rising Behaviors: Items in categories like podcasts, emerging platforms, and gaming that show strong indexing. Indicates where this audience is leaning into newer/growing media behaviors.">⚡ Rising Behaviors</h3>
+                                <h3 class="has-tooltip" data-tooltip="Rising Behaviors: Items in categories like podcasts, emerging platforms, and gaming that show strong indexing. Indicates where this audience is leaning into newer/growing media behaviors.">⚡ Rising Behaviors</h3>
                                 <p class="card-desc">Emerging categories with strong indexing</p>
                                 <div id="risingBehaviors" class="insight-list-v2"></div>
                             </div>
