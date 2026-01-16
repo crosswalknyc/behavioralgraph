@@ -1194,7 +1194,10 @@ def generate_random_password(length=12):
 # GMAIL OAUTH INTEGRATION
 # ============================================================================
 
-GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.send']
+GMAIL_SCOPES = [
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.readonly'
+]
 GMAIL_TOKEN_KEY = 'system/gmail_tokens.json'
 
 def get_gmail_credentials():
