@@ -7658,7 +7658,7 @@
         function sortIncomeChart(mode) {
             currentIncomeSortMode = mode;
             if (currentDashboardData) {
-                renderCharts(currentDashboardData);
+                renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
             }
         }
         
