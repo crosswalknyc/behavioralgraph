@@ -4278,6 +4278,7 @@
                             <button onclick="exportForAdPlatform('tiktok')">🎵 TikTok Ads Format</button>
                         </div>
                     </div>
+                    <button class="btn btn-small" onclick="addCurrentTabToDeck()" title="Add current tab to deck" style="background: var(--accent-lime); color: #1a1a1a;">➕ Add to Deck</button>
                     <button class="btn btn-small" id="deckBtn" onclick="openDeckWorkspace()" title="View Deck Workspace" style="background: var(--accent-purple);">📊 Deck Builder (<span id="deckCount">0</span>)</button>
                     <button class="btn btn-small" onclick="toggleSavedViews()" title="Saved Views">💾 Saved</button>
                 </div>
@@ -4379,9 +4380,6 @@
                         <button class="action-btn" onclick="downloadTabChart('demographics', 'png')" title="Download as PNG">🖼️ PNG</button>
                         <button class="action-btn" onclick="downloadTabChart('demographics', 'pdf')" title="Download as PDF">📑 PDF</button>
                     </div>
-                    <div class="tab-actions-right">
-                        <button class="action-btn primary" onclick="addToWorkspace('demographics')" title="Add to deck workspace">➕ Add to Deck</button>
-                    </div>
                 </div>
                 <div class="demo-grid">
                     <div class="demo-sidebar">
@@ -4444,9 +4442,6 @@
                         <button class="action-btn" onclick="downloadTabChart('behavioral', 'png')" title="Download as PNG">🖼️ PNG</button>
                         <button class="action-btn" onclick="downloadTabChart('behavioral', 'pdf')" title="Download as PDF">📑 PDF</button>
                     </div>
-                    <div class="tab-actions-right">
-                        <button class="action-btn primary" onclick="addToWorkspace('behavioral')" title="Add to deck workspace">➕ Add to Deck</button>
-                    </div>
                 </div>
                 
                 <!-- Category Reorder Controls -->
@@ -4477,9 +4472,6 @@
                         <button class="action-btn" onclick="downloadTabChart('interests', 'png')" title="Download as PNG">🖼️ PNG</button>
                         <button class="action-btn" onclick="downloadTabChart('interests', 'pdf')" title="Download as PDF">📑 PDF</button>
                     </div>
-                    <div class="tab-actions-right">
-                        <button class="action-btn primary" onclick="addToWorkspace('interests')" title="Add to deck workspace">➕ Add to Deck</button>
-                    </div>
                 </div>
                 <div class="interests-header">
                     <h2>🎯 Audience Interests</h2>
@@ -4505,9 +4497,6 @@
                         <button class="action-btn" onclick="downloadTabCSV('location')" title="Download as CSV">📄 CSV</button>
                         <button class="action-btn" onclick="downloadTabChart('location', 'png')" title="Download as PNG">🖼️ PNG</button>
                         <button class="action-btn" onclick="downloadTabChart('location', 'pdf')" title="Download as PDF">📑 PDF</button>
-                    </div>
-                    <div class="tab-actions-right">
-                        <button class="action-btn primary" onclick="addToWorkspace('location')" title="Add to deck workspace">➕ Add to Deck</button>
                     </div>
                 </div>
                 <div class="location-header">
@@ -7639,6 +7628,30 @@
             updateDeckCount();
             
             showDeckNotification(item.title);
+        }
+        
+        function addCurrentTabToDeck() {
+            // Get active tab
+            const activeTab = document.querySelector('.tab-btn.active');
+            if (!activeTab) {
+                alert('Please select a tab first');
+                return;
+            }
+            const tabName = activeTab.textContent.toLowerCase().replace(/[^a-z]/g, '');
+            // Map tab names
+            const tabMap = {
+                'demographics': 'demographics',
+                'behavioral': 'behavioral',
+                'interests': 'interests',
+                'location': 'location',
+                'insights': 'insights',
+                'affinitymap': 'affinity',
+                'sponsorship': 'sponsorship',
+                'partnershipvalue': 'talent',
+                'mediaoptimizer': 'media'
+            };
+            const mappedTab = tabMap[tabName] || tabName;
+            addToWorkspace(mappedTab);
         }
         
         function addToWorkspace(tabName) {
