@@ -443,9 +443,13 @@
             gap: 1rem;
         }
 
+        .dash-profile-info {
+            display: flex;
+            align-items: stretch;
+            gap: 0.75rem;
+        }
+        
         .dash-profile-image {
-            width: 80px;
-            height: 80px;
             border-radius: 12px;
             overflow: hidden;
             border: 3px solid #4a5568;
@@ -453,6 +457,8 @@
             flex-shrink: 0;
             display: none;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            aspect-ratio: 1;
+            align-self: stretch;
         }
         
         .dash-profile-image img {
@@ -463,11 +469,11 @@
         }
         
         .dash-profile-image.loaded {
-            display: block;
+            display: flex;
         }
         
         .dash-profile-image.loading {
-            display: block;
+            display: flex;
             background: linear-gradient(135deg, var(--bg-card), var(--bg-input));
             animation: pulse 1.5s infinite;
         }
@@ -480,25 +486,27 @@
         .dash-brand-container {
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
+            gap: 0.35rem;
         }
 
         .dash-brand-box {
             background: linear-gradient(135deg, #c8e600, #a0d911);
             color: #1a1a1a;
-            padding: 1rem 2rem;
+            padding: 0.75rem 1.5rem;
             border-radius: 8px;
-            font-size: 1.4rem;
+            font-size: 1.2rem;
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 1px;
             cursor: pointer;
             transition: all 0.2s;
             box-shadow: 0 4px 15px rgba(200, 230, 0, 0.3);
+            display: flex;
+            align-items: center;
         }
 
         .dash-brand-box:hover {
-            transform: scale(1.03);
+            transform: scale(1.02);
             box-shadow: 0 6px 20px rgba(200, 230, 0, 0.5);
         }
 
@@ -506,7 +514,7 @@
             color: var(--text-secondary);
             font-size: 0.8rem;
             background: var(--bg-input);
-            padding: 0.5rem 0.75rem;
+            padding: 0.4rem 0.75rem;
             border-radius: 6px;
             border: 1px solid var(--border-color);
         }
