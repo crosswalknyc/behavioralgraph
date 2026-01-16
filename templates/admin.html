@@ -966,6 +966,21 @@
                 </div>
 
                 <div class="access-section">
+                    <h4>🎯 Dashboard Access</h4>
+                    <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+                        <label class="checkbox-group">
+                            <input type="checkbox" id="hasProfileIQAccess" checked>
+                            <span>Profile IQ</span>
+                        </label>
+                        <label class="checkbox-group">
+                            <input type="checkbox" id="hasSubscriberIQAccess">
+                            <span>Subscriber IQ</span>
+                        </label>
+                    </div>
+                    <small style="color: var(--text-secondary); font-size: 0.7rem; display: block; margin-top: 0.5rem;">Select which dashboards this user can access</small>
+                </div>
+
+                <div class="access-section">
                     <h4>📁 Category Access</h4>
                     <label class="checkbox-group">
                         <input type="checkbox" id="allCategories" checked onchange="toggleAllCategories()">
@@ -1182,6 +1197,8 @@
             document.getElementById('unlimitedCredits').checked = false;
             document.getElementById('allCategories').checked = true;
             document.getElementById('allRuns').checked = true;
+            document.getElementById('hasProfileIQAccess').checked = true;
+            document.getElementById('hasSubscriberIQAccess').checked = false;
             
             populateCategoryCheckboxes();
             populateRunCheckboxes();
@@ -1211,6 +1228,8 @@
             document.getElementById('unlimitedCredits').checked = user.credits === -1;
             document.getElementById('allCategories').checked = user.allowed_categories?.includes('*');
             document.getElementById('allRuns').checked = user.allowed_runs?.includes('*');
+            document.getElementById('hasProfileIQAccess').checked = user.has_profile_iq_access !== false; // Default true
+            document.getElementById('hasSubscriberIQAccess').checked = user.has_subscriber_iq_access === true; // Default false
 
             populateCategoryCheckboxes(user.allowed_categories);
             populateRunCheckboxes(user.allowed_runs);
@@ -1507,6 +1526,8 @@
                     Array.from(document.querySelectorAll('#categoryCheckboxes input:checked')).map(cb => cb.value),
                 allowed_runs: document.getElementById('allRuns').checked ? ['*'] : 
                     Array.from(document.querySelectorAll('#runCheckboxes input:checked')).map(cb => cb.value),
+                has_profile_iq_access: document.getElementById('hasProfileIQAccess').checked,
+                has_subscriber_iq_access: document.getElementById('hasSubscriberIQAccess').checked,
                 send_welcome_email: document.getElementById('sendWelcomeEmail').checked
             };
 

@@ -1942,12 +1942,23 @@ def get_user_info():
 @requires_auth
 def index():
     user = get_current_user()
+    role = user.get('role', 'user') if user else 'user'
+    # Admins always have access to all dashboards
+    if role == 'admin':
+        has_profile_iq = True
+        has_subscriber_iq = True
+    else:
+        has_profile_iq = user.get('has_profile_iq_access', True) if user else True  # Default True for backward compat
+        has_subscriber_iq = user.get('has_subscriber_iq_access', False) if user else False
+    
     return render_template('index.html', 
                            username=session.get('username'),
-                           role=user.get('role', 'user') if user else 'user',
+                           role=role,
                            credits=user.get('credits', 0) if user else 0,
                            credits_used=user.get('credits_used', 0) if user else 0,
-                           profile_picture=user.get('profile_picture', '') if user else '')
+                           profile_picture=user.get('profile_picture', '') if user else '',
+                           has_profile_iq_access=has_profile_iq,
+                           has_subscriber_iq_access=has_subscriber_iq)
 
 
 @app.route('/api/health')

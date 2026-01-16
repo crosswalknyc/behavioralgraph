@@ -304,6 +304,7 @@
 
         #formView { display: none; flex: 1; overflow-y: auto; }
         #dashboardView { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+        #subscriberIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #adminView { display: none; flex: 1; }
         
         #adminView iframe {
@@ -311,6 +312,79 @@
             height: calc(100vh - 120px);
             border: none;
             border-radius: 12px;
+        }
+        
+        /* Main IQ Tabs */
+        .iq-tabs-container {
+            display: flex;
+            gap: 0;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+        .iq-tab {
+            padding: 0.75rem 2rem;
+            font-family: 'Space Mono', monospace;
+            font-size: 1rem;
+            font-weight: 700;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .iq-tab:hover {
+            color: var(--text-primary);
+            background: rgba(200, 230, 0, 0.05);
+        }
+        .iq-tab.active {
+            color: var(--accent-lime);
+        }
+        .iq-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--accent-lime);
+        }
+        .iq-tab.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .iq-tab .tab-icon {
+            margin-right: 0.5rem;
+        }
+        
+        /* Subscriber IQ Dashboard */
+        .subscriber-iq-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem;
+            text-align: center;
+        }
+        .subscriber-iq-coming-soon {
+            background: var(--bg-card);
+            border: 2px dashed var(--border-color);
+            border-radius: 16px;
+            padding: 4rem;
+            max-width: 600px;
+        }
+        .subscriber-iq-coming-soon h2 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: var(--accent-lime);
+        }
+        .subscriber-iq-coming-soon p {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            line-height: 1.6;
         }
 
         /* Form Styles */
@@ -5198,6 +5272,16 @@
             </div>
         </header>
 
+        <!-- Main IQ Dashboard Tabs -->
+        <div class="iq-tabs-container">
+            <button class="iq-tab active {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" onclick="showProfileIQ()" {% if not has_profile_iq_access %}disabled{% endif %}>
+                <span class="tab-icon">🎯</span>Profile IQ
+            </button>
+            <button class="iq-tab {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" onclick="showSubscriberIQ()" {% if not has_subscriber_iq_access %}disabled{% endif %}>
+                <span class="tab-icon">👥</span>Subscriber IQ
+            </button>
+        </div>
+
         <!-- FORM VIEW -->
         <div id="formView">
             <div class="main-grid">
@@ -6993,6 +7077,17 @@
             </div><!-- End dashboard-layout -->
         </div><!-- End dashboardView -->
 
+        <!-- SUBSCRIBER IQ VIEW -->
+        <div id="subscriberIQView">
+            <div class="subscriber-iq-content">
+                <div class="subscriber-iq-coming-soon">
+                    <h2>👥 Subscriber IQ</h2>
+                    <p>Subscriber analytics dashboard coming soon.</p>
+                    <p style="margin-top: 1rem; font-size: 0.85rem;">This dashboard will provide deep insights into your subscriber base, engagement metrics, and audience growth analytics.</p>
+                </div>
+            </div>
+        </div><!-- End subscriberIQView -->
+
         <!-- ADMIN VIEW (only for admin users) -->
         {% if role == 'admin' %}
         <div id="adminView">
@@ -7106,6 +7201,7 @@
             const formView = document.getElementById('formView');
             if (formView) formView.style.display = 'none';
             document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('subscriberIQView').style.display = 'none';
             const adminView = document.getElementById('adminView');
             if (adminView) adminView.style.display = 'block';
             const formBtn = document.getElementById('formViewBtn');
@@ -7113,6 +7209,35 @@
             document.getElementById('dashboardViewBtn').classList.remove('active');
             const adminBtn = document.getElementById('adminViewBtn');
             if (adminBtn) adminBtn.classList.add('active');
+        }
+        
+        // Main IQ Tab Switching
+        function showProfileIQ() {
+            const profileTab = document.getElementById('profileIQTab');
+            if (profileTab.classList.contains('disabled')) return;
+            
+            document.getElementById('profileIQTab').classList.add('active');
+            document.getElementById('subscriberIQTab').classList.remove('active');
+            document.getElementById('dashboardView').style.display = 'flex';
+            document.getElementById('subscriberIQView').style.display = 'none';
+            
+            // Show Profile IQ header buttons
+            const viewToggle = document.querySelector('.view-toggle');
+            if (viewToggle) viewToggle.style.display = 'flex';
+        }
+        
+        function showSubscriberIQ() {
+            const subscriberTab = document.getElementById('subscriberIQTab');
+            if (subscriberTab.classList.contains('disabled')) return;
+            
+            document.getElementById('profileIQTab').classList.remove('active');
+            document.getElementById('subscriberIQTab').classList.add('active');
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('subscriberIQView').style.display = 'flex';
+            
+            // Hide Profile IQ specific buttons when on Subscriber IQ
+            const formView = document.getElementById('formView');
+            if (formView) formView.style.display = 'none';
         }
 
         // Activity tracking helper (non-blocking)
