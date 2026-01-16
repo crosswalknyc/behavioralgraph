@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 200" width="120" height="200">
+  <style>
+    .logo-text { font-family: 'Helvetica Neue', Arial, sans-serif; font-weight: 900; font-size: 32px; fill: white; letter-spacing: 2px; }
+    .plus { font-family: 'Helvetica Neue', Arial, sans-serif; font-weight: 400; font-size: 28px; fill: white; }
+  </style>
+  <text x="10" y="35" class="logo-text">CR</text>
+  <text x="10" y="70" class="logo-text">OS</text>
+  <text x="10" y="105" class="logo-text">S</text>
+  <text x="10" y="140" class="logo-text">WA</text>
+  <text x="10" y="175" class="logo-text">LK</text>
+  <text x="85" y="175" class="plus">+</text>
+</svg>
