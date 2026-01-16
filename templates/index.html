@@ -449,6 +449,20 @@
             border-color: var(--accent-cyan);
         }
         
+        .tab-btn.deck-tab {
+            border-color: #9333ea;
+            color: #a855f7;
+        }
+        .tab-btn.deck-tab:hover {
+            background: rgba(147, 51, 234, 0.15);
+            border-color: #a855f7;
+        }
+        .tab-btn.deck-tab.active {
+            background: rgba(147, 51, 234, 0.2);
+            border-color: #a855f7;
+            color: #c4b5fd;
+        }
+        
         .deck-builder-btn {
             background: var(--bg-card) !important;
             border: 1px solid #9333ea !important;
@@ -4899,15 +4913,15 @@
                 <button class="tab-btn" onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span></button>
                 <button class="tab-btn" onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span></button>
                 <button class="tab-btn" onclick="showTab('collaboration')"><span class="tab-icon">👥</span><span class="tab-label">COLLABORATE</span></button>
+                <button class="tab-btn deck-tab" onclick="openDeckWorkspace()"><span class="tab-icon">📊</span><span class="tab-label">DECK (<span id="deckCountTab">0</span>)</span></button>
             </div>
             
-            <!-- Row 3: Buttons only -->
+            <!-- Row 3: Display Toggle -->
             <div class="dash-bottom-row">
                 <div class="row-right" style="margin-left: auto;">
                     <div class="display-mode-toggle" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" title="Toggle between percentages and US population numbers">
                         <span id="dashDisplayLabel">US %</span>
                     </div>
-                    <button class="deck-builder-btn btn btn-small" id="deckBtn" onclick="openDeckWorkspace()" title="View Deck Workspace">📊 Deck Builder (<span id="deckCount">0</span>)</button>
                 </div>
             </div>
             
@@ -8893,9 +8907,16 @@
         }
         
         function updateDeckCount() {
+            const count = deckWorkspaceItems.length;
+            // Update tab count
+            const tabCountEl = document.getElementById('deckCountTab');
+            if (tabCountEl) {
+                tabCountEl.textContent = count;
+            }
+            // Update old count element if exists
             const countEl = document.getElementById('deckCount');
             if (countEl) {
-                countEl.textContent = deckWorkspaceItems.length;
+                countEl.textContent = count;
             }
         }
 
