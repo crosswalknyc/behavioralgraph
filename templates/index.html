@@ -780,9 +780,11 @@
             background: var(--bg-card);
             border-radius: 8px;
             padding: 1rem;
-            overflow-y: auto;
+            overflow: hidden;
             flex-shrink: 0;
             text-align: left;
+            display: flex;
+            flex-direction: column;
         }
         
         .sidebar-tab-info {
@@ -931,9 +933,8 @@
         }
 
         .profile-select-tree {
-            max-height: 600px;
+            flex: 1;
             overflow-y: auto;
-            margin-bottom: 1rem;
             background: var(--bg-input);
             border-radius: 8px;
             padding: 0.5rem;
