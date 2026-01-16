@@ -132,8 +132,15 @@
         .user-role-badge.enterprise { background: rgba(253, 151, 31, 0.2); color: #fd971f; }
         .user-role-badge.user { background: rgba(90, 154, 217, 0.2); color: var(--accent-blue); }
 
+        .header-right-section {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.5rem;
+            margin-left: auto;
+        }
         .view-toggle { display: flex; gap: 0.5rem; }
-        .user-info-bar { margin-left: auto; }
+        .user-info-bar { display: flex; align-items: center; gap: 1rem; }
         .view-btn {
             padding: 0.5rem 1rem;
             background: var(--bg-input);
@@ -4725,25 +4732,27 @@
             <div class="header-text">
                 <h1>PROFILE IQ</h1>
             </div>
-            <div class="view-toggle">
-                <button class="view-btn active" id="dashboardViewBtn" onclick="showDashboardView()">📊 Dashboard</button>
-                {% if role == 'admin' or role == 'enterprise' %}
-                <button class="view-btn" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
-                {% endif %}
-                {% if role == 'admin' %}
-                <button class="view-btn" id="adminViewBtn" onclick="showAdminView()">🔐 Admin</button>
-                {% endif %}
-            </div>
-            <div class="user-info-bar">
-                <div class="credits-display" id="creditsDisplay">
-                    <span class="credits-icon">💳</span>
-                    <span class="credits-label">Credits:</span>
-                    <span class="credits-value" id="creditsValue">{{ 'Unlimited' if credits == -1 else credits }}</span>
+            <div class="header-right-section">
+                <div class="user-info-bar">
+                    <div class="credits-display" id="creditsDisplay">
+                        <span class="credits-icon">💳</span>
+                        <span class="credits-label">Credits:</span>
+                        <span class="credits-value" id="creditsValue">{{ 'Unlimited' if credits == -1 else credits }}</span>
+                    </div>
+                    <div class="user-menu">
+                        <span class="user-name">👤 {{ username }}</span>
+                        <span class="user-role-badge {{ role }}">{{ role }}</span>
+                        <a href="/logout" class="header-btn logout-btn">Logout</a>
+                    </div>
                 </div>
-                <div class="user-menu">
-                    <span class="user-name">👤 {{ username }}</span>
-                    <span class="user-role-badge {{ role }}">{{ role }}</span>
-                    <a href="/logout" class="header-btn logout-btn">Logout</a>
+                <div class="view-toggle">
+                    <button class="view-btn active" id="dashboardViewBtn" onclick="showDashboardView()">📊 Dashboard</button>
+                    {% if role == 'admin' or role == 'enterprise' %}
+                    <button class="view-btn" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
+                    {% endif %}
+                    {% if role == 'admin' %}
+                    <button class="view-btn" id="adminViewBtn" onclick="showAdminView()">🔐 Admin</button>
+                    {% endif %}
                 </div>
             </div>
         </header>
