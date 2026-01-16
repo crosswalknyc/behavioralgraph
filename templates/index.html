@@ -3950,12 +3950,28 @@
             border-color: var(--accent-blue);
         }
 
+        /* Section descriptions */
+        .section-description {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin: 0.25rem 0 0 0;
+            line-height: 1.4;
+        }
+        .tab-header {
+            margin-bottom: 1rem;
+        }
+        .tab-header h2 {
+            margin: 0 0 0.25rem 0;
+            font-size: 1.25rem;
+        }
+        
         /* Location Tab */
         .location-header {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            align-items: flex-start;
             margin-bottom: 1rem;
+            gap: 0.25rem;
         }
         .location-header h2 { margin: 0; }
         .location-stats {
@@ -5630,6 +5646,10 @@
 
             <!-- Demographics Tab -->
             <div id="tab-demographics" class="tab-content">
+                <div class="tab-header">
+                    <h2>👥 Demographics</h2>
+                    <p class="section-description">Audience breakdown by gender, age, income. <span style="color: #10b981;">Green = over-indexes</span> | <span style="color: #ef4444;">Red = under-indexes</span>. Second % = Gen Pop baseline.</p>
+                </div>
                 <div class="demo-main">
                         <div class="stats-row">
                             <div class="stat-card has-tooltip" data-tooltip="Sample Size: Number of matched respondents in this profile. Larger samples (10,000+) = higher confidence. Calculated from unique user IDs matching search criteria.">
@@ -5711,6 +5731,10 @@
 
             <!-- Behavioral Tab -->
             <div id="tab-behavioral" class="tab-content">
+                <div class="tab-header">
+                    <h2>📈 Behavioral</h2>
+                    <p class="section-description">What your audience does, watches, buys. First % = profile, Second % = Gen Pop. <span style="color: #10b981;">Green = over-indexes</span> | <span style="color: #ef4444;">Red = under-indexes</span>.</p>
+                </div>
                 <!-- Behavioral Insights Row -->
                 <div class="behavioral-insights-row" id="behavioralInsightsRow">
                     <div class="behavioral-insight-card highlight">
@@ -5755,6 +5779,10 @@
 
             <!-- Interests Tab -->
             <div id="tab-interests" class="tab-content">
+                <div class="tab-header">
+                    <h2>💡 Interests</h2>
+                    <p class="section-description">What your audience is passionate about. <span style="color: #10b981;">100+ = over-indexes</span> | <span style="color: #ef4444;">&lt;100 = under-indexes</span>.</p>
+                </div>
                 <!-- Interests Insights Summary -->
                 <div class="interests-insights-row" id="interestsInsightsRow">
                     <div class="insight-card highlight">
@@ -5847,6 +5875,7 @@
             <div id="tab-location" class="tab-content">
                 <div class="location-header">
                     <h2>📍 Geographic Distribution</h2>
+                    <p class="section-description">Where your audience lives. Darker = higher concentration. <span style="color: #10b981;">100+ = over-indexes</span> | <span style="color: #ef4444;">&lt;100 = under-indexes</span>.</p>
                     <div class="location-stats" id="locationStats"></div>
                 </div>
                 
@@ -5903,9 +5932,9 @@
             <!-- Affinity Map Tab -->
             <div id="tab-affinity" class="tab-content">
                 <div class="affinity-container">
-                    <div class="affinity-header">
+                    <div class="tab-header">
                         <h2>🔗 Audience Affinity Map</h2>
-                        <p>Discover brands, shows, and talent that share audiences with this profile</p>
+                        <p class="section-description">Discover brands, shows, and talent that share audiences. <span style="color: #fbbf24;">100-199 = moderate</span> | <span style="color: #10b981;">200-499 = strong</span> | <span style="color: #10b981; font-weight: bold;">500+ = exceptional</span>.</p>
                     </div>
                     
                     <!-- Affinity Insights Summary -->
@@ -5982,9 +6011,9 @@
             <!-- Sponsorship Match Tab -->
             <div id="tab-sponsorship" class="tab-content">
                 <div class="sponsorship-container">
-                    <div class="sponsorship-header">
+                    <div class="tab-header">
                         <h2>💰 Sponsorship Match Finder</h2>
-                        <p>Identify brand categories and companies that align with this audience</p>
+                        <p class="section-description">Identify brand partners that align with this audience. <span style="color: #ef4444;">&lt;100 = weak</span> | <span style="color: #fbbf24;">100-130 = moderate</span> | <span style="color: #10b981;">130+ = strong fit</span>.</p>
                     </div>
                     
                     <!-- Executive Summary Row -->
@@ -6134,9 +6163,9 @@
             <!-- Media Optimizer Tab -->
             <div id="tab-media" class="tab-content">
                 <div class="media-container">
-                    <div class="media-header">
+                    <div class="tab-header">
                         <h2>📺 Media Channel Optimizer</h2>
-                        <p>Find the best channels and platforms to reach this audience</p>
+                        <p class="section-description">Find the best channels and platforms to reach this audience. <span style="color: #10b981;">Higher index = better reach efficiency</span>.</p>
                     </div>
                     
                     <!-- Channel Reach Analysis - FIRST -->
@@ -6398,6 +6427,10 @@
             <!-- Top Insights Tab -->
             <div id="tab-insights" class="tab-content active">
                 <div class="insights-container">
+                    <div class="tab-header">
+                        <h2>🔬 Deep Insights</h2>
+                        <p class="section-description">Deep-dive analysis across behavioral patterns, media consumption, and activation opportunities.</p>
+                    </div>
                     <!-- Insights Sub-tabs -->
                     <div class="insights-tabs">
                         <button class="insights-tab active" onclick="showInsightsTab('summary')">📋 Summary</button>
