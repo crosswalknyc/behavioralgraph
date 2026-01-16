@@ -179,6 +179,54 @@
         .user-table tr:hover {
             background: rgba(90, 154, 217, 0.05);
         }
+        
+        .admin-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: white;
+            overflow: hidden;
+            border: 2px solid var(--border-color);
+        }
+        
+        .admin-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .admin-avatar-initials {
+            text-transform: uppercase;
+        }
+        
+        .user-avatar-cell {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .admin-avatar-upload {
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .admin-avatar-upload:hover::after {
+            content: '📷';
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+        }
 
         .badge {
             display: inline-block;
@@ -740,6 +788,7 @@
                     <table class="user-table">
                         <thead>
                             <tr>
+                                <th style="width: 50px;"></th>
                                 <th>Username</th>
                                 <th>Company</th>
                                 <th>Department</th>
@@ -1048,8 +1097,17 @@
                 const company = user.company || '-';
                 const department = user.department || '-';
                 
+                const avatarHtml = user.profile_picture 
+                    ? `<img src="${user.profile_picture}" alt="${username}">`
+                    : `<span class="admin-avatar-initials">${username.substring(0, 2)}</span>`;
+                
                 const row = document.createElement('tr');
                 row.innerHTML = `
+                    <td>
+                        <div class="admin-avatar admin-avatar-upload" onclick="uploadUserAvatar('${username}')" title="Click to change avatar">
+                            ${avatarHtml}
+                        </div>
+                    </td>
                     <td>
                         <a href="#" class="user-link" onclick="showUserDetails('${username}'); return false;">
                             <strong>${username}</strong>
@@ -1918,6 +1976,53 @@
             } catch (error) {
                 showToast('Network error', true);
             }
+        }
+        
+        // ============================================
+        // PROFILE PICTURE UPLOAD FOR ADMIN
+        // ============================================
+        
+        function uploadUserAvatar(username) {
+            // Create a hidden file input
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            
+            input.onchange = async function() {
+                if (!this.files || !this.files[0]) return;
+                
+                const file = this.files[0];
+                
+                // Check file size (500KB max)
+                if (file.size > 500 * 1024) {
+                    showToast('File too large. Maximum size is 500KB.', true);
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('username', username);
+                
+                try {
+                    const response = await fetch('/api/profile-picture', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        showToast(`Profile picture updated for ${username}!`);
+                        loadUsers(); // Refresh the user list
+                    } else {
+                        showToast('Error: ' + data.error, true);
+                    }
+                } catch (e) {
+                    showToast('Upload failed: ' + e.message, true);
+                }
+            };
+            
+            input.click();
         }
     </script>
 </body>

@@ -87,9 +87,128 @@
             gap: 0.75rem;
         }
 
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+            cursor: pointer;
+            overflow: hidden;
+            border: 2px solid var(--border-color);
+            transition: all 0.2s;
+            position: relative;
+        }
+        
+        .user-avatar:hover {
+            border-color: var(--accent-lime);
+            transform: scale(1.05);
+        }
+        
+        .user-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .user-avatar-initials {
+            text-transform: uppercase;
+        }
+
         .user-name {
             font-size: 0.85rem;
             color: var(--text-secondary);
+        }
+        
+        /* Profile Picture Upload Modal */
+        .avatar-upload-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+        
+        .avatar-upload-modal.open {
+            display: flex;
+        }
+        
+        .avatar-upload-content {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+        
+        .avatar-upload-content h3 {
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+        
+        .avatar-preview {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            margin: 1rem auto;
+            background: var(--bg-input);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border: 3px solid var(--border-color);
+        }
+        
+        .avatar-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .avatar-preview-initials {
+            font-size: 2.5rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        
+        .avatar-upload-input {
+            display: none;
+        }
+        
+        .avatar-upload-btn {
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin: 0.5rem;
+        }
+        
+        .avatar-upload-btn:hover {
+            background: var(--accent-cyan);
+        }
+        
+        .avatar-upload-btn.secondary {
+            background: var(--bg-input);
+            color: var(--text-secondary);
+        }
+        
+        .avatar-upload-btn.danger {
+            background: var(--accent-red);
         }
 
         .header-btn {
@@ -4755,7 +4874,14 @@
                         <span class="credits-value" id="creditsValue">{{ 'Unlimited' if credits == -1 else credits }}</span>
                     </div>
                     <div class="user-menu">
-                        <span class="user-name">👤 {{ username }}</span>
+                        <div class="user-avatar" onclick="openAvatarUpload()" title="Click to change profile picture">
+                            {% if profile_picture %}
+                            <img src="{{ profile_picture }}" alt="Profile">
+                            {% else %}
+                            <span class="user-avatar-initials">{{ username[:2] }}</span>
+                            {% endif %}
+                        </div>
+                        <span class="user-name">{{ username }}</span>
                         <span class="user-role-badge {{ role }}">{{ role }}</span>
                         <a href="/logout" class="header-btn logout-btn">Logout</a>
                     </div>
@@ -15214,6 +15340,125 @@
             btn.disabled = false;
             btn.textContent = '🔄';
         }
+        
+        // ============================================================================
+        // PROFILE PICTURE UPLOAD
+        // ============================================================================
+        
+        function openAvatarUpload() {
+            document.getElementById('avatarUploadModal').classList.add('open');
+            updateAvatarPreview();
+        }
+        
+        function closeAvatarUpload() {
+            document.getElementById('avatarUploadModal').classList.remove('open');
+        }
+        
+        function updateAvatarPreview() {
+            const preview = document.getElementById('avatarPreview');
+            const currentPic = '{{ profile_picture }}';
+            if (currentPic) {
+                preview.innerHTML = `<img src="${currentPic}" alt="Current avatar">`;
+            } else {
+                preview.innerHTML = `<span class="avatar-preview-initials">{{ username[:2] }}</span>`;
+            }
+        }
+        
+        function triggerAvatarUpload() {
+            document.getElementById('avatarFileInput').click();
+        }
+        
+        async function handleAvatarUpload(input) {
+            if (!input.files || !input.files[0]) return;
+            
+            const file = input.files[0];
+            
+            // Check file size (500KB max)
+            if (file.size > 500 * 1024) {
+                alert('File too large. Maximum size is 500KB.');
+                return;
+            }
+            
+            // Preview the image
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('avatarPreview').innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+            };
+            reader.readAsDataURL(file);
+            
+            // Upload to server
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch('/api/profile-picture', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update the header avatar
+                    const headerAvatar = document.querySelector('.user-avatar');
+                    headerAvatar.innerHTML = `<img src="${data.profile_picture}" alt="Profile">`;
+                    alert('Profile picture updated!');
+                    closeAvatarUpload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('Upload failed: ' + e.message);
+            }
+        }
+        
+        async function removeAvatar() {
+            if (!confirm('Remove your profile picture?')) return;
+            
+            try {
+                const response = await fetch('/api/profile-picture', {
+                    method: 'DELETE',
+                    credentials: 'same-origin'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update the header avatar to initials
+                    const headerAvatar = document.querySelector('.user-avatar');
+                    headerAvatar.innerHTML = `<span class="user-avatar-initials">{{ username[:2] }}</span>`;
+                    updateAvatarPreview();
+                    alert('Profile picture removed.');
+                    closeAvatarUpload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('Failed to remove: ' + e.message);
+            }
+        }
     </script>
+    
+    <!-- Profile Picture Upload Modal -->
+    <div id="avatarUploadModal" class="avatar-upload-modal" onclick="if(event.target === this) closeAvatarUpload()">
+        <div class="avatar-upload-content">
+            <h3>📷 Profile Picture</h3>
+            <div class="avatar-preview" id="avatarPreview">
+                {% if profile_picture %}
+                <img src="{{ profile_picture }}" alt="Current avatar">
+                {% else %}
+                <span class="avatar-preview-initials">{{ username[:2] }}</span>
+                {% endif %}
+            </div>
+            <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 1rem;">Click to upload a new picture (PNG, JPG, GIF - max 500KB)</p>
+            <input type="file" id="avatarFileInput" class="avatar-upload-input" accept="image/*" onchange="handleAvatarUpload(this)">
+            <div>
+                <button class="avatar-upload-btn" onclick="triggerAvatarUpload()">📤 Upload New</button>
+                <button class="avatar-upload-btn danger" onclick="removeAvatar()">🗑️ Remove</button>
+                <button class="avatar-upload-btn secondary" onclick="closeAvatarUpload()">Cancel</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
