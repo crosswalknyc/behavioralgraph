@@ -2899,48 +2899,68 @@ def set_profile_image():
     """Set a custom profile image (upload or URL)."""
     global profile_image_cache, profile_image_cache_dirty
     from datetime import datetime
+    import uuid
     
     try:
         profile_name = None
         image_url = None
+        
+        print(f"📸 Profile image request - files: {list(request.files.keys())}, form: {dict(request.form)}")
         
         # Handle file upload
         if 'file' in request.files:
             file = request.files['file']
             profile_name = request.form.get('profile_name')
             
+            print(f"   File upload: {file.filename}, profile: {profile_name}")
+            
             if file and file.filename:
-                # Validate file
-                if file.content_length and file.content_length > 2 * 1024 * 1024:
+                # Read file data first (to avoid stream issues)
+                file_data = file.read()
+                file_size = len(file_data)
+                
+                # Validate file size
+                if file_size > 2 * 1024 * 1024:
                     return jsonify({'success': False, 'error': 'File too large (max 2MB)'})
                 
                 # Upload to S3
-                import uuid
                 ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else 'jpg'
                 if ext not in ['jpg', 'jpeg', 'png', 'webp', 'gif']:
                     ext = 'jpg'
                 
+                content_type = f'image/{ext}'
+                if ext == 'jpg':
+                    content_type = 'image/jpeg'
+                
                 s3_key = f"profile-images/{uuid.uuid4().hex}.{ext}"
                 
-                s3_client.upload_fileobj(
-                    file,
-                    S3_BUCKET,
-                    s3_key,
-                    ExtraArgs={
-                        'ContentType': f'image/{ext}',
-                        'ACL': 'public-read'
-                    }
-                )
+                print(f"   Uploading to S3: {s3_key}, size: {file_size}")
                 
-                image_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{s3_key}"
+                try:
+                    s3_client.put_object(
+                        Bucket=S3_BUCKET,
+                        Key=s3_key,
+                        Body=file_data,
+                        ContentType=content_type
+                    )
+                    image_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{s3_key}"
+                    print(f"   ✅ Uploaded to: {image_url}")
+                except Exception as s3_err:
+                    print(f"   ❌ S3 upload failed: {s3_err}")
+                    return jsonify({'success': False, 'error': f'S3 upload failed: {str(s3_err)}'})
         else:
             # Handle JSON with URL
             data = request.get_json()
-            profile_name = data.get('profile_name')
-            image_url = data.get('image_url')
+            if data:
+                profile_name = data.get('profile_name')
+                image_url = data.get('image_url')
+                print(f"   URL mode: profile={profile_name}, url={image_url}")
         
-        if not profile_name or not image_url:
-            return jsonify({'success': False, 'error': 'Profile name and image required'})
+        if not profile_name:
+            return jsonify({'success': False, 'error': 'Profile name required'})
+        
+        if not image_url:
+            return jsonify({'success': False, 'error': 'Image URL or file required'})
         
         # Update cache with custom image
         cache_key = profile_name.lower().strip()
@@ -2954,6 +2974,8 @@ def set_profile_image():
         profile_image_cache_dirty = True
         save_profile_image_cache()
         
+        print(f"   ✅ Saved to cache: {cache_key} -> {image_url}")
+        
         return jsonify({
             'success': True,
             'image_url': image_url,
@@ -2961,6 +2983,9 @@ def set_profile_image():
         })
         
     except Exception as e:
+        print(f"   ❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
 
 
