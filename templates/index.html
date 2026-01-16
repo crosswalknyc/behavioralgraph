@@ -305,14 +305,6 @@
         #formView { display: none; flex: 1; overflow-y: auto; }
         #dashboardView { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
         #subscriberIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
-        #adminView { display: none; flex: 1; overflow: hidden; }
-        
-        #adminView iframe {
-            width: 100%;
-            height: calc(100vh - 80px);
-            border: none;
-            border-radius: 0;
-        }
         
         /* Disabled view buttons */
         .view-btn.disabled {
@@ -5241,7 +5233,7 @@
                     <button class="view-btn" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
                     {% endif %}
                     {% if role == 'admin' %}
-                    <button class="view-btn" id="adminViewBtn" onclick="showAdminView()">🔐 Admin</button>
+                    <a href="/admin" class="view-btn" id="adminViewBtn">🔐 Admin</a>
                     {% endif %}
                 </div>
             </div>
@@ -7148,12 +7140,6 @@
             </div>
         </div><!-- End subscriberIQView -->
 
-        <!-- ADMIN VIEW (only for admin users) -->
-        {% if role == 'admin' %}
-        <div id="adminView">
-            <iframe src="/admin" id="adminFrame"></iframe>
-        </div>
-        {% endif %}
     </div>
 
     <script>
@@ -7234,16 +7220,12 @@
             formView.style.display = 'block';
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'none';
-            const adminView = document.getElementById('adminView');
-            if (adminView) adminView.style.display = 'none';
             
             // Update button states
             const formBtn = document.getElementById('formViewBtn');
             if (formBtn) formBtn.classList.add('active');
             document.getElementById('profileIQTab').classList.remove('active');
             document.getElementById('subscriberIQTab').classList.remove('active');
-            const adminBtn = document.getElementById('adminViewBtn');
-            if (adminBtn) adminBtn.classList.remove('active');
         }
 
         function showDashboardView() {
@@ -7251,22 +7233,6 @@
             showProfileIQ();
         }
 
-        function showAdminView() {
-            const formView = document.getElementById('formView');
-            if (formView) formView.style.display = 'none';
-            document.getElementById('dashboardView').style.display = 'none';
-            document.getElementById('subscriberIQView').style.display = 'none';
-            const adminView = document.getElementById('adminView');
-            if (adminView) adminView.style.display = 'flex';
-            
-            // Update button states
-            const formBtn = document.getElementById('formViewBtn');
-            if (formBtn) formBtn.classList.remove('active');
-            document.getElementById('profileIQTab').classList.remove('active');
-            document.getElementById('subscriberIQTab').classList.remove('active');
-            const adminBtn = document.getElementById('adminViewBtn');
-            if (adminBtn) adminBtn.classList.add('active');
-        }
         
         // Main IQ Tab Switching
         function showProfileIQ() {
@@ -7278,14 +7244,10 @@
             document.getElementById('subscriberIQTab').classList.remove('active');
             const formBtn = document.getElementById('formViewBtn');
             if (formBtn) formBtn.classList.remove('active');
-            const adminBtn = document.getElementById('adminViewBtn');
-            if (adminBtn) adminBtn.classList.remove('active');
             
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'flex';
             document.getElementById('subscriberIQView').style.display = 'none';
-            const adminView = document.getElementById('adminView');
-            if (adminView) adminView.style.display = 'none';
             const formView = document.getElementById('formView');
             if (formView) formView.style.display = 'none';
             
@@ -7302,14 +7264,10 @@
             document.getElementById('subscriberIQTab').classList.add('active');
             const formBtn = document.getElementById('formViewBtn');
             if (formBtn) formBtn.classList.remove('active');
-            const adminBtn = document.getElementById('adminViewBtn');
-            if (adminBtn) adminBtn.classList.remove('active');
             
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'flex';
-            const adminView = document.getElementById('adminView');
-            if (adminView) adminView.style.display = 'none';
             const formView = document.getElementById('formView');
             if (formView) formView.style.display = 'none';
         }
