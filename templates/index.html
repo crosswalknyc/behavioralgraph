@@ -492,6 +492,7 @@
         .tab-btn .tab-icon {
             font-size: 1.1rem;
             line-height: 1;
+            margin-right: 0.35rem;
         }
         
         .tab-btn .tab-label {
@@ -499,6 +500,13 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
             white-space: nowrap;
+        }
+        
+        /* Global icon spacing */
+        h3 span:first-child:not(.module-action-btns),
+        .insight-card h3 span:first-child,
+        .media-card h3::before {
+            margin-right: 0.4rem;
         }
 
         .tab-btn:hover {
@@ -906,9 +914,10 @@
         }
 
         .sidebar-header-section h3 {
-            font-size: 0.9rem;
+            font-size: 1.2rem;
             color: var(--accent-cyan);
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.75rem;
+            font-weight: 700;
         }
 
         .sidebar-search {
