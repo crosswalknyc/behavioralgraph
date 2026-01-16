@@ -3138,19 +3138,29 @@ def process_s3_file_metadata(key, obj):
         head_response = s3_client.head_object(Bucket=S3_BUCKET, Key=key)
         file_size = head_response['ContentLength']
         
-        # Read last 100KB where BRAND CATEGORY row usually is
-        start_byte = max(0, file_size - 100000)
+        # Read last 200KB where BRAND CATEGORY row usually is (increased for safety)
+        start_byte = max(0, file_size - 200000)
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=key, Range=f'bytes={start_byte}-{file_size}')
         content = response['Body'].read().decode('utf-8', errors='ignore')
         
         for line in content.split('\n'):
-            if line.startswith('BRAND CATEGORY,'):
+            line_upper = line.strip().upper()
+            # Check multiple variations of BRAND CATEGORY
+            if line_upper.startswith('BRAND CATEGORY,') or line_upper.startswith('BRAND CATEGORY ') or line_upper.startswith('"BRAND CATEGORY"'):
                 parts = line.split(',')
-                if len(parts) >= 2 and parts[1].strip():
-                    cat = parts[1].strip().upper()
+                if len(parts) >= 2:
+                    cat = parts[1].strip().strip('"').upper()
+                    if cat and cat != 'BRAND CATEGORY':
+                        category = cat
+                        break
+            # Also check for BRAND_CATEGORY variant
+            elif line_upper.startswith('BRAND_CATEGORY,'):
+                parts = line.split(',')
+                if len(parts) >= 2:
+                    cat = parts[1].strip().strip('"').upper()
                     if cat:
                         category = cat
-                break
+                        break
     except Exception as e:
         print(f"Error reading category from {key}: {e}")
     
