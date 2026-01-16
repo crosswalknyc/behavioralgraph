@@ -757,9 +757,10 @@
             padding: 1rem;
         }
         
-        /* Dashboard Layout - Sidebar + Content */
+        /* Dashboard Layout - Content + Sidebar (sidebar on right) */
         .dashboard-layout {
             display: flex;
+            flex-direction: row-reverse;
             gap: 1rem;
             flex: 1;
             overflow: hidden;
@@ -773,6 +774,7 @@
             padding: 1rem;
             overflow-y: auto;
             flex-shrink: 0;
+            text-align: left;
         }
         
         .sidebar-tab-info {
@@ -792,7 +794,8 @@
             flex: 1;
             min-width: 0;
             overflow-y: auto;
-            padding-right: 0.5rem;
+            padding-left: 0;
+            text-align: left;
         }
         
         .dashboard-empty-state {
