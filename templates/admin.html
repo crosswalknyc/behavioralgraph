@@ -1698,8 +1698,15 @@
             const fileInput = document.getElementById('profileImageFile');
             const urlInput = document.getElementById('profileImageUrl').value.trim();
             
+            console.log('Saving profile image:', { profileName, hasFile: !!(fileInput.files && fileInput.files[0]), urlInput });
+            
             if (!profileName) {
                 showToast('No profile selected', true);
+                return;
+            }
+            
+            if (!fileInput.files?.length && !urlInput) {
+                showToast('Please select an image or enter a URL', true);
                 return;
             }
             
@@ -1712,26 +1719,31 @@
                     formData.append('file', fileInput.files[0]);
                     formData.append('profile_name', profileName);
                     
+                    console.log('Uploading file:', fileInput.files[0].name);
+                    
                     response = await fetch('/api/admin/profile-image', {
                         method: 'POST',
+                        credentials: 'same-origin',
                         body: formData
                     });
-                } else if (urlInput) {
+                } else {
                     // Set URL
+                    console.log('Setting URL:', urlInput);
+                    
                     response = await fetch('/api/admin/profile-image', {
                         method: 'POST',
+                        credentials: 'same-origin',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             profile_name: profileName,
                             image_url: urlInput
                         })
                     });
-                } else {
-                    showToast('Please select an image or enter a URL', true);
-                    return;
                 }
                 
+                console.log('Response status:', response.status);
                 const data = await response.json();
+                console.log('Response data:', data);
                 
                 if (data.success) {
                     showToast('Profile image saved!');
@@ -1741,6 +1753,7 @@
                     showToast(data.error || 'Failed to save image', true);
                 }
             } catch (e) {
+                console.error('Save error:', e);
                 showToast('Error saving image: ' + e.message, true);
             }
         }
