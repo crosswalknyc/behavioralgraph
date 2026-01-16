@@ -5338,7 +5338,7 @@
                     <div style="margin-top: 1.5rem; margin-bottom: 0.5rem;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <h3 style="font-size: 0.85rem; color: var(--text-secondary);">Results Library</h3>
-                            <button class="btn btn-small" style="background: var(--bg-dark); padding: 0.25rem 0.5rem;" onclick="refreshCache()" id="refreshBtn" title="Full refresh">🔄</button>
+                            <button class="btn btn-small" style="background: var(--bg-dark); padding: 0.25rem 0.5rem;" onclick="refreshCache(true)" id="refreshBtn" title="Full refresh (re-extracts all categories)">🔄</button>
                         </div>
                         <div id="cacheStatus" style="margin-top: 0.25rem;"></div>
                     </div>
@@ -15779,14 +15779,20 @@
             loadWorkspaceData();
         }
 
-        async function refreshCache() {
+        async function refreshCache(fullRefresh = false) {
             const btn = document.getElementById('refreshBtn');
             const cacheStatus = document.getElementById('cacheStatus');
             btn.disabled = true;
             btn.textContent = '⏳';
             
+            // Use full refresh to re-extract all categories
+            const endpoint = fullRefresh ? '/api/full-refresh-cache' : '/api/refresh-cache';
+            if (fullRefresh) {
+                cacheStatus.innerHTML = '<span style="color: var(--accent-cyan);">🔄 Full rebuild... this may take a minute</span>';
+            }
+            
             try {
-                const response = await fetch('/api/refresh-cache', { credentials: 'same-origin' });
+                const response = await fetch(endpoint, { credentials: 'same-origin' });
                 
                 // Handle authentication errors
                 if (response.status === 401) {
