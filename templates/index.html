@@ -314,52 +314,10 @@
             border-radius: 0;
         }
         
-        /* Main IQ Tabs */
-        .iq-tabs-container {
-            display: flex;
-            gap: 0.25rem;
-            margin-bottom: 0;
-            padding-left: 0.5rem;
-        }
-        .iq-tab {
-            padding: 0.6rem 1.5rem;
-            font-family: 'Space Mono', monospace;
-            font-size: 0.85rem;
-            font-weight: 600;
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-bottom: none;
-            border-radius: 8px 8px 0 0;
-            color: var(--text-secondary);
-            cursor: pointer;
-            transition: all 0.2s;
-            position: relative;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: -1px;
-        }
-        .iq-tab:hover {
-            color: var(--text-primary);
-            background: var(--bg-card);
-        }
-        .iq-tab.active {
-            color: var(--accent-lime);
-            background: var(--bg-card);
-            border-color: var(--accent-lime);
-            border-bottom: 1px solid var(--bg-card);
-            z-index: 1;
-        }
-        .iq-tab.disabled {
+        /* Disabled view buttons */
+        .view-btn.disabled {
             opacity: 0.35;
             cursor: not-allowed;
-        }
-        .iq-tab .tab-icon {
-            margin-right: 0.4rem;
-        }
-        
-        /* Tab content area border */
-        #dashboardView, #subscriberIQView {
-            border-top: 1px solid var(--accent-lime);
         }
         
         /* Subscriber IQ Dashboard */
@@ -5275,8 +5233,10 @@
                         <a href="/logout" class="header-btn logout-btn">Logout</a>
                     </div>
                 </div>
-                <div class="view-toggle">
-                    <button class="view-btn active" id="dashboardViewBtn" onclick="showDashboardView()">📊 Dashboard</button>
+                <div class="view-toggle" id="iqTabsContainer">
+                    <button class="view-btn active {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" onclick="showProfileIQ()" {% if not has_profile_iq_access %}disabled{% endif %}>🎯 Profile IQ</button>
+                    <button class="view-btn {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" onclick="showSubscriberIQ()" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</button>
+                    <button class="view-btn" id="dashboardViewBtn" onclick="showDashboardView()" style="display: none;">📊 Dashboard</button>
                     {% if role == 'admin' or role == 'enterprise' %}
                     <button class="view-btn" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
                     {% endif %}
@@ -5286,16 +5246,6 @@
                 </div>
             </div>
         </header>
-
-        <!-- Main IQ Dashboard Tabs -->
-        <div class="iq-tabs-container" id="iqTabsContainer">
-            <button class="iq-tab active {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" onclick="showProfileIQ()" {% if not has_profile_iq_access %}disabled{% endif %}>
-                <span class="tab-icon">🎯</span>Profile IQ
-            </button>
-            <button class="iq-tab {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" onclick="showSubscriberIQ()" {% if not has_subscriber_iq_access %}disabled{% endif %}>
-                <span class="tab-icon">👥</span>Subscriber IQ
-            </button>
-        </div>
 
         <!-- FORM VIEW -->
         <div id="formView">
@@ -7289,40 +7239,19 @@
             document.getElementById('subscriberIQView').style.display = 'none';
             const adminView = document.getElementById('adminView');
             if (adminView) adminView.style.display = 'none';
+            
+            // Update button states
             const formBtn = document.getElementById('formViewBtn');
             if (formBtn) formBtn.classList.add('active');
-            document.getElementById('dashboardViewBtn').classList.remove('active');
+            document.getElementById('profileIQTab').classList.remove('active');
+            document.getElementById('subscriberIQTab').classList.remove('active');
             const adminBtn = document.getElementById('adminViewBtn');
             if (adminBtn) adminBtn.classList.remove('active');
-            
-            // Hide IQ tabs when in form view
-            const iqTabs = document.getElementById('iqTabsContainer');
-            if (iqTabs) iqTabs.style.display = 'none';
         }
 
         function showDashboardView() {
-            const formView = document.getElementById('formView');
-            if (formView) formView.style.display = 'none';
-            document.getElementById('dashboardView').style.display = 'flex';
-            document.getElementById('subscriberIQView').style.display = 'none';
-            const adminView = document.getElementById('adminView');
-            if (adminView) adminView.style.display = 'none';
-            const formBtn = document.getElementById('formViewBtn');
-            if (formBtn) formBtn.classList.remove('active');
-            document.getElementById('dashboardViewBtn').classList.add('active');
-            const adminBtn = document.getElementById('adminViewBtn');
-            if (adminBtn) adminBtn.classList.remove('active');
-            
-            // Show IQ tabs when in dashboard view
-            const iqTabs = document.getElementById('iqTabsContainer');
-            if (iqTabs) iqTabs.style.display = 'flex';
-            
-            // Set Profile IQ tab as active
-            document.getElementById('profileIQTab').classList.add('active');
-            document.getElementById('subscriberIQTab').classList.remove('active');
-            
-            // Auto-load profiles when switching to dashboard
-            loadDashboardProfiles();
+            // This now just calls showProfileIQ for consistency
+            showProfileIQ();
         }
 
         function showAdminView() {
@@ -7332,15 +7261,14 @@
             document.getElementById('subscriberIQView').style.display = 'none';
             const adminView = document.getElementById('adminView');
             if (adminView) adminView.style.display = 'flex';
+            
+            // Update button states
             const formBtn = document.getElementById('formViewBtn');
             if (formBtn) formBtn.classList.remove('active');
-            document.getElementById('dashboardViewBtn').classList.remove('active');
+            document.getElementById('profileIQTab').classList.remove('active');
+            document.getElementById('subscriberIQTab').classList.remove('active');
             const adminBtn = document.getElementById('adminViewBtn');
             if (adminBtn) adminBtn.classList.add('active');
-            
-            // Hide IQ tabs when in admin view
-            const iqTabs = document.getElementById('iqTabsContainer');
-            if (iqTabs) iqTabs.style.display = 'none';
         }
         
         // Main IQ Tab Switching
@@ -7348,50 +7276,45 @@
             const profileTab = document.getElementById('profileIQTab');
             if (profileTab.classList.contains('disabled')) return;
             
+            // Update tab active states
             document.getElementById('profileIQTab').classList.add('active');
             document.getElementById('subscriberIQTab').classList.remove('active');
+            const formBtn = document.getElementById('formViewBtn');
+            if (formBtn) formBtn.classList.remove('active');
+            const adminBtn = document.getElementById('adminViewBtn');
+            if (adminBtn) adminBtn.classList.remove('active');
+            
+            // Show/hide views
             document.getElementById('dashboardView').style.display = 'flex';
             document.getElementById('subscriberIQView').style.display = 'none';
             const adminView = document.getElementById('adminView');
             if (adminView) adminView.style.display = 'none';
+            const formView = document.getElementById('formView');
+            if (formView) formView.style.display = 'none';
             
-            // Show IQ tabs
-            const iqTabs = document.getElementById('iqTabsContainer');
-            if (iqTabs) iqTabs.style.display = 'flex';
-            
-            // Show Profile IQ header buttons
-            const viewToggle = document.querySelector('.view-toggle');
-            if (viewToggle) viewToggle.style.display = 'flex';
-            
-            // Update header buttons
-            document.getElementById('dashboardViewBtn').classList.add('active');
-            const adminBtn = document.getElementById('adminViewBtn');
-            if (adminBtn) adminBtn.classList.remove('active');
+            // Load profiles
+            loadDashboardProfiles();
         }
         
         function showSubscriberIQ() {
             const subscriberTab = document.getElementById('subscriberIQTab');
             if (subscriberTab.classList.contains('disabled')) return;
             
+            // Update tab active states
             document.getElementById('profileIQTab').classList.remove('active');
             document.getElementById('subscriberIQTab').classList.add('active');
+            const formBtn = document.getElementById('formViewBtn');
+            if (formBtn) formBtn.classList.remove('active');
+            const adminBtn = document.getElementById('adminViewBtn');
+            if (adminBtn) adminBtn.classList.remove('active');
+            
+            // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'flex';
             const adminView = document.getElementById('adminView');
             if (adminView) adminView.style.display = 'none';
-            
-            // Show IQ tabs
-            const iqTabs = document.getElementById('iqTabsContainer');
-            if (iqTabs) iqTabs.style.display = 'flex';
-            
-            // Hide Profile IQ specific buttons when on Subscriber IQ
             const formView = document.getElementById('formView');
             if (formView) formView.style.display = 'none';
-            
-            // Update header buttons
-            document.getElementById('dashboardViewBtn').classList.add('active');
-            const adminBtn = document.getElementById('adminViewBtn');
-            if (adminBtn) adminBtn.classList.remove('active');
         }
 
         // Activity tracking helper (non-blocking)
