@@ -1207,8 +1207,28 @@
         let selectedFiles = new Set();
         let showingArchived = false;
 
+        // Profile image cache for admin
+        const profileImageCache = {};
+        
+        // Pre-load ALL profile images from server cache
+        async function preloadAllProfileImages() {
+            try {
+                const response = await fetch('/api/all-profile-images', { credentials: 'same-origin' });
+                const data = await response.json();
+                if (data.success && data.images) {
+                    Object.entries(data.images).forEach(([key, info]) => {
+                        profileImageCache[key.toLowerCase()] = info.url;
+                    });
+                    console.log(`✅ Pre-loaded ${data.count} profile images`);
+                }
+            } catch (e) {
+                console.log('Could not preload profile images:', e);
+            }
+        }
+        
         // Load data on page load
         document.addEventListener('DOMContentLoaded', () => {
+            preloadAllProfileImages(); // Start loading images immediately
             loadUsers();
             loadCategoriesAndRuns();
             loadContentFiles();

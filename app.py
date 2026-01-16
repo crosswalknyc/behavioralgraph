@@ -3257,6 +3257,29 @@ def get_image_cache_stats():
         'by_source': by_source
     })
 
+@app.route('/api/all-profile-images')
+@requires_auth
+def get_all_profile_images():
+    """Get all cached profile images at once for instant loading."""
+    if not profile_image_cache:
+        load_profile_image_cache()
+    
+    # Return all images that have URLs (exclude not_found entries)
+    images = {}
+    for key, value in profile_image_cache.items():
+        if value.get('image_url'):
+            images[key] = {
+                'url': value['image_url'],
+                'source': value.get('source', 'unknown'),
+                'is_custom': value.get('is_custom', False)
+            }
+    
+    return jsonify({
+        'success': True,
+        'images': images,
+        'count': len(images)
+    })
+
 def load_persisted_cache():
     """Load the S3 file cache from S3 storage."""
     global s3_cache
@@ -4164,8 +4187,16 @@ def async_cache_loader():
         # Load profile image cache
         try:
             load_profile_image_cache()
+            print(f"   ✅ Loaded {len(profile_image_cache)} cached images")
         except Exception as e:
             print(f"   ⚠️ Image cache load error: {e}")
+        
+        # IMMEDIATELY pre-fetch images for all profiles
+        print("🖼️ Starting automatic image prefetch...")
+        try:
+            prefetch_profile_images()
+        except Exception as e:
+            print(f"   ⚠️ Image prefetch error: {e}")
     
     cache_loading_complete = True
     print(f"🎉 Cache ready in {time.time()-start:.2f}s")
@@ -4294,7 +4325,8 @@ def prefetch_profile_images():
                     'cached_at': datetime.now().isoformat()
                 }
                 fetched += 1
-                print(f"   ✅ {profile_name}: {source}")
+                if fetched % 10 == 0:
+                    print(f"   ✅ Fetched {fetched} images...")
             else:
                 profile_image_cache[cache_key] = {
                     'not_found': True,
@@ -4304,16 +4336,21 @@ def prefetch_profile_images():
             
             profile_image_cache_dirty = True
             
+            # Save every 20 fetches to persist progress
+            if (fetched + failed) % 20 == 0:
+                save_profile_image_cache()
+            
             # Small delay to be nice to APIs
-            time_module.sleep(0.5)
+            time_module.sleep(0.3)
             
         except Exception as e:
             failed += 1
-            print(f"   ❌ {profile_name}: {e}")
+            if failed <= 5:  # Only log first few failures
+                print(f"   ❌ {profile_name}: {e}")
     
-    # Save cache
+    # Final save
     save_profile_image_cache()
-    print(f"🖼️ Image prefetch complete: {fetched} found, {skipped} cached, {failed} not found")
+    print(f"🖼️ Image prefetch complete: {fetched} found, {skipped} already cached, {failed} not found")
 
 
 def background_cache_checker():

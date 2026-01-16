@@ -7186,6 +7186,27 @@
 
         // Profile image cache to avoid repeated API calls
         const profileImageCache = {};
+        let allImagesLoaded = false;
+        
+        // Pre-load ALL profile images from server cache at startup
+        async function preloadAllProfileImages() {
+            try {
+                const response = await fetch('/api/all-profile-images', { credentials: 'same-origin' });
+                const data = await response.json();
+                if (data.success && data.images) {
+                    Object.entries(data.images).forEach(([key, info]) => {
+                        profileImageCache[key.toLowerCase()] = info.url;
+                    });
+                    console.log(`✅ Pre-loaded ${data.count} profile images from server cache`);
+                    allImagesLoaded = true;
+                }
+            } catch (e) {
+                console.log('Could not preload profile images:', e);
+            }
+        }
+        
+        // Start preloading images immediately
+        preloadAllProfileImages();
         
         async function fetchProfileImage(profileName, retryCount = 0) {
             const imageContainer = document.getElementById('dashProfileImage');
@@ -7196,10 +7217,13 @@
             imageContainer.classList.remove('loaded', 'loading');
             img.src = '';
             
-            // Check cache first
-            if (profileImageCache[profileName] && profileImageCache[profileName] !== 'pending') {
-                if (profileImageCache[profileName] !== 'none') {
-                    img.src = profileImageCache[profileName];
+            // Check cache first (normalize to lowercase for matching)
+            const cacheKey = profileName.toLowerCase().trim();
+            const cachedUrl = profileImageCache[profileName] || profileImageCache[cacheKey];
+            
+            if (cachedUrl && cachedUrl !== 'pending') {
+                if (cachedUrl !== 'none') {
+                    img.src = cachedUrl;
                     img.onload = () => imageContainer.classList.add('loaded');
                     img.onerror = () => imageContainer.classList.remove('loaded');
                 }
