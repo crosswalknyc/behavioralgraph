@@ -31,4 +31,15 @@ services:
         value: "PUBLIC"
       - key: SNOWFLAKE_ROLE
         value: "ACCOUNTADMIN"
+      # SMTP Email Configuration
+      - key: SMTP_SERVER
+        value: "smtp.gmail.com"
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        value: "no_reply@crosswalknyc.com"
+      - key: SMTP_PASSWORD
+        value: "Token7778"
+      - key: FROM_EMAIL
+        value: "no_reply@crosswalknyc.com"
     healthCheckPath: /api/health
