@@ -6524,6 +6524,9 @@
                 ? ageLabels.map(k => demographicsProjection.age?.[k] || 0)
                 : agePcts;
             
+            // Calculate max for x-axis with padding for labels (horizontal bar)
+            const ageMax = Math.max(...ageData) * 1.5; // 50% padding for horizontal labels
+            
             charts.age = new Chart(document.getElementById('ageChart'), {
                 type: 'bar',
                 data: { 
@@ -6533,7 +6536,8 @@
                 options: { 
                     indexAxis: 'y', 
                     responsive: true, 
-                    maintainAspectRatio: false, 
+                    maintainAspectRatio: false,
+                    layout: { padding: { right: 20 } },
                     plugins: { 
                         legend: { display: false },
                         datalabels: {
@@ -6543,7 +6547,6 @@
                             color: (ctx) => {
                                 const pct = agePcts[ctx.dataIndex] || 0;
                                 const genPop = ageGenPop[ctx.dataIndex] || 0;
-                                // Green if over-indexing (pct > genPop), red if under
                                 return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
                             },
                             formatter: (value, ctx) => {
@@ -6551,15 +6554,16 @@
                                 const genPop = ageGenPop[ctx.dataIndex] || 0;
                                 const genPopProj = Math.round((genPop / 100) * US_POPULATION);
                                 if (isProjection) {
-                                    // Show profile projection and Gen Pop projection
                                     return genPop > 0 ? `${formatNumber(Math.round(value))} (GP: ${formatNumber(genPopProj)})` : formatNumber(Math.round(value));
                                 }
-                                // Show profile % and Gen Pop %
                                 return genPop > 0 ? `${pct.toFixed(1)}% (GP: ${genPop.toFixed(1)}%)` : pct.toFixed(1) + '%';
                             }
                         }
                     }, 
-                    scales: { x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 10 } } } } 
+                    scales: { 
+                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' }, suggestedMax: ageMax }, 
+                        y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 10 } } } 
+                    } 
                 },
                 plugins: [ChartDataLabels]
             });
@@ -6670,12 +6674,16 @@
                 ? incomeLabels.map(k => demographicsProjection.income?.[k] || 0)
                 : incomePcts;
             
+            // Calculate max value for y-axis with padding for labels
+            const incomeMax = Math.max(...incomeData) * 1.35; // 35% padding for labels
+            
             charts.income = new Chart(document.getElementById('incomeChart'), {
                 type: 'bar',
                 data: { labels: incomeLabels, datasets: [{ data: incomeData, backgroundColor: '#66d9ef', borderRadius: 4 }] },
                 options: { 
                     responsive: true, 
-                    maintainAspectRatio: false, 
+                    maintainAspectRatio: false,
+                    layout: { padding: { top: 30 } },
                     plugins: { 
                         legend: { display: false },
                         datalabels: {
@@ -6685,7 +6693,6 @@
                             color: (ctx) => {
                                 const pct = incomePcts[ctx.dataIndex] || 0;
                                 const genPop = incomeGenPop[ctx.dataIndex] || 0;
-                                // Green if over-indexing (pct > genPop), red if under
                                 return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
                             },
                             formatter: (value, ctx) => {
@@ -6693,15 +6700,16 @@
                                 const genPop = incomeGenPop[ctx.dataIndex] || 0;
                                 const genPopProj = Math.round((genPop / 100) * US_POPULATION);
                                 if (isProjection) {
-                                    // Show profile projection and Gen Pop projection
                                     return genPop > 0 ? `${formatNumber(Math.round(value))}\n(GP: ${formatNumber(genPopProj)})` : formatNumber(Math.round(value));
                                 }
-                                // Show profile % and Gen Pop % 
                                 return genPop > 0 ? `${pct.toFixed(1)}%\n(GP: ${genPop.toFixed(1)}%)` : pct.toFixed(1) + '%';
                             }
                         }
                     }, 
-                    scales: { x: { grid: { display: false }, ticks: { color: '#8892b0', font: { size: 8 }, maxRotation: 45 } }, y: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } } } 
+                    scales: { 
+                        x: { grid: { display: false }, ticks: { color: '#8892b0', font: { size: 8 }, maxRotation: 45 } }, 
+                        y: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' }, suggestedMax: incomeMax } 
+                    } 
                 },
                 plugins: [ChartDataLabels]
             });
@@ -6712,12 +6720,14 @@
                 const eduGenPop = eduLabels.map(k => demographicsGenPop.education?.[k] || 0);
                 const eduPcts = Object.values(demographics.education);
                 const eduData = isProjection ? eduLabels.map(k => demographicsProjection.education?.[k] || 0) : eduPcts;
+                const eduMax = Math.max(...eduData) * 1.5; // 50% padding for labels
                 
                 charts.education = new Chart(document.getElementById('educationChart'), {
                     type: 'bar',
                     data: { labels: eduLabels, datasets: [{ data: eduData, backgroundColor: '#a6e22e', borderRadius: 4 }] },
                     options: { 
-                        indexAxis: 'y', responsive: true, maintainAspectRatio: false, 
+                        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                        layout: { padding: { right: 20 } },
                         plugins: { 
                             legend: { display: false }, 
                             datalabels: { 
@@ -6740,7 +6750,10 @@
                                 }
                             } 
                         }, 
-                        scales: { x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } }, y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 9 } } } } 
+                        scales: { 
+                            x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' }, suggestedMax: eduMax }, 
+                            y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 9 } } } 
+                        } 
                     },
                     plugins: [ChartDataLabels]
                 });
