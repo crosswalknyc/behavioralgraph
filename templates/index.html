@@ -1317,70 +1317,6 @@
         }
 
         /* Behavioral Tab */
-        .behavioral-insights-row {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1rem;
-            margin-bottom: 1rem;
-        }
-        @media (max-width: 1200px) {
-            .behavioral-insights-row { grid-template-columns: 1fr; }
-        }
-        .behavioral-insight-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 1rem;
-        }
-        .behavioral-insight-card.highlight {
-            border-color: var(--accent-lime);
-            background: linear-gradient(135deg, rgba(200,230,0,0.05), transparent);
-        }
-        .behavioral-insight-card h4 {
-            margin: 0 0 0.75rem 0;
-            font-size: 0.85rem;
-            color: var(--accent-lime);
-        }
-        .behavioral-insight-content {
-            font-size: 0.8rem;
-            line-height: 1.5;
-        }
-        .behavioral-insight-item {
-            display: flex;
-            align-items: flex-start;
-            gap: 0.5rem;
-            margin-bottom: 0.5rem;
-            padding: 0.4rem 0.5rem;
-            background: var(--bg-input);
-            border-radius: 4px;
-        }
-        .behavioral-insight-item .icon { font-size: 0.9rem; }
-        .behavioral-insight-item .text { flex: 1; font-size: 0.75rem; }
-        .behavioral-insight-item .value {
-            font-weight: 700;
-            white-space: nowrap;
-            font-size: 0.75rem;
-        }
-        .behavioral-insight-item .value.positive { color: #10b981; }
-        .behavioral-insight-item .value.negative { color: #ef4444; }
-        .behavioral-top-cat {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.4rem 0.5rem;
-            background: var(--bg-input);
-            border-radius: 4px;
-            margin-bottom: 0.35rem;
-            font-size: 0.75rem;
-        }
-        .behavioral-top-cat .cat-name { flex: 1; }
-        .behavioral-top-cat .cat-stats { 
-            display: flex; 
-            gap: 0.5rem; 
-            color: var(--accent-lime);
-            font-weight: 600;
-        }
-        
         .behavioral-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -1399,6 +1335,94 @@
                 grid-template-columns: 1fr;
             }
         }
+        
+        /* Behavioral Insights Row */
+        .behavioral-insights-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        @media (max-width: 1200px) {
+            .behavioral-insights-row { grid-template-columns: 1fr; }
+        }
+        .behavioral-insight-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1.25rem;
+        }
+        .behavioral-insight-card.highlight {
+            border-color: var(--accent-lime);
+            background: linear-gradient(135deg, rgba(200,230,0,0.08), transparent);
+        }
+        .behavioral-insight-card h4 {
+            margin: 0 0 1rem 0;
+            font-size: 0.95rem;
+            color: var(--accent-lime);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .behavioral-insight-content {
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }
+        .behavioral-stat-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+            padding: 0.6rem 0.75rem;
+            background: var(--bg-input);
+            border-radius: 6px;
+        }
+        .behavioral-stat-row .icon { font-size: 1.1rem; }
+        .behavioral-stat-row .text { flex: 1; font-size: 0.8rem; line-height: 1.4; }
+        .behavioral-stat-row .value {
+            font-weight: 700;
+            font-size: 0.85rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            background: rgba(200,230,0,0.15);
+            color: var(--accent-lime);
+        }
+        .behavioral-stat-row .value.high { background: rgba(16,185,129,0.15); color: #10b981; }
+        .behavioral-stat-row .value.low { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .behavioral-top-cat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.6rem 0.75rem;
+            background: var(--bg-input);
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+        }
+        .behavioral-top-cat .cat-name { flex: 1; font-size: 0.8rem; }
+        .behavioral-top-cat .cat-stats { 
+            display: flex; 
+            gap: 0.75rem; 
+            font-size: 0.75rem;
+        }
+        .behavioral-top-cat .cat-idx {
+            color: var(--accent-lime);
+            font-weight: 700;
+        }
+        .behavioral-top-cat .cat-high {
+            color: #10b981;
+            font-weight: 600;
+        }
+        .behavioral-activation-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.6rem 0.75rem;
+            background: var(--bg-input);
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+        }
+        .behavioral-activation-item .icon { font-size: 1rem; }
+        .behavioral-activation-item .text { flex: 1; font-size: 0.8rem; line-height: 1.4; }
         
         /* Interests Tab */
         .interests-header {
@@ -5692,19 +5716,28 @@
                     <div class="behavioral-insight-card highlight">
                         <h4>🎯 Behavioral Profile Summary</h4>
                         <div id="behavioralProfileSummary" class="behavioral-insight-content">
-                            <div class="loading-placeholder">Analyzing behaviors...</div>
+                            <div class="behavioral-stat-row">
+                                <span class="icon">⏳</span>
+                                <span class="text">Select a profile to view insights</span>
+                            </div>
                         </div>
                     </div>
                     <div class="behavioral-insight-card">
-                        <h4>🏆 Top Categories</h4>
+                        <h4>🏆 Top Performing Categories</h4>
                         <div id="behavioralTopCategories" class="behavioral-insight-content">
-                            <div class="loading-placeholder">Loading...</div>
+                            <div class="behavioral-stat-row">
+                                <span class="icon">⏳</span>
+                                <span class="text">Loading...</span>
+                            </div>
                         </div>
                     </div>
                     <div class="behavioral-insight-card">
                         <h4>💡 Activation Opportunities</h4>
                         <div id="behavioralActivations" class="behavioral-insight-content">
-                            <div class="loading-placeholder">Loading...</div>
+                            <div class="behavioral-stat-row">
+                                <span class="icon">⏳</span>
+                                <span class="text">Loading...</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -8035,6 +8068,182 @@
         }
         
         // ============================================================================
+        // BEHAVIORAL INSIGHTS
+        // ============================================================================
+        function renderBehavioralInsights(behavioral) {
+            if (!behavioral || Object.keys(behavioral).length === 0) {
+                return;
+            }
+            
+            // Collect all items with their categories
+            const allItems = [];
+            Object.entries(behavioral).forEach(([category, items]) => {
+                items.forEach(item => {
+                    allItems.push({
+                        name: item.name || item.brand,
+                        category: category,
+                        pct: item.pct || item.percentage || 0,
+                        index: item.index || 100,
+                        genPop: item.genPop || item.gen_pop || 0
+                    });
+                });
+            });
+            
+            // === PROFILE SUMMARY ===
+            const summaryItems = [];
+            
+            // Find top over-indexing item
+            const topItem = allItems.sort((a, b) => b.index - a.index)[0];
+            if (topItem) {
+                summaryItems.push({
+                    icon: '🔥',
+                    text: `Strongest signal: <strong style="color: var(--accent-lime);">${topItem.name}</strong> (${topItem.category})`,
+                    value: topItem.index,
+                    valueClass: 'high'
+                });
+            }
+            
+            // Count high indexers (150+)
+            const highIndexers = allItems.filter(i => i.index >= 150).length;
+            const veryHighIndexers = allItems.filter(i => i.index >= 200).length;
+            summaryItems.push({
+                icon: '📈',
+                text: `<strong style="color: var(--accent-lime);">${highIndexers}</strong> items index 150+, <strong style="color: #10b981;">${veryHighIndexers}</strong> index 200+`,
+                value: '',
+                valueClass: ''
+            });
+            
+            // Find category with most high indexers
+            const catHighIndexers = {};
+            allItems.filter(i => i.index >= 150).forEach(i => {
+                catHighIndexers[i.category] = (catHighIndexers[i.category] || 0) + 1;
+            });
+            const topCatForHigh = Object.entries(catHighIndexers).sort((a, b) => b[1] - a[1])[0];
+            if (topCatForHigh) {
+                summaryItems.push({
+                    icon: '🎯',
+                    text: `Most distinctive in: <strong style="color: var(--accent-lime);">${topCatForHigh[0]}</strong>`,
+                    value: `${topCatForHigh[1]}`,
+                    valueClass: 'high'
+                });
+            }
+            
+            // Average index across all
+            const avgIndex = allItems.length > 0 ? Math.round(allItems.reduce((s, i) => s + i.index, 0) / allItems.length) : 100;
+            summaryItems.push({
+                icon: '📊',
+                text: `<strong style="color: var(--accent-lime);">${allItems.length}</strong> total signals, avg index: <strong style="color: ${avgIndex > 110 ? '#10b981' : avgIndex < 90 ? '#ef4444' : 'var(--text-primary)'}">${avgIndex}</strong>`,
+                value: '',
+                valueClass: ''
+            });
+            
+            document.getElementById('behavioralProfileSummary').innerHTML = summaryItems.map(i => `
+                <div class="behavioral-stat-row">
+                    <span class="icon">${i.icon}</span>
+                    <span class="text">${i.text}</span>
+                    ${i.value ? `<span class="value ${i.valueClass}">${i.value}</span>` : ''}
+                </div>
+            `).join('');
+            
+            // === TOP CATEGORIES ===
+            const categoryStats = {};
+            Object.entries(behavioral).forEach(([cat, items]) => {
+                const avgIdx = items.length > 0 
+                    ? Math.round(items.reduce((s, i) => s + (i.index || 100), 0) / items.length) 
+                    : 100;
+                const highCount = items.filter(i => (i.index || 100) >= 150).length;
+                categoryStats[cat] = { avgIndex: avgIdx, count: items.length, highCount };
+            });
+            
+            const topCategories = Object.entries(categoryStats)
+                .sort((a, b) => b[1].avgIndex - a[1].avgIndex)
+                .slice(0, 6);
+            
+            document.getElementById('behavioralTopCategories').innerHTML = topCategories.map(([cat, stats]) => `
+                <div class="behavioral-top-cat">
+                    <span class="cat-name">${cat}</span>
+                    <span class="cat-stats">
+                        <span class="cat-idx">${stats.avgIndex} idx</span>
+                        ${stats.highCount > 0 ? `<span class="cat-high">${stats.highCount}🔥</span>` : ''}
+                    </span>
+                </div>
+            `).join('') || '<p style="color: var(--text-secondary);">No data available</p>';
+            
+            // === ACTIVATION OPPORTUNITIES ===
+            const activations = [];
+            
+            // Purchase-based activation
+            const purchaseBrands = allItems.filter(i => 
+                i.category.toUpperCase().includes('PURCHASED') || i.category.toUpperCase().includes('SHOP')
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (purchaseBrands.length > 0) {
+                activations.push({
+                    icon: '🛍️',
+                    text: `<strong>Shopping:</strong> Partner with ${purchaseBrands.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')}`
+                });
+            }
+            
+            // Streaming/content activation
+            const streamingBrands = allItems.filter(i => 
+                i.category.toUpperCase().includes('STREAMING') || i.category.toUpperCase().includes('SERIES')
+            ).sort((a, b) => b.index - a.index).slice(0, 1);
+            if (streamingBrands.length > 0) {
+                activations.push({
+                    icon: '📺',
+                    text: `<strong>Content:</strong> ${streamingBrands[0].name} integration (Index: ${streamingBrands[0].index})`
+                });
+            }
+            
+            // Social media activation
+            const socialBrands = allItems.filter(i => 
+                i.category.toUpperCase().includes('SOCIAL')
+            ).sort((a, b) => b.index - a.index).slice(0, 1);
+            if (socialBrands.length > 0) {
+                activations.push({
+                    icon: '📱',
+                    text: `<strong>Social:</strong> Focus on ${socialBrands[0].name} (Index: ${socialBrands[0].index})`
+                });
+            }
+            
+            // Interest-based activation
+            const interestItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('INTEREST') && i.index >= 150
+            ).slice(0, 1);
+            if (interestItems.length > 0) {
+                activations.push({
+                    icon: '💡',
+                    text: `<strong>Interest:</strong> Leverage ${interestItems[0].name} for targeting`
+                });
+            }
+            
+            // Sports activation
+            const sportsItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('SPORT') || i.category.toUpperCase().includes('ATHLETE')
+            ).sort((a, b) => b.index - a.index).slice(0, 1);
+            if (sportsItems.length > 0) {
+                activations.push({
+                    icon: '🏆',
+                    text: `<strong>Sports:</strong> ${sportsItems[0].name} sponsorship (Index: ${sportsItems[0].index})`
+                });
+            }
+            
+            // Default if no specific activations
+            if (activations.length === 0) {
+                activations.push({
+                    icon: '📊',
+                    text: 'Review behavioral data for partnership opportunities'
+                });
+            }
+            
+            document.getElementById('behavioralActivations').innerHTML = activations.slice(0, 5).map(a => `
+                <div class="behavioral-activation-item">
+                    <span class="icon">${a.icon}</span>
+                    <span class="text">${a.text}</span>
+                </div>
+            `).join('');
+        }
+        
+        // ============================================================================
         // DEMOGRAPHIC INSIGHTS
         // ============================================================================
         function renderDemoInsights(demographics, demographicsIndex, demographicsGenPop) {
@@ -8247,169 +8456,6 @@
                 <div class="demo-insight-item">
                     <span class="icon">${r.icon}</span>
                     <span class="text">${r.text}</span>
-                </div>
-            `).join('');
-        }
-        
-        // ============================================================================
-        // BEHAVIORAL INSIGHTS
-        // ============================================================================
-        function renderBehavioralInsights(behavioral) {
-            if (!behavioral || Object.keys(behavioral).length === 0) {
-                return;
-            }
-            
-            // Collect all items with their categories
-            const allItems = [];
-            Object.entries(behavioral).forEach(([category, items]) => {
-                items.forEach(item => {
-                    allItems.push({
-                        name: item.name || item.brand,
-                        category: category,
-                        pct: item.pct || item.percentage || 0,
-                        index: item.index || 100,
-                        genPop: item.genPop || item.gen_pop || 0
-                    });
-                });
-            });
-            
-            // === PROFILE SUMMARY ===
-            const summaryItems = [];
-            
-            // Find top over-indexing item
-            const topItem = allItems.sort((a, b) => b.index - a.index)[0];
-            if (topItem) {
-                summaryItems.push({
-                    icon: '🔥',
-                    text: `Strongest affinity: <span style="color: var(--accent-lime); font-weight: 600;">${topItem.name}</span>`,
-                    value: `${topItem.index}`,
-                    valueClass: 'positive'
-                });
-            }
-            
-            // Count high indexers
-            const highIndexers = allItems.filter(i => i.index >= 150).length;
-            summaryItems.push({
-                icon: '📈',
-                text: `<span style="color: var(--accent-lime); font-weight: 600;">${highIndexers}</span> items over-index by 50%+`,
-                value: '',
-                valueClass: ''
-            });
-            
-            // Find category with most high indexers
-            const catHighIndexers = {};
-            allItems.filter(i => i.index >= 150).forEach(i => {
-                catHighIndexers[i.category] = (catHighIndexers[i.category] || 0) + 1;
-            });
-            const topCatForHigh = Object.entries(catHighIndexers).sort((a, b) => b[1] - a[1])[0];
-            if (topCatForHigh) {
-                summaryItems.push({
-                    icon: '🎯',
-                    text: `Most distinctive in: <span style="color: var(--accent-lime); font-weight: 600;">${topCatForHigh[0]}</span>`,
-                    value: `${topCatForHigh[1]} items`,
-                    valueClass: 'positive'
-                });
-            }
-            
-            // Total behavioral signals
-            summaryItems.push({
-                icon: '📊',
-                text: `<span style="color: var(--accent-lime); font-weight: 600;">${allItems.length}</span> total behavioral signals`,
-                value: '',
-                valueClass: ''
-            });
-            
-            document.getElementById('behavioralProfileSummary').innerHTML = summaryItems.map(i => `
-                <div class="behavioral-insight-item">
-                    <span class="icon">${i.icon}</span>
-                    <span class="text">${i.text}</span>
-                    ${i.value ? `<span class="value ${i.valueClass}">${i.value}</span>` : ''}
-                </div>
-            `).join('');
-            
-            // === TOP CATEGORIES ===
-            const categoryStats = {};
-            Object.entries(behavioral).forEach(([cat, items]) => {
-                const avgIndex = items.length > 0 
-                    ? Math.round(items.reduce((s, i) => s + (i.index || 100), 0) / items.length) 
-                    : 100;
-                const highCount = items.filter(i => (i.index || 100) >= 150).length;
-                categoryStats[cat] = { avgIndex, count: items.length, highCount };
-            });
-            
-            const topCategories = Object.entries(categoryStats)
-                .sort((a, b) => b[1].avgIndex - a[1].avgIndex)
-                .slice(0, 5);
-            
-            document.getElementById('behavioralTopCategories').innerHTML = topCategories.map(([cat, stats]) => `
-                <div class="behavioral-top-cat">
-                    <span class="cat-name">${cat}</span>
-                    <span class="cat-stats">
-                        <span title="Average Index">${stats.avgIndex} idx</span>
-                        <span title="High Indexers" style="color: ${stats.highCount > 5 ? '#10b981' : 'var(--text-secondary)'};">(${stats.highCount}🔥)</span>
-                    </span>
-                </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No data</p>';
-            
-            // === ACTIVATION OPPORTUNITIES ===
-            const activations = [];
-            
-            // Purchase-based activation
-            const purchaseBrands = allItems.filter(i => 
-                i.category.toUpperCase().includes('PURCHASED') || i.category.toUpperCase().includes('SHOP')
-            ).sort((a, b) => b.index - a.index).slice(0, 2);
-            if (purchaseBrands.length > 0) {
-                activations.push({
-                    icon: '🛍️',
-                    text: `Partner with ${purchaseBrands.map(b => b.name).join(', ')} for purchase-driven campaigns`
-                });
-            }
-            
-            // Streaming/content activation
-            const streamingBrands = allItems.filter(i => 
-                i.category.toUpperCase().includes('STREAMING') || i.category.toUpperCase().includes('SERIES')
-            ).sort((a, b) => b.index - a.index).slice(0, 1);
-            if (streamingBrands.length > 0) {
-                activations.push({
-                    icon: '📺',
-                    text: `Consider ${streamingBrands[0].name} for content integration`
-                });
-            }
-            
-            // Social media activation
-            const socialBrands = allItems.filter(i => 
-                i.category.toUpperCase().includes('SOCIAL')
-            ).sort((a, b) => b.index - a.index).slice(0, 1);
-            if (socialBrands.length > 0) {
-                activations.push({
-                    icon: '📱',
-                    text: `Focus social efforts on ${socialBrands[0].name}`
-                });
-            }
-            
-            // Interest-based activation
-            const interestItems = allItems.filter(i => 
-                i.category.toUpperCase().includes('INTEREST') && i.index >= 150
-            ).slice(0, 1);
-            if (interestItems.length > 0) {
-                activations.push({
-                    icon: '💡',
-                    text: `Leverage ${interestItems[0].name} interest for targeting`
-                });
-            }
-            
-            // Default if no specific activations
-            if (activations.length === 0) {
-                activations.push({
-                    icon: '📊',
-                    text: 'Review top over-indexers for partnership opportunities'
-                });
-            }
-            
-            document.getElementById('behavioralActivations').innerHTML = activations.slice(0, 4).map(a => `
-                <div class="behavioral-insight-item">
-                    <span class="icon">${a.icon}</span>
-                    <span class="text">${a.text}</span>
                 </div>
             `).join('');
         }
