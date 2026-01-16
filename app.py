@@ -2826,6 +2826,48 @@ def save_profile_image_cache():
     except Exception as e:
         print(f"⚠️ Error saving profile image cache: {e}")
 
+
+@app.route('/api/prefetch-images', methods=['POST'])
+@requires_auth
+def trigger_image_prefetch():
+    """Manually trigger profile image prefetch."""
+    import threading
+    
+    def run_prefetch():
+        prefetch_profile_images()
+    
+    thread = threading.Thread(target=run_prefetch, daemon=True)
+    thread.start()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Image prefetch started in background',
+        'cached_count': len(profile_image_cache)
+    })
+
+
+@app.route('/api/image-cache-stats')
+@requires_auth
+def get_image_cache_stats():
+    """Get profile image cache statistics."""
+    if not profile_image_cache:
+        load_profile_image_cache()
+    
+    found = sum(1 for v in profile_image_cache.values() if v.get('image_url'))
+    not_found = sum(1 for v in profile_image_cache.values() if v.get('not_found'))
+    
+    by_source = {}
+    for v in profile_image_cache.values():
+        src = v.get('source', 'unknown')
+        by_source[src] = by_source.get(src, 0) + 1
+    
+    return jsonify({
+        'total_cached': len(profile_image_cache),
+        'found': found,
+        'not_found': not_found,
+        'by_source': by_source
+    })
+
 def load_persisted_cache():
     """Load the S3 file cache from S3 storage."""
     global s3_cache
@@ -3598,11 +3640,163 @@ def async_cache_loader():
     print(f"🎉 Cache ready in {time.time()-start:.2f}s")
 
 
+def prefetch_profile_images():
+    """Pre-fetch and cache images for all profiles."""
+    import urllib.parse
+    import urllib.request
+    import re
+    from datetime import datetime
+    global profile_image_cache, profile_image_cache_dirty
+    
+    if not s3_cache.get('jobs'):
+        print("   ⚠️ No profiles to fetch images for")
+        return
+    
+    print(f"🖼️ Pre-fetching profile images for {len(s3_cache['jobs'])} profiles...")
+    
+    fetched = 0
+    skipped = 0
+    failed = 0
+    
+    for job in s3_cache.get('jobs', []):
+        profile_name = job.get('project_name', '')
+        if not profile_name:
+            continue
+        
+        cache_key = profile_name.lower().strip()
+        
+        # Skip if already cached
+        if cache_key in profile_image_cache:
+            skipped += 1
+            continue
+        
+        try:
+            # Check for social media handle
+            handle_match = re.search(r'@(\w+)', profile_name)
+            image_url = None
+            source = None
+            title = profile_name
+            
+            if handle_match:
+                handle = handle_match.group(1)
+                
+                # Try TikTok
+                try:
+                    tiktok_url = f"https://www.tiktok.com/@{handle}"
+                    req = urllib.request.Request(tiktok_url, headers={
+                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+                    })
+                    with urllib.request.urlopen(req, timeout=5) as response:
+                        html = response.read().decode('utf-8', errors='ignore')
+                        og_match = re.search(r'<meta[^>]*property=["\']og:image["\'][^>]*content=["\']([^"\']+)["\']', html)
+                        if not og_match:
+                            og_match = re.search(r'<meta[^>]*content=["\']([^"\']+)["\'][^>]*property=["\']og:image["\']', html)
+                        if og_match:
+                            img = og_match.group(1)
+                            if img and 'tiktok' not in img.lower().split('/')[-1] and 'logo' not in img.lower():
+                                image_url = img
+                                source = 'tiktok'
+                                title = f'@{handle}'
+                except:
+                    pass
+                
+                # Try Instagram if TikTok failed
+                if not image_url:
+                    try:
+                        instagram_url = f"https://www.instagram.com/{handle}/"
+                        req = urllib.request.Request(instagram_url, headers={
+                            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+                        })
+                        with urllib.request.urlopen(req, timeout=5) as response:
+                            html = response.read().decode('utf-8', errors='ignore')
+                            og_match = re.search(r'<meta[^>]*property=["\']og:image["\'][^>]*content=["\']([^"\']+)["\']', html)
+                            if not og_match:
+                                og_match = re.search(r'<meta[^>]*content=["\']([^"\']+)["\'][^>]*property=["\']og:image["\']', html)
+                            if og_match:
+                                image_url = og_match.group(1)
+                                source = 'instagram'
+                                title = f'@{handle}'
+                    except:
+                        pass
+            
+            # Try Wikipedia
+            if not image_url:
+                search_name = re.sub(r'@\w+', '', profile_name).replace('_', ' ').replace('-', ' ').strip()
+                if search_name:
+                    try:
+                        wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(search_name)}"
+                        req = urllib.request.Request(wiki_url, headers={'User-Agent': 'CrosswalkIQ/1.0'})
+                        with urllib.request.urlopen(req, timeout=3) as response:
+                            data = json.loads(response.read().decode())
+                            if 'thumbnail' in data:
+                                image_url = data['thumbnail'].get('source')
+                                source = 'wikipedia'
+                                title = data.get('title', profile_name)
+                            elif 'originalimage' in data:
+                                image_url = data['originalimage'].get('source')
+                                source = 'wikipedia'
+                                title = data.get('title', profile_name)
+                    except:
+                        pass
+            
+            # Try Clearbit for brands
+            if not image_url:
+                search_name = re.sub(r'@\w+', '', profile_name).replace('_', ' ').replace('-', ' ').strip()
+                if search_name:
+                    domain = search_name.lower().replace(' ', '') + '.com'
+                    clearbit_url = f"https://logo.clearbit.com/{domain}"
+                    try:
+                        req = urllib.request.Request(clearbit_url, method='HEAD', headers={'User-Agent': 'CrosswalkIQ/1.0'})
+                        with urllib.request.urlopen(req, timeout=2) as response:
+                            if response.status == 200:
+                                image_url = clearbit_url
+                                source = 'clearbit'
+                    except:
+                        pass
+            
+            # Cache the result
+            if image_url:
+                profile_image_cache[cache_key] = {
+                    'image_url': image_url,
+                    'title': title,
+                    'source': source,
+                    'cached_at': datetime.now().isoformat()
+                }
+                fetched += 1
+                print(f"   ✅ {profile_name}: {source}")
+            else:
+                profile_image_cache[cache_key] = {
+                    'not_found': True,
+                    'cached_at': datetime.now().isoformat()
+                }
+                failed += 1
+            
+            profile_image_cache_dirty = True
+            
+            # Small delay to be nice to APIs
+            time_module.sleep(0.5)
+            
+        except Exception as e:
+            failed += 1
+            print(f"   ❌ {profile_name}: {e}")
+    
+    # Save cache
+    save_profile_image_cache()
+    print(f"🖼️ Image prefetch complete: {fetched} found, {skipped} cached, {failed} not found")
+
+
 def background_cache_checker():
     """Background thread that checks for new/modified files every 5 minutes."""
     # Wait for initial cache load
     while not cache_loading_complete:
         time_module.sleep(1)
+    
+    # Pre-fetch profile images after startup
+    time_module.sleep(5)  # Wait a bit before starting
+    try:
+        prefetch_profile_images()
+    except Exception as e:
+        print(f"   ⚠️ Image prefetch error: {e}")
     
     print("🔄 Starting background cache checker (every 5 min)...")
     while True:
@@ -3612,6 +3806,8 @@ def background_cache_checker():
             result = smart_cache_update()
             if result.get('new', 0) > 0 or result.get('updated', 0) > 0:
                 print(f"   📥 Found {result.get('new', 0)} new, {result.get('updated', 0)} modified")
+                # Also fetch images for new profiles
+                prefetch_profile_images()
         except Exception as e:
             print(f"   ⚠️ Background check error: {e}")
 
