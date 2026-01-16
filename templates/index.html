@@ -280,7 +280,7 @@
             display: flex;
             flex-direction: column;
             align-items: flex-start;
-            gap: 0.4rem;
+            gap: 0.75rem;
         }
 
         .dash-brand-box {
@@ -4812,9 +4812,9 @@
         <div id="dashboardView">
             <!-- Row 1: Profile Info + Action Buttons -->
             <div class="dash-header-row">
-                <div class="dash-profile-info">
-                    <div class="dash-brand-box" id="dashBrandNameHeader">SELECT A PROFILE</div>
-                    <div class="dash-date-box" id="dashDateRangeHeader">Date Range: —</div>
+                <div class="dash-profile-info" id="dashProfileInfo" style="display: none;">
+                    <div class="dash-brand-box" id="dashBrandNameHeader"></div>
+                    <div class="dash-date-box" id="dashDateRangeHeader"></div>
                 </div>
                 <div class="dash-action-buttons">
                     <button class="dash-action-btn primary" onclick="toggleAIPanel()" title="AI Lab">🧪 AI LAB</button>
@@ -6596,9 +6596,14 @@
             if (emptyState) emptyState.style.display = 'none';
             if (dashContent) dashContent.style.display = 'block';
             
-            // Update header profile info
-            document.getElementById('dashBrandNameHeader').textContent = (brandName || 'Brand').toUpperCase();
-            document.getElementById('dashDateRangeHeader').textContent = 'Date Range: ' + (dateRange || '--');
+            // Update header profile info and show it
+            const profileInfo = document.getElementById('dashProfileInfo');
+            if (profileInfo && brandName) {
+                profileInfo.style.display = 'flex';
+                document.getElementById('dashBrandNameHeader').textContent = (brandName || 'Brand').toUpperCase();
+                document.getElementById('dashDateRangeHeader').textContent = dateRange ? 'Date Range: ' + dateRange : '';
+                document.getElementById('dashDateRangeHeader').style.display = dateRange ? 'block' : 'none';
+            }
 
             const parsed = parseAllData(csvData);
             
@@ -6989,9 +6994,14 @@
                     const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === profileId);
                     const brandName = data.brand || (profile ? getProfileFullName(profile) : 'Unknown');
                     
-                    // Update header profile info
-                    document.getElementById('dashBrandNameHeader').textContent = brandName.toUpperCase();
-                    document.getElementById('dashDateRangeHeader').textContent = data.date_range ? `Date Range: ${data.date_range}` : 'Date Range: --';
+                    // Update header profile info and show it
+                    const profileInfo = document.getElementById('dashProfileInfo');
+                    if (profileInfo && brandName) {
+                        profileInfo.style.display = 'flex';
+                        document.getElementById('dashBrandNameHeader').textContent = brandName.toUpperCase();
+                        document.getElementById('dashDateRangeHeader').textContent = data.date_range ? `Date Range: ${data.date_range}` : '';
+                        document.getElementById('dashDateRangeHeader').style.display = data.date_range ? 'block' : 'none';
+                    }
                     document.getElementById('dashSampleSize').textContent = formatNumber(parsed.sampleSize);
                     document.getElementById('dashProjectedUS').textContent = formatNumber(parsed.projectedUS);
                     
