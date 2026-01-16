@@ -1190,8 +1190,20 @@ def generate_random_password(length=12):
     chars = string.ascii_letters + string.digits + "!@#$%"
     return ''.join(secrets.choice(chars) for _ in range(length))
 
-def send_welcome_email(email, username, password, role):
-    """Send welcome email with login credentials."""
+def send_welcome_email_async(email, username, password, role):
+    """Send welcome email in background thread (non-blocking)."""
+    def _send():
+        try:
+            send_welcome_email_sync(email, username, password, role)
+        except Exception as e:
+            print(f"❌ Background email failed: {e}")
+    
+    thread = threading.Thread(target=_send, daemon=True)
+    thread.start()
+    return True, "Email queued for sending"
+
+def send_welcome_email_sync(email, username, password, role):
+    """Send welcome email with login credentials (blocking)."""
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
@@ -1290,8 +1302,8 @@ Crosswalk Team
         msg.attach(part1)
         msg.attach(part2)
         
-        # Send email
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
+        # Send email with timeout
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
             server.starttls()
             server.login(smtp_user, smtp_password)
             server.sendmail(from_email, email, msg.as_string())
@@ -1299,9 +1311,19 @@ Crosswalk Team
         print(f"✅ Welcome email sent to {email} for user {username}")
         return True, "Email sent successfully"
         
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"❌ SMTP authentication failed for {email}: {e}")
+        return False, "SMTP authentication failed - check credentials"
+    except smtplib.SMTPException as e:
+        print(f"❌ SMTP error for {email}: {e}")
+        return False, f"SMTP error: {str(e)}"
     except Exception as e:
         print(f"❌ Failed to send welcome email to {email}: {e}")
         return False, str(e)
+
+def send_welcome_email(email, username, password, role):
+    """Send welcome email - uses async to avoid blocking."""
+    return send_welcome_email_async(email, username, password, role)
 
 @app.route('/api/admin/users', methods=['POST'])
 @requires_admin
