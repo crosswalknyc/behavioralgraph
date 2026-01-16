@@ -1182,29 +1182,48 @@
         }
         
         .heatmap-cell {
-            padding: 0.5rem 0.75rem;
-            border-radius: 6px;
-            font-size: 0.75rem;
+            padding: 0.35rem 0.5rem;
+            border-radius: 5px;
+            font-size: 0.7rem;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.2s;
             text-align: center;
-            min-width: 100px;
         }
         
         .heatmap-cell:hover {
-            transform: scale(1.05);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transform: scale(1.03);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
         
         .heatmap-cell .cell-name {
             font-weight: 600;
-            margin-bottom: 0.25rem;
+            font-size: 0.65rem;
+            margin-bottom: 0.15rem;
+            white-space: nowrap;
         }
         
         .heatmap-cell .cell-stats {
-            font-size: 0.65rem;
-            opacity: 0.9;
+            font-size: 0.6rem;
+            opacity: 0.85;
+        }
+        
+        /* Heatmap Groups */
+        .heatmap-group {
+            margin-bottom: 0.75rem;
+        }
+        
+        .heatmap-group-label {
+            font-size: 0.8rem;
+            margin-bottom: 0.4rem;
+            display: flex;
+            align-items: center;
+        }
+        
+        .heatmap-group-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
         }
         
         /* Interest Category Cards */
@@ -7520,25 +7539,56 @@
                 categories[item.category].count++;
             });
             
-            // Calculate averages and sort
+            // Calculate averages
             const categoryData = Object.entries(categories)
                 .map(([name, data]) => ({
                     name,
                     avgIndex: Math.round(data.totalIndex / data.count),
                     count: data.count,
                     topItem: data.items.sort((a, b) => b.index - a.index)[0]
-                }))
-                .sort((a, b) => b.avgIndex - a.avgIndex);
+                }));
             
-            container.innerHTML = categoryData.map(cat => {
-                const { bg, color } = getHeatmapColor(cat.avgIndex);
+            // Split into 3 tiers relative to the data
+            const allIndices = categoryData.map(c => c.avgIndex);
+            const minIdx = Math.min(...allIndices);
+            const maxIdx = Math.max(...allIndices);
+            const range = maxIdx - minIdx || 1;
+            
+            // Calculate percentile-based thresholds
+            const sortedIndices = [...allIndices].sort((a, b) => a - b);
+            const lowThreshold = sortedIndices[Math.floor(sortedIndices.length * 0.33)] || minIdx;
+            const highThreshold = sortedIndices[Math.floor(sortedIndices.length * 0.67)] || maxIdx;
+            
+            // Categorize and sort
+            const overIndexing = categoryData.filter(c => c.avgIndex >= highThreshold).sort((a, b) => b.avgIndex - a.avgIndex);
+            const neutral = categoryData.filter(c => c.avgIndex >= lowThreshold && c.avgIndex < highThreshold).sort((a, b) => b.avgIndex - a.avgIndex);
+            const underIndexing = categoryData.filter(c => c.avgIndex < lowThreshold).sort((a, b) => b.avgIndex - a.avgIndex);
+            
+            const renderGroup = (items, label, colors) => {
+                if (items.length === 0) return '';
                 return `
-                    <div class="heatmap-cell" style="background: ${bg}; color: ${color};" onclick="filterInterestsByCategory('${cat.name}')" title="Click to filter">
-                        <div class="cell-name">${cat.name}</div>
-                        <div class="cell-stats">Avg: ${cat.avgIndex} | ${cat.count} interests</div>
+                    <div class="heatmap-group">
+                        <div class="heatmap-group-label" style="color: ${colors.text};">
+                            <span style="font-weight: 600;">${label}</span>
+                            <span style="opacity: 0.7; font-size: 0.7rem; margin-left: 0.5rem;">(${items.length} categories)</span>
+                        </div>
+                        <div class="heatmap-group-items">
+                            ${items.map(cat => `
+                                <div class="heatmap-cell" style="background: ${colors.bg}; color: ${colors.text}; border: 1px solid ${colors.border};" onclick="filterInterestsByCategory('${cat.name}')" title="${cat.name}: Avg Index ${cat.avgIndex}">
+                                    <div class="cell-name">${cat.name}</div>
+                                    <div class="cell-stats">${cat.avgIndex} idx · ${cat.count}</div>
+                                </div>
+                            `).join('')}
+                        </div>
                     </div>
                 `;
-            }).join('');
+            };
+            
+            container.innerHTML = `
+                ${renderGroup(overIndexing, '🔥 Over-Indexing', { bg: 'rgba(16, 185, 129, 0.2)', text: '#10b981', border: 'rgba(16, 185, 129, 0.4)' })}
+                ${renderGroup(neutral, '⚖️ Neutral', { bg: 'rgba(234, 179, 8, 0.15)', text: '#eab308', border: 'rgba(234, 179, 8, 0.3)' })}
+                ${renderGroup(underIndexing, '📉 Under-Indexing', { bg: 'rgba(239, 68, 68, 0.15)', text: '#ef4444', border: 'rgba(239, 68, 68, 0.3)' })}
+            `;
         }
         
         function getHeatmapColor(index) {
