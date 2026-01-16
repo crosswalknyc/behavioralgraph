@@ -1761,7 +1761,7 @@ def archive_content():
         
         # Update cache counts and persist
         s3_cache['file_count'] = len(s3_cache.get('jobs', []))
-        persist_s3_cache()
+        save_persisted_cache()
         
         return jsonify({
             'success': True,
@@ -1861,7 +1861,7 @@ def delete_content():
         
         # Update cache counts and persist
         s3_cache['file_count'] = len(s3_cache.get('jobs', []))
-        persist_s3_cache()
+        save_persisted_cache()
         
         return jsonify({
             'success': True,
@@ -3096,7 +3096,7 @@ def rename_file():
                     job['key'] = new_key
                     job['s3_key'] = new_key
                     break
-            persist_s3_cache()
+            save_persisted_cache()
         
         print(f"📝 Renamed file: {old_key} -> {new_key}")
         
@@ -3169,7 +3169,7 @@ def change_file_category():
                 if job.get('key') == file_key or job.get('s3_key') == file_key:
                     job['category'] = new_category
                     break
-            persist_s3_cache()
+            save_persisted_cache()
         
         print(f"🏷️ Changed category for {file_key} to {new_category}")
         
