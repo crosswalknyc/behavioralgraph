@@ -1058,6 +1058,33 @@
         </div>
     </div>
 
+    <!-- Rename File Modal -->
+    <div class="modal" id="renameModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>✏️ Rename File</h2>
+                <button class="modal-close" onclick="closeRenameModal()">&times;</button>
+            </div>
+            <input type="hidden" id="renameFileKey">
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Current File Name</label>
+                <div id="currentFileName" style="padding: 0.5rem; background: var(--bg-input); border-radius: 6px; font-size: 0.8rem; color: var(--text-secondary); word-break: break-all;"></div>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">New File Name</label>
+                <input type="text" id="newFileName" placeholder="Enter new file name" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                <small style="color: var(--text-secondary); font-size: 0.7rem;">The file extension (.csv) will be preserved automatically.</small>
+            </div>
+            
+            <div style="display: flex; gap: 0.75rem;">
+                <button class="btn btn-secondary" onclick="closeRenameModal()" style="flex: 1;">Cancel</button>
+                <button class="btn btn-success" onclick="renameFile()" style="flex: 1;">💾 Save</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div class="toast" id="toast"></div>
 
@@ -1681,6 +1708,61 @@
             document.getElementById('profileImageModal').classList.remove('show');
         }
         
+        // ============ FILE RENAME ============
+        
+        function openRenameModal(fileKey, currentName) {
+            document.getElementById('renameFileKey').value = fileKey;
+            document.getElementById('currentFileName').textContent = fileKey.split('/').pop();
+            
+            // Pre-fill with current name (without extension)
+            const fileName = fileKey.split('/').pop();
+            const nameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
+            document.getElementById('newFileName').value = nameWithoutExt;
+            
+            document.getElementById('renameModal').classList.add('show');
+            document.getElementById('newFileName').focus();
+            document.getElementById('newFileName').select();
+        }
+        
+        function closeRenameModal() {
+            document.getElementById('renameModal').classList.remove('show');
+        }
+        
+        async function renameFile() {
+            const fileKey = document.getElementById('renameFileKey').value;
+            const newName = document.getElementById('newFileName').value.trim();
+            
+            if (!fileKey || !newName) {
+                showToast('Please enter a new file name', true);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/rename-file', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        old_key: fileKey,
+                        new_name: newName
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('File renamed successfully!');
+                    closeRenameModal();
+                    loadContentFiles(); // Refresh the file list
+                } else {
+                    showToast(data.error || 'Failed to rename file', true);
+                }
+            } catch (e) {
+                console.error('Rename error:', e);
+                showToast('Error renaming file: ' + e.message, true);
+            }
+        }
+        
         function previewProfileImage(input) {
             if (input.files && input.files[0]) {
                 const reader = new FileReader();
@@ -1955,10 +2037,12 @@
             const isSelected = selectedFiles.has(file.key);
             const dateStr = file.last_modified ? new Date(file.last_modified).toLocaleDateString() : '--';
             const hasCustomImage = file.custom_image ? true : false;
+            const escapedKey = file.key.replace(/'/g, "\\'");
+            const escapedName = (file.project_name || '').replace(/'/g, "\\'");
             
             return `
                 <tr data-key="${file.key}" class="${isSelected ? 'selected' : ''}">
-                    <td><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleFileSelection('${file.key}')"></td>
+                    <td><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleFileSelection('${escapedKey}')"></td>
                     <td class="file-name" title="${file.key}">
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <div class="profile-thumb" id="thumb-${file.key.replace(/[^a-zA-Z0-9]/g, '_')}" style="width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: var(--bg-input); flex-shrink: 0; border: 2px solid ${hasCustomImage ? 'var(--accent-lime)' : 'var(--border-color)'};">
@@ -1972,12 +2056,13 @@
                     <td style="font-size: 0.75rem;">${formatBytes(file.size)}</td>
                     <td>
                         <div class="action-buttons">
-                            <button class="btn btn-small btn-icon" onclick="openProfileImageModal('${file.project_name || file.key}', '${file.key}')" title="Set Profile Image" style="background: ${hasCustomImage ? 'var(--accent-lime)' : 'var(--bg-input)'}; color: ${hasCustomImage ? '#1a1a1a' : 'var(--text-primary)'};">🖼️</button>
+                            <button class="btn btn-small btn-icon" onclick="openRenameModal('${escapedKey}', '${escapedName}')" title="Rename File">✏️</button>
+                            <button class="btn btn-small btn-icon" onclick="openProfileImageModal('${escapedName || escapedKey}', '${escapedKey}')" title="Set Profile Image" style="background: ${hasCustomImage ? 'var(--accent-lime)' : 'var(--bg-input)'}; color: ${hasCustomImage ? '#1a1a1a' : 'var(--text-primary)'};">🖼️</button>
                             ${showingArchived ? 
-                                `<button class="btn btn-small btn-success btn-icon" onclick="restoreFile('${file.key}')" title="Restore">↩️</button>` :
-                                `<button class="btn btn-small btn-archive btn-icon" onclick="archiveFile('${file.key}')" title="Archive">📦</button>`
+                                `<button class="btn btn-small btn-success btn-icon" onclick="restoreFile('${escapedKey}')" title="Restore">↩️</button>` :
+                                `<button class="btn btn-small btn-archive btn-icon" onclick="archiveFile('${escapedKey}')" title="Archive">📦</button>`
                             }
-                            <button class="btn btn-small btn-danger btn-icon" onclick="deleteFile('${file.key}')" title="Delete permanently">🗑️</button>
+                            <button class="btn btn-small btn-danger btn-icon" onclick="deleteFile('${escapedKey}')" title="Delete permanently">🗑️</button>
                         </div>
                     </td>
                 </tr>

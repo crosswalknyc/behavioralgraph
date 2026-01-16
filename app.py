@@ -3044,6 +3044,66 @@ def remove_profile_image():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@app.route('/api/admin/rename-file', methods=['POST'])
+@requires_admin
+def rename_file():
+    """Rename a file in S3 (copy to new key, delete old)."""
+    global s3_file_cache
+    
+    try:
+        data = request.get_json()
+        old_key = data.get('old_key')
+        new_name = data.get('new_name')
+        
+        if not old_key or not new_name:
+            return jsonify({'success': False, 'error': 'Old key and new name required'})
+        
+        # Get the folder path and extension from old key
+        folder = '/'.join(old_key.split('/')[:-1])
+        old_filename = old_key.split('/')[-1]
+        extension = ''
+        if '.' in old_filename:
+            extension = '.' + old_filename.rsplit('.', 1)[-1]
+        
+        # Build new key
+        new_key = f"{folder}/{new_name}{extension}" if folder else f"{new_name}{extension}"
+        
+        # Check if new key already exists
+        try:
+            s3_client.head_object(Bucket=S3_BUCKET, Key=new_key)
+            return jsonify({'success': False, 'error': 'A file with that name already exists'})
+        except:
+            pass  # File doesn't exist, good to proceed
+        
+        # Copy to new key
+        s3_client.copy_object(
+            Bucket=S3_BUCKET,
+            CopySource={'Bucket': S3_BUCKET, 'Key': old_key},
+            Key=new_key
+        )
+        
+        # Delete old key
+        s3_client.delete_object(Bucket=S3_BUCKET, Key=old_key)
+        
+        # Update cache
+        if old_key in s3_file_cache:
+            file_data = s3_file_cache.pop(old_key)
+            file_data['key'] = new_key
+            s3_file_cache[new_key] = file_data
+        
+        print(f"📝 Renamed file: {old_key} -> {new_key}")
+        
+        return jsonify({
+            'success': True,
+            'new_key': new_key,
+            'message': 'File renamed successfully'
+        })
+        
+    except Exception as e:
+        print(f"❌ Rename error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @app.route('/api/image-cache-stats')
 @requires_auth
 def get_image_cache_stats():
