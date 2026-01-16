@@ -4816,8 +4816,9 @@
                     <div class="dash-date-box" id="dashDateRangeHeader">Date Range: —</div>
                 </div>
                 <div class="dash-action-buttons">
-                    <button class="dash-action-btn primary" onclick="toggleAIPanel()" title="Business Intelligence Lab">🧪 BI LAB</button>
+                    <button class="dash-action-btn primary" onclick="toggleAIPanel()" title="AI Lab">🧪 AI LAB</button>
                     <button class="dash-action-btn" onclick="toggleFavorite()" title="Favorite" id="favBtn">⭐</button>
+                    <button class="dash-action-btn" onclick="toggleSavedViews()" title="Saved Views" id="savedBtn">💾</button>
                     <div class="dash-dropdown">
                         <button class="dash-action-btn" onclick="toggleExportMenu()">📥 EXPORT ▾</button>
                         <div id="exportDropdown" class="dash-dropdown-menu" style="display: none;">
@@ -4826,8 +4827,6 @@
                             <a onclick="exportPDF()">📑 Full Report (PDF)</a>
                         </div>
                     </div>
-                    <button class="dash-action-btn accent" onclick="addCurrentTabToDeck()" title="Add to Deck">+ ADD</button>
-                    <button class="dash-action-btn" onclick="toggleSavedViews()" title="Saved Views" id="savedBtn">💾</button>
                 </div>
             </div>
             
@@ -4916,9 +4915,10 @@
                 <button class="tab-btn deck-tab" onclick="openDeckWorkspace()"><span class="tab-icon">📊</span><span class="tab-label">DECK (<span id="deckCountTab">0</span>)</span></button>
             </div>
             
-            <!-- Row 3: Display Toggle -->
+            <!-- Row 3: Display Toggle + Add to Deck -->
             <div class="dash-bottom-row">
                 <div class="row-right" style="margin-left: auto;">
+                    <button class="dash-action-btn accent btn-small" onclick="addCurrentTabToDeck()" title="Add to Deck">+ ADD</button>
                     <div class="display-mode-toggle" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" title="Toggle between percentages and US population numbers">
                         <span id="dashDisplayLabel">US %</span>
                     </div>
