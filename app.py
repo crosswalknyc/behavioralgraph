@@ -1117,8 +1117,8 @@ def login_page():
         session['username'] = username
         session['role'] = user.get('role', 'user')
         
-        redirect_url = '/admin' if user.get('role') == 'admin' else '/'
-        return jsonify({'success': True, 'redirect': redirect_url})
+        # Always redirect to dashboard, admin can access admin panel from there
+        return jsonify({'success': True, 'redirect': '/'})
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
