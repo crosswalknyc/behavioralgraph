@@ -3104,6 +3104,75 @@ def rename_file():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@app.route('/api/admin/change-category', methods=['POST'])
+@requires_admin
+def change_file_category():
+    """Change the BRAND CATEGORY in a CSV file."""
+    global s3_file_cache
+    
+    try:
+        data = request.get_json()
+        file_key = data.get('file_key')
+        new_category = data.get('new_category', '').strip().upper()
+        
+        if not file_key or not new_category:
+            return jsonify({'success': False, 'error': 'File key and category required'})
+        
+        # Download the file from S3
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=file_key)
+        content = response['Body'].read().decode('utf-8', errors='ignore')
+        
+        # Parse and update the BRAND CATEGORY line
+        lines = content.split('\n')
+        updated = False
+        new_lines = []
+        
+        for line in lines:
+            # Check if this is the BRAND CATEGORY line
+            if re.match(r'^\s*BRAND\s*CATEGORY\s*,', line, re.IGNORECASE):
+                new_lines.append(f'BRAND CATEGORY,{new_category}')
+                updated = True
+            else:
+                new_lines.append(line)
+        
+        # If no BRAND CATEGORY line found, add it at the beginning
+        if not updated:
+            # Find where to insert (after any header lines, before data)
+            insert_idx = 0
+            for i, line in enumerate(new_lines):
+                if line.strip() and not line.startswith('#'):
+                    insert_idx = i
+                    break
+            new_lines.insert(insert_idx, f'BRAND CATEGORY,{new_category}')
+        
+        # Upload updated content back to S3
+        updated_content = '\n'.join(new_lines)
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=file_key,
+            Body=updated_content.encode('utf-8'),
+            ContentType='text/csv'
+        )
+        
+        # Update cache
+        if file_key in s3_file_cache:
+            s3_file_cache[file_key]['category'] = new_category
+        
+        print(f"🏷️ Changed category for {file_key} to {new_category}")
+        
+        return jsonify({
+            'success': True,
+            'new_category': new_category,
+            'message': 'Category updated successfully'
+        })
+        
+    except Exception as e:
+        print(f"❌ Category change error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @app.route('/api/image-cache-stats')
 @requires_auth
 def get_image_cache_stats():

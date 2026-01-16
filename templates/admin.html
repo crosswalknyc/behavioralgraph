@@ -1085,6 +1085,61 @@
         </div>
     </div>
 
+    <!-- Change Category Modal -->
+    <div class="modal" id="categoryModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>🏷️ Change Category</h2>
+                <button class="modal-close" onclick="closeCategoryModal()">&times;</button>
+            </div>
+            <input type="hidden" id="categoryFileKey">
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Current Category</label>
+                <div id="currentCategory" style="padding: 0.5rem 0.75rem; background: var(--bg-input); border-radius: 6px; font-size: 0.9rem; color: var(--accent-lime); font-weight: 600;"></div>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Select New Category</label>
+                <select id="newCategory" style="width: 100%; padding: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                    <option value="ACTOR">🎭 ACTOR</option>
+                    <option value="ACTRESS">🎭 ACTRESS</option>
+                    <option value="ATHLETE">🏃 ATHLETE</option>
+                    <option value="BRAND">🏷️ BRAND</option>
+                    <option value="CREATOR">🎬 CREATOR</option>
+                    <option value="EMERGING TALENT">⭐ EMERGING TALENT</option>
+                    <option value="ENTERTAINMENT">🎪 ENTERTAINMENT</option>
+                    <option value="EVENTS">🎫 EVENTS</option>
+                    <option value="FILM">🎬 FILM</option>
+                    <option value="GAMES">🎮 GAMES</option>
+                    <option value="MEDIA">📺 MEDIA</option>
+                    <option value="MOVIE">🎬 MOVIE</option>
+                    <option value="MUSIC">🎵 MUSIC</option>
+                    <option value="NETWORK">📡 NETWORK</option>
+                    <option value="PLATFORM">📱 PLATFORM</option>
+                    <option value="PODCAST">🎙️ PODCAST</option>
+                    <option value="SERIES">📺 SERIES</option>
+                    <option value="SPORT">⚽ SPORT</option>
+                    <option value="SPORTS">⚽ SPORTS</option>
+                    <option value="STREAMER">🎥 STREAMER</option>
+                    <option value="STUDIO">🏢 STUDIO</option>
+                    <option value="TV">📺 TV</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Or Enter Custom Category</label>
+                <input type="text" id="customCategory" placeholder="Enter custom category..." style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                <small style="color: var(--text-secondary); font-size: 0.7rem;">Leave blank to use the dropdown selection above.</small>
+            </div>
+            
+            <div style="display: flex; gap: 0.75rem;">
+                <button class="btn btn-secondary" onclick="closeCategoryModal()" style="flex: 1;">Cancel</button>
+                <button class="btn btn-success" onclick="changeCategory()" style="flex: 1;">💾 Save</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div class="toast" id="toast"></div>
 
@@ -1763,6 +1818,58 @@
             }
         }
         
+        // ============ CATEGORY CHANGE ============
+        
+        function openCategoryModal(fileKey, currentCategory) {
+            document.getElementById('categoryFileKey').value = fileKey;
+            document.getElementById('currentCategory').textContent = currentCategory || 'Uncategorized';
+            document.getElementById('newCategory').value = currentCategory || '';
+            document.getElementById('customCategory').value = '';
+            
+            document.getElementById('categoryModal').classList.add('show');
+        }
+        
+        function closeCategoryModal() {
+            document.getElementById('categoryModal').classList.remove('show');
+        }
+        
+        async function changeCategory() {
+            const fileKey = document.getElementById('categoryFileKey').value;
+            const customCategory = document.getElementById('customCategory').value.trim();
+            const selectedCategory = document.getElementById('newCategory').value;
+            const newCategory = customCategory || selectedCategory;
+            
+            if (!fileKey || !newCategory) {
+                showToast('Please select a category', true);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/change-category', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file_key: fileKey,
+                        new_category: newCategory.toUpperCase()
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Category updated successfully!');
+                    closeCategoryModal();
+                    loadContentFiles(); // Refresh the file list
+                } else {
+                    showToast(data.error || 'Failed to update category', true);
+                }
+            } catch (e) {
+                console.error('Category change error:', e);
+                showToast('Error updating category: ' + e.message, true);
+            }
+        }
+        
         function previewProfileImage(input) {
             if (input.files && input.files[0]) {
                 const reader = new FileReader();
@@ -2039,6 +2146,7 @@
             const hasCustomImage = file.custom_image ? true : false;
             const escapedKey = file.key.replace(/'/g, "\\'");
             const escapedName = (file.project_name || '').replace(/'/g, "\\'");
+            const escapedCategory = (file.category || 'Uncategorized').replace(/'/g, "\\'");
             
             return `
                 <tr data-key="${file.key}" class="${isSelected ? 'selected' : ''}">
@@ -2056,6 +2164,7 @@
                     <td style="font-size: 0.75rem;">${formatBytes(file.size)}</td>
                     <td>
                         <div class="action-buttons">
+                            <button class="btn btn-small btn-icon" onclick="openCategoryModal('${escapedKey}', '${escapedCategory}')" title="Change Category">🏷️</button>
                             <button class="btn btn-small btn-icon" onclick="openRenameModal('${escapedKey}', '${escapedName}')" title="Rename File">✏️</button>
                             <button class="btn btn-small btn-icon" onclick="openProfileImageModal('${escapedName || escapedKey}', '${escapedKey}')" title="Set Profile Image" style="background: ${hasCustomImage ? 'var(--accent-lime)' : 'var(--bg-input)'}; color: ${hasCustomImage ? '#1a1a1a' : 'var(--text-primary)'};">🖼️</button>
                             ${showingArchived ? 
