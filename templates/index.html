@@ -417,24 +417,37 @@
         }
 
         .dash-profile-image {
-            width: 60px;
-            height: 60px;
+            width: 70px;
+            height: 70px;
             border-radius: 50%;
             overflow: hidden;
             border: 3px solid var(--accent-lime);
             background: var(--bg-card);
             flex-shrink: 0;
             display: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
         
         .dash-profile-image img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            object-position: center top;
         }
         
         .dash-profile-image.loaded {
             display: block;
+        }
+        
+        .dash-profile-image.loading {
+            display: block;
+            background: linear-gradient(135deg, var(--bg-card), var(--bg-input));
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
         }
 
         .dash-brand-container {
@@ -7021,7 +7034,8 @@
             if (!imageContainer || !img) return;
             
             // Reset image state
-            imageContainer.classList.remove('loaded');
+            imageContainer.classList.remove('loaded', 'loading');
+            img.src = '';
             
             // Check cache first
             if (profileImageCache[profileName]) {
@@ -7032,19 +7046,29 @@
                 return;
             }
             
+            // Show loading state
+            imageContainer.classList.add('loading');
+            
             try {
                 const response = await fetch(`/api/wiki-image/${encodeURIComponent(profileName)}`);
                 const data = await response.json();
                 
+                imageContainer.classList.remove('loading');
+                
                 if (data.success && data.image_url) {
                     profileImageCache[profileName] = data.image_url;
                     img.src = data.image_url;
-                    imageContainer.classList.add('loaded');
+                    img.onload = () => imageContainer.classList.add('loaded');
+                    img.onerror = () => {
+                        imageContainer.classList.remove('loaded');
+                        profileImageCache[profileName] = 'none';
+                    };
                 } else {
                     profileImageCache[profileName] = 'none';
                 }
             } catch (error) {
                 console.log('Could not fetch profile image:', error);
+                imageContainer.classList.remove('loading');
                 profileImageCache[profileName] = 'none';
             }
         }
