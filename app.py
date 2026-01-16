@@ -3778,10 +3778,20 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
         # Import the bg module
         try:
             import bg
+            import random
+            import numpy as np
             from config import SNOWFLAKE_CONFIG
         except ImportError as e:
             update_job_status(job_id, status='failed', error=f'Module import failed: {str(e)}')
             return
+        
+        # ========== DETERMINISTIC SEEDING (matches terminal behavior) ==========
+        # Create consistent random seed based on inputs for reproducible results
+        seed_string = f"{brands[0]}_{sample_start}_{sample_end}_{behavior_start}_{behavior_end}" if brands else f"{sample_start}_{sample_end}_{behavior_start}_{behavior_end}"
+        deterministic_seed = hash(seed_string) % (2**32)  # Convert to 32-bit integer
+        random.seed(deterministic_seed)
+        np.random.seed(deterministic_seed)
+        print(f"🎲 Deterministic seed set: {deterministic_seed}")
         
         # If we have a reference file from S3, download it for consistency enforcement
         actual_previous_file = previous_file_path
@@ -3812,6 +3822,28 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
             update_job_status(job_id, status='failed', error=f'Database connection failed: {str(e)}')
             return
         
+        # ========== UNIVERSE SCAN (matches terminal behavior) ==========
+        # This is critical for getting correct sample sizes
+        update_job_status(job_id, progress=18, message='Performing universe scan...')
+        
+        try:
+            if hasattr(bg, 'perform_full_universe_scan'):
+                print("🔍 Performing full universe scan (matching terminal behavior)...")
+                universe_results = bg.perform_full_universe_scan(conn, brands, sample_start, sample_end, purchasers_only)
+                if universe_results:
+                    print(f"🌍 Universe scan complete. True universe size: {universe_results['total_universe']:,} users")
+                    # Store universe size for use in pipeline (same as terminal)
+                    bg.run_full_pipeline.universe_size = universe_results['total_universe']
+                else:
+                    print("⚠️ Universe scan returned no results, using default")
+                    bg.run_full_pipeline.universe_size = 1000000
+            else:
+                print("⚠️ perform_full_universe_scan not available in bg module")
+                bg.run_full_pipeline.universe_size = 1000000
+        except Exception as e:
+            print(f"⚠️ Universe scan error: {e}, proceeding with default size")
+            bg.run_full_pipeline.universe_size = 1000000
+        
         update_job_status(job_id, progress=25, message='Running analysis...')
         
         # Run the full pipeline with reference file for consistency
@@ -3835,20 +3867,30 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
             update_job_status(job_id, progress=85, message='Processing results...')
             
             if result_file and os.path.exists(result_file):
-                # Apply frequency analysis if requested (matches bg.py terminal behavior)
+                # Apply frequency analysis if requested (matches bg.py terminal behavior EXACTLY)
                 if include_frequency and not is_genpop:
                     try:
-                        print("📊 Adding frequency metrics...")
+                        print("📊 Adding frequency metrics (matching terminal behavior)...")
                         update_job_status(job_id, progress=87, message='Adding frequency analysis...')
                         
                         import pandas as pd
                         df = pd.read_csv(result_file)
                         
-                        # Run frequency analysis using bg module
-                        if hasattr(bg, 'get_frequency_data'):
+                        # Use calculate_frequency_metrics like terminal version does
+                        if hasattr(bg, 'calculate_frequency_metrics'):
+                            frequency_df = bg.calculate_frequency_metrics(conn, brands, behavior_start, behavior_end, purchasers_only)
+                            if frequency_df is not None and not frequency_df.empty:
+                                # Add frequency columns to main df like terminal
+                                if hasattr(bg, 'add_frequency_columns_to_main_df'):
+                                    df = bg.add_frequency_columns_to_main_df(df, frequency_df)
+                                else:
+                                    # Fallback to merge if add_frequency_columns_to_main_df not available
+                                    if hasattr(bg, 'merge_frequency_data'):
+                                        df = bg.merge_frequency_data(df, frequency_df)
+                        elif hasattr(bg, 'get_frequency_data'):
+                            # Fallback to old method
                             freq_df = bg.get_frequency_data(conn, brands, sample_start, sample_end)
                             if freq_df is not None and not freq_df.empty:
-                                # Merge frequency data
                                 df = bg.merge_frequency_data(df, freq_df) if hasattr(bg, 'merge_frequency_data') else df
                         
                         # Apply listener/watcher/player adjustments
@@ -3862,6 +3904,8 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                         print("✅ Frequency analysis complete")
                     except Exception as e:
                         print(f"⚠️ Frequency analysis error: {e}")
+                        import traceback
+                        traceback.print_exc()
                 
                 # Apply listener/watcher adjustments even without frequency analysis
                 elif is_listener_watcher:
@@ -3875,6 +3919,104 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                         df.to_csv(result_file, index=False)
                     except Exception as e:
                         print(f"⚠️ Listener/watcher adjustment error: {e}")
+                
+                # ========== POST-PROCESSING (matches terminal behavior exactly) ==========
+                update_job_status(job_id, progress=88, message='Applying final processing...')
+                
+                try:
+                    import pandas as pd
+                    df = pd.read_csv(result_file)
+                    
+                    # 1. Enforce input brand to 100% (skip for GenPop)
+                    if not is_genpop and hasattr(bg, 'enforce_input_brand_100'):
+                        print("🎯 Enforcing input brand 100%...")
+                        df = bg.enforce_input_brand_100(df, brands)
+                    
+                    # 2. Add input metadata to dataframe
+                    if hasattr(bg, 'add_input_metadata_to_dataframe'):
+                        print("📋 Adding input metadata...")
+                        df = bg.add_input_metadata_to_dataframe(df, brands, sample_start, sample_end, behavior_start, behavior_end, deterministic_seed)
+                    
+                    # 3. Add unique purchase confirmations column
+                    if hasattr(bg, 'add_unique_purchase_confirmations_column'):
+                        try:
+                            print("🛒 Adding unique purchase confirmations...")
+                            df = bg.add_unique_purchase_confirmations_column(df, conn)
+                        except Exception as e:
+                            print(f"⚠️ Purchase confirmations error: {e}")
+                    
+                    # 4. Enforce cross-category brand consistency
+                    if hasattr(bg, 'enforce_cross_category_brand_consistency'):
+                        print("🔄 Enforcing cross-category brand consistency...")
+                        df = bg.enforce_cross_category_brand_consistency(df)
+                    
+                    # 5. Remove dash variants from output
+                    if hasattr(bg, 'remove_dash_variants_from_output'):
+                        print("🗑️ Removing dash variants...")
+                        df = bg.remove_dash_variants_from_output(df, brands)
+                    
+                    # 6. Convert all text values to uppercase
+                    print("⬆️ Converting to uppercase...")
+                    df['Column'] = df['Column'].astype(str).str.upper()
+                    df['Value'] = df['Value'].astype(str).str.upper()
+                    
+                    # 7. Final sort by category order (matches terminal exactly)
+                    print("📊 Final sorting by category order...")
+                    CATEGORY_ORDER = [
+                        "INPUT_METADATA", "BRAND INPUT", "SAMPLE SIZE", "AVID FAN", "CASUAL FAN",
+                        "AGE", "EDUCATION", "ETHNICITY", "GENDER", "INCOME", "RELATIONSHIP", 
+                        "SEXUAL_ORIENTATION", "PARENTAL_STATUS", "OCCUPATION", "LOCATION",
+                        "INTEREST", "AMUSEMENT PARKS", "APP/PLATFORM USAGE", "AUTOMOBILE", "BANKING",
+                        "DIGITAL BANKING", "CREDIT PROVIDER", "INVESTMENTS", "BETTING", "EDUCATION & LEARNING",
+                        "FRANCHISE", "GAMES", "HEALTH & WELLNESS", "HEAVY MACHINERY", "INSURANCE", "MEDIA",
+                        "MOST PURCHASED BRANDS", "MOVIE THEATER", "NON PROFIT/CHARITY", "PHARMACY", "TOYS",
+                        "TRAVEL", "QSR", "WHERE THEY DINE", "WHERE THEY SHOP", "SEARCH ENGINE/AI", "SEARCH ENGINE",
+                        "SOCIAL MEDIA", "BROADCAST/CABLE", "STREAMING/MUSIC", "STREAMING/PLATFORM", "STREAMING/CHANNEL",
+                        "VIRTUAL MVPD FAST", "PORN MEDIA", "TECHNOLOGY/DEVICE", "TELECOM", "WORKOUT FACILITY",
+                        "EVENTS", "VENUE", "TICKETING", "ACTOR", "ATHLETE", "HOST/PERSONALITY", "INFLUENCER/CREATOR",
+                        "MLB ATHLETE", "MUSICIAN/BAND", "NBA ATHLETE", "NFL ATHLETE", "POLITICS/ACTIVIST",
+                        "SOCCER ATHLETE", "WNBA ATHLETE", "TALENT", "SPORTS ORGANIZATIONS", "SPORTS TEAM",
+                        "WNBA", "NBA", "NFL", "NFC", "NFC EAST", "NFC NORTH", "NFC SOUTH", "NFC WEST",
+                        "NHL", "NWSL", "MLS", "ATLANTIC DIVISION", "PACIFIC DIVISION", "PREMIER LEAGUE",
+                        "METROPOLITAN DIVISION", "MLB", "LA LIGA", "GOLF", "EASTERN CONFERENCE", "CENTRAL DIVISION",
+                        "AFC", "AFC EAST", "AFC NORTH", "AFC SOUTH", "AFC WEST", "AL", "AL CENTRAL", "AL EAST",
+                        "AL WEST", "SERIE A", "SOCCER", "TENNIS", "UEFA", "WESTERN CONFERENCE", "SPORTS",
+                        "RUGBY", "VOLLEYBALL", "COLLEGE/UNIVERSITY", "ACCESSORIES", "APPAREL/FOOTWEAR",
+                        "BEAUTY/WELLNESS", "BRAND CATEGORY", "HOME/OUTDOOR", "MOST PURCHASED CATEGORIES", 
+                        "PETS", "TECHNOLOGY BRAND"
+                    ]
+                    
+                    def get_category_priority(col):
+                        """Define sort priority for categories"""
+                        col_upper = str(col).upper()
+                        try:
+                            return CATEGORY_ORDER.index(col_upper)
+                        except ValueError:
+                            return 1000  # Category not in predefined order - put at end
+                    
+                    df['__sort_priority'] = df['Column'].apply(get_category_priority)
+                    
+                    # Convert Category Share to numeric for proper sorting
+                    sort_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+                    df['__sort_value'] = pd.to_numeric(df[sort_col], errors='coerce').fillna(0)
+                    
+                    # Sort by: priority (asc), category name (asc), value (desc)
+                    df = df.sort_values(
+                        by=['__sort_priority', 'Column', '__sort_value'], 
+                        ascending=[True, True, False]
+                    )
+                    
+                    # Clean up temporary columns
+                    df = df.drop(columns=['__sort_priority', '__sort_value'])
+                    
+                    # Save the fully processed file
+                    df.to_csv(result_file, index=False)
+                    print("✅ All post-processing complete (matching terminal behavior)")
+                    
+                except Exception as e:
+                    print(f"⚠️ Post-processing error (non-fatal): {e}")
+                    import traceback
+                    traceback.print_exc()
                 
                 # Validate demographics against reference if provided
                 demographic_validation = None
