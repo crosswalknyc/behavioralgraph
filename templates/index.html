@@ -5171,6 +5171,17 @@
                         <div id="locationCountBottom" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
                     </div>
                 </div>
+                
+                <!-- All Locations by Percentage -->
+                <div class="location-table location-section" style="margin-top: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+                        <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">📊 All Locations by Percentage <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('location', 'All Locations')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'All Locations')" title="Add to Deck">➕</button></span></h3>
+                        <input type="text" id="locationSearchAll" placeholder="🔍 Search DMAs..." oninput="filterAllLocations()" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); width: 200px;">
+                    </div>
+                    <div class="location-row header"><span>#</span><span>Location</span><span>Percentage</span><span>Index</span></div>
+                    <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
+                    <div id="locationCountAll" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
+                </div>
             </div>
 
             <!-- Affinity Map Tab -->
@@ -8339,6 +8350,27 @@
             // Update count
             document.getElementById('locationCountBottom').textContent = `Showing ${underIndexing.length} DMAs`;
             
+            // Render ALL locations sorted by percentage descending
+            const allByPct = [...locations].sort((a, b) => b.pct - a.pct);
+            document.getElementById('locationListAll').innerHTML = allByPct.map((loc, i) => {
+                const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
+                const displayValue = isProjection 
+                    ? formatNumber(Math.round(loc.projection || 0))
+                    : loc.pct.toFixed(2) + '%';
+                return `
+                    <div class="location-row" data-name="${loc.name.toLowerCase()}">
+                        <span>${i + 1}</span>
+                        <span>${loc.name}</span>
+                        <span style="font-weight: 600;">${displayValue}</span>
+                        <span style="color: ${indexColor};">${loc.index}</span>
+                    </div>
+                `;
+            }).join('');
+            document.getElementById('locationCountAll').textContent = `Showing ${allByPct.length} DMAs`;
+            
+            // Store all locations for filtering
+            allLocationData.all = allByPct;
+            
             // Clear search inputs
             const searchTop = document.getElementById('locationSearchTop');
             const searchBottom = document.getElementById('locationSearchBottom');
@@ -8389,6 +8421,46 @@
             
             // Update count
             const totalCount = which === 'top' ? allLocationData.overIndexing.length : allLocationData.underIndexing.length;
+            countEl.textContent = searchTerm 
+                ? `Showing ${filtered.length} of ${totalCount} DMAs`
+                : `Showing ${totalCount} DMAs`;
+        }
+        
+        function filterAllLocations() {
+            const isProjection = dashDisplayMode === 'projection';
+            const searchInput = document.getElementById('locationSearchAll');
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            
+            const data = allLocationData.all || [];
+            const listEl = document.getElementById('locationListAll');
+            const countEl = document.getElementById('locationCountAll');
+            
+            // Filter data
+            const filtered = searchTerm 
+                ? data.filter(loc => loc.name.toLowerCase().includes(searchTerm))
+                : data;
+            
+            // Sort by percentage descending
+            const sorted = [...filtered].sort((a, b) => b.pct - a.pct);
+            
+            // Render filtered results
+            listEl.innerHTML = sorted.map((loc, i) => {
+                const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
+                const displayValue = isProjection 
+                    ? formatNumber(Math.round(loc.projection || 0))
+                    : loc.pct.toFixed(2) + '%';
+                return `
+                    <div class="location-row" data-name="${loc.name.toLowerCase()}">
+                        <span>${i + 1}</span>
+                        <span>${loc.name}</span>
+                        <span style="font-weight: 600;">${displayValue}</span>
+                        <span style="color: ${indexColor};">${loc.index}</span>
+                    </div>
+                `;
+            }).join('');
+            
+            // Update count
+            const totalCount = data.length;
             countEl.textContent = searchTerm 
                 ? `Showing ${filtered.length} of ${totalCount} DMAs`
                 : `Showing ${totalCount} DMAs`;
