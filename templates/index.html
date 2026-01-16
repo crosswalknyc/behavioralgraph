@@ -9462,8 +9462,18 @@
                     </div>
                 `).join('') || '<p style="color: var(--text-secondary);">No significant demographic differences</p>';
             
-            // Top differentiators
-            document.getElementById('topDifferentiators').innerHTML = topOverIndexers.slice(0, 10).map((item, i) => `
+            // Top differentiators - get top item from EACH category for diverse mix
+            const topByCategory = {};
+            allItems.forEach(item => {
+                if (!topByCategory[item.category] || item.index > topByCategory[item.category].index) {
+                    topByCategory[item.category] = item;
+                }
+            });
+            const diverseDifferentiators = Object.values(topByCategory)
+                .filter(i => i.index > 100)
+                .sort((a, b) => b.index - a.index)
+                .slice(0, 10);
+            document.getElementById('topDifferentiators').innerHTML = diverseDifferentiators.map((item, i) => `
                 <div class="differentiator-item">
                     <span class="differentiator-rank">#${i + 1}</span>
                     <span class="differentiator-name">${item.name} <span class="category-tag">${item.category}</span></span>
