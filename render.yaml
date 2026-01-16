@@ -31,7 +31,7 @@ services:
         value: "PUBLIC"
       - key: SNOWFLAKE_ROLE
         value: "ACCOUNTADMIN"
-      # SMTP Email Configuration
+      # SMTP Email Configuration (fallback)
       - key: SMTP_SERVER
         value: "smtp.gmail.com"
       - key: SMTP_PORT
@@ -42,4 +42,11 @@ services:
         value: "Token7778"
       - key: FROM_EMAIL
         value: "no_reply@crosswalknyc.com"
+      # Google OAuth for Gmail API (set in Render dashboard)
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: APP_URL
+        value: "https://behavioralgraph.onrender.com"
     healthCheckPath: /api/health

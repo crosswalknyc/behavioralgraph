@@ -1190,6 +1190,255 @@ def generate_random_password(length=12):
     chars = string.ascii_letters + string.digits + "!@#$%"
     return ''.join(secrets.choice(chars) for _ in range(length))
 
+# ============================================================================
+# GMAIL OAUTH INTEGRATION
+# ============================================================================
+
+GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.send']
+GMAIL_TOKEN_KEY = 'system/gmail_tokens.json'
+
+def get_gmail_credentials():
+    """Get Gmail OAuth credentials from environment or S3."""
+    client_id = os.environ.get('GOOGLE_CLIENT_ID')
+    client_secret = os.environ.get('GOOGLE_CLIENT_SECRET')
+    return client_id, client_secret
+
+def load_gmail_tokens():
+    """Load Gmail OAuth tokens from S3."""
+    if not s3_client:
+        return None
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=GMAIL_TOKEN_KEY)
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except:
+        return None
+
+def save_gmail_tokens(tokens):
+    """Save Gmail OAuth tokens to S3."""
+    if not s3_client:
+        return False
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=GMAIL_TOKEN_KEY,
+            Body=json.dumps(tokens),
+            ContentType='application/json'
+        )
+        print("✅ Gmail tokens saved to S3")
+        return True
+    except Exception as e:
+        print(f"❌ Error saving Gmail tokens: {e}")
+        return False
+
+def get_gmail_service():
+    """Get authenticated Gmail API service."""
+    try:
+        from google.oauth2.credentials import Credentials
+        from googleapiclient.discovery import build
+        
+        tokens = load_gmail_tokens()
+        if not tokens:
+            return None
+        
+        creds = Credentials(
+            token=tokens.get('access_token'),
+            refresh_token=tokens.get('refresh_token'),
+            token_uri='https://oauth2.googleapis.com/token',
+            client_id=os.environ.get('GOOGLE_CLIENT_ID'),
+            client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
+            scopes=GMAIL_SCOPES
+        )
+        
+        # Refresh if expired
+        if creds.expired and creds.refresh_token:
+            from google.auth.transport.requests import Request
+            creds.refresh(Request())
+            # Save refreshed tokens
+            save_gmail_tokens({
+                'access_token': creds.token,
+                'refresh_token': creds.refresh_token
+            })
+        
+        return build('gmail', 'v1', credentials=creds)
+    except Exception as e:
+        print(f"❌ Gmail service error: {e}")
+        return None
+
+def send_email_via_gmail(to_email, subject, html_content, text_content=None):
+    """Send email using Gmail API (OAuth)."""
+    import base64
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    
+    service = get_gmail_service()
+    if not service:
+        return False, "Gmail not connected"
+    
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        
+        if text_content:
+            msg.attach(MIMEText(text_content, 'plain'))
+        msg.attach(MIMEText(html_content, 'html'))
+        
+        raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+        
+        service.users().messages().send(
+            userId='me',
+            body={'raw': raw}
+        ).execute()
+        
+        print(f"✅ Email sent via Gmail to {to_email}")
+        return True, "Email sent via Gmail"
+    except Exception as e:
+        print(f"❌ Gmail send error: {e}")
+        return False, str(e)
+
+@app.route('/api/admin/gmail/status')
+@requires_admin
+def gmail_status():
+    """Check Gmail connection status."""
+    tokens = load_gmail_tokens()
+    client_id, client_secret = get_gmail_credentials()
+    
+    return jsonify({
+        'success': True,
+        'connected': tokens is not None and tokens.get('access_token') is not None,
+        'configured': bool(client_id and client_secret),
+        'email': tokens.get('email') if tokens else None
+    })
+
+@app.route('/api/admin/gmail/connect')
+@requires_admin
+def gmail_connect():
+    """Start Gmail OAuth flow."""
+    try:
+        from google_auth_oauthlib.flow import Flow
+        
+        client_id, client_secret = get_gmail_credentials()
+        if not client_id or not client_secret:
+            return jsonify({
+                'success': False,
+                'error': 'Gmail OAuth not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to environment.'
+            })
+        
+        # Build redirect URI
+        redirect_uri = request.host_url.rstrip('/') + '/api/admin/gmail/callback'
+        
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [redirect_uri]
+                }
+            },
+            scopes=GMAIL_SCOPES,
+            redirect_uri=redirect_uri
+        )
+        
+        authorization_url, state = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent'
+        )
+        
+        session['gmail_oauth_state'] = state
+        
+        return jsonify({
+            'success': True,
+            'auth_url': authorization_url
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/gmail/callback')
+def gmail_callback():
+    """Handle Gmail OAuth callback."""
+    try:
+        from google_auth_oauthlib.flow import Flow
+        
+        client_id, client_secret = get_gmail_credentials()
+        redirect_uri = request.host_url.rstrip('/') + '/api/admin/gmail/callback'
+        
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [redirect_uri]
+                }
+            },
+            scopes=GMAIL_SCOPES,
+            redirect_uri=redirect_uri
+        )
+        
+        # Exchange code for tokens
+        flow.fetch_token(authorization_response=request.url)
+        
+        credentials = flow.credentials
+        
+        # Get user email
+        from googleapiclient.discovery import build
+        service = build('gmail', 'v1', credentials=credentials)
+        profile = service.users().getProfile(userId='me').execute()
+        
+        # Save tokens
+        save_gmail_tokens({
+            'access_token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'email': profile.get('emailAddress')
+        })
+        
+        # Redirect back to admin with success
+        return redirect('/admin?gmail=connected')
+    except Exception as e:
+        print(f"❌ Gmail OAuth callback error: {e}")
+        return redirect(f'/admin?gmail=error&message={str(e)}')
+
+@app.route('/api/admin/gmail/disconnect', methods=['POST'])
+@requires_admin
+def gmail_disconnect():
+    """Disconnect Gmail OAuth."""
+    try:
+        if s3_client:
+            s3_client.delete_object(Bucket=S3_BUCKET, Key=GMAIL_TOKEN_KEY)
+        return jsonify({'success': True, 'message': 'Gmail disconnected'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/gmail/test', methods=['POST'])
+@requires_admin
+def gmail_test():
+    """Send a test email via Gmail."""
+    try:
+        data = request.get_json()
+        to_email = data.get('to_email')
+        
+        if not to_email:
+            return jsonify({'success': False, 'error': 'Email address required'})
+        
+        success, message = send_email_via_gmail(
+            to_email,
+            '🧪 Test Email from Crosswalk IQ',
+            '<h1>Test Email</h1><p>This is a test email from your Crosswalk IQ dashboard.</p><p>Gmail integration is working!</p>',
+            'Test Email\n\nThis is a test email from your Crosswalk IQ dashboard.\nGmail integration is working!'
+        )
+        
+        return jsonify({'success': success, 'message': message})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+# ============================================================================
+# EMAIL SENDING (uses Gmail API if connected, falls back to SMTP)
+# ============================================================================
+
 def send_welcome_email_async(email, username, password, role):
     """Send welcome email in background thread (non-blocking)."""
     def _send():
@@ -1203,32 +1452,15 @@ def send_welcome_email_async(email, username, password, role):
     return True, "Email queued for sending"
 
 def send_welcome_email_sync(email, username, password, role):
-    """Send welcome email with login credentials (blocking)."""
+    """Send welcome email with login credentials (blocking). Uses Gmail API if available, falls back to SMTP."""
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
     
-    # Get email config from environment
-    smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
-    smtp_port = int(os.environ.get('SMTP_PORT', 587))
-    smtp_user = os.environ.get('SMTP_USER', '')
-    smtp_password = os.environ.get('SMTP_PASSWORD', '')
-    from_email = os.environ.get('FROM_EMAIL', smtp_user)
     app_url = os.environ.get('APP_URL', 'https://behavioralgraph.onrender.com')
     
-    if not smtp_user or not smtp_password:
-        print(f"⚠️ SMTP not configured - skipping welcome email for {username}")
-        return False, "SMTP not configured"
-    
-    try:
-        # Create message
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = '🎉 Welcome to Crosswalk Behavioral Graph'
-        msg['From'] = from_email
-        msg['To'] = email
-        
-        # Plain text version
-        text = f"""
+    # Build email content
+    text = f"""
 Welcome to Crosswalk Behavioral Graph!
 
 Your account has been created. Here are your login details:
@@ -1245,10 +1477,9 @@ If you have any questions, please contact your administrator.
 
 Best regards,
 Crosswalk Team
-        """
-        
-        # HTML version
-        html = f"""
+    """
+    
+    html = f"""
 <!DOCTYPE html>
 <html>
 <head>
@@ -1295,7 +1526,40 @@ Crosswalk Team
     </div>
 </body>
 </html>
-        """
+    """
+    
+    # Try Gmail API first (if connected)
+    tokens = load_gmail_tokens()
+    if tokens and tokens.get('access_token'):
+        print(f"📧 Sending email via Gmail API to {email}...")
+        success, message = send_email_via_gmail(
+            email,
+            '🎉 Welcome to Crosswalk Behavioral Graph',
+            html,
+            text
+        )
+        if success:
+            return True, "Email sent via Gmail"
+        else:
+            print(f"⚠️ Gmail API failed: {message}, trying SMTP...")
+    
+    # Fall back to SMTP
+    smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+    smtp_port = int(os.environ.get('SMTP_PORT', 587))
+    smtp_user = os.environ.get('SMTP_USER', '')
+    smtp_password = os.environ.get('SMTP_PASSWORD', '')
+    from_email = os.environ.get('FROM_EMAIL', smtp_user)
+    
+    if not smtp_user or not smtp_password:
+        print(f"⚠️ SMTP not configured - skipping welcome email for {username}")
+        return False, "Email not configured. Connect Gmail in Admin settings."
+    
+    try:
+        # Create message
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = '🎉 Welcome to Crosswalk Behavioral Graph'
+        msg['From'] = from_email
+        msg['To'] = email
         
         part1 = MIMEText(text, 'plain')
         part2 = MIMEText(html, 'html')
@@ -1303,6 +1567,7 @@ Crosswalk Team
         msg.attach(part2)
         
         # Send email with timeout
+        print(f"📧 Sending email via SMTP to {email}...")
         with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
             server.starttls()
             server.login(smtp_user, smtp_password)

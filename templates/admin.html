@@ -750,6 +750,7 @@
         <div class="admin-tabs">
             <button class="admin-tab active" onclick="showAdminTab('users')">👥 Users</button>
             <button class="admin-tab" onclick="showAdminTab('content')">📁 Content Management</button>
+            <button class="admin-tab" onclick="showAdminTab('settings')">⚙️ Settings</button>
         </div>
 
         <!-- USERS SECTION -->
@@ -822,6 +823,76 @@
                     <div id="recentRunsList">
                         <p style="color: var(--text-secondary); font-size: 0.85rem;">Loading recent runs...</p>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SETTINGS SECTION -->
+        <div id="section-settings" class="admin-section">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Email Status</h3>
+                    <div class="stat-value" id="emailStatus">Checking...</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Gmail Connected</h3>
+                    <div class="stat-value" id="gmailConnected">--</div>
+                </div>
+            </div>
+            
+            <!-- Gmail Integration -->
+            <div class="card" style="margin-top: 1.5rem;">
+                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2>📧 Gmail Integration</h2>
+                    <div id="gmailStatusBadge" style="padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">
+                        Checking...
+                    </div>
+                </div>
+                <div style="padding: 1rem; background: var(--bg-input); border-radius: 8px; margin-bottom: 1rem;">
+                    <p style="margin: 0 0 0.5rem 0; color: var(--text-secondary); font-size: 0.85rem;">
+                        Connect your Gmail account to send welcome emails to new users. This uses secure OAuth authentication - 
+                        your password is never stored.
+                    </p>
+                </div>
+                
+                <div id="gmailNotConnected" style="display: none;">
+                    <button class="btn btn-success" onclick="connectGmail()" style="width: 100%;">
+                        🔗 Connect Gmail Account
+                    </button>
+                    <p style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-secondary);">
+                        You'll be redirected to Google to authorize email sending.
+                    </p>
+                </div>
+                
+                <div id="gmailConnectedSection" style="display: none;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem; padding: 1rem; background: rgba(16, 185, 129, 0.1); border-radius: 8px; margin-bottom: 1rem;">
+                        <span style="font-size: 1.5rem;">✅</span>
+                        <div>
+                            <div style="font-weight: 600; color: #10b981;">Gmail Connected</div>
+                            <div id="gmailEmail" style="font-size: 0.85rem; color: var(--text-secondary);">--</div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 0.75rem;">
+                        <div style="flex: 1;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-size: 0.8rem;">Test Email Address</label>
+                            <input type="email" id="testEmailAddress" placeholder="test@example.com" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                        </div>
+                        <button class="btn btn-secondary" onclick="sendTestEmail()" style="align-self: flex-end;">
+                            🧪 Send Test
+                        </button>
+                    </div>
+                    
+                    <button class="btn" onclick="disconnectGmail()" style="margin-top: 1rem; background: rgba(239, 68, 68, 0.2); color: #ef4444; width: 100%;">
+                        🔌 Disconnect Gmail
+                    </button>
+                </div>
+                
+                <div id="gmailNotConfigured" style="display: none; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-radius: 8px;">
+                    <p style="margin: 0; color: #ef4444; font-size: 0.85rem;">
+                        ⚠️ Gmail OAuth is not configured. Add <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> 
+                        to your environment variables on Render.
+                    </p>
                 </div>
             </div>
         </div>
@@ -1244,6 +1315,139 @@
             if (tabName === 'content') {
                 loadContentFiles();
             }
+            if (tabName === 'settings') {
+                checkGmailStatus();
+            }
+        }
+        
+        // ============ GMAIL INTEGRATION ============
+        
+        async function checkGmailStatus() {
+            try {
+                const response = await fetch('/api/admin/gmail/status', { credentials: 'same-origin' });
+                const data = await response.json();
+                
+                const statusBadge = document.getElementById('gmailStatusBadge');
+                const notConnected = document.getElementById('gmailNotConnected');
+                const connectedSection = document.getElementById('gmailConnectedSection');
+                const notConfigured = document.getElementById('gmailNotConfigured');
+                const emailStatus = document.getElementById('emailStatus');
+                const gmailConnected = document.getElementById('gmailConnected');
+                
+                if (!data.configured) {
+                    // OAuth not configured
+                    statusBadge.textContent = 'Not Configured';
+                    statusBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+                    statusBadge.style.color = '#ef4444';
+                    notConnected.style.display = 'none';
+                    connectedSection.style.display = 'none';
+                    notConfigured.style.display = 'block';
+                    emailStatus.textContent = 'Not Configured';
+                    emailStatus.style.color = '#ef4444';
+                    gmailConnected.textContent = 'No';
+                    gmailConnected.style.color = '#ef4444';
+                } else if (data.connected) {
+                    // Gmail connected
+                    statusBadge.textContent = 'Connected';
+                    statusBadge.style.background = 'rgba(16, 185, 129, 0.2)';
+                    statusBadge.style.color = '#10b981';
+                    notConnected.style.display = 'none';
+                    connectedSection.style.display = 'block';
+                    notConfigured.style.display = 'none';
+                    document.getElementById('gmailEmail').textContent = data.email || 'Connected';
+                    emailStatus.textContent = 'Gmail API';
+                    emailStatus.style.color = '#10b981';
+                    gmailConnected.textContent = 'Yes';
+                    gmailConnected.style.color = '#10b981';
+                } else {
+                    // Not connected but configured
+                    statusBadge.textContent = 'Not Connected';
+                    statusBadge.style.background = 'rgba(245, 158, 11, 0.2)';
+                    statusBadge.style.color = '#f59e0b';
+                    notConnected.style.display = 'block';
+                    connectedSection.style.display = 'none';
+                    notConfigured.style.display = 'none';
+                    emailStatus.textContent = 'SMTP Fallback';
+                    emailStatus.style.color = '#f59e0b';
+                    gmailConnected.textContent = 'No';
+                    gmailConnected.style.color = '#f59e0b';
+                }
+            } catch (e) {
+                console.error('Error checking Gmail status:', e);
+            }
+        }
+        
+        async function connectGmail() {
+            try {
+                const response = await fetch('/api/admin/gmail/connect', { credentials: 'same-origin' });
+                const data = await response.json();
+                
+                if (data.success && data.auth_url) {
+                    // Redirect to Google OAuth
+                    window.location.href = data.auth_url;
+                } else {
+                    showToast(data.error || 'Failed to start Gmail connection', true);
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, true);
+            }
+        }
+        
+        async function disconnectGmail() {
+            if (!confirm('Disconnect Gmail? Welcome emails will fall back to SMTP (if configured).')) return;
+            
+            try {
+                const response = await fetch('/api/admin/gmail/disconnect', {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Gmail disconnected');
+                    checkGmailStatus();
+                } else {
+                    showToast(data.error || 'Failed to disconnect', true);
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, true);
+            }
+        }
+        
+        async function sendTestEmail() {
+            const email = document.getElementById('testEmailAddress').value.trim();
+            if (!email) {
+                showToast('Enter an email address', true);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/gmail/test', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ to_email: email })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Test email sent! Check your inbox.');
+                } else {
+                    showToast(data.error || 'Failed to send test email', true);
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, true);
+            }
+        }
+        
+        // Check for Gmail callback status
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('gmail') === 'connected') {
+            showToast('Gmail connected successfully! 🎉');
+            showAdminTab('settings');
+        } else if (urlParams.get('gmail') === 'error') {
+            showToast('Gmail connection failed: ' + (urlParams.get('message') || 'Unknown error'), true);
+            showAdminTab('settings');
         }
 
         async function loadUsers() {
