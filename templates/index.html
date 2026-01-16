@@ -6709,12 +6709,13 @@
 
             // Age - horizontal bar with Gen Pop in data labels (green/red based on index)
             // Apply sorting based on user selection
-            const sortedAge = getSortedAgeData(demographics.age);
-            const ageLabels = Object.keys(sortedAge);
-            const ageGenPop = ageLabels.map(k => demographicsGenPop.age?.[k] || 0);
-            const agePcts = ageLabels.map(k => sortedAge[k]);
+            const sortedAgeResult = getSortedAgeData(demographics.age);
+            const ageLabels = Object.keys(sortedAgeResult.display);
+            const ageOriginalKeys = sortedAgeResult.originalKeys;
+            const ageGenPop = ageOriginalKeys.map(k => demographicsGenPop.age?.[k] || 0);
+            const agePcts = ageLabels.map((k, i) => sortedAgeResult.display[k]);
             const ageData = isProjection 
-                ? ageLabels.map(k => demographicsProjection.age?.[k] || 0)
+                ? ageOriginalKeys.map(k => demographicsProjection.age?.[k] || 0)
                 : agePcts;
             
             // Calculate max for x-axis with padding for labels (horizontal bar)
@@ -7112,6 +7113,26 @@
             }
         }
         
+        // Map original age labels to display labels
+        const AGE_DISPLAY_LABELS = {
+            '<16': '<16',
+            'under 16': '<16',
+            '16-18': '17-18',
+            '18-20': '19-20',
+            '21-25': '21-25',
+            '26-30': '26-30',
+            '31-40': '31-40',
+            '41-59': '41-59',
+            '60+': '60+',
+            '65+': '65+',
+            'over 65': '65+'
+        };
+        
+        function getAgeDisplayLabel(originalLabel) {
+            const lower = originalLabel.toLowerCase();
+            return AGE_DISPLAY_LABELS[lower] || AGE_DISPLAY_LABELS[originalLabel] || originalLabel;
+        }
+        
         function getSortedAgeData(ageData) {
             const entries = Object.entries(ageData);
             
@@ -7119,29 +7140,33 @@
                 // Sort by value descending
                 entries.sort((a, b) => b[1] - a[1]);
             } else {
-                // Sort by age - extract the starting number from each age label
+                // Sort by age in correct order: <16, 17-18, 19-20, 21-25, 26-30, 31-40, 41-59, 60+
+                const ageOrder = ['<16', 'under 16', '16-18', '18-20', '21-25', '26-30', '31-40', '41-59', '60+', '65+', 'over 65'];
                 entries.sort((a, b) => {
-                    const getAgeValue = (label) => {
-                        const upperLabel = label.toUpperCase();
-                        // Handle special cases first
-                        if (upperLabel.includes('UNDER') || upperLabel.startsWith('<')) {
-                            // Extract number after < or from "UNDER X"
-                            const match = upperLabel.match(/(\d+)/);
-                            return match ? parseInt(match[1]) - 1 : 0; // Under 18 = 17, <16 = 15
-                        }
-                        if (upperLabel.includes('OVER') || upperLabel.includes('+') || upperLabel === '65+' || upperLabel === '60+') {
-                            const match = upperLabel.match(/(\d+)/);
-                            return match ? parseInt(match[1]) + 1 : 999; // 65+ = 66, 60+ = 61
-                        }
-                        // For ranges like "18-20", "21-25", extract first number
-                        const match = upperLabel.match(/(\d+)/);
+                    const getOrderIndex = (label) => {
+                        const lower = label.toLowerCase();
+                        // Check exact match first
+                        let idx = ageOrder.findIndex(o => o.toLowerCase() === lower);
+                        if (idx !== -1) return idx;
+                        // Check if label contains any order item
+                        idx = ageOrder.findIndex(o => lower.includes(o.toLowerCase()) || o.toLowerCase().includes(lower));
+                        if (idx !== -1) return idx;
+                        // Fallback: extract number
+                        const match = lower.match(/(\d+)/);
                         return match ? parseInt(match[1]) : 999;
                     };
-                    return getAgeValue(a[0]) - getAgeValue(b[0]);
+                    return getOrderIndex(a[0]) - getOrderIndex(b[0]);
                 });
             }
             
-            return Object.fromEntries(entries);
+            // Return both display labels and original keys for Gen Pop lookup
+            const originalKeys = entries.map(([key]) => key);
+            const display = {};
+            entries.forEach(([key, value]) => {
+                display[getAgeDisplayLabel(key)] = value;
+            });
+            
+            return { display, originalKeys };
         }
         
         function renderInterests(interests) {
