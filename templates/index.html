@@ -1220,22 +1220,22 @@
         }
 
         .behavioral-pct {
-            font-size: 0.7rem;
-            font-weight: 600;
+            font-size: 0.65rem;
+            font-weight: 500;
             color: var(--text-primary);
-            min-width: 50px;
+            min-width: 42px;
             text-align: right;
+            flex-shrink: 0;
         }
 
         .behavioral-index {
             font-size: 0.65rem;
             font-weight: 700;
-            min-width: 32px;
+            min-width: 38px;
             text-align: center;
-            padding: 1px 4px;
+            padding: 2px 4px;
             border-radius: 3px;
             background: rgba(0, 0, 0, 0.3);
-            margin-left: 4px;
             flex-shrink: 0;
         }
 
@@ -7476,26 +7476,28 @@
             return items.map((item, idx) => {
                 const index = item.index || 0;
                 const genPopPct = item.genPopPct || 0;
+                const profilePct = item.pct || 0;
                 // Green if over-indexing (index >= 100), red if under-indexing (index < 100)
                 const indexColor = index >= 100 ? '#10b981' : '#ef4444';
-                // Show Gen Pop % or projection number based on toggle
-                const genPopProjection = Math.round((genPopPct / 100) * US_POP);
-                const genPopDisplay = isProjection 
-                    ? formatNumber(genPopProjection)
-                    : genPopPct.toFixed(1) + '%';
-                const genPopBadge = genPopPct > 0 ? `<span class="behavioral-index" style="color: ${indexColor}">${genPopDisplay}</span>` : '';
-                const displayValue = isProjection 
+                
+                // Show profile % and gen pop % alongside index
+                const profileDisplay = isProjection 
                     ? formatNumber(Math.round(item.projection || 0))
-                    : item.pct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjection 
+                    ? formatNumber(Math.round((genPopPct / 100) * US_POP))
+                    : genPopPct.toFixed(1) + '%';
+                
                 return `
                     <div class="behavioral-item">
                         <span class="behavioral-rank">${idx + 1}</span>
                         <span class="behavioral-name" title="${item.name}">${item.name}</span>
                         <div class="behavioral-bar-container">
-                            <div class="behavioral-bar" style="width: ${(item.pct / maxPct) * 100}%"></div>
+                            <div class="behavioral-bar" style="width: ${(profilePct / maxPct) * 100}%"></div>
                         </div>
-                        <span class="behavioral-pct">${displayValue}</span>
-                        ${genPopBadge}
+                        <span class="behavioral-index" style="color: ${indexColor}; font-weight: 700;">${index}</span>
+                        <span class="behavioral-pct" style="color: var(--text-primary);">${profileDisplay}</span>
+                        <span class="behavioral-pct" style="color: var(--text-secondary);">(${genPopDisplay})</span>
                     </div>
                 `;
             }).join('');
