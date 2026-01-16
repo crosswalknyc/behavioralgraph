@@ -1093,6 +1093,149 @@
             min-width: 50px;
             text-align: right;
             flex-shrink: 0;
+        }
+        
+        /* Interests Insights Row */
+        .interests-insights-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        
+        .insight-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .insight-card.highlight {
+            border-color: var(--accent-lime);
+            background: rgba(200, 230, 0, 0.05);
+        }
+        
+        .insight-icon {
+            font-size: 1.5rem;
+        }
+        
+        .insight-content {
+            flex: 1;
+        }
+        
+        .insight-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        
+        .insight-value {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        .insight-detail {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+        
+        /* Interests Heatmap */
+        .interests-heatmap-section {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .interests-heatmap-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        
+        .heatmap-cell {
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            min-width: 100px;
+        }
+        
+        .heatmap-cell:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        .heatmap-cell .cell-name {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        
+        .heatmap-cell .cell-stats {
+            font-size: 0.65rem;
+            opacity: 0.9;
+        }
+        
+        /* Interest Category Cards */
+        .interests-categories-section {
+            margin-bottom: 1rem;
+        }
+        
+        .interests-category-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 0.75rem;
+        }
+        
+        .interest-category-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+        }
+        
+        .interest-category-card h4 {
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .interest-category-card .cat-avg {
+            font-size: 0.7rem;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            background: rgba(0,0,0,0.3);
+        }
+        
+        .interest-category-items {
+            font-size: 0.75rem;
+        }
+        
+        .interest-category-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.25rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .interest-category-item:last-child {
+            border-bottom: none;
+        }
+        
+        /* Interests List Section */
+        .interests-list-section {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 1rem;
             border-radius: 4px;
             min-width: 50px;
             text-align: center;
@@ -4705,19 +4848,94 @@
             <!-- Interests Tab -->
             <div id="tab-interests" class="tab-content">
                 <div class="tab-explainer">
-                    <div class="explainer-icon">🎯</div>
-                    <div class="explainer-text">
-                        <strong>Interests</strong> — What your audience is interested in. Categories like hobbies, activities, passions, and lifestyle preferences. <strong>Index:</strong> <span class="highlight-green">100+ = over-indexes</span> | <span class="highlight-red">&lt;100 = under-indexes</span>.
+                    <strong>Interests</strong> — What your audience is passionate about. <strong>Index:</strong> <span class="highlight-green">100+ = over-indexes</span> | <span class="highlight-red">&lt;100 = under-indexes</span>. Heatmap shows category strength by color intensity.
+                </div>
+                
+                <!-- Interests Insights Summary -->
+                <div class="interests-insights-row" id="interestsInsightsRow">
+                    <div class="insight-card highlight">
+                        <div class="insight-icon">🔥</div>
+                        <div class="insight-content">
+                            <div class="insight-label">Top Over-Indexing</div>
+                            <div class="insight-value" id="topOverIndexInterest">--</div>
+                            <div class="insight-detail" id="topOverIndexDetail">Index: --</div>
+                        </div>
+                    </div>
+                    <div class="insight-card">
+                        <div class="insight-icon">📊</div>
+                        <div class="insight-content">
+                            <div class="insight-label">Avg Interest Index</div>
+                            <div class="insight-value" id="avgInterestIndex">--</div>
+                            <div class="insight-detail" id="interestIndexRange">Range: --</div>
+                        </div>
+                    </div>
+                    <div class="insight-card">
+                        <div class="insight-icon">⬆️</div>
+                        <div class="insight-content">
+                            <div class="insight-label">Over-Indexing</div>
+                            <div class="insight-value" id="overIndexCount">--</div>
+                            <div class="insight-detail">interests above 100</div>
+                        </div>
+                    </div>
+                    <div class="insight-card">
+                        <div class="insight-icon">⬇️</div>
+                        <div class="insight-content">
+                            <div class="insight-label">Under-Indexing</div>
+                            <div class="insight-value" id="underIndexCount">--</div>
+                            <div class="insight-detail">interests below 100</div>
+                        </div>
                     </div>
                 </div>
-                <div class="interests-header">
-                    <h2>🎯 Audience Interests</h2>
-                    <div class="interests-filter">
-                        <input type="text" id="interestsSearchInput" placeholder="🔍 Search interests..." oninput="filterInterests()" style="padding: 0.5rem 1rem; font-size: 0.85rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); width: 250px;">
+                
+                <!-- Category Heatmap -->
+                <div class="interests-heatmap-section">
+                    <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                        🗺️ Interest Category Heatmap
+                        <span class="module-action-btns">
+                            <button class="module-btn csv-btn" onclick="exportModuleCSV('interests', 'Category Heatmap')" title="CSV">CSV</button>
+                            <button class="module-btn deck-btn" onclick="addModuleToDeck('interests', 'Category Heatmap')" title="Add to Deck">➕</button>
+                        </span>
+                    </h3>
+                    <div class="heatmap-legend" style="margin-bottom: 0.75rem;">
+                        <span style="font-size: 0.7rem; color: var(--text-secondary);">Under-index</span>
+                        <div style="display: flex; height: 12px; width: 150px; border-radius: 4px; overflow: hidden;">
+                            <div style="flex: 1; background: #ef4444;"></div>
+                            <div style="flex: 1; background: #f97316;"></div>
+                            <div style="flex: 1; background: #eab308;"></div>
+                            <div style="flex: 1; background: #84cc16;"></div>
+                            <div style="flex: 1; background: #22c55e;"></div>
+                        </div>
+                        <span style="font-size: 0.7rem; color: var(--text-secondary);">Over-index</span>
+                    </div>
+                    <div class="interests-heatmap-grid" id="interestsHeatmapGrid">
+                        <div style="padding: 1rem; text-align: center; color: var(--text-secondary);">Loading...</div>
                     </div>
                 </div>
-                <div class="interests-grid" id="interestsGrid">
-                    <div style="padding: 2rem; text-align: center; color: var(--text-secondary);">Select a profile to view interests data</div>
+                
+                <!-- Top Interests by Category -->
+                <div class="interests-categories-section">
+                    <h3>📁 Top Interests by Category</h3>
+                    <div class="interests-category-cards" id="interestsCategoryCards">
+                        <div style="padding: 1rem; text-align: center; color: var(--text-secondary);">Loading...</div>
+                    </div>
+                </div>
+                
+                <!-- Full Interests List -->
+                <div class="interests-list-section">
+                    <div class="interests-header">
+                        <h3>📋 All Interests</h3>
+                        <div class="interests-filter">
+                            <input type="text" id="interestsSearchInput" placeholder="🔍 Search interests..." oninput="filterInterests()" style="padding: 0.5rem 1rem; font-size: 0.85rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); width: 250px;">
+                            <select id="interestsSortSelect" onchange="sortInterests(this.value)" style="padding: 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                <option value="index">Sort: Index ↓</option>
+                                <option value="pct">Sort: % ↓</option>
+                                <option value="alpha">Sort: A-Z</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="interests-grid" id="interestsGrid">
+                        <div style="padding: 2rem; text-align: center; color: var(--text-secondary);">Select a profile to view interests data</div>
+                    </div>
                 </div>
             </div>
 
@@ -7206,32 +7424,178 @@
             return { display, originalKeys };
         }
         
+        let allInterestsData = [];
+        let currentInterestSort = 'index';
+        
         function renderInterests(interests) {
             const container = document.getElementById('interestsGrid');
             if (!container) return;
             
             if (!interests || Object.keys(interests).length === 0) {
                 container.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-secondary);">No interests data available for this profile</div>';
+                document.getElementById('interestsHeatmapGrid').innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No data</div>';
+                document.getElementById('interestsCategoryCards').innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No data</div>';
                 return;
             }
             
-            const isProjection = dashDisplayMode === 'projection';
-            const US_POP = 324700000;
-            
-            // Convert to array and sort by index descending
-            const interestItems = Object.entries(interests)
+            // Convert to array
+            allInterestsData = Object.entries(interests)
                 .map(([name, data]) => ({ 
                     name, 
                     pct: data.pct || 0, 
                     index: data.index || 100,
                     genPopPct: data.genPopPct || 0,
-                    projection: data.projection || 0
+                    projection: data.projection || 0,
+                    category: categorizeInterest(name)
+                }));
+            
+            // Render insights
+            renderInterestsInsights(allInterestsData);
+            
+            // Render category heatmap
+            renderInterestsHeatmap(allInterestsData);
+            
+            // Render category cards
+            renderInterestsCategoryCards(allInterestsData);
+            
+            // Render main list
+            renderInterestsList(allInterestsData);
+        }
+        
+        function categorizeInterest(name) {
+            const lower = name.toLowerCase();
+            if (lower.includes('sport') || lower.includes('fitness') || lower.includes('gym') || lower.includes('running') || lower.includes('yoga') || lower.includes('hiking') || lower.includes('golf') || lower.includes('tennis')) return 'Sports & Fitness';
+            if (lower.includes('travel') || lower.includes('vacation') || lower.includes('adventure') || lower.includes('camping')) return 'Travel & Adventure';
+            if (lower.includes('food') || lower.includes('cooking') || lower.includes('restaurant') || lower.includes('wine') || lower.includes('coffee') || lower.includes('dining')) return 'Food & Dining';
+            if (lower.includes('fashion') || lower.includes('beauty') || lower.includes('style') || lower.includes('makeup') || lower.includes('skincare')) return 'Fashion & Beauty';
+            if (lower.includes('tech') || lower.includes('gaming') || lower.includes('video game') || lower.includes('computer') || lower.includes('gadget')) return 'Tech & Gaming';
+            if (lower.includes('music') || lower.includes('concert') || lower.includes('festival')) return 'Music & Entertainment';
+            if (lower.includes('movie') || lower.includes('film') || lower.includes('tv') || lower.includes('streaming') || lower.includes('netflix')) return 'Movies & TV';
+            if (lower.includes('read') || lower.includes('book') || lower.includes('education') || lower.includes('learn')) return 'Reading & Education';
+            if (lower.includes('home') || lower.includes('garden') || lower.includes('diy') || lower.includes('decor') || lower.includes('interior')) return 'Home & Garden';
+            if (lower.includes('pet') || lower.includes('dog') || lower.includes('cat') || lower.includes('animal')) return 'Pets & Animals';
+            if (lower.includes('health') || lower.includes('wellness') || lower.includes('meditation') || lower.includes('organic')) return 'Health & Wellness';
+            if (lower.includes('art') || lower.includes('photo') || lower.includes('craft') || lower.includes('creative')) return 'Arts & Crafts';
+            if (lower.includes('finance') || lower.includes('invest') || lower.includes('money') || lower.includes('business')) return 'Finance & Business';
+            if (lower.includes('family') || lower.includes('parent') || lower.includes('kid') || lower.includes('child')) return 'Family & Parenting';
+            if (lower.includes('car') || lower.includes('auto') || lower.includes('motor')) return 'Automotive';
+            return 'Other';
+        }
+        
+        function renderInterestsInsights(items) {
+            const overIndexing = items.filter(i => i.index >= 100).sort((a, b) => b.index - a.index);
+            const underIndexing = items.filter(i => i.index < 100);
+            const avgIndex = Math.round(items.reduce((sum, i) => sum + i.index, 0) / items.length);
+            const maxIndex = Math.max(...items.map(i => i.index));
+            const minIndex = Math.min(...items.map(i => i.index));
+            
+            document.getElementById('topOverIndexInterest').textContent = overIndexing[0]?.name || '--';
+            document.getElementById('topOverIndexDetail').textContent = `Index: ${overIndexing[0]?.index || '--'}`;
+            document.getElementById('avgInterestIndex').textContent = avgIndex;
+            document.getElementById('interestIndexRange').textContent = `Range: ${minIndex} - ${maxIndex}`;
+            document.getElementById('overIndexCount').textContent = overIndexing.length;
+            document.getElementById('underIndexCount').textContent = underIndexing.length;
+        }
+        
+        function renderInterestsHeatmap(items) {
+            const container = document.getElementById('interestsHeatmapGrid');
+            
+            // Group by category
+            const categories = {};
+            items.forEach(item => {
+                if (!categories[item.category]) {
+                    categories[item.category] = { items: [], totalIndex: 0, count: 0 };
+                }
+                categories[item.category].items.push(item);
+                categories[item.category].totalIndex += item.index;
+                categories[item.category].count++;
+            });
+            
+            // Calculate averages and sort
+            const categoryData = Object.entries(categories)
+                .map(([name, data]) => ({
+                    name,
+                    avgIndex: Math.round(data.totalIndex / data.count),
+                    count: data.count,
+                    topItem: data.items.sort((a, b) => b.index - a.index)[0]
                 }))
-                .sort((a, b) => b.index - a.index);
+                .sort((a, b) => b.avgIndex - a.avgIndex);
             
-            const maxPct = Math.max(...interestItems.map(i => i.pct), 1);
+            container.innerHTML = categoryData.map(cat => {
+                const { bg, color } = getHeatmapColor(cat.avgIndex);
+                return `
+                    <div class="heatmap-cell" style="background: ${bg}; color: ${color};" onclick="filterInterestsByCategory('${cat.name}')" title="Click to filter">
+                        <div class="cell-name">${cat.name}</div>
+                        <div class="cell-stats">Avg: ${cat.avgIndex} | ${cat.count} interests</div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function getHeatmapColor(index) {
+            if (index >= 150) return { bg: '#22c55e', color: '#000' };
+            if (index >= 120) return { bg: '#84cc16', color: '#000' };
+            if (index >= 100) return { bg: '#eab308', color: '#000' };
+            if (index >= 80) return { bg: '#f97316', color: '#000' };
+            return { bg: '#ef4444', color: '#fff' };
+        }
+        
+        function renderInterestsCategoryCards(items) {
+            const container = document.getElementById('interestsCategoryCards');
             
-            container.innerHTML = interestItems.map((item, idx) => {
+            // Group by category
+            const categories = {};
+            items.forEach(item => {
+                if (!categories[item.category]) categories[item.category] = [];
+                categories[item.category].push(item);
+            });
+            
+            // Sort and take top 5 per category
+            const categoryCards = Object.entries(categories)
+                .map(([name, catItems]) => {
+                    const sorted = catItems.sort((a, b) => b.index - a.index);
+                    const avgIndex = Math.round(sorted.reduce((sum, i) => sum + i.index, 0) / sorted.length);
+                    return { name, items: sorted.slice(0, 5), avgIndex };
+                })
+                .sort((a, b) => b.avgIndex - a.avgIndex)
+                .slice(0, 6);
+            
+            container.innerHTML = categoryCards.map(cat => {
+                const avgColor = cat.avgIndex >= 100 ? '#10b981' : '#ef4444';
+                return `
+                    <div class="interest-category-card">
+                        <h4>
+                            <span>${cat.name}</span>
+                            <span class="cat-avg" style="color: ${avgColor};">Avg: ${cat.avgIndex}</span>
+                        </h4>
+                        <div class="interest-category-items">
+                            ${cat.items.map(item => {
+                                const idxColor = item.index >= 100 ? '#10b981' : '#ef4444';
+                                return `<div class="interest-category-item">
+                                    <span>${item.name}</span>
+                                    <span style="color: ${idxColor}; font-weight: 600;">${item.index}</span>
+                                </div>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function renderInterestsList(items) {
+            const container = document.getElementById('interestsGrid');
+            const isProjection = dashDisplayMode === 'projection';
+            const US_POP = 324700000;
+            
+            // Sort based on current selection
+            let sorted = [...items];
+            if (currentInterestSort === 'index') sorted.sort((a, b) => b.index - a.index);
+            else if (currentInterestSort === 'pct') sorted.sort((a, b) => b.pct - a.pct);
+            else if (currentInterestSort === 'alpha') sorted.sort((a, b) => a.name.localeCompare(b.name));
+            
+            const maxPct = Math.max(...sorted.map(i => i.pct), 1);
+            
+            container.innerHTML = sorted.map((item, idx) => {
                 const indexColor = item.index >= 100 ? '#10b981' : '#ef4444';
                 const profileDisplay = isProjection 
                     ? formatNumber(Math.round(item.projection || (item.pct / 100) * US_POP))
@@ -7241,7 +7605,7 @@
                     : item.genPopPct.toFixed(1) + '%';
                 
                 return `
-                    <div class="interest-item" data-name="${item.name.toLowerCase()}">
+                    <div class="interest-item" data-name="${item.name.toLowerCase()}" data-category="${item.category}">
                         <span class="interest-rank">${idx + 1}</span>
                         <span class="interest-name" title="${item.name}">${item.name}</span>
                         <div class="interest-bar-container">
@@ -7253,6 +7617,23 @@
                     </div>
                 `;
             }).join('');
+        }
+        
+        function sortInterests(sortBy) {
+            currentInterestSort = sortBy;
+            if (allInterestsData.length > 0) {
+                renderInterestsList(allInterestsData);
+            }
+        }
+        
+        function filterInterestsByCategory(category) {
+            const searchInput = document.getElementById('interestsSearchInput');
+            if (searchInput) searchInput.value = '';
+            
+            document.querySelectorAll('.interest-item').forEach(item => {
+                const itemCat = item.dataset.category || '';
+                item.style.display = itemCat === category ? 'flex' : 'none';
+            });
         }
         
         function filterInterests() {
