@@ -1023,20 +1023,21 @@
         .chart-card {
             background: var(--bg-card);
             border-radius: 8px;
-            padding: 1rem;
+            padding: 1.25rem;
         }
 
         .chart-card h3 {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            margin-bottom: 0.75rem;
+            font-size: 1rem;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
             text-transform: uppercase;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            text-align: left;
         }
 
-        .chart-container { height: 180px; }
+        .chart-container { height: 250px; }
         
         /* Module Action Buttons (Add to Deck, CSV, PNG, PDF) */
         .module-action-btns {
@@ -7176,13 +7177,13 @@
                     indexAxis: 'y', 
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: { right: 20 } },
+                    layout: { padding: { right: 30 } },
                     plugins: { 
                         legend: { display: false },
                         datalabels: {
                             anchor: 'end',
                             align: 'end',
-                            font: { size: 11, weight: 'bold' },
+                            font: { size: 14, weight: 'bold' },
                             color: (ctx) => {
                                 const pct = agePcts[ctx.dataIndex] || 0;
                                 const genPop = ageGenPop[ctx.dataIndex] || 0;
@@ -7190,18 +7191,16 @@
                             },
                             formatter: (value, ctx) => {
                                 const pct = agePcts[ctx.dataIndex] || 0;
-                                const genPop = ageGenPop[ctx.dataIndex] || 0;
-                                const genPopProj = Math.round((genPop / 100) * US_POPULATION);
                                 if (isProjection) {
-                                    return genPop > 0 ? `${formatNumber(Math.round(value))} (GP: ${formatNumber(genPopProj)})` : formatNumber(Math.round(value));
+                                    return formatNumber(Math.round(value));
                                 }
-                                return genPop > 0 ? `${pct.toFixed(1)}% (GP: ${genPop.toFixed(1)}%)` : pct.toFixed(1) + '%';
+                                return pct.toFixed(1) + '%';
                             }
                         }
                     }, 
                     scales: { 
-                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 11 } }, suggestedMax: ageMax }, 
-                        y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 12 } } } 
+                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 13 } }, suggestedMax: ageMax }, 
+                        y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 14 } } } 
                     } 
                 },
                 plugins: [ChartDataLabels]
@@ -7330,13 +7329,13 @@
                     indexAxis: 'y', // Horizontal bars
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: { right: 20 } },
+                    layout: { padding: { right: 30 } },
                     plugins: { 
                         legend: { display: false },
                         datalabels: {
                             anchor: 'end',
                             align: 'right',
-                            font: { size: 11, weight: 'bold' },
+                            font: { size: 14, weight: 'bold' },
                             color: (ctx) => {
                                 const pct = incomePcts[ctx.dataIndex] || 0;
                                 const genPop = incomeGenPop[ctx.dataIndex] || 0;
@@ -7344,22 +7343,20 @@
                             },
                             formatter: (value, ctx) => {
                                 const pct = incomePcts[ctx.dataIndex] || 0;
-                                const genPop = incomeGenPop[ctx.dataIndex] || 0;
-                                const genPopProj = Math.round((genPop / 100) * US_POPULATION);
                                 if (isProjection) {
-                                    return genPop > 0 ? `${formatNumber(Math.round(value))} (GP: ${formatNumber(genPopProj)})` : formatNumber(Math.round(value));
+                                    return formatNumber(Math.round(value));
                                 }
-                                return genPop > 0 ? `${pct.toFixed(1)}% (GP: ${genPop.toFixed(1)}%)` : pct.toFixed(1) + '%';
+                                return pct.toFixed(1) + '%';
                             }
                         }
                     }, 
                     scales: { 
                         y: { 
                             grid: { display: false }, 
-                            ticks: { color: '#e6f1ff', font: { size: 12 } },
-                            afterFit: (scale) => { scale.width = Math.max(scale.width, 120); }
+                            ticks: { color: '#e6f1ff', font: { size: 14 } },
+                            afterFit: (scale) => { scale.width = Math.max(scale.width, 140); }
                         }, 
-                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 11 } }, suggestedMax: incomeMax } 
+                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 13 } }, suggestedMax: incomeMax } 
                     } 
                 },
                 plugins: [ChartDataLabels]
@@ -7378,13 +7375,13 @@
                     data: { labels: eduLabels, datasets: [{ data: eduData, backgroundColor: '#a6e22e', borderRadius: 4 }] },
                     options: { 
                         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-                        layout: { padding: { right: 20 } },
+                        layout: { padding: { right: 30 } },
                         plugins: { 
                             legend: { display: false }, 
                             datalabels: { 
                                 anchor: 'end', 
                                 align: 'end', 
-                                font: { size: 11, weight: 'bold' }, 
+                                font: { size: 14, weight: 'bold' }, 
                                 color: (ctx) => {
                                     const pct = eduPcts[ctx.dataIndex] || 0;
                                     const genPop = eduGenPop[ctx.dataIndex] || 0;
@@ -7392,18 +7389,14 @@
                                 },
                                 formatter: (v, ctx) => {
                                     const pct = eduPcts[ctx.dataIndex] || 0;
-                                    const genPop = eduGenPop[ctx.dataIndex] || 0;
-                                    const genPopProj = Math.round((genPop / 100) * US_POPULATION);
-                                    if (isProjection) {
-                                        return genPop > 0 ? `${formatNumber(Math.round(v))} (GP: ${formatNumber(genPopProj)})` : formatNumber(Math.round(v));
-                                    }
-                                    return genPop > 0 ? `${pct.toFixed(1)}% (GP: ${genPop.toFixed(1)}%)` : pct.toFixed(1) + '%';
+                                    if (isProjection) return formatNumber(Math.round(v));
+                                    return pct.toFixed(1) + '%';
                                 }
                             } 
                         }, 
                         scales: { 
-                            x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 11 } }, suggestedMax: eduMax }, 
-                            y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 12 } } } 
+                            x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 13 } }, suggestedMax: eduMax }, 
+                            y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 14 } } } 
                         } 
                     },
                     plugins: [ChartDataLabels]
