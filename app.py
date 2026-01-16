@@ -839,10 +839,13 @@ def requires_admin(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if 'username' not in session:
+            # For API requests, return JSON error instead of redirect
+            if request.path.startswith('/api/'):
+                return jsonify({'success': False, 'error': 'Session expired. Please log in again.'}), 401
             return redirect(url_for('login_page'))
         user = get_current_user()
         if not user or user.get('role') != 'admin':
-            return jsonify({'error': 'Admin access required'}), 403
+            return jsonify({'success': False, 'error': 'Admin access required'}), 403
         return f(*args, **kwargs)
     return decorated
 
