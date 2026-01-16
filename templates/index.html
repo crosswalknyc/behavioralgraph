@@ -389,11 +389,28 @@
         /* Bottom Row (US% and Deck Builder) */
         .dash-bottom-row {
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between;
             align-items: center;
             gap: 0.75rem;
             margin-bottom: 0.5rem;
             padding: 0.25rem 0;
+        }
+        
+        .dash-bottom-row .row-left {
+            flex: 1;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        
+        .dash-bottom-row .row-left strong {
+            color: var(--text-primary);
+        }
+        
+        .dash-bottom-row .row-right {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex-shrink: 0;
         }
 
         .dashboard-header h2 {
@@ -4782,12 +4799,17 @@
                 <button class="tab-btn" onclick="showTab('collaboration')"><span class="tab-icon">👥</span><span class="tab-label">COLLABORATE</span></button>
             </div>
             
-            <!-- Row 3: US% Toggle (right aligned) -->
+            <!-- Row 3: Tab Info + Buttons -->
             <div class="dash-bottom-row">
-                <div class="display-mode-toggle" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" title="Toggle between percentages and US population numbers">
-                    <span id="dashDisplayLabel">US %</span>
+                <div class="row-left" id="dashTabInfo">
+                    <strong>Insights</strong> — Complete audience intelligence. <strong>Index Scale:</strong> <span class="highlight-green">150+ = target</span> | <span class="highlight-yellow">100-149 = neutral</span> | <span class="highlight-red">&lt;100 = deprioritize</span>. <strong>Data Quality:</strong> Higher sample sizes = more reliable insights.
                 </div>
-                <button class="deck-builder-btn btn btn-small" id="deckBtn" onclick="openDeckWorkspace()" title="View Deck Workspace">📊 Deck Builder (<span id="deckCount">0</span>)</button>
+                <div class="row-right">
+                    <div class="display-mode-toggle" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" title="Toggle between percentages and US population numbers">
+                        <span id="dashDisplayLabel">US %</span>
+                    </div>
+                    <button class="deck-builder-btn btn btn-small" id="deckBtn" onclick="openDeckWorkspace()" title="View Deck Workspace">📊 Deck Builder (<span id="deckCount">0</span>)</button>
+                </div>
             </div>
             
             <!-- Dashboard Layout: Fixed Sidebar + Tab Content -->
@@ -4808,9 +4830,6 @@
 
             <!-- Demographics Tab -->
             <div id="tab-demographics" class="tab-content">
-                <div class="tab-explainer">
-                    <strong>Demographics</strong> — Your audience breakdown by gender, age, income, etc. <strong>Colors:</strong> <span class="highlight-green">Green = over-indexes</span> | <span class="highlight-red">Red = under-indexes</span>. Second % shows Gen Pop baseline.
-                </div>
                 <div class="demo-main">
                         <div class="stats-row">
                             <div class="stat-card">
@@ -4853,13 +4872,6 @@
 
             <!-- Behavioral Tab -->
             <div id="tab-behavioral" class="tab-content">
-                <div class="tab-explainer">
-                    <div class="explainer-icon">📊</div>
-                    <div class="explainer-text">
-                        <strong>Behavioral</strong> — What your audience does, watches, buys. <strong>First %</strong> = your audience. <strong>Second %</strong> = Gen Pop. <strong>Colors:</strong> <span class="highlight-green">Green = over-indexes</span> | <span class="highlight-red">Red = under-indexes</span>. <em>Most Purchased Brands</em> = confirmed purchases; others = digital touchpoint.
-                    </div>
-                </div>
-                
                 <!-- Category Reorder Controls -->
                 <div class="behavioral-controls">
                     <select id="categoryReorderSelect" onchange="moveCategoryToTop(this.value)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
@@ -4873,10 +4885,6 @@
 
             <!-- Interests Tab -->
             <div id="tab-interests" class="tab-content">
-                <div class="tab-explainer">
-                    <strong>Interests</strong> — What your audience is passionate about. <strong>Index:</strong> <span class="highlight-green">100+ = over-indexes</span> | <span class="highlight-red">&lt;100 = under-indexes</span>. Heatmap shows category strength by color intensity.
-                </div>
-                
                 <!-- Interests Insights Summary -->
                 <div class="interests-insights-row" id="interestsInsightsRow">
                     <div class="insight-card highlight">
@@ -4967,12 +4975,6 @@
 
             <!-- Location Tab -->
             <div id="tab-location" class="tab-content">
-                <div class="tab-explainer">
-                    <div class="explainer-icon">🗺️</div>
-                    <div class="explainer-text">
-                        <strong>Location</strong> — Where your audience lives. <strong>Heat map:</strong> darker = higher concentration. <strong>Index:</strong> <span class="highlight-green">100+ = over-indexes</span> | <span class="highlight-red">&lt;100 = under-indexes</span>. DMAs = metro areas ranked by audience density.
-                    </div>
-                </div>
                 <div class="location-header">
                     <h2>📍 Geographic Distribution</h2>
                     <div class="location-stats" id="locationStats"></div>
@@ -5019,12 +5021,6 @@
 
             <!-- Affinity Map Tab -->
             <div id="tab-affinity" class="tab-content">
-                <div class="tab-explainer">
-                    <div class="explainer-icon">🔗</div>
-                    <div class="explainer-text">
-                        <strong>Affinity Map</strong> — Brands/content your audience loves. <strong>Index:</strong> 100 = average | <span class="highlight-yellow">100-199 = moderate (1-2x)</span> | <span class="highlight-green">200-499 = strong (2-5x)</span> | <span class="highlight-green">500+ = exceptional (5x+)</span>. Use for partnerships & content integrations.
-                    </div>
-                </div>
                 <div class="affinity-container">
                     <div class="affinity-header">
                         <h2>🔗 Audience Affinity Map</h2>
@@ -5067,12 +5063,6 @@
 
             <!-- Sponsorship Match Tab -->
             <div id="tab-sponsorship" class="tab-content">
-                <div class="tab-explainer">
-                    <div class="explainer-icon">💰</div>
-                    <div class="explainer-text">
-                        <strong>Sponsorship</strong> — Best brand partners for this audience. <strong>Index:</strong> <span class="highlight-red">&lt;100 = weak</span> | <span class="highlight-yellow">100-130 = moderate</span> | <span class="highlight-green">130+ = strong fit</span>. <strong>Match Score:</strong> <span class="highlight-red">0-40 = avoid</span> | <span class="highlight-yellow">41-60 = okay</span> | <span class="highlight-green">61+ = pursue</span>.
-                    </div>
-                </div>
                 <div class="sponsorship-container">
                     <div class="sponsorship-header">
                         <h2>💰 Sponsorship Match Finder</h2>
@@ -5127,12 +5117,6 @@
 
             <!-- Partnership Value Tab -->
             <div id="tab-talent" class="tab-content">
-                <div class="tab-explainer">
-                    <div class="explainer-icon">📈</div>
-                    <div class="explainer-text">
-                        <strong>Partnership Value</strong> — Audience value for advertisers. <strong>Score (0-100):</strong> <span class="highlight-red">0-40 = low value</span> | <span class="highlight-yellow">41-70 = moderate</span> | <span class="highlight-green">71+ = high value</span>. Brand Alignment shows which brands over-index = ideal sponsors.
-                    </div>
-                </div>
                 <div class="talent-container">
                     <div class="talent-header">
                         <h2>📈 Partnership Value Analysis</h2>
@@ -5187,12 +5171,6 @@
 
             <!-- Media Optimizer Tab -->
             <div id="tab-media" class="tab-content">
-                <div class="tab-explainer">
-                    <div class="explainer-icon">📺</div>
-                    <div class="explainer-text">
-                        <strong>Media Optimizer</strong> — Best channels for this audience. <strong>Index:</strong> <span class="highlight-red">&lt;80 = avoid</span> | <span class="highlight-yellow">80-120 = neutral</span> | <span class="highlight-green">120+ = prioritize</span>. Higher index = audience more likely to use that channel vs Gen Pop.
-                    </div>
-                </div>
                 <div class="media-container">
                     <div class="media-header">
                         <h2>📺 Media Channel Optimizer</h2>
@@ -5249,12 +5227,6 @@
 
             <!-- Content Development Tab -->
             <div id="tab-content" class="tab-content">
-                <div class="tab-explainer">
-                    <div class="explainer-icon">🎬</div>
-                    <div class="explainer-text">
-                        <strong>Content Dev</strong> — Find shows, talent & brands for your target demo. <strong>Fit Score:</strong> <span class="highlight-red">0-40 = poor</span> | <span class="highlight-yellow">41-70 = moderate</span> | <span class="highlight-green">71+ = strong fit</span>. <strong>n</strong> = sample size (higher = more reliable data).
-                    </div>
-                </div>
                 <div class="content-dev-container">
                     <div class="content-dev-header">
                         <h2>🎬 Content Development Lab</h2>
@@ -5410,12 +5382,6 @@
 
             <!-- Top Insights Tab -->
             <div id="tab-insights" class="tab-content active">
-                <div class="tab-explainer">
-                    <div class="explainer-icon">💡</div>
-                    <div class="explainer-text">
-                        <strong>Insights</strong> — Complete audience intelligence. <strong>Index Scale:</strong> <span class="highlight-green">150+ = target</span> | <span class="highlight-yellow">100-149 = neutral</span> | <span class="highlight-red">&lt;100 = deprioritize</span>. <strong>Data Quality:</strong> Higher sample sizes = more reliable insights.
-                    </div>
-                </div>
                 <div class="insights-container">
                     <!-- Insights Sub-tabs -->
                     <div class="insights-tabs">
@@ -5645,12 +5611,6 @@
             
             <!-- Segmentation Builder Tab -->
             <div id="tab-segmentation" class="tab-content">
-                <div class="tab-explainer">
-                    <div class="explainer-icon">🎯</div>
-                    <div class="explainer-text">
-                        <strong>Segment Builder</strong> — Filter by demographics to see how behaviors change. Select age, gender, income, etc. and discover what that sub-group does differently. <strong>Segment Size</strong> = % of total audience matching your filters.
-                    </div>
-                </div>
                 <div class="segmentation-container">
                     <div class="seg-header">
                         <h2>🎯 Audience Segment Builder</h2>
@@ -5775,12 +5735,6 @@
 
             <!-- Comparison Tab -->
             <div id="tab-comparison" class="tab-content">
-                <div class="tab-explainer">
-                    <div class="explainer-icon">⚖️</div>
-                    <div class="explainer-text">
-                        <strong>Comparison</strong> — Compare profiles side-by-side with overlap analysis. Current profile and Gen Pop are auto-selected. View shared behaviors, unique traits, and benchmark against population. Use <strong>📊 Executive Summary</strong> for one-click reports.
-                    </div>
-                </div>
                 <div class="comparison-header">
                     <h1 class="comp-title">COMPARISON</h1>
                     <div style="display: flex; gap: 0.5rem; align-items: center;">
@@ -5898,12 +5852,6 @@
             
             <!-- Collaboration Hub Tab -->
             <div id="tab-collaboration" class="tab-content">
-                <div class="tab-explainer">
-                    <div class="explainer-icon">👥</div>
-                    <div class="explainer-text">
-                        <strong>Collaboration Hub</strong> — Share profiles with team members, add comments and annotations, track who viewed what. <span class="highlight-cyan">Create shared workspaces</span> for cross-team collaboration.
-                    </div>
-                </div>
                 <div class="collab-container">
                     <div class="collab-sidebar">
                         <h3>📁 Shared Workspaces</h3>
@@ -6068,11 +6016,34 @@
             }).catch(() => {}); // Silent fail - don't disrupt UX
         }
 
+        // Tab info text for each tab
+        const TAB_INFO = {
+            insights: '<strong>Insights</strong> — Complete audience intelligence. <strong>Index Scale:</strong> <span class="highlight-green">150+ = target</span> | <span class="highlight-yellow">100-149 = neutral</span> | <span class="highlight-red">&lt;100 = deprioritize</span>. Higher sample sizes = more reliable.',
+            demographics: '<strong>Demographics</strong> — Audience breakdown by gender, age, income. <span class="highlight-green">Green = over-indexes</span> | <span class="highlight-red">Red = under-indexes</span>. Second % = Gen Pop baseline.',
+            behavioral: '<strong>Behavioral</strong> — What your audience does, watches, buys. First % = profile, Second % = Gen Pop. <span class="highlight-green">Green = over-indexes</span> | <span class="highlight-red">Red = under-indexes</span>.',
+            interests: '<strong>Interests</strong> — What your audience is passionate about. <strong>Index:</strong> <span class="highlight-green">100+ = over-indexes</span> | <span class="highlight-red">&lt;100 = under-indexes</span>.',
+            location: '<strong>Location</strong> — Where your audience lives. Darker = higher concentration. <span class="highlight-green">100+ = over-indexes</span> | <span class="highlight-red">&lt;100 = under-indexes</span>.',
+            affinity: '<strong>Affinity Map</strong> — Brands/content your audience loves. <span class="highlight-yellow">100-199 = moderate</span> | <span class="highlight-green">200-499 = strong</span> | <span class="highlight-green">500+ = exceptional</span>.',
+            sponsorship: '<strong>Sponsorship</strong> — Best brand partners. <span class="highlight-red">&lt;100 = weak</span> | <span class="highlight-yellow">100-130 = moderate</span> | <span class="highlight-green">130+ = strong fit</span>.',
+            talent: '<strong>Partnership</strong> — Potential brand partnership opportunities and synergies with your audience.',
+            media: '<strong>Media</strong> — Streaming, social, audio preferences and platform usage patterns for this audience.',
+            content: '<strong>Content</strong> — Content development insights including talent, genres, and platform opportunities.',
+            segmentation: '<strong>Segment</strong> — Build custom audience segments with demographic and behavioral filters.',
+            comparison: '<strong>Compare</strong> — Side-by-side profile comparison with overlap analysis and benchmarking.',
+            collaboration: '<strong>Collaborate</strong> — Team workspace for sharing insights and collaborative analysis.'
+        };
+        
         function showTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('tab-' + tabName).classList.add('active');
             event.target.classList.add('active');
+            
+            // Update tab info text
+            const infoEl = document.getElementById('dashTabInfo');
+            if (infoEl && TAB_INFO[tabName]) {
+                infoEl.innerHTML = TAB_INFO[tabName];
+            }
             
             // Track tab usage
             trackActivity(tabName);
