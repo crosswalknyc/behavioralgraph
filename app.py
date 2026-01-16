@@ -3048,7 +3048,7 @@ def remove_profile_image():
 @requires_admin
 def rename_file():
     """Rename a file in S3 (copy to new key, delete old)."""
-    global s3_file_cache
+    global s3_cache
     
     try:
         data = request.get_json()
@@ -3068,12 +3068,15 @@ def rename_file():
         # Build new key
         new_key = f"{folder}/{new_name}{extension}" if folder else f"{new_name}{extension}"
         
-        # Check if new key already exists
-        try:
-            s3_client.head_object(Bucket=S3_BUCKET, Key=new_key)
-            return jsonify({'success': False, 'error': 'A file with that name already exists'})
-        except:
-            pass  # File doesn't exist, good to proceed
+        # Only check for existing file if it's a truly different key (not just case change)
+        if old_key != new_key:
+            try:
+                s3_client.head_object(Bucket=S3_BUCKET, Key=new_key)
+                # File exists - but allow if only case is different
+                if old_key.lower() != new_key.lower():
+                    return jsonify({'success': False, 'error': 'A file with that name already exists'})
+            except:
+                pass  # File doesn't exist, good to proceed
         
         # Copy to new key
         s3_client.copy_object(
@@ -3082,14 +3085,18 @@ def rename_file():
             Key=new_key
         )
         
-        # Delete old key
-        s3_client.delete_object(Bucket=S3_BUCKET, Key=old_key)
+        # Delete old key (only if different)
+        if old_key != new_key:
+            s3_client.delete_object(Bucket=S3_BUCKET, Key=old_key)
         
-        # Update cache
-        if old_key in s3_file_cache:
-            file_data = s3_file_cache.pop(old_key)
-            file_data['key'] = new_key
-            s3_file_cache[new_key] = file_data
+        # Update cache - find job in s3_cache and update its key
+        if s3_cache and 'jobs' in s3_cache:
+            for job in s3_cache.get('jobs', []):
+                if job.get('key') == old_key or job.get('s3_key') == old_key:
+                    job['key'] = new_key
+                    job['s3_key'] = new_key
+                    break
+            persist_s3_cache()
         
         print(f"📝 Renamed file: {old_key} -> {new_key}")
         
@@ -3101,6 +3108,8 @@ def rename_file():
         
     except Exception as e:
         print(f"❌ Rename error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
 
 
@@ -3108,7 +3117,7 @@ def rename_file():
 @requires_admin
 def change_file_category():
     """Change the BRAND CATEGORY in a CSV file."""
-    global s3_file_cache
+    global s3_cache
     
     try:
         data = request.get_json()
@@ -3154,9 +3163,13 @@ def change_file_category():
             ContentType='text/csv'
         )
         
-        # Update cache
-        if file_key in s3_file_cache:
-            s3_file_cache[file_key]['category'] = new_category
+        # Update cache - find job in s3_cache and update its category
+        if s3_cache and 'jobs' in s3_cache:
+            for job in s3_cache.get('jobs', []):
+                if job.get('key') == file_key or job.get('s3_key') == file_key:
+                    job['category'] = new_category
+                    break
+            persist_s3_cache()
         
         print(f"🏷️ Changed category for {file_key} to {new_category}")
         
