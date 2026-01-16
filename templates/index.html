@@ -2764,6 +2764,96 @@
             margin: 0 0 0.5rem 0;
             font-size: 1rem;
         }
+        
+        /* Media Reach Section - First module */
+        .media-reach-section {
+            margin-bottom: 1.5rem;
+        }
+        .media-reach-row {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .media-reach-chart-card, .media-reach-insights-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem;
+        }
+        .media-reach-chart-card { border-color: var(--accent-cyan); }
+        .media-reach-chart-card h3, .media-reach-insights-card h3 {
+            margin: 0 0 0.75rem 0;
+            font-size: 1rem;
+        }
+        .media-insights-list { font-size: 0.85rem; }
+        .media-insight-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            margin-bottom: 0.6rem;
+            padding: 0.5rem;
+            background: var(--bg-input);
+            border-radius: 6px;
+        }
+        .media-insight-item .insight-icon { font-size: 1rem; }
+        .media-insight-item .insight-text { flex: 1; line-height: 1.4; }
+        .media-insight-item .insight-value { 
+            font-weight: 700; 
+            color: var(--accent-lime);
+            white-space: nowrap;
+        }
+        
+        .media-metrics-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        .media-metric-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        .media-metric-icon { font-size: 1.25rem; }
+        .media-metric-value { font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); }
+        .media-metric-label { font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; }
+        
+        .media-recommendations-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .media-rec-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem;
+        }
+        .media-rec-card h4 { margin: 0 0 0.75rem 0; font-size: 0.9rem; }
+        .media-rec-list { font-size: 0.8rem; }
+        .media-rec-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .media-rec-item:last-child { border-bottom: none; }
+        .media-rec-list.negative .media-rec-item { color: var(--text-secondary); }
+        
+        @media (max-width: 1000px) {
+            .media-reach-row { grid-template-columns: 1fr; }
+            .media-metrics-row { grid-template-columns: repeat(2, 1fr); }
+            .media-recommendations-row { grid-template-columns: 1fr; }
+        }
         .affinity-desc, .sponsor-desc {
             color: var(--text-secondary);
             font-size: 0.8rem;
@@ -5571,6 +5661,58 @@
                         <p>Find the best channels and platforms to reach this audience</p>
                     </div>
                     
+                    <!-- Channel Reach Analysis - FIRST -->
+                    <div class="media-reach-section">
+                        <div class="media-reach-row">
+                            <div class="media-reach-chart-card">
+                                <h3>📊 Channel Reach Comparison</h3>
+                                <div style="height: 280px; position: relative;">
+                                    <canvas id="mediaReachChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="media-reach-insights-card">
+                                <h3>💡 Media Mix Insights</h3>
+                                <div id="mediaKeyInsights" class="media-insights-list">
+                                    <div class="loading-placeholder">Analyzing channels...</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="media-metrics-row">
+                            <div class="media-metric-card">
+                                <span class="media-metric-icon">🏆</span>
+                                <span class="media-metric-value" id="mediaDominantChannel">--</span>
+                                <span class="media-metric-label">Dominant Channel</span>
+                            </div>
+                            <div class="media-metric-card">
+                                <span class="media-metric-icon">📈</span>
+                                <span class="media-metric-value" id="mediaChannelCount">--</span>
+                                <span class="media-metric-label">Active Channels</span>
+                            </div>
+                            <div class="media-metric-card">
+                                <span class="media-metric-icon">🎯</span>
+                                <span class="media-metric-value" id="mediaAvgIndex">--</span>
+                                <span class="media-metric-label">Avg Media Index</span>
+                            </div>
+                            <div class="media-metric-card">
+                                <span class="media-metric-icon">⚡</span>
+                                <span class="media-metric-value" id="mediaHighPerformers">--</span>
+                                <span class="media-metric-label">High Performers (150+)</span>
+                            </div>
+                        </div>
+                        
+                        <div class="media-recommendations-row">
+                            <div class="media-rec-card">
+                                <h4>✅ Recommended Actions</h4>
+                                <div id="mediaRecommendations" class="media-rec-list"></div>
+                            </div>
+                            <div class="media-rec-card">
+                                <h4>⚠️ Avoid / Low Priority</h4>
+                                <div id="mediaAvoid" class="media-rec-list negative"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="media-summary">
                         <div class="media-summary-card">
                             <h4>Primary Channels</h4>
@@ -5607,13 +5749,6 @@
                         <div class="media-card">
                             <h3>📰 News & Publishing</h3>
                             <div id="mediaNews" class="media-list"></div>
-                        </div>
-                        
-                        <div class="media-card">
-                            <h3>📊 Channel Reach Comparison</h3>
-                            <div style="height: 250px; position: relative;">
-                                <canvas id="mediaReachChart"></canvas>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -10920,12 +11055,107 @@
                 type,
                 label: config.label,
                 avgIndex: config.items.length > 0 ? Math.round(config.items.reduce((sum, i) => sum + i.index, 0) / config.items.length) : 0,
-                count: config.items.length
+                count: config.items.length,
+                items: config.items
             })).filter(c => c.count > 0 && c.avgIndex > 0).sort((a, b) => b.avgIndex - a.avgIndex);
             
             document.getElementById('primaryChannels').innerHTML = channelScores.slice(0, 4).map(c => `
                 <span class="channel-badge">${c.label} (+${Math.max(0, c.avgIndex - 100)}%)</span>
             `).join('') || '<span style="color: var(--text-secondary);">No media platform data found</span>';
+            
+            // === MEDIA INSIGHTS ===
+            const topChannel = channelScores[0];
+            const allMediaItems = Object.values(mediaTypes).flatMap(m => m.items);
+            const highPerformers = allMediaItems.filter(i => i.index >= 150);
+            const avgMediaIndex = allMediaItems.length > 0 ? Math.round(allMediaItems.reduce((s, i) => s + i.index, 0) / allMediaItems.length) : 0;
+            
+            // Update metrics
+            document.getElementById('mediaDominantChannel').textContent = topChannel?.label || '--';
+            document.getElementById('mediaChannelCount').textContent = channelScores.length;
+            document.getElementById('mediaAvgIndex').textContent = avgMediaIndex;
+            document.getElementById('mediaHighPerformers').textContent = highPerformers.length;
+            
+            // Generate key insights
+            const insights = [];
+            if (topChannel) {
+                const topItem = topChannel.items.sort((a, b) => b.index - a.index)[0];
+                insights.push({
+                    icon: '🏆',
+                    text: `<strong>${topChannel.label}</strong> is your dominant channel with ${topChannel.count} platforms`,
+                    value: `+${topChannel.avgIndex - 100}%`
+                });
+                if (topItem) {
+                    insights.push({
+                        icon: '⭐',
+                        text: `Top performer: <strong>${topItem.name}</strong>`,
+                        value: `${topItem.index} idx`
+                    });
+                }
+            }
+            if (channelScores.length >= 2) {
+                const second = channelScores[1];
+                insights.push({
+                    icon: '📈',
+                    text: `Second strongest: <strong>${second.label}</strong>`,
+                    value: `+${second.avgIndex - 100}%`
+                });
+            }
+            if (highPerformers.length > 5) {
+                insights.push({
+                    icon: '🎯',
+                    text: `${highPerformers.length} high-performing platforms (150+ index)`,
+                    value: 'Strong'
+                });
+            }
+            const lowChannels = channelScores.filter(c => c.avgIndex < 110);
+            if (lowChannels.length > 0) {
+                insights.push({
+                    icon: '⚠️',
+                    text: `Underperforming: ${lowChannels.map(c => c.label).join(', ')}`,
+                    value: 'Low'
+                });
+            }
+            
+            document.getElementById('mediaKeyInsights').innerHTML = insights.length > 0 
+                ? insights.map(i => `
+                    <div class="media-insight-item">
+                        <span class="insight-icon">${i.icon}</span>
+                        <span class="insight-text">${i.text}</span>
+                        <span class="insight-value">${i.value}</span>
+                    </div>
+                `).join('')
+                : '<p style="color: var(--text-secondary);">No media data available</p>';
+            
+            // Recommendations
+            const recommendations = [];
+            if (topChannel) {
+                recommendations.push(`🎯 Focus budget on ${topChannel.label} for maximum reach`);
+                const topItems = topChannel.items.slice(0, 3);
+                if (topItems.length > 0) {
+                    recommendations.push(`📺 Prioritize: ${topItems.map(i => i.name).join(', ')}`);
+                }
+            }
+            if (channelScores.length >= 2) {
+                recommendations.push(`🔄 Cross-promote between ${channelScores[0].label} and ${channelScores[1].label}`);
+            }
+            recommendations.push(`📊 Monitor ${highPerformers.length} high-index platforms for opportunities`);
+            
+            document.getElementById('mediaRecommendations').innerHTML = recommendations.slice(0, 4).map(r => `
+                <div class="media-rec-item">${r}</div>
+            `).join('');
+            
+            // Channels to avoid
+            const avoid = [];
+            lowChannels.forEach(c => {
+                avoid.push(`❌ ${c.label} - below average performance (${c.avgIndex})`);
+            });
+            if (avoid.length === 0) {
+                avoid.push('✓ All channels performing above baseline');
+            }
+            
+            document.getElementById('mediaAvoid').innerHTML = avoid.slice(0, 4).map(a => `
+                <div class="media-rec-item">${a}</div>
+            `).join('');
             
             // Render reach chart
             renderMediaReachChart(channelScores);
