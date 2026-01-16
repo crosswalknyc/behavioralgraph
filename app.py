@@ -1721,6 +1721,216 @@ def delete_user(username):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/admin/users/<username>/reset-password', methods=['POST'])
+@requires_admin
+def reset_user_password(username):
+    """Reset a user's password and optionally send email."""
+    try:
+        req_data = request.json or {}
+        send_email = req_data.get('send_email', True)
+        
+        data = load_users()
+        
+        if username not in data['users']:
+            return jsonify({'success': False, 'error': 'User not found'})
+        
+        user = data['users'][username]
+        
+        # Generate new password
+        new_password = generate_random_password()
+        user['password_hash'] = hash_password(new_password)
+        user['password_reset_at'] = datetime.now().isoformat()
+        
+        save_users(data)
+        
+        # Send password reset email
+        email_status = None
+        if send_email and user.get('email'):
+            email_sent, email_message = send_password_reset_email(
+                user['email'], 
+                username, 
+                new_password,
+                user.get('role', 'user')
+            )
+            email_status = 'sent' if email_sent else f'failed: {email_message}'
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Password reset for {username}',
+            'new_password': new_password if not send_email else None,  # Only return if not emailing
+            'email_status': email_status
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+def send_password_reset_email(email, username, password, role):
+    """Send password reset email."""
+    app_url = os.environ.get('APP_URL', 'https://behavioralgraph.onrender.com')
+    
+    text = f"""
+Your password has been reset.
+
+Here are your new login details:
+
+Username: {username}
+New Password: {password}
+
+Login URL: {app_url}/login
+
+You can change your password after logging in if you'd like.
+
+— Crosswalk Team
+    """
+    
+    html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: 'Segoe UI', Arial, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 20px; }}
+        .container {{ max-width: 600px; margin: 0 auto; background: #16213e; border-radius: 12px; padding: 30px; }}
+        h1 {{ color: #f59e0b; margin-bottom: 20px; }}
+        .credentials {{ background: #0f3460; border-radius: 8px; padding: 20px; margin: 20px 0; }}
+        .field {{ margin: 10px 0; }}
+        .label {{ color: #888; font-size: 12px; text-transform: uppercase; }}
+        .value {{ font-size: 18px; font-weight: bold; color: #fff; font-family: monospace; }}
+        .btn {{ display: inline-block; background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 20px; }}
+        .footer {{ margin-top: 30px; font-size: 12px; color: #666; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Password Reset</h1>
+        <p>Your password has been reset by an administrator. Here are your new login details:</p>
+        
+        <div class="credentials">
+            <div class="field">
+                <div class="label">Username</div>
+                <div class="value">{username}</div>
+            </div>
+            <div class="field">
+                <div class="label">New Password</div>
+                <div class="value">{password}</div>
+            </div>
+        </div>
+        
+        <a href="{app_url}/login" class="btn">Login Now →</a>
+        
+        <p style="margin-top: 20px;">You can change your password after logging in if you'd like.</p>
+        
+        <div class="footer">
+            <p>— Crosswalk Team</p>
+        </div>
+    </div>
+</body>
+</html>
+    """
+    
+    # Try Gmail API first
+    tokens = load_gmail_tokens()
+    if tokens and tokens.get('access_token'):
+        success, message = send_email_via_gmail(
+            email,
+            '🔐 Password Reset - Crosswalk IQ',
+            html,
+            text
+        )
+        if success:
+            return True, "Email sent via Gmail"
+    
+    # Fall back to SMTP
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    
+    smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+    smtp_port = int(os.environ.get('SMTP_PORT', 587))
+    smtp_user = os.environ.get('SMTP_USER', '')
+    smtp_password = os.environ.get('SMTP_PASSWORD', '')
+    from_email = os.environ.get('FROM_EMAIL', smtp_user)
+    
+    if not smtp_user or not smtp_password:
+        return False, "Email not configured"
+    
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = '🔐 Password Reset - Crosswalk IQ'
+        msg['From'] = from_email
+        msg['To'] = email
+        
+        msg.attach(MIMEText(text, 'plain'))
+        msg.attach(MIMEText(html, 'html'))
+        
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.sendmail(from_email, email, msg.as_string())
+        
+        return True, "Email sent via SMTP"
+    except Exception as e:
+        return False, str(e)
+
+@app.route('/api/admin/gmail/share', methods=['POST'])
+@requires_admin  
+def share_gmail_integration():
+    """Share Gmail integration with other admin users (super admin only)."""
+    try:
+        current_user = session.get('username')
+        
+        # Only the main 'admin' user can share Gmail integration
+        if current_user != 'admin':
+            return jsonify({'success': False, 'error': 'Only the super admin can share Gmail integration'})
+        
+        req_data = request.json or {}
+        target_usernames = req_data.get('usernames', [])
+        
+        if not target_usernames:
+            return jsonify({'success': False, 'error': 'No usernames provided'})
+        
+        data = load_users()
+        
+        # Verify all users exist and are admins
+        for username in target_usernames:
+            if username not in data['users']:
+                return jsonify({'success': False, 'error': f'User {username} not found'})
+            if data['users'][username].get('role') != 'admin':
+                return jsonify({'success': False, 'error': f'User {username} is not an admin'})
+        
+        # Update Gmail sharing settings
+        tokens = load_gmail_tokens()
+        if not tokens:
+            return jsonify({'success': False, 'error': 'Gmail not connected. Connect Gmail first.'})
+        
+        tokens['shared_with'] = target_usernames
+        save_gmail_tokens(tokens)
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Gmail integration shared with {len(target_usernames)} admin(s)',
+            'shared_with': target_usernames
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/gmail/shared-users')
+@requires_admin
+def get_gmail_shared_users():
+    """Get list of users Gmail is shared with."""
+    try:
+        tokens = load_gmail_tokens()
+        if not tokens:
+            return jsonify({'success': True, 'shared_with': []})
+        
+        return jsonify({
+            'success': True,
+            'shared_with': tokens.get('shared_with', []),
+            'owner': 'admin'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/api/profile-picture', methods=['POST'])
 @requires_auth
 def upload_profile_picture():

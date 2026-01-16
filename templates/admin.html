@@ -886,6 +886,21 @@
                     <button class="btn" onclick="disconnectGmail()" style="margin-top: 1rem; background: rgba(239, 68, 68, 0.2); color: #ef4444; width: 100%;">
                         🔌 Disconnect Gmail
                     </button>
+                    
+                    <!-- Gmail Sharing (Super Admin Only) -->
+                    <div id="gmailSharingSection" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); display: none;">
+                        <h4 style="margin-bottom: 0.75rem; color: var(--accent-cyan);">👥 Share Gmail with Other Admins</h4>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                            As the super admin, you can share this Gmail integration with other admin users.
+                        </p>
+                        <div id="adminUserCheckboxes" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem;">
+                            <!-- Admin checkboxes will be populated here -->
+                        </div>
+                        <button class="btn btn-secondary" onclick="saveGmailSharing()" style="width: 100%;">
+                            💾 Save Sharing Settings
+                        </button>
+                        <div id="currentSharing" style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);"></div>
+                    </div>
                 </div>
                 
                 <div id="gmailNotConfigured" style="display: none; padding: 1rem; background: rgba(239, 68, 68, 0.1); border-radius: 8px;">
@@ -1359,6 +1374,9 @@
                     emailStatus.style.color = '#10b981';
                     gmailConnected.textContent = 'Yes';
                     gmailConnected.style.color = '#10b981';
+                    
+                    // Load Gmail sharing options (super admin only)
+                    loadGmailSharing();
                 } else {
                     // Not connected but configured
                     statusBadge.textContent = 'Not Connected';
@@ -1448,6 +1466,124 @@
         } else if (urlParams.get('gmail') === 'error') {
             showToast('Gmail connection failed: ' + (urlParams.get('message') || 'Unknown error'), true);
             showAdminTab('settings');
+        }
+        
+        // ============ PASSWORD RESET ============
+        
+        async function resetPassword(username) {
+            const user = allUsers[username];
+            const hasEmail = user && user.email;
+            
+            let message = `Reset password for ${username}?`;
+            if (hasEmail) {
+                message += `\n\nAn email with the new password will be sent to: ${user.email}`;
+            } else {
+                message += `\n\n⚠️ This user has no email address. The new password will be shown on screen.`;
+            }
+            
+            if (!confirm(message)) return;
+            
+            try {
+                const response = await fetch(`/api/admin/users/${username}/reset-password`, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ send_email: hasEmail })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    if (data.new_password) {
+                        // Show password on screen (no email sent)
+                        alert(`Password reset successful!\n\nNew password for ${username}:\n${data.new_password}\n\nPlease save this password - it will not be shown again.`);
+                    } else {
+                        showToast(`Password reset! Email sent to ${user.email}`);
+                    }
+                } else {
+                    showToast(data.error || 'Failed to reset password', true);
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, true);
+            }
+        }
+        
+        // ============ GMAIL SHARING (Super Admin) ============
+        
+        async function loadGmailSharing() {
+            // Only show sharing section for super admin
+            if ('{{ session.get("username") }}' !== 'admin') {
+                document.getElementById('gmailSharingSection').style.display = 'none';
+                return;
+            }
+            
+            document.getElementById('gmailSharingSection').style.display = 'block';
+            
+            try {
+                // Get admin users
+                const usersResponse = await fetch('/api/admin/users', { credentials: 'same-origin' });
+                const usersData = await usersResponse.json();
+                
+                if (usersData.success) {
+                    const adminUsers = Object.entries(usersData.users)
+                        .filter(([name, user]) => user.role === 'admin' && name !== 'admin')
+                        .map(([name, user]) => ({ name, email: user.email }));
+                    
+                    // Get current sharing
+                    const sharingResponse = await fetch('/api/admin/gmail/shared-users', { credentials: 'same-origin' });
+                    const sharingData = await sharingResponse.json();
+                    const sharedWith = sharingData.shared_with || [];
+                    
+                    // Render checkboxes
+                    const container = document.getElementById('adminUserCheckboxes');
+                    if (adminUsers.length === 0) {
+                        container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem;">No other admin users to share with.</p>';
+                    } else {
+                        container.innerHTML = adminUsers.map(user => `
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" value="${user.name}" ${sharedWith.includes(user.name) ? 'checked' : ''}>
+                                <span>${user.name}</span>
+                                ${user.email ? `<span style="color: var(--text-secondary); font-size: 0.75rem;">(${user.email})</span>` : ''}
+                            </label>
+                        `).join('');
+                    }
+                    
+                    // Show current sharing status
+                    const sharingStatus = document.getElementById('currentSharing');
+                    if (sharedWith.length > 0) {
+                        sharingStatus.innerHTML = `Currently shared with: <strong>${sharedWith.join(', ')}</strong>`;
+                    } else {
+                        sharingStatus.innerHTML = 'Not currently shared with anyone.';
+                    }
+                }
+            } catch (e) {
+                console.error('Error loading Gmail sharing:', e);
+            }
+        }
+        
+        async function saveGmailSharing() {
+            const checkboxes = document.querySelectorAll('#adminUserCheckboxes input[type="checkbox"]:checked');
+            const usernames = Array.from(checkboxes).map(cb => cb.value);
+            
+            try {
+                const response = await fetch('/api/admin/gmail/share', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ usernames })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast(data.message);
+                    loadGmailSharing();
+                } else {
+                    showToast(data.error || 'Failed to save sharing settings', true);
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, true);
+            }
         }
 
         async function loadUsers() {
@@ -1540,6 +1676,7 @@
                     <td>
                         <div class="action-buttons">
                             <button class="btn btn-small btn-secondary" onclick="editUser('${username}')">Edit</button>
+                            <button class="btn btn-small" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;" onclick="resetPassword('${username}')">🔐 Reset PW</button>
                             ${username !== 'admin' ? `<button class="btn btn-small btn-danger" onclick="deleteUser('${username}')">Delete</button>` : ''}
                         </div>
                     </td>
