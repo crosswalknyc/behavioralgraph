@@ -10049,10 +10049,21 @@
             
             const allItems = collectAllBehavioralItems(data);
             
-            // Content & Entertainment
-            const contentCategories = ['STREAMING', 'BROADCAST', 'CABLE', 'MOVIES', 'TV SHOWS', 'ENTERTAINMENT'];
+            // Content & Entertainment - only actual streaming/content categories
+            const contentCategories = [
+                'SERIES', 'STREAMING VIDEO', 'STREAMING/PLATFORM', 'BROADCAST/CABLE', 
+                'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'MOVIES', 'TV SHOWS', 
+                'STREAMING MUSIC', 'PODCAST'
+            ];
             const contentItems = allItems
-                .filter(i => contentCategories.some(c => i.category.toUpperCase().includes(c)))
+                .filter(i => {
+                    const cat = i.category.toUpperCase();
+                    // Must match one of the specific content categories exactly or closely
+                    return contentCategories.some(c => cat === c || cat.includes(c)) && 
+                           !cat.includes('MOST PURCHASED') && 
+                           !cat.includes('WHERE THEY SHOP') &&
+                           !cat.includes('RETAIL');
+                })
                 .sort((a, b) => b.index - a.index)
                 .slice(0, 15);
             
