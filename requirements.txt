@@ -6,8 +6,8 @@ snowflake-connector-python==3.12.0
 gunicorn==21.2.0
 python-dotenv==1.0.0
 boto3==1.34.0
-certifi
-pyopenssl
+certifi>=2024.1.0
+pyopenssl>=24.0.0
 openai>=1.12.0
 reportlab==4.0.4
 weasyprint==60.1
