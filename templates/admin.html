@@ -353,7 +353,7 @@
             border-radius: 8px;
             padding: 1rem;
             margin-top: 1rem;
-            max-height: 200px;
+            max-height: 400px;
             overflow-y: auto;
         }
 
@@ -2004,6 +2004,7 @@
             document.querySelectorAll('#categoryCheckboxes input[type="checkbox"]').forEach(cb => {
                 cb.checked = allChecked;
                 cb.disabled = allChecked;
+                cb.indeterminate = false;
             });
         }
 
@@ -2015,15 +2016,121 @@
             });
         }
 
+        // Master category mapping
+        const MASTER_CATEGORIES = {
+            'BRAND': ['ACCESSORIES', 'ACTIVEWEAR', 'AMUSEMENT PARKS', 'APPAREL', 'AUTOMOBILE', 'B2B', 'BANKS', 'BEAUTY', 'BETTING', 'BEVERAGE', 'CASUAL DINING', 'CREDIT PROVIDERS', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'EVENTS', 'FOOTWEAR', 'GROCERY', 'INTIMATES', 'JEWELRY', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY'],
+            'CONTENT': ['GAME PLAYERS', 'GAMES', 'GAMES - PLAYERS', 'MOVIE THEATER', 'PODCAST', 'SERIES - APPLE', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'],
+            'GEN POP': ['GEN POP'],
+            'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING VIDEO', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
+            'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'WNBA'],
+            'TALENT': ['ACTOR', 'ATHLETE', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
+            'MUSIC': ['MUSIC', 'MUSICIAN/BAND']
+        };
+        
+        const MASTER_ICONS = {
+            'BRAND': '📦',
+            'CONTENT': '🎬',
+            'GEN POP': '📊',
+            'PLATFORMS': '📡',
+            'SPORT': '🏆',
+            'TALENT': '🌟',
+            'MUSIC': '🎵',
+            'OTHER': '📁'
+        };
+        
+        function getMasterCategory(cat) {
+            const upperCat = (cat || '').toUpperCase();
+            for (const [master, subs] of Object.entries(MASTER_CATEGORIES)) {
+                if (subs.includes(upperCat)) return master;
+                if (upperCat.startsWith('SERIES')) return 'CONTENT';
+            }
+            return 'OTHER';
+        }
+        
         function populateCategoryCheckboxes(selected = ['*']) {
             const container = document.getElementById('categoryCheckboxes');
             const isAll = selected?.includes('*');
-            container.innerHTML = allCategories.map(cat => `
-                <label class="checkbox-group">
-                    <input type="checkbox" value="${cat}" ${isAll || selected?.includes(cat) ? 'checked' : ''} ${isAll ? 'disabled' : ''}>
-                    <span>${cat}</span>
-                </label>
-            `).join('');
+            
+            // Group categories by master category
+            const grouped = {};
+            allCategories.forEach(cat => {
+                const master = getMasterCategory(cat);
+                if (!grouped[master]) grouped[master] = [];
+                grouped[master].push(cat);
+            });
+            
+            // Build HTML with collapsible master categories
+            let html = '';
+            const masterOrder = ['BRAND', 'CONTENT', 'PLATFORMS', 'SPORT', 'TALENT', 'MUSIC', 'GEN POP', 'OTHER'];
+            
+            masterOrder.forEach(master => {
+                const cats = grouped[master];
+                if (!cats || cats.length === 0) return;
+                
+                const icon = MASTER_ICONS[master] || '📁';
+                const checkedCount = isAll ? cats.length : cats.filter(c => selected?.includes(c)).length;
+                const allMasterChecked = checkedCount === cats.length;
+                
+                html += `
+                    <div class="master-category-group" style="margin-bottom: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
+                        <div class="master-category-header" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: var(--bg-input); cursor: pointer;" onclick="toggleMasterCategory('${master}')">
+                            <input type="checkbox" class="master-checkbox" data-master="${master}" ${allMasterChecked ? 'checked' : ''} ${isAll ? 'disabled' : ''} onclick="event.stopPropagation(); toggleMasterCheckbox('${master}', this.checked)">
+                            <span style="font-size: 1rem;">${icon}</span>
+                            <span style="font-weight: 600; flex: 1;">${master}</span>
+                            <span style="font-size: 0.75rem; color: var(--text-secondary);">${checkedCount}/${cats.length}</span>
+                            <span class="master-arrow" id="arrow-${master}" style="transition: transform 0.2s;">▼</span>
+                        </div>
+                        <div class="master-category-items" id="items-${master}" style="display: none; padding: 0.5rem 0.75rem; background: var(--bg-card); max-height: 200px; overflow-y: auto;">
+                            ${cats.sort().map(cat => `
+                                <label class="checkbox-group" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; font-size: 0.85rem;">
+                                    <input type="checkbox" class="cat-checkbox" data-master="${master}" value="${cat}" ${isAll || selected?.includes(cat) ? 'checked' : ''} ${isAll ? 'disabled' : ''} onchange="updateMasterCount('${master}')">
+                                    <span>${cat}</span>
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function toggleMasterCategory(master) {
+            const items = document.getElementById('items-' + master);
+            const arrow = document.getElementById('arrow-' + master);
+            if (items.style.display === 'none') {
+                items.style.display = 'block';
+                arrow.style.transform = 'rotate(180deg)';
+            } else {
+                items.style.display = 'none';
+                arrow.style.transform = 'rotate(0deg)';
+            }
+        }
+        
+        function toggleMasterCheckbox(master, checked) {
+            const checkboxes = document.querySelectorAll(`.cat-checkbox[data-master="${master}"]`);
+            checkboxes.forEach(cb => cb.checked = checked);
+            updateMasterCount(master);
+        }
+        
+        function updateMasterCount(master) {
+            const checkboxes = document.querySelectorAll(`.cat-checkbox[data-master="${master}"]`);
+            const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+            const total = checkboxes.length;
+            
+            // Update master checkbox
+            const masterCb = document.querySelector(`.master-checkbox[data-master="${master}"]`);
+            if (masterCb) {
+                masterCb.checked = checkedCount === total;
+                masterCb.indeterminate = checkedCount > 0 && checkedCount < total;
+            }
+            
+            // Update count display
+            const header = masterCb?.closest('.master-category-header');
+            if (header) {
+                const countSpan = header.querySelector('span[style*="font-size: 0.75rem"]');
+                if (countSpan) countSpan.textContent = `${checkedCount}/${total}`;
+            }
         }
 
         function populateRunCheckboxes(selected = ['*']) {
@@ -2056,7 +2163,7 @@
                 role: document.getElementById('newRole').value,
                 credits: document.getElementById('unlimitedCredits').checked ? -1 : parseInt(document.getElementById('newCredits').value),
                 allowed_categories: document.getElementById('allCategories').checked ? ['*'] : 
-                    Array.from(document.querySelectorAll('#categoryCheckboxes input:checked')).map(cb => cb.value),
+                    Array.from(document.querySelectorAll('#categoryCheckboxes .cat-checkbox:checked')).map(cb => cb.value),
                 allowed_runs: document.getElementById('allRuns').checked ? ['*'] : 
                     Array.from(document.querySelectorAll('#runCheckboxes input:checked')).map(cb => cb.value),
                 has_profile_iq_access: document.getElementById('hasProfileIQAccess').checked,
