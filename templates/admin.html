@@ -992,6 +992,18 @@
             </div>
             <form id="userForm">
                 <input type="hidden" id="editUsername">
+                <input type="hidden" id="originalUsername">
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>First Name</label>
+                        <input type="text" id="newFirstName" placeholder="First name">
+                    </div>
+                    <div class="form-group">
+                        <label>Last Name</label>
+                        <input type="text" id="newLastName" placeholder="Last name">
+                    </div>
+                </div>
                 
                 <div class="form-row">
                     <div class="form-group">
@@ -1030,6 +1042,17 @@
                 </div>
 
                 <div class="form-row">
+                    <div class="form-group">
+                        <label>Access Expires</label>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="date" id="accessExpires" style="flex: 1; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                            <label class="checkbox-group" style="white-space: nowrap;">
+                                <input type="checkbox" id="unlimitedAccess" checked onchange="toggleAccessExpires()">
+                                <span>Unlimited</span>
+                            </label>
+                        </div>
+                        <small style="color: var(--text-secondary); font-size: 0.65rem;">User will be archived after expiration</small>
+                    </div>
                     <div class="form-group">
                         <label>Role</label>
                         <select id="newRole">
@@ -1723,8 +1746,13 @@
             document.getElementById('newPassword').placeholder = 'Auto-generated if empty';
             document.getElementById('sendWelcomeEmail').checked = true;
             document.getElementById('sendWelcomeEmail').parentElement.parentElement.style.display = 'flex';
+            document.getElementById('newFirstName').value = '';
+            document.getElementById('newLastName').value = '';
             document.getElementById('newCompany').value = '';
             document.getElementById('newDepartment').value = '';
+            document.getElementById('accessExpires').value = '';
+            document.getElementById('unlimitedAccess').checked = true;
+            document.getElementById('accessExpires').disabled = true;
             document.getElementById('newRole').value = 'user';
             document.getElementById('newCredits').value = '5';
             document.getElementById('unlimitedCredits').checked = false;
@@ -1732,6 +1760,7 @@
             document.getElementById('allRuns').checked = true;
             document.getElementById('hasProfileIQAccess').checked = true;
             document.getElementById('hasSubscriberIQAccess').checked = false;
+            document.getElementById('originalUsername').value = '';
             
             populateCategoryCheckboxes();
             populateRunCheckboxes();
@@ -1754,6 +1783,8 @@
             document.getElementById('newPassword').placeholder = 'Leave blank to keep current';
             document.getElementById('sendWelcomeEmail').checked = false;
             document.getElementById('sendWelcomeEmail').parentElement.parentElement.style.display = 'none';
+            document.getElementById('newFirstName').value = user.first_name || '';
+            document.getElementById('newLastName').value = user.last_name || '';
             document.getElementById('newCompany').value = user.company || '';
             document.getElementById('newDepartment').value = user.department || '';
             document.getElementById('newRole').value = user.role;
@@ -1763,6 +1794,19 @@
             document.getElementById('allRuns').checked = user.allowed_runs?.includes('*');
             document.getElementById('hasProfileIQAccess').checked = user.has_profile_iq_access !== false; // Default true
             document.getElementById('hasSubscriberIQAccess').checked = user.has_subscriber_iq_access === true; // Default false
+            document.getElementById('originalUsername').value = username;
+            document.getElementById('newUsername').disabled = false; // Allow editing username
+            
+            // Access expiration
+            if (user.access_expires) {
+                document.getElementById('accessExpires').value = user.access_expires;
+                document.getElementById('unlimitedAccess').checked = false;
+                document.getElementById('accessExpires').disabled = false;
+            } else {
+                document.getElementById('accessExpires').value = '';
+                document.getElementById('unlimitedAccess').checked = true;
+                document.getElementById('accessExpires').disabled = true;
+            }
 
             populateCategoryCheckboxes(user.allowed_categories);
             populateRunCheckboxes(user.allowed_runs);
@@ -1999,6 +2043,15 @@
             }
         }
 
+        function toggleAccessExpires() {
+            const unlimited = document.getElementById('unlimitedAccess').checked;
+            const dateInput = document.getElementById('accessExpires');
+            dateInput.disabled = unlimited;
+            if (unlimited) {
+                dateInput.value = '';
+            }
+        }
+        
         function toggleAllCategories() {
             const allChecked = document.getElementById('allCategories').checked;
             document.querySelectorAll('#categoryCheckboxes input[type="checkbox"]').forEach(cb => {
@@ -2031,7 +2084,7 @@
             'BRAND': '📦',
             'CONTENT': '🎬',
             'GEN POP': '📊',
-            'PLATFORMS': '📡',
+            'PLATFORMS': '💻',
             'SPORT': '🏆',
             'TALENT': '🌟',
             'MUSIC': '🎵',
@@ -2076,7 +2129,7 @@
                         <div class="master-category-header" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: var(--bg-input); cursor: pointer;" onclick="toggleMasterCategory('${master}')">
                             <input type="checkbox" class="master-checkbox" data-master="${master}" ${allMasterChecked ? 'checked' : ''} ${isAll ? 'disabled' : ''} onclick="event.stopPropagation(); toggleMasterCheckbox('${master}', this.checked)">
                             <span style="font-size: 1rem;">${icon}</span>
-                            <span style="font-weight: 600; flex: 1;">${master}</span>
+                            <span style="font-weight: 600; flex: 1; text-align: left;">${master}</span>
                             <span style="font-size: 0.75rem; color: var(--text-secondary);">${checkedCount}/${cats.length}</span>
                             <span class="master-arrow" id="arrow-${master}" style="transition: transform 0.2s;">▼</span>
                         </div>
@@ -2158,10 +2211,13 @@
             const userData = {
                 username: document.getElementById('newUsername').value,
                 email: document.getElementById('newEmail').value,
+                first_name: document.getElementById('newFirstName').value,
+                last_name: document.getElementById('newLastName').value,
                 company: document.getElementById('newCompany').value,
                 department: document.getElementById('newDepartment').value,
                 role: document.getElementById('newRole').value,
                 credits: document.getElementById('unlimitedCredits').checked ? -1 : parseInt(document.getElementById('newCredits').value),
+                access_expires: document.getElementById('unlimitedAccess').checked ? null : document.getElementById('accessExpires').value,
                 allowed_categories: document.getElementById('allCategories').checked ? ['*'] : 
                     Array.from(document.querySelectorAll('#categoryCheckboxes .cat-checkbox:checked')).map(cb => cb.value),
                 allowed_runs: document.getElementById('allRuns').checked ? ['*'] : 
@@ -2170,6 +2226,13 @@
                 has_subscriber_iq_access: document.getElementById('hasSubscriberIQAccess').checked,
                 send_welcome_email: document.getElementById('sendWelcomeEmail').checked
             };
+            
+            // Include original username if changed
+            const originalUsername = document.getElementById('originalUsername').value;
+            if (originalUsername && originalUsername !== userData.username) {
+                userData.new_username = userData.username;
+                userData.username = originalUsername;
+            }
 
             const password = document.getElementById('newPassword').value;
             if (password) {

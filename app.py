@@ -1626,6 +1626,8 @@ def create_user():
         data['users'][username] = {
             'password_hash': hash_password(password),
             'email': email,
+            'first_name': req_data.get('first_name', ''),
+            'last_name': req_data.get('last_name', ''),
             'company': req_data.get('company', ''),
             'department': req_data.get('department', ''),
             'role': role,
@@ -1633,8 +1635,11 @@ def create_user():
             'credits_used': 0,
             'created_at': datetime.now().isoformat(),
             'last_login': None,
+            'access_expires': req_data.get('access_expires'),  # None = unlimited
             'allowed_categories': req_data.get('allowed_categories', ['*']),
-            'allowed_runs': req_data.get('allowed_runs', ['*'])
+            'allowed_runs': req_data.get('allowed_runs', ['*']),
+            'has_profile_iq_access': req_data.get('has_profile_iq_access', True),
+            'has_subscriber_iq_access': req_data.get('has_subscriber_iq_access', False)
         }
         
         save_users(data)
@@ -1682,6 +1687,10 @@ def update_user(username):
             user['password_hash'] = hash_password(req_data['password'])
         if 'email' in req_data:
             user['email'] = req_data['email']
+        if 'first_name' in req_data:
+            user['first_name'] = req_data['first_name']
+        if 'last_name' in req_data:
+            user['last_name'] = req_data['last_name']
         if 'company' in req_data:
             user['company'] = req_data['company']
         if 'department' in req_data:
@@ -1690,10 +1699,28 @@ def update_user(username):
             user['role'] = req_data['role']
         if 'credits' in req_data:
             user['credits'] = req_data['credits']
+        if 'access_expires' in req_data:
+            user['access_expires'] = req_data['access_expires']
         if 'allowed_categories' in req_data:
             user['allowed_categories'] = req_data['allowed_categories']
         if 'allowed_runs' in req_data:
             user['allowed_runs'] = req_data['allowed_runs']
+        if 'has_profile_iq_access' in req_data:
+            user['has_profile_iq_access'] = req_data['has_profile_iq_access']
+        if 'has_subscriber_iq_access' in req_data:
+            user['has_subscriber_iq_access'] = req_data['has_subscriber_iq_access']
+        
+        # Handle username change
+        new_username = req_data.get('new_username', '').strip().lower()
+        if new_username and new_username != username:
+            if new_username in data['users']:
+                return jsonify({'success': False, 'error': f'Username {new_username} already exists'})
+            if username == 'admin':
+                return jsonify({'success': False, 'error': 'Cannot rename the admin user'})
+            # Move user to new key
+            data['users'][new_username] = user
+            del data['users'][username]
+            username = new_username
         
         save_users(data)
         return jsonify({'success': True, 'message': f'User {username} updated'})
