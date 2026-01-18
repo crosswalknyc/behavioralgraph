@@ -7191,17 +7191,24 @@
         // Pre-load ALL profile images from server cache at startup
         async function preloadAllProfileImages() {
             try {
+                console.log('🖼️ Loading profile images from server cache...');
                 const response = await fetch('/api/all-profile-images', { credentials: 'same-origin' });
                 const data = await response.json();
                 if (data.success && data.images) {
+                    let count = 0;
                     Object.entries(data.images).forEach(([key, info]) => {
-                        profileImageCache[key.toLowerCase()] = info.url;
+                        const cacheKey = key.toLowerCase().trim();
+                        profileImageCache[cacheKey] = info.url;
+                        count++;
                     });
-                    console.log(`✅ Pre-loaded ${data.count} profile images from server cache`);
+                    console.log(`✅ Pre-loaded ${count} profile images from server cache`);
+                    console.log('📊 Sample cache keys:', Object.keys(profileImageCache).slice(0, 5));
                     allImagesLoaded = true;
+                } else {
+                    console.log('⚠️ No images in server cache:', data);
                 }
             } catch (e) {
-                console.log('Could not preload profile images:', e);
+                console.log('❌ Could not preload profile images:', e);
             }
         }
         
@@ -7217,22 +7224,31 @@
             imageContainer.classList.remove('loaded', 'loading');
             img.src = '';
             
-            // Check cache first (normalize to lowercase for matching)
+            // ALWAYS use lowercase key for cache consistency
             const cacheKey = profileName.toLowerCase().trim();
-            const cachedUrl = profileImageCache[profileName] || profileImageCache[cacheKey];
+            const cachedUrl = profileImageCache[cacheKey];
             
-            if (cachedUrl && cachedUrl !== 'pending') {
-                if (cachedUrl !== 'none') {
-                    img.src = cachedUrl;
-                    img.onload = () => imageContainer.classList.add('loaded');
-                    img.onerror = () => imageContainer.classList.remove('loaded');
-                }
+            // Check if we have a cached URL
+            if (cachedUrl && cachedUrl !== 'pending' && cachedUrl !== 'none') {
+                console.log(`✅ Using cached image for ${profileName}:`, cachedUrl);
+                img.src = cachedUrl;
+                img.onload = () => imageContainer.classList.add('loaded');
+                img.onerror = () => {
+                    console.log(`⚠️ Cached image failed to load for ${profileName}`);
+                    imageContainer.classList.remove('loaded');
+                };
+                return;
+            }
+            
+            // Skip if we already know there's no image
+            if (cachedUrl === 'none') {
+                console.log(`⏭️ No image available for ${profileName}`);
                 return;
             }
             
             // Show loading state
             imageContainer.classList.add('loading');
-            profileImageCache[profileName] = 'pending';
+            profileImageCache[cacheKey] = 'pending';
             
             try {
                 const response = await fetch(`/api/wiki-image/${encodeURIComponent(profileName)}`);
@@ -7241,7 +7257,9 @@
                 imageContainer.classList.remove('loading');
                 
                 if (data.success && data.image_url) {
-                    profileImageCache[profileName] = data.image_url;
+                    // Store with lowercase key for consistency
+                    profileImageCache[cacheKey] = data.image_url;
+                    console.log(`📥 Fetched image for ${profileName}:`, data.image_url);
                     
                     // Create new image to preload
                     const tempImg = new Image();
@@ -7252,24 +7270,24 @@
                     tempImg.onerror = () => {
                         // Retry once if image fails to load
                         if (retryCount < 2) {
-                            console.log(`Retrying image load for ${profileName} (attempt ${retryCount + 1})`);
+                            console.log(`🔄 Retrying image load for ${profileName} (attempt ${retryCount + 1})`);
                             setTimeout(() => {
-                                profileImageCache[profileName] = null;
+                                profileImageCache[cacheKey] = null;
                                 fetchProfileImage(profileName, retryCount + 1);
                             }, 500);
                         } else {
                             imageContainer.classList.remove('loaded');
-                            profileImageCache[profileName] = 'none';
+                            profileImageCache[cacheKey] = 'none';
                         }
                     };
                     tempImg.src = data.image_url;
                 } else {
-                    profileImageCache[profileName] = 'none';
+                    profileImageCache[cacheKey] = 'none';
                 }
             } catch (error) {
                 console.log('Could not fetch profile image:', error);
                 imageContainer.classList.remove('loading');
-                profileImageCache[profileName] = 'none';
+                profileImageCache[cacheKey] = 'none';
             }
         }
 
