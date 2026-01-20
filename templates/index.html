@@ -7757,13 +7757,24 @@
         <!-- SUBSCRIBER IQ VIEW -->
         <div id="subscriberIQView">
             <div class="dashboard-layout">
-                <!-- Main Content -->
+                <!-- Persistent Sidebar - Right Side (due to row-reverse) -->
+                <div class="persistent-sidebar">
+                    <div class="sidebar-header-section">
+                        <h3>📺 Shows</h3>
+                        <input type="text" id="subscriberProfileSearchInput" class="sidebar-search" placeholder="🔍 Search shows..." onkeyup="filterSubscriberProfiles()">
+                    </div>
+                    <div id="subscriberProfileTree" class="profile-select-tree"></div>
+                </div>
+                
+                <!-- Tab Content Area -->
                 <div class="dashboard-tab-content" id="subscriberDashboardContent">
                     <!-- Empty State -->
                     <div id="subscriberEmptyState" class="dashboard-empty-state">
-                        <div class="empty-state-icon">📺</div>
-                        <h2>Select a Show</h2>
-                        <p>Choose a show from the sidebar to view subscriber analytics and attribution insights.</p>
+                        <div class="empty-state-content">
+                            <div class="empty-state-icon">📺</div>
+                            <h2>Select a Show</h2>
+                            <p>Choose a show from the sidebar to view subscriber analytics and attribution insights.</p>
+                        </div>
                     </div>
 
                     <!-- Profile Info Header -->
@@ -7779,16 +7790,16 @@
 
                     <!-- Tabs -->
                     <div class="dashboard-tabs" id="subscriberTabs" style="display: none;">
-                        <button class="tab-btn active" onclick="showSubscriberTab('overview')"><span class="tab-icon">📊</span><span class="tab-label">OVERVIEW</span></button>
-                        <button class="tab-btn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
-                        <button class="tab-btn" onclick="showSubscriberTab('timing')"><span class="tab-icon">⏱️</span><span class="tab-label">SIGNUP TIMING</span></button>
-                        <button class="tab-btn" onclick="showSubscriberTab('platforms')"><span class="tab-icon">📱</span><span class="tab-label">PLATFORMS</span></button>
-                        <button class="tab-btn" onclick="showSubscriberTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
-                        <button class="tab-btn" onclick="showSubscriberTab('trends')"><span class="tab-icon">📈</span><span class="tab-label">TRENDS</span></button>
+                        <button class="tab-btn active" onclick="showSubscriberTab('overview', event)"><span class="tab-icon">📊</span><span class="tab-label">OVERVIEW</span></button>
+                        <button class="tab-btn" onclick="showSubscriberTab('episodes', event)"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
+                        <button class="tab-btn" onclick="showSubscriberTab('timing', event)"><span class="tab-icon">⏱️</span><span class="tab-label">SIGNUP TIMING</span></button>
+                        <button class="tab-btn" onclick="showSubscriberTab('platforms', event)"><span class="tab-icon">📱</span><span class="tab-label">PLATFORMS</span></button>
+                        <button class="tab-btn" onclick="showSubscriberTab('demographics', event)"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
+                        <button class="tab-btn" onclick="showSubscriberTab('trends', event)"><span class="tab-icon">📈</span><span class="tab-label">TRENDS</span></button>
                     </div>
 
                     <!-- Tab Content -->
-                    <div class="dashboard-tab-content" id="subscriberTabContent">
+                    <div id="subscriberTabContent">
                         <!-- Overview Tab -->
                         <div id="subscriber-tab-overview" class="dashboard-tab active">
                             <div class="tab-section">
@@ -7861,15 +7872,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Persistent Sidebar - Right Side (due to row-reverse) -->
-                <div class="persistent-sidebar">
-                    <div class="sidebar-header-section">
-                        <h3>📺 Shows</h3>
-                        <input type="text" id="subscriberProfileSearchInput" class="sidebar-search" placeholder="🔍 Search shows..." onkeyup="filterSubscriberProfiles()">
-                    </div>
-                    <div id="subscriberProfileTree" class="profile-select-tree"></div>
                 </div>
             </div>
         </div><!-- End subscriberIQView -->
@@ -7987,7 +7989,11 @@
         }
 
         function formatDate(date) { return date.toISOString().split('T')[0]; }
-        function formatNumber(num) { return num ? num.toLocaleString() : '0'; }
+        function formatNumber(num) { 
+            if (num === null || num === undefined || num === '') return '0';
+            const n = typeof num === 'number' ? num : parseFloat(num);
+            return isNaN(n) ? '0' : n.toLocaleString();
+        }
         
         // Format index as multiplier (e.g., 150 → 1.5x, 100 → 1.0x, 75 → 0.75x)
         function formatIndex(index) {
@@ -8409,18 +8415,18 @@
             metricsContainer.innerHTML = `
                 <div class="metric-card">
                     <div class="metric-label">Total Show Watchers</div>
-                    <div class="metric-value">${formatNumber(metrics.total_watchers?.count || 0)}</div>
-                    <div class="metric-sub">Gen Pop: ${formatNumber(metrics.total_watchers?.gen_pop || 0)}</div>
+                    <div class="metric-value">${formatNumber(metrics.total_watchers?.count)}</div>
+                    <div class="metric-sub">Gen Pop: ${metrics.total_watchers?.gen_pop || 'N/A'}</div>
                 </div>
                 <div class="metric-card">
                     <div class="metric-label">Clean Sample</div>
-                    <div class="metric-value">${formatNumber(metrics.clean_sample?.count || 0)}</div>
-                    <div class="metric-sub">Gen Pop: ${formatNumber(metrics.clean_sample?.gen_pop || 0)}</div>
+                    <div class="metric-value">${formatNumber(metrics.clean_sample?.count)}</div>
+                    <div class="metric-sub">Gen Pop: ${metrics.clean_sample?.gen_pop || 'N/A'}</div>
                 </div>
                 <div class="metric-card">
                     <div class="metric-label">New Signups</div>
-                    <div class="metric-value">${formatNumber(metrics.new_signups?.count || 0)}</div>
-                    <div class="metric-sub">Gen Pop: ${formatNumber(metrics.new_signups?.gen_pop || 0)}</div>
+                    <div class="metric-value">${formatNumber(metrics.new_signups?.count)}</div>
+                    <div class="metric-sub">Gen Pop: ${metrics.new_signups?.gen_pop || 'N/A'}</div>
                 </div>
                 <div class="metric-card">
                     <div class="metric-label">Clean Conversion Rate</div>
@@ -8441,17 +8447,17 @@
             conversionContainer.innerHTML = `
                 <div class="conversion-card">
                     <h4>Attributed Signups</h4>
-                    <div class="conversion-value">${formatNumber(summary.attributed?.count || 0)}</div>
+                    <div class="conversion-value">${formatNumber(summary.attributed?.count)}</div>
                     <div class="conversion-pct">${summary.attributed?.percentage || '0%'}</div>
                 </div>
                 <div class="conversion-card">
                     <h4>Dormant to Reactive</h4>
-                    <div class="conversion-value">${formatNumber(summary.dormant_reactive?.count || 0)}</div>
+                    <div class="conversion-value">${formatNumber(summary.dormant_reactive?.count)}</div>
                     <div class="conversion-pct">${summary.dormant_reactive?.percentage || '0%'}</div>
                 </div>
                 <div class="conversion-card">
                     <h4>Total Signups</h4>
-                    <div class="conversion-value">${formatNumber(summary.total?.count || 0)}</div>
+                    <div class="conversion-value">${formatNumber(summary.total?.count)}</div>
                     <div class="conversion-pct">${summary.total?.percentage || '0%'}</div>
                 </div>
             `;
@@ -8480,11 +8486,11 @@
                     </div>
                     <div class="episode-metric">
                         <span class="metric-label">% of Total:</span>
-                        <span class="metric-value">${ep.percentage}</span>
+                        <span class="metric-value">${ep.percentage || 'N/A'}</span>
                     </div>
                     <div class="episode-metric">
                         <span class="metric-label">Avg Days:</span>
-                        <span class="metric-value">${ep.days_avg}</span>
+                        <span class="metric-value">${ep.days_avg || 'N/A'}</span>
                     </div>
                 </div>
             `).join('');

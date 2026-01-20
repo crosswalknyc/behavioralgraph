@@ -2232,6 +2232,9 @@ def get_admin_content():
         # Get SVOD Acquisition files from subscriber bucket
         svod_files = []
         try:
+            # Load SVOD metadata for categories
+            svod_metadata = load_svod_metadata()
+            
             svod_paginator = s3.get_paginator('list_objects_v2')
             for page in svod_paginator.paginate(Bucket=SUBSCRIBER_S3_BUCKET, Prefix=''):
                 for obj in page.get('Contents', []):
@@ -2251,11 +2254,16 @@ def get_admin_content():
                     
                     last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
                     
+                    # Get category from metadata, default to 'SVOD Acquisition'
+                    category = 'SVOD Acquisition'
+                    if key in svod_metadata and svod_metadata[key].get('category'):
+                        category = svod_metadata[key]['category']
+                    
                     svod_files.append({
                         'key': f'svod-acquisition/{key}',  # Prefix to identify bucket
                         'filename': filename,
                         'project_name': show_name,
-                        'category': 'SVOD Acquisition',
+                        'category': category,
                         'size': obj.get('Size', 0),
                         'last_modified': last_modified,
                         'created_at': last_modified,
@@ -3114,6 +3122,20 @@ def get_csv_data(s3_key):
         return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
 
 
+def parse_number(value):
+    """Parse a number from CSV value, handling commas and formatting."""
+    if not value or not value.strip():
+        return None
+    # Remove commas and try to parse as float/int
+    try:
+        cleaned = value.strip().replace(',', '').replace('$', '').replace('%', '')
+        # Try int first, then float
+        if '.' in cleaned:
+            return float(cleaned)
+        return int(cleaned)
+    except:
+        return None
+
 def parse_subscriber_iq_csv(csv_content):
     """Parse subscriber IQ CSV (show-to-platform attribution format)."""
     lines = csv_content.strip().split('\n')
@@ -3170,17 +3192,17 @@ def parse_subscriber_iq_csv(csv_content):
         elif current_section == 'key_metrics':
             if 'Total Show Watchers' in first_col:
                 parsed['key_metrics']['total_watchers'] = {
-                    'count': row[1].strip() if len(row) > 1 else '',
-                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                    'count': parse_number(row[1]) if len(row) > 1 else None,
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''  # Keep as string for display
                 }
-            elif 'Clean Sample' in first_col:
+            elif 'Clean Sample' in first_col or 'Clean Sample (New First Time Viewers)' in first_col:
                 parsed['key_metrics']['clean_sample'] = {
-                    'count': row[1].strip() if len(row) > 1 else '',
+                    'count': parse_number(row[1]) if len(row) > 1 else None,
                     'gen_pop': row[8].strip() if len(row) > 8 else ''
                 }
             elif 'New Platform Signups' in first_col:
                 parsed['key_metrics']['new_signups'] = {
-                    'count': row[1].strip() if len(row) > 1 else '',
+                    'count': parse_number(row[1]) if len(row) > 1 else None,
                     'gen_pop': row[8].strip() if len(row) > 8 else ''
                 }
             elif 'Clean Conversion Rate' in first_col:
@@ -3199,7 +3221,7 @@ def parse_subscriber_iq_csv(csv_content):
                 episode_num = first_col.replace('Episode ', '').strip()
                 parsed['episode_attribution'].append({
                     'episode': episode_num,
-                    'signups': row[1].strip() if len(row) > 1 else '',
+                    'signups': parse_number(row[1]) if len(row) > 1 else None,
                     'days_avg': row[3].strip() if len(row) > 3 else '',
                     'min_avg_view': row[5].strip() if len(row) > 5 else '',
                     'percentage': row[7].strip() if len(row) > 7 else '',
@@ -3213,19 +3235,19 @@ def parse_subscriber_iq_csv(csv_content):
         elif current_section == 'attribution_summary':
             if 'Attributed Signups' in first_col:
                 parsed['attribution_summary']['attributed'] = {
-                    'count': row[1].strip() if len(row) > 1 else '',
+                    'count': parse_number(row[1]) if len(row) > 1 else None,
                     'percentage': row[7].strip() if len(row) > 7 else '',
                     'gen_pop': row[8].strip() if len(row) > 8 else ''
                 }
             elif 'Dormant to Reactive' in first_col:
                 parsed['attribution_summary']['dormant_reactive'] = {
-                    'count': row[1].strip() if len(row) > 1 else '',
+                    'count': parse_number(row[1]) if len(row) > 1 else None,
                     'percentage': row[7].strip() if len(row) > 7 else '',
                     'gen_pop': row[8].strip() if len(row) > 8 else ''
                 }
             elif 'TOTAL SIGNUPS' in first_col:
                 parsed['attribution_summary']['total'] = {
-                    'count': row[1].strip() if len(row) > 1 else '',
+                    'count': parse_number(row[1]) if len(row) > 1 else None,
                     'percentage': row[7].strip() if len(row) > 7 else '',
                     'gen_pop': row[8].strip() if len(row) > 8 else ''
                 }
@@ -4139,10 +4161,38 @@ def rename_file():
         return jsonify({'success': False, 'error': str(e)})
 
 
+# SVOD file metadata storage key
+SVOD_METADATA_KEY = 'system/svod_metadata.json'
+
+def load_svod_metadata():
+    """Load SVOD file metadata (categories) from S3."""
+    if not s3_client:
+        return {}
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=SVOD_METADATA_KEY)
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except:
+        return {}
+
+def save_svod_metadata(metadata):
+    """Save SVOD file metadata to S3."""
+    if not s3_client:
+        return False
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=SVOD_METADATA_KEY,
+            Body=json.dumps(metadata, indent=2),
+            ContentType='application/json'
+        )
+        return True
+    except:
+        return False
+
 @app.route('/api/admin/change-category', methods=['POST'])
 @requires_admin
 def change_file_category():
-    """Change the BRAND CATEGORY in a CSV file."""
+    """Change the BRAND CATEGORY in a CSV file or SVOD file metadata."""
     global s3_cache
     
     try:
@@ -4153,6 +4203,24 @@ def change_file_category():
         if not file_key or not new_category:
             return jsonify({'success': False, 'error': 'File key and category required'})
         
+        # Check if this is a SVOD file (stored in svod-acquisition bucket)
+        if file_key.startswith('svod-acquisition/'):
+            # Handle SVOD file - store category in metadata
+            actual_key = file_key.replace('svod-acquisition/', '')
+            metadata = load_svod_metadata()
+            if actual_key not in metadata:
+                metadata[actual_key] = {}
+            metadata[actual_key]['category'] = new_category
+            save_svod_metadata(metadata)
+            
+            print(f"🏷️ Changed SVOD category for {actual_key} to {new_category}")
+            return jsonify({
+                'success': True,
+                'new_category': new_category,
+                'message': 'Category updated successfully'
+            })
+        
+        # Regular file - update BRAND CATEGORY in CSV
         # Download the file from S3
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=file_key)
         content = response['Body'].read().decode('utf-8', errors='ignore')
