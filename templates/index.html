@@ -8591,7 +8591,7 @@
             });
 
             // Define master category order
-            const masterOrder = ['BRAND', 'CONTENT', 'GEN POP', 'MUSIC', 'PLATFORMS', 'SPORT', 'TALENT', 'OTHER'];
+            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'MUSIC', 'OTHER'];
             
             // Build HTML with master categories
             let html = '';
@@ -15681,7 +15681,7 @@
                 let categoryOptions = '<option value="">All Categories</option>';
                 
                 // Group categories by master category
-                const masterOrder = ['BRAND', 'CONTENT', 'GEN POP', 'MUSIC', 'PLATFORMS', 'SPORT', 'TALENT', 'OTHER'];
+                const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'MUSIC', 'OTHER'];
                 const categoriesByMaster = {};
                 allCategories.forEach(cat => {
                     const master = getMasterCategory(cat);
@@ -15891,7 +15891,7 @@
             `;
 
             // Define master category order
-            const masterOrder = ['BRAND', 'CONTENT', 'GEN POP', 'MUSIC', 'PLATFORMS', 'SPORT', 'TALENT', 'OTHER'];
+            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'MUSIC', 'OTHER'];
             
             masterOrder.forEach(master => {
                 const subcats = byMasterCategory[master];
