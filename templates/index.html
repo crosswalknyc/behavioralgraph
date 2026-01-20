@@ -7815,6 +7815,28 @@
             }
         }
         
+        // Refresh entire image cache from server
+        async function refreshAllProfileImages() {
+            console.log('🔄 Refreshing profile image cache from server...');
+            try {
+                const response = await fetch('/api/all-profile-images', { credentials: 'same-origin' });
+                const data = await response.json();
+                if (data.success && data.images) {
+                    let count = 0;
+                    Object.entries(data.images).forEach(([key, info]) => {
+                        const cacheKey = key.toLowerCase().trim();
+                        profileImageCache[cacheKey] = info.url;
+                        count++;
+                    });
+                    console.log(`✅ Refreshed ${count} profile images from server cache`);
+                    return true;
+                }
+            } catch (e) {
+                console.log('❌ Could not refresh profile images:', e);
+            }
+            return false;
+        }
+        
         // Start preloading images immediately
         preloadAllProfileImages();
         
