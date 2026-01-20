@@ -3612,37 +3612,161 @@
             font-weight: 500;
         }
         
-        /* Affinity Network Visualization */
-        .affinity-network {
-            height: 300px;
-            background: var(--bg-dark);
-            border-radius: 8px;
+        /* Affinity Network Visualization - Enhanced */
+        .affinity-network-container {
             display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            overflow: hidden;
+            flex-direction: column;
+            gap: 0.75rem;
         }
-        .network-node {
-            position: absolute;
-            padding: 0.5rem 1rem;
-            background: var(--bg-card);
-            border: 2px solid var(--accent-blue);
-            border-radius: 20px;
-            font-size: 0.75rem;
-            white-space: nowrap;
+        .affinity-network-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .network-filter-btn {
+            padding: 0.3rem 0.6rem;
+            border-radius: 15px;
+            font-size: 0.65rem;
+            border: 1px solid var(--border-color);
+            background: var(--bg-input);
+            color: var(--text-secondary);
             cursor: pointer;
             transition: all 0.2s;
         }
-        .network-node:hover {
+        .network-filter-btn:hover, .network-filter-btn.active {
             background: var(--accent-blue);
-            transform: scale(1.1);
+            border-color: var(--accent-blue);
+            color: white;
         }
-        .network-node.center {
-            background: linear-gradient(135deg, #10b981, #059669);
-            border-color: #10b981;
+        .network-filter-btn[data-cat="brand"].active { background: #f59e0b; border-color: #f59e0b; }
+        .network-filter-btn[data-cat="content"].active { background: #8b5cf6; border-color: #8b5cf6; }
+        .network-filter-btn[data-cat="platform"].active { background: #06b6d4; border-color: #06b6d4; }
+        .network-filter-btn[data-cat="music"].active { background: #ec4899; border-color: #ec4899; }
+        .network-filter-btn[data-cat="sports"].active { background: #10b981; border-color: #10b981; }
+        
+        .affinity-network {
+            height: 400px;
+            background: linear-gradient(135deg, #0a1628 0%, #0d1a2a 50%, #0a1628 100%);
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+        .network-svg {
+            width: 100%;
+            height: 100%;
+        }
+        .network-line {
+            stroke: rgba(99, 102, 241, 0.3);
+            stroke-width: 1;
+            transition: stroke 0.3s, stroke-width 0.3s;
+        }
+        .network-line.highlighted {
+            stroke: var(--accent-lime);
+            stroke-width: 2;
+        }
+        .network-node {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .network-node:hover {
+            filter: brightness(1.3);
+        }
+        .network-node-circle {
+            transition: all 0.3s ease;
+        }
+        .network-node:hover .network-node-circle {
+            stroke-width: 3;
+        }
+        .network-node-text {
+            fill: white;
+            font-size: 10px;
+            font-weight: 500;
+            pointer-events: none;
+            text-anchor: middle;
+            dominant-baseline: middle;
+        }
+        .network-center-node .network-node-circle {
+            fill: url(#centerGradient);
+            stroke: var(--accent-lime);
+            stroke-width: 3;
+        }
+        .network-center-node .network-node-text {
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .network-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            padding: 0.5rem 0;
+            font-size: 0.7rem;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .network-detail-panel {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(13, 26, 42, 0.95);
+            border: 1px solid var(--accent-lime);
+            border-radius: 8px;
+            padding: 0.75rem;
+            display: none;
+            z-index: 100;
+        }
+        .network-detail-panel.visible {
+            display: block;
+            animation: slideUp 0.2s ease;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(10px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .network-detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .network-detail-name {
             font-weight: 600;
-            z-index: 10;
+            font-size: 0.9rem;
+        }
+        .network-detail-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .network-detail-stats {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.75rem;
+        }
+        .network-detail-stat {
+            display: flex;
+            flex-direction: column;
+        }
+        .network-detail-stat-label {
+            color: var(--text-secondary);
+            font-size: 0.65rem;
+            text-transform: uppercase;
+        }
+        .network-detail-stat-value {
+            font-weight: 600;
+            color: var(--accent-lime);
         }
         
         /* Sponsor Matrix */
@@ -6371,9 +6495,52 @@
                         </div>
                         
                         <div class="affinity-card wide">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Affinity Network: Visual representation showing the strongest brand and content connections for this audience. The central node is your profile, surrounded by top affinities sized by index strength.">🌐 Affinity Network</span> <span class="module-action-btns"><button class="module-btn png-btn" onclick="exportModulePNG('affinity', 'Affinity Network')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Affinity Network')" title="Add to Deck">➕</button></span></h3>
-                            <p class="affinity-desc">Visual map of audience connections</p>
-                            <div id="affinityNetwork" class="affinity-network"></div>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Affinity Network: Interactive visualization showing the strongest connections for this audience. Click nodes to see details. Filter by category. Node size = index strength.">🌐 Affinity Network</span> <span class="module-action-btns"><button class="module-btn png-btn" onclick="exportModulePNG('affinity', 'Affinity Network')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Affinity Network')" title="Add to Deck">➕</button></span></h3>
+                            <div class="affinity-network-container">
+                                <div class="affinity-network-controls" id="networkFilterControls">
+                                    <span style="font-size: 0.7rem; color: var(--text-secondary);">Filter:</span>
+                                    <button class="network-filter-btn active" data-cat="all" onclick="filterNetwork('all')">All</button>
+                                    <button class="network-filter-btn" data-cat="brand" onclick="filterNetwork('brand')">🛍️ Brands</button>
+                                    <button class="network-filter-btn" data-cat="content" onclick="filterNetwork('content')">🎬 Content</button>
+                                    <button class="network-filter-btn" data-cat="platform" onclick="filterNetwork('platform')">📱 Platforms</button>
+                                    <button class="network-filter-btn" data-cat="music" onclick="filterNetwork('music')">🎵 Music</button>
+                                    <button class="network-filter-btn" data-cat="sports" onclick="filterNetwork('sports')">🏆 Sports</button>
+                                </div>
+                                <div id="affinityNetwork" class="affinity-network">
+                                    <div class="network-detail-panel" id="networkDetailPanel">
+                                        <div class="network-detail-header">
+                                            <span class="network-detail-name" id="detailName">--</span>
+                                            <button class="network-detail-close" onclick="closeNetworkDetail()">✕</button>
+                                        </div>
+                                        <div class="network-detail-stats">
+                                            <div class="network-detail-stat">
+                                                <span class="network-detail-stat-label">Category</span>
+                                                <span class="network-detail-stat-value" id="detailCategory">--</span>
+                                            </div>
+                                            <div class="network-detail-stat">
+                                                <span class="network-detail-stat-label">Index</span>
+                                                <span class="network-detail-stat-value" id="detailIndex">--</span>
+                                            </div>
+                                            <div class="network-detail-stat">
+                                                <span class="network-detail-stat-label">Audience %</span>
+                                                <span class="network-detail-stat-value" id="detailPct">--</span>
+                                            </div>
+                                            <div class="network-detail-stat">
+                                                <span class="network-detail-stat-label">Strength</span>
+                                                <span class="network-detail-stat-value" id="detailStrength">--</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="network-legend">
+                                    <div class="legend-item"><div class="legend-dot" style="background: #f59e0b;"></div><span>Brands</span></div>
+                                    <div class="legend-item"><div class="legend-dot" style="background: #8b5cf6;"></div><span>Content</span></div>
+                                    <div class="legend-item"><div class="legend-dot" style="background: #06b6d4;"></div><span>Platforms</span></div>
+                                    <div class="legend-item"><div class="legend-dot" style="background: #ec4899;"></div><span>Music</span></div>
+                                    <div class="legend-item"><div class="legend-dot" style="background: #10b981;"></div><span>Sports</span></div>
+                                    <div class="legend-item" style="margin-left: auto;"><span style="color: var(--text-secondary);">Node size = Index strength</span></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -12999,25 +13166,169 @@
             `).join('');
         }
         
+        // Store network data globally for filtering
+        let networkData = [];
+        let currentNetworkFilter = 'all';
+        
         function renderAffinityNetwork(topItems) {
             const container = document.getElementById('affinityNetwork');
             const profileName = currentProfileData?.name || 'Profile';
             
-            // Create network visualization
-            const centerX = 200, centerY = 150;
-            const radius = 120;
+            // Store for filtering
+            networkData = topItems.map(item => ({
+                ...item,
+                catType: getCategoryType(item.category)
+            }));
             
-            let html = `<div class="network-node center" style="left: ${centerX - 50}px; top: ${centerY - 15}px;">${profileName.substring(0, 15)}</div>`;
+            renderNetworkSVG(networkData, profileName);
+        }
+        
+        function getCategoryType(category) {
+            const cat = (category || '').toUpperCase();
+            if (cat.includes('PURCHASED') || cat.includes('SHOP') || cat.includes('RETAIL') || cat.includes('BRAND') || cat.includes('QSR') || cat.includes('APPAREL')) return 'brand';
+            if (cat.includes('SERIES') || cat.includes('MOVIE') || cat.includes('GAMES') || cat.includes('PODCAST') || cat.includes('CONTENT')) return 'content';
+            if (cat.includes('STREAM') || cat.includes('SOCIAL') || cat.includes('APP') || cat.includes('PLATFORM') || cat.includes('MEDIA') || cat.includes('SEARCH')) return 'platform';
+            if (cat.includes('MUSIC') || cat.includes('AUDIO') || cat.includes('SPOTIFY') || cat.includes('ARTIST')) return 'music';
+            if (cat.includes('SPORT') || cat.includes('MLB') || cat.includes('NBA') || cat.includes('NFL') || cat.includes('NHL')) return 'sports';
+            return 'brand'; // Default
+        }
+        
+        function getCategoryColor(catType) {
+            const colors = {
+                'brand': '#f59e0b',
+                'content': '#8b5cf6', 
+                'platform': '#06b6d4',
+                'music': '#ec4899',
+                'sports': '#10b981'
+            };
+            return colors[catType] || '#6366f1';
+        }
+        
+        function renderNetworkSVG(items, profileName) {
+            const container = document.getElementById('affinityNetwork');
+            const detailPanel = document.getElementById('networkDetailPanel');
             
-            topItems.forEach((item, i) => {
-                const angle = (i / topItems.length) * 2 * Math.PI - Math.PI/2;
-                const x = centerX + radius * Math.cos(angle) - 40;
-                const y = centerY + radius * Math.sin(angle) - 12;
-                const opacity = 0.5 + (item.index / 200) * 0.5;
-                html += `<div class="network-node" style="left: ${x}px; top: ${y}px; opacity: ${opacity};" title="Index: ${item.index}">${item.name.substring(0, 12)}</div>`;
+            // Filter items based on current filter
+            let filteredItems = items;
+            if (currentNetworkFilter !== 'all') {
+                filteredItems = items.filter(i => i.catType === currentNetworkFilter);
+            }
+            
+            // Limit to top 20 for readability
+            filteredItems = filteredItems.slice(0, 20);
+            
+            const width = container.offsetWidth || 600;
+            const height = 400;
+            const centerX = width / 2;
+            const centerY = height / 2;
+            
+            // Create SVG
+            let svg = `<svg class="network-svg" viewBox="0 0 ${width} ${height}">
+                <defs>
+                    <linearGradient id="centerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:#10b981"/>
+                        <stop offset="100%" style="stop-color:#059669"/>
+                    </linearGradient>
+                    <filter id="glow">
+                        <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                        <feMerge>
+                            <feMergeNode in="coloredBlur"/>
+                            <feMergeNode in="SourceGraphic"/>
+                        </feMerge>
+                    </filter>
+                </defs>`;
+            
+            // Draw connection lines first (behind nodes)
+            filteredItems.forEach((item, i) => {
+                const angle = (i / filteredItems.length) * 2 * Math.PI - Math.PI/2;
+                const baseRadius = Math.min(width, height) * 0.35;
+                const radiusVariation = (item.index % 50) / 50 * 30; // Add some variation
+                const radius = baseRadius + radiusVariation;
+                const x = centerX + radius * Math.cos(angle);
+                const y = centerY + radius * Math.sin(angle);
+                
+                svg += `<line class="network-line" data-idx="${i}" x1="${centerX}" y1="${centerY}" x2="${x}" y2="${y}"/>`;
             });
             
-            container.innerHTML = html;
+            // Draw outer nodes
+            filteredItems.forEach((item, i) => {
+                const angle = (i / filteredItems.length) * 2 * Math.PI - Math.PI/2;
+                const baseRadius = Math.min(width, height) * 0.35;
+                const radiusVariation = (item.index % 50) / 50 * 30;
+                const radius = baseRadius + radiusVariation;
+                const x = centerX + radius * Math.cos(angle);
+                const y = centerY + radius * Math.sin(angle);
+                
+                // Node size based on index (15-35px radius)
+                const nodeSize = Math.min(35, Math.max(15, 10 + (item.index / 100) * 5));
+                const color = getCategoryColor(item.catType);
+                
+                // Truncate name for display
+                const displayName = item.name.length > 10 ? item.name.substring(0, 9) + '…' : item.name;
+                
+                svg += `
+                    <g class="network-node" data-idx="${i}" onclick="showNetworkDetail(${i})" onmouseenter="highlightConnection(${i})" onmouseleave="unhighlightConnection(${i})">
+                        <circle class="network-node-circle" cx="${x}" cy="${y}" r="${nodeSize}" fill="${color}" stroke="white" stroke-width="2" filter="url(#glow)"/>
+                        <text class="network-node-text" x="${x}" y="${y}">${displayName}</text>
+                    </g>`;
+            });
+            
+            // Draw center node (profile)
+            const centerSize = 45;
+            const displayProfileName = profileName.length > 12 ? profileName.substring(0, 11) + '…' : profileName;
+            svg += `
+                <g class="network-node network-center-node">
+                    <circle class="network-node-circle" cx="${centerX}" cy="${centerY}" r="${centerSize}" filter="url(#glow)"/>
+                    <text class="network-node-text" x="${centerX}" y="${centerY}">${displayProfileName}</text>
+                </g>`;
+            
+            svg += '</svg>';
+            
+            // Keep the detail panel
+            const panelHTML = detailPanel ? detailPanel.outerHTML : '';
+            container.innerHTML = svg + panelHTML;
+        }
+        
+        function filterNetwork(catType) {
+            currentNetworkFilter = catType;
+            
+            // Update button states
+            document.querySelectorAll('.network-filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.cat === catType);
+            });
+            
+            // Re-render
+            const profileName = currentProfileData?.name || 'Profile';
+            renderNetworkSVG(networkData, profileName);
+            closeNetworkDetail();
+        }
+        
+        function showNetworkDetail(idx) {
+            const item = currentNetworkFilter === 'all' 
+                ? networkData[idx] 
+                : networkData.filter(i => i.catType === currentNetworkFilter)[idx];
+            
+            if (!item) return;
+            
+            document.getElementById('detailName').textContent = item.name;
+            document.getElementById('detailCategory').textContent = item.category;
+            document.getElementById('detailIndex').textContent = formatIndex(item.index);
+            document.getElementById('detailPct').textContent = (item.pct || 0).toFixed(1) + '%';
+            document.getElementById('detailStrength').textContent = item.index >= 200 ? '🔥 Very Strong' : item.index >= 150 ? '💪 Strong' : item.index >= 100 ? '✓ Above Avg' : '↓ Below Avg';
+            
+            document.getElementById('networkDetailPanel').classList.add('visible');
+        }
+        
+        function closeNetworkDetail() {
+            document.getElementById('networkDetailPanel')?.classList.remove('visible');
+        }
+        
+        function highlightConnection(idx) {
+            document.querySelector(`.network-line[data-idx="${idx}"]`)?.classList.add('highlighted');
+        }
+        
+        function unhighlightConnection(idx) {
+            document.querySelector(`.network-line[data-idx="${idx}"]`)?.classList.remove('highlighted');
         }
         
         // ============================================================================
