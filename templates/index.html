@@ -521,6 +521,98 @@
             border: 1px solid var(--border-color);
         }
 
+        /* Profile Tabs Bar */
+        .profile-tabs-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0;
+            margin-bottom: 0.5rem;
+            overflow-x: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent-lime) var(--bg-card);
+        }
+
+        .profile-tabs-bar::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .profile-tabs-bar::-webkit-scrollbar-track {
+            background: var(--bg-card);
+            border-radius: 2px;
+        }
+
+        .profile-tabs-bar::-webkit-scrollbar-thumb {
+            background: var(--accent-lime);
+            border-radius: 2px;
+        }
+
+        .profile-tab {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px 8px 0 0;
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: fit-content;
+            max-width: 200px;
+            white-space: nowrap;
+        }
+
+        .profile-tab:hover {
+            background: var(--bg-input);
+            border-color: var(--accent-lime);
+        }
+
+        .profile-tab.active {
+            background: linear-gradient(135deg, #c8e600, #a0d911);
+            color: #1a1a1a;
+            border-color: var(--accent-lime);
+            font-weight: 600;
+        }
+
+        .profile-tab-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 0.85rem;
+        }
+
+        .profile-tab-close {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: transparent;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            font-size: 0.9rem;
+            line-height: 1;
+            transition: all 0.15s;
+            opacity: 0.6;
+        }
+
+        .profile-tab-close:hover {
+            background: rgba(0,0,0,0.2);
+            opacity: 1;
+        }
+
+        .profile-tab.active .profile-tab-close:hover {
+            background: rgba(0,0,0,0.3);
+        }
+
+        .profile-tabs-empty {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            font-style: italic;
+            padding: 0.5rem;
+        }
+
         /* Action Buttons - already defined above with margin-left: auto */
 
         .dash-action-btn {
@@ -5842,6 +5934,11 @@
 
         <!-- DASHBOARD VIEW -->
         <div id="dashboardView">
+            <!-- Profile Tabs Bar -->
+            <div class="profile-tabs-bar" id="profileTabsBar">
+                <span class="profile-tabs-empty" id="profileTabsEmpty">Select a profile to open a tab</span>
+            </div>
+            
             <!-- Row 1: Profile Info -->
             <div class="dash-header-row">
                 <div class="dash-profile-info" id="dashProfileInfo" style="display: none;">
@@ -8572,6 +8669,10 @@
         let dashboardProfiles = [];
         let selectedDashProfile = null;
         let expandedDashCategories = new Set();
+        
+        // Multi-tab profile management
+        let openProfileTabs = []; // Array of { id, name, dateRange, data, parsed }
+        let activeProfileTabId = null;
 
         function renderDashboardProfileTree(profiles) {
             dashboardProfiles = profiles;
@@ -8691,6 +8792,14 @@
         }
 
         async function selectDashboardProfile(profileId) {
+            // Check if profile is already open in a tab
+            const existingTab = openProfileTabs.find(t => t.id === profileId);
+            if (existingTab) {
+                // Switch to existing tab
+                switchToProfileTab(profileId);
+                return;
+            }
+            
             selectedDashProfile = profileId;
             renderDashboardProfileTree(dashboardProfiles);
             
@@ -8704,74 +8813,167 @@
                 const data = await response.json();
                 
                 if (data.success && data.data) {
-                    currentS3Key = profileId;
                     const parsed = parseAllData(data.data);
-                    currentDashboardData = parsed;
-                    
-                    // Update selected profile info
                     const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === profileId);
                     const brandName = data.brand || (profile ? getProfileFullName(profile) : 'Unknown');
                     
-                    // Update header profile info and show it
-                    const profileInfo = document.getElementById('dashProfileInfo');
-                    if (profileInfo && brandName) {
-                        profileInfo.style.display = 'flex';
-                        document.getElementById('dashBrandNameHeader').textContent = brandName.toUpperCase();
-                        document.getElementById('dashDateRangeHeader').textContent = data.date_range ? `Date Range: ${data.date_range}` : '';
-                        document.getElementById('dashDateRangeHeader').style.display = data.date_range ? 'block' : 'none';
-                        
-                        // Fetch profile image from Wikipedia
-                        fetchProfileImage(brandName);
-                    }
-                    document.getElementById('dashSampleSize').textContent = formatNumber(parsed.sampleSize);
-                    document.getElementById('dashProjectedUS').textContent = formatNumber(parsed.projectedUS);
-                    
-                    // Store profile data for AI features
-                    currentProfileData = {
+                    // Create new tab
+                    const newTab = {
+                        id: profileId,
                         name: brandName,
-                        sampleSize: parsed.sampleSize,
-                        projectedUS: parsed.projectedUS,
-                        demographics: parsed.demographics,
-                        behavioral: parsed.behavioral,
-                        locations: parsed.locations,
-                        s3Key: profileId
+                        dateRange: data.date_range || '',
+                        data: data,
+                        parsed: parsed
                     };
                     
-                    // Update favorite button
-                    updateFavoriteButton();
+                    openProfileTabs.push(newTab);
+                    activeProfileTabId = profileId;
                     
-                    // Reset business conversation for new profile
-                    if (typeof resetBusinessConversation === 'function') {
-                        resetBusinessConversation();
-                    }
+                    // Render tabs bar
+                    renderProfileTabsBar();
                     
-                    // Hide empty state, show dashboard content
-                    const emptyState = document.getElementById('dashboardEmptyState');
-                    const dashContent = document.getElementById('dashboardContent');
-                    if (emptyState) emptyState.style.display = 'none';
-                    if (dashContent) dashContent.style.display = 'block';
-                    
-                    // Render charts and data
-                    renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
-                    renderBehavioralCards(parsed.behavioral);
-                    renderLocationTable(parsed.locations);
-                    
-                    // Render demographic insights
-                    renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop);
-                    
-                    // Render behavioral insights
-                    renderBehavioralInsights(parsed.behavioral);
-                    
-                    // Render top insights
-                    renderTopInsights(parsed);
-                    
-                    // Render interests
-                    if (parsed.interests) {
-                        renderInterests(parsed.interests);
-                    }
+                    // Display the profile data
+                    displayProfileTabData(newTab);
                 }
             } catch (error) {
                 console.error('Error loading profile:', error);
+            }
+        }
+        
+        function renderProfileTabsBar() {
+            const container = document.getElementById('profileTabsBar');
+            const emptyText = document.getElementById('profileTabsEmpty');
+            
+            if (openProfileTabs.length === 0) {
+                if (emptyText) emptyText.style.display = 'block';
+                container.innerHTML = '<span class="profile-tabs-empty" id="profileTabsEmpty">Select a profile to open a tab</span>';
+                return;
+            }
+            
+            let html = '';
+            openProfileTabs.forEach(tab => {
+                const isActive = tab.id === activeProfileTabId;
+                const shortName = tab.name.length > 20 ? tab.name.substring(0, 18) + '...' : tab.name;
+                html += `
+                    <div class="profile-tab ${isActive ? 'active' : ''}" onclick="switchToProfileTab('${tab.id}')" title="${tab.name}">
+                        <span class="profile-tab-name">${shortName}</span>
+                        <button class="profile-tab-close" onclick="event.stopPropagation(); closeProfileTab('${tab.id}')" title="Close tab">×</button>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function switchToProfileTab(profileId) {
+            const tab = openProfileTabs.find(t => t.id === profileId);
+            if (!tab) return;
+            
+            activeProfileTabId = profileId;
+            selectedDashProfile = profileId;
+            
+            // Update tabs bar
+            renderProfileTabsBar();
+            
+            // Update sidebar selection
+            renderDashboardProfileTree(dashboardProfiles);
+            
+            // Display the tab's data
+            displayProfileTabData(tab);
+        }
+        
+        function closeProfileTab(profileId) {
+            const tabIndex = openProfileTabs.findIndex(t => t.id === profileId);
+            if (tabIndex === -1) return;
+            
+            openProfileTabs.splice(tabIndex, 1);
+            
+            if (openProfileTabs.length === 0) {
+                // No more tabs - show empty state
+                activeProfileTabId = null;
+                selectedDashProfile = null;
+                currentDashboardData = null;
+                currentS3Key = null;
+                
+                renderProfileTabsBar();
+                renderDashboardProfileTree(dashboardProfiles);
+                
+                // Show empty state
+                const emptyState = document.getElementById('dashboardEmptyState');
+                const dashContent = document.getElementById('dashboardContent');
+                const profileInfo = document.getElementById('dashProfileInfo');
+                if (emptyState) emptyState.style.display = 'flex';
+                if (dashContent) dashContent.style.display = 'none';
+                if (profileInfo) profileInfo.style.display = 'none';
+            } else {
+                // Switch to another tab
+                const newActiveTab = openProfileTabs[Math.max(0, tabIndex - 1)];
+                switchToProfileTab(newActiveTab.id);
+            }
+        }
+        
+        function displayProfileTabData(tab) {
+            const { id: profileId, name: brandName, dateRange, parsed } = tab;
+            
+            currentS3Key = profileId;
+            currentDashboardData = parsed;
+            
+            // Update header profile info and show it
+            const profileInfo = document.getElementById('dashProfileInfo');
+            if (profileInfo && brandName) {
+                profileInfo.style.display = 'flex';
+                document.getElementById('dashBrandNameHeader').textContent = brandName.toUpperCase();
+                document.getElementById('dashDateRangeHeader').textContent = dateRange ? `Date Range: ${dateRange}` : '';
+                document.getElementById('dashDateRangeHeader').style.display = dateRange ? 'block' : 'none';
+                
+                // Fetch profile image from Wikipedia
+                fetchProfileImage(brandName);
+            }
+            document.getElementById('dashSampleSize').textContent = formatNumber(parsed.sampleSize);
+            document.getElementById('dashProjectedUS').textContent = formatNumber(parsed.projectedUS);
+            
+            // Store profile data for AI features
+            currentProfileData = {
+                name: brandName,
+                sampleSize: parsed.sampleSize,
+                projectedUS: parsed.projectedUS,
+                demographics: parsed.demographics,
+                behavioral: parsed.behavioral,
+                locations: parsed.locations,
+                s3Key: profileId
+            };
+            
+            // Update favorite button
+            updateFavoriteButton();
+            
+            // Reset business conversation for new profile
+            if (typeof resetBusinessConversation === 'function') {
+                resetBusinessConversation();
+            }
+            
+            // Hide empty state, show dashboard content
+            const emptyState = document.getElementById('dashboardEmptyState');
+            const dashContent = document.getElementById('dashboardContent');
+            if (emptyState) emptyState.style.display = 'none';
+            if (dashContent) dashContent.style.display = 'block';
+            
+            // Render charts and data
+            renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
+            renderBehavioralCards(parsed.behavioral);
+            renderLocationTable(parsed.locations);
+            
+            // Render demographic insights
+            renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop);
+            
+            // Render behavioral insights
+            renderBehavioralInsights(parsed.behavioral);
+            
+            // Render top insights
+            renderTopInsights(parsed);
+            
+            // Render interests
+            if (parsed.interests) {
+                renderInterests(parsed.interests);
             }
         }
 
