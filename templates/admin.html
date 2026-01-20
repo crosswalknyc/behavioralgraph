@@ -795,6 +795,7 @@
                                 <th>Department</th>
                                 <th>Role</th>
                                 <th>Credits</th>
+                                <th>Last Login</th>
                                 <th>Usage</th>
                                 <th>Actions</th>
                             </tr>
@@ -1667,6 +1668,38 @@
                 const company = user.company || '-';
                 const department = user.department || '-';
                 
+                // Format last login time
+                let lastLoginDisplay = 'Never';
+                let lastLoginColor = 'var(--text-secondary)';
+                if (user.last_login) {
+                    const lastLogin = new Date(user.last_login);
+                    const now = new Date();
+                    const diffMs = now - lastLogin;
+                    const diffMins = Math.floor(diffMs / 60000);
+                    const diffHours = Math.floor(diffMs / 3600000);
+                    const diffDays = Math.floor(diffMs / 86400000);
+                    
+                    if (diffMins < 5) {
+                        lastLoginDisplay = 'Just now';
+                        lastLoginColor = '#10b981'; // green
+                    } else if (diffMins < 60) {
+                        lastLoginDisplay = `${diffMins}m ago`;
+                        lastLoginColor = '#10b981';
+                    } else if (diffHours < 24) {
+                        lastLoginDisplay = `${diffHours}h ago`;
+                        lastLoginColor = '#f59e0b'; // yellow
+                    } else if (diffDays < 7) {
+                        lastLoginDisplay = `${diffDays}d ago`;
+                        lastLoginColor = '#f59e0b';
+                    } else if (diffDays < 30) {
+                        lastLoginDisplay = `${Math.floor(diffDays / 7)}w ago`;
+                        lastLoginColor = 'var(--text-secondary)';
+                    } else {
+                        lastLoginDisplay = lastLogin.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        lastLoginColor = 'var(--text-secondary)';
+                    }
+                }
+                
                 const avatarHtml = user.profile_picture 
                     ? `<img src="${user.profile_picture}" alt="${username}">`
                     : `<span class="admin-avatar-initials">${username.substring(0, 2)}</span>`;
@@ -1690,6 +1723,9 @@
                     <td>
                         <span class="credits-display ${creditsClass}">${creditsLeft}</span>
                         <span style="font-size: 0.65rem; color: var(--text-secondary);">/ ${user.credits_used || 0} used</span>
+                    </td>
+                    <td style="font-size: 0.75rem; color: ${lastLoginColor};" title="${user.last_login ? new Date(user.last_login).toLocaleString() : 'Never logged in'}">
+                        ${lastLoginDisplay}
                     </td>
                     <td style="min-width: 80px;">
                         <div class="usage-bar">
