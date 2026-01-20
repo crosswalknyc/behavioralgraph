@@ -5983,7 +5983,7 @@
                 </div>
                 <!-- Interests Insights Summary -->
                 <div class="interests-insights-row" id="interestsInsightsRow">
-                    <div class="insight-card highlight">
+                    <div class="insight-card highlight has-tooltip" data-tooltip="Top Over-Indexing Interest: The single interest where this audience most over-indexes compared to Gen Pop. A strong signal for content and campaign themes.">
                         <div class="insight-icon">🔥</div>
                         <div class="insight-content">
                             <div class="insight-label">Top Over-Indexing</div>
@@ -5991,7 +5991,7 @@
                             <div class="insight-detail" id="topOverIndexDetail">Index: --</div>
                         </div>
                     </div>
-                    <div class="insight-card">
+                    <div class="insight-card has-tooltip" data-tooltip="Average Interest Index: Mean index across all interest categories. 1.0x = same as Gen Pop. Shows the range from minimum to maximum index.">
                         <div class="insight-icon">📊</div>
                         <div class="insight-content">
                             <div class="insight-label">Avg Interest Index</div>
@@ -5999,7 +5999,7 @@
                             <div class="insight-detail" id="interestIndexRange">Range: --</div>
                         </div>
                     </div>
-                    <div class="insight-card">
+                    <div class="insight-card has-tooltip" data-tooltip="Over-Indexing Count: Number of interests where this audience indexes above the median - these are interests they're more engaged with than typical.">
                         <div class="insight-icon">⬆️</div>
                         <div class="insight-content">
                             <div class="insight-label">OVER-INDEXING</div>
@@ -6007,7 +6007,7 @@
                             <div class="insight-detail">above median</div>
                         </div>
                     </div>
-                    <div class="insight-card">
+                    <div class="insight-card has-tooltip" data-tooltip="Under-Indexing Count: Number of interests where this audience indexes below the median - these are interests they engage with less than typical.">
                         <div class="insight-icon">⬇️</div>
                         <div class="insight-content">
                             <div class="insight-label">UNDER-INDEXING</div>
@@ -6146,19 +6146,19 @@
                         <div class="affinity-insight-card">
                             <h4 class="has-tooltip" data-tooltip="Affinity Scorecard: Quick metrics showing total affinities found, how many have high indexes (150+), average index score, and the strongest category overall.">📊 Affinity Scorecard</h4>
                             <div class="scorecard-grid" id="affinityScorecard">
-                                <div class="scorecard-item">
+                                <div class="scorecard-item has-tooltip" data-tooltip="Total Affinities: The complete count of brand and content affinities measured for this audience.">
                                     <span class="scorecard-value" id="affTotalItems">--</span>
                                     <span class="scorecard-label">Total Affinities</span>
                                 </div>
-                                <div class="scorecard-item">
+                                <div class="scorecard-item has-tooltip" data-tooltip="High Index: Number of affinities with index 1.5x or higher - these represent strong brand alignment opportunities.">
                                     <span class="scorecard-value positive" id="affHighIndex">--</span>
                                     <span class="scorecard-label">High Index (150+)</span>
                                 </div>
-                                <div class="scorecard-item">
+                                <div class="scorecard-item has-tooltip" data-tooltip="Avg Index: Average affinity index across all measured items. 1.0x = same as Gen Pop, higher = stronger affinity.">
                                     <span class="scorecard-value" id="affAvgIndex">--</span>
                                     <span class="scorecard-label">Avg Index</span>
                                 </div>
-                                <div class="scorecard-item">
+                                <div class="scorecard-item has-tooltip" data-tooltip="Strongest Category: The brand/content category where this audience shows the highest average over-indexing.">
                                     <span class="scorecard-value" id="affTopCategory">--</span>
                                     <span class="scorecard-label">Strongest Category</span>
                                 </div>
@@ -6217,31 +6217,31 @@
                     <!-- Executive Summary Row -->
                     <div class="sponsor-summary-row">
                         <div class="sponsor-summary-card executive">
-                            <h4>📋 Executive Summary</h4>
+                            <h4 class="has-tooltip" data-tooltip="Executive Summary: A high-level narrative of this audience's sponsorship potential including key brand affinities and recommended partnership categories.">📋 Executive Summary</h4>
                             <div id="sponsorExecSummary" class="exec-summary-content">
                                 <div class="loading-placeholder">Generating summary...</div>
                             </div>
                         </div>
                         <div class="sponsor-summary-card">
-                            <h4>🎯 Key Recommendations</h4>
+                            <h4 class="has-tooltip" data-tooltip="Key Recommendations: Specific actionable recommendations for sponsorship and partnership opportunities based on audience affinities.">🎯 Key Recommendations</h4>
                             <div id="sponsorRecommendations" class="recommendations-list">
                                 <div class="loading-placeholder">Analyzing data...</div>
                             </div>
                         </div>
                         <div class="sponsor-summary-card">
-                            <h4>💵 ROI Potential</h4>
+                            <h4 class="has-tooltip" data-tooltip="ROI Potential: Visual meters showing estimated return potential based on audience reach quality, brand alignment, and partnership fit scores.">💵 ROI Potential</h4>
                             <div class="roi-metrics" id="sponsorROI">
-                                <div class="roi-item">
+                                <div class="roi-item has-tooltip" data-tooltip="Audience Reach Quality: Score based on sample size and US projection - larger audiences = higher reach potential.">
                                     <span class="roi-label">Audience Reach Quality</span>
                                     <div class="roi-bar"><div class="roi-fill" id="roiReach" style="width: 0%"></div></div>
                                     <span class="roi-value" id="roiReachValue">--</span>
                                 </div>
-                                <div class="roi-item">
+                                <div class="roi-item has-tooltip" data-tooltip="Brand Alignment Score: How well this audience aligns with potential sponsor brands based on affinity data.">
                                     <span class="roi-label">Brand Alignment Score</span>
                                     <div class="roi-bar"><div class="roi-fill" id="roiAlignment" style="width: 0%"></div></div>
                                     <span class="roi-value" id="roiAlignmentValue">--</span>
                                 </div>
-                                <div class="roi-item">
+                                <div class="roi-item has-tooltip" data-tooltip="Activation Potential: Score based on diversity and depth of over-indexing categories - more engagement points = more activation opportunities.">
                                     <span class="roi-label">Activation Potential</span>
                                     <div class="roi-bar"><div class="roi-fill" id="roiActivation" style="width: 0%"></div></div>
                                     <span class="roi-value" id="roiActivationValue">--</span>
@@ -6252,7 +6252,7 @@
                     
                     <!-- Activation Ideas -->
                     <div class="activation-ideas-section">
-                        <h4>🚀 Activation Ideas</h4>
+                        <h4 class="has-tooltip" data-tooltip="Activation Ideas: Creative sponsorship and marketing activation concepts tailored to this audience's interests and behaviors.">🚀 Activation Ideas</h4>
                         <div id="sponsorActivations" class="activation-grid">
                             <div class="loading-placeholder">Generating ideas...</div>
                         </div>
@@ -6260,19 +6260,19 @@
                     
                     <div class="sponsorship-grid">
                         <div class="sponsor-card highlight">
-                            <h3>🏆 Top Sponsor Categories</h3>
+                            <h3 class="has-tooltip" data-tooltip="Top Sponsor Categories: Brand categories where this audience significantly over-indexes, making them ideal sponsorship targets.">🏆 Top Sponsor Categories</h3>
                             <p class="sponsor-desc">Categories where this audience significantly over-indexes</p>
                             <div id="sponsorCategories" class="sponsor-list"></div>
                         </div>
                         
                         <div class="sponsor-card">
-                            <h3>🎯 Ideal Brand Partners</h3>
+                            <h3 class="has-tooltip" data-tooltip="Ideal Brand Partners: Specific brands with the highest audience overlap - these are your best-fit sponsorship targets.">🎯 Ideal Brand Partners</h3>
                             <p class="sponsor-desc">Specific brands with highest audience overlap</p>
                             <div id="sponsorBrands" class="sponsor-list"></div>
                         </div>
                         
                         <div class="sponsor-card">
-                            <h3>💳 Purchase Behaviors</h3>
+                            <h3 class="has-tooltip" data-tooltip="Purchase Behaviors: What this audience buys, revealing their shopping preferences and purchase intent.">💳 Purchase Behaviors</h3>
                             <p class="sponsor-desc">What this audience buys</p>
                             <div id="sponsorPurchase" class="sponsor-list"></div>
                         </div>
@@ -6392,22 +6392,22 @@
                         </div>
                         
                         <div class="media-metrics-row">
-                            <div class="media-metric-card">
+                            <div class="media-metric-card has-tooltip" data-tooltip="Dominant Channel: The media platform or channel type where this audience has the highest engagement or over-indexing.">
                                 <span class="media-metric-icon">🏆</span>
                                 <span class="media-metric-value" id="mediaDominantChannel">--</span>
                                 <span class="media-metric-label">Dominant Channel</span>
                             </div>
-                            <div class="media-metric-card">
+                            <div class="media-metric-card has-tooltip" data-tooltip="Active Channels: Total number of media channels/platforms where this audience shows meaningful engagement.">
                                 <span class="media-metric-icon">📈</span>
                                 <span class="media-metric-value" id="mediaChannelCount">--</span>
                                 <span class="media-metric-label">Active Channels</span>
                             </div>
-                            <div class="media-metric-card">
+                            <div class="media-metric-card has-tooltip" data-tooltip="Avg Media Index: Average index across all media consumption categories. 1.0x = same as Gen Pop. Higher = stronger media engagement.">
                                 <span class="media-metric-icon">🎯</span>
                                 <span class="media-metric-value" id="mediaAvgIndex">--</span>
                                 <span class="media-metric-label">Avg Media Index</span>
                             </div>
-                            <div class="media-metric-card">
+                            <div class="media-metric-card has-tooltip" data-tooltip="High Performers: Number of media items with index 1.5x or higher - these are strong opportunities for media buys.">
                                 <span class="media-metric-icon">⚡</span>
                                 <span class="media-metric-value" id="mediaHighPerformers">--</span>
                                 <span class="media-metric-label">High Performers (150+)</span>
@@ -6416,11 +6416,11 @@
                         
                         <div class="media-recommendations-row">
                             <div class="media-rec-card">
-                                <h4>✅ Recommended Actions</h4>
+                                <h4 class="has-tooltip" data-tooltip="Recommended Actions: Media channels and platforms where this audience significantly over-indexes - prioritize these for media buys.">✅ Recommended Actions</h4>
                                 <div id="mediaRecommendations" class="media-rec-list"></div>
                             </div>
                             <div class="media-rec-card">
-                                <h4>⚠️ Avoid / Low Priority</h4>
+                                <h4 class="has-tooltip" data-tooltip="Avoid / Low Priority: Media channels where this audience under-indexes - consider reducing or reallocating spend from these.">⚠️ Avoid / Low Priority</h4>
                                 <div id="mediaAvoid" class="media-rec-list negative"></div>
                             </div>
                         </div>
@@ -6428,39 +6428,39 @@
                     
                     <div class="media-summary">
                         <div class="media-summary-card">
-                            <h4>Primary Channels</h4>
+                            <h4 class="has-tooltip" data-tooltip="Primary Channels: The media channels where this audience shows the strongest engagement and highest over-indexing.">Primary Channels</h4>
                             <div id="primaryChannels" class="channel-badges"></div>
                         </div>
                     </div>
                     
                     <div class="media-grid">
                         <div class="media-card">
-                            <h3>📺 VMVPD & Broadcast</h3>
+                            <h3 class="has-tooltip" data-tooltip="VMVPD & Broadcast: Virtual MVPDs (Hulu Live, YouTube TV, etc.) and traditional broadcast/cable networks. Shows audience penetration and index vs Gen Pop.">📺 VMVPD & Broadcast</h3>
                             <div id="mediaTV" class="media-list"></div>
                         </div>
                         
                         <div class="media-card">
-                            <h3>📱 Streaming</h3>
+                            <h3 class="has-tooltip" data-tooltip="Streaming: Subscription video streaming services (Netflix, Disney+, etc.). Shows which platforms this audience prefers and their engagement level.">📱 Streaming</h3>
                             <div id="mediaStreaming" class="media-list"></div>
                         </div>
                         
                         <div class="media-card">
-                            <h3>💻 Social Media</h3>
+                            <h3 class="has-tooltip" data-tooltip="Social Media: Social platforms (Instagram, TikTok, X, etc.). Shows which platforms this audience uses most and where to focus social advertising.">💻 Social Media</h3>
                             <div id="mediaSocial" class="media-list"></div>
                         </div>
                         
                         <div class="media-card">
-                            <h3>🎮 Gaming</h3>
+                            <h3 class="has-tooltip" data-tooltip="Gaming: Gaming platforms and services (PlayStation, Xbox, PC gaming, etc.). Useful for in-game advertising and esports sponsorships.">🎮 Gaming</h3>
                             <div id="mediaGaming" class="media-list"></div>
                         </div>
                         
                         <div class="media-card">
-                            <h3>🎧 Audio/Podcasts</h3>
+                            <h3 class="has-tooltip" data-tooltip="Audio/Podcasts: Audio streaming and podcast platforms (Spotify, Apple Podcasts, etc.). Key for audio advertising and podcast sponsorships.">🎧 Audio/Podcasts</h3>
                             <div id="mediaAudio" class="media-list"></div>
                         </div>
                         
                         <div class="media-card">
-                            <h3>📰 News & Publishing</h3>
+                            <h3 class="has-tooltip" data-tooltip="News & Publishing: News websites, digital publications, and content sites. Good for programmatic display and native advertising.">📰 News & Publishing</h3>
                             <div id="mediaNews" class="media-list"></div>
                         </div>
                     </div>
@@ -6754,12 +6754,12 @@
                             </div>
                             
                             <div class="insight-card-v2">
-                                <h3>📱 Social Media Usage</h3>
+                                <h3 class="has-tooltip" data-tooltip="Social Media Usage: Breakdown of social platform usage by this audience, showing which platforms they engage with most vs. Gen Pop.">📱 Social Media Usage</h3>
                                 <div id="socialMediaUsage" class="media-preference-list"></div>
                             </div>
                             
                             <div class="insight-card-v2">
-                                <h3>🎵 Audio & Music</h3>
+                                <h3 class="has-tooltip" data-tooltip="Audio & Music: Audio streaming and music platform preferences, useful for audio ad targeting and music-related sponsorships.">🎵 Audio & Music</h3>
                                 <div id="audioPreferences" class="media-preference-list"></div>
                             </div>
                             
@@ -11604,14 +11604,14 @@
                 </div>
             `).join('');
             
-            // Key stats grid
+            // Key stats grid with tooltips for each stat
             document.getElementById('keyStatsGrid').innerHTML = `
-                <div class="key-stat-item"><div class="key-stat-label">Total Data Points on Audience</div><div class="key-stat-value neutral">${allItems.length.toLocaleString()}</div></div>
-                <div class="key-stat-item"><div class="key-stat-label">Categories</div><div class="key-stat-value neutral">${categoryCount}</div></div>
-                <div class="key-stat-item"><div class="key-stat-label">Over-Index</div><div class="key-stat-value">${over100Count.toLocaleString()}</div></div>
-                <div class="key-stat-item"><div class="key-stat-label">Under-Index</div><div class="key-stat-value" style="color:#ef4444">${under100Count.toLocaleString()}</div></div>
-                <div class="key-stat-item"><div class="key-stat-label">Avg Index</div><div class="key-stat-value neutral">${formatIndex(Math.round(allItems.reduce((s,i) => s+i.index, 0) / Math.max(1, allItems.length)))}</div></div>
-                <div class="key-stat-item"><div class="key-stat-label">Max Index</div><div class="key-stat-value">${formatIndex(sortedByIndex[0]?.index || 0)}</div></div>
+                <div class="key-stat-item has-tooltip" data-tooltip="Total Data Points: The complete count of behavioral items tracked for this audience including brands, media, content, interests, and more."><div class="key-stat-label">Total Data Points on Audience</div><div class="key-stat-value neutral">${allItems.length.toLocaleString()}</div></div>
+                <div class="key-stat-item has-tooltip" data-tooltip="Categories: Number of unique behavioral categories this audience has data for (e.g., QSR, Streaming, Social Media, etc.)"><div class="key-stat-label">Categories</div><div class="key-stat-value neutral">${categoryCount}</div></div>
+                <div class="key-stat-item has-tooltip" data-tooltip="Over-Index Count: Number of items where this audience indexes above 1.0x (more likely to engage than Gen Pop). Higher = more distinct interests."><div class="key-stat-label">Over-Index</div><div class="key-stat-value">${over100Count.toLocaleString()}</div></div>
+                <div class="key-stat-item has-tooltip" data-tooltip="Under-Index Count: Number of items where this audience indexes below 1.0x (less likely to engage than Gen Pop). Helps identify what to avoid in targeting."><div class="key-stat-label">Under-Index</div><div class="key-stat-value" style="color:#ef4444">${under100Count.toLocaleString()}</div></div>
+                <div class="key-stat-item has-tooltip" data-tooltip="Average Index: Mean index across all behavioral items. 1.0x = same as Gen Pop. Higher values indicate a more distinctive audience profile."><div class="key-stat-label">Avg Index</div><div class="key-stat-value neutral">${formatIndex(Math.round(allItems.reduce((s,i) => s+i.index, 0) / Math.max(1, allItems.length)))}</div></div>
+                <div class="key-stat-item has-tooltip" data-tooltip="Max Index: The highest index score in this profile. Shows the strongest affinity this audience has compared to Gen Pop."><div class="key-stat-label">Max Index</div><div class="key-stat-value">${formatIndex(sortedByIndex[0]?.index || 0)}</div></div>
             `;
             
             // ===== BEHAVIORAL DNA TAB =====
