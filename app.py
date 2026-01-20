@@ -2229,6 +2229,45 @@ def get_admin_content():
         
         print(f"✅ Found {len(active_files)} active files")
         
+        # Get SVOD Acquisition files from subscriber bucket
+        svod_files = []
+        try:
+            svod_paginator = s3.get_paginator('list_objects_v2')
+            for page in svod_paginator.paginate(Bucket=SUBSCRIBER_S3_BUCKET, Prefix=''):
+                for obj in page.get('Contents', []):
+                    key = obj['Key']
+                    # Skip historic folder and non-CSV files
+                    if key.startswith('historic/') or not key.endswith('.csv'):
+                        continue
+                    
+                    filename = key.split('/')[-1]
+                    # Extract show name from filename
+                    name_without_ext = key.replace('.csv', '')
+                    match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+                    if match:
+                        show_name = match.group(1).replace('_', ' ')
+                    else:
+                        show_name = name_without_ext.replace('_', ' ')
+                    
+                    last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
+                    
+                    svod_files.append({
+                        'key': f'svod-acquisition/{key}',  # Prefix to identify bucket
+                        'filename': filename,
+                        'project_name': show_name,
+                        'category': 'SVOD Acquisition',
+                        'size': obj.get('Size', 0),
+                        'last_modified': last_modified,
+                        'created_at': last_modified,
+                        'bucket': SUBSCRIBER_S3_BUCKET,
+                        's3_key': key  # Original key in svod bucket
+                    })
+            
+            print(f"✅ Found {len(svod_files)} SVOD Acquisition files")
+            active_files.extend(svod_files)
+        except Exception as svod_err:
+            print(f"⚠️ Error loading SVOD files: {svod_err}")
+        
         # Load profile image cache to check for custom images
         if not profile_image_cache:
             load_profile_image_cache()
@@ -3334,21 +3373,24 @@ def list_subscriber_iq_files():
         for page in paginator.paginate(Bucket=SUBSCRIBER_S3_BUCKET):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                if key.endswith('.csv'):
-                    # Extract show name from filename (format: ShowName_MM_DD_YYYY_HH_MM.csv)
-                    name_without_ext = key.replace('.csv', '')
-                    match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
-                    if match:
-                        show_name = match.group(1).replace('_', ' ')
-                    else:
-                        show_name = name_without_ext.replace('_', ' ')
-                    
-                    files.append({
-                        's3_key': key,
-                        'show_name': show_name,
-                        'size': obj['Size'],
-                        'last_modified': obj['LastModified'].isoformat()
-                    })
+                # Skip historic folder and non-CSV files
+                if key.startswith('historic/') or not key.endswith('.csv'):
+                    continue
+                
+                # Extract show name from filename (format: ShowName_MM_DD_YYYY_HH_MM.csv)
+                name_without_ext = key.replace('.csv', '')
+                match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+                if match:
+                    show_name = match.group(1).replace('_', ' ')
+                else:
+                    show_name = name_without_ext.replace('_', ' ')
+                
+                files.append({
+                    's3_key': key,
+                    'show_name': show_name,
+                    'size': obj['Size'],
+                    'last_modified': obj['LastModified'].isoformat()
+                })
         
         # Sort by last modified (newest first)
         files.sort(key=lambda x: x['last_modified'], reverse=True)

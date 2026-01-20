@@ -7756,18 +7756,9 @@
 
         <!-- SUBSCRIBER IQ VIEW -->
         <div id="subscriberIQView">
-            <div class="dashboard-container">
-                <!-- Sidebar -->
-                <div class="dashboard-sidebar">
-                    <div class="sidebar-header-section">
-                        <h3>📺 Shows</h3>
-                        <input type="text" id="subscriberProfileSearchInput" class="sidebar-search" placeholder="🔍 Search shows..." onkeyup="filterSubscriberProfiles()">
-                    </div>
-                    <div id="subscriberProfileTree" class="sidebar-tree"></div>
-                </div>
-
+            <div class="dashboard-layout">
                 <!-- Main Content -->
-                <div class="dashboard-content" id="subscriberDashboardContent">
+                <div class="dashboard-tab-content" id="subscriberDashboardContent">
                     <!-- Empty State -->
                     <div id="subscriberEmptyState" class="dashboard-empty-state">
                         <div class="empty-state-icon">📺</div>
@@ -7776,22 +7767,18 @@
                     </div>
 
                     <!-- Profile Info Header -->
-                    <div id="subscriberProfileInfo" class="dash-profile-info" style="display: none;">
-                        <div class="dash-profile-image-container" id="subscriberProfileImage">
-                            <img src="" alt="Show Image" style="display: none;">
-                        </div>
-                        <div class="dash-profile-text">
-                            <div class="dash-brand-box">
-                                <h2 id="subscriberShowNameHeader">SELECT SHOW</h2>
-                            </div>
-                            <div class="dash-date-box">
-                                <span id="subscriberDateRangeHeader"></span>
+                    <div id="subscriberProfileInfo" class="dash-header-row" style="display: none;">
+                        <div class="dash-profile-info">
+                            <div class="dash-profile-image" id="subscriberProfileImage"><img src="" alt="Show" onerror="this.parentElement.classList.remove('loaded')"></div>
+                            <div class="dash-brand-container">
+                                <div class="dash-brand-box" id="subscriberShowNameHeader"></div>
+                                <div class="dash-date-box" id="subscriberDateRangeHeader"></div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Tabs -->
-                    <div class="dashboard-tabs">
+                    <div class="dashboard-tabs" id="subscriberTabs" style="display: none;">
                         <button class="tab-btn active" onclick="showSubscriberTab('overview')"><span class="tab-icon">📊</span><span class="tab-label">OVERVIEW</span></button>
                         <button class="tab-btn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
                         <button class="tab-btn" onclick="showSubscriberTab('timing')"><span class="tab-icon">⏱️</span><span class="tab-label">SIGNUP TIMING</span></button>
@@ -7874,6 +7861,15 @@
                             </div>
                         </div>
                     </div>
+                </div>
+                
+                <!-- Persistent Sidebar - Right Side (due to row-reverse) -->
+                <div class="persistent-sidebar">
+                    <div class="sidebar-header-section">
+                        <h3>📺 Shows</h3>
+                        <input type="text" id="subscriberProfileSearchInput" class="sidebar-search" placeholder="🔍 Search shows..." onkeyup="filterSubscriberProfiles()">
+                    </div>
+                    <div id="subscriberProfileTree" class="profile-select-tree"></div>
                 </div>
             </div>
         </div><!-- End subscriberIQView -->
@@ -8355,11 +8351,11 @@
             const { data, show, date_range } = response;
             
             // Update header
-            document.getElementById('subscriberShowNameHeader').textContent = show;
+            document.getElementById('subscriberShowNameHeader').textContent = show.toUpperCase();
             document.getElementById('subscriberDateRangeHeader').textContent = date_range ? `Date Range: ${date_range}` : '';
             document.getElementById('subscriberProfileInfo').style.display = 'flex';
             document.getElementById('subscriberEmptyState').style.display = 'none';
-            document.getElementById('subscriberDashboardContent').style.display = 'block';
+            document.getElementById('subscriberTabs').style.display = 'flex';
             
             // Render all tabs
             renderSubscriberOverview(data);
@@ -8370,7 +8366,7 @@
             renderSubscriberTrends(data);
         }
         
-        function showSubscriberTab(tabName) {
+        function showSubscriberTab(tabName, event) {
             // Hide all tabs
             document.querySelectorAll('#subscriberTabContent .dashboard-tab').forEach(tab => {
                 tab.classList.remove('active');
@@ -8383,13 +8379,24 @@
             }
             
             // Update tab buttons
-            document.querySelectorAll('#subscriberIQView .tab-btn').forEach(btn => {
+            document.querySelectorAll('#subscriberTabs .tab-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
-            event.target.closest('.tab-btn')?.classList.add('active');
+            if (event && event.target) {
+                event.target.closest('.tab-btn')?.classList.add('active');
+            } else {
+                // Fallback: find button by tab name
+                const buttons = document.querySelectorAll('#subscriberTabs .tab-btn');
+                buttons.forEach(btn => {
+                    if (btn.onclick && btn.onclick.toString().includes(tabName)) {
+                        btn.classList.add('active');
+                    }
+                });
+            }
             
             // Scroll to top
-            document.getElementById('subscriberTabContent').scrollTop = 0;
+            const tabContent = document.getElementById('subscriberTabContent');
+            if (tabContent) tabContent.scrollTop = 0;
         }
         
         function renderSubscriberOverview(data) {
