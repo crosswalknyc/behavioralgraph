@@ -5893,12 +5893,18 @@
             <div id="tab-behavioral" class="tab-content">
                 <div class="tab-header">
                     <h2>📈 Behavioral</h2>
-                    <p class="section-description">What your audience does, watches, buys. First % = profile, Second % = Gen Pop. <span style="color: #10b981;">Green = over-indexes</span> | <span style="color: #ef4444;">Red = under-indexes</span>.</p>
+                    <p class="section-description">What your audience does, watches, buys, and engages with.</p>
+                </div>
+                <div class="metric-legend" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem; background: rgba(90, 154, 217, 0.1); border-radius: 8px; font-size: 0.75rem;">
+                    <span class="has-tooltip" data-tooltip="The percentage of this specific audience that engages with each item."><strong style="color: var(--accent-blue);">Profile %</strong> — Audience penetration</span>
+                    <span class="has-tooltip" data-tooltip="The percentage of the general US population that engages with each item."><strong style="color: var(--text-secondary);">(GP: X%)</strong> — Gen Pop penetration</span>
+                    <span class="has-tooltip" data-tooltip="Index shows how much more/less likely this audience is to engage vs. Gen Pop. 2.0x = twice as likely, 0.5x = half as likely."><strong style="color: #10b981;">Index (X.Xx)</strong> — Over/under-index multiplier</span>
+                    <span class="has-tooltip" data-tooltip="Items with index above 1.5x are considered 'hot' - strong over-indexers."><strong>🔥</strong> — Hot (index > 1.5x)</span>
                 </div>
                 <!-- Behavioral Insights Row -->
                 <div class="behavioral-insights-row" id="behavioralInsightsRow">
                     <div class="behavioral-insight-card highlight">
-                        <h4>🎯 Behavioral Profile Summary</h4>
+                        <h4 class="has-tooltip" data-tooltip="Behavioral Profile Summary: Quick overview of this audience's behavioral patterns - total items tracked, over-indexing rate, and most dominant category based on average index scores.">🎯 Behavioral Profile Summary</h4>
                         <div id="behavioralProfileSummary" class="behavioral-insight-content">
                             <div class="behavioral-stat-row">
                                 <span class="icon">⏳</span>
@@ -5907,7 +5913,14 @@
                         </div>
                     </div>
                     <div class="behavioral-insight-card">
-                        <h4>🏆 Top Performing Categories</h4>
+                        <h4 class="has-tooltip" data-tooltip="Top Performing Categories: Behavioral categories where this audience most over-indexes vs. Gen Pop. Higher index = stronger affinity. Fire count = number of items in that category with index > 1.5x.">🏆 Top Performing Categories</h4>
+                        <div class="top-cat-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.25rem; font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">
+                            <span>Category</span>
+                            <span style="display: flex; gap: 0.75rem;">
+                                <span class="has-tooltip" data-tooltip="Avg Index: Average index across all items in this category. 1.0x = same as Gen Pop, 2.0x = 2x more likely than Gen Pop.">Avg Index</span>
+                                <span class="has-tooltip" data-tooltip="Hot Count: Number of items in this category with index above 1.5x (strong over-indexers).">Hot 🔥</span>
+                            </span>
+                        </div>
                         <div id="behavioralTopCategories" class="behavioral-insight-content">
                             <div class="behavioral-stat-row">
                                 <span class="icon">⏳</span>
@@ -5916,7 +5929,7 @@
                         </div>
                     </div>
                     <div class="behavioral-insight-card">
-                        <h4>💡 Activation Opportunities</h4>
+                        <h4 class="has-tooltip" data-tooltip="Activation Opportunities: Actionable marketing recommendations based on this audience's highest-indexing behaviors across shopping, content, social media, and entertainment categories.">💡 Activation Opportunities</h4>
                         <div id="behavioralActivations" class="behavioral-insight-content">
                             <div class="behavioral-stat-row">
                                 <span class="icon">⏳</span>
@@ -8464,11 +8477,11 @@
                 .slice(0, 6);
             
             document.getElementById('behavioralTopCategories').innerHTML = topCategories.map(([cat, stats]) => `
-                <div class="behavioral-top-cat">
+                <div class="behavioral-top-cat has-tooltip" data-tooltip="${cat}: ${stats.count} items tracked, avg index ${formatIndex(stats.avgIndex)}, ${stats.highCount} strong over-indexers (>1.5x). This audience is ${stats.avgIndex > 100 ? (stats.avgIndex / 100).toFixed(1) + 'x more' : 'less'} likely to engage with ${cat} content vs. Gen Pop.">
                     <span class="cat-name">${cat}</span>
                     <span class="cat-stats">
-                        <span class="cat-idx">${formatIndex(stats.avgIndex)}</span>
-                        ${stats.highCount > 0 ? `<span class="cat-high">${stats.highCount}🔥</span>` : ''}
+                        <span class="cat-idx" style="color: ${stats.avgIndex >= 100 ? '#10b981' : '#ef4444'}">${formatIndex(stats.avgIndex)}</span>
+                        <span class="cat-high" style="min-width: 35px; text-align: right;">${stats.highCount > 0 ? stats.highCount + '🔥' : '-'}</span>
                     </span>
                 </div>
             `).join('') || '<p style="color: var(--text-secondary);">No data available</p>';
