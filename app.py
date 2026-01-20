@@ -3521,12 +3521,21 @@ def set_profile_image():
                 profile_name = data.get('profile_name')
                 image_url = data.get('image_url')
                 print(f"   URL mode: profile={profile_name}, url={image_url}")
+                print(f"   URL length: {len(image_url) if image_url else 0} chars")
+                print(f"   URL starts with http: {image_url.startswith('http') if image_url else False}")
         
         if not profile_name:
+            print(f"   ❌ No profile name provided. Request data: {request.get_json() if request.is_json else request.form}")
             return jsonify({'success': False, 'error': 'Profile name required'})
         
         if not image_url:
+            print(f"   ❌ No image URL provided. Profile: {profile_name}")
             return jsonify({'success': False, 'error': 'Image URL or file required'})
+        
+        # Validate URL format
+        if not image_url.startswith(('http://', 'https://', '/')):
+            print(f"   ⚠️ Warning: URL doesn't start with http/https/: {image_url[:50]}...")
+            # Still allow it, but log the warning
         
         # Ensure cache is loaded before updating
         if not profile_image_cache:

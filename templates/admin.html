@@ -2732,6 +2732,11 @@
                 } else {
                     // Set URL
                     console.log('Setting URL:', urlInput);
+                    console.log('Profile name:', profileName);
+                    console.log('Request payload:', JSON.stringify({
+                        profile_name: profileName,
+                        image_url: urlInput
+                    }));
                     
                     response = await fetch('/api/admin/profile-image', {
                         method: 'POST',
@@ -2757,7 +2762,25 @@
                 console.log('Response data:', data);
                 
                 if (data.success) {
+                    console.log('✅ Image saved successfully!', data);
                     showToast('Profile image saved!');
+                    
+                    // Verify it's in the cache
+                    setTimeout(async () => {
+                        try {
+                            const verifyResponse = await fetch(`/api/debug/image-cache/${encodeURIComponent(profileName)}`, { credentials: 'same-origin' });
+                            const verifyData = await verifyResponse.json();
+                            console.log('🔍 Cache verification:', verifyData);
+                            if (verifyData.in_s3) {
+                                console.log('✅ Confirmed: Image is in S3 cache');
+                            } else {
+                                console.warn('⚠️ Warning: Image not found in S3 cache after save');
+                            }
+                        } catch (e) {
+                            console.error('Could not verify cache:', e);
+                        }
+                    }, 1000);
+                    
                     closeProfileImageModal();
                     // Small delay to ensure cache is updated on server
                     setTimeout(() => {
