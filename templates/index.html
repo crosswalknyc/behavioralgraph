@@ -6041,12 +6041,9 @@
                 <button class="tab-btn" onclick="openDeckWorkspace()"><span class="tab-icon">📊</span><span class="tab-label">DECK BUILDER</span></button>
             </div>
             
-            <!-- Row 3: Tab Info + Actions -->
+            <!-- Row 3: Actions -->
             <div class="dash-bottom-row">
-                <div class="row-left" id="dashTabInfo">
-                    <strong>Insights</strong> — Complete audience intelligence. <strong>Index Scale:</strong> <span class="highlight-green">1.5x+ = target</span> | <span class="highlight-yellow">1.0x-1.49x = neutral</span> | <span class="highlight-red">&lt;1.0x = deprioritize</span>.
-                </div>
-                <div class="row-right">
+                <div class="row-right" style="margin-left: 0;">
                     <div class="display-mode-toggle" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" title="Toggle between percentages and US population numbers">
                         <span id="dashDisplayLabel">US %</span>
                     </div>
@@ -7994,12 +7991,6 @@
             });
             // Scroll window to top as well for good measure
             window.scrollTo(0, 0);
-            
-            // Update tab info text
-            const infoEl = document.getElementById('dashTabInfo');
-            if (infoEl && TAB_INFO[tabName]) {
-                infoEl.innerHTML = TAB_INFO[tabName];
-            }
             
             // Track tab usage
             trackActivity(tabName);
