@@ -1523,10 +1523,12 @@
         
         function openImageUpload(encodedName) {
             const profileName = decodeURIComponent(encodedName);
-            // Use the existing profile image modal
-            currentImageProfile = profileName;
-            document.getElementById('profileImageName').textContent = profileName;
-            document.getElementById('imageModal').style.display = 'flex';
+            // Use the existing profile image modal function
+            // We need to find the s3_key for this profile
+            const profile = profileImagesData.without_images.find(p => p.name === profileName) ||
+                           profileImagesData.with_images.find(p => p.name === profileName);
+            const fileKey = profile ? profile.s3_key : '';
+            openProfileImageModal(profileName, fileKey);
         }
         
         async function removeProfileImage(encodedName) {
@@ -2754,6 +2756,10 @@
                     showToast('Profile image saved!');
                     closeProfileImageModal();
                     loadContentFiles(); // Refresh to show new image
+                    // Also refresh profile images list if we're on that tab
+                    if (document.getElementById('section-images')?.classList.contains('active')) {
+                        loadProfileImages();
+                    }
                 } else {
                     showToast(data.error || 'Failed to save image', true);
                 }
@@ -2785,6 +2791,10 @@
                     showToast('Custom image removed');
                     closeProfileImageModal();
                     loadContentFiles();
+                    // Also refresh profile images list if we're on that tab
+                    if (document.getElementById('section-images')?.classList.contains('active')) {
+                        loadProfileImages();
+                    }
                 } else {
                     showToast(data.error || 'Failed to remove image', true);
                 }
