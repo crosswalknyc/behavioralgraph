@@ -10871,27 +10871,608 @@
             setTimeout(() => notification.remove(), 4000);
         }
         
-        function openDeckWorkspace() {
-            // Create modal for deck workspace
+        // Enhanced Deck Builder State
+        let currentDeckId = null;
+        let currentDeckData = null;
+        let savedDecks = [];
+        let canvaConnected = false;
+        let teamMembers = [];
+        
+        async function openDeckWorkspace() {
+            // Load saved decks and Canva status
+            await Promise.all([loadSavedDecks(), checkCanvaStatus(), loadTeamMembers()]);
+            
+            // Create enhanced modal
             const modal = document.createElement('div');
             modal.className = 'deck-workspace-modal';
+            modal.id = 'deckBuilderModal';
             modal.innerHTML = `
-                <div class="deck-workspace-content">
+                <div class="deck-workspace-content" style="max-width: 1000px; width: 95%;">
                     <div class="deck-workspace-header">
-                        <h2>📊 Deck Workspace</h2>
-                        <button onclick="this.parentElement.parentElement.parentElement.remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                        <h2>📊 Deck Builder</h2>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <span id="canvaStatusBadge" class="canva-badge ${canvaConnected ? 'connected' : ''}">${canvaConnected ? '🎨 Canva Connected' : '🔗 Connect Canva'}</span>
+                            <button onclick="closeDeckBuilder()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                        </div>
                     </div>
-                    <div class="deck-workspace-items" id="deckWorkspaceItems">
-                        ${renderDeckItems()}
+                    
+                    <div class="deck-builder-layout">
+                        <!-- Left: Deck List -->
+                        <div class="deck-list-panel">
+                            <div class="deck-list-header">
+                                <h3>📁 My Decks</h3>
+                                <button class="btn btn-small btn-success" onclick="createNewDeck()">+ New</button>
+                            </div>
+                            <div id="savedDecksList" class="saved-decks-list">
+                                ${renderSavedDecksList()}
+                            </div>
+                            <div style="border-top: 1px solid var(--border-color); padding-top: 0.75rem; margin-top: 0.75rem;">
+                                <h4 style="font-size: 0.75rem; margin-bottom: 0.5rem; color: var(--text-secondary);">Current Session (${deckWorkspaceItems.length} items)</h4>
+                                <button class="btn btn-small btn-secondary" onclick="saveToDeck()" style="width: 100%;">💾 Save Items to Deck</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Right: Deck Editor -->
+                        <div class="deck-editor-panel">
+                            <div id="deckEditorView">
+                                ${currentDeckData ? renderDeckEditor() : renderDeckEmptyState()}
+                            </div>
+                        </div>
                     </div>
-                    <div class="deck-workspace-actions">
-                        <button class="btn btn-secondary" onclick="clearDeckWorkspace()">🗑️ Clear All</button>
-                        <button class="btn btn-primary" onclick="exportDeckAsPDF()">📑 Export as PDF</button>
-                        <button class="btn btn-primary" onclick="exportDeckAsPPT()">📊 Export as Slides</button>
+                    
+                    <div class="deck-workspace-actions" style="border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button class="btn btn-secondary" onclick="clearDeckWorkspace()">🗑️ Clear Session</button>
+                            <button class="btn btn-secondary" onclick="exportDeckAsPDF()">📄 Export PDF</button>
+                            <button class="btn btn-secondary" onclick="exportDeckAsPPT()">📊 Export CSV</button>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            ${canvaConnected ? 
+                                '<button class="btn btn-primary" onclick="exportToCanva()" style="background: #00c4cc;">🎨 Open in Canva</button>' : 
+                                '<button class="btn btn-secondary" onclick="connectCanva()">🔗 Connect Canva</button>'
+                            }
+                            <button class="btn btn-primary" onclick="shareDeckModal()">👥 Share with Team</button>
+                        </div>
                     </div>
                 </div>
             `;
             document.body.appendChild(modal);
+            
+            // Add styles for enhanced deck builder
+            if (!document.getElementById('deckBuilderStyles')) {
+                const styles = document.createElement('style');
+                styles.id = 'deckBuilderStyles';
+                styles.textContent = `
+                    .deck-builder-layout {
+                        display: grid;
+                        grid-template-columns: 280px 1fr;
+                        gap: 1rem;
+                        padding: 1rem;
+                        min-height: 400px;
+                        max-height: 60vh;
+                        overflow: hidden;
+                    }
+                    .deck-list-panel {
+                        background: var(--bg-input);
+                        border-radius: 8px;
+                        padding: 0.75rem;
+                        overflow-y: auto;
+                    }
+                    .deck-list-header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-bottom: 0.75rem;
+                    }
+                    .deck-list-header h3 { margin: 0; font-size: 0.9rem; }
+                    .saved-decks-list {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 0.5rem;
+                        max-height: 300px;
+                        overflow-y: auto;
+                    }
+                    .saved-deck-item {
+                        background: var(--bg-card);
+                        border: 1px solid var(--border-color);
+                        border-radius: 6px;
+                        padding: 0.6rem;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                    }
+                    .saved-deck-item:hover { border-color: var(--accent-blue); }
+                    .saved-deck-item.active { border-color: var(--accent-lime); background: rgba(200, 230, 0, 0.1); }
+                    .saved-deck-item .deck-name { font-weight: 600; font-size: 0.85rem; margin-bottom: 0.25rem; }
+                    .saved-deck-item .deck-meta { font-size: 0.7rem; color: var(--text-secondary); display: flex; gap: 0.5rem; }
+                    .deck-editor-panel {
+                        background: var(--bg-card);
+                        border-radius: 8px;
+                        padding: 1rem;
+                        overflow-y: auto;
+                    }
+                    .deck-empty-state {
+                        text-align: center;
+                        padding: 3rem 1rem;
+                        color: var(--text-secondary);
+                    }
+                    .deck-empty-state h3 { margin-bottom: 0.5rem; }
+                    .canva-badge {
+                        font-size: 0.7rem;
+                        padding: 0.25rem 0.5rem;
+                        border-radius: 4px;
+                        background: var(--bg-input);
+                        border: 1px solid var(--border-color);
+                        cursor: pointer;
+                    }
+                    .canva-badge.connected { background: rgba(0, 196, 204, 0.2); border-color: #00c4cc; color: #00c4cc; }
+                    .deck-slide-preview {
+                        background: var(--bg-input);
+                        border: 1px solid var(--border-color);
+                        border-radius: 8px;
+                        padding: 0.75rem;
+                        margin-bottom: 0.5rem;
+                        display: flex;
+                        gap: 0.75rem;
+                        align-items: center;
+                    }
+                    .deck-slide-preview:hover { border-color: var(--accent-blue); }
+                    .slide-number {
+                        background: var(--accent-blue);
+                        color: white;
+                        width: 28px;
+                        height: 28px;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-weight: 600;
+                        font-size: 0.75rem;
+                        flex-shrink: 0;
+                    }
+                    .slide-content { flex: 1; }
+                    .slide-title { font-weight: 600; font-size: 0.85rem; margin-bottom: 0.2rem; }
+                    .slide-subtitle { font-size: 0.7rem; color: var(--text-secondary); }
+                    .slide-actions { display: flex; gap: 0.25rem; }
+                    .slide-actions button {
+                        background: none;
+                        border: none;
+                        color: var(--text-secondary);
+                        cursor: pointer;
+                        padding: 0.25rem;
+                        font-size: 0.8rem;
+                    }
+                    .slide-actions button:hover { color: var(--text-primary); }
+                    .team-badge {
+                        font-size: 0.6rem;
+                        padding: 0.1rem 0.3rem;
+                        border-radius: 3px;
+                        background: rgba(147, 51, 234, 0.2);
+                        color: #a855f7;
+                    }
+                    .share-modal-content {
+                        padding: 1rem;
+                    }
+                    .team-member-checkbox {
+                        display: flex;
+                        align-items: center;
+                        gap: 0.5rem;
+                        padding: 0.5rem;
+                        background: var(--bg-input);
+                        border-radius: 6px;
+                        margin-bottom: 0.5rem;
+                    }
+                    @media (max-width: 768px) {
+                        .deck-builder-layout {
+                            grid-template-columns: 1fr;
+                        }
+                    }
+                `;
+                document.head.appendChild(styles);
+            }
+        }
+        
+        function closeDeckBuilder() {
+            document.getElementById('deckBuilderModal')?.remove();
+        }
+        
+        async function loadSavedDecks() {
+            try {
+                const response = await fetch('/api/decks');
+                const data = await response.json();
+                if (data.success) {
+                    savedDecks = data.decks || [];
+                }
+            } catch (e) {
+                console.error('Error loading decks:', e);
+            }
+        }
+        
+        async function checkCanvaStatus() {
+            try {
+                const response = await fetch('/api/canva/status');
+                const data = await response.json();
+                canvaConnected = data.connected || false;
+            } catch (e) {
+                canvaConnected = false;
+            }
+        }
+        
+        async function loadTeamMembers() {
+            try {
+                const response = await fetch('/api/team-members');
+                const data = await response.json();
+                teamMembers = data.members || [];
+            } catch (e) {
+                teamMembers = [];
+            }
+        }
+        
+        function renderSavedDecksList() {
+            if (savedDecks.length === 0) {
+                return '<div style="font-size: 0.75rem; color: var(--text-secondary); padding: 1rem; text-align: center;">No saved decks yet. Create one to get started!</div>';
+            }
+            
+            return savedDecks.map(deck => `
+                <div class="saved-deck-item ${currentDeckId === deck.id ? 'active' : ''}" onclick="loadDeck('${deck.id}')">
+                    <div class="deck-name">${deck.name}</div>
+                    <div class="deck-meta">
+                        <span>${deck.slides_count} slides</span>
+                        ${deck.is_team_deck ? '<span class="team-badge">👥 Team</span>' : ''}
+                        ${!deck.is_mine ? '<span style="color: #a855f7;">Shared</span>' : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function renderDeckEmptyState() {
+            return `
+                <div class="deck-empty-state">
+                    <h3>📑 Select or Create a Deck</h3>
+                    <p>Choose a deck from the list or create a new one to start building your presentation.</p>
+                    <button class="btn btn-primary" onclick="createNewDeck()" style="margin-top: 1rem;">+ Create New Deck</button>
+                </div>
+            `;
+        }
+        
+        function renderDeckEditor() {
+            if (!currentDeckData) return renderDeckEmptyState();
+            
+            const slides = currentDeckData.slides || [];
+            return `
+                <div class="deck-editor-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div>
+                        <input type="text" id="deckNameInput" value="${currentDeckData.name || 'Untitled Deck'}" 
+                               style="font-size: 1.1rem; font-weight: 600; background: transparent; border: none; color: var(--text-primary); width: 200px;"
+                               onchange="updateDeckName(this.value)">
+                        <div style="font-size: 0.7rem; color: var(--text-secondary);">
+                            ${currentDeckData.slides?.length || 0} slides • Last updated ${currentDeckData.updated_at ? new Date(currentDeckData.updated_at).toLocaleDateString() : 'never'}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-small btn-secondary" onclick="duplicateDeck('${currentDeckData.id}')">📋 Duplicate</button>
+                        <button class="btn btn-small btn-danger" onclick="deleteDeck('${currentDeckData.id}')" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">🗑️ Delete</button>
+                    </div>
+                </div>
+                
+                <div class="deck-slides-list" id="deckSlidesList">
+                    ${slides.length === 0 ? 
+                        '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No slides yet. Add items from dashboard tabs using the ➕ buttons.</div>' :
+                        slides.map((slide, idx) => `
+                            <div class="deck-slide-preview" draggable="true" data-idx="${idx}">
+                                <div class="slide-number">${idx + 1}</div>
+                                <div class="slide-content">
+                                    <div class="slide-title">${slide.title || 'Untitled Slide'}</div>
+                                    <div class="slide-subtitle">${slide.profileName || ''} • ${slide.type || 'content'}</div>
+                                </div>
+                                <div class="slide-actions">
+                                    <button onclick="moveSlide(${idx}, -1)" title="Move up">⬆️</button>
+                                    <button onclick="moveSlide(${idx}, 1)" title="Move down">⬇️</button>
+                                    <button onclick="removeSlideFromDeck(${idx})" title="Remove">🗑️</button>
+                                </div>
+                            </div>
+                        `).join('')
+                    }
+                </div>
+                
+                ${deckWorkspaceItems.length > 0 ? `
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                        <h4 style="font-size: 0.85rem; margin-bottom: 0.5rem;">📥 Add from Session (${deckWorkspaceItems.length} items)</h4>
+                        <button class="btn btn-small btn-success" onclick="addSessionItemsToDeck()">Add All to This Deck</button>
+                    </div>
+                ` : ''}
+            `;
+        }
+        
+        async function createNewDeck() {
+            const name = prompt('Enter deck name:', 'New Deck');
+            if (!name) return;
+            
+            try {
+                const response = await fetch('/api/decks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, slides: [] })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentDeckId = data.deck.id;
+                    currentDeckData = data.deck;
+                    await loadSavedDecks();
+                    refreshDeckBuilder();
+                    showNotification('✅ Deck created!', 'success');
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('Error creating deck');
+            }
+        }
+        
+        async function loadDeck(deckId) {
+            try {
+                const response = await fetch(`/api/decks/${deckId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentDeckId = deckId;
+                    currentDeckData = data.deck;
+                    refreshDeckBuilder();
+                }
+            } catch (e) {
+                alert('Error loading deck');
+            }
+        }
+        
+        async function saveToDeck() {
+            if (deckWorkspaceItems.length === 0) {
+                alert('No items in session to save');
+                return;
+            }
+            
+            if (!currentDeckId) {
+                // Create new deck first
+                await createNewDeck();
+                if (!currentDeckId) return;
+            }
+            
+            await addSessionItemsToDeck();
+        }
+        
+        async function addSessionItemsToDeck() {
+            if (!currentDeckId || !currentDeckData) return;
+            
+            const newSlides = [...(currentDeckData.slides || []), ...deckWorkspaceItems];
+            
+            try {
+                const response = await fetch(`/api/decks/${currentDeckId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slides: newSlides })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentDeckData = data.deck;
+                    deckWorkspaceItems = [];
+                    localStorage.setItem('deckWorkspaceItems', '[]');
+                    refreshDeckBuilder();
+                    showNotification('✅ Items added to deck!', 'success');
+                }
+            } catch (e) {
+                alert('Error saving to deck');
+            }
+        }
+        
+        async function updateDeckName(name) {
+            if (!currentDeckId) return;
+            
+            try {
+                await fetch(`/api/decks/${currentDeckId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                currentDeckData.name = name;
+                await loadSavedDecks();
+                document.getElementById('savedDecksList').innerHTML = renderSavedDecksList();
+            } catch (e) {
+                console.error('Error updating deck name');
+            }
+        }
+        
+        async function removeSlideFromDeck(idx) {
+            if (!currentDeckData) return;
+            
+            currentDeckData.slides.splice(idx, 1);
+            
+            try {
+                await fetch(`/api/decks/${currentDeckId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slides: currentDeckData.slides })
+                });
+                refreshDeckBuilder();
+            } catch (e) {
+                console.error('Error removing slide');
+            }
+        }
+        
+        async function moveSlide(idx, direction) {
+            if (!currentDeckData) return;
+            
+            const newIdx = idx + direction;
+            if (newIdx < 0 || newIdx >= currentDeckData.slides.length) return;
+            
+            const slides = currentDeckData.slides;
+            [slides[idx], slides[newIdx]] = [slides[newIdx], slides[idx]];
+            
+            try {
+                await fetch(`/api/decks/${currentDeckId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slides })
+                });
+                refreshDeckBuilder();
+            } catch (e) {
+                console.error('Error moving slide');
+            }
+        }
+        
+        async function duplicateDeck(deckId) {
+            try {
+                const response = await fetch(`/api/decks/${deckId}/duplicate`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    await loadSavedDecks();
+                    currentDeckId = data.deck.id;
+                    currentDeckData = data.deck;
+                    refreshDeckBuilder();
+                    showNotification('✅ Deck duplicated!', 'success');
+                }
+            } catch (e) {
+                alert('Error duplicating deck');
+            }
+        }
+        
+        async function deleteDeck(deckId) {
+            if (!confirm('Are you sure you want to delete this deck?')) return;
+            
+            try {
+                const response = await fetch(`/api/decks/${deckId}`, { method: 'DELETE' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentDeckId = null;
+                    currentDeckData = null;
+                    await loadSavedDecks();
+                    refreshDeckBuilder();
+                    showNotification('✅ Deck deleted', 'success');
+                }
+            } catch (e) {
+                alert('Error deleting deck');
+            }
+        }
+        
+        function refreshDeckBuilder() {
+            document.getElementById('savedDecksList').innerHTML = renderSavedDecksList();
+            document.getElementById('deckEditorView').innerHTML = currentDeckData ? renderDeckEditor() : renderDeckEmptyState();
+        }
+        
+        async function connectCanva() {
+            try {
+                const response = await fetch('/api/canva/auth');
+                const data = await response.json();
+                
+                if (data.success && data.auth_url) {
+                    window.open(data.auth_url, '_blank', 'width=600,height=700');
+                } else {
+                    alert(data.error || 'Canva integration not configured. Contact your administrator.');
+                }
+            } catch (e) {
+                alert('Error connecting to Canva');
+            }
+        }
+        
+        async function exportToCanva() {
+            if (!currentDeckId) {
+                alert('Please select or create a deck first');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/canva/export-deck', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deck_id: currentDeckId })
+                });
+                const data = await response.json();
+                
+                if (data.success && data.edit_url) {
+                    window.open(data.edit_url, '_blank');
+                    showNotification('✅ Opened in Canva!', 'success');
+                } else {
+                    alert(data.error || 'Error exporting to Canva');
+                }
+            } catch (e) {
+                alert('Error exporting to Canva');
+            }
+        }
+        
+        function shareDeckModal() {
+            if (!currentDeckId || !currentDeckData) {
+                alert('Please select a deck first');
+                return;
+            }
+            
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'shareDeckModal';
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 400px;">
+                    <div class="deck-workspace-header">
+                        <h2>👥 Share Deck</h2>
+                        <button onclick="document.getElementById('shareDeckModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div class="share-modal-content">
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" id="shareTeamDeck" ${currentDeckData.is_team_deck ? 'checked' : ''}>
+                                <span>Share with entire team</span>
+                            </label>
+                        </div>
+                        
+                        <h4 style="font-size: 0.85rem; margin-bottom: 0.5rem;">Or share with specific people:</h4>
+                        <div id="teamMembersShareList">
+                            ${teamMembers.length === 0 ? 
+                                '<div style="color: var(--text-secondary); font-size: 0.8rem;">No team members found</div>' :
+                                teamMembers.map(m => `
+                                    <div class="team-member-checkbox">
+                                        <input type="checkbox" id="share-${m.username}" value="${m.username}" 
+                                               ${(currentDeckData.shared_with || []).includes(m.username) ? 'checked' : ''}>
+                                        <label for="share-${m.username}">${m.username} <span style="color: var(--text-secondary);">(${m.department || 'Team'})</span></label>
+                                    </div>
+                                `).join('')
+                            }
+                        </div>
+                        
+                        <button class="btn btn-primary" onclick="saveShareSettings()" style="width: 100%; margin-top: 1rem;">Save Sharing Settings</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        async function saveShareSettings() {
+            const isTeamDeck = document.getElementById('shareTeamDeck').checked;
+            const shareWith = [];
+            
+            teamMembers.forEach(m => {
+                const checkbox = document.getElementById(`share-${m.username}`);
+                if (checkbox && checkbox.checked) {
+                    shareWith.push(m.username);
+                }
+            });
+            
+            try {
+                const response = await fetch(`/api/decks/${currentDeckId}/share`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_team_deck: isTeamDeck, share_with: shareWith })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentDeckData = data.deck;
+                    document.getElementById('shareDeckModal').remove();
+                    showNotification('✅ Sharing settings saved!', 'success');
+                    await loadSavedDecks();
+                    refreshDeckBuilder();
+                }
+            } catch (e) {
+                alert('Error saving sharing settings');
+            }
         }
         
         function renderDeckItems() {

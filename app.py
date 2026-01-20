@@ -4918,6 +4918,538 @@ bg_checker.start()
 
 
 # ============================================================================
+# DECK BUILDER API
+# ============================================================================
+
+DECKS_S3_KEY = 'system/decks/'
+
+@app.route('/api/decks', methods=['GET'])
+@requires_auth
+def get_user_decks():
+    """Get all decks for the current user and their team."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    username = session.get('username')
+    company = user.get('company', '')
+    
+    try:
+        decks = []
+        # List all deck files
+        paginator = s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=DECKS_S3_KEY):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                if key.endswith('.json'):
+                    try:
+                        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+                        deck_data = json.loads(response['Body'].read().decode('utf-8'))
+                        
+                        # Show if owned by user, shared with user, or same company
+                        owner = deck_data.get('owner', '')
+                        shared_with = deck_data.get('shared_with', [])
+                        deck_company = deck_data.get('company', '')
+                        is_team_deck = deck_data.get('is_team_deck', False)
+                        
+                        can_view = (
+                            owner == username or
+                            username in shared_with or
+                            (is_team_deck and deck_company == company)
+                        )
+                        
+                        if can_view:
+                            decks.append({
+                                'id': deck_data.get('id'),
+                                'name': deck_data.get('name', 'Untitled Deck'),
+                                'owner': owner,
+                                'is_mine': owner == username,
+                                'is_team_deck': is_team_deck,
+                                'slides_count': len(deck_data.get('slides', [])),
+                                'created_at': deck_data.get('created_at'),
+                                'updated_at': deck_data.get('updated_at'),
+                                'shared_with': shared_with
+                            })
+                    except:
+                        continue
+        
+        # Sort by updated date
+        decks.sort(key=lambda x: x.get('updated_at', ''), reverse=True)
+        
+        return jsonify({'success': True, 'decks': decks})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/decks', methods=['POST'])
+@requires_auth
+def create_deck():
+    """Create a new deck."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        data = request.get_json()
+        deck_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+        
+        deck = {
+            'id': deck_id,
+            'name': data.get('name', 'Untitled Deck'),
+            'description': data.get('description', ''),
+            'owner': session.get('username'),
+            'company': user.get('company', ''),
+            'is_team_deck': data.get('is_team_deck', False),
+            'shared_with': data.get('shared_with', []),
+            'slides': data.get('slides', []),
+            'template': data.get('template', 'default'),
+            'created_at': now,
+            'updated_at': now
+        }
+        
+        # Save to S3
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(deck),
+            ContentType='application/json'
+        )
+        
+        return jsonify({'success': True, 'deck': deck})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/decks/<deck_id>', methods=['GET'])
+@requires_auth
+def get_deck(deck_id):
+    """Get a specific deck by ID."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        deck = json.loads(response['Body'].read().decode('utf-8'))
+        
+        # Check permission
+        username = session.get('username')
+        company = user.get('company', '')
+        owner = deck.get('owner', '')
+        shared_with = deck.get('shared_with', [])
+        deck_company = deck.get('company', '')
+        is_team_deck = deck.get('is_team_deck', False)
+        
+        can_view = (
+            owner == username or
+            username in shared_with or
+            (is_team_deck and deck_company == company)
+        )
+        
+        if not can_view:
+            return jsonify({'success': False, 'error': 'Permission denied'})
+        
+        deck['can_edit'] = owner == username or username in shared_with
+        
+        return jsonify({'success': True, 'deck': deck})
+    except s3_client.exceptions.NoSuchKey:
+        return jsonify({'success': False, 'error': 'Deck not found'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/decks/<deck_id>', methods=['PUT'])
+@requires_auth
+def update_deck(deck_id):
+    """Update an existing deck."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        
+        # Get existing deck
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        deck = json.loads(response['Body'].read().decode('utf-8'))
+        
+        # Check permission
+        username = session.get('username')
+        owner = deck.get('owner', '')
+        shared_with = deck.get('shared_with', [])
+        
+        can_edit = owner == username or username in shared_with
+        if not can_edit:
+            return jsonify({'success': False, 'error': 'Permission denied'})
+        
+        # Update deck
+        data = request.get_json()
+        if 'name' in data:
+            deck['name'] = data['name']
+        if 'description' in data:
+            deck['description'] = data['description']
+        if 'slides' in data:
+            deck['slides'] = data['slides']
+        if 'is_team_deck' in data and owner == username:
+            deck['is_team_deck'] = data['is_team_deck']
+        if 'shared_with' in data and owner == username:
+            deck['shared_with'] = data['shared_with']
+        if 'template' in data:
+            deck['template'] = data['template']
+        
+        deck['updated_at'] = datetime.now().isoformat()
+        deck['last_editor'] = username
+        
+        # Save to S3
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(deck),
+            ContentType='application/json'
+        )
+        
+        return jsonify({'success': True, 'deck': deck})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/decks/<deck_id>', methods=['DELETE'])
+@requires_auth
+def delete_deck(deck_id):
+    """Delete a deck (owner only)."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        
+        # Get existing deck
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        deck = json.loads(response['Body'].read().decode('utf-8'))
+        
+        # Only owner can delete
+        if deck.get('owner') != session.get('username'):
+            return jsonify({'success': False, 'error': 'Only the deck owner can delete it'})
+        
+        # Delete from S3
+        s3_client.delete_object(Bucket=S3_BUCKET, Key=s3_key)
+        
+        return jsonify({'success': True, 'message': 'Deck deleted'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/decks/<deck_id>/share', methods=['POST'])
+@requires_auth
+def share_deck(deck_id):
+    """Share a deck with team members."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        data = request.get_json()
+        share_with = data.get('share_with', [])
+        is_team_deck = data.get('is_team_deck', False)
+        
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        deck = json.loads(response['Body'].read().decode('utf-8'))
+        
+        # Only owner can share
+        if deck.get('owner') != session.get('username'):
+            return jsonify({'success': False, 'error': 'Only the deck owner can share it'})
+        
+        # Update sharing settings
+        deck['shared_with'] = list(set(deck.get('shared_with', []) + share_with))
+        deck['is_team_deck'] = is_team_deck
+        deck['updated_at'] = datetime.now().isoformat()
+        
+        # Save
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(deck),
+            ContentType='application/json'
+        )
+        
+        return jsonify({'success': True, 'deck': deck})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/decks/<deck_id>/duplicate', methods=['POST'])
+@requires_auth
+def duplicate_deck(deck_id):
+    """Duplicate an existing deck."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        original = json.loads(response['Body'].read().decode('utf-8'))
+        
+        # Create new deck
+        new_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+        
+        new_deck = {
+            'id': new_id,
+            'name': f"Copy of {original.get('name', 'Untitled')}",
+            'description': original.get('description', ''),
+            'owner': session.get('username'),
+            'company': user.get('company', ''),
+            'is_team_deck': False,
+            'shared_with': [],
+            'slides': original.get('slides', []),
+            'template': original.get('template', 'default'),
+            'created_at': now,
+            'updated_at': now
+        }
+        
+        # Save new deck
+        new_key = f"{DECKS_S3_KEY}{new_id}.json"
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=new_key,
+            Body=json.dumps(new_deck),
+            ContentType='application/json'
+        )
+        
+        return jsonify({'success': True, 'deck': new_deck})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
+# CANVA INTEGRATION API
+# ============================================================================
+
+CANVA_CLIENT_ID = os.environ.get('CANVA_CLIENT_ID', '')
+CANVA_CLIENT_SECRET = os.environ.get('CANVA_CLIENT_SECRET', '')
+CANVA_REDIRECT_URI = os.environ.get('CANVA_REDIRECT_URI', '')
+CANVA_TOKENS_KEY = 'system/canva_tokens.json'
+
+def load_canva_tokens():
+    """Load Canva OAuth tokens from S3."""
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=CANVA_TOKENS_KEY)
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except:
+        return {}
+
+def save_canva_tokens(tokens):
+    """Save Canva OAuth tokens to S3."""
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=CANVA_TOKENS_KEY,
+            Body=json.dumps(tokens),
+            ContentType='application/json'
+        )
+    except Exception as e:
+        print(f"Error saving Canva tokens: {e}")
+
+
+@app.route('/api/canva/auth')
+@requires_auth
+def canva_auth():
+    """Initiate Canva OAuth flow."""
+    if not CANVA_CLIENT_ID:
+        return jsonify({'success': False, 'error': 'Canva integration not configured'})
+    
+    # Generate state token for security
+    state = str(uuid.uuid4())
+    session['canva_oauth_state'] = state
+    
+    auth_url = f"https://www.canva.com/api/oauth/authorize?" + \
+               f"client_id={CANVA_CLIENT_ID}&" + \
+               f"redirect_uri={CANVA_REDIRECT_URI}&" + \
+               f"response_type=code&" + \
+               f"scope=design:read design:write&" + \
+               f"state={state}"
+    
+    return jsonify({'success': True, 'auth_url': auth_url})
+
+
+@app.route('/api/canva/callback')
+def canva_callback():
+    """Handle Canva OAuth callback."""
+    code = request.args.get('code')
+    state = request.args.get('state')
+    error = request.args.get('error')
+    
+    if error:
+        return redirect('/?canva_error=' + error)
+    
+    if state != session.get('canva_oauth_state'):
+        return redirect('/?canva_error=invalid_state')
+    
+    # Exchange code for tokens
+    try:
+        import urllib.request
+        import urllib.parse
+        
+        token_url = 'https://api.canva.com/rest/v1/oauth/token'
+        data = urllib.parse.urlencode({
+            'grant_type': 'authorization_code',
+            'code': code,
+            'redirect_uri': CANVA_REDIRECT_URI,
+            'client_id': CANVA_CLIENT_ID,
+            'client_secret': CANVA_CLIENT_SECRET
+        }).encode()
+        
+        req = urllib.request.Request(token_url, data=data, method='POST')
+        req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+        
+        with urllib.request.urlopen(req) as response:
+            tokens = json.loads(response.read().decode())
+            
+            # Save tokens for user
+            username = session.get('username')
+            all_tokens = load_canva_tokens()
+            all_tokens[username] = {
+                'access_token': tokens.get('access_token'),
+                'refresh_token': tokens.get('refresh_token'),
+                'expires_at': (datetime.now() + timedelta(seconds=tokens.get('expires_in', 3600))).isoformat()
+            }
+            save_canva_tokens(all_tokens)
+        
+        return redirect('/?canva_connected=true')
+    except Exception as e:
+        print(f"Canva OAuth error: {e}")
+        return redirect('/?canva_error=token_exchange_failed')
+
+
+@app.route('/api/canva/status')
+@requires_auth
+def canva_status():
+    """Check if Canva is connected for current user."""
+    username = session.get('username')
+    tokens = load_canva_tokens()
+    
+    if username in tokens:
+        # Check if token is expired
+        expires_at = tokens[username].get('expires_at', '')
+        if expires_at:
+            try:
+                exp_date = datetime.fromisoformat(expires_at)
+                if exp_date > datetime.now():
+                    return jsonify({
+                        'success': True,
+                        'connected': True,
+                        'expires_at': expires_at
+                    })
+            except:
+                pass
+    
+    return jsonify({
+        'success': True,
+        'connected': False
+    })
+
+
+@app.route('/api/canva/disconnect', methods=['POST'])
+@requires_auth
+def canva_disconnect():
+    """Disconnect Canva for current user."""
+    username = session.get('username')
+    tokens = load_canva_tokens()
+    
+    if username in tokens:
+        del tokens[username]
+        save_canva_tokens(tokens)
+    
+    return jsonify({'success': True, 'message': 'Canva disconnected'})
+
+
+@app.route('/api/canva/export-deck', methods=['POST'])
+@requires_auth
+def export_deck_to_canva():
+    """Export a deck to Canva as a new design."""
+    username = session.get('username')
+    tokens = load_canva_tokens()
+    
+    if username not in tokens:
+        return jsonify({'success': False, 'error': 'Canva not connected'})
+    
+    access_token = tokens[username].get('access_token')
+    if not access_token:
+        return jsonify({'success': False, 'error': 'Invalid Canva token'})
+    
+    try:
+        data = request.get_json()
+        deck_id = data.get('deck_id')
+        
+        # Get deck data
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        deck = json.loads(response['Body'].read().decode('utf-8'))
+        
+        # Create Canva design via API
+        # Note: This is a simplified example - actual Canva API requires more setup
+        import urllib.request
+        
+        create_url = 'https://api.canva.com/rest/v1/designs'
+        design_data = json.dumps({
+            'design_type': 'presentation',
+            'title': deck.get('name', 'Crosswalk Deck'),
+            'preset_id': '16x9'  # Standard presentation size
+        }).encode()
+        
+        req = urllib.request.Request(create_url, data=design_data, method='POST')
+        req.add_header('Authorization', f'Bearer {access_token}')
+        req.add_header('Content-Type', 'application/json')
+        
+        with urllib.request.urlopen(req) as response:
+            result = json.loads(response.read().decode())
+            design_id = result.get('design', {}).get('id')
+            edit_url = result.get('design', {}).get('urls', {}).get('edit_url')
+            
+            return jsonify({
+                'success': True,
+                'design_id': design_id,
+                'edit_url': edit_url,
+                'message': 'Deck exported to Canva! Click to open in Canva.'
+            })
+    except Exception as e:
+        print(f"Canva export error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/team-members')
+@requires_auth
+def get_team_members():
+    """Get team members in the same company."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    company = user.get('company', '')
+    if not company:
+        return jsonify({'success': True, 'members': []})
+    
+    users_data = load_users()
+    members = []
+    
+    for username, user_data in users_data.get('users', {}).items():
+        if user_data.get('company', '') == company:
+            members.append({
+                'username': username,
+                'department': user_data.get('department', ''),
+                'profile_picture': user_data.get('profile_picture')
+            })
+    
+    return jsonify({'success': True, 'members': members})
+
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
