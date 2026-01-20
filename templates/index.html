@@ -1442,6 +1442,15 @@
             padding: 0.6rem 0.75rem;
             background: var(--bg-input);
             border-radius: 6px;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+        .behavioral-stat-row.has-tooltip {
+            cursor: help;
+        }
+        .behavioral-stat-row.has-tooltip:hover {
+            border-color: var(--accent-lime);
+            background: rgba(200, 230, 0, 0.1);
         }
         .behavioral-stat-row .icon { font-size: 1.1rem; }
         .behavioral-stat-row .text { flex: 1; font-size: 0.8rem; line-height: 1.4; }
@@ -1486,6 +1495,15 @@
             background: var(--bg-input);
             border-radius: 6px;
             margin-bottom: 0.5rem;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+        .behavioral-activation-item.has-tooltip {
+            cursor: help;
+        }
+        .behavioral-activation-item.has-tooltip:hover {
+            border-color: var(--accent-blue);
+            background: rgba(99, 102, 241, 0.1);
         }
         .behavioral-activation-item .icon { font-size: 1rem; }
         .behavioral-activation-item .text { flex: 1; font-size: 0.8rem; line-height: 1.4; }
@@ -8530,7 +8548,8 @@
                     icon: '🔥',
                     text: `Strongest signal: <strong style="color: var(--accent-lime);">${topItem.name}</strong> (${topItem.category})`,
                     value: topItem.index,
-                    valueClass: 'high'
+                    valueClass: 'high',
+                    tooltip: `Strongest Signal: The single item where this audience most over-indexes vs Gen Pop. ${topItem.name} has an index of ${formatIndex(topItem.index)}, meaning this audience is ${(topItem.index / 100).toFixed(1)}x more likely to engage with it than the average American.`
                 });
             }
             
@@ -8541,7 +8560,8 @@
                 icon: '📈',
                 text: `<strong style="color: var(--accent-lime);">${highIndexers}</strong> items 1.5x+, <strong style="color: #10b981;">${veryHighIndexers}</strong> at 2.0x+`,
                 value: '',
-                valueClass: ''
+                valueClass: '',
+                tooltip: `High Indexers Count: ${highIndexers} items have an index of 1.5x or higher (strong over-indexers), and ${veryHighIndexers} items are at 2.0x+ (very strong). More high indexers = more distinctive audience profile with clear targeting opportunities.`
             });
             
             // Find category with most high indexers
@@ -8555,7 +8575,8 @@
                     icon: '🎯',
                     text: `Most distinctive in: <strong style="color: var(--accent-lime);">${topCatForHigh[0]}</strong>`,
                     value: `${topCatForHigh[1]}`,
-                    valueClass: 'high'
+                    valueClass: 'high',
+                    tooltip: `Most Distinctive Category: ${topCatForHigh[0]} has the most items where this audience strongly over-indexes (${topCatForHigh[1]} items at 1.5x+). This is the category that most defines this audience's unique interests vs. Gen Pop.`
                 });
             }
             
@@ -8565,11 +8586,12 @@
                 icon: '📊',
                 text: `<strong style="color: var(--accent-lime);">${allItems.length}</strong> total signals, avg: <strong style="color: ${avgIndex > 110 ? '#10b981' : avgIndex < 90 ? '#ef4444' : 'var(--text-primary)'}">${formatIndex(avgIndex)}</strong>`,
                 value: '',
-                valueClass: ''
+                valueClass: '',
+                tooltip: `Total Signals: ${allItems.length.toLocaleString()} behavioral data points tracked for this audience. Average index of ${formatIndex(avgIndex)} across all items. ${avgIndex > 110 ? 'This audience has distinctly different behaviors than Gen Pop.' : avgIndex > 100 ? 'Slightly above average distinctiveness.' : 'Similar to Gen Pop overall.'}`
             });
             
             document.getElementById('behavioralProfileSummary').innerHTML = summaryItems.map(i => `
-                <div class="behavioral-stat-row">
+                <div class="behavioral-stat-row has-tooltip" data-tooltip="${i.tooltip || ''}">
                     <span class="icon">${i.icon}</span>
                     <span class="text">${i.text}</span>
                     ${i.value ? `<span class="value ${i.valueClass}">${i.value}</span>` : ''}
@@ -8610,7 +8632,8 @@
             if (purchaseBrands.length > 0) {
                 activations.push({
                     icon: '🛍️',
-                    text: `<strong>Shopping:</strong> Partner with ${purchaseBrands.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')}`
+                    text: `<strong>Shopping:</strong> Partner with ${purchaseBrands.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')}`,
+                    tooltip: `Shopping Partnership: This audience strongly over-indexes on these brands (${purchaseBrands.map(b => formatIndex(b.index)).join(', ')}). Co-branded campaigns or retail activations could drive high engagement.`
                 });
             }
             
@@ -8621,7 +8644,8 @@
             if (streamingBrands.length > 0) {
                 activations.push({
                     icon: '📺',
-                    text: `<strong>Content:</strong> ${streamingBrands[0].name} integration (${formatIndex(streamingBrands[0].index)})`
+                    text: `<strong>Content:</strong> ${streamingBrands[0].name} integration (${formatIndex(streamingBrands[0].index)})`,
+                    tooltip: `Content Integration: ${streamingBrands[0].name} is a top streaming/content choice for this audience. Consider product placement, sponsored content, or ad buys on this platform.`
                 });
             }
             
@@ -8632,7 +8656,8 @@
             if (socialBrands.length > 0) {
                 activations.push({
                     icon: '📱',
-                    text: `<strong>Social:</strong> Focus on ${socialBrands[0].name} (${formatIndex(socialBrands[0].index)})`
+                    text: `<strong>Social:</strong> Focus on ${socialBrands[0].name} (${formatIndex(socialBrands[0].index)})`,
+                    tooltip: `Social Media Focus: ${socialBrands[0].name} is the preferred social platform for this audience. Prioritize paid media and organic content on this channel for maximum reach.`
                 });
             }
             
@@ -8643,7 +8668,8 @@
             if (interestItems.length > 0) {
                 activations.push({
                     icon: '💡',
-                    text: `<strong>Interest:</strong> Leverage ${interestItems[0].name} for targeting`
+                    text: `<strong>Interest:</strong> Leverage ${interestItems[0].name} for targeting`,
+                    tooltip: `Interest Targeting: "${interestItems[0].name}" is a strong audience passion point (${formatIndex(interestItems[0].index)}). Use this as a keyword/interest target in paid campaigns or for content themes.`
                 });
             }
             
@@ -8654,7 +8680,8 @@
             if (sportsItems.length > 0) {
                 activations.push({
                     icon: '🏆',
-                    text: `<strong>Sports:</strong> ${sportsItems[0].name} sponsorship (${formatIndex(sportsItems[0].index)})`
+                    text: `<strong>Sports:</strong> ${sportsItems[0].name} sponsorship (${formatIndex(sportsItems[0].index)})`,
+                    tooltip: `Sports Sponsorship: This audience over-indexes on ${sportsItems[0].name} (${formatIndex(sportsItems[0].index)}). Consider sponsorship, athlete partnerships, or sports-related activations.`
                 });
             }
             
@@ -8662,12 +8689,13 @@
             if (activations.length === 0) {
                 activations.push({
                     icon: '📊',
-                    text: 'Review behavioral data for partnership opportunities'
+                    text: 'Review behavioral data for partnership opportunities',
+                    tooltip: `Explore the behavioral cards below to identify specific partnership and activation opportunities based on this audience's interests and behaviors.`
                 });
             }
             
             document.getElementById('behavioralActivations').innerHTML = activations.slice(0, 5).map(a => `
-                <div class="behavioral-activation-item">
+                <div class="behavioral-activation-item has-tooltip" data-tooltip="${a.tooltip || ''}">
                     <span class="icon">${a.icon}</span>
                     <span class="text">${a.text}</span>
                 </div>
