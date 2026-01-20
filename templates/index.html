@@ -2567,7 +2567,7 @@
             display: none !important; /* Disable CSS tooltips, use JS tooltip instead */
         }
         
-        /* Global tooltip element */
+        /* Global tooltip element - highest z-index to always show on top */
         #globalTooltip {
             position: fixed;
             background: linear-gradient(135deg, #1a2a3a, #0d1a2a);
@@ -2578,15 +2578,16 @@
             font-weight: 400;
             line-height: 1.5;
             width: 300px;
-            max-width: 90vw;
+            max-width: calc(100vw - 20px);
             text-align: left;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px var(--accent-lime);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.8), 0 0 0 2px var(--accent-lime);
             opacity: 0;
             visibility: hidden;
             transition: opacity 0.15s ease, visibility 0.15s ease;
-            z-index: 9999999;
+            z-index: 2147483647; /* Maximum z-index value */
             pointer-events: none;
             white-space: normal;
+            word-wrap: break-word;
         }
         #globalTooltip.visible {
             opacity: 1;
@@ -5358,9 +5359,6 @@
     </style>
 </head>
 <body>
-    <!-- Global Tooltip Element -->
-    <div id="globalTooltip"></div>
-    
     <div class="container">
         <header>
             <img src="/static/crosswalk-logo-stacked.svg" alt="Crosswalk Logo" class="logo" style="height: 80px; width: auto;">
@@ -7398,13 +7396,24 @@
                 
                 clearTimeout(hideTimeout);
                 
+                // Set content first
                 tooltip.textContent = text;
-                tooltip.classList.remove('below');
+                tooltip.classList.remove('below', 'visible');
+                
+                // Temporarily show tooltip off-screen to measure its height
+                tooltip.style.left = '-9999px';
+                tooltip.style.top = '-9999px';
+                tooltip.style.visibility = 'hidden';
+                tooltip.style.opacity = '0';
+                tooltip.style.display = 'block';
+                
+                // Force reflow to get accurate dimensions
+                const tooltipWidth = Math.min(300, window.innerWidth - 20);
+                tooltip.style.width = tooltipWidth + 'px';
+                const tooltipHeight = tooltip.offsetHeight;
                 
                 // Get element position
                 const rect = target.getBoundingClientRect();
-                const tooltipWidth = 300;
-                const tooltipHeight = tooltip.offsetHeight || 100;
                 
                 // Calculate horizontal position (center on element, but keep in viewport)
                 let left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
@@ -7423,18 +7432,26 @@
                     showBelow = true;
                 }
                 
+                // Make sure tooltip doesn't go off bottom of screen either
+                if (top + tooltipHeight > window.innerHeight - 10) {
+                    top = window.innerHeight - tooltipHeight - 10;
+                }
+                
+                // Apply final position
                 tooltip.style.left = left + 'px';
                 tooltip.style.top = top + 'px';
-                tooltip.style.width = tooltipWidth + 'px';
+                tooltip.style.visibility = '';
+                tooltip.style.opacity = '';
+                tooltip.style.display = '';
                 
                 if (showBelow) {
                     tooltip.classList.add('below');
                 }
                 
-                // Small delay before showing
-                setTimeout(() => {
+                // Small delay before showing for smooth animation
+                requestAnimationFrame(() => {
                     tooltip.classList.add('visible');
-                }, 50);
+                });
                 
             }, true);
             
@@ -17690,5 +17707,8 @@
             </div>
         </div>
     </div>
+    
+    <!-- Global Tooltip Element - placed at end of body to ensure highest z-index layer -->
+    <div id="globalTooltip"></div>
 </body>
 </html>
