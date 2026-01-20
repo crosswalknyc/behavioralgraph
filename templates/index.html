@@ -2467,14 +2467,25 @@
             background: rgba(16, 185, 129, 0.2);
             color: #10b981;
             font-weight: 600;
+            cursor: help;
+            transition: all 0.2s ease;
+        }
+        .data-quality-badge:hover {
+            background: rgba(16, 185, 129, 0.35);
         }
         .data-quality-badge.medium {
             background: rgba(234, 179, 8, 0.2);
             color: #eab308;
         }
+        .data-quality-badge.medium:hover {
+            background: rgba(234, 179, 8, 0.35);
+        }
         .data-quality-badge.low {
             background: rgba(239, 68, 68, 0.2);
             color: #ef4444;
+        }
+        .data-quality-badge.low:hover {
+            background: rgba(239, 68, 68, 0.35);
         }
         
         /* Audience Snapshot */
@@ -12210,13 +12221,23 @@
             
             // Data quality badge
             const sampleSize = data.sampleSize || 0;
-            let qualityClass = '', qualityText = 'High Confidence';
-            if (sampleSize < 1000) { qualityClass = 'low'; qualityText = 'Low Sample'; }
-            else if (sampleSize < 10000) { qualityClass = 'medium'; qualityText = 'Moderate'; }
+            let qualityClass = '', qualityText = 'High Confidence', qualityTooltip = '';
+            if (sampleSize < 1000) { 
+                qualityClass = 'low'; 
+                qualityText = 'Low Sample';
+                qualityTooltip = `Low Sample Size: With only ${sampleSize.toLocaleString()} respondents, results are indicative but not statistically reliable. Use for directional insights only.`;
+            } else if (sampleSize < 10000) { 
+                qualityClass = 'medium'; 
+                qualityText = 'Moderate';
+                qualityTooltip = `Moderate Confidence: ${sampleSize.toLocaleString()} respondents provides directionally accurate data. Good for planning, but consider margin of error for precise targeting.`;
+            } else {
+                qualityTooltip = `High Confidence: ${sampleSize.toLocaleString()} respondents provides statistically reliable data. Results are robust for strategic decisions and precise audience targeting.`;
+            }
             const badge = document.getElementById('dataQualityBadge');
             if (badge) {
-                badge.className = 'data-quality-badge ' + qualityClass;
+                badge.className = 'data-quality-badge has-tooltip ' + qualityClass;
                 badge.textContent = qualityText;
+                badge.setAttribute('data-tooltip', qualityTooltip);
             }
             
             // ===== SUMMARY TAB =====
