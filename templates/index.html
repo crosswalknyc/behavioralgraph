@@ -691,7 +691,7 @@
         /* Bottom Row (US% and Deck Builder) */
         .dash-bottom-row {
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-end;
             align-items: center;
             gap: 0.75rem;
             margin-top: 0.75rem;
@@ -6043,7 +6043,7 @@
             
             <!-- Row 3: Actions -->
             <div class="dash-bottom-row">
-                <div class="row-right" style="margin-left: 0;">
+                <div class="row-right">
                     <div class="display-mode-toggle" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" title="Toggle between percentages and US population numbers">
                         <span id="dashDisplayLabel">US %</span>
                     </div>
