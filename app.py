@@ -2527,6 +2527,11 @@ def index():
                            has_subscriber_iq_access=has_subscriber_iq)
 
 
+@app.route('/health')
+def health_check_root():
+    """Root health check endpoint for Render."""
+    return jsonify({'status': 'ok'}), 200
+
 @app.route('/api/health')
 def health_check():
     """Quick health check endpoint."""

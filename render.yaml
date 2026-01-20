@@ -49,4 +49,4 @@ services:
         sync: false
       - key: APP_URL
         value: "https://behavioralgraph.onrender.com"
-    healthCheckPath: /api/health
+    healthCheckPath: /health
