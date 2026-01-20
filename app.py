@@ -57,13 +57,14 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 CORS(app)
 
-# Health check endpoint - register early so it's available immediately
+# Health check endpoints - register early so they're available immediately
 @app.route('/health')
+@app.route('/healthz')  # Also support /healthz for Render compatibility
 def health_check_root():
     """Root health check endpoint for Render - must be fast and not depend on any initialization."""
     return 'ok', 200
 
-print("✅ Health check endpoint registered")
+print("✅ Health check endpoints registered (/health and /healthz)")
 
 # Global error handler for API routes - ensures JSON responses
 @app.errorhandler(Exception)
