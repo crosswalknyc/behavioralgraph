@@ -7661,11 +7661,15 @@
             if (tabContent) {
                 tabContent.scrollTop = 0;
             }
-            // Also scroll the main dashboard area to top
-            const dashboardMain = document.querySelector('.dashboard-main');
-            if (dashboardMain) {
-                dashboardMain.scrollTop = 0;
+            // Scroll the main dashboard tab content container to top (this is the actual scrollable area)
+            const dashboardTabContent = document.querySelector('.dashboard-tab-content');
+            if (dashboardTabContent) {
+                dashboardTabContent.scrollTop = 0;
             }
+            // Also scroll individual tab containers
+            document.querySelectorAll('.tab-content').forEach(t => {
+                t.scrollTop = 0;
+            });
             // Scroll window to top as well for good measure
             window.scrollTo(0, 0);
             
