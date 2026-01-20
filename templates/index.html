@@ -2516,33 +2516,58 @@
             position: relative;
             cursor: help;
         }
-        .has-tooltip::after {
-            content: attr(data-tooltip);
-            position: fixed;
-            background: var(--bg-card);
-            color: var(--text-primary);
-            padding: 0.75rem 1rem;
-            border-radius: 8px;
-            font-size: 0.75rem;
-            line-height: 1.4;
-            width: 280px;
-            max-width: 90vw;
-            text-align: left;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-            border: 1px solid var(--accent-lime);
+        .has-tooltip::before {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: var(--accent-lime);
             opacity: 0;
             visibility: hidden;
-            transition: opacity 0.2s ease;
-            z-index: 999999;
+            transition: opacity 0.15s ease;
+            z-index: 1000001;
+        }
+        .has-tooltip::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: calc(100% + 10px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #1a2a3a, #0d1a2a);
+            color: #e6f1ff;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 400;
+            line-height: 1.5;
+            width: 300px;
+            max-width: 90vw;
+            text-align: left;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px var(--accent-lime);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.15s ease, visibility 0.15s ease;
+            z-index: 1000000;
             pointer-events: none;
             white-space: normal;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
         }
+        .has-tooltip:hover::before,
         .has-tooltip:hover::after {
             opacity: 1;
             visibility: visible;
+        }
+        /* If tooltip would go off top of screen, show below instead */
+        .has-tooltip.tooltip-bottom::before {
+            bottom: auto;
+            top: 100%;
+            border-top-color: transparent;
+            border-bottom-color: var(--accent-lime);
+        }
+        .has-tooltip.tooltip-bottom::after {
+            bottom: auto;
+            top: calc(100% + 10px);
         }
         .metric-icon {
             font-size: 1.5rem;
@@ -5727,19 +5752,19 @@
                         <!-- Demographics Insights Row -->
                         <div class="demo-insights-row" id="demoInsightsRow">
                             <div class="demo-insight-card">
-                                <h4>🎯 Demographic Profile Summary</h4>
+                                <h4 class="has-tooltip" data-tooltip="Demographic Profile Summary: Quick overview of this audience's demographic composition including age skew, gender balance, and income level compared to the general population.">🎯 Demographic Profile Summary</h4>
                                 <div id="demoProfileSummary" class="demo-insight-content">
                                     <div class="loading-placeholder">Analyzing demographics...</div>
                                 </div>
                             </div>
                             <div class="demo-insight-card">
-                                <h4>📊 Key Differentiators vs Gen Pop</h4>
+                                <h4 class="has-tooltip" data-tooltip="Key Differentiators vs Gen Pop: Demographic segments where this audience most strongly over-indexes (>1.1x) or under-indexes (<0.8x) compared to the general US population.">📊 Key Differentiators vs Gen Pop</h4>
                                 <div id="demoDifferentiators" class="demo-insight-content">
                                     <div class="loading-placeholder">Loading...</div>
                                 </div>
                             </div>
                             <div class="demo-insight-card">
-                                <h4>💡 Targeting Recommendations</h4>
+                                <h4 class="has-tooltip" data-tooltip="Targeting Recommendations: Actionable suggestions for media buying and campaign targeting based on this audience's demographic makeup - age ranges, gender focus, income tiers, etc.">💡 Targeting Recommendations</h4>
                                 <div id="demoTargetingRecs" class="demo-insight-content">
                                     <div class="loading-placeholder">Loading...</div>
                                 </div>
@@ -5749,7 +5774,7 @@
                         <div class="charts-grid">
                             <div class="chart-card">
                                 <h3>
-                                    <span>📅 AGE</span>
+                                    <span class="has-tooltip" data-tooltip="Age Distribution: Breakdown by age bracket. Green = your audience over-indexes vs Gen Pop (GP). Red = under-indexes. Hover bars for exact %.">📅 AGE</span>
                                     <div style="display: flex; gap: 0.25rem; align-items: center;">
                                         <select id="ageChartType" onchange="changeChartType('age', this.value)" class="chart-type-select" title="Chart Type">
                                             <option value="bar">📊</option>
@@ -5773,7 +5798,7 @@
                             </div>
                             <div class="chart-card">
                                 <h3>
-                                    <span>👫 GENDER</span>
+                                    <span class="has-tooltip" data-tooltip="Gender Distribution: Breakdown by gender identity. Green = over-indexes vs Gen Pop. Red = under-indexes. % shows audience composition.">👫 GENDER</span>
                                     <div style="display: flex; gap: 0.25rem; align-items: center;">
                                         <select id="genderChartType" onchange="changeChartType('gender', this.value)" class="chart-type-select" title="Chart Type">
                                             <option value="doughnut">🍩</option>
@@ -5788,7 +5813,7 @@
                             </div>
                             <div class="chart-card">
                                 <h3>
-                                    <span>🌍 ETHNICITY</span>
+                                    <span class="has-tooltip" data-tooltip="Ethnicity Distribution: Racial/ethnic makeup of this audience. Compare to Gen Pop (GP) to see which groups over/under-index.">🌍 ETHNICITY</span>
                                     <div style="display: flex; gap: 0.25rem; align-items: center;">
                                         <select id="ethnicityChartType" onchange="changeChartType('ethnicity', this.value)" class="chart-type-select" title="Chart Type">
                                             <option value="doughnut">🍩</option>
@@ -5803,7 +5828,7 @@
                             </div>
                             <div class="chart-card">
                                 <h3>
-                                    <span>💰 INCOME</span>
+                                    <span class="has-tooltip" data-tooltip="Income Distribution: Household income breakdown. Green = over-indexes vs Gen Pop, Red = under-indexes. Useful for pricing and premium vs mass-market positioning.">💰 INCOME</span>
                                     <div style="display: flex; gap: 0.25rem; align-items: center;">
                                         <select id="incomeChartType" onchange="changeChartType('income', this.value)" class="chart-type-select" title="Chart Type">
                                             <option value="bar">📊</option>
@@ -5827,7 +5852,7 @@
                             </div>
                             <div class="chart-card">
                                 <h3>
-                                    <span>🎓 EDUCATION</span>
+                                    <span class="has-tooltip" data-tooltip="Education Level: Highest education attained. Useful for messaging sophistication and professional targeting.">🎓 EDUCATION</span>
                                     <div style="display: flex; gap: 0.25rem; align-items: center;">
                                         <select id="educationChartType" onchange="changeChartType('education', this.value)" class="chart-type-select" title="Chart Type">
                                             <option value="bar">📊</option>
@@ -5842,7 +5867,7 @@
                             </div>
                             <div class="chart-card">
                                 <h3>
-                                    <span>💑 RELATIONSHIP</span>
+                                    <span class="has-tooltip" data-tooltip="Relationship Status: Marital and relationship status breakdown. Useful for family-oriented vs singles targeting.">💑 RELATIONSHIP</span>
                                     <div style="display: flex; gap: 0.25rem; align-items: center;">
                                         <select id="relationshipChartType" onchange="changeChartType('relationship', this.value)" class="chart-type-select" title="Chart Type">
                                             <option value="doughnut">🍩</option>
@@ -6625,8 +6650,8 @@
                             <!-- Audience Snapshot -->
                             <div class="insight-card-v2 full-width">
                                 <div class="insight-card-header">
-                                    <h3>👤 Audience Snapshot</h3>
-                                    <span class="data-quality-badge" id="dataQualityBadge">High Confidence</span>
+                                    <h3 class="has-tooltip" data-tooltip="Audience Snapshot: Quick demographic overview showing the dominant characteristic in each category. The percentage shows what portion of your audience falls into each segment.">👤 Audience Snapshot</h3>
+                                    <span class="data-quality-badge has-tooltip" id="dataQualityBadge" data-tooltip="Data Quality: Based on sample size. High Confidence (10,000+) = statistically reliable. Moderate (1,000-10,000) = directionally accurate. Low (<1,000) = indicative only.">High Confidence</span>
                                 </div>
                                 <div id="audienceSnapshot" class="audience-snapshot">
                                     <div class="snapshot-loading">Loading audience profile...</div>
@@ -11518,8 +11543,16 @@
                 if (topIncome) demoInsights.push({ label: 'Top Income', value: topIncome[0], sub: topIncome[1].toFixed(1) + '%' });
             }
             
+            // Tooltip descriptions for each snapshot category
+            const snapshotTooltips = {
+                'Dominant Gender': 'The gender that makes up the largest percentage of this audience.',
+                'Largest Age Group': 'The age bracket that represents the highest share of this audience.',
+                'Top Ethnicity': 'The ethnic group that comprises the largest portion of this audience.',
+                'Top Income': 'The income bracket most common among this audience.'
+            };
+            
             document.getElementById('audienceSnapshot').innerHTML = demoInsights.map(d => `
-                <div class="snapshot-item">
+                <div class="snapshot-item has-tooltip" data-tooltip="${snapshotTooltips[d.label] || d.label}: ${d.value} at ${d.sub} of the audience.">
                     <div class="snapshot-label">${d.label}</div>
                     <div class="snapshot-value">${d.value}</div>
                     <div class="snapshot-subtext">${d.sub}</div>
