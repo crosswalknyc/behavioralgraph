@@ -2700,6 +2700,12 @@
             border-top-color: transparent;
             border-bottom-color: var(--accent-lime);
         }
+        /* Hide tooltips when hover is disabled */
+        body.hover-disabled #globalTooltip {
+            display: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+        }
         .has-tooltip-legacy::before,
         .has-tooltip-legacy::after {
             opacity: 1;
@@ -6044,6 +6050,9 @@
                     <div class="display-mode-toggle" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" title="Toggle between percentages and US population numbers">
                         <span id="dashDisplayLabel">US %</span>
                     </div>
+                    <div class="display-mode-toggle" id="hoverToggle" onclick="toggleHoverDescriptors()" title="Toggle hover tooltips on/off">
+                        <span id="hoverToggleLabel">HOVER ON</span>
+                    </div>
                     <button class="dash-action-btn" onclick="toggleFavorite()" title="Favorite" id="tabFavBtn">⭐</button>
                     <button class="dash-action-btn" onclick="toggleSavedViews()" title="Save View" id="tabSavedBtn">💾</button>
                     <div class="dash-dropdown">
@@ -9139,6 +9148,37 @@
                 renderMediaOptimizer(currentDashboardData);
             }
         }
+        
+        // Hover tooltip toggle
+        let hoverEnabled = true;
+        
+        function toggleHoverDescriptors() {
+            hoverEnabled = !hoverEnabled;
+            const toggle = document.getElementById('hoverToggle');
+            const label = document.getElementById('hoverToggleLabel');
+            
+            if (hoverEnabled) {
+                toggle.classList.remove('active');
+                label.textContent = 'HOVER ON';
+                document.body.classList.remove('hover-disabled');
+            } else {
+                toggle.classList.add('active');
+                label.textContent = 'HOVER OFF';
+                document.body.classList.add('hover-disabled');
+            }
+            
+            // Save preference to localStorage
+            localStorage.setItem('hoverEnabled', hoverEnabled);
+        }
+        
+        // Load hover preference on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedPref = localStorage.getItem('hoverEnabled');
+            if (savedPref === 'false') {
+                hoverEnabled = true; // Will be toggled to false
+                toggleHoverDescriptors();
+            }
+        });
         
         // ============================================================================
         // BEHAVIORAL INSIGHTS
