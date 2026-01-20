@@ -10045,7 +10045,33 @@
 
         let allBehavioralData = {};
         let currentCategoryOrder = [];
-        const defaultPriorityCategories = ['APPAREL/FOOTWEAR', 'RETAIL', 'APPS/PLATFORMS', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING/VIDEO', 'STREAMING/MUSIC', 'QSR', 'TECHNOLOGY/DEVICE', 'GAMES', 'SPORTS', 'MEDIA'];
+        // Comprehensive list of all possible behavioral categories
+        const ALL_BEHAVIORAL_CATEGORIES = [
+            // Platforms & Media
+            'STREAMING/PLATFORM', 'STREAMING/VIDEO', 'STREAMING VIDEO', 'STREAMING/MUSIC', 'STREAMING MUSIC',
+            'APP/PLATFORM', 'APPS/PLATFORMS', 'APP/PLATFORM USAGE', 'BROADCAST/CABLE', 'VIRTUAL MVPD/FAST',
+            'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD', 'SOCIAL MEDIA', 'SEARCH ENGINE/AI', 'MEDIA',
+            'PODCAST', 'PODCASTS', 'NEWS', 'RADIO',
+            // Shopping & Retail
+            'APPAREL/FOOTWEAR', 'RETAIL', 'RETAILERS', 'QSR', 'CASUAL DINING', 'GROCERY',
+            'WHERE THEY SHOP', 'MOST PURCHASED BRANDS', 'PURCHASE BEHAVIOR',
+            // Technology
+            'TECHNOLOGY/DEVICE', 'GAMES', 'GAMING', 'GAME PLAYERS',
+            // Sports
+            'SPORTS', 'MLB', 'NBA', 'NFL', 'WNBA', 'NHL', 'MLS', 'MILB',
+            'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION',
+            // Content
+            'SERIES', 'MOVIES', 'MOVIE THEATER', 'TV SHOWS',
+            // Financial
+            'BANKS', 'DIGITAL BANKING', 'CREDIT PROVIDERS', 'CREDIT PROVIDER',
+            // Lifestyle
+            'BEAUTY', 'BEVERAGE', 'AUTOMOBILE', 'TRAVEL', 'JEWELRY', 'ACCESSORIES',
+            'ACTIVEWEAR', 'FOOTWEAR', 'INTIMATES', 'PHARMA', 'TELECOM',
+            'WORKOUT FACILITY', 'MEMBERSHIP', 'TICKETING', 'TOY', 'VENUE', 'EVENTS',
+            // Interests
+            'INTEREST', 'INTERESTS', 'HOBBIES'
+        ];
+        const defaultPriorityCategories = ['MOST PURCHASED BRANDS', 'WHERE THEY SHOP', 'APPAREL/FOOTWEAR', 'RETAIL', 'APP/PLATFORM', 'APP/PLATFORM USAGE', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING/VIDEO', 'STREAMING VIDEO', 'STREAMING/MUSIC', 'STREAMING MUSIC', 'STREAMING/PLATFORM', 'BROADCAST/CABLE', 'VIRTUAL MVPD/FAST', 'QSR', 'TECHNOLOGY/DEVICE', 'GAMES', 'SPORTS', 'MEDIA', 'INTEREST'];
 
         function renderBehavioralCards(behavioral, highlightCategory = null) {
             allBehavioralData = behavioral;
