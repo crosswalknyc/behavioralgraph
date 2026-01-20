@@ -3361,20 +3361,34 @@ def load_profile_image_cache():
 
 def save_profile_image_cache():
     """Save profile image cache to S3."""
-    global profile_image_cache_dirty
-    if not s3_client or not profile_image_cache_dirty:
-        return
+    global profile_image_cache, profile_image_cache_dirty
+    if not s3_client:
+        print("⚠️ Cannot save profile image cache: S3 client not available")
+        return False
+    
+    # Always ensure cache is loaded before saving (in case it was cleared or not loaded)
+    # This prevents overwriting the cache with a partial/empty cache
+    if not profile_image_cache:
+        print("   📥 Loading cache before save...")
+        load_profile_image_cache()
+    
     try:
+        # Save the current cache state
+        cache_json = json.dumps(profile_image_cache, indent=2)
         s3_client.put_object(
             Bucket=S3_BUCKET,
             Key=S3_IMAGE_CACHE_KEY,
-            Body=json.dumps(profile_image_cache),
+            Body=cache_json,
             ContentType='application/json'
         )
         profile_image_cache_dirty = False
         print(f"💾 Saved profile image cache: {len(profile_image_cache)} images")
+        return True
     except Exception as e:
         print(f"⚠️ Error saving profile image cache: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 @app.route('/api/prefetch-images', methods=['POST'])
@@ -3514,7 +3528,11 @@ def set_profile_image():
         if not image_url:
             return jsonify({'success': False, 'error': 'Image URL or file required'})
         
-        # Update cache with custom image
+        # Ensure cache is loaded before updating
+        if not profile_image_cache:
+            load_profile_image_cache()
+        
+        # Update cache with custom image (normalize key consistently)
         cache_key = profile_name.lower().strip()
         profile_image_cache[cache_key] = {
             'image_url': image_url,
@@ -3524,9 +3542,14 @@ def set_profile_image():
             'cached_at': datetime.now().isoformat()
         }
         profile_image_cache_dirty = True
-        save_profile_image_cache()
+        
+        # Save immediately and verify
+        saved = save_profile_image_cache()
+        if not saved:
+            print(f"   ⚠️ Warning: Cache save may have failed for {cache_key}")
         
         print(f"   ✅ Saved to cache: {cache_key} -> {image_url}")
+        print(f"   📊 Cache now has {len(profile_image_cache)} entries")
         
         return jsonify({
             'success': True,
@@ -3554,13 +3577,22 @@ def remove_profile_image():
         if not profile_name:
             return jsonify({'success': False, 'error': 'Profile name required'})
         
+        # Ensure cache is loaded before removing
+        if not profile_image_cache:
+            load_profile_image_cache()
+        
         cache_key = profile_name.lower().strip()
         
         # Remove from cache
         if cache_key in profile_image_cache:
             del profile_image_cache[cache_key]
             profile_image_cache_dirty = True
-            save_profile_image_cache()
+            saved = save_profile_image_cache()
+            if not saved:
+                print(f"   ⚠️ Warning: Cache save may have failed after removing {cache_key}")
+            print(f"   ✅ Removed from cache: {cache_key}")
+        else:
+            print(f"   ℹ️ Cache key not found: {cache_key}")
         
         return jsonify({
             'success': True,
@@ -4879,6 +4911,14 @@ def background_cache_checker():
         except Exception as e:
             print(f"   ⚠️ Background check error: {e}")
 
+
+# Load image cache synchronously on startup (small, fast operation)
+print("🚀 App starting - loading image cache...")
+try:
+    load_profile_image_cache()
+    print(f"   ✅ Image cache loaded: {len(profile_image_cache)} images")
+except Exception as e:
+    print(f"   ⚠️ Image cache load error: {e}")
 
 # Start cache loader in background (doesn't block startup!)
 print("🚀 App starting - cache will load in background...")
