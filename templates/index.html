@@ -1238,12 +1238,28 @@
             padding: 1rem;
         }
         .demo-insight-card h4 {
-            margin: 0 0 0.75rem 0;
+            margin: 0 0 0.5rem 0;
             font-size: 0.85rem;
             color: var(--accent-lime);
             display: flex;
             align-items: center;
             gap: 0.5rem;
+        }
+        .insight-col-header {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 0.5rem;
+            margin-bottom: 0.35rem;
+            font-size: 0.6rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .insight-col-header span {
+            cursor: help;
+        }
+        .insight-col-header span:hover {
+            color: var(--accent-lime);
         }
         .demo-insight-content {
             font-size: 0.8rem;
@@ -5848,18 +5864,30 @@
                         <div class="demo-insights-row" id="demoInsightsRow">
                             <div class="demo-insight-card">
                                 <h4 class="has-tooltip" data-tooltip="Demographic Profile Summary: Quick overview of this audience's demographic composition including age skew, gender balance, and income level compared to the general population.">🎯 Demographic Profile Summary</h4>
+                                <div class="insight-col-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
+                                    <span class="has-tooltip" data-tooltip="Characteristic: The dominant demographic trait in each category (gender, age, income, ethnicity).">Characteristic</span>
+                                    <span class="has-tooltip" data-tooltip="Index vs GP: How this segment compares to Gen Pop. Positive = over-indexes (more of this audience). Negative = under-indexes.">Index vs GP</span>
+                                </div>
                                 <div id="demoProfileSummary" class="demo-insight-content">
                                     <div class="loading-placeholder">Analyzing demographics...</div>
                                 </div>
                             </div>
                             <div class="demo-insight-card">
                                 <h4 class="has-tooltip" data-tooltip="Key Differentiators vs Gen Pop: Demographic segments where this audience most strongly over-indexes (>1.1x) or under-indexes (<0.8x) compared to the general US population.">📊 Key Differentiators vs Gen Pop</h4>
+                                <div class="insight-col-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
+                                    <span class="has-tooltip" data-tooltip="Segment: A specific demographic group (e.g., 18-24, Female, $100K+).">Segment</span>
+                                    <span class="has-tooltip" data-tooltip="Index Diff: Percentage difference from Gen Pop. +50% means 1.5x more likely than average. -30% means 30% less likely.">Index Diff</span>
+                                </div>
                                 <div id="demoDifferentiators" class="demo-insight-content">
                                     <div class="loading-placeholder">Loading...</div>
                                 </div>
                             </div>
                             <div class="demo-insight-card">
                                 <h4 class="has-tooltip" data-tooltip="Targeting Recommendations: Actionable suggestions for media buying and campaign targeting based on this audience's demographic makeup - age ranges, gender focus, income tiers, etc.">💡 Targeting Recommendations</h4>
+                                <div class="insight-col-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
+                                    <span class="has-tooltip" data-tooltip="Type: The targeting dimension (Gender, Age, Income, etc.).">Type</span>
+                                    <span class="has-tooltip" data-tooltip="Action: The recommended targeting action based on audience composition.">Action</span>
+                                </div>
                                 <div id="demoTargetingRecs" class="demo-insight-content">
                                     <div class="loading-placeholder">Loading...</div>
                                 </div>
@@ -6025,6 +6053,10 @@
                 <div class="behavioral-insights-row" id="behavioralInsightsRow">
                     <div class="behavioral-insight-card highlight">
                         <h4 class="has-tooltip" data-tooltip="Behavioral Profile Summary: Quick overview of this audience's behavioral patterns - total items tracked, over-indexing rate, and most dominant category based on average index scores.">🎯 Behavioral Profile Summary</h4>
+                        <div class="insight-col-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
+                            <span class="has-tooltip" data-tooltip="Metric: Key behavioral measurement for this audience's activity patterns.">Metric</span>
+                            <span class="has-tooltip" data-tooltip="Value: The index score or count. Higher = stronger affinity vs Gen Pop.">Value</span>
+                        </div>
                         <div id="behavioralProfileSummary" class="behavioral-insight-content">
                             <div class="behavioral-stat-row">
                                 <span class="icon">⏳</span>
@@ -6050,6 +6082,10 @@
                     </div>
                     <div class="behavioral-insight-card">
                         <h4 class="has-tooltip" data-tooltip="Activation Opportunities: Actionable marketing recommendations based on this audience's highest-indexing behaviors across shopping, content, social media, and entertainment categories.">💡 Activation Opportunities</h4>
+                        <div class="insight-col-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
+                            <span class="has-tooltip" data-tooltip="Channel: The marketing channel or category type (Shopping, Content, Social, Sports, etc.).">Channel</span>
+                            <span class="has-tooltip" data-tooltip="Recommendation: Suggested partner or platform based on highest audience affinity.">Recommendation</span>
+                        </div>
                         <div id="behavioralActivations" class="behavioral-insight-content">
                             <div class="behavioral-stat-row">
                                 <span class="icon">⏳</span>
