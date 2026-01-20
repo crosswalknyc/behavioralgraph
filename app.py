@@ -3143,6 +3143,8 @@ def parse_subscriber_iq_csv(csv_content):
     reader = csv.reader(lines)
     rows = list(reader)
     
+    print(f"📊 Parsing subscriber IQ CSV: {len(rows)} rows")
+    
     parsed = {
         'metadata': {},
         'key_metrics': {},
@@ -3167,11 +3169,13 @@ def parse_subscriber_iq_csv(csv_content):
         if not row or all(not cell.strip() for cell in row):
             continue
         
-        # Check for section headers
-        first_col = row[0].strip() if row[0] else ''
+        # Check for section headers - can be in first or second column
+        first_col = row[0].strip() if len(row) > 0 and row[0] else ''
+        second_col = row[1].strip() if len(row) > 1 and row[1] else ''
+        combined_check = first_col + ' ' + second_col
         
         # Metadata section
-        if 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in first_col:
+        if 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in first_col or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in second_col:
             current_section = 'metadata'
             continue
         elif current_section == 'metadata':
@@ -3185,26 +3189,36 @@ def parse_subscriber_iq_csv(csv_content):
                 parsed['metadata']['exclusion_window'] = row[1].strip() if len(row) > 1 else ''
             elif 'Attribution Window' in first_col:
                 parsed['metadata']['attribution_window'] = row[1].strip() if len(row) > 1 else ''
-            elif 'KEY METRICS' in first_col:
+            elif 'KEY METRICS' in first_col or 'KEY METRICS' in second_col:
                 current_section = 'key_metrics'
+                print(f"   ✅ Entered KEY METRICS section at row {i}")
                 continue
         
         # Key metrics
         elif current_section == 'key_metrics':
             if 'Total Show Watchers' in first_col:
+                count_val = parse_number(row[1]) if len(row) > 1 else None
+                gen_pop_val = row[8].strip() if len(row) > 8 else ''
+                print(f"   📊 Found Total Show Watchers: row={row[:3]}, count={count_val}, gen_pop={gen_pop_val}, row_len={len(row)}")
                 parsed['key_metrics']['total_watchers'] = {
-                    'count': parse_number(row[1]) if len(row) > 1 else None,
-                    'gen_pop': row[8].strip() if len(row) > 8 else ''  # Keep as string for display
+                    'count': count_val,
+                    'gen_pop': gen_pop_val
                 }
             elif 'Clean Sample' in first_col or 'Clean Sample (New First Time Viewers)' in first_col:
+                count_val = parse_number(row[1]) if len(row) > 1 else None
+                gen_pop_val = row[8].strip() if len(row) > 8 else ''
+                print(f"   📊 Found Clean Sample: count={count_val}, gen_pop={gen_pop_val}")
                 parsed['key_metrics']['clean_sample'] = {
-                    'count': parse_number(row[1]) if len(row) > 1 else None,
-                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                    'count': count_val,
+                    'gen_pop': gen_pop_val
                 }
             elif 'New Platform Signups' in first_col:
+                count_val = parse_number(row[1]) if len(row) > 1 else None
+                gen_pop_val = row[8].strip() if len(row) > 8 else ''
+                print(f"   📊 Found New Platform Signups: count={count_val}, gen_pop={gen_pop_val}")
                 parsed['key_metrics']['new_signups'] = {
-                    'count': parse_number(row[1]) if len(row) > 1 else None,
-                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                    'count': count_val,
+                    'gen_pop': gen_pop_val
                 }
             elif 'Clean Conversion Rate' in first_col:
                 parsed['key_metrics']['clean_conversion_rate'] = row[1].strip() if len(row) > 1 else ''
@@ -3212,7 +3226,7 @@ def parse_subscriber_iq_csv(csv_content):
                 parsed['key_metrics']['total_conversion_rate'] = row[1].strip() if len(row) > 1 else ''
             elif 'Average Days' in first_col:
                 parsed['key_metrics']['avg_days_to_signup'] = row[3].strip() if len(row) > 3 else ''
-            elif 'PER-EPISODE ATTRIBUTION' in first_col:
+            elif 'PER-EPISODE ATTRIBUTION' in first_col or 'PER-EPISODE ATTRIBUTION' in second_col:
                 current_section = 'episode_attribution'
                 continue
         
@@ -3228,7 +3242,7 @@ def parse_subscriber_iq_csv(csv_content):
                     'percentage': row[7].strip() if len(row) > 7 else '',
                     'gen_pop': row[8].strip() if len(row) > 8 else ''
                 })
-            elif 'ATTRIBUTION SUMMARY' in first_col:
+            elif 'ATTRIBUTION SUMMARY' in first_col or 'ATTRIBUTION SUMMARY' in second_col:
                 current_section = 'attribution_summary'
                 continue
         
@@ -3252,7 +3266,7 @@ def parse_subscriber_iq_csv(csv_content):
                     'percentage': row[7].strip() if len(row) > 7 else '',
                     'gen_pop': row[8].strip() if len(row) > 8 else ''
                 }
-            elif 'SIGNUP TIMING (Days After Show is Available)' in first_col:
+            elif 'SIGNUP TIMING (Days After Show is Available)' in first_col or 'SIGNUP TIMING (Days After Show is Available)' in second_col:
                 current_section = 'signup_timing'
                 continue
         
@@ -3266,7 +3280,7 @@ def parse_subscriber_iq_csv(csv_content):
                         'percentage': row[7].strip() if len(row) > 7 else '',
                         'gen_pop': row[8].strip() if len(row) > 8 else ''
                     })
-            elif 'SIGNUP TIMING PER EPISODE' in first_col:
+            elif 'SIGNUP TIMING PER EPISODE' in first_col or 'SIGNUP TIMING PER EPISODE' in second_col:
                 current_section = 'episode_signup_timing'
                 continue
         
@@ -3284,7 +3298,7 @@ def parse_subscriber_iq_csv(csv_content):
                     'percentage': row[7].strip() if len(row) > 7 else '',
                     'gen_pop': row[8].strip() if len(row) > 8 else ''
                 })
-            elif 'POST-SIGNUP TOUCHPOINT ANALYSIS' in first_col:
+            elif 'POST-SIGNUP TOUCHPOINT ANALYSIS' in first_col or 'POST-SIGNUP TOUCHPOINT ANALYSIS' in second_col:
                 current_section = 'post_signup_touchpoints'
                 continue
         
@@ -3305,7 +3319,7 @@ def parse_subscriber_iq_csv(csv_content):
                     'percentage': row[7].strip() if len(row) > 7 else '',
                     'gen_pop': row[8].strip() if len(row) > 8 else ''
                 })
-            elif 'COMPETITIVE PLATFORMS' in first_col:
+            elif 'COMPETITIVE PLATFORMS' in first_col or 'COMPETITIVE PLATFORMS' in second_col:
                 current_section = 'competitive_platforms'
                 continue
         
@@ -3319,7 +3333,7 @@ def parse_subscriber_iq_csv(csv_content):
                         'platform': platform,
                         'percentage': percentage
                     })
-            elif 'MONTHLY PLATFORM SIGNUPS' in first_col:
+            elif 'MONTHLY PLATFORM SIGNUPS' in first_col or 'MONTHLY PLATFORM SIGNUPS' in second_col:
                 current_section = 'monthly_signups'
                 continue
         
@@ -3334,7 +3348,7 @@ def parse_subscriber_iq_csv(csv_content):
                         'percentage': row[7].strip() if len(row) > 7 else '',
                         'gen_pop': row[8].strip() if len(row) > 8 else ''
                     })
-            elif 'MONTHLY PLATFORM CHURN' in first_col:
+            elif 'MONTHLY PLATFORM CHURN' in first_col or 'MONTHLY PLATFORM CHURN' in second_col:
                 current_section = 'monthly_churn'
                 continue
         
@@ -3348,7 +3362,7 @@ def parse_subscriber_iq_csv(csv_content):
                         'percentage': row[7].strip() if len(row) > 7 else '',
                         'gen_pop': row[8].strip() if len(row) > 8 else ''
                     })
-            elif 'DEMOGRAPHICS' in first_col:
+            elif 'DEMOGRAPHICS' in first_col or 'DEMOGRAPHICS' in second_col:
                 current_section = 'demographics'
                 continue
         
@@ -3378,6 +3392,15 @@ def parse_subscriber_iq_csv(csv_content):
                     'percentage': row[7].strip() if len(row) > 7 else '',
                     'gen_pop': row[8].strip() if len(row) > 8 else ''
                 })
+    
+    # Log parsing summary
+    print(f"📊 Parsing complete:")
+    print(f"   Key metrics: {len(parsed['key_metrics'])} items")
+    print(f"   Episodes: {len(parsed['episode_attribution'])} items")
+    print(f"   Signup timing: {len(parsed['signup_timing'])} items")
+    print(f"   Attribution summary: {len(parsed['attribution_summary'])} items")
+    if parsed['key_metrics'].get('total_watchers'):
+        print(f"   Total Watchers: {parsed['key_metrics']['total_watchers']}")
     
     return parsed
 
