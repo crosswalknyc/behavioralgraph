@@ -3762,6 +3762,28 @@ def get_image_cache_stats():
         'by_source': by_source
     })
 
+@app.route('/api/debug/image-cache')
+@requires_admin
+def debug_image_cache():
+    """Debug endpoint to see all cached profile images."""
+    if not profile_image_cache:
+        load_profile_image_cache()
+    
+    # Get custom images only
+    custom_images = {k: v for k, v in profile_image_cache.items() if v.get('is_custom')}
+    
+    # Get first 50 entries for inspection
+    sample_entries = dict(list(profile_image_cache.items())[:50])
+    
+    return jsonify({
+        'success': True,
+        'total_entries': len(profile_image_cache),
+        'custom_count': len(custom_images),
+        'custom_images': custom_images,
+        'sample_keys': list(profile_image_cache.keys())[:100],
+        'sample_entries': sample_entries
+    })
+
 @app.route('/api/all-profile-images')
 @requires_auth
 def get_all_profile_images():
