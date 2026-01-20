@@ -3172,11 +3172,13 @@ def parse_subscriber_iq_csv(csv_content):
         # Check for section headers - can be in first or second column
         first_col = row[0].strip() if len(row) > 0 and row[0] else ''
         second_col = row[1].strip() if len(row) > 1 and row[1] else ''
-        combined_check = first_col + ' ' + second_col
+        # Also check combined for headers that span columns
+        combined_check = (first_col + ' ' + second_col).strip().upper()
         
         # Metadata section
-        if 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in first_col or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in second_col:
+        if 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in first_col.upper() or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in second_col.upper() or 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in combined_check:
             current_section = 'metadata'
+            print(f"   ✅ Entered metadata section at row {i}")
             continue
         elif current_section == 'metadata':
             if 'Show/Content Tracked' in first_col:
@@ -3189,9 +3191,9 @@ def parse_subscriber_iq_csv(csv_content):
                 parsed['metadata']['exclusion_window'] = row[1].strip() if len(row) > 1 else ''
             elif 'Attribution Window' in first_col:
                 parsed['metadata']['attribution_window'] = row[1].strip() if len(row) > 1 else ''
-            elif 'KEY METRICS' in first_col or 'KEY METRICS' in second_col:
+            elif 'KEY METRICS' in first_col.upper() or 'KEY METRICS' in second_col.upper() or 'KEY METRICS' in combined_check:
                 current_section = 'key_metrics'
-                print(f"   ✅ Entered KEY METRICS section at row {i}")
+                print(f"   ✅ Entered KEY METRICS section at row {i}: first_col='{first_col}', second_col='{second_col}'")
                 continue
         
         # Key metrics
@@ -3226,45 +3228,61 @@ def parse_subscriber_iq_csv(csv_content):
                 parsed['key_metrics']['total_conversion_rate'] = row[1].strip() if len(row) > 1 else ''
             elif 'Average Days' in first_col:
                 parsed['key_metrics']['avg_days_to_signup'] = row[3].strip() if len(row) > 3 else ''
-            elif 'PER-EPISODE ATTRIBUTION' in first_col or 'PER-EPISODE ATTRIBUTION' in second_col:
+            elif 'PER-EPISODE ATTRIBUTION' in first_col.upper() or 'PER-EPISODE ATTRIBUTION' in second_col.upper() or 'PER-EPISODE ATTRIBUTION' in combined_check:
                 current_section = 'episode_attribution'
+                print(f"   ✅ Entered PER-EPISODE ATTRIBUTION section at row {i}: first_col='{first_col}', second_col='{second_col}'")
                 continue
         
         # Episode attribution
         elif current_section == 'episode_attribution':
             if first_col.startswith('Episode '):
                 episode_num = first_col.replace('Episode ', '').strip()
+                signups_val = parse_number(row[1]) if len(row) > 1 else None
+                print(f"   📊 Found Episode {episode_num}: signups={signups_val}")
                 parsed['episode_attribution'].append({
                     'episode': episode_num,
-                    'signups': parse_number(row[1]) if len(row) > 1 else None,
+                    'signups': signups_val,
                     'days_avg': row[3].strip() if len(row) > 3 else '',
                     'min_avg_view': row[5].strip() if len(row) > 5 else '',
                     'percentage': row[7].strip() if len(row) > 7 else '',
                     'gen_pop': row[8].strip() if len(row) > 8 else ''
                 })
-            elif 'ATTRIBUTION SUMMARY' in first_col or 'ATTRIBUTION SUMMARY' in second_col:
+            elif 'ATTRIBUTION SUMMARY' in first_col.upper() or 'ATTRIBUTION SUMMARY' in second_col.upper() or 'ATTRIBUTION SUMMARY' in combined_check:
                 current_section = 'attribution_summary'
+                print(f"   ✅ Entered ATTRIBUTION SUMMARY section at row {i}: first_col='{first_col}', second_col='{second_col}'")
                 continue
         
         # Attribution summary
         elif current_section == 'attribution_summary':
             if 'Attributed Signups' in first_col:
+                count_val = parse_number(row[1]) if len(row) > 1 else None
+                pct_val = row[7].strip() if len(row) > 7 else ''
+                gen_pop_val = row[8].strip() if len(row) > 8 else ''
+                print(f"   📊 Found Attributed Signups: count={count_val}, pct={pct_val}, gen_pop={gen_pop_val}")
                 parsed['attribution_summary']['attributed'] = {
-                    'count': parse_number(row[1]) if len(row) > 1 else None,
-                    'percentage': row[7].strip() if len(row) > 7 else '',
-                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                    'count': count_val,
+                    'percentage': pct_val,
+                    'gen_pop': gen_pop_val
                 }
             elif 'Dormant to Reactive' in first_col:
+                count_val = parse_number(row[1]) if len(row) > 1 else None
+                pct_val = row[7].strip() if len(row) > 7 else ''
+                gen_pop_val = row[8].strip() if len(row) > 8 else ''
+                print(f"   📊 Found Dormant to Reactive: count={count_val}, pct={pct_val}, gen_pop={gen_pop_val}")
                 parsed['attribution_summary']['dormant_reactive'] = {
-                    'count': parse_number(row[1]) if len(row) > 1 else None,
-                    'percentage': row[7].strip() if len(row) > 7 else '',
-                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                    'count': count_val,
+                    'percentage': pct_val,
+                    'gen_pop': gen_pop_val
                 }
             elif 'TOTAL SIGNUPS' in first_col:
+                count_val = parse_number(row[1]) if len(row) > 1 else None
+                pct_val = row[7].strip() if len(row) > 7 else ''
+                gen_pop_val = row[8].strip() if len(row) > 8 else ''
+                print(f"   📊 Found TOTAL SIGNUPS: count={count_val}, pct={pct_val}, gen_pop={gen_pop_val}")
                 parsed['attribution_summary']['total'] = {
-                    'count': parse_number(row[1]) if len(row) > 1 else None,
-                    'percentage': row[7].strip() if len(row) > 7 else '',
-                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                    'count': count_val,
+                    'percentage': pct_val,
+                    'gen_pop': gen_pop_val
                 }
             elif 'SIGNUP TIMING (Days After Show is Available)' in first_col or 'SIGNUP TIMING (Days After Show is Available)' in second_col:
                 current_section = 'signup_timing'

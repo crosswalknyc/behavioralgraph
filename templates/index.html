@@ -8375,6 +8375,22 @@
         }
         
         function showSubscriberTab(tabName, event) {
+            // Get the button that was clicked
+            let clickedButton = null;
+            if (event && event.target) {
+                clickedButton = event.target.closest('.tab-btn');
+            }
+            if (!clickedButton) {
+                // Fallback: find button by tab name
+                const buttons = document.querySelectorAll('#subscriberTabs .tab-btn');
+                buttons.forEach(btn => {
+                    const onclickAttr = btn.getAttribute('onclick');
+                    if (onclickAttr && onclickAttr.includes(`'${tabName}'`)) {
+                        clickedButton = btn;
+                    }
+                });
+            }
+            
             // Hide all tabs
             document.querySelectorAll('#subscriberTabContent .dashboard-tab').forEach(tab => {
                 tab.classList.remove('active');
@@ -8390,16 +8406,8 @@
             document.querySelectorAll('#subscriberTabs .tab-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
-            if (event && event.target) {
-                event.target.closest('.tab-btn')?.classList.add('active');
-            } else {
-                // Fallback: find button by tab name
-                const buttons = document.querySelectorAll('#subscriberTabs .tab-btn');
-                buttons.forEach(btn => {
-                    if (btn.onclick && btn.onclick.toString().includes(tabName)) {
-                        btn.classList.add('active');
-                    }
-                });
+            if (clickedButton) {
+                clickedButton.classList.add('active');
             }
             
             // Scroll to top
