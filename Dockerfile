@@ -30,4 +30,5 @@ EXPOSE 10000
 ENV PYTHONUNBUFFERED=1
 
 # Run the application
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:10000", "--workers", "2", "--threads", "4", "--timeout", "300"]
+# Use 1 worker for faster startup, Render will scale if needed
+CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:10000", "--workers", "1", "--threads", "2", "--timeout", "120"]

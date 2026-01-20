@@ -63,6 +63,8 @@ def health_check_root():
     """Root health check endpoint for Render - must be fast and not depend on any initialization."""
     return 'ok', 200
 
+print("✅ Health check endpoint registered")
+
 # Global error handler for API routes - ensures JSON responses
 @app.errorhandler(Exception)
 def handle_exception(e):
@@ -5367,14 +5369,8 @@ def background_cache_checker():
 
 
 # Load image cache synchronously on startup (small, fast operation)
-print("🚀 App starting - loading image cache...")
-try:
-    load_profile_image_cache()
-    print(f"   ✅ Image cache loaded: {len(profile_image_cache)} images")
-except Exception as e:
-    print(f"   ⚠️ Image cache load error: {e}")
-
 # Start cache loader in background (doesn't block startup!)
+# All cache loading happens in background thread to ensure fast startup
 print("🚀 App starting - cache will load in background...")
 cache_thread = threading.Thread(target=async_cache_loader, daemon=True)
 cache_thread.start()
