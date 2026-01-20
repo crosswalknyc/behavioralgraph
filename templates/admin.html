@@ -750,6 +750,7 @@
         <div class="admin-tabs">
             <button class="admin-tab active" onclick="showAdminTab('users')">👥 Users</button>
             <button class="admin-tab" onclick="showAdminTab('content')">📁 Content Management</button>
+            <button class="admin-tab" onclick="showAdminTab('images')">🖼️ Profile Images</button>
             <button class="admin-tab" onclick="showAdminTab('settings')">⚙️ Settings</button>
         </div>
 
@@ -824,6 +825,57 @@
                     <div id="recentRunsList">
                         <p style="color: var(--text-secondary); font-size: 0.85rem;">Loading recent runs...</p>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PROFILE IMAGES SECTION -->
+        <div id="section-images" class="admin-section">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Profiles</h3>
+                    <div class="stat-value blue" id="imagesTotalProfiles">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>With Images</h3>
+                    <div class="stat-value green" id="imagesWithCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Missing Images</h3>
+                    <div class="stat-value red" id="imagesMissingCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Coverage</h3>
+                    <div class="stat-value purple" id="imagesCoverage">0%</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h2>🖼️ Profiles Missing Images</h2>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-small btn-secondary" onclick="loadProfileImages()">↻ Refresh</button>
+                    </div>
+                </div>
+                
+                <div class="content-filters">
+                    <input type="text" id="imageSearch" class="content-search" placeholder="🔍 Search profiles..." onkeyup="filterImageProfiles()">
+                    <select id="imageCategoryFilter" class="category-filter" onchange="filterImageProfiles()">
+                        <option value="">All Categories</option>
+                    </select>
+                </div>
+                
+                <div id="imageProfilesList" class="content-accordion" style="max-height: 500px; overflow-y: auto;">
+                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
+                </div>
+            </div>
+            
+            <div class="card" style="margin-top: 1rem;">
+                <div class="card-header">
+                    <h2>✅ Profiles With Images</h2>
+                </div>
+                <div id="imageProfilesWithList" class="content-accordion" style="max-height: 300px; overflow-y: auto;">
+                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
                 </div>
             </div>
         </div>
@@ -1354,8 +1406,127 @@
             if (tabName === 'content') {
                 loadContentFiles();
             }
+            if (tabName === 'images') {
+                loadProfileImages();
+            }
             if (tabName === 'settings') {
                 checkGmailStatus();
+            }
+        }
+        
+        // ============ PROFILE IMAGES ============
+        
+        let profileImagesData = { without_images: [], with_images: [] };
+        
+        async function loadProfileImages() {
+            try {
+                const response = await fetch('/api/admin/profiles-without-images', { credentials: 'same-origin' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    profileImagesData = data;
+                    
+                    // Update stats
+                    document.getElementById('imagesTotalProfiles').textContent = data.total_profiles;
+                    document.getElementById('imagesWithCount').textContent = data.has_image_count;
+                    document.getElementById('imagesMissingCount').textContent = data.missing_count;
+                    const coverage = data.total_profiles > 0 ? Math.round((data.has_image_count / data.total_profiles) * 100) : 0;
+                    document.getElementById('imagesCoverage').textContent = coverage + '%';
+                    
+                    // Populate category filter
+                    const categories = [...new Set(data.without_images.map(p => p.category))].sort();
+                    const filter = document.getElementById('imageCategoryFilter');
+                    filter.innerHTML = '<option value="">All Categories</option>' + 
+                        categories.map(c => `<option value="${c}">${c}</option>`).join('');
+                    
+                    renderImageProfilesList();
+                }
+            } catch (error) {
+                console.error('Failed to load profile images:', error);
+            }
+        }
+        
+        function filterImageProfiles() {
+            renderImageProfilesList();
+        }
+        
+        function renderImageProfilesList() {
+            const searchTerm = (document.getElementById('imageSearch')?.value || '').toLowerCase();
+            const categoryFilter = document.getElementById('imageCategoryFilter')?.value || '';
+            
+            // Filter profiles without images
+            let filtered = profileImagesData.without_images.filter(p => {
+                const matchesSearch = !searchTerm || p.name.toLowerCase().includes(searchTerm);
+                const matchesCategory = !categoryFilter || p.category === categoryFilter;
+                return matchesSearch && matchesCategory;
+            });
+            
+            const container = document.getElementById('imageProfilesList');
+            
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">✅ All profiles have images!</div>';
+            } else {
+                container.innerHTML = filtered.map(p => `
+                    <div class="content-file-row" style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                        <div class="profile-image-placeholder" style="width: 50px; height: 50px; background: var(--bg-input); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 1.5rem;">📷</div>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: var(--text-primary);">${p.name}</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">${p.category}</div>
+                        </div>
+                        <button class="btn btn-small btn-primary" onclick="openImageUpload('${encodeURIComponent(p.name)}')">📤 Upload Image</button>
+                    </div>
+                `).join('');
+            }
+            
+            // Render profiles with images
+            const withContainer = document.getElementById('imageProfilesWithList');
+            const withImages = profileImagesData.with_images || [];
+            
+            if (withImages.length === 0) {
+                withContainer.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No profiles with images yet</div>';
+            } else {
+                withContainer.innerHTML = withImages.map(p => `
+                    <div class="content-file-row" style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                        <img src="${p.image_url}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;" onerror="this.src=''; this.style.background='var(--bg-input)'; this.style.display='flex'; this.innerHTML='❌';">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: var(--text-primary);">${p.name}</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">${p.category}</div>
+                        </div>
+                        <button class="btn btn-small btn-secondary" onclick="removeProfileImage('${encodeURIComponent(p.name)}')">🗑️ Remove</button>
+                    </div>
+                `).join('');
+            }
+        }
+        
+        function openImageUpload(encodedName) {
+            const profileName = decodeURIComponent(encodedName);
+            // Use the existing profile image modal
+            currentImageProfile = profileName;
+            document.getElementById('profileImageName').textContent = profileName;
+            document.getElementById('imageModal').style.display = 'flex';
+        }
+        
+        async function removeProfileImage(encodedName) {
+            const profileName = decodeURIComponent(encodedName);
+            if (!confirm(`Remove image for "${profileName}"?`)) return;
+            
+            try {
+                const response = await fetch('/api/admin/profile-image', {
+                    method: 'DELETE',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ profile_name: profileName })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Image removed successfully');
+                    loadProfileImages();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to remove image'));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
             }
         }
         

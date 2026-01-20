@@ -2851,12 +2851,8 @@ shared_links = {}  # In production, store in database/S3
 
 @app.route('/api/wiki-image/<path:name>')
 def get_wiki_image(name):
-    """Fetch profile image - checks cache first, then social media, then Wikipedia."""
-    import urllib.parse
-    import urllib.request
-    import re
-    from datetime import datetime, timedelta
-    global profile_image_cache, profile_image_cache_dirty
+    """Get profile image - only returns admin-uploaded custom images."""
+    global profile_image_cache
     
     # Load cache if empty
     if not profile_image_cache:
@@ -2865,135 +2861,79 @@ def get_wiki_image(name):
     # Normalize the cache key
     cache_key = name.lower().strip()
     
-    # Check cache first
+    # Only return custom images that admin has uploaded
     if cache_key in profile_image_cache:
         cached = profile_image_cache[cache_key]
-        if cached.get('image_url'):
+        if cached.get('image_url') and cached.get('is_custom'):
             return jsonify({
                 'success': True,
                 'image_url': cached['image_url'],
                 'title': cached.get('title', name),
-                'source': cached.get('source', 'cache'),
+                'source': 'custom',
                 'cached': True
             })
-        elif cached.get('not_found'):
-            # We previously tried and failed - don't retry for 24 hours
-            cached_time = cached.get('cached_at', '')
-            if cached_time:
-                try:
-                    cached_dt = datetime.fromisoformat(cached_time)
-                    if datetime.now() - cached_dt < timedelta(hours=24):
-                        return jsonify({'success': False, 'error': 'No image found', 'cached': True})
-                except:
-                    pass
     
-    # Helper to cache and return result
-    def cache_result(image_url, title, source):
-        global profile_image_cache, profile_image_cache_dirty
-        profile_image_cache[cache_key] = {
-            'image_url': image_url,
-            'title': title,
-            'source': source,
-            'cached_at': datetime.now().isoformat()
-        }
-        profile_image_cache_dirty = True
-        # Save cache periodically (every 5 new entries)
-        if len(profile_image_cache) % 5 == 0:
-            save_profile_image_cache()
-        return jsonify({
-            'success': True,
-            'image_url': image_url,
-            'title': title,
-            'source': source
-        })
+    # No custom image - return not found (don't search external sources)
+    return jsonify({'success': False, 'error': 'No custom image uploaded'})
+
+
+@app.route('/api/admin/profiles-without-images')
+@requires_admin
+def get_profiles_without_images():
+    """Get list of all profiles that don't have custom images."""
+    global profile_image_cache, s3_cache
     
-    def cache_not_found():
-        global profile_image_cache, profile_image_cache_dirty
-        profile_image_cache[cache_key] = {
-            'not_found': True,
-            'cached_at': datetime.now().isoformat()
-        }
-        profile_image_cache_dirty = True
-        save_profile_image_cache()
-        return jsonify({'success': False, 'error': 'No image found'})
+    # Load caches
+    if not profile_image_cache:
+        load_profile_image_cache()
     
-    try:
-        # Check if name contains a social media handle (@username)
-        handle_match = re.search(r'@(\w+)', name)
+    if not s3_cache.get('loaded'):
+        load_persisted_cache()
+    
+    # Get all profile names from s3_cache
+    all_profiles = []
+    for f in s3_cache.get('files', []):
+        name = f.get('project_name', '')
+        if name:
+            all_profiles.append({
+                'name': name,
+                'category': f.get('category', 'UNCATEGORIZED'),
+                's3_key': f.get('s3_key', '')
+            })
+    
+    # Find profiles without custom images
+    profiles_without_images = []
+    profiles_with_images = []
+    
+    for profile in all_profiles:
+        cache_key = profile['name'].lower().strip()
+        cached = profile_image_cache.get(cache_key, {})
         
-        if handle_match:
-            handle = handle_match.group(1)
-            
-            # Try TikTok first
-            try:
-                tiktok_url = f"https://www.tiktok.com/@{handle}"
-                req = urllib.request.Request(tiktok_url, headers={
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                })
-                with urllib.request.urlopen(req, timeout=5) as response:
-                    html = response.read().decode('utf-8', errors='ignore')
-                    og_match = re.search(r'<meta[^>]*property=["\']og:image["\'][^>]*content=["\']([^"\']+)["\']', html)
-                    if not og_match:
-                        og_match = re.search(r'<meta[^>]*content=["\']([^"\']+)["\'][^>]*property=["\']og:image["\']', html)
-                    if og_match:
-                        image_url = og_match.group(1)
-                        if image_url and 'tiktok' not in image_url.lower().split('/')[-1] and 'logo' not in image_url.lower():
-                            return cache_result(image_url, f'@{handle}', 'tiktok')
-            except:
-                pass
-            
-            # Try Instagram
-            try:
-                instagram_url = f"https://www.instagram.com/{handle}/"
-                req = urllib.request.Request(instagram_url, headers={
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                })
-                with urllib.request.urlopen(req, timeout=5) as response:
-                    html = response.read().decode('utf-8', errors='ignore')
-                    og_match = re.search(r'<meta[^>]*property=["\']og:image["\'][^>]*content=["\']([^"\']+)["\']', html)
-                    if not og_match:
-                        og_match = re.search(r'<meta[^>]*content=["\']([^"\']+)["\'][^>]*property=["\']og:image["\']', html)
-                    if og_match:
-                        image_url = og_match.group(1)
-                        if image_url:
-                            return cache_result(image_url, f'@{handle}', 'instagram')
-            except:
-                pass
-        
-        # Clean and format the name for Wikipedia search (remove handle if present)
-        search_name = re.sub(r'@\w+', '', name).replace('_', ' ').replace('-', ' ').strip()
-        
-        if search_name:
-            # Try Wikipedia API to get page image
-            wiki_api_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(search_name)}"
-            req = urllib.request.Request(wiki_api_url, headers={'User-Agent': 'CrosswalkIQ/1.0'})
-            
-            try:
-                with urllib.request.urlopen(req, timeout=3) as response:
-                    data = json.loads(response.read().decode())
-                    if 'thumbnail' in data:
-                        return cache_result(data['thumbnail'].get('source'), data.get('title', name), 'wikipedia')
-                    elif 'originalimage' in data:
-                        return cache_result(data['originalimage'].get('source'), data.get('title', name), 'wikipedia')
-            except:
-                pass
-            
-            # Fallback: Try Clearbit logo API for brands
-            domain_name = search_name.lower().replace(' ', '') + '.com'
-            clearbit_url = f"https://logo.clearbit.com/{domain_name}"
-            
-            try:
-                req = urllib.request.Request(clearbit_url, method='HEAD', headers={'User-Agent': 'CrosswalkIQ/1.0'})
-                with urllib.request.urlopen(req, timeout=2) as response:
-                    if response.status == 200:
-                        return cache_result(clearbit_url, name, 'clearbit')
-            except:
-                pass
-        
-        return cache_not_found()
-        
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        if cached.get('image_url') and cached.get('is_custom'):
+            profiles_with_images.append({
+                'name': profile['name'],
+                'category': profile['category'],
+                'image_url': cached['image_url']
+            })
+        else:
+            profiles_without_images.append({
+                'name': profile['name'],
+                'category': profile['category'],
+                's3_key': profile['s3_key']
+            })
+    
+    # Sort alphabetically
+    profiles_without_images.sort(key=lambda x: x['name'].lower())
+    profiles_with_images.sort(key=lambda x: x['name'].lower())
+    
+    return jsonify({
+        'success': True,
+        'without_images': profiles_without_images,
+        'with_images': profiles_with_images,
+        'total_profiles': len(all_profiles),
+        'missing_count': len(profiles_without_images),
+        'has_image_count': len(profiles_with_images)
+    })
 
 
 @app.route('/api/share', methods=['POST'])
