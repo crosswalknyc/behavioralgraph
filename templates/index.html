@@ -7805,10 +7805,20 @@
             }
         }
         
+        // Refresh cache for a specific profile (useful after saving new image)
+        async function refreshProfileImageCache(profileName) {
+            const cacheKey = profileName.toLowerCase().trim();
+            delete profileImageCache[cacheKey];
+            // Re-fetch the image
+            if (document.getElementById('dashProfileInfo')?.style.display !== 'none') {
+                fetchProfileImage(profileName, 0, true);
+            }
+        }
+        
         // Start preloading images immediately
         preloadAllProfileImages();
         
-        async function fetchProfileImage(profileName, retryCount = 0) {
+        async function fetchProfileImage(profileName, retryCount = 0, forceRefresh = false) {
             const imageContainer = document.getElementById('dashProfileImage');
             const img = imageContainer?.querySelector('img');
             if (!imageContainer || !img) return;
@@ -7819,22 +7829,41 @@
             
             // ALWAYS use lowercase key for cache consistency
             const cacheKey = profileName.toLowerCase().trim();
+            
+            // If forcing refresh (e.g., after saving), clear cache for this profile
+            if (forceRefresh) {
+                delete profileImageCache[cacheKey];
+            }
+            
             const cachedUrl = profileImageCache[cacheKey];
             
-            // Check if we have a cached URL
-            if (cachedUrl && cachedUrl !== 'pending' && cachedUrl !== 'none') {
+            // Check if we have a cached URL (but always check API for custom images to get latest)
+            if (cachedUrl && cachedUrl !== 'pending' && cachedUrl !== 'none' && !forceRefresh) {
                 console.log(`✅ Using cached image for ${profileName}:`, cachedUrl);
                 img.src = cachedUrl;
                 img.onload = () => imageContainer.classList.add('loaded');
                 img.onerror = () => {
-                    console.log(`⚠️ Cached image failed to load for ${profileName}`);
+                    console.log(`⚠️ Cached image failed to load for ${profileName}, fetching fresh...`);
                     imageContainer.classList.remove('loaded');
+                    // Clear cache and fetch fresh
+                    delete profileImageCache[cacheKey];
+                    fetchProfileImage(profileName, 0, true);
                 };
+                // Still check API in background to update cache if image was changed
+                fetch(`/api/wiki-image/${encodeURIComponent(profileName)}`).then(r => r.json()).then(data => {
+                    if (data.success && data.image_url && data.image_url !== cachedUrl) {
+                        console.log(`🔄 Image updated for ${profileName}, updating cache`);
+                        profileImageCache[cacheKey] = data.image_url;
+                        if (img.src === cachedUrl) {
+                            img.src = data.image_url;
+                        }
+                    }
+                }).catch(() => {});
                 return;
             }
             
-            // Skip if we already know there's no image
-            if (cachedUrl === 'none') {
+            // Skip if we already know there's no image (unless forcing refresh)
+            if (cachedUrl === 'none' && !forceRefresh) {
                 console.log(`⏭️ No image available for ${profileName}`);
                 return;
             }
@@ -7866,7 +7895,7 @@
                             console.log(`🔄 Retrying image load for ${profileName} (attempt ${retryCount + 1})`);
                             setTimeout(() => {
                                 profileImageCache[cacheKey] = null;
-                                fetchProfileImage(profileName, retryCount + 1);
+                                fetchProfileImage(profileName, retryCount + 1, true);
                             }, 500);
                         } else {
                             imageContainer.classList.remove('loaded');

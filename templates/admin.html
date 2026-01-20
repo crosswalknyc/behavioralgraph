@@ -2752,6 +2752,7 @@
                     showToast('Profile image saved!');
                     closeProfileImageModal();
                     loadContentFiles(); // Refresh to show new image
+                    loadProfileImages(); // Refresh profile images list
                 } else {
                     showToast(data.error || 'Failed to save image', true);
                 }
