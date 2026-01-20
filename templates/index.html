@@ -8673,6 +8673,65 @@
         // Multi-tab profile management
         let openProfileTabs = []; // Array of { id, name, dateRange, data, parsed }
         let activeProfileTabId = null;
+        
+        // Save open tabs to localStorage (only save id, name, dateRange - not full data)
+        function saveOpenTabs() {
+            const tabsToSave = openProfileTabs.map(t => ({
+                id: t.id,
+                name: t.name,
+                dateRange: t.dateRange
+            }));
+            localStorage.setItem('openProfileTabs', JSON.stringify(tabsToSave));
+            localStorage.setItem('activeProfileTabId', activeProfileTabId || '');
+        }
+        
+        // Load saved tabs from localStorage
+        function loadSavedTabs() {
+            try {
+                const savedTabs = JSON.parse(localStorage.getItem('openProfileTabs') || '[]');
+                const savedActiveId = localStorage.getItem('activeProfileTabId') || '';
+                return { savedTabs, savedActiveId };
+            } catch (e) {
+                return { savedTabs: [], savedActiveId: '' };
+            }
+        }
+        
+        // Restore tabs on page load
+        async function restoreSavedTabs() {
+            const { savedTabs, savedActiveId } = loadSavedTabs();
+            if (savedTabs.length === 0) return;
+            
+            // Load each saved tab's data
+            for (const savedTab of savedTabs) {
+                try {
+                    const response = await fetch(`/api/get-csv-data/${encodeURIComponent(savedTab.id)}`, { credentials: 'same-origin' });
+                    if (response.status === 401) continue;
+                    const data = await response.json();
+                    
+                    if (data.success && data.data) {
+                        const parsed = parseAllData(data.data);
+                        openProfileTabs.push({
+                            id: savedTab.id,
+                            name: savedTab.name || data.brand || 'Unknown',
+                            dateRange: savedTab.dateRange || data.date_range || '',
+                            data: data,
+                            parsed: parsed
+                        });
+                    }
+                } catch (e) {
+                    console.log('Could not restore tab:', savedTab.id);
+                }
+            }
+            
+            // Render tabs bar
+            renderProfileTabsBar();
+            
+            // Switch to the previously active tab, or first tab
+            if (openProfileTabs.length > 0) {
+                const tabToActivate = openProfileTabs.find(t => t.id === savedActiveId) || openProfileTabs[0];
+                switchToProfileTab(tabToActivate.id);
+            }
+        }
 
         function renderDashboardProfileTree(profiles) {
             dashboardProfiles = profiles;
@@ -8829,6 +8888,9 @@
                     openProfileTabs.push(newTab);
                     activeProfileTabId = profileId;
                     
+                    // Save to localStorage
+                    saveOpenTabs();
+                    
                     // Render tabs bar
                     renderProfileTabsBar();
                     
@@ -8872,6 +8934,9 @@
             activeProfileTabId = profileId;
             selectedDashProfile = profileId;
             
+            // Save active tab to localStorage
+            saveOpenTabs();
+            
             // Update tabs bar
             renderProfileTabsBar();
             
@@ -8887,6 +8952,9 @@
             if (tabIndex === -1) return;
             
             openProfileTabs.splice(tabIndex, 1);
+            
+            // Save to localStorage
+            saveOpenTabs();
             
             if (openProfileTabs.length === 0) {
                 // No more tabs - show empty state
@@ -9020,6 +9088,11 @@
                 
                 const profiles = data.jobs || [];
                 renderDashboardProfileTree(profiles);
+                
+                // Restore saved tabs (only once after initial load)
+                if (openProfileTabs.length === 0) {
+                    restoreSavedTabs();
+                }
             } catch (error) {
                 console.error('Failed to load profiles:', error);
                 if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Error loading profiles</div>';
