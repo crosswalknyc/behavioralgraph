@@ -57,6 +57,12 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 CORS(app)
 
+# Health check endpoint - register early so it's available immediately
+@app.route('/health')
+def health_check_root():
+    """Root health check endpoint for Render - must be fast and not depend on any initialization."""
+    return 'ok', 200
+
 # Global error handler for API routes - ensures JSON responses
 @app.errorhandler(Exception)
 def handle_exception(e):
@@ -2529,20 +2535,18 @@ def index():
                            has_subscriber_iq_access=has_subscriber_iq)
 
 
-@app.route('/health')
-def health_check_root():
-    """Root health check endpoint for Render."""
-    return jsonify({'status': 'ok'}), 200
-
 @app.route('/api/health')
 def health_check():
     """Quick health check endpoint."""
-    return jsonify({
-        'status': 'healthy', 
-        'timestamp': datetime.now().isoformat(),
-        'cache_ready': cache_loading_complete,
-        'cache_size': len(s3_cache.get('jobs', []))
-    })
+    try:
+        return jsonify({
+            'status': 'healthy', 
+            'timestamp': datetime.now().isoformat(),
+            'cache_ready': cache_loading_complete,
+            'cache_size': len(s3_cache.get('jobs', [])) if s3_cache else 0
+        })
+    except:
+        return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
 
 
 @app.route('/api/check-cache', methods=['POST'])
