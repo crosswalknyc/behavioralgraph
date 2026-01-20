@@ -7840,17 +7840,30 @@
         // Start preloading images immediately
         preloadAllProfileImages();
         
+        // Track current profile to prevent showing wrong image
+        let currentProfileForImage = null;
+        
         async function fetchProfileImage(profileName, retryCount = 0, forceRefresh = false) {
             const imageContainer = document.getElementById('dashProfileImage');
             const img = imageContainer?.querySelector('img');
             if (!imageContainer || !img) return;
             
+            // ALWAYS use lowercase key for cache consistency
+            const cacheKey = profileName.toLowerCase().trim();
+            
+            // If this is a different profile, clear the image immediately
+            if (currentProfileForImage && currentProfileForImage !== cacheKey) {
+                console.log(`🔄 Profile changed from ${currentProfileForImage} to ${cacheKey}, clearing image`);
+                img.src = '';
+                imageContainer.classList.remove('loaded', 'loading');
+            }
+            
+            // Update current profile tracker
+            currentProfileForImage = cacheKey;
+            
             // Reset image state
             imageContainer.classList.remove('loaded', 'loading');
             img.src = '';
-            
-            // ALWAYS use lowercase key for cache consistency
-            const cacheKey = profileName.toLowerCase().trim();
             
             // If forcing refresh (e.g., after saving), clear cache for this profile
             if (forceRefresh) {
@@ -7862,22 +7875,33 @@
             // Check if we have a cached URL (but always check API for custom images to get latest)
             if (cachedUrl && cachedUrl !== 'pending' && cachedUrl !== 'none' && !forceRefresh) {
                 console.log(`✅ Using cached image for ${profileName}:`, cachedUrl);
-                img.src = cachedUrl;
-                img.onload = () => imageContainer.classList.add('loaded');
-                img.onerror = () => {
-                    console.log(`⚠️ Cached image failed to load for ${profileName}, fetching fresh...`);
-                    imageContainer.classList.remove('loaded');
-                    // Clear cache and fetch fresh
-                    delete profileImageCache[cacheKey];
-                    fetchProfileImage(profileName, 0, true);
-                };
+                // Verify this is still the current profile before setting image
+                if (currentProfileForImage === cacheKey) {
+                    img.src = cachedUrl;
+                    img.onload = () => {
+                        // Double-check we're still showing the right profile
+                        if (currentProfileForImage === cacheKey) {
+                            imageContainer.classList.add('loaded');
+                        }
+                    };
+                    img.onerror = () => {
+                        console.log(`⚠️ Cached image failed to load for ${profileName}, fetching fresh...`);
+                        imageContainer.classList.remove('loaded');
+                        // Clear cache and fetch fresh
+                        delete profileImageCache[cacheKey];
+                        fetchProfileImage(profileName, 0, true);
+                    };
+                }
                 // Still check API in background to update cache if image was changed
                 fetch(`/api/wiki-image/${encodeURIComponent(profileName)}`).then(r => r.json()).then(data => {
-                    if (data.success && data.image_url && data.image_url !== cachedUrl) {
-                        console.log(`🔄 Image updated for ${profileName}, updating cache`);
-                        profileImageCache[cacheKey] = data.image_url;
-                        if (img.src === cachedUrl) {
-                            img.src = data.image_url;
+                    // Only update if this is still the current profile
+                    if (currentProfileForImage === cacheKey) {
+                        if (data.success && data.image_url && data.image_url !== cachedUrl) {
+                            console.log(`🔄 Image updated for ${profileName}, updating cache`);
+                            profileImageCache[cacheKey] = data.image_url;
+                            if (img.src === cachedUrl && currentProfileForImage === cacheKey) {
+                                img.src = data.image_url;
+                            }
                         }
                     }
                 }).catch(() => {});
@@ -7900,6 +7924,12 @@
                 
                 imageContainer.classList.remove('loading');
                 
+                // Verify this is still the current profile before processing
+                if (currentProfileForImage !== cacheKey) {
+                    console.log(`⏭️ Profile changed during fetch, ignoring response for ${profileName}`);
+                    return;
+                }
+                
                 if (data.success && data.image_url) {
                     // Store with lowercase key for consistency
                     profileImageCache[cacheKey] = data.image_url;
@@ -7908,25 +7938,36 @@
                     // Create new image to preload
                     const tempImg = new Image();
                     tempImg.onload = () => {
-                        img.src = data.image_url;
-                        imageContainer.classList.add('loaded');
+                        // Double-check we're still showing the right profile
+                        if (currentProfileForImage === cacheKey) {
+                            img.src = data.image_url;
+                            imageContainer.classList.add('loaded');
+                        } else {
+                            console.log(`⏭️ Profile changed, not setting image for ${profileName}`);
+                        }
                     };
                     tempImg.onerror = () => {
-                        // Retry once if image fails to load
-                        if (retryCount < 2) {
-                            console.log(`🔄 Retrying image load for ${profileName} (attempt ${retryCount + 1})`);
-                            setTimeout(() => {
-                                profileImageCache[cacheKey] = null;
-                                fetchProfileImage(profileName, retryCount + 1, true);
-                            }, 500);
-                        } else {
-                            imageContainer.classList.remove('loaded');
-                            profileImageCache[cacheKey] = 'none';
+                        // Retry once if image fails to load (only if still current profile)
+                        if (currentProfileForImage === cacheKey) {
+                            if (retryCount < 2) {
+                                console.log(`🔄 Retrying image load for ${profileName} (attempt ${retryCount + 1})`);
+                                setTimeout(() => {
+                                    if (currentProfileForImage === cacheKey) {
+                                        profileImageCache[cacheKey] = null;
+                                        fetchProfileImage(profileName, retryCount + 1, true);
+                                    }
+                                }, 500);
+                            } else {
+                                imageContainer.classList.remove('loaded');
+                                profileImageCache[cacheKey] = 'none';
+                            }
                         }
                     };
                     tempImg.src = data.image_url;
                 } else {
-                    profileImageCache[cacheKey] = 'none';
+                    if (currentProfileForImage === cacheKey) {
+                        profileImageCache[cacheKey] = 'none';
+                    }
                 }
             } catch (error) {
                 console.log('Could not fetch profile image:', error);
@@ -9040,9 +9081,18 @@
                 selectedDashProfile = null;
                 currentDashboardData = null;
                 currentS3Key = null;
+                currentProfileForImage = null; // Clear image profile tracker
                 
                 renderProfileTabsBar();
                 renderDashboardProfileTree(dashboardProfiles);
+                
+                // Clear the image
+                const imageContainer = document.getElementById('dashProfileImage');
+                const img = imageContainer?.querySelector('img');
+                if (img) {
+                    img.src = '';
+                    imageContainer.classList.remove('loaded', 'loading');
+                }
                 
                 // Show empty state
                 const emptyState = document.getElementById('dashboardEmptyState');
