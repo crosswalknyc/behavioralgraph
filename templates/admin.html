@@ -2745,16 +2745,28 @@
                 }
                 
                 console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText);
+                    showToast(`Failed to save: ${response.status} ${response.statusText}`, true);
+                    return;
+                }
+                
                 const data = await response.json();
                 console.log('Response data:', data);
                 
                 if (data.success) {
                     showToast('Profile image saved!');
                     closeProfileImageModal();
-                    loadContentFiles(); // Refresh to show new image
-                    loadProfileImages(); // Refresh profile images list
+                    // Small delay to ensure cache is updated on server
+                    setTimeout(() => {
+                        loadContentFiles(); // Refresh to show new image
+                        loadProfileImages(); // Refresh profile images list
+                    }, 500);
                 } else {
                     showToast(data.error || 'Failed to save image', true);
+                    console.error('Save failed:', data);
                 }
             } catch (e) {
                 console.error('Save error:', e);

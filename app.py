@@ -3547,6 +3547,33 @@ def set_profile_image():
         saved = save_profile_image_cache()
         if not saved:
             print(f"   ⚠️ Warning: Cache save may have failed for {cache_key}")
+            return jsonify({
+                'success': False,
+                'error': 'Failed to save image cache. Please try again.'
+            }), 500
+        
+        # Verify the save by reading back from S3 (without overwriting in-memory cache)
+        try:
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_IMAGE_CACHE_KEY)
+            saved_cache = json.loads(response['Body'].read().decode('utf-8'))
+            if cache_key in saved_cache:
+                saved_entry = saved_cache[cache_key]
+                if saved_entry.get('image_url') == image_url and saved_entry.get('is_custom'):
+                    print(f"   ✅ Verified: Image saved and confirmed in S3 cache")
+                else:
+                    print(f"   ⚠️ Warning: Cache entry exists but doesn't match: {saved_entry}")
+                    # Don't fail, but log the warning
+            else:
+                print(f"   ❌ ERROR: Cache entry not found in S3 after save! Key: {cache_key}")
+                print(f"   📋 Available keys in S3: {list(saved_cache.keys())[:10]}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Image was not saved to cache. Please try again.'
+                }), 500
+        except Exception as verify_err:
+            print(f"   ⚠️ Could not verify cache save: {verify_err}")
+            import traceback
+            traceback.print_exc()
         
         print(f"   ✅ Saved to cache: {cache_key} -> {image_url}")
         print(f"   📊 Cache now has {len(profile_image_cache)} entries")
@@ -3554,7 +3581,8 @@ def set_profile_image():
         return jsonify({
             'success': True,
             'image_url': image_url,
-            'message': 'Profile image saved'
+            'cache_key': cache_key,
+            'message': 'Profile image saved and verified'
         })
         
     except Exception as e:
@@ -3787,6 +3815,37 @@ def debug_image_cache():
         'custom_images': custom_images,
         'sample_keys': list(profile_image_cache.keys())[:100],
         'sample_entries': sample_entries
+    })
+
+@app.route('/api/debug/image-cache/<path:name>')
+@requires_admin
+def debug_image_cache_for_profile(name):
+    """Debug endpoint to check cache for a specific profile."""
+    if not profile_image_cache:
+        load_profile_image_cache()
+    
+    cache_key = name.lower().strip()
+    in_memory = cache_key in profile_image_cache
+    in_memory_entry = profile_image_cache.get(cache_key)
+    
+    # Also check S3 directly
+    s3_entry = None
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_IMAGE_CACHE_KEY)
+        s3_cache = json.loads(response['Body'].read().decode('utf-8'))
+        s3_entry = s3_cache.get(cache_key)
+    except:
+        pass
+    
+    return jsonify({
+        'success': True,
+        'profile_name': name,
+        'cache_key': cache_key,
+        'in_memory': in_memory,
+        'in_memory_entry': in_memory_entry,
+        'in_s3': s3_entry is not None,
+        's3_entry': s3_entry,
+        'matches': in_memory_entry == s3_entry if (in_memory_entry and s3_entry) else False
     })
 
 @app.route('/api/all-profile-images')
