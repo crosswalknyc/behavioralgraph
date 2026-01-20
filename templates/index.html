@@ -8356,6 +8356,8 @@
         function displaySubscriberData(response) {
             const { data, show, date_range } = response;
             
+            console.log('📊 Displaying subscriber data:', { show, date_range, key_metrics: data.key_metrics });
+            
             // Update header
             document.getElementById('subscriberShowNameHeader').textContent = show.toUpperCase();
             document.getElementById('subscriberDateRangeHeader').textContent = date_range ? `Date Range: ${date_range}` : '';
