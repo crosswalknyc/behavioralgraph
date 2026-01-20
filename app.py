@@ -11,6 +11,7 @@ import os
 import sys
 import uuid
 import json
+import csv
 import threading
 import traceback
 import re
@@ -90,6 +91,7 @@ def server_error(e):
 # ============================================================================
 
 S3_BUCKET = 'dashboard-inputs'
+SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
 S3_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
 
@@ -3062,6 +3064,340 @@ def get_csv_data(s3_key):
         })
     except Exception as e:
         print(f"❌ Error in get_csv_data: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
+
+
+def parse_subscriber_iq_csv(csv_content):
+    """Parse subscriber IQ CSV (show-to-platform attribution format)."""
+    lines = csv_content.strip().split('\n')
+    reader = csv.reader(lines)
+    rows = list(reader)
+    
+    parsed = {
+        'metadata': {},
+        'key_metrics': {},
+        'episode_attribution': [],
+        'signup_timing': [],
+        'episode_signup_timing': {},
+        'attribution_summary': {},
+        'post_signup_touchpoints': [],
+        'competitive_platforms': [],
+        'monthly_signups': [],
+        'monthly_churn': [],
+        'demographics': {
+            'age': [],
+            'gender': []
+        }
+    }
+    
+    current_section = None
+    current_episode = None
+    
+    for i, row in enumerate(rows):
+        if not row or all(not cell.strip() for cell in row):
+            continue
+        
+        # Check for section headers
+        first_col = row[0].strip() if row[0] else ''
+        
+        # Metadata section
+        if 'SHOW-TO-PLATFORM ATTRIBUTION RESULTS' in first_col:
+            current_section = 'metadata'
+            continue
+        elif current_section == 'metadata':
+            if 'Show/Content Tracked' in first_col:
+                parsed['metadata']['show'] = row[1].strip() if len(row) > 1 else ''
+            elif 'Platform Tracked' in first_col:
+                parsed['metadata']['platform'] = row[1].strip() if len(row) > 1 else ''
+            elif 'Analysis Date Range' in first_col:
+                parsed['metadata']['date_range'] = row[1].strip() if len(row) > 1 else ''
+            elif 'Exclusion Window' in first_col:
+                parsed['metadata']['exclusion_window'] = row[1].strip() if len(row) > 1 else ''
+            elif 'Attribution Window' in first_col:
+                parsed['metadata']['attribution_window'] = row[1].strip() if len(row) > 1 else ''
+            elif 'KEY METRICS' in first_col:
+                current_section = 'key_metrics'
+                continue
+        
+        # Key metrics
+        elif current_section == 'key_metrics':
+            if 'Total Show Watchers' in first_col:
+                parsed['key_metrics']['total_watchers'] = {
+                    'count': row[1].strip() if len(row) > 1 else '',
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                }
+            elif 'Clean Sample' in first_col:
+                parsed['key_metrics']['clean_sample'] = {
+                    'count': row[1].strip() if len(row) > 1 else '',
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                }
+            elif 'New Platform Signups' in first_col:
+                parsed['key_metrics']['new_signups'] = {
+                    'count': row[1].strip() if len(row) > 1 else '',
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                }
+            elif 'Clean Conversion Rate' in first_col:
+                parsed['key_metrics']['clean_conversion_rate'] = row[1].strip() if len(row) > 1 else ''
+            elif 'Total Show Conversion Rate' in first_col:
+                parsed['key_metrics']['total_conversion_rate'] = row[1].strip() if len(row) > 1 else ''
+            elif 'Average Days' in first_col:
+                parsed['key_metrics']['avg_days_to_signup'] = row[3].strip() if len(row) > 3 else ''
+            elif 'PER-EPISODE ATTRIBUTION' in first_col:
+                current_section = 'episode_attribution'
+                continue
+        
+        # Episode attribution
+        elif current_section == 'episode_attribution':
+            if first_col.startswith('Episode '):
+                episode_num = first_col.replace('Episode ', '').strip()
+                parsed['episode_attribution'].append({
+                    'episode': episode_num,
+                    'signups': row[1].strip() if len(row) > 1 else '',
+                    'days_avg': row[3].strip() if len(row) > 3 else '',
+                    'min_avg_view': row[5].strip() if len(row) > 5 else '',
+                    'percentage': row[7].strip() if len(row) > 7 else '',
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                })
+            elif 'ATTRIBUTION SUMMARY' in first_col:
+                current_section = 'attribution_summary'
+                continue
+        
+        # Attribution summary
+        elif current_section == 'attribution_summary':
+            if 'Attributed Signups' in first_col:
+                parsed['attribution_summary']['attributed'] = {
+                    'count': row[1].strip() if len(row) > 1 else '',
+                    'percentage': row[7].strip() if len(row) > 7 else '',
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                }
+            elif 'Dormant to Reactive' in first_col:
+                parsed['attribution_summary']['dormant_reactive'] = {
+                    'count': row[1].strip() if len(row) > 1 else '',
+                    'percentage': row[7].strip() if len(row) > 7 else '',
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                }
+            elif 'TOTAL SIGNUPS' in first_col:
+                parsed['attribution_summary']['total'] = {
+                    'count': row[1].strip() if len(row) > 1 else '',
+                    'percentage': row[7].strip() if len(row) > 7 else '',
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                }
+            elif 'SIGNUP TIMING (Days After Show is Available)' in first_col:
+                current_section = 'signup_timing'
+                continue
+        
+        # Signup timing
+        elif current_section == 'signup_timing':
+            if first_col and first_col not in ['', 'SIGNUP TIMING (Days After Show is Available)']:
+                if 'Days Later' in first_col or first_col in ['Same Day', 'Day 1']:
+                    parsed['signup_timing'].append({
+                        'timing': first_col,
+                        'signups': row[1].strip() if len(row) > 1 else '',
+                        'percentage': row[7].strip() if len(row) > 7 else '',
+                        'gen_pop': row[8].strip() if len(row) > 8 else ''
+                    })
+            elif 'SIGNUP TIMING PER EPISODE' in first_col:
+                current_section = 'episode_signup_timing'
+                continue
+        
+        # Episode signup timing
+        elif current_section == 'episode_signup_timing':
+            if first_col.startswith('Episode '):
+                episode_num = first_col.replace('Episode ', '').strip()
+                current_episode = episode_num
+                if episode_num not in parsed['episode_signup_timing']:
+                    parsed['episode_signup_timing'][episode_num] = []
+            elif current_episode and first_col and ('Days Later' in first_col or first_col in ['Same Day', 'Day 1']):
+                parsed['episode_signup_timing'][current_episode].append({
+                    'timing': first_col,
+                    'signups': row[1].strip() if len(row) > 1 else '',
+                    'percentage': row[7].strip() if len(row) > 7 else '',
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                })
+            elif 'POST-SIGNUP TOUCHPOINT ANALYSIS' in first_col:
+                current_section = 'post_signup_touchpoints'
+                continue
+        
+        # Post-signup touchpoints
+        elif current_section == 'post_signup_touchpoints':
+            if first_col and first_col.endswith('Touchpoint'):
+                touchpoint_num = first_col.replace('Touchpoint', '').strip()
+                parsed['post_signup_touchpoints'].append({
+                    'touchpoint': touchpoint_num,
+                    'users': row[1].strip() if len(row) > 1 else '',
+                    'percentage': row[7].strip() if len(row) > 7 else '',
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                })
+            elif 'Total Platform Signups' in first_col:
+                parsed['post_signup_touchpoints'].append({
+                    'touchpoint': 'Total',
+                    'users': row[1].strip() if len(row) > 1 else '',
+                    'percentage': row[7].strip() if len(row) > 7 else '',
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                })
+            elif 'COMPETITIVE PLATFORMS' in first_col:
+                current_section = 'competitive_platforms'
+                continue
+        
+        # Competitive platforms
+        elif current_section == 'competitive_platforms':
+            if first_col and first_col not in ['', 'COMPETITIVE PLATFORMS (% of Show Watchers)']:
+                if first_col and not first_col.startswith(','):
+                    platform = first_col.strip()
+                    percentage = row[7].strip() if len(row) > 7 else ''
+                    parsed['competitive_platforms'].append({
+                        'platform': platform,
+                        'percentage': percentage
+                    })
+            elif 'MONTHLY PLATFORM SIGNUPS' in first_col:
+                current_section = 'monthly_signups'
+                continue
+        
+        # Monthly signups
+        elif current_section == 'monthly_signups':
+            if first_col and first_col not in ['', 'MONTHLY PLATFORM SIGNUPS -']:
+                if re.match(r'^\d{4}-\d{2}$', first_col):
+                    parsed['monthly_signups'].append({
+                        'month': first_col,
+                        'signups': row[1].strip() if len(row) > 1 else '',
+                        'watched_show': row[3].strip() if len(row) > 3 else '',
+                        'percentage': row[7].strip() if len(row) > 7 else '',
+                        'gen_pop': row[8].strip() if len(row) > 8 else ''
+                    })
+            elif 'MONTHLY PLATFORM CHURN' in first_col:
+                current_section = 'monthly_churn'
+                continue
+        
+        # Monthly churn
+        elif current_section == 'monthly_churn':
+            if first_col and first_col not in ['', 'MONTHLY PLATFORM CHURN -']:
+                if re.match(r'^\d{4}-\d{2}$', first_col):
+                    parsed['monthly_churn'].append({
+                        'month': first_col,
+                        'churned': row[1].strip() if len(row) > 1 else '',
+                        'percentage': row[7].strip() if len(row) > 7 else '',
+                        'gen_pop': row[8].strip() if len(row) > 8 else ''
+                    })
+            elif 'DEMOGRAPHICS' in first_col:
+                current_section = 'demographics'
+                continue
+        
+        # Demographics
+        elif current_section == 'demographics':
+            if first_col == 'AGE':
+                current_section = 'demographics_age'
+                continue
+            elif first_col == 'GENDER':
+                current_section = 'demographics_gender'
+                continue
+        
+        elif current_section == 'demographics_age':
+            if first_col and first_col not in ['', 'AGE']:
+                parsed['demographics']['age'].append({
+                    'age_range': first_col,
+                    'count': row[1].strip() if len(row) > 1 else '',
+                    'percentage': row[7].strip() if len(row) > 7 else '',
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                })
+        
+        elif current_section == 'demographics_gender':
+            if first_col and first_col not in ['', 'GENDER']:
+                parsed['demographics']['gender'].append({
+                    'gender': first_col,
+                    'count': row[1].strip() if len(row) > 1 else '',
+                    'percentage': row[7].strip() if len(row) > 7 else '',
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                })
+    
+    return parsed
+
+
+@app.route('/api/subscriber-iq/list')
+@requires_auth
+def list_subscriber_iq_files():
+    """List all subscriber IQ CSV files from S3."""
+    if not s3_client:
+        return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    
+    try:
+        files = []
+        paginator = s3_client.get_paginator('list_objects_v2')
+        
+        for page in paginator.paginate(Bucket=SUBSCRIBER_S3_BUCKET):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                if key.endswith('.csv'):
+                    # Extract show name from filename (format: ShowName_MM_DD_YYYY_HH_MM.csv)
+                    name_without_ext = key.replace('.csv', '')
+                    match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+                    if match:
+                        show_name = match.group(1).replace('_', ' ')
+                    else:
+                        show_name = name_without_ext.replace('_', ' ')
+                    
+                    files.append({
+                        's3_key': key,
+                        'show_name': show_name,
+                        'size': obj['Size'],
+                        'last_modified': obj['LastModified'].isoformat()
+                    })
+        
+        # Sort by last modified (newest first)
+        files.sort(key=lambda x: x['last_modified'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'files': files
+        })
+    except Exception as e:
+        print(f"❌ Error listing subscriber IQ files: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/subscriber-iq/data/<path:s3_key>')
+@requires_auth
+def get_subscriber_iq_data(s3_key):
+    """Get subscriber IQ CSV data as JSON."""
+    print(f"📥 get_subscriber_iq_data called for: {s3_key}")
+    
+    if not s3_client:
+        print("❌ S3 client not configured")
+        return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    
+    try:
+        print(f"📂 Fetching from S3: {SUBSCRIBER_S3_BUCKET}/{s3_key}")
+        response = s3_client.get_object(Bucket=SUBSCRIBER_S3_BUCKET, Key=s3_key)
+        csv_content = response['Body'].read().decode('utf-8')
+        print(f"✅ Got CSV content: {len(csv_content)} bytes")
+        
+        # Parse subscriber IQ CSV
+        parsed = parse_subscriber_iq_csv(csv_content)
+        
+        # Extract show name from filename
+        name_without_ext = s3_key.replace('.csv', '')
+        match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+        if match:
+            show_name = match.group(1).replace('_', ' ')
+        else:
+            show_name = name_without_ext.replace('_', ' ')
+        
+        # Get date range from metadata
+        date_range = parsed['metadata'].get('date_range', '')
+        
+        print(f"✅ Returning subscriber IQ data for show: {show_name.upper()}")
+        return jsonify({
+            'success': True,
+            'data': parsed,
+            'show': show_name.upper(),
+            'date_range': date_range,
+            's3_key': s3_key
+        })
+    except Exception as e:
+        print(f"❌ Error in get_subscriber_iq_data: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500

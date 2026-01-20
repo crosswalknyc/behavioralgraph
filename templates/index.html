@@ -313,21 +313,131 @@
         }
         
         /* Subscriber IQ Dashboard */
-        .subscriber-iq-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 3rem;
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .metric-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.25rem;
+        }
+        .metric-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+        .metric-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--accent-lime);
+            margin-bottom: 0.25rem;
+        }
+        .metric-sub {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        .conversion-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .conversion-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
             text-align: center;
         }
-        .subscriber-iq-coming-soon {
+        .conversion-card h4 {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+        .conversion-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-lime);
+            margin-bottom: 0.5rem;
+        }
+        .conversion-pct {
+            font-size: 1.25rem;
+            color: var(--text-primary);
+        }
+        .episode-list, .episode-attribution-grid {
+            display: grid;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        .episode-item {
             background: var(--bg-card);
-            border: 2px dashed var(--border-color);
-            border-radius: 16px;
-            padding: 4rem;
-            max-width: 600px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .episode-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.25rem;
+        }
+        .episode-card h4 {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            color: var(--accent-lime);
+        }
+        .episode-metric {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+        .episode-timing-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+        .episode-timing-card h4 {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            color: var(--accent-lime);
+        }
+        .timing-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .timing-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+        }
+        .platform-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+        .platform-name {
+            font-weight: 600;
+        }
+        .platform-pct {
+            color: var(--accent-lime);
+            font-weight: 600;
         }
         .subscriber-iq-coming-soon h2 {
             font-size: 2rem;
@@ -7646,11 +7756,124 @@
 
         <!-- SUBSCRIBER IQ VIEW -->
         <div id="subscriberIQView">
-            <div class="subscriber-iq-content">
-                <div class="subscriber-iq-coming-soon">
-                    <h2>👥 Subscriber IQ</h2>
-                    <p>Subscriber analytics dashboard coming soon.</p>
-                    <p style="margin-top: 1rem; font-size: 0.85rem;">This dashboard will provide deep insights into your subscriber base, engagement metrics, and audience growth analytics.</p>
+            <div class="dashboard-container">
+                <!-- Sidebar -->
+                <div class="dashboard-sidebar">
+                    <div class="sidebar-header-section">
+                        <h3>📺 Shows</h3>
+                        <input type="text" id="subscriberProfileSearchInput" class="sidebar-search" placeholder="🔍 Search shows..." onkeyup="filterSubscriberProfiles()">
+                    </div>
+                    <div id="subscriberProfileTree" class="sidebar-tree"></div>
+                </div>
+
+                <!-- Main Content -->
+                <div class="dashboard-content" id="subscriberDashboardContent">
+                    <!-- Empty State -->
+                    <div id="subscriberEmptyState" class="dashboard-empty-state">
+                        <div class="empty-state-icon">📺</div>
+                        <h2>Select a Show</h2>
+                        <p>Choose a show from the sidebar to view subscriber analytics and attribution insights.</p>
+                    </div>
+
+                    <!-- Profile Info Header -->
+                    <div id="subscriberProfileInfo" class="dash-profile-info" style="display: none;">
+                        <div class="dash-profile-image-container" id="subscriberProfileImage">
+                            <img src="" alt="Show Image" style="display: none;">
+                        </div>
+                        <div class="dash-profile-text">
+                            <div class="dash-brand-box">
+                                <h2 id="subscriberShowNameHeader">SELECT SHOW</h2>
+                            </div>
+                            <div class="dash-date-box">
+                                <span id="subscriberDateRangeHeader"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabs -->
+                    <div class="dashboard-tabs">
+                        <button class="tab-btn active" onclick="showSubscriberTab('overview')"><span class="tab-icon">📊</span><span class="tab-label">OVERVIEW</span></button>
+                        <button class="tab-btn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
+                        <button class="tab-btn" onclick="showSubscriberTab('timing')"><span class="tab-icon">⏱️</span><span class="tab-label">SIGNUP TIMING</span></button>
+                        <button class="tab-btn" onclick="showSubscriberTab('platforms')"><span class="tab-icon">📱</span><span class="tab-label">PLATFORMS</span></button>
+                        <button class="tab-btn" onclick="showSubscriberTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
+                        <button class="tab-btn" onclick="showSubscriberTab('trends')"><span class="tab-icon">📈</span><span class="tab-label">TRENDS</span></button>
+                    </div>
+
+                    <!-- Tab Content -->
+                    <div class="dashboard-tab-content" id="subscriberTabContent">
+                        <!-- Overview Tab -->
+                        <div id="subscriber-tab-overview" class="dashboard-tab active">
+                            <div class="tab-section">
+                                <h3>Key Metrics</h3>
+                                <div id="subscriberKeyMetrics" class="metrics-grid"></div>
+                            </div>
+                            <div class="tab-section">
+                                <h3>Conversion Summary</h3>
+                                <div id="subscriberConversionSummary" class="conversion-cards"></div>
+                            </div>
+                            <div class="tab-section">
+                                <h3>Top Performing Episodes</h3>
+                                <div id="subscriberTopEpisodes" class="episode-list"></div>
+                            </div>
+                        </div>
+
+                        <!-- Episodes Tab -->
+                        <div id="subscriber-tab-episodes" class="dashboard-tab">
+                            <div class="tab-section">
+                                <h3>Episode Attribution</h3>
+                                <div id="subscriberEpisodeAttribution" class="episode-attribution-grid"></div>
+                            </div>
+                        </div>
+
+                        <!-- Timing Tab -->
+                        <div id="subscriber-tab-timing" class="dashboard-tab">
+                            <div class="tab-section">
+                                <h3>Signup Timing Overview</h3>
+                                <div id="subscriberSignupTimingChart" class="chart-container"></div>
+                            </div>
+                            <div class="tab-section">
+                                <h3>Episode-Level Signup Timing</h3>
+                                <div id="subscriberEpisodeTiming" class="episode-timing-grid"></div>
+                            </div>
+                        </div>
+
+                        <!-- Platforms Tab -->
+                        <div id="subscriber-tab-platforms" class="dashboard-tab">
+                            <div class="tab-section">
+                                <h3>Competitive Platforms</h3>
+                                <div id="subscriberCompetitivePlatforms" class="platform-list"></div>
+                            </div>
+                            <div class="tab-section">
+                                <h3>Post-Signup Touchpoints</h3>
+                                <div id="subscriberTouchpoints" class="touchpoint-chart"></div>
+                            </div>
+                        </div>
+
+                        <!-- Demographics Tab -->
+                        <div id="subscriber-tab-demographics" class="dashboard-tab">
+                            <div class="tab-section">
+                                <h3>Age Distribution</h3>
+                                <div id="subscriberAgeChart" class="chart-container"></div>
+                            </div>
+                            <div class="tab-section">
+                                <h3>Gender Distribution</h3>
+                                <div id="subscriberGenderChart" class="chart-container"></div>
+                            </div>
+                        </div>
+
+                        <!-- Trends Tab -->
+                        <div id="subscriber-tab-trends" class="dashboard-tab">
+                            <div class="tab-section">
+                                <h3>Monthly Signups</h3>
+                                <div id="subscriberMonthlySignupsChart" class="chart-container"></div>
+                            </div>
+                            <div class="tab-section">
+                                <h3>Monthly Churn</h3>
+                                <div id="subscriberMonthlyChurnChart" class="chart-container"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div><!-- End subscriberIQView -->
@@ -8032,6 +8255,292 @@
             document.getElementById('subscriberIQView').style.display = 'flex';
             const formView = document.getElementById('formView');
             if (formView) formView.style.display = 'none';
+            
+            // Load subscriber profiles
+            loadSubscriberProfiles();
+        }
+        
+        // Subscriber IQ data
+        let subscriberProfiles = [];
+        let currentSubscriberData = null;
+        
+        async function loadSubscriberProfiles() {
+            try {
+                const response = await fetch('/api/subscriber-iq/list', { credentials: 'same-origin' });
+                if (response.status === 401) { window.location.href = '/login'; return; }
+                const data = await response.json();
+                
+                if (data.success) {
+                    subscriberProfiles = data.files;
+                    renderSubscriberProfileTree();
+                } else {
+                    console.error('Failed to load subscriber profiles:', data.error);
+                }
+            } catch (error) {
+                console.error('Error loading subscriber profiles:', error);
+            }
+        }
+        
+        function renderSubscriberProfileTree() {
+            const container = document.getElementById('subscriberProfileTree');
+            if (!container) return;
+            
+            const searchTerm = (document.getElementById('subscriberProfileSearchInput')?.value || '').toLowerCase();
+            
+            let html = '';
+            
+            if (searchTerm) {
+                // Flat list of matches
+                const matches = subscriberProfiles.filter(p => 
+                    p.show_name.toLowerCase().includes(searchTerm)
+                );
+                
+                matches.forEach(file => {
+                    html += `
+                        <div class="sidebar-item" onclick="selectSubscriberProfile('${file.s3_key}')">
+                            <span class="sidebar-item-icon">📺</span>
+                            <span class="sidebar-item-name">${file.show_name}</span>
+                        </div>
+                    `;
+                });
+            } else {
+                // Group by show name (first part before date)
+                const grouped = {};
+                subscriberProfiles.forEach(file => {
+                    const key = file.show_name;
+                    if (!grouped[key]) {
+                        grouped[key] = [];
+                    }
+                    grouped[key].push(file);
+                });
+                
+                Object.keys(grouped).sort().forEach(showName => {
+                    const files = grouped[showName];
+                    const latestFile = files[0]; // Already sorted by date
+                    html += `
+                        <div class="sidebar-item" onclick="selectSubscriberProfile('${latestFile.s3_key}')">
+                            <span class="sidebar-item-icon">📺</span>
+                            <span class="sidebar-item-name">${showName}</span>
+                            ${files.length > 1 ? `<span class="sidebar-item-count">${files.length}</span>` : ''}
+                        </div>
+                    `;
+                });
+            }
+            
+            container.innerHTML = html || '<div class="sidebar-item">No shows found</div>';
+        }
+        
+        function filterSubscriberProfiles() {
+            renderSubscriberProfileTree();
+        }
+        
+        async function selectSubscriberProfile(s3Key) {
+            try {
+                const response = await fetch(`/api/subscriber-iq/data/${encodeURIComponent(s3Key)}`, { credentials: 'same-origin' });
+                if (response.status === 401) { window.location.href = '/login'; return; }
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentSubscriberData = data.data;
+                    displaySubscriberData(data);
+                } else {
+                    console.error('Failed to load subscriber data:', data.error);
+                }
+            } catch (error) {
+                console.error('Error loading subscriber data:', error);
+            }
+        }
+        
+        function displaySubscriberData(response) {
+            const { data, show, date_range } = response;
+            
+            // Update header
+            document.getElementById('subscriberShowNameHeader').textContent = show;
+            document.getElementById('subscriberDateRangeHeader').textContent = date_range ? `Date Range: ${date_range}` : '';
+            document.getElementById('subscriberProfileInfo').style.display = 'flex';
+            document.getElementById('subscriberEmptyState').style.display = 'none';
+            document.getElementById('subscriberDashboardContent').style.display = 'block';
+            
+            // Render all tabs
+            renderSubscriberOverview(data);
+            renderSubscriberEpisodes(data);
+            renderSubscriberTiming(data);
+            renderSubscriberPlatforms(data);
+            renderSubscriberDemographics(data);
+            renderSubscriberTrends(data);
+        }
+        
+        function showSubscriberTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('#subscriberTabContent .dashboard-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            const selectedTab = document.getElementById(`subscriber-tab-${tabName}`);
+            if (selectedTab) {
+                selectedTab.classList.add('active');
+            }
+            
+            // Update tab buttons
+            document.querySelectorAll('#subscriberIQView .tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.closest('.tab-btn')?.classList.add('active');
+            
+            // Scroll to top
+            document.getElementById('subscriberTabContent').scrollTop = 0;
+        }
+        
+        function renderSubscriberOverview(data) {
+            const metricsContainer = document.getElementById('subscriberKeyMetrics');
+            const conversionContainer = document.getElementById('subscriberConversionSummary');
+            const episodesContainer = document.getElementById('subscriberTopEpisodes');
+            
+            // Key Metrics
+            const metrics = data.key_metrics || {};
+            metricsContainer.innerHTML = `
+                <div class="metric-card">
+                    <div class="metric-label">Total Show Watchers</div>
+                    <div class="metric-value">${formatNumber(metrics.total_watchers?.count || 0)}</div>
+                    <div class="metric-sub">Gen Pop: ${formatNumber(metrics.total_watchers?.gen_pop || 0)}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Clean Sample</div>
+                    <div class="metric-value">${formatNumber(metrics.clean_sample?.count || 0)}</div>
+                    <div class="metric-sub">Gen Pop: ${formatNumber(metrics.clean_sample?.gen_pop || 0)}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">New Signups</div>
+                    <div class="metric-value">${formatNumber(metrics.new_signups?.count || 0)}</div>
+                    <div class="metric-sub">Gen Pop: ${formatNumber(metrics.new_signups?.gen_pop || 0)}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Clean Conversion Rate</div>
+                    <div class="metric-value">${metrics.clean_conversion_rate || 'N/A'}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Total Conversion Rate</div>
+                    <div class="metric-value">${metrics.total_conversion_rate || 'N/A'}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Avg Days to Signup</div>
+                    <div class="metric-value">${metrics.avg_days_to_signup || 'N/A'}</div>
+                </div>
+            `;
+            
+            // Conversion Summary
+            const summary = data.attribution_summary || {};
+            conversionContainer.innerHTML = `
+                <div class="conversion-card">
+                    <h4>Attributed Signups</h4>
+                    <div class="conversion-value">${formatNumber(summary.attributed?.count || 0)}</div>
+                    <div class="conversion-pct">${summary.attributed?.percentage || '0%'}</div>
+                </div>
+                <div class="conversion-card">
+                    <h4>Dormant to Reactive</h4>
+                    <div class="conversion-value">${formatNumber(summary.dormant_reactive?.count || 0)}</div>
+                    <div class="conversion-pct">${summary.dormant_reactive?.percentage || '0%'}</div>
+                </div>
+                <div class="conversion-card">
+                    <h4>Total Signups</h4>
+                    <div class="conversion-value">${formatNumber(summary.total?.count || 0)}</div>
+                    <div class="conversion-pct">${summary.total?.percentage || '0%'}</div>
+                </div>
+            `;
+            
+            // Top Episodes
+            const episodes = (data.episode_attribution || []).slice(0, 10);
+            episodesContainer.innerHTML = episodes.map(ep => `
+                <div class="episode-item">
+                    <span class="episode-number">Episode ${ep.episode}</span>
+                    <span class="episode-signups">${formatNumber(ep.signups)} signups</span>
+                    <span class="episode-pct">${ep.percentage}</span>
+                </div>
+            `).join('');
+        }
+        
+        function renderSubscriberEpisodes(data) {
+            const container = document.getElementById('subscriberEpisodeAttribution');
+            const episodes = data.episode_attribution || [];
+            
+            container.innerHTML = episodes.map(ep => `
+                <div class="episode-card">
+                    <h4>Episode ${ep.episode}</h4>
+                    <div class="episode-metric">
+                        <span class="metric-label">Signups:</span>
+                        <span class="metric-value">${formatNumber(ep.signups)}</span>
+                    </div>
+                    <div class="episode-metric">
+                        <span class="metric-label">% of Total:</span>
+                        <span class="metric-value">${ep.percentage}</span>
+                    </div>
+                    <div class="episode-metric">
+                        <span class="metric-label">Avg Days:</span>
+                        <span class="metric-value">${ep.days_avg}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function renderSubscriberTiming(data) {
+            // Overview chart
+            const timingData = data.signup_timing || [];
+            // TODO: Add Chart.js visualization
+            
+            // Episode timing
+            const container = document.getElementById('subscriberEpisodeTiming');
+            const episodeTiming = data.episode_signup_timing || {};
+            
+            let html = '';
+            Object.keys(episodeTiming).sort((a, b) => parseInt(a) - parseInt(b)).forEach(epNum => {
+                const timings = episodeTiming[epNum];
+                html += `
+                    <div class="episode-timing-card">
+                        <h4>Episode ${epNum}</h4>
+                        <div class="timing-list">
+                            ${timings.map(t => `
+                                <div class="timing-item">
+                                    <span>${t.timing}:</span>
+                                    <span>${formatNumber(t.signups)} (${t.percentage})</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+        
+        function renderSubscriberPlatforms(data) {
+            const platformsContainer = document.getElementById('subscriberCompetitivePlatforms');
+            const platforms = data.competitive_platforms || [];
+            
+            platformsContainer.innerHTML = platforms.map(p => `
+                <div class="platform-item">
+                    <span class="platform-name">${p.platform}</span>
+                    <span class="platform-pct">${p.percentage}</span>
+                </div>
+            `).join('');
+            
+            // Touchpoints
+            const touchpointsContainer = document.getElementById('subscriberTouchpoints');
+            const touchpoints = data.post_signup_touchpoints || [];
+            // TODO: Add Chart.js visualization
+        }
+        
+        function renderSubscriberDemographics(data) {
+            const ageData = data.demographics?.age || [];
+            const genderData = data.demographics?.gender || [];
+            
+            // TODO: Add Chart.js visualizations for age and gender
+        }
+        
+        function renderSubscriberTrends(data) {
+            const signups = data.monthly_signups || [];
+            const churn = data.monthly_churn || [];
+            
+            // TODO: Add Chart.js line charts for trends
         }
 
         // Activity tracking helper (non-blocking)
