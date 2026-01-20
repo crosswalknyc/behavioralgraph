@@ -3481,7 +3481,23 @@
         .affinity-desc, .sponsor-desc {
             color: var(--text-secondary);
             font-size: 0.8rem;
-            margin: 0 0 0.75rem 0;
+            margin: 0 0 0.5rem 0;
+        }
+        .affinity-col-header {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 0.75rem;
+            margin-bottom: 0.35rem;
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .affinity-col-header span {
+            cursor: help;
+        }
+        .affinity-col-header span:hover {
+            color: var(--accent-lime);
         }
         .affinity-list, .sponsor-list, .talent-list, .media-list {
             max-height: 300px;
@@ -6317,24 +6333,40 @@
                         <div class="affinity-card">
                             <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Content & Entertainment: Shows, movies, streaming services, and entertainment content this audience engages with significantly more than the general population. Higher index = stronger affinity.">🎬 Content & Entertainment</span> <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Content & Entertainment')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Content & Entertainment')" title="Add to Deck">➕</button></span></h3>
                             <p class="affinity-desc">Shows, movies, and streaming platforms this audience loves</p>
+                            <div class="affinity-col-header">
+                                <span class="has-tooltip" data-tooltip="Item: The content, show, or platform name.">Item</span>
+                                <span class="has-tooltip" data-tooltip="Index: Affinity score vs Gen Pop. Higher = stronger preference. 200 = 2x more likely than average. Green = strong affinity.">Index</span>
+                            </div>
                             <div id="affinityContent" class="affinity-list"></div>
                         </div>
                         
                         <div class="affinity-card">
                             <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Brand Affinities: Consumer brands this audience over-indexes for based on purchase behavior and engagement. Great for identifying sponsorship and partnership opportunities.">🛍️ Brand Affinities</span> <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Brand Affinities')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Brand Affinities')" title="Add to Deck">➕</button></span></h3>
                             <p class="affinity-desc">Brands this audience over-indexes for</p>
+                            <div class="affinity-col-header">
+                                <span class="has-tooltip" data-tooltip="Brand: The brand or company name.">Brand</span>
+                                <span class="has-tooltip" data-tooltip="Index: Affinity score vs Gen Pop. Higher = stronger brand preference. 500+ = very strong affinity.">Index</span>
+                            </div>
                             <div id="affinityBrands" class="affinity-list"></div>
                         </div>
                         
                         <div class="affinity-card">
                             <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Digital Platforms: Social media, apps, streaming services, and digital platforms this audience uses more than the general population. Useful for digital media planning and targeting.">📱 Digital Platforms</span> <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Digital Platforms')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Digital Platforms')" title="Add to Deck">➕</button></span></h3>
                             <p class="affinity-desc">Apps, websites, and social platforms they use</p>
+                            <div class="affinity-col-header">
+                                <span class="has-tooltip" data-tooltip="Platform: The app, website, or social platform.">Platform</span>
+                                <span class="has-tooltip" data-tooltip="Index: Usage index vs Gen Pop. Higher = more likely to use this platform.">Index</span>
+                            </div>
                             <div id="affinityPlatforms" class="affinity-list"></div>
                         </div>
                         
                         <div class="affinity-card">
                             <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Music & Audio: Music streaming services, genres, artists, and podcast preferences. Shows audio content affinities for media planning and sponsorship opportunities.">🎵 Music & Audio</span> <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Music & Audio')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Music & Audio')" title="Add to Deck">➕</button></span></h3>
                             <p class="affinity-desc">Music genres, artists, and podcasts</p>
+                            <div class="affinity-col-header">
+                                <span class="has-tooltip" data-tooltip="Artist/Service: The artist, genre, or music streaming service.">Artist/Service</span>
+                                <span class="has-tooltip" data-tooltip="Index: Listening/engagement index vs Gen Pop. Higher = stronger music affinity.">Index</span>
+                            </div>
                             <div id="affinityMusic" class="affinity-list"></div>
                         </div>
                         
