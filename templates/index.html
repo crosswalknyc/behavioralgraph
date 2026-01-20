@@ -2561,25 +2561,15 @@
             position: relative;
             cursor: help;
         }
-        .has-tooltip::before {
-            content: '';
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            border: 6px solid transparent;
-            border-top-color: var(--accent-lime);
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.15s ease;
-            z-index: 1000001;
-        }
+        /* Tooltip container - we use a global tooltip div instead of ::after to avoid overflow clipping */
+        .has-tooltip::before,
         .has-tooltip::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            bottom: calc(100% + 10px);
-            left: 50%;
-            transform: translateX(-50%);
+            display: none !important; /* Disable CSS tooltips, use JS tooltip instead */
+        }
+        
+        /* Global tooltip element */
+        #globalTooltip {
+            position: fixed;
             background: linear-gradient(135deg, #1a2a3a, #0d1a2a);
             color: #e6f1ff;
             padding: 0.75rem 1rem;
@@ -2594,12 +2584,31 @@
             opacity: 0;
             visibility: hidden;
             transition: opacity 0.15s ease, visibility 0.15s ease;
-            z-index: 1000000;
+            z-index: 9999999;
             pointer-events: none;
             white-space: normal;
         }
-        .has-tooltip:hover::before,
-        .has-tooltip:hover::after {
+        #globalTooltip.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        #globalTooltip::before {
+            content: '';
+            position: absolute;
+            bottom: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: var(--accent-lime);
+        }
+        #globalTooltip.below::before {
+            bottom: auto;
+            top: -6px;
+            border-top-color: transparent;
+            border-bottom-color: var(--accent-lime);
+        }
+        .has-tooltip-legacy::before,
+        .has-tooltip-legacy::after {
             opacity: 1;
             visibility: visible;
         }
@@ -5349,6 +5358,9 @@
     </style>
 </head>
 <body>
+    <!-- Global Tooltip Element -->
+    <div id="globalTooltip"></div>
+    
     <div class="container">
         <header>
             <img src="/static/crosswalk-logo-stacked.svg" alt="Crosswalk Logo" class="logo" style="height: 80px; width: auto;">
@@ -7364,7 +7376,77 @@
             loadDashboardProfiles();
             // Initialize deck count from localStorage
             updateDeckCount();
+            
+            // Initialize global tooltip system
+            initGlobalTooltip();
         });
+        
+        // Global tooltip system to avoid overflow clipping
+        function initGlobalTooltip() {
+            const tooltip = document.getElementById('globalTooltip');
+            if (!tooltip) return;
+            
+            let hideTimeout = null;
+            
+            // Use event delegation for all .has-tooltip elements
+            document.addEventListener('mouseenter', function(e) {
+                const target = e.target.closest('.has-tooltip');
+                if (!target) return;
+                
+                const text = target.getAttribute('data-tooltip');
+                if (!text) return;
+                
+                clearTimeout(hideTimeout);
+                
+                tooltip.textContent = text;
+                tooltip.classList.remove('below');
+                
+                // Get element position
+                const rect = target.getBoundingClientRect();
+                const tooltipWidth = 300;
+                const tooltipHeight = tooltip.offsetHeight || 100;
+                
+                // Calculate horizontal position (center on element, but keep in viewport)
+                let left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
+                if (left < 10) left = 10;
+                if (left + tooltipWidth > window.innerWidth - 10) {
+                    left = window.innerWidth - tooltipWidth - 10;
+                }
+                
+                // Calculate vertical position (prefer above, but show below if no room)
+                let top = rect.top - tooltipHeight - 12;
+                let showBelow = false;
+                
+                if (top < 10) {
+                    // Not enough room above, show below
+                    top = rect.bottom + 12;
+                    showBelow = true;
+                }
+                
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+                tooltip.style.width = tooltipWidth + 'px';
+                
+                if (showBelow) {
+                    tooltip.classList.add('below');
+                }
+                
+                // Small delay before showing
+                setTimeout(() => {
+                    tooltip.classList.add('visible');
+                }, 50);
+                
+            }, true);
+            
+            document.addEventListener('mouseleave', function(e) {
+                const target = e.target.closest('.has-tooltip');
+                if (!target) return;
+                
+                hideTimeout = setTimeout(() => {
+                    tooltip.classList.remove('visible');
+                }, 100);
+            }, true);
+        }
 
         function formatDate(date) { return date.toISOString().split('T')[0]; }
         function formatNumber(num) { return num ? num.toLocaleString() : '0'; }
