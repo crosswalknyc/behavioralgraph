@@ -2888,57 +2888,85 @@ def get_profiles_without_images():
     """Get list of all profiles that don't have custom images."""
     global profile_image_cache, s3_cache
     
-    # Load caches
-    if not profile_image_cache:
-        load_profile_image_cache()
-    
-    if not s3_cache.get('loaded'):
-        load_persisted_cache()
-    
-    # Get all profile names from s3_cache
-    all_profiles = []
-    for f in s3_cache.get('files', []):
-        name = f.get('project_name', '')
-        if name:
-            all_profiles.append({
-                'name': name,
-                'category': f.get('category', 'UNCATEGORIZED'),
-                's3_key': f.get('s3_key', '')
-            })
-    
-    # Find profiles without custom images
-    profiles_without_images = []
-    profiles_with_images = []
-    
-    for profile in all_profiles:
-        cache_key = profile['name'].lower().strip()
-        cached = profile_image_cache.get(cache_key, {})
+    try:
+        # Load caches
+        if not profile_image_cache:
+            load_profile_image_cache()
         
-        if cached.get('image_url') and cached.get('is_custom'):
-            profiles_with_images.append({
-                'name': profile['name'],
-                'category': profile['category'],
-                'image_url': cached['image_url']
-            })
+        if not s3_cache.get('loaded'):
+            load_persisted_cache()
+        
+        # Get all profile names from s3_cache
+        all_profiles = []
+        files = s3_cache.get('files', [])
+        
+        # Also check jobs if files is empty
+        if not files:
+            jobs = s3_cache.get('jobs', [])
+            for job in jobs:
+                name = job.get('project_name') or job.get('brand') or job.get('job_id', '')
+                if name:
+                    all_profiles.append({
+                        'name': name,
+                        'category': job.get('category', 'UNCATEGORIZED'),
+                        's3_key': job.get('s3_key') or job.get('job_id', '')
+                    })
         else:
-            profiles_without_images.append({
-                'name': profile['name'],
-                'category': profile['category'],
-                's3_key': profile['s3_key']
-            })
-    
-    # Sort alphabetically
-    profiles_without_images.sort(key=lambda x: x['name'].lower())
-    profiles_with_images.sort(key=lambda x: x['name'].lower())
-    
-    return jsonify({
-        'success': True,
-        'without_images': profiles_without_images,
-        'with_images': profiles_with_images,
-        'total_profiles': len(all_profiles),
-        'missing_count': len(profiles_without_images),
-        'has_image_count': len(profiles_with_images)
-    })
+            for f in files:
+                name = f.get('project_name', '')
+                if name:
+                    all_profiles.append({
+                        'name': name,
+                        'category': f.get('category', 'UNCATEGORIZED'),
+                        's3_key': f.get('s3_key', '')
+                    })
+        
+        # Find profiles without custom images
+        profiles_without_images = []
+        profiles_with_images = []
+        
+        for profile in all_profiles:
+            cache_key = profile['name'].lower().strip()
+            cached = profile_image_cache.get(cache_key, {})
+            
+            if cached.get('image_url') and cached.get('is_custom'):
+                profiles_with_images.append({
+                    'name': profile['name'],
+                    'category': profile['category'],
+                    'image_url': cached['image_url']
+                })
+            else:
+                profiles_without_images.append({
+                    'name': profile['name'],
+                    'category': profile['category'],
+                    's3_key': profile['s3_key']
+                })
+        
+        # Sort alphabetically
+        profiles_without_images.sort(key=lambda x: x['name'].lower())
+        profiles_with_images.sort(key=lambda x: x['name'].lower())
+        
+        return jsonify({
+            'success': True,
+            'without_images': profiles_without_images,
+            'with_images': profiles_with_images,
+            'total_profiles': len(all_profiles),
+            'missing_count': len(profiles_without_images),
+            'has_image_count': len(profiles_with_images)
+        })
+    except Exception as e:
+        import traceback
+        print(f"Error in get_profiles_without_images: {e}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'without_images': [],
+            'with_images': [],
+            'total_profiles': 0,
+            'missing_count': 0,
+            'has_image_count': 0
+        }), 500
 
 
 @app.route('/api/share', methods=['POST'])

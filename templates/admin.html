@@ -1419,30 +1419,53 @@
         let profileImagesData = { without_images: [], with_images: [] };
         
         async function loadProfileImages() {
+            const listContainer = document.getElementById('imageProfilesList');
+            const withListContainer = document.getElementById('imageProfilesWithList');
+            
+            // Show loading state
+            if (listContainer) listContainer.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>';
+            if (withListContainer) withListContainer.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>';
+            
             try {
                 const response = await fetch('/api/admin/profiles-without-images', { credentials: 'same-origin' });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const data = await response.json();
                 
-                if (data.success) {
-                    profileImagesData = data;
-                    
-                    // Update stats
-                    document.getElementById('imagesTotalProfiles').textContent = data.total_profiles;
-                    document.getElementById('imagesWithCount').textContent = data.has_image_count;
-                    document.getElementById('imagesMissingCount').textContent = data.missing_count;
-                    const coverage = data.total_profiles > 0 ? Math.round((data.has_image_count / data.total_profiles) * 100) : 0;
-                    document.getElementById('imagesCoverage').textContent = coverage + '%';
-                    
-                    // Populate category filter
-                    const categories = [...new Set(data.without_images.map(p => p.category))].sort();
-                    const filter = document.getElementById('imageCategoryFilter');
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load profile images');
+                }
+                
+                profileImagesData = data;
+                
+                // Update stats
+                document.getElementById('imagesTotalProfiles').textContent = data.total_profiles || 0;
+                document.getElementById('imagesWithCount').textContent = data.has_image_count || 0;
+                document.getElementById('imagesMissingCount').textContent = data.missing_count || 0;
+                const coverage = data.total_profiles > 0 ? Math.round((data.has_image_count / data.total_profiles) * 100) : 0;
+                document.getElementById('imagesCoverage').textContent = coverage + '%';
+                
+                // Populate category filter
+                const categories = [...new Set((data.without_images || []).map(p => p.category))].sort();
+                const filter = document.getElementById('imageCategoryFilter');
+                if (filter) {
                     filter.innerHTML = '<option value="">All Categories</option>' + 
                         categories.map(c => `<option value="${c}">${c}</option>`).join('');
-                    
-                    renderImageProfilesList();
                 }
+                
+                renderImageProfilesList();
             } catch (error) {
                 console.error('Failed to load profile images:', error);
+                const errorMsg = error.message || 'Failed to load profile images';
+                if (listContainer) {
+                    listContainer.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--accent-red);">❌ Error: ${errorMsg}</div>`;
+                }
+                if (withListContainer) {
+                    withListContainer.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--accent-red);">❌ Error: ${errorMsg}</div>`;
+                }
             }
         }
         
