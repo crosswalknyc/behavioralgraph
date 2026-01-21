@@ -9429,10 +9429,10 @@
                     tooltip.classList.add('below');
                 }
                 
-                // Small delay before showing for smooth animation
-                requestAnimationFrame(() => {
-                    tooltip.classList.add('visible');
-                });
+                // Show tooltip immediately (removed animation delay for debugging)
+                tooltip.classList.add('visible');
+                console.log('📍 Tooltip positioned at:', left, top, 'visible class added:', tooltip.classList.contains('visible'));
+                console.log('📐 Tooltip computed style - display:', window.getComputedStyle(tooltip).display, 'opacity:', window.getComputedStyle(tooltip).opacity, 'visibility:', window.getComputedStyle(tooltip).visibility);
                 
             }, true);
             
