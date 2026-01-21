@@ -13220,51 +13220,40 @@
                 const response = await fetch(`/api/status/${currentJobId}`);
                 const data = await response.json();
                 if (response.ok) {
-                    // Update regular form status
-                    const statusText = document.getElementById('statusText');
-                    const statusMessage = document.getElementById('statusMessage');
-                    const progressFill = document.getElementById('progressFill');
-                    if (statusText) statusText.textContent = data.project_name || 'Processing...';
-                    if (statusMessage) statusMessage.textContent = data.message || 'In progress';
-                    if (progressFill) progressFill.style.width = data.progress + '%';
+                    // Update all status elements (works for both formView and Custom Analysis)
+                    const statusTextElements = document.querySelectorAll('#statusText');
+                    const statusMessageElements = document.querySelectorAll('#statusMessage');
+                    const progressFillElements = document.querySelectorAll('#progressFill');
                     
-                    // Update custom form status
-                    const customStatusText = document.getElementById('customStatusText');
-                    const customStatusMessage = document.getElementById('customStatusMessage');
-                    const customProgressFill = document.getElementById('customProgressFill');
-                    if (customStatusText) customStatusText.textContent = data.project_name || 'Processing...';
-                    if (customStatusMessage) customStatusMessage.textContent = data.message || 'In progress';
-                    if (customProgressFill) customProgressFill.style.width = data.progress + '%';
+                    statusTextElements.forEach(el => el.textContent = data.project_name || 'Processing...');
+                    statusMessageElements.forEach(el => el.textContent = data.message || 'In progress');
+                    progressFillElements.forEach(el => el.style.width = data.progress + '%');
 
                     if (data.status === 'completed') {
                         clearInterval(pollInterval);
-                        // Update regular form
-                        const statusRunning = document.getElementById('statusRunning');
-                        const statusComplete = document.getElementById('statusComplete');
-                        const viewResultsBtn = document.getElementById('viewResultsBtn');
-                        if (statusRunning) statusRunning.style.display = 'none';
-                        if (statusComplete) statusComplete.style.display = 'block';
-                        if (viewResultsBtn) viewResultsBtn.onclick = () => loadJobResult(currentJobId);
+                        // Update all status displays
+                        const statusRunningElements = document.querySelectorAll('#statusRunning');
+                        const statusCompleteElements = document.querySelectorAll('#statusComplete');
+                        const viewResultsBtnElements = document.querySelectorAll('#viewResultsBtn');
                         
-                        // Update custom form
-                        const customStatusRunning = document.getElementById('customStatusRunning');
-                        const customStatusComplete = document.getElementById('customStatusComplete');
-                        const customViewResultsBtn = document.getElementById('customViewResultsBtn');
-                        if (customStatusRunning) customStatusRunning.style.display = 'none';
-                        if (customStatusComplete) customStatusComplete.style.display = 'block';
-                        if (customViewResultsBtn) customViewResultsBtn.onclick = () => loadJobResult(currentJobId);
+                        statusRunningElements.forEach(el => el.style.display = 'none');
+                        statusCompleteElements.forEach(el => el.style.display = 'block');
+                        viewResultsBtnElements.forEach(btn => {
+                            btn.onclick = () => loadJobResult(currentJobId);
+                        });
                         
                         loadJobs();
                     }
                     if (data.status === 'failed') {
                         clearInterval(pollInterval);
-                        // Update regular form
-                        const statusRunning = document.getElementById('statusRunning');
-                        const statusError = document.getElementById('statusError');
-                        const errorMessage = document.getElementById('errorMessage');
-                        if (statusRunning) statusRunning.style.display = 'none';
-                        if (statusError) statusError.style.display = 'block';
-                        if (errorMessage) errorMessage.textContent = data.error || 'Error';
+                        // Update all error displays
+                        const statusRunningElements = document.querySelectorAll('#statusRunning');
+                        const statusErrorElements = document.querySelectorAll('#statusError');
+                        const errorMessageElements = document.querySelectorAll('#errorMessage');
+                        
+                        statusRunningElements.forEach(el => el.style.display = 'none');
+                        statusErrorElements.forEach(el => el.style.display = 'block');
+                        errorMessageElements.forEach(el => el.textContent = data.error || 'Error');
                         
                         // Update custom form
                         const customStatusRunning = document.getElementById('customStatusRunning');
