@@ -2956,6 +2956,11 @@
         }
         
         /* Key Stats Grid */
+        .insights-tab-summary {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
         .key-stats-grid {
             display: grid;
             grid-template-columns: repeat(6, 1fr);
@@ -2966,6 +2971,32 @@
             border-radius: 8px;
             padding: 0.75rem;
             text-align: center;
+        }
+        .key-stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+        .key-stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .key-stat-value.positive {
+            color: var(--accent-lime);
+        }
+        .key-stat-value.neutral {
+            color: var(--text-primary);
+        }
+        .insights-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .insights-list .insight-item {
+            padding: 0.75rem;
+            background: rgba(255,255,255,0.03);
+            border-radius: 6px;
+            border-left: 3px solid var(--accent-cyan);
         }
         .key-stat-label {
             font-size: 0.7rem;
@@ -7796,98 +7827,66 @@
 
                     <!-- Tabs -->
                     <div class="dashboard-tabs" id="subscriberTabs" style="display: none;">
-                        <button class="tab-btn active" onclick="showSubscriberTab('overview', event)"><span class="tab-icon">📊</span><span class="tab-label">OVERVIEW</span></button>
-                        <button class="tab-btn" onclick="showSubscriberTab('episodes', event)"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
-                        <button class="tab-btn" onclick="showSubscriberTab('timing', event)"><span class="tab-icon">⏱️</span><span class="tab-label">SIGNUP TIMING</span></button>
-                        <button class="tab-btn" onclick="showSubscriberTab('platforms', event)"><span class="tab-icon">📱</span><span class="tab-label">PLATFORMS</span></button>
-                        <button class="tab-btn" onclick="showSubscriberTab('demographics', event)"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
-                        <button class="tab-btn" onclick="showSubscriberTab('trends', event)"><span class="tab-icon">📈</span><span class="tab-label">TRENDS</span></button>
+                        <button class="tab-btn active" onclick="showSubscriberTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
+                        <button class="tab-btn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
+                        <button class="tab-btn" onclick="showSubscriberTab('timing')"><span class="tab-icon">⏱️</span><span class="tab-label">TIMING</span></button>
+                        <button class="tab-btn" onclick="showSubscriberTab('platforms')"><span class="tab-icon">📱</span><span class="tab-label">PLATFORMS</span></button>
+                        <button class="tab-btn" onclick="showSubscriberTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
+                        <button class="tab-btn" onclick="showSubscriberTab('trends')"><span class="tab-icon">📈</span><span class="tab-label">TRENDS</span></button>
                     </div>
 
                     <!-- Tab Content -->
-                    <div id="subscriberTabContent">
-                        <!-- Overview Tab -->
-                        <div id="subscriber-tab-overview" class="dashboard-tab active">
-                            <div class="tab-section">
-                                <h3>📊 Platform Signups Overview</h3>
-                                <p class="section-description">How many people signed up for the platform to watch this show</p>
-                                <div id="subscriberKeyMetrics" class="metrics-grid"></div>
-                            </div>
-                            <div class="tab-section">
-                                <h3>🎯 Signup Breakdown</h3>
-                                <p class="section-description">Attribution of platform signups to this show</p>
-                                <div id="subscriberConversionSummary" class="conversion-cards"></div>
-                            </div>
-                            <div class="tab-section">
-                                <h3>📺 Top Episodes Driving Signups</h3>
-                                <p class="section-description">Episodes that generated the most platform signups</p>
-                                <div id="subscriberTopEpisodes" class="episode-list"></div>
+                    <div class="tab-content" id="subscriberTabContent">
+                        <!-- Insights Tab -->
+                        <div id="subscriber-tab-insights" class="tab-content active">
+                            <div class="insights-tab-summary">
+                                <!-- Key Statistics -->
+                                <div class="insight-card">
+                                    <h3>📊 At-a-Glance Statistics</h3>
+                                    <div id="subscriberKeyStats" class="key-stats-grid"></div>
+                                </div>
+                                
+                                <!-- Key Insights -->
+                                <div class="insight-card">
+                                    <h3>💡 Key Insights</h3>
+                                    <div id="subscriberKeyInsights" class="insights-list"></div>
+                                </div>
+                                
+                                <!-- Top Episodes Summary -->
+                                <div class="insight-card">
+                                    <h3>📺 Top Episodes Driving Signups</h3>
+                                    <div id="subscriberTopEpisodes" class="episode-list"></div>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Episodes Tab -->
-                        <div id="subscriber-tab-episodes" class="dashboard-tab">
-                            <div class="tab-section">
-                                <h3>📺 Episode Performance</h3>
-                                <p class="section-description">Which episodes drove the most platform signups</p>
-                                <div id="subscriberEpisodeAttribution" class="episode-attribution-grid"></div>
-                            </div>
+                        <div id="subscriber-tab-episodes" class="tab-content">
+                            <div class="episode-attribution-grid" id="subscriberEpisodeAttribution"></div>
                         </div>
 
                         <!-- Timing Tab -->
-                        <div id="subscriber-tab-timing" class="dashboard-tab">
-                            <div class="tab-section">
-                                <h3>⏱️ When People Signed Up</h3>
-                                <p class="section-description">How many days after the show was available did people sign up for the platform</p>
-                                <div id="subscriberSignupTimingChart" class="chart-container"></div>
-                            </div>
-                            <div class="tab-section">
-                                <h3>📺 Episode-Level Signup Timing</h3>
-                                <p class="section-description">Signup timing broken down by individual episode</p>
-                                <div id="subscriberEpisodeTiming" class="episode-timing-grid"></div>
-                            </div>
+                        <div id="subscriber-tab-timing" class="tab-content">
+                            <div class="chart-container" id="subscriberSignupTimingChart"></div>
+                            <div class="episode-timing-grid" id="subscriberEpisodeTiming" style="margin-top: 2rem;"></div>
                         </div>
 
                         <!-- Platforms Tab -->
-                        <div id="subscriber-tab-platforms" class="dashboard-tab">
-                            <div class="tab-section">
-                                <h3>📱 Other Platforms They Use</h3>
-                                <p class="section-description">What percentage of show watchers also use competing streaming platforms</p>
-                                <div id="subscriberCompetitivePlatforms" class="platform-list"></div>
-                            </div>
-                            <div class="tab-section">
-                                <h3>🔄 Engagement After Signup</h3>
-                                <p class="section-description">How many times users watched the show after signing up (1st-5th platform touchpoint)</p>
-                                <div id="subscriberTouchpoints" class="touchpoint-chart"></div>
-                            </div>
+                        <div id="subscriber-tab-platforms" class="tab-content">
+                            <div class="platform-list" id="subscriberCompetitivePlatforms"></div>
+                            <div class="touchpoint-chart" id="subscriberTouchpoints" style="margin-top: 2rem;"></div>
                         </div>
 
                         <!-- Demographics Tab -->
-                        <div id="subscriber-tab-demographics" class="dashboard-tab">
-                            <div class="tab-section">
-                                <h3>👥 Age of New Signups</h3>
-                                <p class="section-description">Age distribution of people who signed up for the platform to watch this show</p>
-                                <div id="subscriberAgeChart" class="chart-container"></div>
-                            </div>
-                            <div class="tab-section">
-                                <h3>👥 Gender of New Signups</h3>
-                                <p class="section-description">Gender distribution of people who signed up for the platform to watch this show</p>
-                                <div id="subscriberGenderChart" class="chart-container"></div>
-                            </div>
+                        <div id="subscriber-tab-demographics" class="tab-content">
+                            <div class="chart-container" id="subscriberAgeChart"></div>
+                            <div class="chart-container" id="subscriberGenderChart" style="margin-top: 2rem;"></div>
                         </div>
 
                         <!-- Trends Tab -->
-                        <div id="subscriber-tab-trends" class="dashboard-tab">
-                            <div class="tab-section">
-                                <h3>📈 Monthly Signup Trends</h3>
-                                <p class="section-description">Platform signups over time and how many watched this show</p>
-                                <div id="subscriberMonthlySignupsChart" class="chart-container"></div>
-                            </div>
-                            <div class="tab-section">
-                                <h3>📉 Monthly Churn Trends</h3>
-                                <p class="section-description">Users who stopped visiting the platform over time</p>
-                                <div id="subscriberMonthlyChurnChart" class="chart-container"></div>
-                            </div>
+                        <div id="subscriber-tab-trends" class="tab-content">
+                            <div class="chart-container" id="subscriberMonthlySignupsChart"></div>
+                            <div class="chart-container" id="subscriberMonthlyChurnChart" style="margin-top: 2rem;"></div>
                         </div>
                     </div>
                 </div>
@@ -8392,7 +8391,7 @@
             document.getElementById('subscriberTabs').style.display = 'flex';
             
             // Render all tabs
-            renderSubscriberOverview(data);
+            renderSubscriberInsights(data);
             renderSubscriberEpisodes(data);
             renderSubscriberTiming(data);
             renderSubscriberPlatforms(data);
@@ -8400,25 +8399,9 @@
             renderSubscriberTrends(data);
         }
         
-        function showSubscriberTab(tabName, event) {
-            // Get the button that was clicked
-            let clickedButton = null;
-            if (event && event.target) {
-                clickedButton = event.target.closest('.tab-btn');
-            }
-            if (!clickedButton) {
-                // Fallback: find button by tab name
-                const buttons = document.querySelectorAll('#subscriberTabs .tab-btn');
-                buttons.forEach(btn => {
-                    const onclickAttr = btn.getAttribute('onclick');
-                    if (onclickAttr && onclickAttr.includes(`'${tabName}'`)) {
-                        clickedButton = btn;
-                    }
-                });
-            }
-            
-            // Hide all tabs
-            document.querySelectorAll('#subscriberTabContent .dashboard-tab').forEach(tab => {
+        function showSubscriberTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('#subscriberTabContent .tab-content').forEach(tab => {
                 tab.classList.remove('active');
             });
             
@@ -8432,6 +8415,10 @@
             document.querySelectorAll('#subscriberTabs .tab-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
+            const clickedButton = Array.from(document.querySelectorAll('#subscriberTabs .tab-btn')).find(btn => {
+                const onclickAttr = btn.getAttribute('onclick');
+                return onclickAttr && onclickAttr.includes(`'${tabName}'`);
+            });
             if (clickedButton) {
                 clickedButton.classList.add('active');
             }
@@ -8439,96 +8426,96 @@
             // Scroll to top
             const tabContent = document.getElementById('subscriberTabContent');
             if (tabContent) tabContent.scrollTop = 0;
+            window.scrollTo(0, 0);
         }
         
-        function renderSubscriberOverview(data) {
-            const metricsContainer = document.getElementById('subscriberKeyMetrics');
-            const conversionContainer = document.getElementById('subscriberConversionSummary');
+        function renderSubscriberInsights(data) {
+            const statsContainer = document.getElementById('subscriberKeyStats');
+            const insightsContainer = document.getElementById('subscriberKeyInsights');
             const episodesContainer = document.getElementById('subscriberTopEpisodes');
             
             const platform = data.metadata?.platform || 'the platform';
             const show = data.metadata?.show || 'this show';
-            
-            // Key Metrics - Clearer language
             const metrics = data.key_metrics || {};
+            const summary = data.attribution_summary || {};
+            
             const totalWatchers = metrics.total_watchers?.count || 0;
             const newSignups = metrics.new_signups?.count || 0;
             const cleanSample = metrics.clean_sample?.count || 0;
+            const totalSignups = summary.total?.count || 0;
+            const attributedSignups = summary.attributed?.count || 0;
+            const conversionRate = metrics.clean_conversion_rate || metrics.total_conversion_rate || 'N/A';
             
-            metricsContainer.innerHTML = `
-                <div class="metric-card">
-                    <div class="metric-label">👥 Total Show Watchers</div>
-                    <div class="metric-value">${formatNumber(totalWatchers)}</div>
-                    <div class="metric-sub">People who watched ${show}</div>
+            // Key Statistics
+            statsContainer.innerHTML = `
+                <div class="key-stat-item">
+                    <div class="key-stat-label">Total Show Watchers</div>
+                    <div class="key-stat-value neutral">${formatNumber(totalWatchers)}</div>
                 </div>
-                <div class="metric-card">
-                    <div class="metric-label">🆕 New Platform Signups</div>
-                    <div class="metric-value">${formatNumber(newSignups)}</div>
-                    <div class="metric-sub">People who signed up for ${platform} to watch ${show}</div>
+                <div class="key-stat-item">
+                    <div class="key-stat-label">New Platform Signups</div>
+                    <div class="key-stat-value positive">${formatNumber(newSignups)}</div>
                 </div>
-                <div class="metric-card">
-                    <div class="metric-label">📊 Clean Sample</div>
-                    <div class="metric-value">${formatNumber(cleanSample)}</div>
-                    <div class="metric-sub">First-time viewers (excludes existing subscribers)</div>
+                <div class="key-stat-item">
+                    <div class="key-stat-label">Conversion Rate</div>
+                    <div class="key-stat-value ${conversionRate !== 'N/A' ? 'positive' : 'neutral'}">${conversionRate}</div>
                 </div>
-                <div class="metric-card">
-                    <div class="metric-label">📈 Conversion Rate</div>
-                    <div class="metric-value">${metrics.clean_conversion_rate || metrics.total_conversion_rate || 'N/A'}</div>
-                    <div class="metric-sub">% of viewers who signed up</div>
+                <div class="key-stat-item">
+                    <div class="key-stat-label">Attributed Signups</div>
+                    <div class="key-stat-value positive">${formatNumber(attributedSignups)}</div>
                 </div>
-                <div class="metric-card">
-                    <div class="metric-label">⏱️ Avg Days to Signup</div>
-                    <div class="metric-value">${metrics.avg_days_to_signup || 'N/A'}</div>
-                    <div class="metric-sub">Days from watching to signing up</div>
+                <div class="key-stat-item">
+                    <div class="key-stat-label">Total Signups</div>
+                    <div class="key-stat-value positive">${formatNumber(totalSignups)}</div>
                 </div>
-                <div class="metric-card">
-                    <div class="metric-label">🎯 Total Conversion Rate</div>
-                    <div class="metric-value">${metrics.total_conversion_rate || 'N/A'}</div>
-                    <div class="metric-sub">% of all watchers who signed up</div>
+                <div class="key-stat-item">
+                    <div class="key-stat-label">Clean Sample</div>
+                    <div class="key-stat-value neutral">${formatNumber(cleanSample)}</div>
                 </div>
             `;
             
-            // Conversion Summary - Clearer language
-            const summary = data.attribution_summary || {};
-            const attributed = summary.attributed?.count || 0;
-            const dormant = summary.dormant_reactive?.count || 0;
-            const total = summary.total?.count || 0;
+            // Key Insights - Dynamic bullet points
+            const insights = [];
+            if (newSignups > 0) {
+                insights.push(`<strong>${formatNumber(newSignups)} people</strong> signed up for ${platform} specifically to watch ${show}`);
+            }
+            if (conversionRate !== 'N/A') {
+                insights.push(`<strong>${conversionRate}</strong> of show watchers converted to platform subscribers`);
+            }
+            if (attributedSignups > 0 && totalSignups > 0) {
+                const pct = ((attributedSignups / totalSignups) * 100).toFixed(1);
+                insights.push(`<strong>${pct}%</strong> of signups were directly attributed to watching the show`);
+            }
+            if (metrics.avg_days_to_signup && metrics.avg_days_to_signup !== 'N/A') {
+                insights.push(`Average time from watching to signup: <strong>${metrics.avg_days_to_signup} days</strong>`);
+            }
+            if (totalWatchers > 0 && newSignups > 0) {
+                const reachPct = ((newSignups / totalWatchers) * 100).toFixed(1);
+                insights.push(`Show reached <strong>${formatNumber(totalWatchers)} viewers</strong>, driving <strong>${reachPct}%</strong> to sign up`);
+            }
             
-            conversionContainer.innerHTML = `
-                <div class="conversion-card">
-                    <h4>✅ Attributed Signups</h4>
-                    <div class="conversion-value">${formatNumber(attributed)}</div>
-                    <div class="conversion-pct">${summary.attributed?.percentage || '0%'} of watchers</div>
-                    <div class="conversion-desc">Signed up after watching the show</div>
-                </div>
-                <div class="conversion-card">
-                    <h4>🔄 Dormant to Reactive</h4>
-                    <div class="conversion-value">${formatNumber(dormant)}</div>
-                    <div class="conversion-pct">${summary.dormant_reactive?.percentage || '0%'} of watchers</div>
-                    <div class="conversion-desc">Reactivated existing accounts</div>
-                </div>
-                <div class="conversion-card">
-                    <h4>📊 Total Signups</h4>
-                    <div class="conversion-value">${formatNumber(total)}</div>
-                    <div class="conversion-pct">${summary.total?.percentage || '0%'} of watchers</div>
-                    <div class="conversion-desc">All platform signups from this show</div>
-                </div>
-            `;
+            if (insights.length === 0) {
+                insights.push('No insights available for this show');
+            }
             
-            // Top Episodes - Sorted by signups
+            insightsContainer.innerHTML = insights.map(insight => `
+                <div class="insight-item">${insight}</div>
+            `).join('');
+            
+            // Top Episodes - Sorted by signups, limit to top 5
             const episodes = (data.episode_attribution || []).slice().sort((a, b) => {
                 const aSignups = a.signups || 0;
                 const bSignups = b.signups || 0;
                 return bSignups - aSignups;
-            }).slice(0, 10);
+            }).slice(0, 5);
             
             if (episodes.length === 0) {
                 episodesContainer.innerHTML = '<div class="episode-item"><span>No episode data available</span></div>';
             } else {
                 episodesContainer.innerHTML = episodes.map(ep => `
                     <div class="episode-item">
-                        <span class="episode-number">📺 Episode ${ep.episode}</span>
-                        <span class="episode-signups">${formatNumber(ep.signups)} people signed up</span>
+                        <span class="episode-number">Episode ${ep.episode}</span>
+                        <span class="episode-signups">${formatNumber(ep.signups)} signups</span>
                         <span class="episode-pct">${ep.percentage || 'N/A'}</span>
                     </div>
                 `).join('');
@@ -8537,25 +8524,41 @@
         
         function renderSubscriberEpisodes(data) {
             const container = document.getElementById('subscriberEpisodeAttribution');
-            const episodes = data.episode_attribution || [];
+            const episodes = (data.episode_attribution || []).slice().sort((a, b) => {
+                const aSignups = a.signups || 0;
+                const bSignups = b.signups || 0;
+                return bSignups - aSignups;
+            });
             
-            container.innerHTML = episodes.map(ep => `
-                <div class="episode-card">
-                    <h4>Episode ${ep.episode}</h4>
-                    <div class="episode-metric">
-                        <span class="metric-label">Signups:</span>
-                        <span class="metric-value">${formatNumber(ep.signups)}</span>
+            if (episodes.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No episode data available</p>';
+            } else {
+                container.innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
+                        ${episodes.map(ep => `
+                            <div class="episode-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;">
+                                <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-cyan);">Episode ${ep.episode}</h4>
+                                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-secondary);">Signups:</span>
+                                        <span style="font-weight: 700; color: var(--accent-lime);">${formatNumber(ep.signups)}</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-secondary);">% of Total:</span>
+                                        <span style="color: var(--text-primary);">${ep.percentage || 'N/A'}</span>
+                                    </div>
+                                    ${ep.days_avg ? `
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-secondary);">Avg Days to Signup:</span>
+                                        <span style="color: var(--text-primary);">${ep.days_avg}</span>
+                                    </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
                     </div>
-                    <div class="episode-metric">
-                        <span class="metric-label">% of Total:</span>
-                        <span class="metric-value">${ep.percentage || 'N/A'}</span>
-                    </div>
-                    <div class="episode-metric">
-                        <span class="metric-label">Avg Days:</span>
-                        <span class="metric-value">${ep.days_avg || 'N/A'}</span>
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }
         }
         
         function renderSubscriberTiming(data) {
