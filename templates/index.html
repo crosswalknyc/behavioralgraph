@@ -10925,16 +10925,6 @@
                 return parseNumber(actual) || 0;
             };
             
-            // Filter age data - remove GENDER entries and invalid age ranges
-            const validAgeData = ageData.filter(item => {
-                const ageRange = item.age_range || item.age || '';
-                return ageRange && 
-                       ageRange.toUpperCase() !== 'GENDER' && 
-                       ageRange.toUpperCase() !== 'AGE' &&
-                       ageRange.trim() !== '' &&
-                       (item.count || parseNumber(item.count) > 0);
-            });
-            
             // Age Table
             const ageTableContainer = document.getElementById('subscriberAgeTable');
             if (ageTableContainer) {
