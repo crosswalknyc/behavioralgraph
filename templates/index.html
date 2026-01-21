@@ -6489,9 +6489,7 @@
                     <button class="view-btn active {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" onclick="showProfileIQ()" {% if not has_profile_iq_access %}disabled{% endif %}>🎯 Profile IQ</button>
                     <button class="view-btn {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" onclick="showSubscriberIQ()" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</button>
                     {% if role == 'admin' or role == 'enterprise' %}
-                    <button class="view-btn {% if not has_attribution_iq_access %}disabled{% endif %}" id="talentSearchIQTab" onclick="showTalentSearchIQ()" {% if not has_attribution_iq_access %}disabled{% endif %}>🔍 Talent Search IQ</button>
-                    <button class="view-btn {% if not has_attribution_iq_access %}disabled{% endif %}" id="talentTheaterIQTab" onclick="showTalentTheaterIQ()" {% if not has_attribution_iq_access %}disabled{% endif %}>🎭 Talent Ticket Sale IQ</button>
-                    <button class="view-btn" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
+                    <button class="view-btn" id="customAnalysisBtn" onclick="showCustomAnalysis()">🔧 Custom Analysis</button>
                     {% endif %}
                     {% if role == 'admin' %}
                     <a href="/admin" class="view-btn" id="adminViewBtn">🔐 Admin</a>
