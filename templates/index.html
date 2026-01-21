@@ -9092,11 +9092,11 @@
                     if (sortedCategories.length > 1) {
                         const categoryId = `subscriber-category-${category.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}`;
                         html += `
-                            <div class="category-item open" onclick="toggleSubscriberCategory(this)">
+                            <div class="category-item" onclick="toggleSubscriberCategory(this)">
                                 <span class="arrow">▶</span>
                                 <span class="sidebar-category-name">${category}</span>
                             </div>
-                            <div class="category-children open" id="${categoryId}">
+                            <div class="category-children" id="${categoryId}">
                                 ${showNames.map(showName => {
                                     const files = shows[showName];
                                     const latestFile = files[0]; // Already sorted by date
