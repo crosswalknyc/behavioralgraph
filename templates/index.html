@@ -6823,9 +6823,308 @@
                     </div>
                 </div>
 
-                <!-- Profile IQ Tab Content (bg.py form) - Reuse formView content directly -->
-                <div id="customAnalysisTabContentProfileIQ" class="custom-analysis-tab-content active" style="display: none;">
-                    <!-- This will show formView content via JavaScript -->
+                <!-- Profile IQ Tab Content (bg.py form) - Integrated two-column layout -->
+                <div id="customAnalysisTabContentProfileIQ" class="custom-analysis-tab-content active">
+                    <div class="main-grid">
+                        <div class="card">
+                            <h2>📊 Analysis Parameters</h2>
+                            <form id="analysisForm">
+                                <div class="form-section">
+                                    <div class="form-section-title">Project & Brand</div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label>Project Name</label>
+                                            <input type="text" id="project_name" placeholder="e.g., Nike_Q4" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Category</label>
+                                            <select id="brand_category" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                                <option value="">-- Select Category --</option>
+                                                <optgroup label="📦 BRAND">
+                                                    <option value="ACCESSORIES">Accessories</option>
+                                                    <option value="ACTIVEWEAR">Activewear</option>
+                                                    <option value="AMUSEMENT PARKS">Amusement Parks</option>
+                                                    <option value="APPAREL">Apparel</option>
+                                                    <option value="AUTOMOBILE">Automobile</option>
+                                                    <option value="B2B">B2B</option>
+                                                    <option value="BANKS">Banks</option>
+                                                    <option value="BEAUTY">Beauty</option>
+                                                    <option value="BETTING">Betting</option>
+                                                    <option value="BEVERAGE">Beverage</option>
+                                                    <option value="CASUAL DINING">Casual Dining</option>
+                                                    <option value="CREDIT PROVIDERS">Credit Providers</option>
+                                                    <option value="DIGITAL BANKING">Digital Banking</option>
+                                                    <option value="EVENTS">Events</option>
+                                                    <option value="FOOTWEAR">Footwear</option>
+                                                    <option value="GROCERY">Grocery</option>
+                                                    <option value="INTIMATES">Intimates</option>
+                                                    <option value="JEWELRY">Jewelry</option>
+                                                    <option value="MEMBERSHIP">Membership</option>
+                                                    <option value="NON PROFIT/CHARITY">Non Profit/Charity</option>
+                                                    <option value="PHARMA">Pharma</option>
+                                                    <option value="QSR">QSR</option>
+                                                    <option value="RETAILERS">Retailers</option>
+                                                    <option value="TELECOM">Telecom</option>
+                                                    <option value="TICKETING">Ticketing</option>
+                                                    <option value="TOY">Toy</option>
+                                                    <option value="TRAVEL">Travel</option>
+                                                    <option value="VENUE">Venue</option>
+                                                    <option value="WORKOUT FACILITY">Workout Facility</option>
+                                                </optgroup>
+                                                <optgroup label="🎬 CONTENT">
+                                                    <option value="GAME PLAYERS">Game Players</option>
+                                                    <option value="GAMES">Games</option>
+                                                    <option value="GAMES - PLAYERS">Games - Players</option>
+                                                    <option value="MOVIE THEATER">Movie Theater</option>
+                                                    <option value="PODCAST">Podcast</option>
+                                                    <option value="SERIES - APPLE">Series - Apple</option>
+                                                    <option value="SERIES - FXP">Series - FXP</option>
+                                                    <option value="SERIES - HBO ENTERTAINMENT">Series - HBO Entertainment</option>
+                                                    <option value="SERIES - HBO MAX">Series - HBO Max</option>
+                                                    <option value="SERIES - NETFLIX">Series - Netflix</option>
+                                                    <option value="SERIES - PARAMOUNT TV STUDIOS">Series - Paramount TV Studios</option>
+                                                    <option value="SERIES - SONY">Series - Sony</option>
+                                                    <option value="SERIES - UNIVERSAL TV">Series - Universal TV</option>
+                                                    <option value="SERIES - WBD">Series - WBD</option>
+                                                </optgroup>
+                                                <optgroup label="📊 GEN POP">
+                                                    <option value="GEN POP">Gen Pop</option>
+                                                </optgroup>
+                                                <optgroup label="📺 PLATFORMS">
+                                                    <option value="APP/PLATFORM">App/Platform</option>
+                                                    <option value="BROADCAST/CABLE">Broadcast/Cable</option>
+                                                    <option value="MEDIA">Media</option>
+                                                    <option value="PLATFORMS">Platforms</option>
+                                                    <option value="SEARCH ENGINE/AI">Search Engine/AI</option>
+                                                    <option value="SOCIAL MEDIA">Social Media</option>
+                                                    <option value="STREAMING MUSIC">Streaming Music</option>
+                                                    <option value="STREAMING VIDEO">Streaming Video</option>
+                                                    <option value="VIRTUAL MVPD/FAST">Virtual MVPD/FAST</option>
+                                                </optgroup>
+                                                <optgroup label="⚽ SPORT">
+                                                    <option value="MILB">MiLB</option>
+                                                    <option value="MLB">MLB</option>
+                                                    <option value="NBA">NBA</option>
+                                                    <option value="NFL">NFL</option>
+                                                    <option value="SPORTS ORGANIZATIONS">Sports Organizations</option>
+                                                    <option value="WNBA">WNBA</option>
+                                                </optgroup>
+                                                <optgroup label="⭐ TALENT">
+                                                    <option value="ACTOR">Actor</option>
+                                                    <option value="ATHLETE">Athlete</option>
+                                                    <option value="CREATOR/INFLUENCER">Creator/Influencer</option>
+                                                    <option value="INFLUENCER/CREATOR">Influencer/Creator</option>
+                                                    <option value="EMERGING TALENT">Emerging Talent</option>
+                                                    <option value="HOST/PERSONALITY">Host/Personality</option>
+                                                    <option value="MUSICIAN/BAND">Musician/Band</option>
+                                                    <option value="PODCASTER">Podcaster</option>
+                                                    <option value="POLITICS/ACTIVIST">Politics/Activist</option>
+                                                    <option value="WRITER/DIRECTOR/AUTHOR/ARTIST">Writer/Director/Author/Artist</option>
+                                                </optgroup>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Brands (comma-separated)</label>
+                                        <textarea id="brands" placeholder="nike, adidas, puma" required></textarea>
+                                    </div>
+                                    <div class="form-row">
+                                        <label class="checkbox-group"><input type="checkbox" id="is_genpop" onchange="toggleGenPopOptions()"><span>Updating GenPop?</span></label>
+                                        <label class="checkbox-group" id="purchasers_group"><input type="checkbox" id="purchasers_only"><span>Purchasers Only</span></label>
+                                    </div>
+                                </div>
+
+                                <div class="form-section">
+                                    <div class="form-section-title">Additional Options</div>
+                                    <div class="form-row">
+                                        <label class="checkbox-group"><input type="checkbox" id="include_frequency"><span>Include visit frequency analysis?</span></label>
+                                    </div>
+                                    <div class="form-row">
+                                        <label class="checkbox-group"><input type="checkbox" id="is_listener_watcher" onchange="toggleListenerOptions()"><span>Is this a listener/watcher/player profile?</span></label>
+                                    </div>
+                                    <div id="listenerOptions" style="display: none; margin-left: 1.5rem;">
+                                        <div class="form-group">
+                                            <label>Platform name (as it appears in hostmap)</label>
+                                            <input type="text" id="platform_name" placeholder="e.g., spotify, netflix, hulu">
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <label class="checkbox-group"><input type="checkbox" id="is_update" onchange="toggleUpdateOptions()"><span>Are you updating a previous run?</span></label>
+                                    </div>
+                                    <div id="updateOptions" style="display: none; margin-left: 1.5rem;">
+                                        <div class="form-group">
+                                            <label>Previous CSV file (select from S3)</label>
+                                            <select id="previous_file" style="font-size: 0.8rem;">
+                                                <option value="">Select a previous run...</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-section">
+                                    <div class="form-section-title">Date Ranges</div>
+                                    <div class="form-row" style="margin-bottom: 0.5rem;">
+                                        <label class="checkbox-group"><input type="checkbox" id="same_dates" checked onchange="toggleDateFields()"><span>Same dates for Sample & Behavior</span></label>
+                                    </div>
+                                    <div id="singleDateRange">
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label>Start Date</label>
+                                                <input type="date" id="start_date" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>End Date</label>
+                                                <input type="date" id="end_date" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="separateDateRanges" style="display: none;">
+                                        <div style="font-size: 0.7rem; color: var(--accent-cyan); margin-bottom: 0.5rem;">Sample Group Dates</div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label>Sample Start</label>
+                                                <input type="date" id="sample_start_date">
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Sample End</label>
+                                                <input type="date" id="sample_end_date">
+                                            </div>
+                                        </div>
+                                        <div style="font-size: 0.7rem; color: var(--accent-cyan); margin: 0.5rem 0;">Behavior Study Dates</div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label>Behavior Start</label>
+                                                <input type="date" id="behavior_start_date">
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Behavior End</label>
+                                                <input type="date" id="behavior_end_date">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="collapsible">
+                                    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                                        <span>🎯 Demographic Filters</span><span>▼</span>
+                                    </div>
+                                    <div class="collapsible-content">
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label>Gender</label>
+                                                <select id="gender"><option value="">All</option><option>Female</option><option>Male</option><option>Trans Male</option><option>Trans Female</option><option>Non-binary</option></select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Age</label>
+                                                <select id="age"><option value="">All</option><option>&lt;16</option><option>16-18</option><option>18-20</option><option>21-25</option><option>26-30</option><option>31-40</option><option>41-59</option><option>60+</option></select>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label>Ethnicity</label>
+                                                <select id="ethnicity"><option value="">All</option><option>White</option><option>Black</option><option>LatinX</option><option>Asian</option><option>Other</option></select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Income</label>
+                                                <select id="income"><option value="">All</option><option>$40K - $60K</option><option>$60K - $75K</option><option>$75K - $100K</option><option>$100K - $150K</option><option>$150K - $250K</option><option>$250K+</option></select>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label>Education</label>
+                                                <select id="education"><option value="">All</option><option>Complete College/University</option><option>Completed HS only</option><option>Completed Grad School</option><option>None</option></select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Relationship</label>
+                                                <select id="relationship"><option value="">All</option><option>Single</option><option>In a Relationship</option><option>Married</option><option>Divorced</option><option>Other</option></select>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label>Sexual Orientation</label>
+                                                <select id="sexual_orientation"><option value="">All</option><option>Yes</option><option>No</option><option>Prefer not to say</option></select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Parental Status</label>
+                                                <select id="parental_status"><option value="">All</option><option>Doesn't have Kids</option><option>Has Kids</option><option>Other</option></select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="collapsible">
+                                    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                                        <span>🔧 Safety Check Demographics (Optional)</span><span>▼</span>
+                                    </div>
+                                    <div class="collapsible-content">
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label>Check Gender</label>
+                                                <select id="skew_gender"><option value="">None</option><option>Female</option><option>Male</option><option>Trans Male</option><option>Trans Female</option><option>Non-binary</option></select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Check Age</label>
+                                                <select id="skew_age"><option value="">None</option><option>&lt;16</option><option>16-18</option><option>18-20</option><option>21-25</option><option>26-30</option><option>31-40</option><option>41-59</option><option>60+</option></select>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label>Check Ethnicity</label>
+                                                <select id="skew_ethnicity"><option value="">None</option><option>White</option><option>Black</option><option>LatinX</option><option>Asian</option><option>Other</option></select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Size</label>
+                                                <select id="skew_strength"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary" id="submitBtn">🚀 Run Analysis</button>
+                            </form>
+                        </div>
+
+                        <div class="card">
+                            <h2>📈 Status & Results</h2>
+                            <div id="currentJob" style="display: none;">
+                                <div class="status-panel">
+                                    <div id="statusRunning">
+                                        <div class="spinner"></div>
+                                        <div class="pulse" id="statusText">Processing...</div>
+                                        <div style="font-size: 0.8rem; color: var(--text-secondary);" id="statusMessage">Analysis in progress</div>
+                                        <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width: 0%"></div></div>
+                                    </div>
+                                    <div id="statusComplete" style="display: none;">
+                                        <div style="font-size: 2.5rem;">✅</div>
+                                        <div style="margin: 0.5rem 0;">Complete!</div>
+                                        <button class="btn btn-success" id="viewResultsBtn" style="margin-top: 0.75rem;">📊 View Dashboard</button>
+                                    </div>
+                                    <div id="statusError" style="display: none;">
+                                        <div style="font-size: 2.5rem;">❌</div>
+                                        <div style="color: var(--accent-red);" id="errorMessage"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="noCurrentJob"><div class="empty-state" style="padding: 1.5rem; color: var(--text-secondary);">Submit an analysis to get started</div></div>
+
+                            <div style="margin-top: 1.5rem; margin-bottom: 0.5rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <h3 style="font-size: 0.85rem; color: var(--text-secondary);">Results Library</h3>
+                                    <button class="btn btn-small" style="background: var(--bg-dark); padding: 0.25rem 0.5rem;" onclick="refreshCache(true)" id="refreshBtn" title="Full refresh (re-extracts all categories)">🔄</button>
+                                </div>
+                                <div id="cacheStatus" style="margin-top: 0.25rem;"></div>
+                            </div>
+                            
+                            <div style="margin-bottom: 0.75rem;">
+                                <input type="text" id="searchInput" placeholder="🔍 Search brands..." oninput="filterJobs()" style="margin-bottom: 0.5rem;">
+                                <select id="categoryFilter" onchange="filterJobs()" style="font-size: 0.8rem;">
+                                    <option value="">All Categories</option>
+                                </select>
+                            </div>
+                            
+                            <div id="jobsList" style="max-height: 350px; overflow-y: auto;"><div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Loading...</div></div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Talent Search IQ Tab Content -->
@@ -9587,10 +9886,10 @@
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) {
                 customAnalysisView.style.display = 'flex';
-                // Show formView for Profile IQ tab (default active tab) - reuse original form
+                // Hide formView when showing Custom Analysis (form is now embedded in Profile IQ tab)
                 const formView = document.getElementById('formView');
                 if (formView) {
-                    formView.style.display = 'block';
+                    formView.style.display = 'none';
                 }
             }
         }
@@ -9602,30 +9901,20 @@
             document.getElementById('customAnalysisTabTalentTheater').classList.remove('active');
             
             // Hide all tab contents
-            document.getElementById('customAnalysisTabContentProfileIQ').style.display = 'none';
+            document.getElementById('customAnalysisTabContentProfileIQ').classList.remove('active');
             document.getElementById('customAnalysisTabContentTalentSearch').classList.remove('active');
             document.getElementById('customAnalysisTabContentTalentTheater').classList.remove('active');
-            
-            const formView = document.getElementById('formView');
             
             // Show selected tab
             if (tabName === 'profile-iq') {
                 document.getElementById('customAnalysisTabProfileIQ').classList.add('active');
-                document.getElementById('customAnalysisTabContentProfileIQ').style.display = 'block';
-                // Show formView directly (reuse original form) - it's already in the DOM
-                if (formView) {
-                    formView.style.display = 'block';
-                }
+                document.getElementById('customAnalysisTabContentProfileIQ').classList.add('active');
             } else if (tabName === 'talent-search') {
                 document.getElementById('customAnalysisTabTalentSearch').classList.add('active');
                 document.getElementById('customAnalysisTabContentTalentSearch').classList.add('active');
-                // Hide formView when switching to other tabs
-                if (formView) formView.style.display = 'none';
             } else if (tabName === 'talent-theater') {
                 document.getElementById('customAnalysisTabTalentTheater').classList.add('active');
                 document.getElementById('customAnalysisTabContentTalentTheater').classList.add('active');
-                // Hide formView when switching to other tabs
-                if (formView) formView.style.display = 'none';
             }
         }
         
