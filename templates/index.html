@@ -9368,7 +9368,12 @@
                 }
                 
                 const text = target.getAttribute('data-tooltip');
-                if (!text) return;
+                if (!text) {
+                    console.log('❌ No tooltip text found');
+                    return;
+                }
+                
+                console.log('✅ Showing tooltip:', text.substring(0, 50) + '...');
                 
                 clearTimeout(hideTimeout);
                 
