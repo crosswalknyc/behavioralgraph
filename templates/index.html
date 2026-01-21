@@ -636,6 +636,15 @@
             border-radius: 6px;
             border: 1px solid var(--border-color);
         }
+        .dash-meta-box {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            background: var(--bg-input);
+            padding: 0.35rem 0.6rem;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            margin-top: 0.25rem;
+        }
 
         /* Profile Tabs Bar */
         .profile-tabs-bar {
@@ -7884,6 +7893,9 @@
                             <div class="dash-brand-container">
                                 <div class="dash-brand-box" id="subscriberShowNameHeader"></div>
                                 <div class="dash-date-box" id="subscriberDateRangeHeader"></div>
+                                <div class="dash-meta-box" id="subscriberPlatformHeader" style="display: none;"></div>
+                                <div class="dash-meta-box" id="subscriberExclusionWindow" style="display: none;"></div>
+                                <div class="dash-meta-box" id="subscriberAttributionWindow" style="display: none;"></div>
                             </div>
                         </div>
                     </div>
@@ -8291,6 +8303,62 @@
             }
         }
 
+        async function fetchSubscriberProfileImage(showName) {
+            const imageContainer = document.getElementById('subscriberProfileImage');
+            const img = imageContainer?.querySelector('img');
+            if (!imageContainer || !img) return;
+            
+            // Use lowercase key for cache consistency
+            const cacheKey = showName.toLowerCase().trim();
+            
+            // Reset image state
+            imageContainer.classList.remove('loaded', 'loading');
+            img.src = '';
+            
+            const cachedUrl = profileImageCache[cacheKey];
+            
+            // Check if we have a cached URL
+            if (cachedUrl && cachedUrl !== 'pending' && cachedUrl !== 'none') {
+                console.log(`✅ Using cached image for ${showName}:`, cachedUrl);
+                img.src = cachedUrl;
+                img.onload = () => {
+                    imageContainer.classList.add('loaded');
+                };
+                img.onerror = () => {
+                    console.log(`⚠️ Cached image failed to load for ${showName}`);
+                    imageContainer.classList.remove('loaded');
+                };
+                return;
+            }
+            
+            // Check API for image
+            try {
+                imageContainer.classList.add('loading');
+                const response = await fetch(`/api/profile-image/${encodeURIComponent(showName)}`, { credentials: 'same-origin' });
+                const data = await response.json();
+                
+                if (data.success && data.image_url) {
+                    profileImageCache[cacheKey] = data.image_url;
+                    img.src = data.image_url;
+                    img.onload = () => {
+                        imageContainer.classList.add('loaded');
+                        imageContainer.classList.remove('loading');
+                    };
+                    img.onerror = () => {
+                        imageContainer.classList.remove('loaded', 'loading');
+                        profileImageCache[cacheKey] = 'none';
+                    };
+                } else {
+                    imageContainer.classList.remove('loading');
+                    profileImageCache[cacheKey] = 'none';
+                }
+            } catch (error) {
+                console.log('Could not fetch subscriber profile image:', error);
+                imageContainer.classList.remove('loading');
+                profileImageCache[cacheKey] = 'none';
+            }
+        }
+
         function showFormView() {
             const formView = document.getElementById('formView');
             if (!formView) return; // Not available for this user role
@@ -8488,15 +8556,48 @@
             // Update header
             const showNameHeader = document.getElementById('subscriberShowNameHeader');
             const dateRangeHeader = document.getElementById('subscriberDateRangeHeader');
+            const platformHeader = document.getElementById('subscriberPlatformHeader');
+            const exclusionWindow = document.getElementById('subscriberExclusionWindow');
+            const attributionWindow = document.getElementById('subscriberAttributionWindow');
             const profileInfo = document.getElementById('subscriberProfileInfo');
             const emptyState = document.getElementById('subscriberEmptyState');
             const tabs = document.getElementById('subscriberTabs');
             
+            const metadata = data.metadata || {};
+            const platform = metadata.platform || '';
+            const exclusion = metadata.exclusion_window || '';
+            const attribution = metadata.attribution_window || '';
+            
             if (showNameHeader) showNameHeader.textContent = show ? show.toUpperCase() : 'UNKNOWN SHOW';
-            if (dateRangeHeader) dateRangeHeader.textContent = date_range ? `Date Range: ${date_range}` : '';
+            
+            if (dateRangeHeader) {
+                dateRangeHeader.textContent = date_range ? `Date Range: ${date_range}` : '';
+                dateRangeHeader.style.display = date_range ? 'block' : 'none';
+            }
+            
+            if (platformHeader) {
+                platformHeader.textContent = platform ? `Platform Tracked: ${platform}` : '';
+                platformHeader.style.display = platform ? 'block' : 'none';
+            }
+            
+            if (exclusionWindow) {
+                exclusionWindow.textContent = exclusion ? `Exclusion Window: ${exclusion}` : '';
+                exclusionWindow.style.display = exclusion ? 'block' : 'none';
+            }
+            
+            if (attributionWindow) {
+                attributionWindow.textContent = attribution ? `Attribution Window: ${attribution}` : '';
+                attributionWindow.style.display = attribution ? 'block' : 'none';
+            }
+            
             if (profileInfo) profileInfo.style.display = 'flex';
             if (emptyState) emptyState.style.display = 'none';
             if (tabs) tabs.style.display = 'flex';
+            
+            // Load profile image if available
+            if (show) {
+                fetchSubscriberProfileImage(show);
+            }
             
             // Render all tabs with error handling
             try {
