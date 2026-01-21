@@ -9315,10 +9315,12 @@
         
         function toggleSubscriberGenPop() {
             subscriberGenPopMode = !subscriberGenPopMode;
+            
             const label = document.getElementById('subscriberGenPopToggleLabel');
             if (label) {
                 label.textContent = subscriberGenPopMode ? 'GEN POP' : 'ACTUAL';
             }
+            
             // Re-render demographics to show gen pop projections
             if (currentSubscriberData) {
                 renderSubscriberDemographics(currentSubscriberData);
@@ -10902,12 +10904,12 @@
             const getDisplayValue = (actual, genPop) => {
                 if (subscriberGenPopMode) {
                     // Check if genPop exists and is valid (not empty, not 'N/A')
-                    if (genPop) {
+                    if (genPop !== null && genPop !== undefined && genPop !== '') {
                         const genPopStr = String(genPop).trim();
-                        if (genPopStr !== '' && genPopStr.toUpperCase() !== 'N/A') {
+                        if (genPopStr !== '' && genPopStr.toUpperCase() !== 'N/A' && genPopStr !== '0') {
                             const parsed = parseNumber(genPopStr);
                             // Return parsed value if valid, otherwise fall back to actual
-                            if (parsed !== null && parsed !== undefined && !isNaN(parsed)) {
+                            if (parsed !== null && parsed !== undefined && !isNaN(parsed) && parsed > 0) {
                                 return parsed;
                             }
                         }
