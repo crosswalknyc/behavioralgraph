@@ -8468,9 +8468,29 @@
         }
         
         function renderSubscriberInsights(data) {
+            if (!data) {
+                console.error('❌ No data provided to renderSubscriberInsights');
+                return;
+            }
+            
             const statsContainer = document.getElementById('subscriberKeyStats');
             const insightsContainer = document.getElementById('subscriberKeyInsights');
             const episodesContainer = document.getElementById('subscriberTopEpisodes');
+            
+            if (!statsContainer || !insightsContainer || !episodesContainer) {
+                console.error('❌ Containers not found:', {
+                    stats: !!statsContainer,
+                    insights: !!insightsContainer,
+                    episodes: !!episodesContainer
+                });
+                return;
+            }
+            
+            console.log('📊 Rendering insights with data:', {
+                metadata: data.metadata,
+                key_metrics: data.key_metrics,
+                attribution_summary: data.attribution_summary
+            });
             
             const platform = data.metadata?.platform || 'the platform';
             const show = data.metadata?.show || 'this show';

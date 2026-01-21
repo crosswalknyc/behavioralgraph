@@ -3581,6 +3581,13 @@ def get_subscriber_iq_data(s3_key):
         # Parse subscriber IQ CSV
         parsed = parse_subscriber_iq_csv(csv_content)
         
+        # Log what was parsed
+        print(f"📊 Parsed data summary:")
+        print(f"   Key metrics: {len(parsed.get('key_metrics', {}))} items")
+        print(f"   Episodes: {len(parsed.get('episode_attribution', []))} items")
+        print(f"   Signup timing: {len(parsed.get('signup_timing', []))} items")
+        print(f"   Metadata: {parsed.get('metadata', {})}")
+        
         # Extract show name from filename
         name_without_ext = s3_key.replace('.csv', '')
         match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
@@ -3593,6 +3600,8 @@ def get_subscriber_iq_data(s3_key):
         date_range = parsed['metadata'].get('date_range', '')
         
         print(f"✅ Returning subscriber IQ data for show: {show_name.upper()}")
+        print(f"   Data keys: {list(parsed.keys())}")
+        
         return jsonify({
             'success': True,
             'data': parsed,
