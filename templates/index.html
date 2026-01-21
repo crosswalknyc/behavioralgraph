@@ -8480,7 +8480,7 @@
                             <!-- Timeline Chart -->
                             <div class="tab-section">
                                 <h3>📈 Subscriptions Over Time</h3>
-                                <p class="section-description">Monthly platform signups attributed to this show (from MONTHLY PLATFORM SIGNUPS data). Green bars show monthly signups, yellow line shows cumulative total. This represents people who signed up for the platform each month and watched this show.</p>
+                                <p class="section-description">Monthly platform signups attributed to this show (from MONTHLY PLATFORM SIGNUPS data). Green bars show monthly signups, yellow line shows cumulative total. Yellow triangles (▲) mark estimated episode release dates to show correlation between episode drops and signup spikes.</p>
                                 <div id="subscriberEpisodeTimelineChart" class="chart-container" style="height: 400px; margin-bottom: 2rem;"></div>
                             </div>
                             
@@ -9804,6 +9804,10 @@
                             const date = new Date(year, parseInt(month) - 1);
                             return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
                         });
+                        const monthlyDates = monthlySignups.map(m => {
+                            const [year, month] = m.month.split('-');
+                            return new Date(year, parseInt(month) - 1);
+                        });
                         const monthlySignupCounts = monthlySignups.map(m => parseNumber(m.signups) || 0);
                         
                         // Calculate cumulative
@@ -9811,6 +9815,47 @@
                         const cumulativeMonthly = monthlySignupCounts.map(count => {
                             cumulative += count;
                             return cumulative;
+                        });
+                        
+                        // Map episodes to months - distribute episodes across the timeline
+                        // Since we don't have explicit release dates, we'll distribute them evenly
+                        // across the months where signups occurred
+                        const episodeMarkers = [];
+                        const totalEpisodes = episodes.length;
+                        const totalMonths = months.length;
+                        
+                        if (totalEpisodes > 0 && totalMonths > 0) {
+                            // Distribute episodes across months
+                            // Each episode gets assigned to a month based on its order
+                            episodes.forEach((ep, epIdx) => {
+                                // Calculate which month this episode should be in
+                                // Distribute evenly across the timeline
+                                const monthIndex = Math.floor((epIdx / totalEpisodes) * totalMonths);
+                                
+                                if (monthIndex >= 0 && monthIndex < months.length) {
+                                    episodeMarkers.push({
+                                        episode: ep.episode,
+                                        monthIndex: monthIndex,
+                                        month: months[monthIndex],
+                                        signups: parseNumber(ep.signups) || 0,
+                                        date: monthlyDates[monthIndex]
+                                    });
+                                }
+                            });
+                        }
+                        
+                        // Sort markers by month index
+                        episodeMarkers.sort((a, b) => a.monthIndex - b.monthIndex);
+                        
+                        // Add episode markers as scatter points
+                        const episodeMarkerData = new Array(months.length).fill(null);
+                        const maxCumulative = Math.max(...cumulativeMonthly);
+                        
+                        episodeMarkers.forEach(marker => {
+                            if (marker.monthIndex >= 0 && marker.monthIndex < episodeMarkerData.length) {
+                                // Place marker at the cumulative signup value for that month (on the line)
+                                episodeMarkerData[marker.monthIndex] = cumulativeMonthly[marker.monthIndex];
+                            }
                         });
                         
                         chartConfig = {
@@ -9837,6 +9882,20 @@
                                         borderWidth: 1,
                                         yAxisID: 'y1',
                                         order: 2
+                                    },
+                                    {
+                                        label: 'Episode Releases',
+                                        data: episodeMarkerData,
+                                        type: 'scatter',
+                                        pointRadius: 7,
+                                        pointHoverRadius: 9,
+                                        pointBackgroundColor: 'rgba(255, 193, 7, 0.9)',
+                                        pointBorderColor: 'rgba(255, 193, 7, 1)',
+                                        pointBorderWidth: 2,
+                                        yAxisID: 'y',
+                                        order: 3,
+                                        pointStyle: 'triangle',
+                                        showLine: false
                                     }
                                 ]
                             },
@@ -9862,7 +9921,11 @@
                                         position: 'top',
                                         labels: {
                                             color: '#e6f1ff',
-                                            usePointStyle: true
+                                            usePointStyle: true,
+                                            filter: function(legendItem, chartData) {
+                                                // Show all legends
+                                                return true;
+                                            }
                                         }
                                     },
                                     tooltip: {
@@ -9873,9 +9936,28 @@
                                         borderWidth: 1,
                                         callbacks: {
                                             title: function(context) {
+                                                const dataIndex = context[0].dataIndex;
+                                                // Check if this is an episode marker
+                                                const marker = episodeMarkers.find(m => m.monthIndex === dataIndex);
+                                                if (marker && context[0].datasetIndex === 2) {
+                                                    return `Episode ${marker.episode} Release - ${context[0].label}`;
+                                                }
                                                 return context[0].label;
                                             },
                                             label: function(context) {
+                                                const dataIndex = context.dataIndex;
+                                                const marker = episodeMarkers.find(m => m.monthIndex === dataIndex);
+                                                
+                                                // Episode marker tooltip
+                                                if (marker && context.datasetIndex === 2) {
+                                                    return [
+                                                        `Episode ${marker.episode} released`,
+                                                        `Signups: ${formatNumber(marker.signups)}`,
+                                                        `Month: ${marker.month}`
+                                                    ];
+                                                }
+                                                
+                                                // Regular tooltip
                                                 let label = context.dataset.label || '';
                                                 if (label) {
                                                     label += ': ';
@@ -9884,11 +9966,19 @@
                                                     label += formatNumber(context.parsed.y);
                                                     if (context.datasetIndex === 0) {
                                                         label += ' (cumulative total)';
-                                                    } else {
+                                                    } else if (context.datasetIndex === 1) {
                                                         label += ' (this month)';
                                                     }
                                                 }
                                                 return label;
+                                            },
+                                            filter: function(tooltipItem) {
+                                                // Show episode markers even if they're null in the dataset
+                                                if (tooltipItem.datasetIndex === 2) {
+                                                    const marker = episodeMarkers.find(m => m.monthIndex === tooltipItem.dataIndex);
+                                                    return marker !== undefined;
+                                                }
+                                                return true;
                                             }
                                         }
                                     }
