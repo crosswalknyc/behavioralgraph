@@ -9419,23 +9419,34 @@
                 }
                 
                 // Apply final position - use fixed positioning relative to viewport
-                tooltip.style.cssText = `
+                // Force tooltip to be in a definitely visible position (center of screen for testing)
+                const testLeft = Math.max(50, Math.min(left, window.innerWidth - 350));
+                const testTop = Math.max(50, Math.min(top, window.innerHeight - 150));
+                
+                tooltip.setAttribute('style', `
                     position: fixed !important;
-                    left: ${left}px !important;
-                    top: ${top}px !important;
+                    left: ${testLeft}px !important;
+                    top: ${testTop}px !important;
                     visibility: visible !important;
                     opacity: 1 !important;
                     display: block !important;
                     z-index: 2147483647 !important;
-                    background: linear-gradient(135deg, #1a2a3a, #0d1a2a) !important;
-                    color: #e6f1ff !important;
-                    padding: 0.75rem 1rem !important;
+                    background: #1a2a3a !important;
+                    color: #ffffff !important;
+                    padding: 12px 16px !important;
                     border-radius: 8px !important;
-                    font-size: 0.8rem !important;
+                    font-size: 14px !important;
                     max-width: 300px !important;
-                    box-shadow: 0 8px 32px rgba(0,0,0,0.8), 0 0 0 2px #c8e600 !important;
+                    min-width: 200px !important;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.8), 0 0 0 3px #c8e600 !important;
                     pointer-events: none !important;
-                `;
+                    transform: none !important;
+                    animation: none !important;
+                    transition: none !important;
+                `);
+                
+                console.log('🎨 Tooltip style applied:', tooltip.getAttribute('style'));
+                console.log('📍 Final position:', testLeft, testTop);
                 
                 if (showBelow) {
                     tooltip.classList.add('below');
