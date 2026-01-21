@@ -3524,6 +3524,9 @@ def list_subscriber_iq_files():
     
     try:
         files = []
+        # Load SVOD metadata to get categories
+        svod_metadata = load_svod_metadata()
+        
         paginator = s3_client.get_paginator('list_objects_v2')
         
         for page in paginator.paginate(Bucket=SUBSCRIBER_S3_BUCKET):
@@ -3541,9 +3544,15 @@ def list_subscriber_iq_files():
                 else:
                     show_name = name_without_ext.replace('_', ' ')
                 
+                # Get category from metadata, default to 'SVOD Acquisition'
+                category = 'SVOD Acquisition'
+                if key in svod_metadata and svod_metadata[key].get('category'):
+                    category = svod_metadata[key]['category']
+                
                 files.append({
                     's3_key': key,
                     'show_name': show_name,
+                    'category': category,
                     'size': obj['Size'],
                     'last_modified': obj['LastModified'].isoformat()
                 })

@@ -1412,6 +1412,57 @@
             color: white;
         }
 
+        .sidebar-item {
+            padding: 0.35rem 0.5rem;
+            cursor: pointer;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            border-radius: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .sidebar-item:hover {
+            background: var(--bg-dark);
+            color: var(--text-primary);
+        }
+
+        .sidebar-item-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sidebar-item-count {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            background: rgba(255,255,255,0.1);
+            padding: 0.1rem 0.3rem;
+            border-radius: 10px;
+        }
+
+        .sidebar-category-header {
+            padding: 0.5rem 0.5rem 0.25rem 0.5rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            margin-top: 0.5rem;
+        }
+
+        .sidebar-category-header:first-child {
+            margin-top: 0;
+        }
+
+        .sidebar-category-name {
+            color: var(--accent-cyan);
+        }
+
         .selected-profile-info {
             border-top: 1px solid var(--border-color);
             padding-top: 1rem;
@@ -8331,40 +8382,60 @@
             let html = '';
             
             if (searchTerm) {
-                // Flat list of matches
+                // Flat list of matches (no icons for SVOD)
                 const matches = subscriberProfiles.filter(p => 
-                    p.show_name.toLowerCase().includes(searchTerm)
+                    p.show_name.toLowerCase().includes(searchTerm) ||
+                    (p.category && p.category.toLowerCase().includes(searchTerm))
                 );
                 
                 matches.forEach(file => {
                     html += `
                         <div class="sidebar-item" onclick="selectSubscriberProfile('${file.s3_key}')">
-                            <span class="sidebar-item-icon">📺</span>
                             <span class="sidebar-item-name">${file.show_name}</span>
                         </div>
                     `;
                 });
             } else {
-                // Group by show name (first part before date)
-                const grouped = {};
+                // Group by category, then by show name
+                const byCategory = {};
                 subscriberProfiles.forEach(file => {
-                    const key = file.show_name;
-                    if (!grouped[key]) {
-                        grouped[key] = [];
+                    const category = file.category || 'SVOD Acquisition';
+                    if (!byCategory[category]) {
+                        byCategory[category] = {};
                     }
-                    grouped[key].push(file);
+                    const showName = file.show_name;
+                    if (!byCategory[category][showName]) {
+                        byCategory[category][showName] = [];
+                    }
+                    byCategory[category][showName].push(file);
                 });
                 
-                Object.keys(grouped).sort().forEach(showName => {
-                    const files = grouped[showName];
-                    const latestFile = files[0]; // Already sorted by date
-                    html += `
-                        <div class="sidebar-item" onclick="selectSubscriberProfile('${latestFile.s3_key}')">
-                            <span class="sidebar-item-icon">📺</span>
-                            <span class="sidebar-item-name">${showName}</span>
-                            ${files.length > 1 ? `<span class="sidebar-item-count">${files.length}</span>` : ''}
-                        </div>
-                    `;
+                // Sort categories
+                const sortedCategories = Object.keys(byCategory).sort();
+                
+                sortedCategories.forEach(category => {
+                    const shows = byCategory[category];
+                    const showNames = Object.keys(shows).sort();
+                    
+                    // Only show category header if there are multiple categories
+                    if (sortedCategories.length > 1) {
+                        html += `
+                            <div class="sidebar-category-header">
+                                <span class="sidebar-category-name">${category}</span>
+                            </div>
+                        `;
+                    }
+                    
+                    showNames.forEach(showName => {
+                        const files = shows[showName];
+                        const latestFile = files[0]; // Already sorted by date
+                        html += `
+                            <div class="sidebar-item" onclick="selectSubscriberProfile('${latestFile.s3_key}')">
+                                <span class="sidebar-item-name">${showName}</span>
+                                ${files.length > 1 ? `<span class="sidebar-item-count">${files.length}</span>` : ''}
+                            </div>
+                        `;
+                    });
                 });
             }
             
