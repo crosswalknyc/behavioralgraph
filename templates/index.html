@@ -9338,15 +9338,20 @@
         // Global tooltip system to avoid overflow clipping
         function initGlobalTooltip() {
             const tooltip = document.getElementById('globalTooltip');
-            if (!tooltip) return;
+            if (!tooltip) {
+                console.error('❌ globalTooltip element not found!');
+                return;
+            }
+            console.log('✅ Global tooltip system initialized');
             
             let hideTimeout = null;
             
             // Use event delegation for all .has-tooltip elements
-            document.addEventListener('mouseenter', function(e) {
-                if (!e.target || typeof e.target.closest !== 'function') return;
+            document.addEventListener('mouseover', function(e) {
                 const target = e.target.closest('.has-tooltip');
                 if (!target) return;
+                
+                console.log('🎯 Tooltip target found:', target, 'hover-disabled:', document.body.classList.contains('hover-disabled'));
                 
                 // Check if hover is disabled globally (Profile IQ uses body.hover-disabled)
                 if (document.body.classList.contains('hover-disabled')) {
