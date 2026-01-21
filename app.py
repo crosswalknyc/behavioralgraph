@@ -3198,8 +3198,21 @@ def parse_subscriber_iq_csv(csv_content):
                 parsed['metadata']['show'] = row[1].strip() if len(row) > 1 else ''
             elif 'Platform Tracked' in first_col:
                 parsed['metadata']['platform'] = row[1].strip() if len(row) > 1 else ''
-            elif 'Analysis Date Range' in first_col:
-                parsed['metadata']['date_range'] = row[1].strip() if len(row) > 1 else ''
+            elif 'Analysis Date Range' in first_col or 'Date Range' in first_col or 'date range' in first_col.lower():
+                # Try multiple columns for date range
+                date_range_val = ''
+                if len(row) > 1:
+                    date_range_val = row[1].strip()
+                if not date_range_val and len(row) > 2:
+                    date_range_val = row[2].strip()
+                if not date_range_val and len(row) > 0:
+                    # Sometimes the date might be in the same cell after a colon
+                    if ':' in first_col:
+                        parts = first_col.split(':', 1)
+                        if len(parts) > 1:
+                            date_range_val = parts[1].strip()
+                parsed['metadata']['date_range'] = date_range_val
+                print(f"   📅 Found date range: '{date_range_val}' from row {i}: {row[:3]}")
             elif 'Exclusion Window' in first_col:
                 parsed['metadata']['exclusion_window'] = row[1].strip() if len(row) > 1 else ''
             elif 'Attribution Window' in first_col:
@@ -3439,6 +3452,36 @@ def parse_subscriber_iq_csv(csv_content):
                     'percentage': row[7].strip() if len(row) > 7 else '',
                     'gen_pop': row[8].strip() if len(row) > 8 else ''
                 })
+    
+    # Fallback: If date range wasn't found, try to find it anywhere in the CSV
+    if not parsed['metadata'].get('date_range'):
+        print("   ⚠️ Date range not found via section detection, trying fallback parsing...")
+        for i, row in enumerate(rows):
+            if not row or len(row) < 1:
+                continue
+            first_col = row[0].strip() if row[0] else ''
+            second_col = row[1].strip() if len(row) > 1 and row[1] else ''
+            # Check various date range patterns
+            if ('date range' in first_col.lower() or 'analysis date range' in first_col.lower()) and not parsed['metadata'].get('date_range'):
+                # Try multiple columns
+                date_range_val = ''
+                if len(row) > 1:
+                    date_range_val = row[1].strip()
+                if not date_range_val and len(row) > 2:
+                    date_range_val = row[2].strip()
+                if date_range_val:
+                    parsed['metadata']['date_range'] = date_range_val
+                    print(f"   ✅ Fallback: Found date range: '{date_range_val}'")
+            # Also check if date range is in second column
+            elif ('date range' in second_col.lower() or 'analysis date range' in second_col.lower()) and not parsed['metadata'].get('date_range'):
+                date_range_val = ''
+                if len(row) > 2:
+                    date_range_val = row[2].strip()
+                if not date_range_val and len(row) > 1:
+                    date_range_val = row[1].strip()
+                if date_range_val:
+                    parsed['metadata']['date_range'] = date_range_val
+                    print(f"   ✅ Fallback: Found date range in second column: '{date_range_val}'")
     
     # Fallback: If key metrics weren't found, try to find them anyway
     if not parsed['key_metrics'].get('total_watchers'):

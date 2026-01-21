@@ -9212,6 +9212,10 @@
             const platform = metadata.platform || '';
             const exclusion = metadata.exclusion_window || '';
             const attribution = metadata.attribution_window || '';
+            // Get date range from response or metadata as fallback
+            const dateRange = date_range || metadata.date_range || '';
+            
+            console.log('📅 Date range check:', { date_range, metadata_date_range: metadata.date_range, final: dateRange });
             
             if (showNameHeader) showNameHeader.textContent = show ? show.toUpperCase() : 'UNKNOWN SHOW';
             
@@ -9221,8 +9225,9 @@
             }
             
             if (dateRangeHeader) {
-                dateRangeHeader.textContent = date_range ? `Analysis Date Range: ${date_range}` : '';
-                dateRangeHeader.style.display = date_range ? 'block' : 'none';
+                dateRangeHeader.textContent = dateRange ? `Analysis Date Range: ${dateRange}` : '';
+                dateRangeHeader.style.display = dateRange ? 'block' : 'none';
+                console.log('📅 Setting date range header:', dateRange, 'display:', dateRange ? 'block' : 'none');
             }
             
             if (exclusionWindow) {
