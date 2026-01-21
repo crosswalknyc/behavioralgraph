@@ -1759,9 +1759,24 @@
         .dashboard-tab-content {
             flex: 1;
             min-width: 0;
-            overflow-y: auto;
+            overflow: hidden;
             padding: 0;
             text-align: left;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .subscriber-fixed-header {
+            flex-shrink: 0;
+            background: var(--bg-dark);
+            z-index: 10;
+        }
+        
+        #subscriberTabContent {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            min-height: 0;
         }
         
         .dashboard-empty-state {
@@ -8403,12 +8418,7 @@
                 </div>
                 
                 <!-- Tab Content Area -->
-                <div class="dashboard-tab-content" id="subscriberDashboardContent">
-                    <!-- Profile Tabs Bar -->
-                    <div class="profile-tabs-container" id="subscriberTabsBarContainer" style="display: none;">
-                        <div class="profile-tabs-bar" id="subscriberTabsBar"></div>
-                    </div>
-                    
+                <div class="dashboard-tab-content" id="subscriberDashboardContent" style="display: flex; flex-direction: column; overflow: hidden;">
                     <!-- Empty State -->
                     <div id="subscriberEmptyState" class="dashboard-empty-state">
                         <div class="empty-state-content">
@@ -8418,44 +8428,52 @@
                         </div>
                     </div>
 
-                    <!-- Profile Info Header -->
-                    <div id="subscriberProfileInfo" class="dash-header-row" style="display: none;">
-                        <div class="dash-profile-info">
-                            <div class="dash-profile-image" id="subscriberProfileImage"><img src="" alt="Show" onerror="this.parentElement.classList.remove('loaded')"></div>
-                            <div class="dash-brand-container">
-                                <div class="dash-brand-box" id="subscriberShowNameHeader"></div>
-                                <div class="dash-meta-box" id="subscriberPlatformHeader" style="display: none;"></div>
-                                <div class="dash-meta-box" id="subscriberDateRangeHeader" style="display: none;"></div>
-                                <div class="dash-meta-box" id="subscriberExclusionWindow" style="display: none;"></div>
-                                <div class="dash-meta-box" id="subscriberAttributionWindow" style="display: none;"></div>
+                    <!-- Fixed Header Section -->
+                    <div class="subscriber-fixed-header" style="display: none; flex-shrink: 0;">
+                        <!-- Profile Tabs Bar -->
+                        <div class="profile-tabs-container" id="subscriberTabsBarContainer" style="display: none;">
+                            <div class="profile-tabs-bar" id="subscriberTabsBar"></div>
+                        </div>
+
+                        <!-- Profile Info Header -->
+                        <div id="subscriberProfileInfo" class="dash-header-row">
+                            <div class="dash-profile-info">
+                                <div class="dash-profile-image" id="subscriberProfileImage"><img src="" alt="Show" onerror="this.parentElement.classList.remove('loaded')"></div>
+                                <div class="dash-brand-container">
+                                    <div class="dash-brand-box" id="subscriberShowNameHeader"></div>
+                                    <div class="dash-meta-box" id="subscriberPlatformHeader" style="display: none;"></div>
+                                    <div class="dash-meta-box" id="subscriberDateRangeHeader" style="display: none;"></div>
+                                    <div class="dash-meta-box" id="subscriberExclusionWindow" style="display: none;"></div>
+                                    <div class="dash-meta-box" id="subscriberAttributionWindow" style="display: none;"></div>
+                                </div>
                             </div>
                         </div>
+
+                        <!-- Action Buttons Row -->
+                        <div class="dash-action-row" id="subscriberActionRow" style="justify-content: flex-end; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <div class="display-mode-toggle" id="subscriberUSPercentToggle" onclick="toggleSubscriberUSPercent()" title="Toggle between US % and US #">
+                                <span id="subscriberDisplayModeLabel">US %</span>
+                            </div>
+                            <div class="display-mode-toggle" id="subscriberGenPopToggle" onclick="toggleSubscriberGenPop()" title="Toggle between actual numbers and Gen Pop projections">
+                                <span id="subscriberGenPopToggleLabel">ACTUAL</span>
+                            </div>
+                            <div class="display-mode-toggle" id="subscriberHoverToggle" onclick="toggleSubscriberHover()" title="Toggle hover tooltips on/off">
+                                <span id="subscriberHoverToggleLabel">HOVER ON</span>
+                            </div>
+                        </div>
+
+                        <!-- Tabs -->
+                        <div class="dashboard-tabs" id="subscriberTabs">
+                            <button class="tab-btn active" onclick="showSubscriberTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
+                            <button class="tab-btn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
+                            <button class="tab-btn" onclick="showSubscriberTab('timing')"><span class="tab-icon">⏱️</span><span class="tab-label">TIMING</span></button>
+                            <button class="tab-btn" onclick="showSubscriberTab('platforms')"><span class="tab-icon">📱</span><span class="tab-label">PLATFORMS</span></button>
+                            <button class="tab-btn" onclick="showSubscriberTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
+                            <button class="tab-btn" onclick="showSubscriberTab('trends')"><span class="tab-icon">📈</span><span class="tab-label">TRENDS</span></button>
+                        </div>
                     </div>
 
-                    <!-- Action Buttons Row -->
-                    <div class="dash-action-row" id="subscriberActionRow" style="display: none; justify-content: flex-end; gap: 0.5rem; margin-bottom: 0.5rem;">
-                        <div class="display-mode-toggle" id="subscriberUSPercentToggle" onclick="toggleSubscriberUSPercent()" title="Toggle between US % and US #">
-                            <span id="subscriberDisplayModeLabel">US %</span>
-                        </div>
-                        <div class="display-mode-toggle" id="subscriberGenPopToggle" onclick="toggleSubscriberGenPop()" title="Toggle between actual numbers and Gen Pop projections">
-                            <span id="subscriberGenPopToggleLabel">ACTUAL</span>
-                        </div>
-                        <div class="display-mode-toggle" id="subscriberHoverToggle" onclick="toggleSubscriberHover()" title="Toggle hover tooltips on/off">
-                            <span id="subscriberHoverToggleLabel">HOVER ON</span>
-                        </div>
-                    </div>
-
-                    <!-- Tabs -->
-                    <div class="dashboard-tabs" id="subscriberTabs" style="display: none;">
-                        <button class="tab-btn active" onclick="showSubscriberTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
-                        <button class="tab-btn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
-                        <button class="tab-btn" onclick="showSubscriberTab('timing')"><span class="tab-icon">⏱️</span><span class="tab-label">TIMING</span></button>
-                        <button class="tab-btn" onclick="showSubscriberTab('platforms')"><span class="tab-icon">📱</span><span class="tab-label">PLATFORMS</span></button>
-                        <button class="tab-btn" onclick="showSubscriberTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
-                        <button class="tab-btn" onclick="showSubscriberTab('trends')"><span class="tab-icon">📈</span><span class="tab-label">TRENDS</span></button>
-                    </div>
-
-                    <!-- Tab Content -->
+                    <!-- Scrollable Tab Content -->
                     <div id="subscriberTabContent">
                         <!-- Insights Tab -->
                         <div id="subscriber-tab-insights" class="tab-content active">
@@ -9286,8 +9304,15 @@
             }
             
             const actionRow = document.getElementById('subscriberActionRow');
-            if (profileInfo) profileInfo.style.display = 'flex';
+            const fixedHeader = document.querySelector('.subscriber-fixed-header');
+            const emptyState = document.getElementById('subscriberEmptyState');
+            
+            // Show fixed header section, hide empty state
+            if (fixedHeader) fixedHeader.style.display = 'block';
             if (emptyState) emptyState.style.display = 'none';
+            
+            // Show individual elements within fixed header
+            if (profileInfo) profileInfo.style.display = 'flex';
             if (tabs) tabs.style.display = 'flex';
             if (actionRow) actionRow.style.display = 'flex';
             
@@ -9439,15 +9464,11 @@
                 
                 renderSubscriberTabsBar();
                 
-                // Show empty state
+                // Hide fixed header, show empty state
+                const fixedHeader = document.querySelector('.subscriber-fixed-header');
                 const emptyState = document.getElementById('subscriberEmptyState');
-                const profileInfo = document.getElementById('subscriberProfileInfo');
-                const tabs = document.getElementById('subscriberTabs');
-                const actionRow = document.getElementById('subscriberActionRow');
+                if (fixedHeader) fixedHeader.style.display = 'none';
                 if (emptyState) emptyState.style.display = 'flex';
-                if (profileInfo) profileInfo.style.display = 'none';
-                if (tabs) tabs.style.display = 'none';
-                if (actionRow) actionRow.style.display = 'none';
             } else {
                 // Switch to another tab
                 const newActiveTab = openSubscriberTabs[Math.max(0, tabIndex - 1)];
