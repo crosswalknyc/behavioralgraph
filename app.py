@@ -3165,7 +3165,16 @@ def parse_subscriber_iq_csv(csv_content):
     current_section = None
     current_episode = None
     
-    for i, row in enumerate(rows):
+    # Skip header row if it exists (Category,Count,Count Label,etc.)
+    start_idx = 0
+    if rows and len(rows) > 0:
+        first_row = rows[0]
+        if len(first_row) > 0 and first_row[0].strip().upper() == 'CATEGORY':
+            start_idx = 1
+            print(f"   📋 Skipping header row")
+    
+    for i in range(start_idx, len(rows)):
+        row = rows[i]
         if not row or all(not cell.strip() for cell in row):
             continue
         
@@ -3235,10 +3244,18 @@ def parse_subscriber_iq_csv(csv_content):
         
         # Episode attribution
         elif current_section == 'episode_attribution':
+            # Handle both "Episode X" and just "X" formats
+            episode_num = None
             if first_col.startswith('Episode '):
                 episode_num = first_col.replace('Episode ', '').strip()
+            elif first_col and first_col.strip().isdigit():
+                episode_num = first_col.strip()
+            elif first_col and len(first_col) <= 3 and first_col.replace(' ', '').isdigit():
+                episode_num = first_col.replace(' ', '').strip()
+            
+            if episode_num:
                 signups_val = parse_number(row[1]) if len(row) > 1 else None
-                print(f"   📊 Found Episode {episode_num}: signups={signups_val}")
+                print(f"   📊 Found Episode {episode_num}: signups={signups_val}, row={row[:3]}")
                 parsed['episode_attribution'].append({
                     'episode': episode_num,
                     'signups': signups_val,
@@ -3410,6 +3427,77 @@ def parse_subscriber_iq_csv(csv_content):
                     'percentage': row[7].strip() if len(row) > 7 else '',
                     'gen_pop': row[8].strip() if len(row) > 8 else ''
                 })
+    
+    # Fallback: If key metrics weren't found, try to find them anyway
+    if not parsed['key_metrics'].get('total_watchers'):
+        print("   ⚠️ Key metrics not found via section detection, trying fallback parsing...")
+        for i, row in enumerate(rows):
+            if not row or len(row) < 2:
+                continue
+            first_col = row[0].strip() if row[0] else ''
+            if 'Total Show Watchers' in first_col and not parsed['key_metrics'].get('total_watchers'):
+                parsed['key_metrics']['total_watchers'] = {
+                    'count': parse_number(row[1]) if len(row) > 1 else None,
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                }
+                print(f"   ✅ Fallback: Found Total Show Watchers")
+            elif 'New Platform Signups' in first_col and not parsed['key_metrics'].get('new_signups'):
+                parsed['key_metrics']['new_signups'] = {
+                    'count': parse_number(row[1]) if len(row) > 1 else None,
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                }
+                print(f"   ✅ Fallback: Found New Platform Signups")
+            elif 'Clean Sample' in first_col and not parsed['key_metrics'].get('clean_sample'):
+                parsed['key_metrics']['clean_sample'] = {
+                    'count': parse_number(row[1]) if len(row) > 1 else None,
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                }
+                print(f"   ✅ Fallback: Found Clean Sample")
+    
+    # Fallback: Try to find attribution summary
+    if not parsed['attribution_summary'].get('total'):
+        for i, row in enumerate(rows):
+            if not row or len(row) < 2:
+                continue
+            first_col = row[0].strip() if row[0] else ''
+            if 'TOTAL SIGNUPS' in first_col.upper() and not parsed['attribution_summary'].get('total'):
+                parsed['attribution_summary']['total'] = {
+                    'count': parse_number(row[1]) if len(row) > 1 else None,
+                    'percentage': row[7].strip() if len(row) > 7 else '',
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                }
+                print(f"   ✅ Fallback: Found TOTAL SIGNUPS")
+            elif 'Attributed Signups' in first_col and not parsed['attribution_summary'].get('attributed'):
+                parsed['attribution_summary']['attributed'] = {
+                    'count': parse_number(row[1]) if len(row) > 1 else None,
+                    'percentage': row[7].strip() if len(row) > 7 else '',
+                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                }
+                print(f"   ✅ Fallback: Found Attributed Signups")
+    
+    # Fallback: Try to find episodes if none were found
+    if len(parsed['episode_attribution']) == 0:
+        print("   ⚠️ No episodes found via section detection, trying fallback parsing...")
+        for i, row in enumerate(rows):
+            if not row or len(row) < 2:
+                continue
+            first_col = row[0].strip() if row[0] else ''
+            # Look for rows that start with a number (episode number)
+            if first_col and (first_col.isdigit() or first_col.startswith('Episode ')):
+                episode_num = first_col.replace('Episode ', '').strip() if first_col.startswith('Episode ') else first_col
+                # Check if row[1] looks like a number (signups count)
+                if row[1] and (row[1].strip().replace(',', '').isdigit()):
+                    signups_val = parse_number(row[1])
+                    if signups_val and signups_val > 0:  # Only add if it looks like real data
+                        parsed['episode_attribution'].append({
+                            'episode': episode_num,
+                            'signups': signups_val,
+                            'days_avg': row[3].strip() if len(row) > 3 else '',
+                            'min_avg_view': row[5].strip() if len(row) > 5 else '',
+                            'percentage': row[7].strip() if len(row) > 7 else '',
+                            'gen_pop': row[8].strip() if len(row) > 8 else ''
+                        })
+                        print(f"   ✅ Fallback: Found Episode {episode_num} with {signups_val} signups")
     
     # Log parsing summary
     print(f"📊 Parsing complete:")
