@@ -12967,31 +12967,58 @@
         }
 
         // Form submission
-        document.getElementById('analysisForm').addEventListener('submit', async function(e) {
+        // Use event delegation to handle form submission from both forms
+        document.addEventListener('submit', async function(e) {
+            // Only handle analysisForm submissions
+            if (e.target.id !== 'analysisForm') return;
+            
             e.preventDefault();
             console.log('📋 Form submitted');
             
-            const submitBtn = document.getElementById('submitBtn');
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = 'Checking...';
-
-            const brands = document.getElementById('brands').value.trim();
-            const startDate = document.getElementById('start_date').value;
-            const endDate = document.getElementById('end_date').value;
+            const form = e.target;
+            const formRoot = form.closest('.main-grid') || form;
+            
+            // Find elements within this form's context
+            const submitBtn = formRoot.querySelector('#submitBtn') || document.getElementById('submitBtn');
+            const brandsInput = formRoot.querySelector('#brands') || document.getElementById('brands');
+            const startDateInput = formRoot.querySelector('#start_date') || document.getElementById('start_date');
+            const endDateInput = formRoot.querySelector('#end_date') || document.getElementById('end_date');
+            
+            if (!brandsInput || !startDateInput || !endDateInput) {
+                console.error('Form inputs not found');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '🚀 Run Analysis';
+                }
+                return;
+            }
+            
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = 'Checking...';
+            }
+            
+            const brands = brandsInput.value.trim();
+            const startDate = startDateInput.value;
+            const endDate = endDateInput.value;
             
             console.log('📋 Form values:', { brands, startDate, endDate });
             
             // Validate required fields
             if (!brands) {
                 alert('Please enter at least one brand');
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '🚀 Run Analysis';
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '🚀 Run Analysis';
+                }
                 return;
             }
             if (!startDate || !endDate) {
                 alert('Please select start and end dates');
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '🚀 Run Analysis';
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '🚀 Run Analysis';
+                }
                 return;
             }
 
@@ -13011,8 +13038,10 @@
                 if (cacheData.found && cacheData.type === 'exact') {
                     console.log('✅ Found exact cache match');
                     await loadCachedResult(cacheData.file);
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = '🚀 Run Analysis';
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '🚀 Run Analysis';
+                    }
                     return;
                 }
                 // If only similar files found (different dates), proceed with new analysis
@@ -13021,10 +13050,12 @@
             }
 
             console.log('🚀 Submitting new analysis...');
-            submitBtn.innerHTML = 'Submitting...';
-            await submitNewAnalysis();
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '🚀 Run Analysis';
+            if (submitBtn) submitBtn.innerHTML = 'Submitting...';
+            await submitNewAnalysis(formRoot);
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '🚀 Run Analysis';
+            }
         });
 
         async function loadCachedResult(fileKey) {
@@ -13048,38 +13079,42 @@
             }
         }
 
-        async function submitNewAnalysis() {
-            trackActivity('run_analysis', document.getElementById('brands').value);
+        async function submitNewAnalysis(formRoot) {
+            // Use formRoot context if provided, otherwise fall back to document
+            const getElement = (id) => (formRoot && formRoot.querySelector('#' + id)) || document.getElementById(id);
             
-            const sameDates = document.getElementById('same_dates').checked;
+            const brandsValue = getElement('brands')?.value || '';
+            trackActivity('run_analysis', brandsValue);
+            
+            const sameDates = getElement('same_dates')?.checked || false;
             
             // Get dates based on same/different dates selection
             let sampleStart, sampleEnd, behaviorStart, behaviorEnd;
             if (sameDates) {
-                sampleStart = document.getElementById('start_date').value;
-                sampleEnd = document.getElementById('end_date').value;
+                sampleStart = getElement('start_date')?.value || '';
+                sampleEnd = getElement('end_date')?.value || '';
                 behaviorStart = sampleStart;
                 behaviorEnd = sampleEnd;
             } else {
-                sampleStart = document.getElementById('sample_start_date').value;
-                sampleEnd = document.getElementById('sample_end_date').value;
-                behaviorStart = document.getElementById('behavior_start_date').value;
-                behaviorEnd = document.getElementById('behavior_end_date').value;
+                sampleStart = getElement('sample_start_date')?.value || '';
+                sampleEnd = getElement('sample_end_date')?.value || '';
+                behaviorStart = getElement('behavior_start_date')?.value || '';
+                behaviorEnd = getElement('behavior_end_date')?.value || '';
             }
 
             // Build filters object
             const filters = {};
             const filterFields = ['gender', 'age', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status'];
             filterFields.forEach(field => {
-                const value = document.getElementById(field)?.value;
+                const value = getElement(field)?.value;
                 if (value) filters[field.toUpperCase()] = [value];
             });
 
             // Build skew settings
             const skewSettings = {};
-            const skewStrength = document.getElementById('skew_strength').value;
+            const skewStrength = getElement('skew_strength')?.value || 'medium';
             ['gender', 'age', 'ethnicity'].forEach(field => {
-                const value = document.getElementById('skew_' + field)?.value;
+                const value = getElement('skew_' + field)?.value;
                 if (value) {
                     skewSettings[field.toUpperCase()] = {
                         target: [value],
@@ -13089,11 +13124,11 @@
             });
 
             const formData = {
-                project_name: document.getElementById('project_name').value,
-                brands: document.getElementById('brands').value,
-                brand_category: document.getElementById('brand_category').value || 'GENERAL',
-                is_genpop: document.getElementById('is_genpop').checked,
-                purchasers_only: document.getElementById('purchasers_only').checked,
+                project_name: getElement('project_name')?.value || '',
+                brands: brandsValue,
+                brand_category: getElement('brand_category')?.value || 'GENERAL',
+                is_genpop: getElement('is_genpop')?.checked || false,
+                purchasers_only: getElement('purchasers_only')?.checked || false,
                 sample_start: sampleStart,
                 sample_end: sampleEnd,
                 behavior_start: behaviorStart,
@@ -13101,11 +13136,11 @@
                 filters: filters,
                 skew_settings: skewSettings,
                 // Additional options matching bg.py terminal
-                include_frequency: document.getElementById('include_frequency').checked,
-                is_listener_watcher: document.getElementById('is_listener_watcher').checked,
-                platform_name: document.getElementById('platform_name')?.value || '',
-                is_update: document.getElementById('is_update').checked,
-                previous_file: document.getElementById('previous_file')?.value || ''
+                include_frequency: getElement('include_frequency')?.checked || false,
+                is_listener_watcher: getElement('is_listener_watcher')?.checked || false,
+                platform_name: getElement('platform_name')?.value || '',
+                is_update: getElement('is_update')?.checked || false,
+                previous_file: getElement('previous_file')?.value || ''
             };
 
             console.log('📤 Sending form data:', formData);
@@ -13159,11 +13194,18 @@
         }
 
         function showCurrentJob() {
-            document.getElementById('currentJob').style.display = 'block';
-            document.getElementById('noCurrentJob').style.display = 'none';
-            document.getElementById('statusRunning').style.display = 'block';
-            document.getElementById('statusComplete').style.display = 'none';
-            document.getElementById('statusError').style.display = 'none';
+            // Update status in both formView and Custom Analysis Profile IQ tab
+            const currentJobElements = document.querySelectorAll('#currentJob');
+            const noCurrentJobElements = document.querySelectorAll('#noCurrentJob');
+            const statusRunningElements = document.querySelectorAll('#statusRunning');
+            const statusCompleteElements = document.querySelectorAll('#statusComplete');
+            const statusErrorElements = document.querySelectorAll('#statusError');
+            
+            currentJobElements.forEach(el => el.style.display = 'block');
+            noCurrentJobElements.forEach(el => el.style.display = 'none');
+            statusRunningElements.forEach(el => el.style.display = 'block');
+            statusCompleteElements.forEach(el => el.style.display = 'none');
+            statusErrorElements.forEach(el => el.style.display = 'none');
         }
 
         function startPolling() {
