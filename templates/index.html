@@ -9346,7 +9346,9 @@
                 if (!target) return;
                 
                 // Check if hover is disabled globally (Profile IQ uses body.hover-disabled)
-                if (document.body.classList.contains('hover-disabled')) {
+                const isHoverDisabled = document.body.classList.contains('hover-disabled');
+                if (isHoverDisabled) {
+                    console.log('Hover disabled, not showing tooltip');
                     return;
                 }
                 
