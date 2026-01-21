@@ -8404,6 +8404,11 @@
                 
                 <!-- Tab Content Area -->
                 <div class="dashboard-tab-content" id="subscriberDashboardContent">
+                    <!-- Profile Tabs Bar -->
+                    <div class="profile-tabs-container" id="subscriberTabsBarContainer" style="display: none;">
+                        <div class="profile-tabs-bar" id="subscriberTabsBar"></div>
+                    </div>
+                    
                     <!-- Empty State -->
                     <div id="subscriberEmptyState" class="dashboard-empty-state">
                         <div class="empty-state-content">
@@ -8596,6 +8601,8 @@
         let subscriberHoverEnabled = true; // Default to enabled
         let subscriberProfiles = [];
         let currentSubscriberData = null;
+        let openSubscriberTabs = []; // Array of { id, name, dateRange, data }
+        let activeSubscriberTabId = null;
 
         document.addEventListener('DOMContentLoaded', function() {
             const today = new Date();
@@ -9047,6 +9054,11 @@
             
             // Load subscriber profiles
             loadSubscriberProfiles();
+            
+            // Restore saved tabs if none are currently open
+            if (openSubscriberTabs.length === 0) {
+                restoreSavedSubscriberTabs();
+            }
         }
         
         async function loadSubscriberProfiles() {
@@ -9161,6 +9173,15 @@
         
         async function selectSubscriberProfile(s3Key) {
             console.log('🔍 Selecting subscriber profile:', s3Key);
+            
+            // Check if profile is already open in a tab
+            const existingTab = openSubscriberTabs.find(t => t.id === s3Key);
+            if (existingTab) {
+                // Switch to existing tab
+                switchToSubscriberTab(s3Key);
+                return;
+            }
+            
             try {
                 const url = `/api/subscriber-iq/data/${encodeURIComponent(s3Key)}`;
                 console.log('📡 Fetching from:', url);
@@ -9176,8 +9197,25 @@
                 console.log('📦 Response data:', data);
                 
                 if (data.success) {
-                    currentSubscriberData = data.data;
-                    displaySubscriberData(data);
+                    // Create new tab
+                    const newTab = {
+                        id: s3Key,
+                        name: data.show || 'Unknown Show',
+                        dateRange: data.date_range || '',
+                        data: data
+                    };
+                    
+                    openSubscriberTabs.push(newTab);
+                    activeSubscriberTabId = s3Key;
+                    
+                    // Save to localStorage
+                    saveSubscriberTabs();
+                    
+                    // Render tabs bar
+                    renderSubscriberTabsBar();
+                    
+                    // Display the profile data
+                    displaySubscriberTabData(newTab);
                 } else {
                     console.error('❌ Failed to load subscriber data:', data.error);
                     alert('Failed to load data: ' + (data.error || 'Unknown error'));
@@ -9188,8 +9226,9 @@
             }
         }
         
-        function displaySubscriberData(response) {
-            const { data, show, date_range } = response;
+        function displaySubscriberTabData(tab) {
+            const { id: s3Key, name: show, dateRange, data: response } = tab;
+            const { data, show: showFromData, date_range } = response;
             
             console.log('📊 Displaying subscriber data:', { show, date_range, data });
             
@@ -9208,18 +9247,21 @@
             const emptyState = document.getElementById('subscriberEmptyState');
             const tabs = document.getElementById('subscriberTabs');
             
+            currentSubscriberData = data;
+            
             const metadata = data.metadata || {};
             // Get platform from metadata
             const platform = metadata.platform || '';
             const exclusion = metadata.exclusion_window || '';
             const attribution = metadata.attribution_window || '';
-            // Get date range from response or metadata as fallback
-            const dateRange = date_range || metadata.date_range || '';
+            // Get date range from tab, response, or metadata as fallback
+            const finalDateRange = dateRange || date_range || metadata.date_range || '';
+            const finalShow = show || showFromData || 'UNKNOWN SHOW';
             
-            console.log('📅 Date range check:', { date_range, metadata_date_range: metadata.date_range, final: dateRange });
+            console.log('📅 Date range check:', { dateRange, date_range, metadata_date_range: metadata.date_range, final: finalDateRange });
             console.log('📱 Platform check:', { metadata_platform: metadata.platform, final: platform, metadata_keys: Object.keys(metadata) });
             
-            if (showNameHeader) showNameHeader.textContent = show ? show.toUpperCase() : 'UNKNOWN SHOW';
+            if (showNameHeader) showNameHeader.textContent = finalShow.toUpperCase();
             
             if (platformHeader) {
                 platformHeader.textContent = platform ? `Platform Tracked: ${platform}` : '';
@@ -9228,9 +9270,9 @@
             }
             
             if (dateRangeHeader) {
-                dateRangeHeader.textContent = dateRange ? `Analysis Date Range: ${dateRange}` : '';
-                dateRangeHeader.style.display = dateRange ? 'block' : 'none';
-                console.log('📅 Setting date range header:', dateRange, 'display:', dateRange ? 'block' : 'none');
+                dateRangeHeader.textContent = finalDateRange ? `Analysis Date Range: ${finalDateRange}` : '';
+                dateRangeHeader.style.display = finalDateRange ? 'block' : 'none';
+                console.log('📅 Setting date range header:', finalDateRange, 'display:', finalDateRange ? 'block' : 'none');
             }
             
             if (exclusionWindow) {
@@ -9250,8 +9292,8 @@
             if (actionRow) actionRow.style.display = 'flex';
             
             // Load profile image if available
-            if (show) {
-                fetchSubscriberProfileImage(show);
+            if (finalShow && finalShow !== 'UNKNOWN SHOW') {
+                fetchSubscriberProfileImage(finalShow);
             }
             
             // Render all tabs with error handling
@@ -9276,6 +9318,141 @@
             
             // Ensure the default tab (insights) is shown
             showSubscriberTab('insights');
+        }
+        
+        // Save open subscriber tabs to localStorage
+        function saveSubscriberTabs() {
+            const tabsToSave = openSubscriberTabs.map(t => ({
+                id: t.id,
+                name: t.name,
+                dateRange: t.dateRange
+            }));
+            localStorage.setItem('openSubscriberTabs', JSON.stringify(tabsToSave));
+            localStorage.setItem('activeSubscriberTabId', activeSubscriberTabId || '');
+        }
+        
+        // Load saved subscriber tabs from localStorage
+        function loadSavedSubscriberTabs() {
+            try {
+                const savedTabs = JSON.parse(localStorage.getItem('openSubscriberTabs') || '[]');
+                const savedActiveId = localStorage.getItem('activeSubscriberTabId') || '';
+                return { savedTabs, savedActiveId };
+            } catch (e) {
+                return { savedTabs: [], savedActiveId: '' };
+            }
+        }
+        
+        // Restore saved subscriber tabs on page load
+        async function restoreSavedSubscriberTabs() {
+            const { savedTabs, savedActiveId } = loadSavedSubscriberTabs();
+            if (savedTabs.length === 0) return;
+            
+            // Load each saved tab's data
+            for (const savedTab of savedTabs) {
+                try {
+                    const response = await fetch(`/api/subscriber-iq/data/${encodeURIComponent(savedTab.id)}`, { credentials: 'same-origin' });
+                    if (response.status === 401) continue;
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        openSubscriberTabs.push({
+                            id: savedTab.id,
+                            name: savedTab.name || data.show || 'Unknown Show',
+                            dateRange: savedTab.dateRange || data.date_range || '',
+                            data: data
+                        });
+                    }
+                } catch (e) {
+                    console.log('Could not restore subscriber tab:', savedTab.id);
+                }
+            }
+            
+            // Render tabs bar
+            renderSubscriberTabsBar();
+            
+            // Switch to the previously active tab, or first tab
+            if (openSubscriberTabs.length > 0) {
+                const tabToActivate = openSubscriberTabs.find(t => t.id === savedActiveId) || openSubscriberTabs[0];
+                switchToSubscriberTab(tabToActivate.id);
+            }
+        }
+        
+        // Render subscriber tabs bar
+        function renderSubscriberTabsBar() {
+            const container = document.getElementById('subscriberTabsBar');
+            const containerWrapper = document.getElementById('subscriberTabsBarContainer');
+            
+            if (openSubscriberTabs.length === 0) {
+                if (containerWrapper) containerWrapper.style.display = 'none';
+                if (container) container.innerHTML = '';
+                return;
+            }
+            
+            if (containerWrapper) containerWrapper.style.display = 'block';
+            
+            let html = '';
+            openSubscriberTabs.forEach(tab => {
+                const isActive = tab.id === activeSubscriberTabId;
+                const shortName = tab.name.length > 20 ? tab.name.substring(0, 18) + '...' : tab.name;
+                html += `
+                    <div class="profile-tab ${isActive ? 'active' : ''}" onclick="switchToSubscriberTab('${tab.id}')" title="${tab.name}">
+                        <span class="profile-tab-name">${shortName}</span>
+                        <button class="profile-tab-close" onclick="event.stopPropagation(); closeSubscriberTab('${tab.id}')" title="Close tab">×</button>
+                    </div>
+                `;
+            });
+            
+            if (container) container.innerHTML = html;
+        }
+        
+        // Switch to a subscriber tab
+        function switchToSubscriberTab(s3Key) {
+            const tab = openSubscriberTabs.find(t => t.id === s3Key);
+            if (!tab) return;
+            
+            activeSubscriberTabId = s3Key;
+            
+            // Save active tab to localStorage
+            saveSubscriberTabs();
+            
+            // Update tabs bar
+            renderSubscriberTabsBar();
+            
+            // Display the tab's data
+            displaySubscriberTabData(tab);
+        }
+        
+        // Close a subscriber tab
+        function closeSubscriberTab(s3Key) {
+            const tabIndex = openSubscriberTabs.findIndex(t => t.id === s3Key);
+            if (tabIndex === -1) return;
+            
+            openSubscriberTabs.splice(tabIndex, 1);
+            
+            // Save to localStorage
+            saveSubscriberTabs();
+            
+            if (openSubscriberTabs.length === 0) {
+                // No more tabs - show empty state
+                activeSubscriberTabId = null;
+                currentSubscriberData = null;
+                
+                renderSubscriberTabsBar();
+                
+                // Show empty state
+                const emptyState = document.getElementById('subscriberEmptyState');
+                const profileInfo = document.getElementById('subscriberProfileInfo');
+                const tabs = document.getElementById('subscriberTabs');
+                const actionRow = document.getElementById('subscriberActionRow');
+                if (emptyState) emptyState.style.display = 'flex';
+                if (profileInfo) profileInfo.style.display = 'none';
+                if (tabs) tabs.style.display = 'none';
+                if (actionRow) actionRow.style.display = 'none';
+            } else {
+                // Switch to another tab
+                const newActiveTab = openSubscriberTabs[Math.max(0, tabIndex - 1)];
+                switchToSubscriberTab(newActiveTab.id);
+            }
         }
         
         function showSubscriberTab(tabName) {
