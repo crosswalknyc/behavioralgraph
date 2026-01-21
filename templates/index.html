@@ -10751,8 +10751,20 @@
             
             // Get the value to display (actual or gen pop projection)
             const getDisplayValue = (actual, genPop) => {
-                if (subscriberGenPopMode && genPop) {
-                    return parseNumber(genPop) || 0;
+                if (subscriberGenPopMode) {
+                    // Check if genPop exists and is valid (not empty, not 'N/A')
+                    if (genPop) {
+                        const genPopStr = String(genPop).trim();
+                        if (genPopStr !== '' && genPopStr.toUpperCase() !== 'N/A') {
+                            const parsed = parseNumber(genPopStr);
+                            // Return parsed value if valid, otherwise fall back to actual
+                            if (parsed !== null && parsed !== undefined && !isNaN(parsed)) {
+                                return parsed;
+                            }
+                        }
+                    }
+                    // If no valid genPop, return actual as fallback
+                    return parseNumber(actual) || 0;
                 }
                 return parseNumber(actual) || 0;
             };
