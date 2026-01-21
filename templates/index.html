@@ -8362,41 +8362,76 @@
         }
         
         async function selectSubscriberProfile(s3Key) {
+            console.log('🔍 Selecting subscriber profile:', s3Key);
             try {
-                const response = await fetch(`/api/subscriber-iq/data/${encodeURIComponent(s3Key)}`, { credentials: 'same-origin' });
-                if (response.status === 401) { window.location.href = '/login'; return; }
+                const url = `/api/subscriber-iq/data/${encodeURIComponent(s3Key)}`;
+                console.log('📡 Fetching from:', url);
+                const response = await fetch(url, { credentials: 'same-origin' });
+                console.log('📥 Response status:', response.status);
+                
+                if (response.status === 401) { 
+                    window.location.href = '/login'; 
+                    return; 
+                }
+                
                 const data = await response.json();
+                console.log('📦 Response data:', data);
                 
                 if (data.success) {
                     currentSubscriberData = data.data;
                     displaySubscriberData(data);
                 } else {
-                    console.error('Failed to load subscriber data:', data.error);
+                    console.error('❌ Failed to load subscriber data:', data.error);
+                    alert('Failed to load data: ' + (data.error || 'Unknown error'));
                 }
             } catch (error) {
-                console.error('Error loading subscriber data:', error);
+                console.error('❌ Error loading subscriber data:', error);
+                alert('Error loading data: ' + error.message);
             }
         }
         
         function displaySubscriberData(response) {
             const { data, show, date_range } = response;
             
-            console.log('📊 Displaying subscriber data:', { show, date_range, key_metrics: data.key_metrics });
+            console.log('📊 Displaying subscriber data:', { show, date_range, data });
+            
+            if (!data) {
+                console.error('❌ No data in response');
+                return;
+            }
             
             // Update header
-            document.getElementById('subscriberShowNameHeader').textContent = show.toUpperCase();
-            document.getElementById('subscriberDateRangeHeader').textContent = date_range ? `Date Range: ${date_range}` : '';
-            document.getElementById('subscriberProfileInfo').style.display = 'flex';
-            document.getElementById('subscriberEmptyState').style.display = 'none';
-            document.getElementById('subscriberTabs').style.display = 'flex';
+            const showNameHeader = document.getElementById('subscriberShowNameHeader');
+            const dateRangeHeader = document.getElementById('subscriberDateRangeHeader');
+            const profileInfo = document.getElementById('subscriberProfileInfo');
+            const emptyState = document.getElementById('subscriberEmptyState');
+            const tabs = document.getElementById('subscriberTabs');
             
-            // Render all tabs
-            renderSubscriberInsights(data);
-            renderSubscriberEpisodes(data);
-            renderSubscriberTiming(data);
-            renderSubscriberPlatforms(data);
-            renderSubscriberDemographics(data);
-            renderSubscriberTrends(data);
+            if (showNameHeader) showNameHeader.textContent = show ? show.toUpperCase() : 'UNKNOWN SHOW';
+            if (dateRangeHeader) dateRangeHeader.textContent = date_range ? `Date Range: ${date_range}` : '';
+            if (profileInfo) profileInfo.style.display = 'flex';
+            if (emptyState) emptyState.style.display = 'none';
+            if (tabs) tabs.style.display = 'flex';
+            
+            // Render all tabs with error handling
+            try {
+                renderSubscriberInsights(data);
+            } catch (e) { console.error('Error rendering insights:', e); }
+            try {
+                renderSubscriberEpisodes(data);
+            } catch (e) { console.error('Error rendering episodes:', e); }
+            try {
+                renderSubscriberTiming(data);
+            } catch (e) { console.error('Error rendering timing:', e); }
+            try {
+                renderSubscriberPlatforms(data);
+            } catch (e) { console.error('Error rendering platforms:', e); }
+            try {
+                renderSubscriberDemographics(data);
+            } catch (e) { console.error('Error rendering demographics:', e); }
+            try {
+                renderSubscriberTrends(data);
+            } catch (e) { console.error('Error rendering trends:', e); }
         }
         
         function showSubscriberTab(tabName) {
@@ -8562,11 +8597,21 @@
         }
         
         function renderSubscriberTiming(data) {
+            if (!data) {
+                console.error('❌ No data provided to renderSubscriberTiming');
+                return;
+            }
+            
             // Overview chart
             const timingData = data.signup_timing || [];
             const chartContainer = document.getElementById('subscriberSignupTimingChart');
             
-            if (timingData.length > 0 && chartContainer) {
+            if (!chartContainer) {
+                console.error('❌ Container subscriberSignupTimingChart not found');
+                return;
+            }
+            
+            if (timingData.length > 0) {
                 // Destroy existing chart if it exists
                 if (charts.subscriberSignupTiming) {
                     charts.subscriberSignupTiming.destroy();
@@ -8623,13 +8668,18 @@
             
             // Episode timing
             const container = document.getElementById('subscriberEpisodeTiming');
+            if (!container) {
+                console.error('❌ Container subscriberEpisodeTiming not found');
+                return;
+            }
+            
             const episodeTiming = data.episode_signup_timing || {};
             
             let html = '';
             const episodeKeys = Object.keys(episodeTiming).sort((a, b) => parseInt(a) - parseInt(b));
             
             if (episodeKeys.length === 0) {
-                container.innerHTML = '<p style="color: var(--text-secondary);">No episode timing data available</p>';
+                container.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No episode timing data available</p>';
             } else {
                 episodeKeys.forEach(epNum => {
                     const timings = episodeTiming[epNum];
