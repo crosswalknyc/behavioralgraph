@@ -58,13 +58,15 @@ app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 CORS(app)
 
 # Health check endpoints - register early so they're available immediately
+# These MUST be registered before any heavy imports or initialization
 @app.route('/health')
 @app.route('/healthz')  # Also support /healthz for Render compatibility
 def health_check_root():
     """Root health check endpoint for Render - must be fast and not depend on any initialization."""
-    return 'ok', 200
+    # Return immediately - no processing, no imports, no dependencies
+    return 'ok', 200, {'Content-Type': 'text/plain'}
 
-print("✅ Health check endpoints registered (/health and /healthz)")
+print("✅ Health check endpoints registered (/health and /healthz) - ready for Render")
 
 # Global error handler for API routes - ensures JSON responses
 @app.errorhandler(Exception)
@@ -6155,6 +6157,12 @@ def get_team_members():
 # ============================================================================
 # MAIN
 # ============================================================================
+
+# Print startup completion message
+print("=" * 60)
+print("✅ Flask app fully initialized and ready to serve requests")
+print("✅ Health check available at /health and /healthz")
+print("=" * 60)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

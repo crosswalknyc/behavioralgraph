@@ -31,7 +31,8 @@ ENV PYTHONUNBUFFERED=1
 
 # Run the application
 # Use 1 worker for faster startup, Render will scale if needed
-# --preload loads app before forking (faster for single worker)
 # --access-logfile - logs to stdout
 # --error-logfile - logs to stderr
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:10000", "--workers", "1", "--threads", "2", "--timeout", "120", "--preload", "--access-logfile", "-", "--error-logfile", "-"]
+# Removed --preload for faster startup
+# Reduced timeout to 60s for faster health check response
+CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:10000", "--workers", "1", "--threads", "2", "--timeout", "60", "--access-logfile", "-", "--error-logfile", "-"]
