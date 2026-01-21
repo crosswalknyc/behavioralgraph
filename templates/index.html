@@ -8536,7 +8536,7 @@
                             </div>
                             <div class="tab-section">
                                 <h3>🔄 Engagement After Signup</h3>
-                                <p class="section-description">How many times users watched the show after signing up (1st-5th platform touchpoint)</p>
+                                <p class="section-description">Position of this show in users' viewing sequence after signup. 1st = first watch after signup, 2nd = watched something else first then this show, etc.</p>
                                 <div id="subscriberTouchpoints" class="touchpoint-chart"></div>
                             </div>
                         </div>
@@ -10498,9 +10498,12 @@
                     const totalTouchpoint = touchpoints.find(t => t.touchpoint === 'Total');
                     if (totalTouchpoint) {
                         const totalUsers = parseNumber(totalTouchpoint.users) || 0;
+                        const firstWatch = touchpoints.find(t => t.touchpoint === '1');
+                        const firstWatchUsers = firstWatch ? parseNumber(firstWatch.users) || 0 : 0;
+                        const firstWatchPct = totalUsers > 0 ? ((firstWatchUsers / totalUsers) * 100).toFixed(1) : 0;
                         insights.push({
                             icon: '🔄',
-                            text: `<strong>${formatNumber(totalUsers)} users</strong> engaged with the show after signing up, demonstrating strong post-acquisition retention value.`
+                            text: `<strong>${formatNumber(totalUsers)} users</strong> watched this show within their first 5 platform watches after signup. ${firstWatchPct}% watched it as their first show, demonstrating strong immediate appeal.`
                         });
                     }
                 }
@@ -10546,15 +10549,28 @@
                 touchpointsContainer.innerHTML = '';
                 touchpointsContainer.appendChild(ctx);
                 
-                const labels = touchpoints.map(t => `${t.touchpoint}${t.touchpoint !== 'Total' ? ' Touchpoint' : ''}`);
-                const users = touchpoints.map(t => parseNumber(t.users) || 0);
+                // Filter out 'Total' and sort by touchpoint number
+                const filteredTouchpoints = touchpoints.filter(t => t.touchpoint !== 'Total').sort((a, b) => {
+                    const aNum = parseInt(a.touchpoint) || 0;
+                    const bNum = parseInt(b.touchpoint) || 0;
+                    return aNum - bNum;
+                });
+                
+                const labels = filteredTouchpoints.map(t => {
+                    const num = parseInt(t.touchpoint) || 0;
+                    if (num === 1) return '1st Watch (First after signup)';
+                    if (num === 2) return '2nd Watch';
+                    if (num === 3) return '3rd Watch';
+                    return `${num}th Watch`;
+                });
+                const users = filteredTouchpoints.map(t => parseNumber(t.users) || 0);
                 
                 charts.subscriberTouchpoints = new Chart(ctx, {
                     type: 'line',
                     data: {
                         labels: labels,
                         datasets: [{
-                            label: 'Users Who Watched Show',
+                            label: 'Users Who Watched Show at This Position',
                             data: users,
                             backgroundColor: 'rgba(74, 222, 128, 0.2)',
                             borderColor: 'rgba(74, 222, 128, 1)',
@@ -10568,23 +10584,72 @@
                         plugins: {
                             title: {
                                 display: true,
-                                text: 'Show Engagement After Platform Signup',
-                                color: '#fff'
+                                text: 'Show Position in Users\' First 5 Watches After Signup',
+                                color: '#e6f1ff',
+                                font: {
+                                    size: 16,
+                                    weight: 'bold'
+                                }
                             },
                             legend: {
                                 display: true,
-                                labels: { color: '#fff' }
+                                position: 'top',
+                                labels: { 
+                                    color: '#e6f1ff',
+                                    usePointStyle: true
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(26, 42, 58, 0.95)',
+                                titleColor: '#e6f1ff',
+                                bodyColor: '#e6f1ff',
+                                borderColor: 'rgba(74, 222, 128, 0.5)',
+                                borderWidth: 1,
+                                callbacks: {
+                                    title: function(context) {
+                                        const index = context[0].dataIndex;
+                                        const touchpoint = filteredTouchpoints[index];
+                                        const num = parseInt(touchpoint.touchpoint) || 0;
+                                        if (num === 1) {
+                                            return '1st Watch: First content watched after signup';
+                                        } else {
+                                            return `${num}th Watch: Watched ${num - 1} other show(s) first, then this show`;
+                                        }
+                                    },
+                                    label: function(context) {
+                                        return `Users: ${formatNumber(context.parsed.y)}`;
+                                    }
+                                }
                             }
                         },
                         scales: {
                             y: {
                                 beginAtZero: true,
-                                ticks: { color: '#fff' },
-                                grid: { color: 'rgba(255,255,255,0.1)' }
+                                title: {
+                                    display: true,
+                                    text: 'Number of Users',
+                                    color: '#e6f1ff'
+                                },
+                                ticks: { 
+                                    color: '#a6b3c7',
+                                    callback: function(value) {
+                                        return formatNumber(value);
+                                    }
+                                },
+                                grid: { color: 'rgba(166, 226, 46, 0.1)' }
                             },
                             x: {
-                                ticks: { color: '#fff' },
-                                grid: { color: 'rgba(255,255,255,0.1)' }
+                                title: {
+                                    display: true,
+                                    text: 'Position in Viewing Sequence',
+                                    color: '#e6f1ff'
+                                },
+                                ticks: { 
+                                    color: '#a6b3c7',
+                                    maxRotation: 45,
+                                    minRotation: 45
+                                },
+                                grid: { color: 'rgba(166, 226, 46, 0.1)' }
                             }
                         }
                     }
