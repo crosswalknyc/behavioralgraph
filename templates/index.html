@@ -7262,7 +7262,6 @@
         <div id="dashboardView">
             <!-- Profile Tabs Bar -->
             <div class="profile-tabs-bar" id="profileTabsBar">
-                <span class="profile-tabs-empty" id="profileTabsEmpty">Select a profile to open a tab</span>
             </div>
             
             <!-- Row 1: Profile Info -->
@@ -13827,8 +13826,7 @@
             const emptyText = document.getElementById('profileTabsEmpty');
             
             if (openProfileTabs.length === 0) {
-                if (emptyText) emptyText.style.display = 'block';
-                container.innerHTML = '<span class="profile-tabs-empty" id="profileTabsEmpty">Select a profile to open a tab</span>';
+                container.innerHTML = '';
                 return;
             }
             
