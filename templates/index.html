@@ -10776,29 +10776,67 @@
             let ageData = data.demographics?.age || [];
             let genderData = data.demographics?.gender || [];
             
+            // Gender keywords to identify gender entries
+            const genderKeywords = ['MALE', 'FEMALE', 'GENDER', 'TRANS', 'NON-BINARY', 'NONBINARY', 'NON BINARY', 'PREFER NOT TO SAY', 'OTHER'];
+            
             // Fallback: check if demographics is an array or object with different structure
             if (!ageData.length && !genderData.length && data.demographics) {
                 console.log('⚠️ Trying alternative demographics structure');
                 if (Array.isArray(data.demographics)) {
-                    ageData = data.demographics.filter(d => d.age_range || d.age);
-                    genderData = data.demographics.filter(d => d.gender && !d.age_range && !d.age);
+                    ageData = data.demographics.filter(d => {
+                        const key = (d.age_range || d.age || '').toUpperCase().trim();
+                        return key && !genderKeywords.some(kw => key.includes(kw)) && (/\d/.test(key) || key.includes('-') || key.includes('+'));
+                    });
+                    genderData = data.demographics.filter(d => {
+                        const key = (d.gender || d.age_range || d.age || '').toUpperCase().trim();
+                        return key && genderKeywords.some(kw => key.includes(kw));
+                    });
                 } else if (typeof data.demographics === 'object') {
                     // Check for flat structure
                     const allDemo = Object.values(data.demographics).flat();
-                    ageData = allDemo.filter(d => d.age_range || d.age);
-                    genderData = allDemo.filter(d => d.gender && !d.age_range && !d.age);
+                    ageData = allDemo.filter(d => {
+                        const key = (d.age_range || d.age || '').toUpperCase().trim();
+                        return key && !genderKeywords.some(kw => key.includes(kw)) && (/\d/.test(key) || key.includes('-') || key.includes('+'));
+                    });
+                    genderData = allDemo.filter(d => {
+                        const key = (d.gender || d.age_range || d.age || '').toUpperCase().trim();
+                        return key && genderKeywords.some(kw => key.includes(kw));
+                    });
                 }
             }
             
-            console.log('📊 Final age data:', ageData);
-            console.log('📊 Final gender data:', genderData);
+            // Extract any gender entries that might be in the age array
+            const genderFromAge = [];
+            const cleanedAgeData = [];
+            ageData.forEach(item => {
+                const key = (item.age_range || item.age || '').toUpperCase().trim();
+                if (key && genderKeywords.some(kw => key.includes(kw))) {
+                    // This is actually a gender entry
+                    genderFromAge.push({
+                        gender: item.age_range || item.age || '',
+                        count: item.count || '',
+                        percentage: item.percentage || '',
+                        gen_pop: item.gen_pop || ''
+                    });
+                } else {
+                    cleanedAgeData.push(item);
+                }
+            });
+            
+            // Merge gender data from both sources
+            genderData = [...genderData, ...genderFromAge];
+            ageData = cleanedAgeData;
+            
+            console.log('📊 Final age data (after cleanup):', ageData);
+            console.log('📊 Final gender data (after merge):', genderData);
             
             // Filter age data - remove GENDER entries and invalid age ranges
             const validAgeData = ageData.filter(item => {
                 const ageRange = item.age_range || item.age || '';
+                const ageRangeUpper = ageRange.toUpperCase().trim();
                 return ageRange && 
-                       ageRange.toUpperCase() !== 'GENDER' && 
-                       ageRange.toUpperCase() !== 'AGE' &&
+                       !genderKeywords.some(kw => ageRangeUpper.includes(kw)) &&
+                       ageRangeUpper !== 'AGE' &&
                        ageRange.trim() !== '' &&
                        (item.count || parseNumber(item.count) > 0);
             });
@@ -10816,17 +10854,31 @@
             
             // Group genders case-insensitively and combine their values
             const genderGroups = {};
+            
+            // Normalize gender key function - handles all variations
+            const normalizeGenderKey = (gender) => {
+                const normalized = gender.toUpperCase().trim().replace(/\s+/g, ' ');
+                // Handle common variations
+                if (normalized === 'MALE' || normalized.startsWith('MALE')) return 'MALE';
+                if (normalized === 'FEMALE' || normalized.startsWith('FEMALE')) return 'FEMALE';
+                if (normalized.includes('TRANS') && normalized.includes('MALE')) return 'TRANS MALE';
+                if (normalized.includes('TRANS') && normalized.includes('FEMALE')) return 'TRANS FEMALE';
+                if (normalized.includes('NON') && normalized.includes('BINARY')) return 'NON-BINARY';
+                if (normalized.includes('PREFER') || normalized.includes('NOT') && normalized.includes('SAY')) return 'PREFER NOT TO SAY';
+                return normalized;
+            };
+            
             filteredGenderData.forEach(item => {
                 const gender = item.gender || '';
-                const normalizedKey = gender.toUpperCase().trim();
+                const normalizedKey = normalizeGenderKey(gender);
                 
                 if (!genderGroups[normalizedKey]) {
                     let displayName = gender;
                     if (normalizedKey === 'MALE') displayName = 'Male';
                     else if (normalizedKey === 'FEMALE') displayName = 'Female';
-                    else if (normalizedKey === 'TRANS MALE' || normalizedKey === 'TRANSMALE') displayName = 'Trans Male';
-                    else if (normalizedKey === 'TRANS FEMALE' || normalizedKey === 'TRANSFEMALE') displayName = 'Trans Female';
-                    else if (normalizedKey === 'NON-BINARY' || normalizedKey === 'NONBINARY' || normalizedKey === 'NON BINARY') displayName = 'Non-Binary';
+                    else if (normalizedKey === 'TRANS MALE') displayName = 'Trans Male';
+                    else if (normalizedKey === 'TRANS FEMALE') displayName = 'Trans Female';
+                    else if (normalizedKey === 'NON-BINARY') displayName = 'Non-Binary';
                     else if (normalizedKey === 'PREFER NOT TO SAY') displayName = 'Prefer not to say';
                     else {
                         displayName = gender.split(' ').map(word => 
@@ -10849,6 +10901,8 @@
                 genderGroups[normalizedKey].count += count;
                 genderGroups[normalizedKey].percentage += percentage;
                 genderGroups[normalizedKey].genPop += genPop;
+                
+                console.log(`📊 Aggregating gender: "${gender}" -> "${normalizedKey}" (${displayName}): count=${count}, total now=${genderGroups[normalizedKey].count}`);
             });
             
             // Convert to array and sort by count descending
