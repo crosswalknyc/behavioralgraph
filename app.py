@@ -6540,6 +6540,47 @@ def run_talent_search(job_id):
         update_job_status(job_id, status='failed', error=error_msg)
 
 
+@app.route('/api/admin/fix-csv-genpop', methods=['POST'])
+@requires_auth
+def fix_csv_genpop():
+    """Admin endpoint to fix US Gen Pop Projection for SAMPLE SIZE in all CSV files."""
+    from flask import session
+    user = session.get('user')
+    if user.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Admin access required'}), 403
+    
+    try:
+        import subprocess
+        import sys
+        
+        # Run the fix script
+        script_path = os.path.join(os.path.dirname(__file__), 'fix_s3_csv_genpop.py')
+        result = subprocess.run(
+            [sys.executable, script_path],
+            capture_output=True,
+            text=True,
+            timeout=3600  # 1 hour timeout
+        )
+        
+        if result.returncode == 0:
+            return jsonify({
+                'success': True,
+                'output': result.stdout,
+                'message': 'CSV files fixed successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.stderr or 'Script execution failed',
+                'output': result.stdout
+            }), 500
+            
+    except subprocess.TimeoutExpired:
+        return jsonify({'success': False, 'error': 'Script execution timed out'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 def run_talent_theater(job_id):
     """Run the Talent_Theater_Attribution.py script."""
     try:

@@ -9688,7 +9688,7 @@
             }
         }
 
-        function showFormView() {
+        window.showFormView = function() {
             const formView = document.getElementById('formView');
             if (!formView) return; // Not available for this user role
             formView.style.display = 'block';
@@ -9718,8 +9718,8 @@
         }
 
         
-        // Main IQ Tab Switching
-        function showProfileIQ() {
+        // Main IQ Tab Switching - Ensure functions are in global scope
+        window.showProfileIQ = function() {
             const profileTab = document.getElementById('profileIQTab');
             if (profileTab.classList.contains('disabled')) return;
             
@@ -9751,7 +9751,7 @@
             loadDashboardProfiles();
         }
         
-        function showSubscriberIQ() {
+        window.showSubscriberIQ = function() {
             const subscriberTab = document.getElementById('subscriberIQTab');
             if (subscriberTab.classList.contains('disabled')) return;
             
@@ -9788,7 +9788,7 @@
             }
         }
         
-        function showTalentSearchIQ() {
+        window.showTalentSearchIQ = function() {
             const talentSearchTab = document.getElementById('talentSearchIQTab');
             if (talentSearchTab && talentSearchTab.classList.contains('disabled')) return;
             
@@ -9816,7 +9816,7 @@
             if (customAnalysisView) customAnalysisView.style.display = 'none';
         }
         
-        function showTalentTheaterIQ() {
+        window.showTalentTheaterIQ = function() {
             const talentTheaterTab = document.getElementById('talentTheaterIQTab');
             if (talentTheaterTab && talentTheaterTab.classList.contains('disabled')) return;
             
@@ -9844,7 +9844,7 @@
             if (customAnalysisView) customAnalysisView.style.display = 'none';
         }
         
-        function showCustomAnalysis() {
+        window.showCustomAnalysis = function() {
             const customAnalysisBtn = document.getElementById('customAnalysisBtn');
             if (customAnalysisBtn && customAnalysisBtn.classList.contains('disabled')) return;
             
