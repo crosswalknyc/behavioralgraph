@@ -9393,55 +9393,28 @@
                 tooltip.style.width = tooltipWidth + 'px';
                 const tooltipHeight = tooltip.offsetHeight;
                 
-                // Get element position
-                const rect = target.getBoundingClientRect();
-                
-                // Calculate horizontal position (center on element, but keep in viewport)
-                let left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
-                if (left < 10) left = 10;
-                if (left + tooltipWidth > window.innerWidth - 10) {
-                    left = window.innerWidth - tooltipWidth - 10;
-                }
-                
-                // Calculate vertical position (prefer above, but show below if no room)
-                let top = rect.top - tooltipHeight - 12;
-                let showBelow = false;
-                
-                if (top < 10) {
-                    // Not enough room above, show below
-                    top = rect.bottom + 12;
-                    showBelow = true;
-                }
-                
-                // Make sure tooltip doesn't go off bottom of screen either
-                if (top + tooltipHeight > window.innerHeight - 10) {
-                    top = window.innerHeight - tooltipHeight - 10;
-                }
-                
-                // Apply final position - use fixed positioning relative to viewport
                 // Get element position relative to viewport
                 const rect = target.getBoundingClientRect();
                 
                 // Position tooltip ABOVE the element by default
                 let finalTop = rect.top - 80; // 80px above element
                 let finalLeft = rect.left + (rect.width / 2) - 150; // Center horizontally
+                let showBelow = false;
                 
                 // If tooltip would go off top, show below element instead
                 if (finalTop < 10) {
                     finalTop = rect.bottom + 10;
+                    showBelow = true;
                 }
                 
                 // Keep within horizontal bounds
                 if (finalLeft < 10) finalLeft = 10;
                 if (finalLeft > window.innerWidth - 320) finalLeft = window.innerWidth - 320;
                 
-                // Keep within vertical bounds
+                // Keep within vertical bounds - if still off bottom, force to top
                 if (finalTop > window.innerHeight - 100) {
-                    finalTop = rect.top - 80;
+                    finalTop = Math.max(10, rect.top - 80);
                 }
-                if (finalTop < 10) finalTop = 10;
-                
-                console.log('📍 Element rect:', rect.top, rect.left, 'Final pos:', finalLeft, finalTop);
                 
                 tooltip.setAttribute('style', `
                     position: fixed !important;
