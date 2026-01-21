@@ -304,6 +304,7 @@
 
         #formView { display: none; flex: 1; overflow-y: auto; }
         #customAnalysisView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+        #customAnalysisView.active { display: flex; }
         #dashboardView { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
         #subscriberIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #talentSearchIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
@@ -6812,7 +6813,7 @@
         </div>
 
         <!-- CUSTOM ANALYSIS VIEW -->
-        <div id="customAnalysisView" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+        <div id="customAnalysisView">
             <!-- Custom Analysis Tabs - At the top -->
             <div class="custom-analysis-tabs-container">
                 <div class="custom-analysis-tabs">
