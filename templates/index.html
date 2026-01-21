@@ -10275,6 +10275,13 @@
                 row.style.display = this.checked ? 'block' : 'none';
             }
         });
+        
+        // Talent Search Form Handler (for standalone Talent Search IQ view)
+        document.getElementById('talentSearchForm')?.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const startDate = document.getElementById('talentSearchStartDate').value;
+            const endDate = document.getElementById('talentSearchEndDate').value;
             const searchTermsInput = document.getElementById('talentSearchTerms').value;
             const platformsInput = document.getElementById('talentSearchPlatforms').value;
             const beforeAfterCheck = document.getElementById('talentSearchBeforeAfter').checked;
