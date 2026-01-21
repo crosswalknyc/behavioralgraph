@@ -10905,6 +10905,8 @@
                 genderGroups[normalizedKey].percentage += percentage;
                 genderGroups[normalizedKey].genPop += genPop;
                 
+                // Get displayName from the group (it's already set when the group was created)
+                const displayName = genderGroups[normalizedKey].gender;
                 console.log(`📊 Aggregating gender: "${gender}" -> "${normalizedKey}" (${displayName}): count=${count}, total now=${genderGroups[normalizedKey].count}`);
             });
             
