@@ -8868,23 +8868,38 @@
                     
                     // Only show category header if there are multiple categories
                     if (sortedCategories.length > 1) {
+                        const categoryId = `subscriber-category-${category.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}`;
                         html += `
-                            <div class="sidebar-category-header">
+                            <div class="category-item open" onclick="toggleSubscriberCategory(this)">
+                                <span class="arrow">▶</span>
                                 <span class="sidebar-category-name">${category}</span>
                             </div>
-                        `;
-                    }
-                    
-                    showNames.forEach(showName => {
-                        const files = shows[showName];
-                        const latestFile = files[0]; // Already sorted by date
-                        html += `
-                            <div class="sidebar-item" onclick="selectSubscriberProfile('${latestFile.s3_key}')">
-                                <span class="sidebar-item-name">${showName}</span>
-                                ${files.length > 1 ? `<span class="sidebar-item-count">${files.length}</span>` : ''}
+                            <div class="category-children open" id="${categoryId}">
+                                ${showNames.map(showName => {
+                                    const files = shows[showName];
+                                    const latestFile = files[0]; // Already sorted by date
+                                    return `
+                                        <div class="sidebar-item" onclick="selectSubscriberProfile('${latestFile.s3_key}')">
+                                            <span class="sidebar-item-name">${showName}</span>
+                                            ${files.length > 1 ? `<span class="sidebar-item-count">${files.length}</span>` : ''}
+                                        </div>
+                                    `;
+                                }).join('')}
                             </div>
                         `;
-                    });
+                    } else {
+                        // Single category - no collapsible header needed
+                        showNames.forEach(showName => {
+                            const files = shows[showName];
+                            const latestFile = files[0]; // Already sorted by date
+                            html += `
+                                <div class="sidebar-item" onclick="selectSubscriberProfile('${latestFile.s3_key}')">
+                                    <span class="sidebar-item-name">${showName}</span>
+                                    ${files.length > 1 ? `<span class="sidebar-item-count">${files.length}</span>` : ''}
+                                </div>
+                            `;
+                        });
+                    }
                 });
             }
             
@@ -8893,6 +8908,11 @@
         
         function filterSubscriberProfiles() {
             renderSubscriberProfileTree();
+        }
+        
+        function toggleSubscriberCategory(el) {
+            el.classList.toggle('open');
+            el.nextElementSibling.classList.toggle('open');
         }
         
         async function selectSubscriberProfile(s3Key) {
