@@ -9345,6 +9345,11 @@
                 const target = e.target.closest('.has-tooltip');
                 if (!target) return;
                 
+                // Check if hover is disabled globally (Profile IQ uses body.hover-disabled)
+                if (document.body.classList.contains('hover-disabled')) {
+                    return;
+                }
+                
                 // Check if this is in Subscriber IQ view and hover is disabled
                 const subscriberView = document.getElementById('subscriberIQView');
                 if (subscriberView && window.getComputedStyle(subscriberView).display !== 'none') {
