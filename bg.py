@@ -754,7 +754,7 @@ def connect_snowflake():
     # Try programmatic access token first, fallback to password if needed
     try:
         if token:
-            conn = snowflake.connector.connect(
+        conn = snowflake.connector.connect(
                 user=user,
                 token=token,
                 account=account,
@@ -764,9 +764,9 @@ def connect_snowflake():
                 role=role,
                 insecure_mode=True,   # Bypass SSL certificate validation
                 ocsp_fail_open=True   # Allow connection even if OCSP check fails
-            )
-            if not SILENCE_VERBOSE_OUTPUT:
-                print("✅ Connected using programmatic access token")
+        )
+        if not SILENCE_VERBOSE_OUTPUT:
+            print("✅ Connected using programmatic access token")
         else:
             raise Exception("No token provided, using password auth")
     except Exception as token_error:

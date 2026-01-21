@@ -1652,7 +1652,8 @@ def create_user():
             'allowed_categories': req_data.get('allowed_categories', ['*']),
             'allowed_runs': req_data.get('allowed_runs', ['*']),
             'has_profile_iq_access': req_data.get('has_profile_iq_access', True),
-            'has_subscriber_iq_access': req_data.get('has_subscriber_iq_access', False)
+            'has_subscriber_iq_access': req_data.get('has_subscriber_iq_access', False),
+            'has_attribution_iq_access': req_data.get('has_attribution_iq_access', False)
         }
         
         save_users(data)
@@ -1722,6 +1723,8 @@ def update_user(username):
             user['has_profile_iq_access'] = req_data['has_profile_iq_access']
         if 'has_subscriber_iq_access' in req_data:
             user['has_subscriber_iq_access'] = req_data['has_subscriber_iq_access']
+        if 'has_attribution_iq_access' in req_data:
+            user['has_attribution_iq_access'] = req_data['has_attribution_iq_access']
         
         # Handle username change
         new_username = req_data.get('new_username', '').strip().lower()
@@ -2575,9 +2578,11 @@ def index():
     if role == 'admin':
         has_profile_iq = True
         has_subscriber_iq = True
+        has_attribution_iq = True
     else:
         has_profile_iq = user.get('has_profile_iq_access', True) if user else True  # Default True for backward compat
         has_subscriber_iq = user.get('has_subscriber_iq_access', False) if user else False
+        has_attribution_iq = user.get('has_attribution_iq_access', False) if user else False
     
     return render_template('index.html', 
                            username=session.get('username'),
@@ -2586,7 +2591,8 @@ def index():
                            credits_used=user.get('credits_used', 0) if user else 0,
                            profile_picture=user.get('profile_picture', '') if user else '',
                            has_profile_iq_access=has_profile_iq,
-                           has_subscriber_iq_access=has_subscriber_iq)
+                           has_subscriber_iq_access=has_subscriber_iq,
+                           has_attribution_iq_access=has_attribution_iq)
 
 
 @app.route('/api/health')
@@ -6311,6 +6317,305 @@ def get_team_members():
             })
     
     return jsonify({'success': True, 'members': members})
+
+
+# ============================================================================
+# ATTRIBUTION IQ ENDPOINTS
+# ============================================================================
+
+@app.route('/api/attribution/talent-search', methods=['POST'])
+@requires_auth
+def submit_talent_search():
+    """Submit a Talent Search IQ analysis job."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Check access
+        role = user.get('role', 'user')
+        if role != 'admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+            return jsonify({'error': 'Attribution IQ access required'}), 403
+        
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate required fields
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        search_terms = data.get('search_terms', [])
+        platforms = data.get('platforms', [])
+        
+        if not start_date or not end_date:
+            return jsonify({'error': 'Start date and end date are required'}), 400
+        if not search_terms:
+            return jsonify({'error': 'At least one search term is required'}), 400
+        if not platforms:
+            return jsonify({'error': 'At least one platform is required'}), 400
+        
+        # Create job
+        job_id = str(uuid.uuid4())
+        username = user.get('username', 'unknown')
+        
+        jobs[job_id] = {
+            'job_id': job_id,
+            'username': username,
+            'type': 'talent_search',
+            'status': 'queued',
+            'progress': 0,
+            'message': 'Job queued...',
+            'created_at': datetime.now().isoformat(),
+            'error': None,
+            'result_file': None,
+            'params': {
+                'start_date': start_date,
+                'end_date': end_date,
+                'search_terms': search_terms,
+                'platforms': platforms,
+                'before_common_name': data.get('before_common_name')
+            }
+        }
+        
+        # Start job in background thread
+        thread = threading.Thread(target=run_talent_search, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'job_id': job_id,
+            'message': 'Talent Search IQ job submitted successfully',
+            'status': 'queued'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/attribution/talent-theater', methods=['POST'])
+@requires_auth
+def submit_talent_theater():
+    """Submit a Talent Ticket Sale IQ analysis job."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Check access
+        role = user.get('role', 'user')
+        if role != 'admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+            return jsonify({'error': 'Attribution IQ access required'}), 403
+        
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate required fields
+        talent_name = data.get('talent_name')
+        movie_name = data.get('movie_name')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        
+        if not talent_name:
+            return jsonify({'error': 'Talent name is required'}), 400
+        if not movie_name:
+            return jsonify({'error': 'Movie name is required'}), 400
+        if not start_date or not end_date:
+            return jsonify({'error': 'Start date and end date are required'}), 400
+        
+        # Create job
+        job_id = str(uuid.uuid4())
+        username = user.get('username', 'unknown')
+        
+        jobs[job_id] = {
+            'job_id': job_id,
+            'username': username,
+            'type': 'talent_theater',
+            'status': 'queued',
+            'progress': 0,
+            'message': 'Job queued...',
+            'created_at': datetime.now().isoformat(),
+            'error': None,
+            'result_file': None,
+            'params': {
+                'talent_name': talent_name,
+                'competitive_talents': data.get('competitive_talents', []),
+                'movie_name': movie_name,
+                'start_date': start_date,
+                'end_date': end_date
+            }
+        }
+        
+        # Start job in background thread
+        thread = threading.Thread(target=run_talent_theater, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'job_id': job_id,
+            'message': 'Talent Ticket Sale IQ job submitted successfully',
+            'status': 'queued'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def run_talent_search(job_id):
+    """Run the platform_search_tracker.py script."""
+    try:
+        update_job_status(job_id, progress=10, message='Initializing...')
+        
+        # Import the script module
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'platform_search_tracker.py')
+        if not os.path.exists(script_path):
+            update_job_status(job_id, status='failed', error=f'Script not found: {script_path}')
+            return
+        
+        # Get job parameters
+        job = jobs[job_id]
+        params = job['params']
+        
+        update_job_status(job_id, progress=30, message='Running analysis...')
+        
+        # Import and run the script
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("platform_search_tracker", script_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, os.path.dirname(script_path))
+        spec.loader.exec_module(module)
+        
+        # Prepare parameters for the script
+        from datetime import datetime
+        start_date = datetime.strptime(params['start_date'], '%Y-%m-%d')
+        end_date = datetime.strptime(params['end_date'], '%Y-%m-%d')
+        
+        # Run the analysis function
+        conn = module.connect_snowflake()
+        try:
+            script_params = {
+                'start_date': start_date,
+                'end_date': end_date,
+                'search_terms': params['search_terms'],
+                'platforms': params['platforms'],
+                'before_common_name': params.get('before_common_name')
+            }
+            results = module.run_analysis(conn, script_params)
+            update_job_status(job_id, progress=80, message='Writing output...')
+            
+            # Write output and capture path
+            module.write_output(results)
+            
+            # Find the output file (it's written to Desktop/attribution folder)
+            from pathlib import Path
+            output_folder = Path.home() / "Desktop" / "attribution"
+            if output_folder.exists():
+                # Find the most recent CSV file in the folder
+                csv_files = list(output_folder.glob("platform_search_tracker_*.csv"))
+                if csv_files:
+                    # Sort by modification time, get most recent
+                    csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    output_file = str(csv_files[0])
+                    if os.path.exists(output_file):
+                        jobs[job_id]['result_file'] = output_file
+                        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
+                    else:
+                        update_job_status(job_id, status='failed', error='Output file not found')
+                else:
+                    update_job_status(job_id, status='failed', error='No output file created')
+            else:
+                update_job_status(job_id, status='failed', error='Output folder not found')
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+                
+    except Exception as e:
+        import traceback
+        error_msg = f"Error running talent search: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        update_job_status(job_id, status='failed', error=error_msg)
+
+
+def run_talent_theater(job_id):
+    """Run the Talent_Theater_Attribution.py script."""
+    try:
+        update_job_status(job_id, progress=10, message='Initializing...')
+        
+        # Import the script module
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Talent_Theater_Attribution.py')
+        if not os.path.exists(script_path):
+            update_job_status(job_id, status='failed', error=f'Script not found: {script_path}')
+            return
+        
+        # Get job parameters
+        job = jobs[job_id]
+        params = job['params']
+        
+        update_job_status(job_id, progress=30, message='Running analysis...')
+        
+        # Import and run the script
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("talent_theater_attribution", script_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, os.path.dirname(script_path))
+        spec.loader.exec_module(module)
+        
+        # Prepare parameters for the script
+        from datetime import datetime
+        start_date = datetime.strptime(params['start_date'], '%Y-%m-%d')
+        end_date = datetime.strptime(params['end_date'], '%Y-%m-%d')
+        
+        # Run the query function
+        conn = module.connect_snowflake()
+        try:
+            script_params = {
+                'talent_name': params['talent_name'],
+                'competitive_talents': params.get('competitive_talents', []),
+                'movie_name': params['movie_name'],
+                'start_date': start_date,
+                'end_date': end_date
+            }
+            results = module.run_query(conn, script_params)
+            update_job_status(job_id, progress=80, message='Writing output...')
+            
+            # Write output
+            module.write_output(results, script_params)
+            
+            # Find the output file (it's written to Desktop/attribution folder)
+            from pathlib import Path
+            output_folder = Path.home() / "Desktop" / "attribution"
+            if output_folder.exists():
+                # Find the most recent CSV file matching the pattern (movie_talent_timestamp.csv)
+                # The file name format is: {safe_movie_name}_{safe_talent_name}_{timestamp}.csv
+                csv_files = list(output_folder.glob("*.csv"))
+                # Filter to files that match the pattern (have timestamp at end)
+                csv_files = [f for f in csv_files if len(f.stem.split('_')) >= 3]
+                if csv_files:
+                    # Sort by modification time, get most recent
+                    csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    output_file = str(csv_files[0])
+                    if os.path.exists(output_file):
+                        jobs[job_id]['result_file'] = output_file
+                        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
+                    else:
+                        update_job_status(job_id, status='failed', error='Output file not found')
+                else:
+                    update_job_status(job_id, status='failed', error='No output file created')
+            else:
+                update_job_status(job_id, status='failed', error='Output folder not found')
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+                
+    except Exception as e:
+        import traceback
+        error_msg = f"Error running talent theater: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        update_job_status(job_id, status='failed', error=error_msg)
 
 
 # ============================================================================

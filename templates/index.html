@@ -305,6 +305,7 @@
         #formView { display: none; flex: 1; overflow-y: auto; }
         #dashboardView { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
         #subscriberIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+        #attributionIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         
         /* Disabled view buttons */
         .view-btn.disabled {
@@ -1782,6 +1783,54 @@
             overflow-y: auto;
             overflow-x: hidden;
             min-height: 0;
+        }
+        
+        /* Attribution IQ Styles */
+        .attribution-tabs-container {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0;
+        }
+        
+        .attribution-tabs {
+            display: flex;
+            gap: 0.5rem;
+            padding: 1rem;
+        }
+        
+        .attribution-tab {
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .attribution-tab:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+        }
+        
+        .attribution-tab.active {
+            background: var(--accent-lime);
+            color: var(--bg-dark);
+            border-color: var(--accent-lime);
+            font-weight: 600;
+        }
+        
+        .attribution-tab-content {
+            display: none;
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+        }
+        
+        .attribution-tab-content.active {
+            display: block;
         }
         
         .dashboard-empty-state {
@@ -6389,6 +6438,7 @@
                 <div class="view-toggle" id="iqTabsContainer">
                     <button class="view-btn active {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" onclick="showProfileIQ()" {% if not has_profile_iq_access %}disabled{% endif %}>🎯 Profile IQ</button>
                     <button class="view-btn {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" onclick="showSubscriberIQ()" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</button>
+                    <button class="view-btn {% if not has_attribution_iq_access %}disabled{% endif %}" id="attributionIQTab" onclick="showAttributionIQ()" {% if not has_attribution_iq_access %}disabled{% endif %}>🔍 Attribution IQ</button>
                     <button class="view-btn" id="dashboardViewBtn" onclick="showDashboardView()" style="display: none;">📊 Dashboard</button>
                     {% if role == 'admin' or role == 'enterprise' %}
                     <button class="view-btn" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
@@ -8611,6 +8661,150 @@
             </div>
         </div><!-- End subscriberIQView -->
 
+        <!-- ATTRIBUTION IQ VIEW -->
+        <div id="attributionIQView">
+            <div class="dashboard-layout">
+                <!-- Attribution IQ Tabs -->
+                <div class="attribution-tabs-container">
+                    <div class="attribution-tabs">
+                        <button class="attribution-tab active" onclick="switchAttributionTab('talent-search')" id="attributionTabTalentSearch">
+                            🔍 Talent Search IQ
+                        </button>
+                        <button class="attribution-tab" onclick="switchAttributionTab('talent-theater')" id="attributionTabTalentTheater">
+                            🎭 Talent Ticket Sale IQ
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Talent Search IQ Tab -->
+                <div id="attributionTabContentTalentSearch" class="attribution-tab-content active">
+                    <div class="card">
+                        <h2>🔍 Talent Search IQ</h2>
+                        <p class="section-description">Track search terms across platforms to measure search attribution</p>
+                        
+                        <form id="talentSearchForm">
+                            <div class="form-section">
+                                <div class="form-section-title">Analysis Parameters</div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Study Start Date</label>
+                                        <input type="date" id="talentSearchStartDate" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Study End Date</label>
+                                        <input type="date" id="talentSearchEndDate" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Search Terms (comma-separated)</label>
+                                        <input type="text" id="talentSearchTerms" placeholder="e.g., Taylor Swift, Swift" required>
+                                        <small>Enter search terms separated by commas</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Platforms (comma-separated)</label>
+                                        <input type="text" id="talentSearchPlatforms" placeholder="e.g., YouTube, Google" required>
+                                        <small>Enter platforms to search separated by commas</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>
+                                            <input type="checkbox" id="talentSearchBeforeAfter">
+                                            Check before/after search?
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row" id="talentSearchBeforeAfterRow" style="display: none;">
+                                    <div class="form-group">
+                                        <label>Common Name (before search)</label>
+                                        <input type="text" id="talentSearchBeforeCommonName" placeholder="Enter common_name that should come before the search">
+                                    </div>
+                                </div>
+                                
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-primary">Run Analysis</button>
+                                </div>
+                            </div>
+                        </form>
+                        
+                        <!-- Job Status Display -->
+                        <div id="talentSearchJobStatus" style="display: none; margin-top: 2rem;">
+                            <div class="card">
+                                <h3>Job Status</h3>
+                                <div id="talentSearchJobStatusContent"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Talent Ticket Sale IQ Tab -->
+                <div id="attributionTabContentTalentTheater" class="attribution-tab-content">
+                    <div class="card">
+                        <h2>🎭 Talent Ticket Sale IQ</h2>
+                        <p class="section-description">Track how many users went from talent searches to theater platforms</p>
+                        
+                        <form id="talentTheaterForm">
+                            <div class="form-section">
+                                <div class="form-section-title">Analysis Parameters</div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Talent Name</label>
+                                        <input type="text" id="talentTheaterTalentName" placeholder="e.g., Taylor Swift" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Competitive Talent Name(s) (comma-separated, optional)</label>
+                                        <input type="text" id="talentTheaterCompetitiveTalents" placeholder="e.g., Ariana Grande, Billie Eilish">
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Movie Name</label>
+                                        <input type="text" id="talentTheaterMovieName" placeholder="e.g., The Eras Tour" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Start Date</label>
+                                        <input type="date" id="talentTheaterStartDate" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>End Date</label>
+                                        <input type="date" id="talentTheaterEndDate" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-primary">Run Analysis</button>
+                                </div>
+                            </div>
+                        </form>
+                        
+                        <!-- Job Status Display -->
+                        <div id="talentTheaterJobStatus" style="display: none; margin-top: 2rem;">
+                            <div class="card">
+                                <h3>Job Status</h3>
+                                <div id="talentTheaterJobStatusContent"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div><!-- End attributionIQView -->
+
     </div>
 
     <script>
@@ -9026,12 +9220,16 @@
             formView.style.display = 'block';
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'none';
+            const attributionView = document.getElementById('attributionIQView');
+            if (attributionView) attributionView.style.display = 'none';
             
             // Update button states
             const formBtn = document.getElementById('formViewBtn');
             if (formBtn) formBtn.classList.add('active');
             document.getElementById('profileIQTab').classList.remove('active');
             document.getElementById('subscriberIQTab').classList.remove('active');
+            const attributionTab = document.getElementById('attributionIQTab');
+            if (attributionTab) attributionTab.classList.remove('active');
         }
 
         function showDashboardView() {
@@ -9048,12 +9246,16 @@
             // Update tab active states
             document.getElementById('profileIQTab').classList.add('active');
             document.getElementById('subscriberIQTab').classList.remove('active');
+            const attributionTab = document.getElementById('attributionIQTab');
+            if (attributionTab) attributionTab.classList.remove('active');
             const formBtn = document.getElementById('formViewBtn');
             if (formBtn) formBtn.classList.remove('active');
             
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'flex';
             document.getElementById('subscriberIQView').style.display = 'none';
+            const attributionView = document.getElementById('attributionIQView');
+            if (attributionView) attributionView.style.display = 'none';
             const formView = document.getElementById('formView');
             if (formView) formView.style.display = 'none';
             
@@ -9068,12 +9270,16 @@
             // Update tab active states
             document.getElementById('profileIQTab').classList.remove('active');
             document.getElementById('subscriberIQTab').classList.add('active');
+            const attributionTab = document.getElementById('attributionIQTab');
+            if (attributionTab) attributionTab.classList.remove('active');
             const formBtn = document.getElementById('formViewBtn');
             if (formBtn) formBtn.classList.remove('active');
             
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'flex';
+            const attributionView = document.getElementById('attributionIQView');
+            if (attributionView) attributionView.style.display = 'none';
             const formView = document.getElementById('formView');
             if (formView) formView.style.display = 'none';
             
@@ -9085,6 +9291,234 @@
                 restoreSavedSubscriberTabs();
             }
         }
+        
+        function showAttributionIQ() {
+            const attributionTab = document.getElementById('attributionIQTab');
+            if (attributionTab && attributionTab.classList.contains('disabled')) return;
+            
+            // Update tab active states
+            document.getElementById('profileIQTab').classList.remove('active');
+            document.getElementById('subscriberIQTab').classList.remove('active');
+            if (attributionTab) attributionTab.classList.add('active');
+            const formBtn = document.getElementById('formViewBtn');
+            if (formBtn) formBtn.classList.remove('active');
+            
+            // Show/hide views
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('subscriberIQView').style.display = 'none';
+            const attributionView = document.getElementById('attributionIQView');
+            if (attributionView) attributionView.style.display = 'flex';
+            const formView = document.getElementById('formView');
+            if (formView) formView.style.display = 'none';
+        }
+        
+        function switchAttributionTab(tabName) {
+            // Update tab buttons
+            document.getElementById('attributionTabTalentSearch').classList.remove('active');
+            document.getElementById('attributionTabTalentTheater').classList.remove('active');
+            
+            // Hide all tab contents
+            document.getElementById('attributionTabContentTalentSearch').classList.remove('active');
+            document.getElementById('attributionTabContentTalentTheater').classList.remove('active');
+            
+            // Show selected tab
+            if (tabName === 'talent-search') {
+                document.getElementById('attributionTabTalentSearch').classList.add('active');
+                document.getElementById('attributionTabContentTalentSearch').classList.add('active');
+            } else if (tabName === 'talent-theater') {
+                document.getElementById('attributionTabTalentTheater').classList.add('active');
+                document.getElementById('attributionTabContentTalentTheater').classList.add('active');
+            }
+        }
+        
+        // Talent Search Form Handler
+        document.getElementById('talentSearchForm')?.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const startDate = document.getElementById('talentSearchStartDate').value;
+            const endDate = document.getElementById('talentSearchEndDate').value;
+            const searchTermsInput = document.getElementById('talentSearchTerms').value;
+            const platformsInput = document.getElementById('talentSearchPlatforms').value;
+            const beforeAfterCheck = document.getElementById('talentSearchBeforeAfter').checked;
+            const beforeCommonName = document.getElementById('talentSearchBeforeCommonName').value;
+            
+            const searchTerms = searchTermsInput.split(',').map(t => t.trim()).filter(t => t);
+            const platforms = platformsInput.split(',').map(p => p.trim()).filter(p => p);
+            
+            if (!startDate || !endDate) {
+                alert('Please select both start and end dates');
+                return;
+            }
+            if (searchTerms.length === 0) {
+                alert('Please enter at least one search term');
+                return;
+            }
+            if (platforms.length === 0) {
+                alert('Please enter at least one platform');
+                return;
+            }
+            
+            const payload = {
+                start_date: startDate,
+                end_date: endDate,
+                search_terms: searchTerms,
+                platforms: platforms
+            };
+            
+            if (beforeAfterCheck && beforeCommonName) {
+                payload.before_common_name = beforeCommonName;
+            }
+            
+            try {
+                const response = await fetch('/api/attribution/talent-search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('talentSearchJobStatus').style.display = 'block';
+                    pollTalentSearchJobStatus(data.job_id);
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to submit job'));
+                }
+            } catch (error) {
+                alert('Error submitting job: ' + error.message);
+            }
+        });
+        
+        // Talent Theater Form Handler
+        document.getElementById('talentTheaterForm')?.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const talentName = document.getElementById('talentTheaterTalentName').value;
+            const competitiveTalentsInput = document.getElementById('talentTheaterCompetitiveTalents').value;
+            const movieName = document.getElementById('talentTheaterMovieName').value;
+            const startDate = document.getElementById('talentTheaterStartDate').value;
+            const endDate = document.getElementById('talentTheaterEndDate').value;
+            
+            if (!talentName || !movieName || !startDate || !endDate) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            const competitiveTalents = competitiveTalentsInput.split(',').map(t => t.trim()).filter(t => t);
+            
+            const payload = {
+                talent_name: talentName,
+                movie_name: movieName,
+                start_date: startDate,
+                end_date: endDate
+            };
+            
+            if (competitiveTalents.length > 0) {
+                payload.competitive_talents = competitiveTalents;
+            }
+            
+            try {
+                const response = await fetch('/api/attribution/talent-theater', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('talentTheaterJobStatus').style.display = 'block';
+                    pollTalentTheaterJobStatus(data.job_id);
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to submit job'));
+                }
+            } catch (error) {
+                alert('Error submitting job: ' + error.message);
+            }
+        });
+        
+        // Job Status Polling
+        function pollTalentSearchJobStatus(jobId) {
+            const statusDiv = document.getElementById('talentSearchJobStatusContent');
+            let pollCount = 0;
+            const maxPolls = 600; // 10 minutes max
+            
+            const poll = async () => {
+                try {
+                    const response = await fetch(`/api/status/${jobId}`, { credentials: 'same-origin' });
+                    const data = await response.json();
+                    
+                    statusDiv.innerHTML = `
+                        <div><strong>Status:</strong> ${data.status}</div>
+                        <div><strong>Progress:</strong> ${data.progress}%</div>
+                        <div><strong>Message:</strong> ${data.message || ''}</div>
+                        ${data.error ? `<div style="color: red;"><strong>Error:</strong> ${data.error}</div>` : ''}
+                        ${data.status === 'completed' && data.result_file ? 
+                            `<div style="margin-top: 1rem;">
+                                <a href="/api/download/${jobId}" class="btn-primary" download>Download Results</a>
+                            </div>` : ''}
+                    `;
+                    
+                    if (data.status === 'completed' || data.status === 'failed') {
+                        return; // Stop polling
+                    }
+                    
+                    pollCount++;
+                    if (pollCount < maxPolls) {
+                        setTimeout(poll, 2000); // Poll every 2 seconds
+                    }
+                } catch (error) {
+                    statusDiv.innerHTML = `<div style="color: red;">Error polling status: ${error.message}</div>`;
+                }
+            };
+            
+            poll();
+        }
+        
+        function pollTalentTheaterJobStatus(jobId) {
+            const statusDiv = document.getElementById('talentTheaterJobStatusContent');
+            let pollCount = 0;
+            const maxPolls = 600; // 10 minutes max
+            
+            const poll = async () => {
+                try {
+                    const response = await fetch(`/api/status/${jobId}`, { credentials: 'same-origin' });
+                    const data = await response.json();
+                    
+                    statusDiv.innerHTML = `
+                        <div><strong>Status:</strong> ${data.status}</div>
+                        <div><strong>Progress:</strong> ${data.progress}%</div>
+                        <div><strong>Message:</strong> ${data.message || ''}</div>
+                        ${data.error ? `<div style="color: red;"><strong>Error:</strong> ${data.error}</div>` : ''}
+                        ${data.status === 'completed' && data.result_file ? 
+                            `<div style="margin-top: 1rem;">
+                                <a href="/api/download/${jobId}" class="btn-primary" download>Download Results</a>
+                            </div>` : ''}
+                    `;
+                    
+                    if (data.status === 'completed' || data.status === 'failed') {
+                        return; // Stop polling
+                    }
+                    
+                    pollCount++;
+                    if (pollCount < maxPolls) {
+                        setTimeout(poll, 2000); // Poll every 2 seconds
+                    }
+                } catch (error) {
+                    statusDiv.innerHTML = `<div style="color: red;">Error polling status: ${error.message}</div>`;
+                }
+            };
+            
+            poll();
+        }
+        
+        // Toggle before/after checkbox visibility
+        document.getElementById('talentSearchBeforeAfter')?.addEventListener('change', function(e) {
+            const row = document.getElementById('talentSearchBeforeAfterRow');
+            if (row) {
+                row.style.display = e.target.checked ? 'block' : 'none';
+            }
+        });
         
         async function loadSubscriberProfiles() {
             try {
