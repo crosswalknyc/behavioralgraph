@@ -2257,10 +2257,8 @@ def get_admin_content():
                     
                     last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
                     
-                    # Get category from metadata, default to 'SVOD Acquisition'
+                    # SVOD files are ALWAYS categorized as 'SVOD Acquisition' - cannot be changed
                     category = 'SVOD Acquisition'
-                    if key in svod_metadata and svod_metadata[key].get('category'):
-                        category = svod_metadata[key]['category']
                     
                     svod_files.append({
                         'key': f'svod-acquisition/{key}',  # Prefix to identify bucket
@@ -4337,19 +4335,21 @@ def change_file_category():
         
         # Check if this is a SVOD file (stored in svod-acquisition bucket)
         if file_key.startswith('svod-acquisition/'):
-            # Handle SVOD file - store category in metadata
-            actual_key = file_key.replace('svod-acquisition/', '')
-            metadata = load_svod_metadata()
-            if actual_key not in metadata:
-                metadata[actual_key] = {}
-            metadata[actual_key]['category'] = new_category
-            save_svod_metadata(metadata)
+            # SVOD files MUST always be categorized as 'SVOD Acquisition'
+            # They cannot be changed to other categories
+            if new_category.upper() != 'SVOD ACQUISITION':
+                return jsonify({
+                    'success': False,
+                    'error': 'SVOD files must remain in the "SVOD Acquisition" category. They cannot be moved to other categories.'
+                })
             
-            print(f"🏷️ Changed SVOD category for {actual_key} to {new_category}")
+            # Even if they try to set it to SVOD Acquisition, we don't need to store it
+            # since it's always enforced at load time
+            print(f"🏷️ SVOD file category change attempted for {file_key} - ignored (always SVOD Acquisition)")
             return jsonify({
                 'success': True,
-                'new_category': new_category,
-                'message': 'Category updated successfully'
+                'new_category': 'SVOD Acquisition',
+                'message': 'SVOD files are always categorized as "SVOD Acquisition"'
             })
         
         # Regular file - update BRAND CATEGORY in CSV
