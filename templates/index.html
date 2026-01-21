@@ -9209,6 +9209,7 @@
             const tabs = document.getElementById('subscriberTabs');
             
             const metadata = data.metadata || {};
+            // Get platform from metadata
             const platform = metadata.platform || '';
             const exclusion = metadata.exclusion_window || '';
             const attribution = metadata.attribution_window || '';
@@ -9216,12 +9217,14 @@
             const dateRange = date_range || metadata.date_range || '';
             
             console.log('📅 Date range check:', { date_range, metadata_date_range: metadata.date_range, final: dateRange });
+            console.log('📱 Platform check:', { metadata_platform: metadata.platform, final: platform, metadata_keys: Object.keys(metadata) });
             
             if (showNameHeader) showNameHeader.textContent = show ? show.toUpperCase() : 'UNKNOWN SHOW';
             
             if (platformHeader) {
                 platformHeader.textContent = platform ? `Platform Tracked: ${platform}` : '';
                 platformHeader.style.display = platform ? 'block' : 'none';
+                console.log('📱 Setting platform header:', platform, 'display:', platform ? 'block' : 'none');
             }
             
             if (dateRangeHeader) {

@@ -3196,8 +3196,21 @@ def parse_subscriber_iq_csv(csv_content):
         elif current_section == 'metadata':
             if 'Show/Content Tracked' in first_col:
                 parsed['metadata']['show'] = row[1].strip() if len(row) > 1 else ''
-            elif 'Platform Tracked' in first_col:
-                parsed['metadata']['platform'] = row[1].strip() if len(row) > 1 else ''
+            elif 'Platform Tracked' in first_col or 'platform tracked' in first_col.lower():
+                # Try multiple columns for platform
+                platform_val = ''
+                if len(row) > 1:
+                    platform_val = row[1].strip()
+                if not platform_val and len(row) > 2:
+                    platform_val = row[2].strip()
+                if not platform_val and len(row) > 0:
+                    # Sometimes the platform might be in the same cell after a colon
+                    if ':' in first_col:
+                        parts = first_col.split(':', 1)
+                        if len(parts) > 1:
+                            platform_val = parts[1].strip()
+                parsed['metadata']['platform'] = platform_val
+                print(f"   📱 Found platform: '{platform_val}' from row {i}: {row[:3]}")
             elif 'Analysis Date Range' in first_col or 'Date Range' in first_col or 'date range' in first_col.lower():
                 # Try multiple columns for date range
                 date_range_val = ''
@@ -3501,6 +3514,36 @@ def parse_subscriber_iq_csv(csv_content):
                 if date_range_val:
                     parsed['metadata']['date_range'] = date_range_val
                     print(f"   ✅ Fallback: Found date range in second column: '{date_range_val}'")
+    
+    # Fallback: If platform wasn't found, try to find it anywhere in the CSV
+    if not parsed['metadata'].get('platform'):
+        print("   ⚠️ Platform not found via section detection, trying fallback parsing...")
+        for i, row in enumerate(rows):
+            if not row or len(row) < 1:
+                continue
+            first_col = row[0].strip() if row[0] else ''
+            second_col = row[1].strip() if len(row) > 1 and row[1] else ''
+            # Check various platform patterns
+            if ('platform tracked' in first_col.lower() or 'platform' in first_col.lower()) and not parsed['metadata'].get('platform'):
+                # Try multiple columns
+                platform_val = ''
+                if len(row) > 1:
+                    platform_val = row[1].strip()
+                if not platform_val and len(row) > 2:
+                    platform_val = row[2].strip()
+                if platform_val:
+                    parsed['metadata']['platform'] = platform_val
+                    print(f"   ✅ Fallback: Found platform: '{platform_val}'")
+            # Also check if platform is in second column
+            elif ('platform tracked' in second_col.lower() or 'platform' in second_col.lower()) and not parsed['metadata'].get('platform'):
+                platform_val = ''
+                if len(row) > 2:
+                    platform_val = row[2].strip()
+                if not platform_val and len(row) > 1:
+                    platform_val = row[1].strip()
+                if platform_val:
+                    parsed['metadata']['platform'] = platform_val
+                    print(f"   ✅ Fallback: Found platform in second column: '{platform_val}'")
     
     # Fallback: If key metrics weren't found, try to find them anyway
     if not parsed['key_metrics'].get('total_watchers'):
