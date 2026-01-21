@@ -9526,6 +9526,7 @@
         
         function toggleSubscriberGenPop() {
             subscriberGenPopMode = !subscriberGenPopMode;
+            console.log('🔄 Toggling Gen Pop mode:', subscriberGenPopMode);
             
             const label = document.getElementById('subscriberGenPopToggleLabel');
             if (label) {
@@ -9534,7 +9535,10 @@
             
             // Re-render demographics to show gen pop projections
             if (currentSubscriberData) {
+                console.log('📊 Re-rendering demographics with Gen Pop mode:', subscriberGenPopMode);
                 renderSubscriberDemographics(currentSubscriberData);
+            } else {
+                console.warn('⚠️ No currentSubscriberData available to re-render');
             }
         }
         
@@ -11173,13 +11177,21 @@
                     // Check if genPop exists and is valid (not empty, not 'N/A')
                     if (genPop !== null && genPop !== undefined && genPop !== '') {
                         const genPopStr = String(genPop).trim();
-                        if (genPopStr !== '' && genPopStr.toUpperCase() !== 'N/A' && genPopStr !== '0') {
+                        if (genPopStr !== '' && genPopStr.toUpperCase() !== 'N/A') {
                             const parsed = parseNumber(genPopStr);
-                            // Return parsed value if valid, otherwise fall back to actual
-                            if (parsed !== null && parsed !== undefined && !isNaN(parsed) && parsed > 0) {
+                            console.log(`🔄 Gen Pop toggle: genPop="${genPopStr}", parsed=${parsed}, isNaN=${isNaN(parsed)}`);
+                            // Return parsed value if valid (including 0), otherwise fall back to actual
+                            if (parsed !== null && parsed !== undefined && !isNaN(parsed)) {
+                                console.log(`✅ Using Gen Pop: ${parsed}`);
                                 return parsed;
+                            } else {
+                                console.log(`⚠️ Gen Pop invalid (parsed=${parsed}), falling back to actual: ${actual}`);
                             }
+                        } else {
+                            console.log(`⚠️ Gen Pop is empty or N/A ("${genPopStr}"), falling back to actual: ${actual}`);
                         }
+                    } else {
+                        console.log(`⚠️ Gen Pop is null/undefined/empty, falling back to actual: ${actual}`);
                     }
                     // If no valid genPop, return actual as fallback
                     return parseNumber(actual) || 0;
@@ -11207,7 +11219,7 @@
                                         const ageRange = item.age_range || item.age || 'N/A';
                                         const count = parseNumber(item.count) || 0;
                                         const percentage = item.percentage || 'N/A';
-                                        const genPop = item.gen_pop || '';
+                                        const genPop = item.gen_pop || item.genPop || '';
                                         const displayValue = getDisplayValue(item.count, genPop);
                                         const comparisonValue = subscriberGenPopMode ? count : (genPop ? parseNumber(genPop) : 0);
                                         const actualCount = parseNumber(item.count) || 0;
