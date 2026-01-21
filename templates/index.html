@@ -303,6 +303,7 @@
         }
 
         #formView { display: none; flex: 1; overflow-y: auto; }
+        #profileIQFormView { display: none; flex: 1; overflow-y: auto; padding: 2rem; }
         #customAnalysisView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #dashboardView { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
         #subscriberIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
@@ -6487,11 +6488,9 @@
                 <div class="view-toggle" id="iqTabsContainer">
                     <button class="view-btn active {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" onclick="showProfileIQ()" {% if not has_profile_iq_access %}disabled{% endif %}>🎯 Profile IQ</button>
                     <button class="view-btn {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" onclick="showSubscriberIQ()" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</button>
+                    {% if role == 'admin' or role == 'enterprise' %}
                     <button class="view-btn {% if not has_attribution_iq_access %}disabled{% endif %}" id="talentSearchIQTab" onclick="showTalentSearchIQ()" {% if not has_attribution_iq_access %}disabled{% endif %}>🔍 Talent Search IQ</button>
                     <button class="view-btn {% if not has_attribution_iq_access %}disabled{% endif %}" id="talentTheaterIQTab" onclick="showTalentTheaterIQ()" {% if not has_attribution_iq_access %}disabled{% endif %}>🎭 Talent Ticket Sale IQ</button>
-                    <button class="view-btn" id="dashboardViewBtn" onclick="showDashboardView()" style="display: none;">📊 Dashboard</button>
-                    {% if role == 'admin' or role == 'enterprise' %}
-                    <button class="view-btn" id="customAnalysisBtn" onclick="showCustomAnalysis()">🔧 Custom Analysis</button>
                     <button class="view-btn" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
                     {% endif %}
                     {% if role == 'admin' %}
@@ -6805,28 +6804,10 @@
             </div>
         </div>
 
-        <!-- CUSTOM ANALYSIS VIEW -->
-        <div id="customAnalysisView">
-            <div class="dashboard-layout">
-                <!-- Custom Analysis Tabs -->
-                <div class="custom-analysis-tabs-container">
-                    <div class="custom-analysis-tabs">
-                        <button class="custom-analysis-tab active" onclick="switchCustomAnalysisTab('profile-iq')" id="customAnalysisTabProfileIQ">
-                            🎯 Profile IQ
-                        </button>
-                        <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-search')" id="customAnalysisTabTalentSearch">
-                            🔍 Talent Search IQ
-                        </button>
-                        <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-theater')" id="customAnalysisTabTalentTheater">
-                            🎭 Talent Ticket Sale IQ
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Profile IQ Tab Content (bg.py form) -->
-                <div id="customAnalysisTabContentProfileIQ" class="custom-analysis-tab-content active">
-                    <div class="main-grid">
-                        <div class="card">
+        <!-- PROFILE IQ VIEW (Form Layout) -->
+        <div id="profileIQFormView" style="display: none;">
+            <div class="main-grid">
+                <div class="card">
                             <h2>📊 Analysis Parameters</h2>
                             <form id="customAnalysisForm">
                                 <div class="form-section">
@@ -7109,9 +7090,25 @@
                         </div>
                     </div>
                 </div>
+        </div><!-- End profileIQFormView -->
+
+        <!-- CUSTOM ANALYSIS VIEW (for Talent Search and Theater) -->
+        <div id="customAnalysisView" style="display: none;">
+            <div class="dashboard-layout">
+                <!-- Custom Analysis Tabs -->
+                <div class="custom-analysis-tabs-container">
+                    <div class="custom-analysis-tabs">
+                        <button class="custom-analysis-tab active" onclick="switchCustomAnalysisTab('talent-search')" id="customAnalysisTabTalentSearch">
+                            🔍 Talent Search IQ
+                        </button>
+                        <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-theater')" id="customAnalysisTabTalentTheater">
+                            🎭 Talent Ticket Sale IQ
+                        </button>
+                    </div>
+                </div>
 
                 <!-- Talent Search IQ Tab Content -->
-                <div id="customAnalysisTabContentTalentSearch" class="custom-analysis-tab-content">
+                <div id="customAnalysisTabContentTalentSearch" class="custom-analysis-tab-content active">
                     <div class="card">
                         <h2>🔍 Talent Search IQ</h2>
                         <p class="section-description">Track search terms across platforms to measure search attribution</p>
@@ -9735,8 +9732,8 @@
             const customAnalysisBtn = document.getElementById('customAnalysisBtn');
             if (customAnalysisBtn) customAnalysisBtn.classList.remove('active');
             
-            // Show/hide views
-            document.getElementById('dashboardView').style.display = 'flex';
+            // Show/hide views - Profile IQ now shows the form layout
+            document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'none';
             const talentSearchView = document.getElementById('talentSearchIQView');
             if (talentSearchView) talentSearchView.style.display = 'none';
@@ -9746,9 +9743,10 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
-            
-            // Load profiles
-            loadDashboardProfiles();
+            const profileIQFormView = document.getElementById('profileIQFormView');
+            if (profileIQFormView) profileIQFormView.style.display = 'none';
+            const profileIQFormView = document.getElementById('profileIQFormView');
+            if (profileIQFormView) profileIQFormView.style.display = 'block';
         }
         
         window.showSubscriberIQ = function() {
