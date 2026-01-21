@@ -8432,6 +8432,9 @@
             try {
                 renderSubscriberTrends(data);
             } catch (e) { console.error('Error rendering trends:', e); }
+            
+            // Ensure the default tab (insights) is shown
+            showSubscriberTab('insights');
         }
         
         function showSubscriberTab(tabName) {
@@ -8612,6 +8615,12 @@
             }
             
             if (timingData.length > 0) {
+                // Check if Chart.js is available
+                if (typeof Chart === 'undefined') {
+                    chartContainer.innerHTML = '<p style="color: var(--text-secondary);">Chart.js not loaded. Please refresh the page.</p>';
+                    return;
+                }
+                
                 // Destroy existing chart if it exists
                 if (charts.subscriberSignupTiming) {
                     charts.subscriberSignupTiming.destroy();
