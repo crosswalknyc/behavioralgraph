@@ -9346,9 +9346,7 @@
                 if (!target) return;
                 
                 // Check if hover is disabled globally (Profile IQ uses body.hover-disabled)
-                const isHoverDisabled = document.body.classList.contains('hover-disabled');
-                if (isHoverDisabled) {
-                    console.log('Hover disabled, not showing tooltip');
+                if (document.body.classList.contains('hover-disabled')) {
                     return;
                 }
                 
@@ -14078,12 +14076,9 @@
         let hoverEnabled = true;
         
         function toggleHoverDescriptors() {
-            console.log('toggleHoverDescriptors called, current state:', hoverEnabled);
             hoverEnabled = !hoverEnabled;
             const toggle = document.getElementById('hoverToggle');
             const label = document.getElementById('hoverToggleLabel');
-            
-            console.log('New state:', hoverEnabled, 'toggle element:', toggle, 'label element:', label);
             
             if (hoverEnabled) {
                 if (toggle) toggle.classList.remove('active');
@@ -14093,9 +14088,13 @@
                 if (toggle) toggle.classList.add('active');
                 if (label) label.textContent = 'HOVER OFF';
                 document.body.classList.add('hover-disabled');
+                
+                // Hide any currently visible tooltip
+                const tooltip = document.getElementById('globalTooltip');
+                if (tooltip) {
+                    tooltip.classList.remove('visible');
+                }
             }
-            
-            console.log('body.hover-disabled:', document.body.classList.contains('hover-disabled'));
             
             // Save preference to localStorage
             localStorage.setItem('hoverEnabled', hoverEnabled);
