@@ -9786,7 +9786,8 @@
                 const matchingProfiles = profiles.filter(p => {
                     const fullName = getProfileFullName(p).toLowerCase();
                     const cat = (p.category || 'UNCATEGORIZED').toLowerCase();
-                    const masterCat = getMasterCategory(p.category || 'UNCATEGORIZED').toLowerCase();
+                    const isSvod = p.is_svod || (p.key && p.key.startsWith('svod-acquisition/')) || (p.s3_key && p.bucket === 'svod-acquisition');
+                    const masterCat = getMasterCategory(p.category || 'UNCATEGORIZED', isSvod).toLowerCase();
                     return fullName.includes(searchTerm) || cat.includes(searchTerm) || masterCat.includes(searchTerm);
                 });
                 
@@ -9809,7 +9810,8 @@
                     const isActive = selectedDashProfile === id;
                     const fullName = getProfileFullName(p);
                     const cat = p.category || 'UNCATEGORIZED';
-                    const masterCat = getMasterCategory(cat);
+                    const isSvod = p.is_svod || (p.key && p.key.startsWith('svod-acquisition/')) || (p.s3_key && p.bucket === 'svod-acquisition');
+                    const masterCat = getMasterCategory(cat, isSvod);
                     const icon = MASTER_CATEGORY_ICONS[masterCat] || '📁';
                     
                     html += `
@@ -9832,7 +9834,9 @@
             const byMasterCategory = {};
             profiles.forEach(p => {
                 const cat = p.category || 'UNCATEGORIZED';
-                const masterCat = getMasterCategory(cat);
+                // Check if this is a SVOD file (has is_svod flag or key starts with svod-acquisition/)
+                const isSvod = p.is_svod || (p.key && p.key.startsWith('svod-acquisition/')) || (p.s3_key && p.bucket === 'svod-acquisition');
+                const masterCat = getMasterCategory(cat, isSvod);
                 if (!byMasterCategory[masterCat]) byMasterCategory[masterCat] = {};
                 if (!byMasterCategory[masterCat][cat]) byMasterCategory[masterCat][cat] = [];
                 byMasterCategory[masterCat][cat].push(p);
@@ -16989,9 +16993,14 @@
             'SVOD ACQUISITION': '📺'  // TV icon for SVOD
         };
         
-        function getMasterCategory(category) {
+        function getMasterCategory(category, isSvod = false) {
+            // If this is a SVOD file, it's always under SVOD ACQUISITION master
+            if (isSvod) {
+                return 'SVOD ACQUISITION';
+            }
+            
             const cat = (category || '').toUpperCase();
-            // SVOD Acquisition is always its own master category - check first
+            // SVOD Acquisition category itself is always its own master category
             if (cat === 'SVOD ACQUISITION') {
                 return 'SVOD ACQUISITION';
             }
@@ -17257,7 +17266,9 @@
             const byMasterCategory = {};
             profiles.forEach(p => {
                 const cat = p.category || 'UNCATEGORIZED';
-                const masterCat = getMasterCategory(cat);
+                // Check if this is a SVOD file (has is_svod flag or key starts with svod-acquisition/)
+                const isSvod = p.is_svod || (p.key && p.key.startsWith('svod-acquisition/')) || (p.s3_key && p.bucket === 'svod-acquisition');
+                const masterCat = getMasterCategory(cat, isSvod);
                 if (!byMasterCategory[masterCat]) byMasterCategory[masterCat] = {};
                 if (!byMasterCategory[masterCat][cat]) byMasterCategory[masterCat][cat] = [];
                 byMasterCategory[masterCat][cat].push(p);
@@ -17404,7 +17415,8 @@
             // Get all profiles in this master category
             const items = comparisonProfiles.filter(p => {
                 const cat = p.category || 'UNCATEGORIZED';
-                return getMasterCategory(cat) === masterCategory;
+                const isSvod = p.is_svod || (p.key && p.key.startsWith('svod-acquisition/')) || (p.s3_key && p.bucket === 'svod-acquisition');
+                return getMasterCategory(cat, isSvod) === masterCategory;
             });
             
             const allSelected = items.every(p => selectedForComparison.has(p.s3_key || p.job_id));

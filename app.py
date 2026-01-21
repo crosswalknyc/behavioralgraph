@@ -2257,8 +2257,11 @@ def get_admin_content():
                     
                     last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
                     
-                    # SVOD files are ALWAYS categorized as 'SVOD Acquisition' - cannot be changed
+                    # Get category from metadata, default to 'SVOD Acquisition'
+                    # SVOD files can have subcategories (TALENT, CONTENT, etc.) but they're always under SVOD ACQUISITION master
                     category = 'SVOD Acquisition'
+                    if key in svod_metadata and svod_metadata[key].get('category'):
+                        category = svod_metadata[key]['category']
                     
                     svod_files.append({
                         'key': f'svod-acquisition/{key}',  # Prefix to identify bucket
@@ -2269,7 +2272,8 @@ def get_admin_content():
                         'last_modified': last_modified,
                         'created_at': last_modified,
                         'bucket': SUBSCRIBER_S3_BUCKET,
-                        's3_key': key  # Original key in svod bucket
+                        's3_key': key,  # Original key in svod bucket
+                        'is_svod': True  # Flag to identify SVOD files
                     })
             
             print(f"✅ Found {len(svod_files)} SVOD Acquisition files")
@@ -4335,21 +4339,20 @@ def change_file_category():
         
         # Check if this is a SVOD file (stored in svod-acquisition bucket)
         if file_key.startswith('svod-acquisition/'):
-            # SVOD files MUST always be categorized as 'SVOD Acquisition'
-            # They cannot be changed to other categories
-            if new_category.upper() != 'SVOD ACQUISITION':
-                return jsonify({
-                    'success': False,
-                    'error': 'SVOD files must remain in the "SVOD Acquisition" category. They cannot be moved to other categories.'
-                })
+            # SVOD files can have subcategories (TALENT, CONTENT, etc.)
+            # but they're always grouped under SVOD ACQUISITION master category
+            actual_key = file_key.replace('svod-acquisition/', '')
+            metadata = load_svod_metadata()
+            if actual_key not in metadata:
+                metadata[actual_key] = {}
+            metadata[actual_key]['category'] = new_category
+            save_svod_metadata(metadata)
             
-            # Even if they try to set it to SVOD Acquisition, we don't need to store it
-            # since it's always enforced at load time
-            print(f"🏷️ SVOD file category change attempted for {file_key} - ignored (always SVOD Acquisition)")
+            print(f"🏷️ Changed SVOD subcategory for {actual_key} to {new_category} (under SVOD ACQUISITION master)")
             return jsonify({
                 'success': True,
-                'new_category': 'SVOD Acquisition',
-                'message': 'SVOD files are always categorized as "SVOD Acquisition"'
+                'new_category': new_category,
+                'message': f'Category updated to {new_category} (grouped under SVOD ACQUISITION master category)'
             })
         
         # Regular file - update BRAND CATEGORY in CSV
