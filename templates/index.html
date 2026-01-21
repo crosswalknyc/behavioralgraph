@@ -8257,8 +8257,8 @@
                             <div class="dash-profile-image" id="subscriberProfileImage"><img src="" alt="Show" onerror="this.parentElement.classList.remove('loaded')"></div>
                             <div class="dash-brand-container">
                                 <div class="dash-brand-box" id="subscriberShowNameHeader"></div>
-                                <div class="dash-date-box" id="subscriberDateRangeHeader"></div>
                                 <div class="dash-meta-box" id="subscriberPlatformHeader" style="display: none;"></div>
+                                <div class="dash-meta-box" id="subscriberDateRangeHeader" style="display: none;"></div>
                                 <div class="dash-meta-box" id="subscriberExclusionWindow" style="display: none;"></div>
                                 <div class="dash-meta-box" id="subscriberAttributionWindow" style="display: none;"></div>
                             </div>
@@ -8951,14 +8951,14 @@
             
             if (showNameHeader) showNameHeader.textContent = show ? show.toUpperCase() : 'UNKNOWN SHOW';
             
-            if (dateRangeHeader) {
-                dateRangeHeader.textContent = date_range ? `Date Range: ${date_range}` : '';
-                dateRangeHeader.style.display = date_range ? 'block' : 'none';
-            }
-            
             if (platformHeader) {
                 platformHeader.textContent = platform ? `Platform Tracked: ${platform}` : '';
                 platformHeader.style.display = platform ? 'block' : 'none';
+            }
+            
+            if (dateRangeHeader) {
+                dateRangeHeader.textContent = date_range ? `Analysis Date Range: ${date_range}` : '';
+                dateRangeHeader.style.display = date_range ? 'block' : 'none';
             }
             
             if (exclusionWindow) {
