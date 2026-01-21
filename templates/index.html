@@ -9584,12 +9584,10 @@
             if (talentSearchView) talentSearchView.style.display = 'none';
             const talentTheaterView = document.getElementById('talentTheaterIQView');
             if (talentTheaterView) talentTheaterView.style.display = 'none';
-            const formView = document.getElementById('formView');
-            if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) {
                 customAnalysisView.style.display = 'flex';
-                // Show formView for Profile IQ tab (default active tab)
+                // Show formView for Profile IQ tab (default active tab) - reuse original form
                 const formView = document.getElementById('formView');
                 if (formView) {
                     formView.style.display = 'block';
