@@ -303,7 +303,6 @@
         }
 
         #formView { display: none; flex: 1; overflow-y: auto; }
-        #profileIQFormView { display: none; flex: 1; overflow-y: auto; padding: 2rem; }
         #customAnalysisView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #dashboardView { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
         #subscriberIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
@@ -6488,8 +6487,12 @@
                 <div class="view-toggle" id="iqTabsContainer">
                     <button class="view-btn active {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" onclick="showProfileIQ()" {% if not has_profile_iq_access %}disabled{% endif %}>🎯 Profile IQ</button>
                     <button class="view-btn {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" onclick="showSubscriberIQ()" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</button>
+                    <button class="view-btn {% if not has_attribution_iq_access %}disabled{% endif %}" id="talentSearchIQTab" onclick="showTalentSearchIQ()" {% if not has_attribution_iq_access %}disabled{% endif %}>🔍 Talent Search IQ</button>
+                    <button class="view-btn {% if not has_attribution_iq_access %}disabled{% endif %}" id="talentTheaterIQTab" onclick="showTalentTheaterIQ()" {% if not has_attribution_iq_access %}disabled{% endif %}>🎭 Talent Ticket Sale IQ</button>
+                    <button class="view-btn" id="dashboardViewBtn" onclick="showDashboardView()" style="display: none;">📊 Dashboard</button>
                     {% if role == 'admin' or role == 'enterprise' %}
                     <button class="view-btn" id="customAnalysisBtn" onclick="showCustomAnalysis()">🔧 Custom Analysis</button>
+                    <button class="view-btn" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
                     {% endif %}
                     {% if role == 'admin' %}
                     <a href="/admin" class="view-btn" id="adminViewBtn">🔐 Admin</a>
@@ -6802,296 +6805,8 @@
             </div>
         </div>
 
-        <!-- PROFILE IQ VIEW (Form Layout) -->
-        <div id="profileIQFormView" style="display: none;">
-            <div class="main-grid">
-                <div class="card">
-                            <h2>📊 Analysis Parameters</h2>
-                            <form id="customAnalysisForm">
-                                <div class="form-section">
-                                    <div class="form-section-title">Project & Brand</div>
-                                    <div class="form-row">
-                                        <div class="form-group">
-                                            <label>Project Name</label>
-                                            <input type="text" id="custom_project_name" placeholder="e.g., Nike_Q4" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Category</label>
-                                            <select id="custom_brand_category" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                                <option value="">-- Select Category --</option>
-                                                <optgroup label="📦 BRAND">
-                                                    <option value="ACCESSORIES">Accessories</option>
-                                                    <option value="ACTIVEWEAR">Activewear</option>
-                                                    <option value="AMUSEMENT PARKS">Amusement Parks</option>
-                                                    <option value="APPAREL">Apparel</option>
-                                                    <option value="AUTOMOBILE">Automobile</option>
-                                                    <option value="B2B">B2B</option>
-                                                    <option value="BANKS">Banks</option>
-                                                    <option value="BEAUTY">Beauty</option>
-                                                    <option value="BETTING">Betting</option>
-                                                    <option value="BEVERAGE">Beverage</option>
-                                                    <option value="CASUAL DINING">Casual Dining</option>
-                                                    <option value="CREDIT PROVIDERS">Credit Providers</option>
-                                                    <option value="DIGITAL BANKING">Digital Banking</option>
-                                                    <option value="EVENTS">Events</option>
-                                                    <option value="FOOTWEAR">Footwear</option>
-                                                    <option value="GROCERY">Grocery</option>
-                                                    <option value="INTIMATES">Intimates</option>
-                                                    <option value="JEWELRY">Jewelry</option>
-                                                    <option value="MEMBERSHIP">Membership</option>
-                                                    <option value="NON PROFIT/CHARITY">Non Profit/Charity</option>
-                                                    <option value="PHARMA">Pharma</option>
-                                                    <option value="QSR">QSR</option>
-                                                    <option value="RETAILERS">Retailers</option>
-                                                    <option value="TELECOM">Telecom</option>
-                                                    <option value="TICKETING">Ticketing</option>
-                                                    <option value="TOY">Toy</option>
-                                                    <option value="TRAVEL">Travel</option>
-                                                    <option value="VENUE">Venue</option>
-                                                    <option value="WORKOUT FACILITY">Workout Facility</option>
-                                                </optgroup>
-                                                <optgroup label="🎬 CONTENT">
-                                                    <option value="GAME PLAYERS">Game Players</option>
-                                                    <option value="GAMES">Games</option>
-                                                    <option value="GAMES - PLAYERS">Games - Players</option>
-                                                    <option value="MOVIE THEATER">Movie Theater</option>
-                                                    <option value="PODCAST">Podcast</option>
-                                                    <option value="SERIES - APPLE">Series - Apple</option>
-                                                    <option value="SERIES - FXP">Series - FXP</option>
-                                                    <option value="SERIES - HBO ENTERTAINMENT">Series - HBO Entertainment</option>
-                                                    <option value="SERIES - HBO MAX">Series - HBO Max</option>
-                                                    <option value="SERIES - NETFLIX">Series - Netflix</option>
-                                                    <option value="SERIES - PARAMOUNT TV STUDIOS">Series - Paramount TV Studios</option>
-                                                    <option value="SERIES - SONY">Series - Sony</option>
-                                                    <option value="SERIES - UNIVERSAL TV">Series - Universal TV</option>
-                                                    <option value="SERIES - WBD">Series - WBD</option>
-                                                </optgroup>
-                                                <optgroup label="📊 GEN POP">
-                                                    <option value="GEN POP">Gen Pop</option>
-                                                </optgroup>
-                                                <optgroup label="📺 PLATFORMS">
-                                                    <option value="APP/PLATFORM">App/Platform</option>
-                                                    <option value="BROADCAST/CABLE">Broadcast/Cable</option>
-                                                    <option value="MEDIA">Media</option>
-                                                    <option value="PLATFORMS">Platforms</option>
-                                                    <option value="SEARCH ENGINE/AI">Search Engine/AI</option>
-                                                    <option value="SOCIAL MEDIA">Social Media</option>
-                                                    <option value="STREAMING MUSIC">Streaming Music</option>
-                                                    <option value="STREAMING VIDEO">Streaming Video</option>
-                                                    <option value="VIRTUAL MVPD/FAST">Virtual MVPD/FAST</option>
-                                                </optgroup>
-                                                <optgroup label="⚽ SPORT">
-                                                    <option value="MILB">MiLB</option>
-                                                    <option value="MLB">MLB</option>
-                                                    <option value="NBA">NBA</option>
-                                                    <option value="NFL">NFL</option>
-                                                    <option value="SPORTS ORGANIZATIONS">Sports Organizations</option>
-                                                    <option value="WNBA">WNBA</option>
-                                                </optgroup>
-                                                <optgroup label="⭐ TALENT">
-                                                    <option value="ACTOR">Actor</option>
-                                                    <option value="ATHLETE">Athlete</option>
-                                                    <option value="CREATOR/INFLUENCER">Creator/Influencer</option>
-                                                    <option value="INFLUENCER/CREATOR">Influencer/Creator</option>
-                                                    <option value="EMERGING TALENT">Emerging Talent</option>
-                                                    <option value="HOST/PERSONALITY">Host/Personality</option>
-                                                    <option value="MUSICIAN/BAND">Musician/Band</option>
-                                                    <option value="PODCASTER">Podcaster</option>
-                                                    <option value="POLITICS/ACTIVIST">Politics/Activist</option>
-                                                    <option value="WRITER/DIRECTOR/AUTHOR/ARTIST">Writer/Director/Author/Artist</option>
-                                                </optgroup>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Brands (comma-separated)</label>
-                                        <textarea id="custom_brands" placeholder="nike, adidas, puma" required></textarea>
-                                    </div>
-                                    <div class="form-row">
-                                        <label class="checkbox-group"><input type="checkbox" id="custom_is_genpop" onchange="toggleCustomGenPopOptions()"><span>Updating GenPop?</span></label>
-                                        <label class="checkbox-group" id="custom_purchasers_group"><input type="checkbox" id="custom_purchasers_only"><span>Purchasers Only</span></label>
-                                    </div>
-                                </div>
-
-                                <div class="form-section">
-                                    <div class="form-section-title">Additional Options</div>
-                                    <div class="form-row">
-                                        <label class="checkbox-group"><input type="checkbox" id="custom_include_frequency"><span>Include visit frequency analysis?</span></label>
-                                    </div>
-                                    <div class="form-row">
-                                        <label class="checkbox-group"><input type="checkbox" id="custom_is_listener_watcher" onchange="toggleCustomListenerOptions()"><span>Is this a listener/watcher/player profile?</span></label>
-                                    </div>
-                                    <div id="customListenerOptions" style="display: none; margin-left: 1.5rem;">
-                                        <div class="form-group">
-                                            <label>Platform name (as it appears in hostmap)</label>
-                                            <input type="text" id="custom_platform_name" placeholder="e.g., spotify, netflix, hulu">
-                                        </div>
-                                    </div>
-                                    <div class="form-row">
-                                        <label class="checkbox-group"><input type="checkbox" id="custom_is_update" onchange="toggleCustomUpdateOptions()"><span>Are you updating a previous run?</span></label>
-                                    </div>
-                                    <div id="customUpdateOptions" style="display: none; margin-left: 1.5rem;">
-                                        <div class="form-group">
-                                            <label>Previous CSV file (select from S3)</label>
-                                            <select id="custom_previous_file" style="font-size: 0.8rem;">
-                                                <option value="">Select a previous run...</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="form-section">
-                                    <div class="form-section-title">Date Ranges</div>
-                                    <div class="form-row" style="margin-bottom: 0.5rem;">
-                                        <label class="checkbox-group"><input type="checkbox" id="custom_same_dates" checked onchange="toggleCustomDateFields()"><span>Same dates for Sample & Behavior</span></label>
-                                    </div>
-                                    <div id="customSingleDateRange">
-                                        <div class="form-row">
-                                            <div class="form-group">
-                                                <label>Start Date</label>
-                                                <input type="date" id="custom_start_date" required>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>End Date</label>
-                                                <input type="date" id="custom_end_date" required>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div id="customSeparateDateRanges" style="display: none;">
-                                        <div style="font-size: 0.7rem; color: var(--accent-cyan); margin-bottom: 0.5rem;">Sample Group Dates</div>
-                                        <div class="form-row">
-                                            <div class="form-group">
-                                                <label>Sample Start</label>
-                                                <input type="date" id="custom_sample_start_date">
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Sample End</label>
-                                                <input type="date" id="custom_sample_end_date">
-                                            </div>
-                                        </div>
-                                        <div style="font-size: 0.7rem; color: var(--accent-cyan); margin: 0.5rem 0;">Behavior Study Dates</div>
-                                        <div class="form-row">
-                                            <div class="form-group">
-                                                <label>Behavior Start</label>
-                                                <input type="date" id="custom_behavior_start_date">
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Behavior End</label>
-                                                <input type="date" id="custom_behavior_end_date">
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="collapsible">
-                                    <div class="collapsible-header" onclick="toggleCollapsible(this)">
-                                        <span>🎯 Demographic Filters</span><span>▼</span>
-                                    </div>
-                                    <div class="collapsible-content">
-                                        <div class="form-row">
-                                            <div class="form-group">
-                                                <label>Gender</label>
-                                                <select id="custom_gender"><option value="">All</option><option>Female</option><option>Male</option><option>Trans Male</option><option>Trans Female</option><option>Non-binary</option></select>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Age</label>
-                                                <select id="custom_age"><option value="">All</option><option>&lt;16</option><option>16-18</option><option>18-20</option><option>21-25</option><option>26-30</option><option>31-40</option><option>41-59</option><option>60+</option></select>
-                                            </div>
-                                        </div>
-                                        <div class="form-row">
-                                            <div class="form-group">
-                                                <label>Ethnicity</label>
-                                                <select id="custom_ethnicity"><option value="">All</option><option>White</option><option>Black</option><option>LatinX</option><option>Asian</option><option>Other</option></select>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Income</label>
-                                                <select id="custom_income"><option value="">All</option><option>$40K - $60K</option><option>$60K - $75K</option><option>$75K - $100K</option><option>$100K - $150K</option><option>$150K - $250K</option><option>$250K+</option></select>
-                                            </div>
-                                        </div>
-                                        <div class="form-row">
-                                            <div class="form-group">
-                                                <label>Education</label>
-                                                <select id="custom_education"><option value="">All</option><option>Complete College/University</option><option>Completed HS only</option><option>Completed Grad School</option><option>None</option></select>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Relationship</label>
-                                                <select id="custom_relationship"><option value="">All</option><option>Single</option><option>In a Relationship</option><option>Married</option><option>Divorced</option><option>Other</option></select>
-                                            </div>
-                                        </div>
-                                        <div class="form-row">
-                                            <div class="form-group">
-                                                <label>Sexual Orientation</label>
-                                                <select id="custom_sexual_orientation"><option value="">All</option><option>Yes</option><option>No</option><option>Prefer not to say</option></select>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Parental Status</label>
-                                                <select id="custom_parental_status"><option value="">All</option><option>Doesn't have Kids</option><option>Has Kids</option><option>Other</option></select>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="collapsible">
-                                    <div class="collapsible-header" onclick="toggleCollapsible(this)">
-                                        <span>🔧 Safety Check Demographics (Optional)</span><span>▼</span>
-                                    </div>
-                                    <div class="collapsible-content">
-                                        <div class="form-row">
-                                            <div class="form-group">
-                                                <label>Check Gender</label>
-                                                <select id="custom_skew_gender"><option value="">None</option><option>Female</option><option>Male</option><option>Trans Male</option><option>Trans Female</option><option>Non-binary</option></select>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Check Age</label>
-                                                <select id="custom_skew_age"><option value="">None</option><option>&lt;16</option><option>16-18</option><option>18-20</option><option>21-25</option><option>26-30</option><option>31-40</option><option>41-59</option><option>60+</option></select>
-                                            </div>
-                                        </div>
-                                        <div class="form-row">
-                                            <div class="form-group">
-                                                <label>Check Ethnicity</label>
-                                                <select id="custom_skew_ethnicity"><option value="">None</option><option>White</option><option>Black</option><option>LatinX</option><option>Asian</option><option>Other</option></select>
-                                            </div>
-                                            <div class="form-group">
-                                                <label>Size</label>
-                                                <select id="custom_skew_strength"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <button type="submit" class="btn btn-primary" id="customSubmitBtn">🚀 Run Analysis</button>
-                            </form>
-                        </div>
-
-                        <div class="card">
-                            <h2>📈 Status & Results</h2>
-                            <div id="customCurrentJob" style="display: none;">
-                                <div class="status-panel">
-                                    <div id="customStatusRunning">
-                                        <div class="spinner"></div>
-                                        <div class="pulse" id="customStatusText">Processing...</div>
-                                        <div style="font-size: 0.8rem; color: var(--text-secondary);" id="customStatusMessage">Analysis in progress</div>
-                                        <div class="progress-bar"><div class="progress-fill" id="customProgressFill" style="width: 0%"></div></div>
-                                    </div>
-                                    <div id="customStatusComplete" style="display: none;">
-                                        <div style="font-size: 2.5rem;">✅</div>
-                                        <div style="margin: 0.5rem 0;">Complete!</div>
-                                        <button class="btn btn-success" id="customViewResultsBtn" style="margin-top: 0.75rem;">📊 View Dashboard</button>
-                                    </div>
-                                    <div id="customStatusError" style="display: none;">
-                                        <div style="font-size: 2.5rem;">❌</div>
-                                        <div style="color: var(--accent-red);" id="customErrorMessage"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div id="customNoCurrentJob"><div class="empty-state" style="padding: 1.5rem; color: var(--text-secondary);">Submit an analysis to get started</div></div>
-                        </div>
-                    </div>
-                </div>
-        </div><!-- End profileIQFormView -->
-
-        <!-- CUSTOM ANALYSIS VIEW (for Talent Search and Theater) -->
-        <div id="customAnalysisView" style="display: none;">
+        <!-- CUSTOM ANALYSIS VIEW -->
+        <div id="customAnalysisView">
             <div class="dashboard-layout">
                 <!-- Custom Analysis Tabs -->
                 <div class="custom-analysis-tabs-container">
@@ -7108,11 +6823,9 @@
                     </div>
                 </div>
 
-                <!-- Profile IQ Tab Content (bg.py form) -->
-                <div id="customAnalysisTabContentProfileIQ" class="custom-analysis-tab-content active" style="display: block;">
-                    <div style="display: contents;">
-                        <!-- Profile IQ form will be displayed from profileIQFormView -->
-                    </div>
+                <!-- Profile IQ Tab Content (bg.py form) - Reuse formView content directly -->
+                <div id="customAnalysisTabContentProfileIQ" class="custom-analysis-tab-content active" style="display: none;">
+                    <!-- This will show formView content via JavaScript -->
                 </div>
 
                 <!-- Talent Search IQ Tab Content -->
@@ -7154,9 +6867,9 @@
                                 
                                 <div class="form-row">
                                     <div class="form-group">
-                                        <label style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; cursor: pointer;">
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                                             <input type="checkbox" id="customTalentSearchBeforeAfter" style="margin: 0;">
-                                            <span style="white-space: nowrap;">Check before/after search?</span>
+                                            <span>Check before/after search?</span>
                                         </label>
                                     </div>
                                 </div>
@@ -7169,7 +6882,7 @@
                                 </div>
                                 
                                 <div class="form-actions">
-                                    <button type="submit" class="btn btn-primary">🚀 Run Analysis</button>
+                                    <button type="submit" class="btn-primary">Run Analysis</button>
                                 </div>
                             </div>
                         </form>
@@ -7227,7 +6940,7 @@
                                 </div>
                                 
                                 <div class="form-actions">
-                                    <button type="submit" class="btn btn-primary">🚀 Run Analysis</button>
+                                    <button type="submit" class="btn-primary">Run Analysis</button>
                                 </div>
                             </div>
                         </form>
@@ -9191,9 +8904,9 @@
                                 
                                 <div class="form-row">
                                     <div class="form-group">
-                                        <label style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; cursor: pointer;">
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                                             <input type="checkbox" id="talentSearchBeforeAfter" style="margin: 0;">
-                                            <span style="white-space: nowrap;">Check before/after search?</span>
+                                            <span>Check before/after search?</span>
                                         </label>
                                     </div>
                                 </div>
@@ -9206,7 +8919,7 @@
                                 </div>
                                 
                                 <div class="form-actions">
-                                    <button type="submit" class="btn btn-primary">🚀 Run Analysis</button>
+                                    <button type="submit" class="btn-primary">Run Analysis</button>
                                 </div>
                             </div>
                         </form>
@@ -9267,7 +8980,7 @@
                                 </div>
                                 
                                 <div class="form-actions">
-                                    <button type="submit" class="btn btn-primary">🚀 Run Analysis</button>
+                                    <button type="submit" class="btn-primary">Run Analysis</button>
                                 </div>
                             </div>
                         </form>
@@ -9310,10 +9023,8 @@
             if (startDateInput) startDateInput.value = formatDate(thirtyDaysAgo);
             if (endDateInput) endDateInput.value = formatDate(today);
             loadJobs();
-            
-            // Dashboard (Profile IQ) is default view - load profiles
+            // Dashboard is default view - load profiles immediately
             loadDashboardProfiles();
-            
             // Initialize deck count from localStorage
             updateDeckCount();
             
@@ -9707,8 +9418,6 @@
             if (talentTheaterView) talentTheaterView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const profileIQFormView = document.getElementById('profileIQFormView');
-            if (profileIQFormView) profileIQFormView.style.display = 'none';
             
             // Update button states
             const formBtn = document.getElementById('formViewBtn');
@@ -9744,7 +9453,7 @@
             const customAnalysisBtn = document.getElementById('customAnalysisBtn');
             if (customAnalysisBtn) customAnalysisBtn.classList.remove('active');
             
-            // Show/hide views - Profile IQ shows the dashboard
+            // Show/hide views
             document.getElementById('dashboardView').style.display = 'flex';
             document.getElementById('subscriberIQView').style.display = 'none';
             const talentSearchView = document.getElementById('talentSearchIQView');
@@ -9755,8 +9464,9 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const profileIQFormView = document.getElementById('profileIQFormView');
-            if (profileIQFormView) profileIQFormView.style.display = 'none';
+            
+            // Load profiles
+            loadDashboardProfiles();
         }
         
         window.showSubscriberIQ = function() {
@@ -9786,8 +9496,6 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const profileIQFormView = document.getElementById('profileIQFormView');
-            if (profileIQFormView) profileIQFormView.style.display = 'none';
             
             // Load subscriber profiles
             loadSubscriberProfiles();
@@ -9824,8 +9532,6 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const profileIQFormView = document.getElementById('profileIQFormView');
-            if (profileIQFormView) profileIQFormView.style.display = 'none';
         }
         
         window.showTalentTheaterIQ = function() {
@@ -9854,8 +9560,6 @@
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
-            const profileIQFormView = document.getElementById('profileIQFormView');
-            if (profileIQFormView) profileIQFormView.style.display = 'none';
         }
         
         window.showCustomAnalysis = function() {
@@ -9883,15 +9587,12 @@
             const formView = document.getElementById('formView');
             if (formView) formView.style.display = 'none';
             const customAnalysisView = document.getElementById('customAnalysisView');
-            if (customAnalysisView) customAnalysisView.style.display = 'flex';
-            const profileIQFormView = document.getElementById('profileIQFormView');
-            // Show profileIQFormView when Custom Analysis is opened if Profile IQ tab is active
-            if (profileIQFormView) {
-                const profileIQTab = document.getElementById('customAnalysisTabProfileIQ');
-                if (profileIQTab && profileIQTab.classList.contains('active')) {
-                    profileIQFormView.style.display = 'block';
-                } else {
-                    profileIQFormView.style.display = 'none';
+            if (customAnalysisView) {
+                customAnalysisView.style.display = 'flex';
+                // Show formView for Profile IQ tab (default active tab)
+                const formView = document.getElementById('formView');
+                if (formView) {
+                    formView.style.display = 'block';
                 }
             }
         }
@@ -9903,252 +9604,34 @@
             document.getElementById('customAnalysisTabTalentTheater').classList.remove('active');
             
             // Hide all tab contents
-            const profileIQContent = document.getElementById('customAnalysisTabContentProfileIQ');
-            const talentSearchContent = document.getElementById('customAnalysisTabContentTalentSearch');
-            const talentTheaterContent = document.getElementById('customAnalysisTabContentTalentTheater');
+            document.getElementById('customAnalysisTabContentProfileIQ').style.display = 'none';
+            document.getElementById('customAnalysisTabContentTalentSearch').classList.remove('active');
+            document.getElementById('customAnalysisTabContentTalentTheater').classList.remove('active');
             
-            profileIQContent.classList.remove('active');
-            profileIQContent.style.display = 'none';
-            talentSearchContent.classList.remove('active');
-            talentSearchContent.style.display = 'none';
-            talentTheaterContent.classList.remove('active');
-            talentTheaterContent.style.display = 'none';
+            const formView = document.getElementById('formView');
             
             // Show selected tab
             if (tabName === 'profile-iq') {
                 document.getElementById('customAnalysisTabProfileIQ').classList.add('active');
-                profileIQContent.classList.add('active');
-                profileIQContent.style.display = 'block';
-                // Show profileIQFormView and append to tab content if needed
-                const profileIQFormView = document.getElementById('profileIQFormView');
-                if (profileIQFormView) {
-                    profileIQFormView.style.display = 'block';
-                    // Move profileIQFormView into the tab content if not already there
-                    if (profileIQFormView.parentElement !== profileIQContent) {
-                        profileIQContent.innerHTML = '';
-                        profileIQFormView.style.display = 'block';
-                        profileIQContent.appendChild(profileIQFormView);
-                    }
+                document.getElementById('customAnalysisTabContentProfileIQ').style.display = 'block';
+                // Show formView directly (reuse original form) - it's already in the DOM
+                if (formView) {
+                    formView.style.display = 'block';
                 }
             } else if (tabName === 'talent-search') {
                 document.getElementById('customAnalysisTabTalentSearch').classList.add('active');
-                talentSearchContent.classList.add('active');
-                talentSearchContent.style.display = 'block';
-                // Hide profileIQFormView
-                const profileIQFormView = document.getElementById('profileIQFormView');
-                if (profileIQFormView) profileIQFormView.style.display = 'none';
+                document.getElementById('customAnalysisTabContentTalentSearch').classList.add('active');
+                // Hide formView when switching to other tabs
+                if (formView) formView.style.display = 'none';
             } else if (tabName === 'talent-theater') {
                 document.getElementById('customAnalysisTabTalentTheater').classList.add('active');
-                talentTheaterContent.classList.add('active');
-                talentTheaterContent.style.display = 'block';
-                // Hide profileIQFormView
-                const profileIQFormView = document.getElementById('profileIQFormView');
-                if (profileIQFormView) profileIQFormView.style.display = 'none';
+                document.getElementById('customAnalysisTabContentTalentTheater').classList.add('active');
+                // Hide formView when switching to other tabs
+                if (formView) formView.style.display = 'none';
             }
         }
         
-        // Custom Analysis Form Handler (Profile IQ - bg.py)
-        document.getElementById('customAnalysisForm')?.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            console.log('📋 Custom Analysis Form submitted');
-            
-            const submitBtn = document.getElementById('customSubmitBtn');
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = 'Checking...';
-
-            const brands = document.getElementById('custom_brands').value.trim();
-            const startDate = document.getElementById('custom_start_date').value;
-            const endDate = document.getElementById('custom_end_date').value;
-            
-            console.log('📋 Form values:', { brands, startDate, endDate });
-            
-            // Validate required fields
-            if (!brands) {
-                alert('Please enter at least one brand');
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '🚀 Run Analysis';
-                return;
-            }
-            if (!startDate || !endDate) {
-                alert('Please select start and end dates');
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '🚀 Run Analysis';
-                return;
-            }
-
-            // Check cache first
-            try {
-                console.log('🔍 Checking cache...');
-                const cacheResponse = await fetch('/api/check-cache', {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ brands, start_date: startDate, end_date: endDate })
-                });
-                const cacheData = await cacheResponse.json();
-                console.log('📦 Cache response:', cacheData);
-
-                if (cacheData.found && cacheData.type === 'exact') {
-                    console.log('✅ Found exact cache match');
-                    await loadCachedResult(cacheData.file);
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = '🚀 Run Analysis';
-                    return;
-                }
-            } catch (error) { 
-                console.log('⚠️ Cache check failed:', error); 
-            }
-
-            console.log('🚀 Submitting new analysis...');
-            submitBtn.innerHTML = 'Submitting...';
-            await submitCustomAnalysis();
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '🚀 Run Analysis';
-        });
-        
-        async function submitCustomAnalysis() {
-            trackActivity('run_analysis', document.getElementById('custom_brands').value);
-            
-            const sameDates = document.getElementById('custom_same_dates').checked;
-            
-            let sampleStart, sampleEnd, behaviorStart, behaviorEnd;
-            if (sameDates) {
-                sampleStart = document.getElementById('custom_start_date').value;
-                sampleEnd = document.getElementById('custom_end_date').value;
-                behaviorStart = sampleStart;
-                behaviorEnd = sampleEnd;
-            } else {
-                sampleStart = document.getElementById('custom_sample_start_date').value;
-                sampleEnd = document.getElementById('custom_sample_end_date').value;
-                behaviorStart = document.getElementById('custom_behavior_start_date').value;
-                behaviorEnd = document.getElementById('custom_behavior_end_date').value;
-            }
-
-            const filters = {};
-            const filterFields = ['gender', 'age', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status'];
-            filterFields.forEach(field => {
-                const value = document.getElementById('custom_' + field)?.value;
-                if (value) filters[field.toUpperCase()] = [value];
-            });
-
-            const skewSettings = {};
-            const skewStrength = document.getElementById('custom_skew_strength').value;
-            ['gender', 'age', 'ethnicity'].forEach(field => {
-                const value = document.getElementById('custom_skew_' + field)?.value;
-                if (value) {
-                    skewSettings[field.toUpperCase()] = {
-                        target: [value],
-                        strength: skewStrength
-                    };
-                }
-            });
-
-            const formData = {
-                project_name: document.getElementById('custom_project_name').value,
-                brands: document.getElementById('custom_brands').value,
-                brand_category: document.getElementById('custom_brand_category').value || 'GENERAL',
-                is_genpop: document.getElementById('custom_is_genpop').checked,
-                purchasers_only: document.getElementById('custom_purchasers_only').checked,
-                sample_start: sampleStart,
-                sample_end: sampleEnd,
-                behavior_start: behaviorStart,
-                behavior_end: behaviorEnd,
-                filters: filters,
-                skew_settings: skewSettings,
-                include_frequency: document.getElementById('custom_include_frequency').checked,
-                is_listener_watcher: document.getElementById('custom_is_listener_watcher').checked,
-                platform_name: document.getElementById('custom_platform_name')?.value || '',
-                is_update: document.getElementById('custom_is_update').checked,
-                previous_file: document.getElementById('custom_previous_file')?.value || ''
-            };
-
-            console.log('📤 Sending form data:', formData);
-            
-            try {
-                const response = await fetch('/api/submit', { 
-                    method: 'POST', 
-                    credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify(formData) 
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    currentJobId = data.job_id;
-                    console.log('✅ Job started:', currentJobId);
-                    if (data.credits_left !== undefined) {
-                        updateCreditsDisplay(data.credits_left);
-                    }
-                    showCustomCurrentJob();
-                    startPolling();
-                    loadJobs();
-                } else { 
-                    console.error('❌ Submit failed:', data);
-                    if (response.status === 403 && data.credits_left === 0) {
-                        alert('❌ No credits remaining!\n\nPlease contact an administrator to get more credits.');
-                        updateCreditsDisplay(0);
-                    } else {
-                        alert(data.error || 'Failed to submit analysis'); 
-                    }
-                }
-            } catch (error) { 
-                console.error('❌ Network error:', error);
-                alert('Network error: ' + error.message); 
-            }
-        }
-        
-        function showCustomCurrentJob() {
-            document.getElementById('customCurrentJob').style.display = 'block';
-            document.getElementById('customNoCurrentJob').style.display = 'none';
-            document.getElementById('customStatusRunning').style.display = 'block';
-            document.getElementById('customStatusComplete').style.display = 'none';
-            document.getElementById('customStatusError').style.display = 'none';
-        }
-        
-        // Custom Analysis Helper Functions
-        function toggleCustomGenPopOptions() {
-            const isGenPop = document.getElementById('custom_is_genpop').checked;
-            const purchasersGroup = document.getElementById('custom_purchasers_group');
-            if (purchasersGroup) {
-                purchasersGroup.style.display = isGenPop ? 'none' : 'block';
-            }
-        }
-        
-        function toggleCustomListenerOptions() {
-            const isListener = document.getElementById('custom_is_listener_watcher').checked;
-            const listenerOptions = document.getElementById('customListenerOptions');
-            if (listenerOptions) {
-                listenerOptions.style.display = isListener ? 'block' : 'none';
-            }
-        }
-        
-        function toggleCustomUpdateOptions() {
-            const isUpdate = document.getElementById('custom_is_update').checked;
-            const updateOptions = document.getElementById('customUpdateOptions');
-            if (updateOptions) {
-                updateOptions.style.display = isUpdate ? 'block' : 'none';
-            }
-        }
-        
-        function toggleCustomDateFields() {
-            const sameDates = document.getElementById('custom_same_dates').checked;
-            const singleRange = document.getElementById('customSingleDateRange');
-            const separateRanges = document.getElementById('customSeparateDateRanges');
-            if (singleRange && separateRanges) {
-                singleRange.style.display = sameDates ? 'block' : 'none';
-                separateRanges.style.display = sameDates ? 'none' : 'block';
-                if (sameDates) {
-                    document.getElementById('custom_start_date').required = true;
-                    document.getElementById('custom_end_date').required = true;
-                } else {
-                    document.getElementById('custom_sample_start_date').required = true;
-                    document.getElementById('custom_sample_end_date').required = true;
-                    document.getElementById('custom_behavior_start_date').required = true;
-                    document.getElementById('custom_behavior_end_date').required = true;
-                }
-            }
-        }
+        // Custom Analysis Profile IQ now uses original formView - no custom form handler needed
         
         // Custom Talent Search Form Handler
         document.getElementById('customTalentSearchForm')?.addEventListener('submit', async function(e) {
