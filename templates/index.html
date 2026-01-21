@@ -9418,21 +9418,21 @@
                     top = window.innerHeight - tooltipHeight - 10;
                 }
                 
-                // Apply final position
+                // Apply final position - use fixed positioning relative to viewport
+                tooltip.style.position = 'fixed';
                 tooltip.style.left = left + 'px';
                 tooltip.style.top = top + 'px';
-                tooltip.style.visibility = '';
-                tooltip.style.opacity = '';
-                tooltip.style.display = '';
+                tooltip.style.visibility = 'visible';
+                tooltip.style.opacity = '1';
+                tooltip.style.display = 'block';
+                tooltip.style.zIndex = '999999';
                 
                 if (showBelow) {
                     tooltip.classList.add('below');
                 }
                 
-                // Show tooltip immediately (removed animation delay for debugging)
+                // Show tooltip
                 tooltip.classList.add('visible');
-                console.log('📍 Tooltip positioned at:', left, top, 'visible class added:', tooltip.classList.contains('visible'));
-                console.log('📐 Tooltip computed style - display:', window.getComputedStyle(tooltip).display, 'opacity:', window.getComputedStyle(tooltip).opacity, 'visibility:', window.getComputedStyle(tooltip).visibility);
                 
             }, true);
             
