@@ -10674,58 +10674,8 @@
             
             console.log('📊 Demographics data:', data.demographics);
             
-            // Render Insights
-            const insightsContainer = document.getElementById('subscriberDemographicsInsights');
-            if (insightsContainer) {
-                const ageData = data.demographics?.age || [];
-                const genderData = data.demographics?.gender || [];
-                const insights = [];
-                
-                console.log('📊 Age data:', ageData);
-                console.log('📊 Gender data:', genderData);
-                
-                if (ageData.length > 0) {
-                    const topAgeGroup = ageData[0];
-                    const ageRange = topAgeGroup.age_range || topAgeGroup.age || 'N/A';
-                    insights.push({
-                        icon: '👥',
-                        text: `<strong>${ageRange}</strong> age group represented the largest segment of new signups (${topAgeGroup.percentage || 'N/A'}), indicating primary audience appeal.`
-                    });
-                }
-                
-                // Filter valid gender data for insights
-                const validGenderForInsights = genderData.filter(item => {
-                    const gender = item.gender || '';
-                    const count = parseNumber(item.count) || 0;
-                    return gender && 
-                           gender.toUpperCase() !== 'GENDER' && 
-                           gender.toUpperCase() !== 'N/A' && 
-                           gender.trim() !== '' &&
-                           count > 0;
-                });
-                
-                if (validGenderForInsights.length > 0) {
-                    const topGender = validGenderForInsights[0];
-                    insights.push({
-                        icon: '📊',
-                        text: `<strong>${topGender.gender}</strong> viewers accounted for ${topGender.percentage || 'N/A'} of new signups, showing demographic concentration.`
-                    });
-                }
-                
-                insightsContainer.innerHTML = insights.length > 0 ? `
-                    <h4>💡 Key Demographic Insights</h4>
-                    <div class="tab-insights-list">
-                        ${insights.map(i => `
-                            <div class="tab-insight-item">
-                                <span class="tab-insight-icon">${i.icon}</span>
-                                <div class="tab-insight-text">${i.text}</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : '';
-            }
-            
             // Get demographics data - check multiple possible locations
+            const insightsContainer = document.getElementById('subscriberDemographicsInsights');
             let ageData = data.demographics?.age || [];
             let genderData = data.demographics?.gender || [];
             
@@ -10745,6 +10695,110 @@
             
             console.log('📊 Final age data:', ageData);
             console.log('📊 Final gender data:', genderData);
+            
+            // Filter age data - remove GENDER entries and invalid age ranges
+            const validAgeData = ageData.filter(item => {
+                const ageRange = item.age_range || item.age || '';
+                return ageRange && 
+                       ageRange.toUpperCase() !== 'GENDER' && 
+                       ageRange.toUpperCase() !== 'AGE' &&
+                       ageRange.trim() !== '' &&
+                       (item.count || parseNumber(item.count) > 0);
+            });
+            
+            // Combine gender data case-insensitively (used by insights, table, and chart)
+            const filteredGenderData = genderData.filter(item => {
+                const gender = item.gender || '';
+                const count = parseNumber(item.count) || 0;
+                return gender && 
+                       gender.toUpperCase() !== 'GENDER' && 
+                       gender.toUpperCase() !== 'N/A' && 
+                       gender.trim() !== '' &&
+                       count > 0;
+            });
+            
+            // Group genders case-insensitively and combine their values
+            const genderGroups = {};
+            filteredGenderData.forEach(item => {
+                const gender = item.gender || '';
+                const normalizedKey = gender.toUpperCase().trim();
+                
+                if (!genderGroups[normalizedKey]) {
+                    let displayName = gender;
+                    if (normalizedKey === 'MALE') displayName = 'Male';
+                    else if (normalizedKey === 'FEMALE') displayName = 'Female';
+                    else if (normalizedKey === 'TRANS MALE' || normalizedKey === 'TRANSMALE') displayName = 'Trans Male';
+                    else if (normalizedKey === 'TRANS FEMALE' || normalizedKey === 'TRANSFEMALE') displayName = 'Trans Female';
+                    else if (normalizedKey === 'NON-BINARY' || normalizedKey === 'NONBINARY' || normalizedKey === 'NON BINARY') displayName = 'Non-Binary';
+                    else if (normalizedKey === 'PREFER NOT TO SAY') displayName = 'Prefer not to say';
+                    else {
+                        displayName = gender.split(' ').map(word => 
+                            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                        ).join(' ');
+                    }
+                    
+                    genderGroups[normalizedKey] = {
+                        gender: displayName,
+                        count: 0,
+                        percentage: 0,
+                        genPop: 0
+                    };
+                }
+                
+                const count = parseNumber(item.count) || 0;
+                const percentage = parseFloat(item.percentage) || 0;
+                const genPop = parseNumber(item.gen_pop) || 0;
+                
+                genderGroups[normalizedKey].count += count;
+                genderGroups[normalizedKey].percentage += percentage;
+                genderGroups[normalizedKey].genPop += genPop;
+            });
+            
+            // Convert to array and sort by count descending
+            const validGenderData = Object.values(genderGroups)
+                .sort((a, b) => b.count - a.count);
+            
+            // Calculate total for percentage recalculation
+            const genderTotalCount = validGenderData.reduce((sum, g) => sum + g.count, 0);
+            validGenderData.forEach(g => {
+                g.percentage = genderTotalCount > 0 ? ((g.count / genderTotalCount) * 100).toFixed(2) + '%' : 'N/A';
+            });
+            
+            console.log('📊 Combined gender data:', validGenderData);
+            
+            // Update insights to use combined gender data
+            if (insightsContainer) {
+                const insights = [];
+                
+                if (validAgeData.length > 0) {
+                    const topAgeGroup = validAgeData[0];
+                    const ageRange = topAgeGroup.age_range || topAgeGroup.age || 'N/A';
+                    insights.push({
+                        icon: '👥',
+                        text: `<strong>${ageRange}</strong> age group represented the largest segment of new signups (${topAgeGroup.percentage || 'N/A'}), indicating primary audience appeal.`
+                    });
+                }
+                
+                if (validGenderData.length > 0) {
+                    const topGender = validGenderData[0];
+                    insights.push({
+                        icon: '📊',
+                        text: `<strong>${topGender.gender}</strong> viewers accounted for ${topGender.percentage || 'N/A'} of new signups, showing demographic concentration.`
+                    });
+                }
+                
+                insightsContainer.innerHTML = insights.length > 0 ? `
+                    <h4>💡 Key Demographic Insights</h4>
+                    <div class="tab-insights-list">
+                        ${insights.map(i => `
+                            <div class="tab-insight-item">
+                                <span class="tab-insight-icon">${i.icon}</span>
+                                <div class="tab-insight-text">${i.text}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : '';
+            }
             
             // Format values based on display mode
             const formatValue = (value, genPop) => {
@@ -10774,10 +10828,20 @@
                 return parseNumber(actual) || 0;
             };
             
+            // Filter age data - remove GENDER entries and invalid age ranges
+            const validAgeData = ageData.filter(item => {
+                const ageRange = item.age_range || item.age || '';
+                return ageRange && 
+                       ageRange.toUpperCase() !== 'GENDER' && 
+                       ageRange.toUpperCase() !== 'AGE' &&
+                       ageRange.trim() !== '' &&
+                       (item.count || parseNumber(item.count) > 0);
+            });
+            
             // Age Table
             const ageTableContainer = document.getElementById('subscriberAgeTable');
             if (ageTableContainer) {
-                if (ageData.length > 0) {
+                if (validAgeData.length > 0) {
                     ageTableContainer.innerHTML = `
                         <div class="demographics-table-wrapper">
                             <table class="demographics-table">
@@ -10790,7 +10854,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${ageData.map(item => {
+                                    ${validAgeData.map(item => {
                                         const ageRange = item.age_range || item.age || 'N/A';
                                         const count = parseNumber(item.count) || 0;
                                         const percentage = item.percentage || 'N/A';
@@ -10817,7 +10881,7 @@
             
             // Age Chart
             const ageContainer = document.getElementById('subscriberAgeChart');
-            if (ageData.length > 0 && ageContainer) {
+            if (validAgeData.length > 0 && ageContainer) {
                 if (charts.subscriberAge) {
                     charts.subscriberAge.destroy();
                 }
@@ -10826,9 +10890,9 @@
                 ageContainer.innerHTML = '';
                 ageContainer.appendChild(ctx);
                 
-                const labels = ageData.map(a => a.age_range || a.age || 'N/A');
-                const counts = ageData.map(a => getDisplayValue(a.count, a.gen_pop));
-                const percentages = ageData.map(a => parseFloat(a.percentage) || 0);
+                const labels = validAgeData.map(a => a.age_range || a.age || 'N/A');
+                const counts = validAgeData.map(a => getDisplayValue(a.count, a.gen_pop));
+                const percentages = validAgeData.map(a => parseFloat(a.percentage) || 0);
                 
                 charts.subscriberAge = new Chart(ctx, {
                     type: 'bar',
@@ -10872,24 +10936,11 @@
                 ageContainer.innerHTML = '<p style="color: var(--text-secondary);">No age data available</p>';
             }
             
-            // Gender Table
+            // Gender Table (uses validGenderData created earlier)
             const genderTableContainer = document.getElementById('subscriberGenderTable');
             if (genderTableContainer) {
-                // Filter out empty or invalid gender entries
-                const validGenderData = genderData.filter(item => {
-                    const gender = item.gender || '';
-                    const count = parseNumber(item.count) || 0;
-                    // Exclude entries where gender is empty, "GENDER", "N/A", or count is 0
-                    return gender && 
-                           gender.toUpperCase() !== 'GENDER' && 
-                           gender.toUpperCase() !== 'N/A' && 
-                           gender.trim() !== '' &&
-                           count > 0;
-                });
-                
-                console.log('📊 Valid gender data:', validGenderData);
-                
                 if (validGenderData.length > 0) {
+                    
                     genderTableContainer.innerHTML = `
                         <div class="demographics-table-wrapper">
                             <table class="demographics-table">
@@ -10903,12 +10954,12 @@
                                 </thead>
                                 <tbody>
                                     ${validGenderData.map(item => {
-                                        const gender = item.gender || 'N/A';
-                                        const count = parseNumber(item.count) || 0;
-                                        const percentage = item.percentage || 'N/A';
-                                        const genPop = item.gen_pop || '';
-                                        const displayValue = getDisplayValue(item.count, genPop);
-                                        const comparisonValue = subscriberGenPopMode ? count : (genPop ? parseNumber(genPop) : 0);
+                                        const gender = item.gender;
+                                        const count = item.count;
+                                        const percentage = item.percentage; // Already calculated earlier
+                                        const genPop = item.genPop;
+                                        const displayValue = getDisplayValue(count, genPop);
+                                        const comparisonValue = subscriberGenPopMode ? count : (genPop > 0 ? genPop : 0);
                                         return `
                                             <tr>
                                                 <td><strong>${gender}</strong></td>
@@ -10930,18 +10981,7 @@
             
             // Gender Chart
             const genderContainer = document.getElementById('subscriberGenderChart');
-            // Filter out invalid entries for chart too
-            const validGenderForChart = genderData.filter(item => {
-                const gender = item.gender || '';
-                const count = parseNumber(item.count) || 0;
-                return gender && 
-                       gender.toUpperCase() !== 'GENDER' && 
-                       gender.toUpperCase() !== 'N/A' && 
-                       gender.trim() !== '' &&
-                       count > 0;
-            });
-            
-            if (validGenderForChart.length > 0 && genderContainer) {
+            if (validGenderData.length > 0 && genderContainer) {
                 if (charts.subscriberGender) {
                     charts.subscriberGender.destroy();
                 }
@@ -10950,20 +10990,9 @@
                 genderContainer.innerHTML = '';
                 genderContainer.appendChild(ctx);
                 
-                // Group similar gender labels
-                const genderGroups = {};
-                validGenderForChart.forEach(g => {
-                    const key = g.gender.toUpperCase().replace(/[^A-Z]/g, '');
-                    if (!genderGroups[key]) {
-                        genderGroups[key] = { label: g.gender, count: 0, percentage: 0 };
-                    }
-                    const value = getDisplayValue(g.count, g.gen_pop);
-                    genderGroups[key].count += value;
-                    genderGroups[key].percentage += parseFloat(g.percentage) || 0;
-                });
-                
-                const labels = Object.values(genderGroups).map(g => g.label);
-                const counts = Object.values(genderGroups).map(g => g.count);
+                // Use the already-combined gender data
+                const labels = validGenderData.map(g => g.gender);
+                const counts = validGenderData.map(g => getDisplayValue(g.count, g.genPop));
                 
                 charts.subscriberGender = new Chart(ctx, {
                     type: 'doughnut',
