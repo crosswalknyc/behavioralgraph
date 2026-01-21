@@ -920,6 +920,63 @@
             line-height: 1.5;
         }
 
+        /* Demographics Table Styles */
+        .demographics-table-container {
+            margin-bottom: 2rem;
+        }
+
+        .demographics-table-wrapper {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .demographics-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .demographics-table thead {
+            background: var(--bg-input);
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .demographics-table th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+        }
+
+        .demographics-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .demographics-table tbody tr:hover {
+            background: rgba(90, 154, 217, 0.05);
+        }
+
+        .demographics-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .demographics-table td strong {
+            color: var(--accent-cyan);
+        }
+
+        .demographics-table td:nth-child(2),
+        .demographics-table td:nth-child(4) {
+            color: var(--accent-lime);
+            font-weight: 600;
+        }
+
         /* Form Styles */
         .main-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 1.5rem; }
         @media (max-width: 1000px) { .main-grid { grid-template-columns: 1fr; } }
@@ -8476,15 +8533,19 @@
                         <!-- Demographics Tab -->
                         <div id="subscriber-tab-demographics" class="tab-content">
                             <div id="subscriberDemographicsInsights" class="tab-insights-section"></div>
+                            
                             <div class="tab-section">
                                 <h3>👥 Age of New Signups</h3>
                                 <p class="section-description">Age distribution of people who signed up for the platform to watch this show</p>
-                                <div id="subscriberAgeChart" class="chart-container"></div>
+                                <div id="subscriberAgeTable" class="demographics-table-container"></div>
+                                <div id="subscriberAgeChart" class="chart-container" style="margin-top: 2rem;"></div>
                             </div>
+                            
                             <div class="tab-section">
                                 <h3>👥 Gender of New Signups</h3>
                                 <p class="section-description">Gender distribution of people who signed up for the platform to watch this show</p>
-                                <div id="subscriberGenderChart" class="chart-container"></div>
+                                <div id="subscriberGenderTable" class="demographics-table-container"></div>
+                                <div id="subscriberGenderChart" class="chart-container" style="margin-top: 2rem;"></div>
                             </div>
                         </div>
 
@@ -9224,9 +9285,10 @@
             if (label) {
                 label.textContent = subscriberDisplayMode === 'percent' ? 'US %' : 'US #';
             }
-            // Re-render insights if data is loaded
+            // Re-render all tabs if data is loaded
             if (currentSubscriberData) {
                 renderSubscriberInsights(currentSubscriberData);
+                renderSubscriberDemographics(currentSubscriberData);
             }
         }
         
@@ -10204,6 +10266,53 @@
             const ageData = data.demographics?.age || [];
             const genderData = data.demographics?.gender || [];
             
+            // Format values based on display mode
+            const formatValue = (value, genPop) => {
+                if (subscriberDisplayMode === 'projection' && genPop) {
+                    return formatNumber(genPop);
+                }
+                return formatNumber(value);
+            };
+            
+            // Age Table
+            const ageTableContainer = document.getElementById('subscriberAgeTable');
+            if (ageTableContainer) {
+                if (ageData.length > 0) {
+                    ageTableContainer.innerHTML = `
+                        <div class="demographics-table-wrapper">
+                            <table class="demographics-table">
+                                <thead>
+                                    <tr>
+                                        <th>Age Range</th>
+                                        <th>Count</th>
+                                        <th>Percentage</th>
+                                        ${subscriberDisplayMode === 'projection' ? '<th>Gen Pop Projection</th>' : '<th>Gen Pop %</th>'}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${ageData.map(item => {
+                                        const ageRange = item.age_range || item.age || 'N/A';
+                                        const count = parseNumber(item.count) || 0;
+                                        const percentage = item.percentage || 'N/A';
+                                        const genPop = item.gen_pop || '';
+                                        return `
+                                            <tr>
+                                                <td><strong>${ageRange}</strong></td>
+                                                <td>${formatNumber(count)}</td>
+                                                <td>${percentage}</td>
+                                                <td>${genPop ? formatValue(count, genPop) : 'N/A'}</td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    ageTableContainer.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No age data available</p>';
+                }
+            }
+            
             // Age Chart
             const ageContainer = document.getElementById('subscriberAgeChart');
             if (ageData.length > 0 && ageContainer) {
@@ -10215,7 +10324,7 @@
                 ageContainer.innerHTML = '';
                 ageContainer.appendChild(ctx);
                 
-                const labels = ageData.map(a => a.age_range);
+                const labels = ageData.map(a => a.age_range || a.age || 'N/A');
                 const counts = ageData.map(a => parseNumber(a.count) || 0);
                 const percentages = ageData.map(a => parseFloat(a.percentage) || 0);
                 
@@ -10259,6 +10368,45 @@
                 });
             } else if (ageContainer) {
                 ageContainer.innerHTML = '<p style="color: var(--text-secondary);">No age data available</p>';
+            }
+            
+            // Gender Table
+            const genderTableContainer = document.getElementById('subscriberGenderTable');
+            if (genderTableContainer) {
+                if (genderData.length > 0) {
+                    genderTableContainer.innerHTML = `
+                        <div class="demographics-table-wrapper">
+                            <table class="demographics-table">
+                                <thead>
+                                    <tr>
+                                        <th>Gender</th>
+                                        <th>Count</th>
+                                        <th>Percentage</th>
+                                        ${subscriberDisplayMode === 'projection' ? '<th>Gen Pop Projection</th>' : '<th>Gen Pop %</th>'}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${genderData.map(item => {
+                                        const gender = item.gender || 'N/A';
+                                        const count = parseNumber(item.count) || 0;
+                                        const percentage = item.percentage || 'N/A';
+                                        const genPop = item.gen_pop || '';
+                                        return `
+                                            <tr>
+                                                <td><strong>${gender}</strong></td>
+                                                <td>${formatNumber(count)}</td>
+                                                <td>${percentage}</td>
+                                                <td>${genPop ? formatValue(count, genPop) : 'N/A'}</td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    genderTableContainer.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No gender data available</p>';
+                }
             }
             
             // Gender Chart
