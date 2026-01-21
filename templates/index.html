@@ -14070,7 +14070,7 @@
         // Hover tooltip toggle
         let hoverEnabled = true;
         
-        function toggleHoverDescriptors() {
+        window.toggleHoverDescriptors = function() {
             hoverEnabled = !hoverEnabled;
             const toggle = document.getElementById('hoverToggle');
             const label = document.getElementById('hoverToggleLabel');
