@@ -14075,24 +14075,32 @@
         // Hover tooltip toggle
         let hoverEnabled = true;
         
-        window.toggleHoverDescriptors = function() {
+        function toggleHoverDescriptors() {
+            console.log('toggleHoverDescriptors called, current state:', hoverEnabled);
             hoverEnabled = !hoverEnabled;
             const toggle = document.getElementById('hoverToggle');
             const label = document.getElementById('hoverToggleLabel');
             
+            console.log('New state:', hoverEnabled, 'toggle element:', toggle, 'label element:', label);
+            
             if (hoverEnabled) {
-                toggle.classList.remove('active');
-                label.textContent = 'HOVER ON';
+                if (toggle) toggle.classList.remove('active');
+                if (label) label.textContent = 'HOVER ON';
                 document.body.classList.remove('hover-disabled');
             } else {
-                toggle.classList.add('active');
-                label.textContent = 'HOVER OFF';
+                if (toggle) toggle.classList.add('active');
+                if (label) label.textContent = 'HOVER OFF';
                 document.body.classList.add('hover-disabled');
             }
+            
+            console.log('body.hover-disabled:', document.body.classList.contains('hover-disabled'));
             
             // Save preference to localStorage
             localStorage.setItem('hoverEnabled', hoverEnabled);
         }
+        
+        // Expose to window for onclick handlers
+        window.toggleHoverDescriptors = toggleHoverDescriptors;
         
         // Load hover preference on page load
         document.addEventListener('DOMContentLoaded', function() {
