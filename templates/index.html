@@ -3035,7 +3035,7 @@
         }
         .key-stats-grid {
             display: grid;
-            grid-template-columns: repeat(6, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 0.75rem;
         }
         .key-stat-item {
@@ -3058,6 +3058,12 @@
         }
         .key-stat-value.neutral {
             color: var(--text-primary);
+        }
+        .key-stat-genpop {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+            opacity: 0.8;
         }
         .insights-list {
             display: flex;
@@ -7900,6 +7906,16 @@
                         </div>
                     </div>
 
+                    <!-- Action Buttons Row -->
+                    <div class="dash-action-row" id="subscriberActionRow" style="display: none; justify-content: flex-end; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <div class="display-mode-toggle" id="subscriberUSPercentToggle" onclick="toggleSubscriberUSPercent()" title="Toggle between US % and US #">
+                            <span id="subscriberDisplayModeLabel">US %</span>
+                        </div>
+                        <div class="display-mode-toggle" id="subscriberHoverToggle" onclick="toggleSubscriberHover()" title="Toggle hover tooltips on/off">
+                            <span id="subscriberHoverToggleLabel">HOVER ON</span>
+                        </div>
+                    </div>
+
                     <!-- Tabs -->
                     <div class="dashboard-tabs" id="subscriberTabs" style="display: none;">
                         <button class="tab-btn active" onclick="showSubscriberTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
@@ -8590,9 +8606,11 @@
                 attributionWindow.style.display = attribution ? 'block' : 'none';
             }
             
+            const actionRow = document.getElementById('subscriberActionRow');
             if (profileInfo) profileInfo.style.display = 'flex';
             if (emptyState) emptyState.style.display = 'none';
             if (tabs) tabs.style.display = 'flex';
+            if (actionRow) actionRow.style.display = 'flex';
             
             // Load profile image if available
             if (show) {
@@ -8653,6 +8671,30 @@
             window.scrollTo(0, 0);
         }
         
+        // Subscriber IQ display mode (US % vs US #)
+        let subscriberDisplayMode = 'percent'; // 'percent' or 'projection'
+        let subscriberHoverEnabled = true;
+        
+        function toggleSubscriberUSPercent() {
+            subscriberDisplayMode = subscriberDisplayMode === 'percent' ? 'projection' : 'percent';
+            const label = document.getElementById('subscriberDisplayModeLabel');
+            if (label) {
+                label.textContent = subscriberDisplayMode === 'percent' ? 'US %' : 'US #';
+            }
+            // Re-render insights if data is loaded
+            if (currentSubscriberData) {
+                renderSubscriberInsights(currentSubscriberData);
+            }
+        }
+        
+        function toggleSubscriberHover() {
+            subscriberHoverEnabled = !subscriberHoverEnabled;
+            const label = document.getElementById('subscriberHoverToggleLabel');
+            if (label) {
+                label.textContent = subscriberHoverEnabled ? 'HOVER ON' : 'HOVER OFF';
+            }
+        }
+        
         function renderSubscriberInsights(data) {
             if (!data) {
                 console.error('❌ No data provided to renderSubscriberInsights');
@@ -8688,37 +8730,87 @@
             const summary = data.attribution_summary || {};
             
             const totalWatchers = metrics.total_watchers?.count || 0;
+            const totalWatchersGenPop = metrics.total_watchers?.gen_pop || '';
+            const preExisting = metrics.pre_existing?.count || 0;
+            const preExistingGenPop = metrics.pre_existing?.gen_pop || '';
             const newSignups = metrics.new_signups?.count || 0;
+            const newSignupsGenPop = metrics.new_signups?.gen_pop || '';
             const cleanSample = metrics.clean_sample?.count || 0;
+            const cleanSampleGenPop = metrics.clean_sample?.gen_pop || '';
             const totalSignups = summary.total?.count || 0;
+            const totalSignupsGenPop = summary.total?.gen_pop || '';
             const attributedSignups = summary.attributed?.count || 0;
-            const conversionRate = metrics.clean_conversion_rate || metrics.total_conversion_rate || 'N/A';
+            const attributedSignupsGenPop = summary.attributed?.gen_pop || '';
+            const dormantReactive = summary.dormant_reactive?.count || 0;
+            const dormantReactiveGenPop = summary.dormant_reactive?.gen_pop || '';
+            const totalConversionRate = metrics.total_conversion_rate || 'N/A';
+            const cleanConversionRate = metrics.clean_conversion_rate || 'N/A';
+            const avgDaysToSignup = metrics.avg_days_to_signup || 'N/A';
             
-            // Key Statistics
+            // Format values based on display mode
+            const formatValue = (value, genPop) => {
+                if (subscriberDisplayMode === 'projection' && genPop) {
+                    return formatNumber(genPop);
+                }
+                return formatNumber(value);
+            };
+            
+            const formatGenPop = (genPop) => {
+                if (!genPop) return '';
+                if (subscriberDisplayMode === 'percent') {
+                    return `Gen Pop: ${genPop}`;
+                }
+                return `Actual: ${formatNumber(genPop)}`;
+            };
+            
+            // Key Statistics with tooltips
             const statsHTML = `
-                <div class="key-stat-item">
+                <div class="key-stat-item has-tooltip" data-tooltip="How many people total watched the series">
                     <div class="key-stat-label">Total Show Watchers</div>
-                    <div class="key-stat-value neutral">${formatNumber(totalWatchers)}</div>
+                    <div class="key-stat-value neutral">${formatValue(totalWatchers, totalWatchersGenPop)}</div>
+                    ${totalWatchersGenPop ? `<div class="key-stat-genpop">${formatGenPop(totalWatchersGenPop)}</div>` : ''}
                 </div>
-                <div class="key-stat-item">
+                <div class="key-stat-item has-tooltip" data-tooltip="How many people watched a previous season of the series">
+                    <div class="key-stat-label">Pre-Existing Series Viewers</div>
+                    <div class="key-stat-value neutral">${formatValue(preExisting, preExistingGenPop)}</div>
+                    ${preExistingGenPop ? `<div class="key-stat-genpop">${formatGenPop(preExistingGenPop)}</div>` : ''}
+                </div>
+                <div class="key-stat-item has-tooltip" data-tooltip="People who have not watched the show before">
+                    <div class="key-stat-label">New First Time Viewers</div>
+                    <div class="key-stat-value neutral">${formatValue(cleanSample, cleanSampleGenPop)}</div>
+                    ${cleanSampleGenPop ? `<div class="key-stat-genpop">${formatGenPop(cleanSampleGenPop)}</div>` : ''}
+                </div>
+                <div class="key-stat-item has-tooltip" data-tooltip="How many people signed up for the platform then their first watch was this show">
                     <div class="key-stat-label">New Platform Signups</div>
-                    <div class="key-stat-value positive">${formatNumber(newSignups)}</div>
+                    <div class="key-stat-value positive">${formatValue(newSignups, newSignupsGenPop)}</div>
+                    ${newSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(newSignupsGenPop)}</div>` : ''}
                 </div>
-                <div class="key-stat-item">
-                    <div class="key-stat-label">Conversion Rate</div>
-                    <div class="key-stat-value ${conversionRate !== 'N/A' ? 'positive' : 'neutral'}">${conversionRate}</div>
+                <div class="key-stat-item has-tooltip" data-tooltip="What percent of the total show watchers signed up for the platform to watch this show">
+                    <div class="key-stat-label">Total Show Conversion Rate</div>
+                    <div class="key-stat-value ${totalConversionRate !== 'N/A' ? 'positive' : 'neutral'}">${totalConversionRate}</div>
                 </div>
-                <div class="key-stat-item">
+                <div class="key-stat-item has-tooltip" data-tooltip="How many first time viewers signed up for the platform to watch the show">
+                    <div class="key-stat-label">New Viewers Conversion Rate</div>
+                    <div class="key-stat-value ${cleanConversionRate !== 'N/A' ? 'positive' : 'neutral'}">${cleanConversionRate}</div>
+                </div>
+                <div class="key-stat-item has-tooltip" data-tooltip="How long on average it takes for a user to sign up for a platform to watch the show after the first episode has dropped">
+                    <div class="key-stat-label">Average Days from Show Available to Signup</div>
+                    <div class="key-stat-value neutral">${avgDaysToSignup}</div>
+                </div>
+                <div class="key-stat-item has-tooltip" data-tooltip="Confirmed new subscribers to the streaming platform">
                     <div class="key-stat-label">Attributed Signups</div>
-                    <div class="key-stat-value positive">${formatNumber(attributedSignups)}</div>
+                    <div class="key-stat-value positive">${formatValue(attributedSignups, attributedSignupsGenPop)}</div>
+                    ${attributedSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(attributedSignupsGenPop)}</div>` : ''}
                 </div>
-                <div class="key-stat-item">
-                    <div class="key-stat-label">Total Signups</div>
-                    <div class="key-stat-value positive">${formatNumber(totalSignups)}</div>
+                <div class="key-stat-item has-tooltip" data-tooltip="How many dormant users logged back in to watch the show">
+                    <div class="key-stat-label">Dormant to Reactive</div>
+                    <div class="key-stat-value positive">${formatValue(dormantReactive, dormantReactiveGenPop)}</div>
+                    ${dormantReactiveGenPop ? `<div class="key-stat-genpop">${formatGenPop(dormantReactiveGenPop)}</div>` : ''}
                 </div>
-                <div class="key-stat-item">
-                    <div class="key-stat-label">Clean Sample</div>
-                    <div class="key-stat-value neutral">${formatNumber(cleanSample)}</div>
+                <div class="key-stat-item has-tooltip" data-tooltip="Total number of signups and dormant to reactive">
+                    <div class="key-stat-label">Total Signups & Reactivated Users</div>
+                    <div class="key-stat-value positive">${formatValue(totalSignups, totalSignupsGenPop)}</div>
+                    ${totalSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(totalSignupsGenPop)}</div>` : ''}
                 </div>
             `;
             statsContainer.innerHTML = statsHTML;
@@ -8730,24 +8822,54 @@
                 computedDisplay: window.getComputedStyle(statsContainer).display
             });
             
-            // Key Insights - Dynamic bullet points
+            // Key Insights - Actionable for studios/agents/production companies
             const insights = [];
-            if (newSignups > 0) {
-                insights.push(`<strong>${formatNumber(newSignups)} people</strong> signed up for ${platform} specifically to watch ${show}`);
+            
+            // Subscriber Growth Value
+            if (totalSignups > 0) {
+                insights.push(`<strong>${formatNumber(totalSignups)} total subscribers</strong> were acquired or reactivated by ${show} - demonstrating strong platform value`);
             }
-            if (conversionRate !== 'N/A') {
-                insights.push(`<strong>${conversionRate}</strong> of show watchers converted to platform subscribers`);
+            
+            // New Subscriber Acquisition
+            if (newSignups > 0 && cleanSample > 0) {
+                const newViewerPct = ((newSignups / cleanSample) * 100).toFixed(1);
+                insights.push(`<strong>${formatNumber(newSignups)} new platform subscribers</strong> were acquired from first-time viewers (${newViewerPct}% conversion rate)`);
             }
-            if (attributedSignups > 0 && totalSignups > 0) {
-                const pct = ((attributedSignups / totalSignups) * 100).toFixed(1);
-                insights.push(`<strong>${pct}%</strong> of signups were directly attributed to watching the show`);
+            
+            // Reactivation Value
+            if (dormantReactive > 0) {
+                const reactivationPct = totalSignups > 0 ? ((dormantReactive / totalSignups) * 100).toFixed(1) : 0;
+                insights.push(`<strong>${formatNumber(dormantReactive)} dormant users</strong> were reactivated (${reactivationPct}% of total impact) - showing retention value`);
             }
-            if (metrics.avg_days_to_signup && metrics.avg_days_to_signup !== 'N/A') {
-                insights.push(`Average time from watching to signup: <strong>${metrics.avg_days_to_signup} days</strong>`);
+            
+            // Conversion Performance
+            if (cleanConversionRate !== 'N/A' && totalConversionRate !== 'N/A') {
+                insights.push(`New viewers convert at <strong>${cleanConversionRate}</strong> vs. <strong>${totalConversionRate}</strong> overall - indicating strong appeal to new audiences`);
             }
+            
+            // Speed to Conversion
+            if (avgDaysToSignup !== 'N/A' && parseFloat(avgDaysToSignup) < 7) {
+                insights.push(`Fast conversion: Average <strong>${avgDaysToSignup} days</strong> from premiere to signup - shows immediate platform value`);
+            } else if (avgDaysToSignup !== 'N/A') {
+                insights.push(`Average <strong>${avgDaysToSignup} days</strong> from premiere to signup - indicates sustained interest`);
+            }
+            
+            // Reach and Impact
             if (totalWatchers > 0 && newSignups > 0) {
                 const reachPct = ((newSignups / totalWatchers) * 100).toFixed(1);
-                insights.push(`Show reached <strong>${formatNumber(totalWatchers)} viewers</strong>, driving <strong>${reachPct}%</strong> to sign up`);
+                insights.push(`Reached <strong>${formatNumber(totalWatchers)} total viewers</strong>, converting <strong>${reachPct}%</strong> to platform subscribers`);
+            }
+            
+            // First-Time Viewer Appeal
+            if (cleanSample > 0 && preExisting > 0) {
+                const newViewerPct = ((cleanSample / totalWatchers) * 100).toFixed(1);
+                insights.push(`<strong>${newViewerPct}%</strong> of viewers were first-time watchers - demonstrating ability to attract new audiences`);
+            }
+            
+            // Long-term Value Indicator
+            if (attributedSignups > 0 && totalSignups > 0) {
+                const attributionPct = ((attributedSignups / totalSignups) * 100).toFixed(1);
+                insights.push(`<strong>${attributionPct}%</strong> of signups directly attributed to ${show} - clear ROI for platform investment`);
             }
             
             if (insights.length === 0) {

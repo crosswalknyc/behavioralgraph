@@ -3219,6 +3219,14 @@ def parse_subscriber_iq_csv(csv_content):
                     'count': count_val,
                     'gen_pop': gen_pop_val
                 }
+            elif 'Pre-Existing' in first_col or 'Pre Existing' in first_col:
+                count_val = parse_number(row[1]) if len(row) > 1 else None
+                gen_pop_val = row[8].strip() if len(row) > 8 else ''
+                print(f"   📊 Found Pre-Existing Series Viewers: count={count_val}, gen_pop={gen_pop_val}")
+                parsed['key_metrics']['pre_existing'] = {
+                    'count': count_val,
+                    'gen_pop': gen_pop_val
+                }
             elif 'Clean Sample' in first_col or 'Clean Sample (New First Time Viewers)' in first_col:
                 count_val = parse_number(row[1]) if len(row) > 1 else None
                 gen_pop_val = row[8].strip() if len(row) > 8 else ''
