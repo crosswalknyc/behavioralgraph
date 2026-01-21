@@ -725,6 +725,23 @@
             display: block;
         }
 
+        .subcategory-accordion {
+            margin-left: 1rem;
+            margin-top: 0.5rem;
+            background: rgba(90, 154, 217, 0.05);
+            border-radius: 8px;
+            padding: 0.5rem;
+        }
+
+        .subcategory-accordion .category-accordion-header {
+            padding: 0.75rem 1rem;
+            background: transparent;
+        }
+
+        .subcategory-accordion .category-accordion-content {
+            padding: 0.5rem;
+        }
+
         .confirm-modal {
             background: rgba(249, 38, 114, 0.1);
             border: 1px solid var(--accent-red);
@@ -2640,6 +2657,102 @@
             document.getElementById('newCategory').value = currentCategory || '';
             document.getElementById('customCategory').value = '';
             
+            // Check if this is a SVOD file
+            const isSvod = fileKey.startsWith('svod-acquisition/');
+            const select = document.getElementById('newCategory');
+            
+            if (isSvod) {
+                // For SVOD files, show all categories as subcategories under SVOD ACQUISITION
+                // Get all unique categories from SVOD files
+                const svodCategories = new Set();
+                contentFiles.forEach(f => {
+                    if (f.is_svod || (f.key && f.key.startsWith('svod-acquisition/')) || (f.bucket === 'svod-acquisition')) {
+                        if (f.category && f.category !== 'SVOD Acquisition') {
+                            svodCategories.add(f.category);
+                        }
+                    }
+                });
+                
+                // Also include common categories that might be used
+                const commonCategories = [
+                    'TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'SPORT',
+                    'SERIES - APPLE', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT',
+                    'SERIES - HBO MAX', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS',
+                    'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'
+                ];
+                commonCategories.forEach(cat => svodCategories.add(cat));
+                
+                select.innerHTML = '<option value="">Select a subcategory...</option>';
+                Array.from(svodCategories).sort().forEach(cat => {
+                    select.innerHTML += `<option value="${cat}">${cat}</option>`;
+                });
+                
+                // Add note that this is for SVOD subcategories
+                const label = select.previousElementSibling;
+                if (label) {
+                    label.innerHTML = 'Select SVOD Subcategory (under SVOD ACQUISITION master)';
+                }
+            } else {
+                // For regular files, show master category groups
+                select.innerHTML = `
+                    <optgroup label="📺 CONTENT">
+                        <option value="GAME PLAYERS">GAME PLAYERS</option>
+                        <option value="GAMES">GAMES</option>
+                        <option value="MOVIE THEATER">MOVIE THEATER</option>
+                        <option value="PODCAST">PODCAST</option>
+                        <option value="SERIES - APPLE">SERIES - APPLE</option>
+                        <option value="SERIES - FXP">SERIES - FXP</option>
+                        <option value="SERIES - HBO ENTERTAINMENT">SERIES - HBO ENTERTAINMENT</option>
+                        <option value="SERIES - HBO MAX">SERIES - HBO MAX</option>
+                        <option value="SERIES - NETFLIX">SERIES - NETFLIX</option>
+                        <option value="SERIES - PARAMOUNT TV STUDIOS">SERIES - PARAMOUNT TV STUDIOS</option>
+                        <option value="SERIES - SONY">SERIES - SONY</option>
+                        <option value="SERIES - UNIVERSAL TV">SERIES - UNIVERSAL TV</option>
+                        <option value="SERIES - WBD">SERIES - WBD</option>
+                    </optgroup>
+                    <optgroup label="⭐ TALENT">
+                        <option value="ACTOR">ACTOR</option>
+                        <option value="ATHLETE">ATHLETE</option>
+                        <option value="CREATOR/INFLUENCER">CREATOR/INFLUENCER</option>
+                        <option value="HOST/PERSONALITY">HOST/PERSONALITY</option>
+                        <option value="MUSICIAN/BAND">MUSICIAN/BAND</option>
+                        <option value="PODCASTER">PODCASTER</option>
+                        <option value="WRITER/DIRECTOR/AUTHOR/ARTIST">WRITER/DIRECTOR/AUTHOR/ARTIST</option>
+                    </optgroup>
+                    <optgroup label="📺 PLATFORMS">
+                        <option value="APP/PLATFORM">APP/PLATFORM</option>
+                        <option value="BROADCAST/CABLE">BROADCAST/CABLE</option>
+                        <option value="STREAMING VIDEO">STREAMING VIDEO</option>
+                        <option value="STREAMING MUSIC">STREAMING MUSIC</option>
+                        <option value="SOCIAL MEDIA">SOCIAL MEDIA</option>
+                        <option value="VIRTUAL MVPD FAST">VIRTUAL MVPD FAST</option>
+                    </optgroup>
+                    <optgroup label="📦 BRAND">
+                        <option value="APPAREL">APPAREL</option>
+                        <option value="BEAUTY">BEAUTY</option>
+                        <option value="BEVERAGE">BEVERAGE</option>
+                        <option value="FOOTWEAR">FOOTWEAR</option>
+                        <option value="GROCERY">GROCERY</option>
+                        <option value="QSR">QSR</option>
+                        <option value="RETAILERS">RETAILERS</option>
+                        <option value="TELECOM">TELECOM</option>
+                        <option value="CREDIT PROVIDER">CREDIT PROVIDER</option>
+                    </optgroup>
+                    <optgroup label="⚽ SPORT">
+                        <option value="MLB">MLB</option>
+                        <option value="NBA">NBA</option>
+                        <option value="NFL">NFL</option>
+                        <option value="WNBA">WNBA</option>
+                        <option value="SPORTS ORGANIZATIONS">SPORTS ORGANIZATIONS</option>
+                    </optgroup>
+                `;
+                
+                const label = select.previousElementSibling;
+                if (label) {
+                    label.innerHTML = 'Select New Category';
+                }
+            }
+            
             document.getElementById('categoryModal').classList.add('show');
         }
         
@@ -2924,9 +3037,29 @@
         function renderContentAccordions(files) {
             const container = document.getElementById('contentAccordions');
             
-            // Group by category
-            const byCategory = {};
+            // Separate SVOD files from regular files
+            const svodFiles = [];
+            const regularFiles = [];
+            
             files.forEach(file => {
+                if (file.is_svod || (file.key && file.key.startsWith('svod-acquisition/')) || (file.bucket === 'svod-acquisition')) {
+                    svodFiles.push(file);
+                } else {
+                    regularFiles.push(file);
+                }
+            });
+            
+            // Group SVOD files by subcategory under SVOD ACQUISITION master
+            const svodBySubcategory = {};
+            svodFiles.forEach(file => {
+                const subcat = file.category || 'SVOD Acquisition';
+                if (!svodBySubcategory[subcat]) svodBySubcategory[subcat] = [];
+                svodBySubcategory[subcat].push(file);
+            });
+            
+            // Group regular files by category (will use master categories)
+            const byCategory = {};
+            regularFiles.forEach(file => {
                 const cat = file.category || 'Uncategorized';
                 if (!byCategory[cat]) byCategory[cat] = [];
                 byCategory[cat].push(file);
@@ -2934,15 +3067,68 @@
 
             // Sort categories
             const sortedCategories = Object.keys(byCategory).sort();
+            const sortedSvodSubcategories = Object.keys(svodBySubcategory).sort();
 
-            if (sortedCategories.length === 0) {
+            if (sortedCategories.length === 0 && sortedSvodSubcategories.length === 0) {
                 container.innerHTML = `<p style="color: var(--text-secondary); font-size: 0.85rem; padding: 2rem; text-align: center;">
                     ${showingArchived ? 'No archived files found.' : 'No content files found.'}
                 </p>`;
                 return;
             }
 
-            container.innerHTML = sortedCategories.map(category => {
+            let html = '';
+            
+            // First, render SVOD ACQUISITION master category with subcategories
+            if (sortedSvodSubcategories.length > 0) {
+                const totalSvodFiles = svodFiles.length;
+                html += `
+                    <div class="category-accordion" data-category="SVOD ACQUISITION" data-master-category="true">
+                        <div class="category-accordion-header" onclick="toggleAccordion(this)">
+                            <div class="category-accordion-title">
+                                <span class="category-accordion-arrow">▼</span>
+                                <span>📺 SVOD ACQUISITION</span>
+                                <span class="badge badge-user">${totalSvodFiles} files</span>
+                            </div>
+                        </div>
+                        <div class="category-accordion-content">
+                            ${sortedSvodSubcategories.map(subcat => {
+                                const subcatFiles = svodBySubcategory[subcat];
+                                return `
+                                    <div class="subcategory-accordion" data-subcategory="${subcat}" style="margin-bottom: 1rem; border-left: 3px solid var(--accent-cyan); padding-left: 1rem;">
+                                        <div class="category-accordion-header" onclick="toggleAccordion(this)">
+                                            <div class="category-accordion-title">
+                                                <span class="category-accordion-arrow">▼</span>
+                                                <span>${getCategoryIcon(subcat)} ${subcat}</span>
+                                                <span class="badge badge-user">${subcatFiles.length} files</span>
+                                            </div>
+                                        </div>
+                                        <div class="category-accordion-content">
+                                            <table class="content-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th style="width: 40px;"><input type="checkbox" onchange="toggleCategorySelection('${subcat}', this.checked, true)"></th>
+                                                        <th>File Name</th>
+                                                        <th>Project</th>
+                                                        <th>Date</th>
+                                                        <th>Size</th>
+                                                        <th>Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    ${subcatFiles.map(file => renderFileRow(file)).join('')}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Then render regular files grouped by category
+            html += sortedCategories.map(category => {
                 const catFiles = byCategory[category];
                 return `
                     <div class="category-accordion" data-category="${category}">
@@ -2973,6 +3159,8 @@
                     </div>
                 `;
             }).join('');
+            
+            container.innerHTML = html;
         }
 
         function getCategoryIcon(category) {
@@ -3042,15 +3230,33 @@
             updateSelectionBar();
         }
 
-        function toggleCategorySelection(category, checked) {
+        function toggleCategorySelection(category, checked, isSvodSubcategory = false) {
             const files = showingArchived ? archivedFiles : contentFiles;
-            files.filter(f => (f.category || 'Uncategorized') === category).forEach(file => {
-                if (checked) {
-                    selectedFiles.add(file.key);
-                } else {
-                    selectedFiles.delete(file.key);
-                }
-            });
+            if (isSvodSubcategory) {
+                // For SVOD subcategories, only select SVOD files with this subcategory
+                files.filter(f => {
+                    const isSvod = f.is_svod || (f.key && f.key.startsWith('svod-acquisition/')) || (f.bucket === 'svod-acquisition');
+                    return isSvod && (f.category || 'SVOD Acquisition') === category;
+                }).forEach(file => {
+                    if (checked) {
+                        selectedFiles.add(file.key);
+                    } else {
+                        selectedFiles.delete(file.key);
+                    }
+                });
+            } else {
+                // For regular categories, only select non-SVOD files
+                files.filter(f => {
+                    const isSvod = f.is_svod || (f.key && f.key.startsWith('svod-acquisition/')) || (f.bucket === 'svod-acquisition');
+                    return !isSvod && (f.category || 'Uncategorized') === category;
+                }).forEach(file => {
+                    if (checked) {
+                        selectedFiles.add(file.key);
+                    } else {
+                        selectedFiles.delete(file.key);
+                    }
+                });
+            }
             renderContentAccordions(showingArchived ? archivedFiles : contentFiles);
             updateSelectionBar();
         }
