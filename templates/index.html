@@ -456,6 +456,365 @@
             line-height: 1.6;
         }
 
+        /* Strategic Dashboard Styles */
+        .executive-summary-section,
+        .strategic-section {
+            margin-bottom: 2rem;
+        }
+
+        .executive-summary-card {
+            background: linear-gradient(135deg, rgba(90, 154, 217, 0.1), rgba(90, 154, 217, 0.05));
+            border: 2px solid var(--accent-blue);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .exec-summary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .exec-summary-header h2 {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.5rem;
+            color: var(--accent-cyan);
+            margin: 0;
+        }
+
+        .performance-badge {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0.75rem 1.25rem;
+            border-radius: 12px;
+            background: var(--bg-card);
+            border: 2px solid;
+        }
+
+        .performance-badge.exceptional {
+            border-color: var(--accent-lime);
+            background: rgba(166, 226, 46, 0.1);
+        }
+
+        .performance-badge.strong {
+            border-color: var(--accent-cyan);
+            background: rgba(90, 154, 217, 0.1);
+        }
+
+        .performance-badge.good {
+            border-color: var(--accent-blue);
+            background: rgba(90, 154, 217, 0.05);
+        }
+
+        .performance-badge.developing {
+            border-color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .performance-score {
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .performance-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            margin-top: 0.25rem;
+            font-weight: 600;
+        }
+
+        .exec-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .exec-summary-metric {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+
+        .exec-metric-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .exec-metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-lime);
+            margin-bottom: 0.5rem;
+            line-height: 1;
+        }
+
+        .exec-metric-desc {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .exec-summary-insight {
+            background: var(--bg-card);
+            border-left: 4px solid var(--accent-cyan);
+            padding: 1rem 1.25rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+
+        .strategic-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+        }
+
+        .strategic-card h3 {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.25rem;
+            color: var(--accent-cyan);
+            margin: 0 0 1.5rem 0;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .value-assessment-grid,
+        .acquisition-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .value-metric-card,
+        .acquisition-metric {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .value-metric-header,
+        .acquisition-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .value-icon,
+        .acquisition-icon {
+            font-size: 1.5rem;
+        }
+
+        .value-label,
+        .acquisition-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-transform: uppercase;
+        }
+
+        .value-metric-value,
+        .acquisition-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-lime);
+            margin-bottom: 0.5rem;
+            line-height: 1;
+        }
+
+        .value-metric-desc,
+        .acquisition-desc {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.75rem;
+        }
+
+        .value-metric-breakdown {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .breakdown-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+        }
+
+        .breakdown-item span {
+            color: var(--text-secondary);
+        }
+
+        .breakdown-item strong {
+            color: var(--accent-lime);
+        }
+
+        .value-indicator {
+            display: inline-block;
+            padding: 0.4rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-top: 0.5rem;
+        }
+
+        .value-indicator.strong {
+            background: rgba(166, 226, 46, 0.2);
+            color: var(--accent-lime);
+        }
+
+        .value-indicator.moderate {
+            background: rgba(90, 154, 217, 0.2);
+            color: var(--accent-cyan);
+        }
+
+        .value-indicator.developing {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+        }
+
+        .value-insight-box,
+        .acquisition-insight,
+        .performance-insight {
+            background: var(--bg-input);
+            border-left: 4px solid var(--accent-cyan);
+            padding: 1rem 1.25rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: var(--text-primary);
+            margin-top: 1rem;
+        }
+
+        .episode-performance-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .episode-performance-card {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .episode-performance-card.top-performer {
+            border: 2px solid var(--accent-lime);
+            background: rgba(166, 226, 46, 0.1);
+        }
+
+        .episode-rank {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .episode-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            margin-bottom: 0.75rem;
+        }
+
+        .episode-impact {
+            margin: 1rem 0;
+        }
+
+        .impact-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--accent-lime);
+            line-height: 1;
+        }
+
+        .impact-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .episode-share {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+        }
+
+        .episode-timing {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+            font-style: italic;
+        }
+
+        .recommendations-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .recommendation-item {
+            display: flex;
+            gap: 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+        }
+
+        .recommendation-icon {
+            font-size: 2rem;
+            flex-shrink: 0;
+        }
+
+        .recommendation-content {
+            flex: 1;
+        }
+
+        .recommendation-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            margin-bottom: 0.5rem;
+        }
+
+        .recommendation-insight {
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+
+        .detailed-metrics-container {
+            padding-top: 1rem;
+        }
+
+        .insight-card-header {
+            cursor: pointer;
+        }
+
         /* Form Styles */
         .main-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 1.5rem; }
         @media (max-width: 1000px) { .main-grid { grid-template-columns: 1fr; } }
@@ -7930,23 +8289,29 @@
                     <div id="subscriberTabContent">
                         <!-- Insights Tab -->
                         <div id="subscriber-tab-insights" class="tab-content active">
-                            <div class="insights-tab-summary">
-                                <!-- Key Statistics -->
-                                <div class="insight-card">
-                                    <h3>📊 At-a-Glance Statistics</h3>
+                            <!-- Executive Summary -->
+                            <div id="subscriberExecutiveSummary" class="executive-summary-section"></div>
+                            
+                            <!-- Platform Value Assessment -->
+                            <div id="subscriberPlatformValue" class="strategic-section"></div>
+                            
+                            <!-- Content Performance Analysis -->
+                            <div id="subscriberContentPerformance" class="strategic-section"></div>
+                            
+                            <!-- Audience Acquisition Insights -->
+                            <div id="subscriberAudienceAcquisition" class="strategic-section"></div>
+                            
+                            <!-- Strategic Recommendations -->
+                            <div id="subscriberRecommendations" class="strategic-section"></div>
+                            
+                            <!-- Detailed Metrics (Collapsible) -->
+                            <div class="insight-card" style="margin-top: 2rem;">
+                                <div class="insight-card-header" onclick="toggleDetailedMetrics()" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                                    <h3>📊 Detailed Metrics</h3>
+                                    <span id="detailedMetricsToggle" style="font-size: 1.2rem; transition: transform 0.3s;">▼</span>
+                                </div>
+                                <div id="subscriberDetailedMetrics" class="detailed-metrics-container" style="display: none;">
                                     <div id="subscriberKeyStats" class="key-stats-grid"></div>
-                                </div>
-                                
-                                <!-- Key Insights -->
-                                <div class="insight-card">
-                                    <h3>💡 Key Insights</h3>
-                                    <div id="subscriberKeyInsights" class="insights-list"></div>
-                                </div>
-                                
-                                <!-- Top Episodes Summary -->
-                                <div class="insight-card">
-                                    <h3>📺 Top Episodes Driving Signups</h3>
-                                    <div id="subscriberTopEpisodes" class="episode-list"></div>
                                 </div>
                             </div>
                         </div>
@@ -8701,28 +9066,19 @@
                 return;
             }
             
+            // Get all containers
+            const execSummaryContainer = document.getElementById('subscriberExecutiveSummary');
+            const platformValueContainer = document.getElementById('subscriberPlatformValue');
+            const contentPerformanceContainer = document.getElementById('subscriberContentPerformance');
+            const audienceAcquisitionContainer = document.getElementById('subscriberAudienceAcquisition');
+            const recommendationsContainer = document.getElementById('subscriberRecommendations');
             const statsContainer = document.getElementById('subscriberKeyStats');
-            const insightsContainer = document.getElementById('subscriberKeyInsights');
-            const episodesContainer = document.getElementById('subscriberTopEpisodes');
             
-            if (!statsContainer || !insightsContainer || !episodesContainer) {
-                console.error('❌ Containers not found:', {
-                    stats: !!statsContainer,
-                    insights: !!insightsContainer,
-                    episodes: !!episodesContainer
-                });
+            if (!execSummaryContainer || !platformValueContainer || !contentPerformanceContainer || 
+                !audienceAcquisitionContainer || !recommendationsContainer || !statsContainer) {
+                console.error('❌ Containers not found');
                 return;
             }
-            
-            console.log('📊 Rendering insights with data:', {
-                metadata: data.metadata,
-                key_metrics: data.key_metrics,
-                attribution_summary: data.attribution_summary,
-                has_key_metrics: !!data.key_metrics,
-                key_metrics_keys: data.key_metrics ? Object.keys(data.key_metrics) : [],
-                total_watchers: data.key_metrics?.total_watchers,
-                new_signups: data.key_metrics?.new_signups
-            });
             
             const platform = data.metadata?.platform || 'the platform';
             const show = data.metadata?.show || 'this show';
@@ -8763,7 +9119,277 @@
                 return `Actual: ${formatNumber(genPop)}`;
             };
             
-            // Key Statistics with tooltips
+            // Calculate strategic metrics
+            const newViewerPct = cleanSample > 0 && totalWatchers > 0 ? ((cleanSample / totalWatchers) * 100).toFixed(1) : 0;
+            const conversionPct = totalWatchers > 0 && newSignups > 0 ? ((newSignups / totalWatchers) * 100).toFixed(1) : 0;
+            const reactivationPct = totalSignups > 0 ? ((dormantReactive / totalSignups) * 100).toFixed(1) : 0;
+            const attributionPct = totalSignups > 0 ? ((attributedSignups / totalSignups) * 100).toFixed(1) : 0;
+            const newViewerConversionPct = cleanSample > 0 ? ((newSignups / cleanSample) * 100).toFixed(1) : 0;
+            
+            // Performance indicators
+            const isFastConversion = avgDaysToSignup !== 'N/A' && parseFloat(avgDaysToSignup) < 7;
+            const isStrongNewViewerAppeal = newViewerPct > 50;
+            const isHighConversion = parseFloat(conversionPct) > 5;
+            const isStrongReactivation = reactivationPct > 20;
+            
+            // 1. EXECUTIVE SUMMARY
+            const performanceScore = totalSignups > 0 ? Math.min(100, Math.round((totalSignups / 10000) * 100)) : 0;
+            const performanceLabel = performanceScore >= 80 ? 'Exceptional' : performanceScore >= 60 ? 'Strong' : performanceScore >= 40 ? 'Good' : 'Developing';
+            
+            execSummaryContainer.innerHTML = `
+                <div class="executive-summary-card">
+                    <div class="exec-summary-header">
+                        <h2>Executive Summary</h2>
+                        <div class="performance-badge ${performanceLabel.toLowerCase()}">
+                            <span class="performance-score">${performanceScore}</span>
+                            <span class="performance-label">${performanceLabel}</span>
+                        </div>
+                    </div>
+                    <div class="exec-summary-grid">
+                        <div class="exec-summary-metric">
+                            <div class="exec-metric-label">Total Platform Impact</div>
+                            <div class="exec-metric-value">${formatValue(totalSignups, totalSignupsGenPop)}</div>
+                            <div class="exec-metric-desc">Subscribers acquired or reactivated</div>
+                        </div>
+                        <div class="exec-summary-metric">
+                            <div class="exec-metric-label">New Subscriber Acquisition</div>
+                            <div class="exec-metric-value">${formatValue(newSignups, newSignupsGenPop)}</div>
+                            <div class="exec-metric-desc">First-time platform signups</div>
+                        </div>
+                        <div class="exec-summary-metric">
+                            <div class="exec-metric-label">Audience Reach</div>
+                            <div class="exec-metric-value">${formatValue(totalWatchers, totalWatchersGenPop)}</div>
+                            <div class="exec-metric-desc">Total show viewers</div>
+                        </div>
+                        <div class="exec-summary-metric">
+                            <div class="exec-metric-label">Conversion Rate</div>
+                            <div class="exec-metric-value">${conversionPct}%</div>
+                            <div class="exec-metric-desc">Viewers to subscribers</div>
+                        </div>
+                    </div>
+                    <div class="exec-summary-insight">
+                        <strong>${show}</strong> demonstrates ${totalSignups > 10000 ? 'exceptional' : totalSignups > 5000 ? 'strong' : 'moderate'} platform value, 
+                        ${isStrongNewViewerAppeal ? 'strongly appealing to new audiences' : 'engaging both new and existing viewers'} 
+                        with ${isFastConversion ? 'immediate' : 'sustained'} conversion patterns.
+                    </div>
+                </div>
+            `;
+            
+            // 2. PLATFORM VALUE ASSESSMENT
+            const valueStrength = totalSignups > 10000 ? 'high' : totalSignups > 5000 ? 'moderate' : 'developing';
+            platformValueContainer.innerHTML = `
+                <div class="strategic-card">
+                    <h3>💰 Platform Value Assessment</h3>
+                    <div class="value-assessment-grid">
+                        <div class="value-metric-card">
+                            <div class="value-metric-header">
+                                <span class="value-icon">📈</span>
+                                <span class="value-label">Subscriber Growth</span>
+                            </div>
+                            <div class="value-metric-value">${formatValue(totalSignups, totalSignupsGenPop)}</div>
+                            <div class="value-metric-breakdown">
+                                <div class="breakdown-item">
+                                    <span>New Signups:</span>
+                                    <strong>${formatValue(newSignups, newSignupsGenPop)}</strong>
+                                </div>
+                                <div class="breakdown-item">
+                                    <span>Reactivations:</span>
+                                    <strong>${formatValue(dormantReactive, dormantReactiveGenPop)}</strong>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="value-metric-card">
+                            <div class="value-metric-header">
+                                <span class="value-icon">🎯</span>
+                                <span class="value-label">Attribution Rate</span>
+                            </div>
+                            <div class="value-metric-value">${attributionPct}%</div>
+                            <div class="value-metric-desc">Directly attributed to ${show}</div>
+                            <div class="value-indicator ${attributionPct > 70 ? 'strong' : attributionPct > 50 ? 'moderate' : 'developing'}">
+                                ${attributionPct > 70 ? 'Strong ROI' : attributionPct > 50 ? 'Clear Value' : 'Developing'}
+                            </div>
+                        </div>
+                        <div class="value-metric-card">
+                            <div class="value-metric-header">
+                                <span class="value-icon">⚡</span>
+                                <span class="value-label">Speed to Conversion</span>
+                            </div>
+                            <div class="value-metric-value">${avgDaysToSignup !== 'N/A' ? avgDaysToSignup : 'N/A'}</div>
+                            <div class="value-metric-desc">Average days to signup</div>
+                            <div class="value-indicator ${isFastConversion ? 'strong' : 'moderate'}">
+                                ${isFastConversion ? 'Immediate Impact' : 'Sustained Interest'}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="value-insight-box">
+                        <strong>Strategic Value:</strong> ${show} delivers ${valueStrength}-value subscriber growth for ${platform}, 
+                        with ${attributionPct}% direct attribution demonstrating clear ROI. 
+                        ${isStrongReactivation ? `Strong reactivation (${reactivationPct}%) indicates retention value beyond new acquisition.` : 
+                        'Focus on new subscriber acquisition with opportunity to improve reactivation.'}
+                    </div>
+                </div>
+            `;
+            
+            // 3. CONTENT PERFORMANCE ANALYSIS
+            const topEpisodes = (data.episode_attribution || []).slice().sort((a, b) => {
+                return (b.signups || 0) - (a.signups || 0);
+            }).slice(0, 5);
+            
+            contentPerformanceContainer.innerHTML = `
+                <div class="strategic-card">
+                    <h3>🎬 Content Performance Analysis</h3>
+                    ${topEpisodes.length > 0 ? `
+                        <div class="episode-performance-grid">
+                            ${topEpisodes.map((ep, idx) => {
+                                const episodePct = totalSignups > 0 ? ((ep.signups / totalSignups) * 100).toFixed(1) : 0;
+                                return `
+                                    <div class="episode-performance-card ${idx === 0 ? 'top-performer' : ''}">
+                                        <div class="episode-rank">#${idx + 1}</div>
+                                        <div class="episode-title">Episode ${ep.episode}</div>
+                                        <div class="episode-impact">
+                                            <div class="impact-value">${formatNumber(ep.signups)}</div>
+                                            <div class="impact-label">Signups</div>
+                                        </div>
+                                        <div class="episode-share">${episodePct}% of total</div>
+                                        ${ep.days_avg ? `<div class="episode-timing">Avg ${ep.days_avg} days to signup</div>` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        <div class="performance-insight">
+                            <strong>Content Strategy Insight:</strong> 
+                            ${topEpisodes[0] ? `Episode ${topEpisodes[0].episode} drives the highest subscriber acquisition (${formatNumber(topEpisodes[0].signups)} signups, ${((topEpisodes[0].signups / totalSignups) * 100).toFixed(1)}% of total). ` : ''}
+                            ${topEpisodes.length > 1 ? `Top 3 episodes account for ${((topEpisodes.slice(0, 3).reduce((sum, ep) => sum + (ep.signups || 0), 0) / totalSignups) * 100).toFixed(1)}% of all signups, ` : ''}
+                            indicating ${topEpisodes.length > 0 && topEpisodes[0].signups > (totalSignups / topEpisodes.length) ? 'strong episode-level performance' : 'distributed engagement'}.
+                        </div>
+                    ` : '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No episode performance data available</p>'}
+                </div>
+            `;
+            
+            // 4. AUDIENCE ACQUISITION INSIGHTS
+            audienceAcquisitionContainer.innerHTML = `
+                <div class="strategic-card">
+                    <h3>👥 Audience Acquisition Insights</h3>
+                    <div class="acquisition-grid">
+                        <div class="acquisition-metric">
+                            <div class="acquisition-header">
+                                <span class="acquisition-icon">🆕</span>
+                                <span class="acquisition-label">New Audience Appeal</span>
+                            </div>
+                            <div class="acquisition-value">${newViewerPct}%</div>
+                            <div class="acquisition-desc">First-time viewers</div>
+                            <div class="acquisition-indicator ${isStrongNewViewerAppeal ? 'strong' : 'moderate'}">
+                                ${isStrongNewViewerAppeal ? 'Strong New Audience Draw' : 'Balanced Audience'}
+                            </div>
+                        </div>
+                        <div class="acquisition-metric">
+                            <div class="acquisition-header">
+                                <span class="acquisition-icon">🔄</span>
+                                <span class="acquisition-label">Returning Viewers</span>
+                            </div>
+                            <div class="acquisition-value">${formatValue(preExisting, preExistingGenPop)}</div>
+                            <div class="acquisition-desc">Pre-existing series viewers</div>
+                        </div>
+                        <div class="acquisition-metric">
+                            <div class="acquisition-header">
+                                <span class="acquisition-icon">📊</span>
+                                <span class="acquisition-label">New Viewer Conversion</span>
+                            </div>
+                            <div class="acquisition-value">${newViewerConversionPct}%</div>
+                            <div class="acquisition-desc">First-time viewers to subscribers</div>
+                            <div class="acquisition-indicator ${parseFloat(newViewerConversionPct) > 5 ? 'strong' : 'moderate'}">
+                                ${parseFloat(newViewerConversionPct) > 5 ? 'High Conversion' : 'Moderate Conversion'}
+                            </div>
+                        </div>
+                        <div class="acquisition-metric">
+                            <div class="acquisition-header">
+                                <span class="acquisition-icon">🎯</span>
+                                <span class="acquisition-label">Overall Conversion</span>
+                            </div>
+                            <div class="acquisition-value">${conversionPct}%</div>
+                            <div class="acquisition-desc">Total viewers to subscribers</div>
+                        </div>
+                    </div>
+                    <div class="acquisition-insight">
+                        <strong>Audience Strategy:</strong> 
+                        ${show} ${isStrongNewViewerAppeal ? 'strongly appeals to new audiences' : 'engages a mix of new and returning viewers'}, 
+                        with ${newViewerPct}% first-time viewers demonstrating ${isStrongNewViewerAppeal ? 'exceptional' : 'solid'} new audience acquisition capability. 
+                        ${parseFloat(newViewerConversionPct) > parseFloat(conversionPct) ? 
+                        `New viewers convert at a higher rate (${newViewerConversionPct}% vs ${conversionPct}%), indicating strong appeal to platform newcomers.` :
+                        `Conversion rates are consistent across viewer types, showing broad appeal.`}
+                    </div>
+                </div>
+            `;
+            
+            // 5. STRATEGIC RECOMMENDATIONS
+            const recommendations = [];
+            
+            if (isFastConversion && totalSignups > 5000) {
+                recommendations.push({
+                    icon: '🚀',
+                    title: 'Leverage Fast Conversion',
+                    insight: `With ${avgDaysToSignup} days average conversion, ${show} drives immediate platform value. Consider front-loading marketing spend and platform promotion to maximize early signup momentum.`
+                });
+            }
+            
+            if (isStrongNewViewerAppeal && newViewerConversionPct > 5) {
+                recommendations.push({
+                    icon: '🎯',
+                    title: 'Target New Audience Acquisition',
+                    insight: `${newViewerPct}% first-time viewers with ${newViewerConversionPct}% conversion demonstrates strong new audience appeal. Position ${show} as a platform acquisition driver in marketing and distribution strategy.`
+                });
+            }
+            
+            if (topEpisodes.length > 0 && topEpisodes[0].signups > (totalSignups * 0.3)) {
+                recommendations.push({
+                    icon: '📺',
+                    title: 'Amplify Top-Performing Episodes',
+                    insight: `Episode ${topEpisodes[0].episode} drives ${((topEpisodes[0].signups / totalSignups) * 100).toFixed(1)}% of signups. Use this episode in marketing campaigns, trailers, and platform promotion to maximize subscriber acquisition.`
+                });
+            }
+            
+            if (isStrongReactivation) {
+                recommendations.push({
+                    icon: '🔄',
+                    title: 'Capitalize on Retention Value',
+                    insight: `${reactivationPct}% reactivation rate shows ${show} brings back dormant subscribers. Highlight this retention value in renewal discussions and platform partnership conversations.`
+                });
+            }
+            
+            if (attributionPct > 70) {
+                recommendations.push({
+                    icon: '💰',
+                    title: 'Demonstrate Clear ROI',
+                    insight: `${attributionPct}% direct attribution provides strong evidence of ${show}'s platform value. Use this data in content valuation, licensing negotiations, and strategic planning.`
+                });
+            }
+            
+            if (recommendations.length === 0) {
+                recommendations.push({
+                    icon: '📊',
+                    title: 'Continue Monitoring',
+                    insight: `Continue tracking performance metrics to identify optimization opportunities as more data becomes available.`
+                });
+            }
+            
+            recommendationsContainer.innerHTML = `
+                <div class="strategic-card">
+                    <h3>💡 Strategic Recommendations</h3>
+                    <div class="recommendations-list">
+                        ${recommendations.map(rec => `
+                            <div class="recommendation-item">
+                                <div class="recommendation-icon">${rec.icon}</div>
+                                <div class="recommendation-content">
+                                    <div class="recommendation-title">${rec.title}</div>
+                                    <div class="recommendation-insight">${rec.insight}</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            
+            // 6. DETAILED METRICS (for collapsible section)
             const statsHTML = `
                 <div class="key-stat-item has-tooltip" data-tooltip="How many people total watched the series">
                     <div class="key-stat-label">Total Show Watchers</div>
@@ -8814,116 +9440,15 @@
                 </div>
             `;
             statsContainer.innerHTML = statsHTML;
-            console.log('✅ Set stats HTML, container children:', statsContainer.children.length);
-            console.log('📊 Stats container check:', {
-                innerHTML_length: statsContainer.innerHTML.length,
-                offsetHeight: statsContainer.offsetHeight,
-                offsetWidth: statsContainer.offsetWidth,
-                computedDisplay: window.getComputedStyle(statsContainer).display
-            });
-            
-            // Key Insights - Actionable for studios/agents/production companies
-            const insights = [];
-            
-            // Subscriber Growth Value
-            if (totalSignups > 0) {
-                insights.push(`<strong>${formatNumber(totalSignups)} total subscribers</strong> were acquired or reactivated by ${show} - demonstrating strong platform value`);
-            }
-            
-            // New Subscriber Acquisition
-            if (newSignups > 0 && cleanSample > 0) {
-                const newViewerPct = ((newSignups / cleanSample) * 100).toFixed(1);
-                insights.push(`<strong>${formatNumber(newSignups)} new platform subscribers</strong> were acquired from first-time viewers (${newViewerPct}% conversion rate)`);
-            }
-            
-            // Reactivation Value
-            if (dormantReactive > 0) {
-                const reactivationPct = totalSignups > 0 ? ((dormantReactive / totalSignups) * 100).toFixed(1) : 0;
-                insights.push(`<strong>${formatNumber(dormantReactive)} dormant users</strong> were reactivated (${reactivationPct}% of total impact) - showing retention value`);
-            }
-            
-            // Conversion Performance
-            if (cleanConversionRate !== 'N/A' && totalConversionRate !== 'N/A') {
-                insights.push(`New viewers convert at <strong>${cleanConversionRate}</strong> vs. <strong>${totalConversionRate}</strong> overall - indicating strong appeal to new audiences`);
-            }
-            
-            // Speed to Conversion
-            if (avgDaysToSignup !== 'N/A' && parseFloat(avgDaysToSignup) < 7) {
-                insights.push(`Fast conversion: Average <strong>${avgDaysToSignup} days</strong> from premiere to signup - shows immediate platform value`);
-            } else if (avgDaysToSignup !== 'N/A') {
-                insights.push(`Average <strong>${avgDaysToSignup} days</strong> from premiere to signup - indicates sustained interest`);
-            }
-            
-            // Reach and Impact
-            if (totalWatchers > 0 && newSignups > 0) {
-                const reachPct = ((newSignups / totalWatchers) * 100).toFixed(1);
-                insights.push(`Reached <strong>${formatNumber(totalWatchers)} total viewers</strong>, converting <strong>${reachPct}%</strong> to platform subscribers`);
-            }
-            
-            // First-Time Viewer Appeal
-            if (cleanSample > 0 && preExisting > 0) {
-                const newViewerPct = ((cleanSample / totalWatchers) * 100).toFixed(1);
-                insights.push(`<strong>${newViewerPct}%</strong> of viewers were first-time watchers - demonstrating ability to attract new audiences`);
-            }
-            
-            // Long-term Value Indicator
-            if (attributedSignups > 0 && totalSignups > 0) {
-                const attributionPct = ((attributedSignups / totalSignups) * 100).toFixed(1);
-                insights.push(`<strong>${attributionPct}%</strong> of signups directly attributed to ${show} - clear ROI for platform investment`);
-            }
-            
-            if (insights.length === 0) {
-                insights.push('No insights available for this show');
-            }
-            
-            insightsContainer.innerHTML = insights.map(insight => `
-                <div class="insight-item">${insight}</div>
-            `).join('');
-            console.log('✅ Set insights HTML, count:', insights.length);
-            
-            // Top Episodes - Sorted by signups, limit to top 5
-            const episodes = (data.episode_attribution || []).slice().sort((a, b) => {
-                const aSignups = a.signups || 0;
-                const bSignups = b.signups || 0;
-                return bSignups - aSignups;
-            }).slice(0, 5);
-            
-            if (episodes.length === 0) {
-                episodesContainer.innerHTML = '<div class="episode-item"><span>No episode data available</span></div>';
-            } else {
-                episodesContainer.innerHTML = episodes.map(ep => `
-                    <div class="episode-item">
-                        <span class="episode-number">Episode ${ep.episode}</span>
-                        <span class="episode-signups">${formatNumber(ep.signups)} signups</span>
-                        <span class="episode-pct">${ep.percentage || 'N/A'}</span>
-                    </div>
-                `).join('');
-            }
-            console.log('✅ Set episodes HTML, count:', episodes.length);
-            
-            // Check if tab is visible
-            const insightsTab = document.getElementById('subscriber-tab-insights');
-            const tabContent = document.getElementById('subscriberTabContent');
-            if (insightsTab) {
-                const computedStyle = window.getComputedStyle(insightsTab);
-                console.log('📋 Insights tab check:', {
-                    exists: true,
-                    hasActiveClass: insightsTab.classList.contains('active'),
-                    display: computedStyle.display,
-                    visibility: computedStyle.visibility,
-                    opacity: computedStyle.opacity,
-                    height: computedStyle.height,
-                    width: computedStyle.width,
-                    parentDisplay: tabContent ? window.getComputedStyle(tabContent).display : 'N/A'
-                });
-                
-                // Force visibility if needed
-                if (computedStyle.display === 'none') {
-                    console.warn('⚠️ Tab is hidden! Forcing display...');
-                    insightsTab.style.display = 'block';
-                }
-            } else {
-                console.error('❌ Insights tab not found!');
+        }
+        
+        function toggleDetailedMetrics() {
+            const container = document.getElementById('subscriberDetailedMetrics');
+            const toggle = document.getElementById('detailedMetricsToggle');
+            if (container && toggle) {
+                const isVisible = container.style.display !== 'none';
+                container.style.display = isVisible ? 'none' : 'block';
+                toggle.style.transform = isVisible ? 'rotate(0deg)' : 'rotate(180deg)';
             }
         }
         
