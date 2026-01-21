@@ -15126,8 +15126,9 @@ def enforce_streaming_music_top6(df):
 def add_us_gen_pop_projection(df: pd.DataFrame) -> pd.DataFrame:
     """Add US Gen Pop Projection = (Original Raw Numbers / 10,000,000) * 324,700,000.
 
-    Uses finalized 'Original Raw Numbers'. Writes a new column 'US Gen Pop Projection'
-    formatted to 0 decimals where possible (string), leaves non-numeric rows as-is.
+    Uses finalized 'Original Raw Numbers'. For SAMPLE SIZE row, uses Percentage value as raw number.
+    Writes a new column 'US Gen Pop Projection' formatted to 0 decimals where possible (string), 
+    leaves non-numeric rows as-is.
     """
     import pandas as pd
     if df is None or df.empty:
@@ -15138,6 +15139,23 @@ def add_us_gen_pop_projection(df: pd.DataFrame) -> pd.DataFrame:
         return df
     # At this point in the pipeline, the column should be 'Original Raw Numbers' (after rename)
     raw_col = 'Original Raw Numbers'
+    
+    # Handle SAMPLE SIZE row specially - use Percentage value as the raw number if Original Raw Numbers is missing/empty
+    sample_size_mask = df['Column'].str.upper() == 'SAMPLE SIZE'
+    if sample_size_mask.any():
+        for idx in df[sample_size_mask].index:
+            raw_val = df.at[idx, raw_col]
+            # If Original Raw Numbers is missing, empty, or NaN, use Percentage value
+            if pd.isna(raw_val) or str(raw_val).strip() in ('', 'nan', 'NaN', 'None'):
+                if 'Percentage' in df.columns:
+                    pct_val = df.at[idx, 'Percentage']
+                    if not pd.isna(pct_val) and str(pct_val).strip() not in ('', 'nan', 'NaN'):
+                        try:
+                            # Use Percentage as the raw number for SAMPLE SIZE
+                            df.at[idx, raw_col] = str(int(float(str(pct_val).replace(',', ''))))
+                        except:
+                            pass
+    
     raw_num = pd.to_numeric(df[raw_col].astype(str).str.replace(',', ''), errors='coerce')
     proj = (raw_num / 10_000_000.0) * 324_700_000.0
     # Format as integer-like string (no decimals) when numeric, else keep empty
