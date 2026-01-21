@@ -303,9 +303,9 @@
         }
 
         #formView { display: none; flex: 1; overflow-y: auto; }
-        #profileIQFormView { display: none; flex: 1; overflow-y: auto; padding: 2rem; }
+        #profileIQFormView { display: block; flex: 1; overflow-y: auto; padding: 2rem; }
         #customAnalysisView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
-        #dashboardView { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+        #dashboardView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #subscriberIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #talentSearchIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #talentTheaterIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
@@ -9300,8 +9300,12 @@
             if (startDateInput) startDateInput.value = formatDate(thirtyDaysAgo);
             if (endDateInput) endDateInput.value = formatDate(today);
             loadJobs();
-            // Dashboard is default view - load profiles immediately
-            loadDashboardProfiles();
+            
+            // Profile IQ is default view - ensure it's shown on page load
+            if (typeof showProfileIQ === 'function') {
+                showProfileIQ();
+            }
+            
             // Initialize deck count from localStorage
             updateDeckCount();
             
