@@ -815,6 +815,111 @@
             cursor: pointer;
         }
 
+        /* Tab Insights Sections */
+        .tab-insights-section {
+            background: linear-gradient(135deg, rgba(90, 154, 217, 0.1), rgba(90, 154, 217, 0.05));
+            border: 1px solid var(--accent-blue);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .tab-insights-section h4 {
+            font-family: 'Space Mono', monospace;
+            font-size: 1rem;
+            color: var(--accent-cyan);
+            margin: 0 0 1rem 0;
+            text-transform: uppercase;
+        }
+
+        .tab-insights-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .tab-insight-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            background: var(--bg-card);
+            border-radius: 8px;
+            border-left: 3px solid var(--accent-cyan);
+        }
+
+        .tab-insight-icon {
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .tab-insight-text {
+            flex: 1;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: var(--text-primary);
+        }
+
+        .tab-insight-text strong {
+            color: var(--accent-lime);
+        }
+
+        /* Timing Metrics Grid */
+        .timing-metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .timing-metric-card {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+
+        .timing-metric-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .timing-metric-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--accent-lime);
+            line-height: 1;
+        }
+
+        .timing-metric-desc {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+        }
+
+        /* Tab Section Styles */
+        .tab-section {
+            margin-bottom: 3rem;
+        }
+
+        .tab-section h3 {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.25rem;
+            color: var(--accent-cyan);
+            margin: 0 0 0.5rem 0;
+        }
+
+        .section-description {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+            line-height: 1.5;
+        }
+
         /* Form Styles */
         .main-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 1.5rem; }
         @media (max-width: 1000px) { .main-grid { grid-template-columns: 1fr; } }
@@ -8304,45 +8409,98 @@
                             <!-- Strategic Recommendations -->
                             <div id="subscriberRecommendations" class="strategic-section"></div>
                             
-                            <!-- Detailed Metrics (Collapsible) -->
-                            <div class="insight-card" style="margin-top: 2rem;">
-                                <div class="insight-card-header" onclick="toggleDetailedMetrics()" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
-                                    <h3>📊 Detailed Metrics</h3>
-                                    <span id="detailedMetricsToggle" style="font-size: 1.2rem; transition: transform 0.3s;">▼</span>
-                                </div>
-                                <div id="subscriberDetailedMetrics" class="detailed-metrics-container" style="display: none;">
-                                    <div id="subscriberKeyStats" class="key-stats-grid"></div>
-                                </div>
-                            </div>
+                            <!-- Key Metrics Overview -->
+                            <div id="subscriberKeyMetrics" class="strategic-section"></div>
                         </div>
 
                         <!-- Episodes Tab -->
                         <div id="subscriber-tab-episodes" class="tab-content">
-                            <div class="episode-attribution-grid" id="subscriberEpisodeAttribution"></div>
+                            <div id="subscriberEpisodesInsights" class="tab-insights-section"></div>
+                            <div class="tab-section">
+                                <h3>📺 Episode Performance</h3>
+                                <p class="section-description">Which episodes drove the most platform signups</p>
+                                <div id="subscriberEpisodeAttribution" class="episode-attribution-grid"></div>
+                            </div>
                         </div>
 
                         <!-- Timing Tab -->
                         <div id="subscriber-tab-timing" class="tab-content">
-                            <div class="chart-container" id="subscriberSignupTimingChart"></div>
-                            <div class="episode-timing-grid" id="subscriberEpisodeTiming" style="margin-top: 2rem;"></div>
+                            <div id="subscriberTimingInsights" class="tab-insights-section"></div>
+                            
+                            <div class="tab-section">
+                                <h3>⏱️ Signup Timing Overview</h3>
+                                <p class="section-description">Key metrics on when people signed up after show premiere</p>
+                                <div id="subscriberTimingMetrics" class="timing-metrics-grid"></div>
+                            </div>
+                            
+                            <div class="tab-section">
+                                <h3>📊 Signup Distribution</h3>
+                                <p class="section-description">Distribution of signups by days after premiere</p>
+                                <div class="chart-container" id="subscriberSignupTimingChart"></div>
+                            </div>
+                            
+                            <div class="tab-section">
+                                <h3>📈 Signup Timeline</h3>
+                                <p class="section-description">Daily signup volume over time</p>
+                                <div class="chart-container" id="subscriberSignupTimelineChart"></div>
+                            </div>
+                            
+                            <div class="tab-section">
+                                <h3>🎯 Percentile Analysis</h3>
+                                <p class="section-description">When do different percentiles of users sign up?</p>
+                                <div class="chart-container" id="subscriberPercentileChart"></div>
+                            </div>
+                            
+                            <div class="tab-section">
+                                <h3>📺 Episode-Level Signup Timing</h3>
+                                <p class="section-description">Signup timing broken down by individual episode</p>
+                                <div id="subscriberEpisodeTiming" class="episode-timing-grid"></div>
+                            </div>
                         </div>
 
                         <!-- Platforms Tab -->
                         <div id="subscriber-tab-platforms" class="tab-content">
-                            <div class="platform-list" id="subscriberCompetitivePlatforms"></div>
-                            <div class="touchpoint-chart" id="subscriberTouchpoints" style="margin-top: 2rem;"></div>
+                            <div id="subscriberPlatformsInsights" class="tab-insights-section"></div>
+                            <div class="tab-section">
+                                <h3>📱 Other Platforms They Use</h3>
+                                <p class="section-description">What percentage of show watchers also use competing streaming platforms</p>
+                                <div id="subscriberCompetitivePlatforms" class="platform-list"></div>
+                            </div>
+                            <div class="tab-section">
+                                <h3>🔄 Engagement After Signup</h3>
+                                <p class="section-description">How many times users watched the show after signing up (1st-5th platform touchpoint)</p>
+                                <div id="subscriberTouchpoints" class="touchpoint-chart"></div>
+                            </div>
                         </div>
 
                         <!-- Demographics Tab -->
                         <div id="subscriber-tab-demographics" class="tab-content">
-                            <div class="chart-container" id="subscriberAgeChart"></div>
-                            <div class="chart-container" id="subscriberGenderChart" style="margin-top: 2rem;"></div>
+                            <div id="subscriberDemographicsInsights" class="tab-insights-section"></div>
+                            <div class="tab-section">
+                                <h3>👥 Age of New Signups</h3>
+                                <p class="section-description">Age distribution of people who signed up for the platform to watch this show</p>
+                                <div id="subscriberAgeChart" class="chart-container"></div>
+                            </div>
+                            <div class="tab-section">
+                                <h3>👥 Gender of New Signups</h3>
+                                <p class="section-description">Gender distribution of people who signed up for the platform to watch this show</p>
+                                <div id="subscriberGenderChart" class="chart-container"></div>
+                            </div>
                         </div>
 
                         <!-- Trends Tab -->
                         <div id="subscriber-tab-trends" class="tab-content">
-                            <div class="chart-container" id="subscriberMonthlySignupsChart"></div>
-                            <div class="chart-container" id="subscriberMonthlyChurnChart" style="margin-top: 2rem;"></div>
+                            <div id="subscriberTrendsInsights" class="tab-insights-section"></div>
+                            <div class="tab-section">
+                                <h3>📈 Monthly Signups</h3>
+                                <p class="section-description">Monthly trend of new platform signups driven by this show</p>
+                                <div id="subscriberMonthlySignupsChart" class="chart-container"></div>
+                            </div>
+                            <div class="tab-section">
+                                <h3>📉 Monthly Churn</h3>
+                                <p class="section-description">Monthly trend of platform churn attributed to this show</p>
+                                <div id="subscriberMonthlyChurnChart" class="chart-container"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -9092,10 +9250,10 @@
             const contentPerformanceContainer = document.getElementById('subscriberContentPerformance');
             const audienceAcquisitionContainer = document.getElementById('subscriberAudienceAcquisition');
             const recommendationsContainer = document.getElementById('subscriberRecommendations');
-            const statsContainer = document.getElementById('subscriberKeyStats');
+            const keyMetricsContainer = document.getElementById('subscriberKeyMetrics');
             
             if (!execSummaryContainer || !platformValueContainer || !contentPerformanceContainer || 
-                !audienceAcquisitionContainer || !recommendationsContainer || !statsContainer) {
+                !audienceAcquisitionContainer || !recommendationsContainer || !keyMetricsContainer) {
                 console.error('❌ Containers not found');
                 return;
             }
@@ -9409,70 +9567,109 @@
                 </div>
             `;
             
-            // 6. DETAILED METRICS (for collapsible section)
-            const statsHTML = `
-                <div class="key-stat-item has-tooltip" data-tooltip="How many people total watched the series">
-                    <div class="key-stat-label">Total Show Watchers</div>
-                    <div class="key-stat-value neutral">${formatValue(totalWatchers, totalWatchersGenPop)}</div>
-                    ${totalWatchersGenPop ? `<div class="key-stat-genpop">${formatGenPop(totalWatchersGenPop)}</div>` : ''}
-                </div>
-                <div class="key-stat-item has-tooltip" data-tooltip="How many people watched a previous season of the series">
-                    <div class="key-stat-label">Pre-Existing Series Viewers</div>
-                    <div class="key-stat-value neutral">${formatValue(preExisting, preExistingGenPop)}</div>
-                    ${preExistingGenPop ? `<div class="key-stat-genpop">${formatGenPop(preExistingGenPop)}</div>` : ''}
-                </div>
-                <div class="key-stat-item has-tooltip" data-tooltip="People who have not watched the show before">
-                    <div class="key-stat-label">New First Time Viewers</div>
-                    <div class="key-stat-value neutral">${formatValue(cleanSample, cleanSampleGenPop)}</div>
-                    ${cleanSampleGenPop ? `<div class="key-stat-genpop">${formatGenPop(cleanSampleGenPop)}</div>` : ''}
-                </div>
-                <div class="key-stat-item has-tooltip" data-tooltip="How many people signed up for the platform then their first watch was this show">
-                    <div class="key-stat-label">New Platform Signups</div>
-                    <div class="key-stat-value positive">${formatValue(newSignups, newSignupsGenPop)}</div>
-                    ${newSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(newSignupsGenPop)}</div>` : ''}
-                </div>
-                <div class="key-stat-item has-tooltip" data-tooltip="What percent of the total show watchers signed up for the platform to watch this show">
-                    <div class="key-stat-label">Total Show Conversion Rate</div>
-                    <div class="key-stat-value ${totalConversionRate !== 'N/A' ? 'positive' : 'neutral'}">${totalConversionRate}</div>
-                </div>
-                <div class="key-stat-item has-tooltip" data-tooltip="How many first time viewers signed up for the platform to watch the show">
-                    <div class="key-stat-label">New Viewers Conversion Rate</div>
-                    <div class="key-stat-value ${cleanConversionRate !== 'N/A' ? 'positive' : 'neutral'}">${cleanConversionRate}</div>
-                </div>
-                <div class="key-stat-item has-tooltip" data-tooltip="How long on average it takes for a user to sign up for a platform to watch the show after the first episode has dropped">
-                    <div class="key-stat-label">Average Days from Show Available to Signup</div>
-                    <div class="key-stat-value neutral">${avgDaysToSignup}</div>
-                </div>
-                <div class="key-stat-item has-tooltip" data-tooltip="Confirmed new subscribers to the streaming platform">
-                    <div class="key-stat-label">Attributed Signups</div>
-                    <div class="key-stat-value positive">${formatValue(attributedSignups, attributedSignupsGenPop)}</div>
-                    ${attributedSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(attributedSignupsGenPop)}</div>` : ''}
-                </div>
-                <div class="key-stat-item has-tooltip" data-tooltip="How many dormant users logged back in to watch the show">
-                    <div class="key-stat-label">Dormant to Reactive</div>
-                    <div class="key-stat-value positive">${formatValue(dormantReactive, dormantReactiveGenPop)}</div>
-                    ${dormantReactiveGenPop ? `<div class="key-stat-genpop">${formatGenPop(dormantReactiveGenPop)}</div>` : ''}
-                </div>
-                <div class="key-stat-item has-tooltip" data-tooltip="Total number of signups and dormant to reactive">
-                    <div class="key-stat-label">Total Signups & Reactivated Users</div>
-                    <div class="key-stat-value positive">${formatValue(totalSignups, totalSignupsGenPop)}</div>
-                    ${totalSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(totalSignupsGenPop)}</div>` : ''}
-                </div>
-            `;
-            statsContainer.innerHTML = statsHTML;
-        }
-        
-        function toggleDetailedMetrics() {
-            const container = document.getElementById('subscriberDetailedMetrics');
-            const toggle = document.getElementById('detailedMetricsToggle');
-            if (container && toggle) {
-                const isVisible = container.style.display !== 'none';
-                container.style.display = isVisible ? 'none' : 'block';
-                toggle.style.transform = isVisible ? 'rotate(0deg)' : 'rotate(180deg)';
+            // 6. KEY METRICS OVERVIEW
+            const keyMetricsContainer = document.getElementById('subscriberKeyMetrics');
+            if (keyMetricsContainer) {
+                keyMetricsContainer.innerHTML = `
+                    <div class="strategic-card">
+                        <h3>📊 Key Metrics Overview</h3>
+                        <div class="key-stats-grid">
+                            <div class="key-stat-item has-tooltip" data-tooltip="How many people total watched the series">
+                                <div class="key-stat-label">Total Show Watchers</div>
+                                <div class="key-stat-value neutral">${formatValue(totalWatchers, totalWatchersGenPop)}</div>
+                                ${totalWatchersGenPop ? `<div class="key-stat-genpop">${formatGenPop(totalWatchersGenPop)}</div>` : ''}
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="How many people watched a previous season of the series">
+                                <div class="key-stat-label">Pre-Existing Series Viewers</div>
+                                <div class="key-stat-value neutral">${formatValue(preExisting, preExistingGenPop)}</div>
+                                ${preExistingGenPop ? `<div class="key-stat-genpop">${formatGenPop(preExistingGenPop)}</div>` : ''}
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="People who have not watched the show before">
+                                <div class="key-stat-label">New First Time Viewers</div>
+                                <div class="key-stat-value neutral">${formatValue(cleanSample, cleanSampleGenPop)}</div>
+                                ${cleanSampleGenPop ? `<div class="key-stat-genpop">${formatGenPop(cleanSampleGenPop)}</div>` : ''}
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="How many people signed up for the platform then their first watch was this show">
+                                <div class="key-stat-label">New Platform Signups</div>
+                                <div class="key-stat-value positive">${formatValue(newSignups, newSignupsGenPop)}</div>
+                                ${newSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(newSignupsGenPop)}</div>` : ''}
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="What percent of the total show watchers signed up for the platform to watch this show">
+                                <div class="key-stat-label">Total Show Conversion Rate</div>
+                                <div class="key-stat-value ${totalConversionRate !== 'N/A' ? 'positive' : 'neutral'}">${totalConversionRate}</div>
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="How many first time viewers signed up for the platform to watch the show">
+                                <div class="key-stat-label">New Viewers Conversion Rate</div>
+                                <div class="key-stat-value ${cleanConversionRate !== 'N/A' ? 'positive' : 'neutral'}">${cleanConversionRate}</div>
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="How long on average it takes for a user to sign up for a platform to watch the show after the first episode has dropped">
+                                <div class="key-stat-label">Average Days from Show Available to Signup</div>
+                                <div class="key-stat-value neutral">${avgDaysToSignup}</div>
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="Confirmed new subscribers to the streaming platform">
+                                <div class="key-stat-label">Attributed Signups</div>
+                                <div class="key-stat-value positive">${formatValue(attributedSignups, attributedSignupsGenPop)}</div>
+                                ${attributedSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(attributedSignupsGenPop)}</div>` : ''}
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="How many dormant users logged back in to watch the show">
+                                <div class="key-stat-label">Dormant to Reactive</div>
+                                <div class="key-stat-value positive">${formatValue(dormantReactive, dormantReactiveGenPop)}</div>
+                                ${dormantReactiveGenPop ? `<div class="key-stat-genpop">${formatGenPop(dormantReactiveGenPop)}</div>` : ''}
+                            </div>
+                            <div class="key-stat-item has-tooltip" data-tooltip="Total number of signups and dormant to reactive">
+                                <div class="key-stat-label">Total Signups & Reactivated Users</div>
+                                <div class="key-stat-value positive">${formatValue(totalSignups, totalSignupsGenPop)}</div>
+                                ${totalSignupsGenPop ? `<div class="key-stat-genpop">${formatGenPop(totalSignupsGenPop)}</div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
             }
         }
         
         function renderSubscriberEpisodes(data) {
+            // Render Insights
+            const insightsContainer = document.getElementById('subscriberEpisodesInsights');
+            if (insightsContainer) {
+                const episodes = (data.episode_attribution || []).slice().sort((a, b) => {
+                    const aSignups = a.signups || 0;
+                    const bSignups = b.signups || 0;
+                    return bSignups - aSignups;
+                });
+                
+                const insights = [];
+                if (episodes.length > 0) {
+                    const topEpisode = episodes[0];
+                    const top3Total = episodes.slice(0, 3).reduce((sum, ep) => sum + (parseNumber(ep.signups) || 0), 0);
+                    const allTotal = episodes.reduce((sum, ep) => sum + (parseNumber(ep.signups) || 0), 0);
+                    const top3Pct = allTotal > 0 ? ((top3Total / allTotal) * 100).toFixed(1) : 0;
+                    
+                    insights.push({
+                        icon: '🎬',
+                        text: `<strong>Episode ${topEpisode.episode} drives the most signups</strong> with ${formatNumber(topEpisode.signups)} subscribers (${topEpisode.percentage || 'N/A'} of total).`
+                    });
+                    
+                    if (episodes.length >= 3) {
+                        insights.push({
+                            icon: '📊',
+                            text: `<strong>Top 3 episodes account for ${top3Pct}%</strong> of all signups, indicating concentrated performance in key episodes.`
+                        });
+                    }
+                }
+                
+                insightsContainer.innerHTML = insights.length > 0 ? `
+                    <h4>💡 Key Episode Insights</h4>
+                    <div class="tab-insights-list">
+                        ${insights.map(i => `
+                            <div class="tab-insight-item">
+                                <span class="tab-insight-icon">${i.icon}</span>
+                                <div class="tab-insight-text">${i.text}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : '';
+            }
+            
             const container = document.getElementById('subscriberEpisodeAttribution');
             const episodes = (data.episode_attribution || []).slice().sort((a, b) => {
                 const aSignups = a.signups || 0;
@@ -9517,74 +9714,301 @@
                 return;
             }
             
-            // Overview chart
+            const metrics = data.key_metrics || {};
             const timingData = data.signup_timing || [];
-            const chartContainer = document.getElementById('subscriberSignupTimingChart');
+            const avgDaysToSignup = metrics.avg_days_to_signup || 'N/A';
+            const show = data.metadata?.show || 'this show';
             
-            if (!chartContainer) {
-                console.error('❌ Container subscriberSignupTimingChart not found');
-                return;
+            // Render Insights
+            const insightsContainer = document.getElementById('subscriberTimingInsights');
+            if (insightsContainer) {
+                const insights = [];
+                
+                if (avgDaysToSignup !== 'N/A') {
+                    const days = parseFloat(avgDaysToSignup);
+                    if (days < 7) {
+                        insights.push({
+                            icon: '⚡',
+                            text: `<strong>Immediate conversion:</strong> Average ${avgDaysToSignup} days to signup indicates strong immediate platform value and urgency-driven acquisition.`
+                        });
+                    } else if (days < 30) {
+                        insights.push({
+                            icon: '📈',
+                            text: `<strong>Fast conversion:</strong> Average ${avgDaysToSignup} days shows viewers quickly convert to subscribers, demonstrating strong content appeal.`
+                        });
+                    } else {
+                        insights.push({
+                            icon: '🔄',
+                            text: `<strong>Sustained interest:</strong> Average ${avgDaysToSignup} days suggests viewers take time to evaluate before subscribing, indicating consideration-driven acquisition.`
+                        });
+                    }
+                }
+                
+                if (timingData.length > 0) {
+                    const totalSignups = timingData.reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
+                    const earlySignups = timingData.filter(t => {
+                        const days = parseInt(t.timing) || 999;
+                        return days <= 7;
+                    }).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
+                    const earlyPct = totalSignups > 0 ? ((earlySignups / totalSignups) * 100).toFixed(1) : 0;
+                    
+                    if (earlyPct > 50) {
+                        insights.push({
+                            icon: '🎯',
+                            text: `<strong>Early adoption pattern:</strong> ${earlyPct}% of signups occur within the first week, showing strong premiere impact and marketing effectiveness.`
+                        });
+                    }
+                }
+                
+                insightsContainer.innerHTML = insights.length > 0 ? `
+                    <h4>💡 Key Timing Insights</h4>
+                    <div class="tab-insights-list">
+                        ${insights.map(i => `
+                            <div class="tab-insight-item">
+                                <span class="tab-insight-icon">${i.icon}</span>
+                                <div class="tab-insight-text">${i.text}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : '';
             }
             
-            if (timingData.length > 0) {
-                // Check if Chart.js is available
+            // Render Timing Metrics
+            const metricsContainer = document.getElementById('subscriberTimingMetrics');
+            if (metricsContainer && timingData.length > 0) {
+                const totalSignups = timingData.reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
+                const earlySignups = timingData.filter(t => {
+                    const days = parseInt(t.timing) || 999;
+                    return days <= 7;
+                }).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
+                const earlyPct = totalSignups > 0 ? ((earlySignups / totalSignups) * 100).toFixed(1) : 0;
+                
+                const midSignups = timingData.filter(t => {
+                    const days = parseInt(t.timing) || 999;
+                    return days > 7 && days <= 30;
+                }).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
+                const midPct = totalSignups > 0 ? ((midSignups / totalSignups) * 100).toFixed(1) : 0;
+                
+                const lateSignups = timingData.filter(t => {
+                    const days = parseInt(t.timing) || 999;
+                    return days > 30;
+                }).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
+                const latePct = totalSignups > 0 ? ((lateSignups / totalSignups) * 100).toFixed(1) : 0;
+                
+                metricsContainer.innerHTML = `
+                    <div class="timing-metric-card">
+                        <div class="timing-metric-label">Average Days to Signup</div>
+                        <div class="timing-metric-value">${avgDaysToSignup}</div>
+                        <div class="timing-metric-desc">Mean conversion time</div>
+                    </div>
+                    <div class="timing-metric-card">
+                        <div class="timing-metric-label">Early Signups (0-7 days)</div>
+                        <div class="timing-metric-value">${earlyPct}%</div>
+                        <div class="timing-metric-desc">${formatNumber(earlySignups)} subscribers</div>
+                    </div>
+                    <div class="timing-metric-card">
+                        <div class="timing-metric-label">Mid-Term (8-30 days)</div>
+                        <div class="timing-metric-value">${midPct}%</div>
+                        <div class="timing-metric-desc">${formatNumber(midSignups)} subscribers</div>
+                    </div>
+                    <div class="timing-metric-card">
+                        <div class="timing-metric-label">Late Signups (30+ days)</div>
+                        <div class="timing-metric-value">${latePct}%</div>
+                        <div class="timing-metric-desc">${formatNumber(lateSignups)} subscribers</div>
+                    </div>
+                `;
+            }
+            
+            // Distribution Chart
+            const chartContainer = document.getElementById('subscriberSignupTimingChart');
+            if (chartContainer && timingData.length > 0) {
                 if (typeof Chart === 'undefined') {
                     chartContainer.innerHTML = '<p style="color: var(--text-secondary);">Chart.js not loaded. Please refresh the page.</p>';
-                    return;
-                }
-                
-                // Destroy existing chart if it exists
-                if (charts.subscriberSignupTiming) {
-                    charts.subscriberSignupTiming.destroy();
-                }
-                
-                const ctx = document.createElement('canvas');
-                chartContainer.innerHTML = '';
-                chartContainer.appendChild(ctx);
-                
-                const labels = timingData.map(t => t.timing);
-                const signups = timingData.map(t => parseNumber(t.signups) || 0);
-                
-                charts.subscriberSignupTiming = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'Platform Signups',
-                            data: signups,
-                            backgroundColor: 'rgba(74, 222, 128, 0.6)',
-                            borderColor: 'rgba(74, 222, 128, 1)',
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: 'Signups by Days After Show Available',
-                                color: '#fff'
-                            },
-                            legend: {
-                                display: false
-                            }
+                } else {
+                    if (charts.subscriberSignupTiming) {
+                        charts.subscriberSignupTiming.destroy();
+                    }
+                    
+                    const ctx = document.createElement('canvas');
+                    chartContainer.innerHTML = '';
+                    chartContainer.appendChild(ctx);
+                    
+                    const labels = timingData.map(t => t.timing);
+                    const signups = timingData.map(t => parseNumber(t.signups) || 0);
+                    
+                    charts.subscriberSignupTiming = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Platform Signups',
+                                data: signups,
+                                backgroundColor: 'rgba(74, 222, 128, 0.6)',
+                                borderColor: 'rgba(74, 222, 128, 1)',
+                                borderWidth: 1
+                            }]
                         },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: { color: '#fff' },
-                                grid: { color: 'rgba(255,255,255,0.1)' }
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: 'Signups by Days After Show Available',
+                                    color: '#fff'
+                                },
+                                legend: {
+                                    display: false
+                                }
                             },
-                            x: {
-                                ticks: { color: '#fff' },
-                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: { color: '#fff' },
+                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                },
+                                x: {
+                                    ticks: { color: '#fff' },
+                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                }
                             }
                         }
-                    }
-                });
+                    });
+                }
             } else if (chartContainer) {
                 chartContainer.innerHTML = '<p style="color: var(--text-secondary);">No signup timing data available</p>';
+            }
+            
+            // Timeline Chart
+            const timelineContainer = document.getElementById('subscriberSignupTimelineChart');
+            if (timelineContainer && timingData.length > 0) {
+                if (typeof Chart !== 'undefined') {
+                    if (charts.subscriberSignupTimeline) {
+                        charts.subscriberSignupTimeline.destroy();
+                    }
+                    
+                    const ctx = document.createElement('canvas');
+                    timelineContainer.innerHTML = '';
+                    timelineContainer.appendChild(ctx);
+                    
+                    const labels = timingData.map(t => `Day ${t.timing}`);
+                    const signups = timingData.map(t => parseNumber(t.signups) || 0);
+                    
+                    charts.subscriberSignupTimeline = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Daily Signups',
+                                data: signups,
+                                borderColor: 'rgba(90, 154, 217, 1)',
+                                backgroundColor: 'rgba(90, 154, 217, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: 'Signup Volume Over Time',
+                                    color: '#fff'
+                                },
+                                legend: {
+                                    display: false
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: { color: '#fff' },
+                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                },
+                                x: {
+                                    ticks: { color: '#fff', maxRotation: 45, minRotation: 45 },
+                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+            
+            // Percentile Chart
+            const percentileContainer = document.getElementById('subscriberPercentileChart');
+            if (percentileContainer && timingData.length > 0) {
+                if (typeof Chart !== 'undefined') {
+                    if (charts.subscriberPercentile) {
+                        charts.subscriberPercentile.destroy();
+                    }
+                    
+                    // Calculate cumulative percentages
+                    const total = timingData.reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
+                    let cumulative = 0;
+                    const percentileData = timingData.map(t => {
+                        cumulative += (parseNumber(t.signups) || 0);
+                        return (cumulative / total) * 100;
+                    });
+                    
+                    const ctx = document.createElement('canvas');
+                    percentileContainer.innerHTML = '';
+                    percentileContainer.appendChild(ctx);
+                    
+                    const labels = timingData.map(t => `Day ${t.timing}`);
+                    
+                    charts.subscriberPercentile = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Cumulative %',
+                                    data: percentileData,
+                                    borderColor: 'rgba(166, 226, 46, 1)',
+                                    backgroundColor: 'rgba(166, 226, 46, 0.1)',
+                                    fill: true,
+                                    tension: 0.4
+                                },
+                                {
+                                    label: '50% Threshold',
+                                    data: new Array(timingData.length).fill(50),
+                                    borderColor: 'rgba(255, 255, 255, 0.3)',
+                                    borderDash: [5, 5],
+                                    fill: false
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: 'Cumulative Signup Percentage',
+                                    color: '#fff'
+                                },
+                                legend: {
+                                    display: true,
+                                    labels: { color: '#fff' }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 100,
+                                    ticks: { color: '#fff', callback: function(value) { return value + '%'; } },
+                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                },
+                                x: {
+                                    ticks: { color: '#fff', maxRotation: 45, minRotation: 45 },
+                                    grid: { color: 'rgba(255,255,255,0.1)' }
+                                }
+                            }
+                        }
+                    });
+                }
             }
             
             // Episode timing
@@ -9625,6 +10049,45 @@
         }
         
         function renderSubscriberPlatforms(data) {
+            // Render Insights
+            const insightsContainer = document.getElementById('subscriberPlatformsInsights');
+            if (insightsContainer) {
+                const platforms = data.competitive_platforms || [];
+                const touchpoints = data.post_signup_touchpoints || [];
+                const insights = [];
+                
+                if (platforms.length > 0) {
+                    const topPlatform = platforms[0];
+                    insights.push({
+                        icon: '📱',
+                        text: `<strong>${topPlatform.platform}</strong> is used by ${topPlatform.percentage} of show watchers, indicating strong cross-platform engagement.`
+                    });
+                }
+                
+                if (touchpoints.length > 0) {
+                    const totalTouchpoint = touchpoints.find(t => t.touchpoint === 'Total');
+                    if (totalTouchpoint) {
+                        const totalUsers = parseNumber(totalTouchpoint.users) || 0;
+                        insights.push({
+                            icon: '🔄',
+                            text: `<strong>${formatNumber(totalUsers)} users</strong> engaged with the show after signing up, demonstrating strong post-acquisition retention value.`
+                        });
+                    }
+                }
+                
+                insightsContainer.innerHTML = insights.length > 0 ? `
+                    <h4>💡 Key Platform Insights</h4>
+                    <div class="tab-insights-list">
+                        ${insights.map(i => `
+                            <div class="tab-insight-item">
+                                <span class="tab-insight-icon">${i.icon}</span>
+                                <div class="tab-insight-text">${i.text}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : '';
+            }
+            
             const platformsContainer = document.getElementById('subscriberCompetitivePlatforms');
             const platforms = data.competitive_platforms || [];
             
@@ -9702,6 +10165,42 @@
         }
         
         function renderSubscriberDemographics(data) {
+            // Render Insights
+            const insightsContainer = document.getElementById('subscriberDemographicsInsights');
+            if (insightsContainer) {
+                const ageData = data.demographics?.age || [];
+                const genderData = data.demographics?.gender || [];
+                const insights = [];
+                
+                if (ageData.length > 0) {
+                    const topAgeGroup = ageData[0];
+                    insights.push({
+                        icon: '👥',
+                        text: `<strong>${topAgeGroup.age}</strong> age group represents the largest segment of new signups (${topAgeGroup.percentage || 'N/A'}), indicating primary audience appeal.`
+                    });
+                }
+                
+                if (genderData.length > 0) {
+                    const topGender = genderData[0];
+                    insights.push({
+                        icon: '📊',
+                        text: `<strong>${topGender.gender}</strong> viewers account for ${topGender.percentage || 'N/A'} of new signups, showing demographic concentration.`
+                    });
+                }
+                
+                insightsContainer.innerHTML = insights.length > 0 ? `
+                    <h4>💡 Key Demographic Insights</h4>
+                    <div class="tab-insights-list">
+                        ${insights.map(i => `
+                            <div class="tab-insight-item">
+                                <span class="tab-insight-icon">${i.icon}</span>
+                                <div class="tab-insight-text">${i.text}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : '';
+            }
+            
             const ageData = data.demographics?.age || [];
             const genderData = data.demographics?.gender || [];
             
@@ -9826,6 +10325,49 @@
         }
         
         function renderSubscriberTrends(data) {
+            // Render Insights
+            const insightsContainer = document.getElementById('subscriberTrendsInsights');
+            if (insightsContainer) {
+                const signups = data.monthly_signups || [];
+                const churn = data.monthly_churn || [];
+                const insights = [];
+                
+                if (signups.length > 0) {
+                    const totalSignups = signups.reduce((sum, s) => sum + (parseNumber(s.signups) || 0), 0);
+                    const peakMonth = signups.reduce((max, s) => {
+                        const count = parseNumber(s.signups) || 0;
+                        return count > (parseNumber(max.signups) || 0) ? s : max;
+                    }, signups[0]);
+                    
+                    insights.push({
+                        icon: '📈',
+                        text: `<strong>${peakMonth.month}</strong> saw peak signup activity with ${formatNumber(parseNumber(peakMonth.signups) || 0)} new subscribers, indicating optimal timing for marketing campaigns.`
+                    });
+                }
+                
+                if (churn.length > 0) {
+                    const totalChurn = churn.reduce((sum, c) => sum + (parseNumber(c.churn) || 0), 0);
+                    if (totalChurn > 0) {
+                        insights.push({
+                            icon: '📉',
+                            text: `Monthly churn trends show ${formatNumber(totalChurn)} total churned subscribers, providing insights into retention patterns and platform stickiness.`
+                        });
+                    }
+                }
+                
+                insightsContainer.innerHTML = insights.length > 0 ? `
+                    <h4>💡 Key Trend Insights</h4>
+                    <div class="tab-insights-list">
+                        ${insights.map(i => `
+                            <div class="tab-insight-item">
+                                <span class="tab-insight-icon">${i.icon}</span>
+                                <div class="tab-insight-text">${i.text}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : '';
+            }
+            
             const signups = data.monthly_signups || [];
             const churn = data.monthly_churn || [];
             
