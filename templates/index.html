@@ -367,6 +367,12 @@
         .conversion-pct {
             font-size: 1.25rem;
             color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+        .conversion-desc {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
         }
         .episode-list, .episode-attribution-grid {
             display: grid;
@@ -7803,15 +7809,18 @@
                         <!-- Overview Tab -->
                         <div id="subscriber-tab-overview" class="dashboard-tab active">
                             <div class="tab-section">
-                                <h3>Key Metrics</h3>
+                                <h3>📊 Platform Signups Overview</h3>
+                                <p class="section-description">How many people signed up for the platform to watch this show</p>
                                 <div id="subscriberKeyMetrics" class="metrics-grid"></div>
                             </div>
                             <div class="tab-section">
-                                <h3>Conversion Summary</h3>
+                                <h3>🎯 Signup Breakdown</h3>
+                                <p class="section-description">Attribution of platform signups to this show</p>
                                 <div id="subscriberConversionSummary" class="conversion-cards"></div>
                             </div>
                             <div class="tab-section">
-                                <h3>Top Performing Episodes</h3>
+                                <h3>📺 Top Episodes Driving Signups</h3>
+                                <p class="section-description">Episodes that generated the most platform signups</p>
                                 <div id="subscriberTopEpisodes" class="episode-list"></div>
                             </div>
                         </div>
@@ -7819,7 +7828,8 @@
                         <!-- Episodes Tab -->
                         <div id="subscriber-tab-episodes" class="dashboard-tab">
                             <div class="tab-section">
-                                <h3>Episode Attribution</h3>
+                                <h3>📺 Episode Performance</h3>
+                                <p class="section-description">Which episodes drove the most platform signups</p>
                                 <div id="subscriberEpisodeAttribution" class="episode-attribution-grid"></div>
                             </div>
                         </div>
@@ -7827,11 +7837,13 @@
                         <!-- Timing Tab -->
                         <div id="subscriber-tab-timing" class="dashboard-tab">
                             <div class="tab-section">
-                                <h3>Signup Timing Overview</h3>
+                                <h3>⏱️ When People Signed Up</h3>
+                                <p class="section-description">How many days after the show was available did people sign up for the platform</p>
                                 <div id="subscriberSignupTimingChart" class="chart-container"></div>
                             </div>
                             <div class="tab-section">
-                                <h3>Episode-Level Signup Timing</h3>
+                                <h3>📺 Episode-Level Signup Timing</h3>
+                                <p class="section-description">Signup timing broken down by individual episode</p>
                                 <div id="subscriberEpisodeTiming" class="episode-timing-grid"></div>
                             </div>
                         </div>
@@ -7839,11 +7851,13 @@
                         <!-- Platforms Tab -->
                         <div id="subscriber-tab-platforms" class="dashboard-tab">
                             <div class="tab-section">
-                                <h3>Competitive Platforms</h3>
+                                <h3>📱 Other Platforms They Use</h3>
+                                <p class="section-description">What percentage of show watchers also use competing streaming platforms</p>
                                 <div id="subscriberCompetitivePlatforms" class="platform-list"></div>
                             </div>
                             <div class="tab-section">
-                                <h3>Post-Signup Touchpoints</h3>
+                                <h3>🔄 Engagement After Signup</h3>
+                                <p class="section-description">How many times users watched the show after signing up (1st-5th platform touchpoint)</p>
                                 <div id="subscriberTouchpoints" class="touchpoint-chart"></div>
                             </div>
                         </div>
@@ -7851,11 +7865,13 @@
                         <!-- Demographics Tab -->
                         <div id="subscriber-tab-demographics" class="dashboard-tab">
                             <div class="tab-section">
-                                <h3>Age Distribution</h3>
+                                <h3>👥 Age of New Signups</h3>
+                                <p class="section-description">Age distribution of people who signed up for the platform to watch this show</p>
                                 <div id="subscriberAgeChart" class="chart-container"></div>
                             </div>
                             <div class="tab-section">
-                                <h3>Gender Distribution</h3>
+                                <h3>👥 Gender of New Signups</h3>
+                                <p class="section-description">Gender distribution of people who signed up for the platform to watch this show</p>
                                 <div id="subscriberGenderChart" class="chart-container"></div>
                             </div>
                         </div>
@@ -7863,11 +7879,13 @@
                         <!-- Trends Tab -->
                         <div id="subscriber-tab-trends" class="dashboard-tab">
                             <div class="tab-section">
-                                <h3>Monthly Signups</h3>
+                                <h3>📈 Monthly Signup Trends</h3>
+                                <p class="section-description">Platform signups over time and how many watched this show</p>
                                 <div id="subscriberMonthlySignupsChart" class="chart-container"></div>
                             </div>
                             <div class="tab-section">
-                                <h3>Monthly Churn</h3>
+                                <h3>📉 Monthly Churn Trends</h3>
+                                <p class="section-description">Users who stopped visiting the platform over time</p>
                                 <div id="subscriberMonthlyChurnChart" class="chart-container"></div>
                             </div>
                         </div>
@@ -7993,6 +8011,14 @@
             if (num === null || num === undefined || num === '') return '0';
             const n = typeof num === 'number' ? num : parseFloat(num);
             return isNaN(n) ? '0' : n.toLocaleString();
+        }
+        
+        function parseNumber(value) {
+            if (value === null || value === undefined || value === '') return null;
+            if (typeof value === 'number') return value;
+            const cleaned = String(value).replace(/,/g, '').replace(/$/g, '').replace(/%/g, '').trim();
+            const num = parseFloat(cleaned);
+            return isNaN(num) ? null : num;
         }
         
         // Format index as multiplier (e.g., 150 → 1.5x, 100 → 1.0x, 75 → 0.75x)
@@ -8420,67 +8446,93 @@
             const conversionContainer = document.getElementById('subscriberConversionSummary');
             const episodesContainer = document.getElementById('subscriberTopEpisodes');
             
-            // Key Metrics
+            const platform = data.metadata?.platform || 'the platform';
+            const show = data.metadata?.show || 'this show';
+            
+            // Key Metrics - Clearer language
             const metrics = data.key_metrics || {};
+            const totalWatchers = metrics.total_watchers?.count || 0;
+            const newSignups = metrics.new_signups?.count || 0;
+            const cleanSample = metrics.clean_sample?.count || 0;
+            
             metricsContainer.innerHTML = `
                 <div class="metric-card">
-                    <div class="metric-label">Total Show Watchers</div>
-                    <div class="metric-value">${formatNumber(metrics.total_watchers?.count)}</div>
-                    <div class="metric-sub">Gen Pop: ${metrics.total_watchers?.gen_pop || 'N/A'}</div>
+                    <div class="metric-label">👥 Total Show Watchers</div>
+                    <div class="metric-value">${formatNumber(totalWatchers)}</div>
+                    <div class="metric-sub">People who watched ${show}</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-label">Clean Sample</div>
-                    <div class="metric-value">${formatNumber(metrics.clean_sample?.count)}</div>
-                    <div class="metric-sub">Gen Pop: ${metrics.clean_sample?.gen_pop || 'N/A'}</div>
+                    <div class="metric-label">🆕 New Platform Signups</div>
+                    <div class="metric-value">${formatNumber(newSignups)}</div>
+                    <div class="metric-sub">People who signed up for ${platform} to watch ${show}</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-label">New Signups</div>
-                    <div class="metric-value">${formatNumber(metrics.new_signups?.count)}</div>
-                    <div class="metric-sub">Gen Pop: ${metrics.new_signups?.gen_pop || 'N/A'}</div>
+                    <div class="metric-label">📊 Clean Sample</div>
+                    <div class="metric-value">${formatNumber(cleanSample)}</div>
+                    <div class="metric-sub">First-time viewers (excludes existing subscribers)</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-label">Clean Conversion Rate</div>
-                    <div class="metric-value">${metrics.clean_conversion_rate || 'N/A'}</div>
+                    <div class="metric-label">📈 Conversion Rate</div>
+                    <div class="metric-value">${metrics.clean_conversion_rate || metrics.total_conversion_rate || 'N/A'}</div>
+                    <div class="metric-sub">% of viewers who signed up</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-label">Total Conversion Rate</div>
-                    <div class="metric-value">${metrics.total_conversion_rate || 'N/A'}</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Avg Days to Signup</div>
+                    <div class="metric-label">⏱️ Avg Days to Signup</div>
                     <div class="metric-value">${metrics.avg_days_to_signup || 'N/A'}</div>
+                    <div class="metric-sub">Days from watching to signing up</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">🎯 Total Conversion Rate</div>
+                    <div class="metric-value">${metrics.total_conversion_rate || 'N/A'}</div>
+                    <div class="metric-sub">% of all watchers who signed up</div>
                 </div>
             `;
             
-            // Conversion Summary
+            // Conversion Summary - Clearer language
             const summary = data.attribution_summary || {};
+            const attributed = summary.attributed?.count || 0;
+            const dormant = summary.dormant_reactive?.count || 0;
+            const total = summary.total?.count || 0;
+            
             conversionContainer.innerHTML = `
                 <div class="conversion-card">
-                    <h4>Attributed Signups</h4>
-                    <div class="conversion-value">${formatNumber(summary.attributed?.count)}</div>
-                    <div class="conversion-pct">${summary.attributed?.percentage || '0%'}</div>
+                    <h4>✅ Attributed Signups</h4>
+                    <div class="conversion-value">${formatNumber(attributed)}</div>
+                    <div class="conversion-pct">${summary.attributed?.percentage || '0%'} of watchers</div>
+                    <div class="conversion-desc">Signed up after watching the show</div>
                 </div>
                 <div class="conversion-card">
-                    <h4>Dormant to Reactive</h4>
-                    <div class="conversion-value">${formatNumber(summary.dormant_reactive?.count)}</div>
-                    <div class="conversion-pct">${summary.dormant_reactive?.percentage || '0%'}</div>
+                    <h4>🔄 Dormant to Reactive</h4>
+                    <div class="conversion-value">${formatNumber(dormant)}</div>
+                    <div class="conversion-pct">${summary.dormant_reactive?.percentage || '0%'} of watchers</div>
+                    <div class="conversion-desc">Reactivated existing accounts</div>
                 </div>
                 <div class="conversion-card">
-                    <h4>Total Signups</h4>
-                    <div class="conversion-value">${formatNumber(summary.total?.count)}</div>
-                    <div class="conversion-pct">${summary.total?.percentage || '0%'}</div>
+                    <h4>📊 Total Signups</h4>
+                    <div class="conversion-value">${formatNumber(total)}</div>
+                    <div class="conversion-pct">${summary.total?.percentage || '0%'} of watchers</div>
+                    <div class="conversion-desc">All platform signups from this show</div>
                 </div>
             `;
             
-            // Top Episodes
-            const episodes = (data.episode_attribution || []).slice(0, 10);
-            episodesContainer.innerHTML = episodes.map(ep => `
-                <div class="episode-item">
-                    <span class="episode-number">Episode ${ep.episode}</span>
-                    <span class="episode-signups">${formatNumber(ep.signups)} signups</span>
-                    <span class="episode-pct">${ep.percentage}</span>
-                </div>
-            `).join('');
+            // Top Episodes - Sorted by signups
+            const episodes = (data.episode_attribution || []).slice().sort((a, b) => {
+                const aSignups = a.signups || 0;
+                const bSignups = b.signups || 0;
+                return bSignups - aSignups;
+            }).slice(0, 10);
+            
+            if (episodes.length === 0) {
+                episodesContainer.innerHTML = '<div class="episode-item"><span>No episode data available</span></div>';
+            } else {
+                episodesContainer.innerHTML = episodes.map(ep => `
+                    <div class="episode-item">
+                        <span class="episode-number">📺 Episode ${ep.episode}</span>
+                        <span class="episode-signups">${formatNumber(ep.signups)} people signed up</span>
+                        <span class="episode-pct">${ep.percentage || 'N/A'}</span>
+                    </div>
+                `).join('');
+            }
         }
         
         function renderSubscriberEpisodes(data) {
@@ -8509,61 +8561,423 @@
         function renderSubscriberTiming(data) {
             // Overview chart
             const timingData = data.signup_timing || [];
-            // TODO: Add Chart.js visualization
+            const chartContainer = document.getElementById('subscriberSignupTimingChart');
+            
+            if (timingData.length > 0 && chartContainer) {
+                // Destroy existing chart if it exists
+                if (charts.subscriberSignupTiming) {
+                    charts.subscriberSignupTiming.destroy();
+                }
+                
+                const ctx = document.createElement('canvas');
+                chartContainer.innerHTML = '';
+                chartContainer.appendChild(ctx);
+                
+                const labels = timingData.map(t => t.timing);
+                const signups = timingData.map(t => parseNumber(t.signups) || 0);
+                
+                charts.subscriberSignupTiming = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Platform Signups',
+                            data: signups,
+                            backgroundColor: 'rgba(74, 222, 128, 0.6)',
+                            borderColor: 'rgba(74, 222, 128, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Signups by Days After Show Available',
+                                color: '#fff'
+                            },
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { color: '#fff' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            },
+                            x: {
+                                ticks: { color: '#fff' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            }
+                        }
+                    }
+                });
+            } else if (chartContainer) {
+                chartContainer.innerHTML = '<p style="color: var(--text-secondary);">No signup timing data available</p>';
+            }
             
             // Episode timing
             const container = document.getElementById('subscriberEpisodeTiming');
             const episodeTiming = data.episode_signup_timing || {};
             
             let html = '';
-            Object.keys(episodeTiming).sort((a, b) => parseInt(a) - parseInt(b)).forEach(epNum => {
-                const timings = episodeTiming[epNum];
-                html += `
-                    <div class="episode-timing-card">
-                        <h4>Episode ${epNum}</h4>
-                        <div class="timing-list">
-                            ${timings.map(t => `
-                                <div class="timing-item">
-                                    <span>${t.timing}:</span>
-                                    <span>${formatNumber(t.signups)} (${t.percentage})</span>
+            const episodeKeys = Object.keys(episodeTiming).sort((a, b) => parseInt(a) - parseInt(b));
+            
+            if (episodeKeys.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-secondary);">No episode timing data available</p>';
+            } else {
+                episodeKeys.forEach(epNum => {
+                    const timings = episodeTiming[epNum];
+                    if (timings && timings.length > 0) {
+                        html += `
+                            <div class="episode-timing-card">
+                                <h4>Episode ${epNum}</h4>
+                                <div class="timing-list">
+                                    ${timings.map(t => `
+                                        <div class="timing-item">
+                                            <span>${t.timing}:</span>
+                                            <span>${formatNumber(t.signups)} people (${t.percentage})</span>
+                                        </div>
+                                    `).join('')}
                                 </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                `;
-            });
-            container.innerHTML = html;
+                            </div>
+                        `;
+                    }
+                });
+                container.innerHTML = html;
+            }
         }
         
         function renderSubscriberPlatforms(data) {
             const platformsContainer = document.getElementById('subscriberCompetitivePlatforms');
             const platforms = data.competitive_platforms || [];
             
-            platformsContainer.innerHTML = platforms.map(p => `
-                <div class="platform-item">
-                    <span class="platform-name">${p.platform}</span>
-                    <span class="platform-pct">${p.percentage}</span>
-                </div>
-            `).join('');
+            if (platforms.length === 0) {
+                platformsContainer.innerHTML = '<p style="color: var(--text-secondary);">No competitive platform data available</p>';
+            } else {
+                platformsContainer.innerHTML = platforms.map(p => `
+                    <div class="platform-item">
+                        <span class="platform-name">${p.platform}</span>
+                        <span class="platform-pct">${p.percentage} of show watchers</span>
+                    </div>
+                `).join('');
+            }
             
             // Touchpoints
             const touchpointsContainer = document.getElementById('subscriberTouchpoints');
             const touchpoints = data.post_signup_touchpoints || [];
-            // TODO: Add Chart.js visualization
+            
+            if (touchpoints.length > 0 && touchpointsContainer) {
+                // Destroy existing chart if it exists
+                if (charts.subscriberTouchpoints) {
+                    charts.subscriberTouchpoints.destroy();
+                }
+                
+                const ctx = document.createElement('canvas');
+                touchpointsContainer.innerHTML = '';
+                touchpointsContainer.appendChild(ctx);
+                
+                const labels = touchpoints.map(t => `${t.touchpoint}${t.touchpoint !== 'Total' ? ' Touchpoint' : ''}`);
+                const users = touchpoints.map(t => parseNumber(t.users) || 0);
+                
+                charts.subscriberTouchpoints = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Users Who Watched Show',
+                            data: users,
+                            backgroundColor: 'rgba(74, 222, 128, 0.2)',
+                            borderColor: 'rgba(74, 222, 128, 1)',
+                            borderWidth: 2,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Show Engagement After Platform Signup',
+                                color: '#fff'
+                            },
+                            legend: {
+                                display: true,
+                                labels: { color: '#fff' }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { color: '#fff' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            },
+                            x: {
+                                ticks: { color: '#fff' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            }
+                        }
+                    }
+                });
+            } else if (touchpointsContainer) {
+                touchpointsContainer.innerHTML = '<p style="color: var(--text-secondary);">No touchpoint data available</p>';
+            }
         }
         
         function renderSubscriberDemographics(data) {
             const ageData = data.demographics?.age || [];
             const genderData = data.demographics?.gender || [];
             
-            // TODO: Add Chart.js visualizations for age and gender
+            // Age Chart
+            const ageContainer = document.getElementById('subscriberAgeChart');
+            if (ageData.length > 0 && ageContainer) {
+                if (charts.subscriberAge) {
+                    charts.subscriberAge.destroy();
+                }
+                
+                const ctx = document.createElement('canvas');
+                ageContainer.innerHTML = '';
+                ageContainer.appendChild(ctx);
+                
+                const labels = ageData.map(a => a.age_range);
+                const counts = ageData.map(a => parseNumber(a.count) || 0);
+                const percentages = ageData.map(a => parseFloat(a.percentage) || 0);
+                
+                charts.subscriberAge = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'New Signups by Age',
+                            data: counts,
+                            backgroundColor: 'rgba(74, 222, 128, 0.6)',
+                            borderColor: 'rgba(74, 222, 128, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Age Distribution of New Platform Signups',
+                                color: '#fff'
+                            },
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { color: '#fff' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            },
+                            x: {
+                                ticks: { color: '#fff' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            }
+                        }
+                    }
+                });
+            } else if (ageContainer) {
+                ageContainer.innerHTML = '<p style="color: var(--text-secondary);">No age data available</p>';
+            }
+            
+            // Gender Chart
+            const genderContainer = document.getElementById('subscriberGenderChart');
+            if (genderData.length > 0 && genderContainer) {
+                if (charts.subscriberGender) {
+                    charts.subscriberGender.destroy();
+                }
+                
+                const ctx = document.createElement('canvas');
+                genderContainer.innerHTML = '';
+                genderContainer.appendChild(ctx);
+                
+                // Group similar gender labels
+                const genderGroups = {};
+                genderData.forEach(g => {
+                    const key = g.gender.toUpperCase().replace(/[^A-Z]/g, '');
+                    if (!genderGroups[key]) {
+                        genderGroups[key] = { label: g.gender, count: 0, percentage: 0 };
+                    }
+                    genderGroups[key].count += parseNumber(g.count) || 0;
+                    genderGroups[key].percentage += parseFloat(g.percentage) || 0;
+                });
+                
+                const labels = Object.values(genderGroups).map(g => g.label);
+                const counts = Object.values(genderGroups).map(g => g.count);
+                
+                charts.subscriberGender = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'New Signups by Gender',
+                            data: counts,
+                            backgroundColor: [
+                                'rgba(74, 222, 128, 0.8)',
+                                'rgba(59, 130, 246, 0.8)',
+                                'rgba(168, 85, 247, 0.8)',
+                                'rgba(236, 72, 153, 0.8)',
+                                'rgba(251, 146, 60, 0.8)'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Gender Distribution of New Platform Signups',
+                                color: '#fff'
+                            },
+                            legend: {
+                                display: true,
+                                position: 'right',
+                                labels: { color: '#fff' }
+                            }
+                        }
+                    }
+                });
+            } else if (genderContainer) {
+                genderContainer.innerHTML = '<p style="color: var(--text-secondary);">No gender data available</p>';
+            }
         }
         
         function renderSubscriberTrends(data) {
             const signups = data.monthly_signups || [];
             const churn = data.monthly_churn || [];
             
-            // TODO: Add Chart.js line charts for trends
+            // Monthly Signups Chart
+            const signupsContainer = document.getElementById('subscriberMonthlySignupsChart');
+            if (signups.length > 0 && signupsContainer) {
+                if (charts.subscriberMonthlySignups) {
+                    charts.subscriberMonthlySignups.destroy();
+                }
+                
+                const ctx = document.createElement('canvas');
+                signupsContainer.innerHTML = '';
+                signupsContainer.appendChild(ctx);
+                
+                const labels = signups.map(s => s.month);
+                const signupCounts = signups.map(s => parseNumber(s.signups) || 0);
+                const watchedShow = signups.map(s => parseNumber(s.watched_show) || 0);
+                
+                charts.subscriberMonthlySignups = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Total Platform Signups',
+                            data: signupCounts,
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 2,
+                            fill: true
+                        }, {
+                            label: 'Signups Who Watched Show',
+                            data: watchedShow,
+                            borderColor: 'rgba(74, 222, 128, 1)',
+                            backgroundColor: 'rgba(74, 222, 128, 0.1)',
+                            borderWidth: 2,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Monthly Platform Signups',
+                                color: '#fff'
+                            },
+                            legend: {
+                                display: true,
+                                labels: { color: '#fff' }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { color: '#fff' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            },
+                            x: {
+                                ticks: { color: '#fff' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            }
+                        }
+                    }
+                });
+            } else if (signupsContainer) {
+                signupsContainer.innerHTML = '<p style="color: var(--text-secondary);">No monthly signup data available</p>';
+            }
+            
+            // Monthly Churn Chart
+            const churnContainer = document.getElementById('subscriberMonthlyChurnChart');
+            if (churn.length > 0 && churnContainer) {
+                if (charts.subscriberMonthlyChurn) {
+                    charts.subscriberMonthlyChurn.destroy();
+                }
+                
+                const ctx = document.createElement('canvas');
+                churnContainer.innerHTML = '';
+                churnContainer.appendChild(ctx);
+                
+                const labels = churn.map(c => c.month);
+                const churnCounts = churn.map(c => parseNumber(c.churned) || 0);
+                
+                charts.subscriberMonthlyChurn = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Users Who Stopped Visiting Platform',
+                            data: churnCounts,
+                            borderColor: 'rgba(239, 68, 68, 1)',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            borderWidth: 2,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Monthly Platform Churn',
+                                color: '#fff'
+                            },
+                            legend: {
+                                display: true,
+                                labels: { color: '#fff' }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { color: '#fff' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            },
+                            x: {
+                                ticks: { color: '#fff' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            }
+                        }
+                    }
+                });
+            } else if (churnContainer) {
+                churnContainer.innerHTML = '<p style="color: var(--text-secondary);">No monthly churn data available</p>';
+            }
         }
 
         // Activity tracking helper (non-blocking)
