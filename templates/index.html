@@ -9419,13 +9419,23 @@
                 }
                 
                 // Apply final position - use fixed positioning relative to viewport
-                tooltip.style.position = 'fixed';
-                tooltip.style.left = left + 'px';
-                tooltip.style.top = top + 'px';
-                tooltip.style.visibility = 'visible';
-                tooltip.style.opacity = '1';
-                tooltip.style.display = 'block';
-                tooltip.style.zIndex = '999999';
+                tooltip.style.cssText = `
+                    position: fixed !important;
+                    left: ${left}px !important;
+                    top: ${top}px !important;
+                    visibility: visible !important;
+                    opacity: 1 !important;
+                    display: block !important;
+                    z-index: 2147483647 !important;
+                    background: linear-gradient(135deg, #1a2a3a, #0d1a2a) !important;
+                    color: #e6f1ff !important;
+                    padding: 0.75rem 1rem !important;
+                    border-radius: 8px !important;
+                    font-size: 0.8rem !important;
+                    max-width: 300px !important;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.8), 0 0 0 2px #c8e600 !important;
+                    pointer-events: none !important;
+                `;
                 
                 if (showBelow) {
                     tooltip.classList.add('below');
@@ -23326,6 +23336,6 @@
     </div>
     
     <!-- Global Tooltip Element - placed at end of body to ensure highest z-index layer -->
-    <div id="globalTooltip"></div>
+    <div id="globalTooltip" style="position: fixed !important; z-index: 2147483647 !important; pointer-events: none;"></div>
 </body>
 </html>
