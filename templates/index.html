@@ -8491,7 +8491,11 @@
             console.log('📊 Rendering insights with data:', {
                 metadata: data.metadata,
                 key_metrics: data.key_metrics,
-                attribution_summary: data.attribution_summary
+                attribution_summary: data.attribution_summary,
+                has_key_metrics: !!data.key_metrics,
+                key_metrics_keys: data.key_metrics ? Object.keys(data.key_metrics) : [],
+                total_watchers: data.key_metrics?.total_watchers,
+                new_signups: data.key_metrics?.new_signups
             });
             
             const platform = data.metadata?.platform || 'the platform';
@@ -8507,7 +8511,7 @@
             const conversionRate = metrics.clean_conversion_rate || metrics.total_conversion_rate || 'N/A';
             
             // Key Statistics
-            statsContainer.innerHTML = `
+            const statsHTML = `
                 <div class="key-stat-item">
                     <div class="key-stat-label">Total Show Watchers</div>
                     <div class="key-stat-value neutral">${formatNumber(totalWatchers)}</div>
@@ -8533,6 +8537,8 @@
                     <div class="key-stat-value neutral">${formatNumber(cleanSample)}</div>
                 </div>
             `;
+            statsContainer.innerHTML = statsHTML;
+            console.log('✅ Set stats HTML, container children:', statsContainer.children.length);
             
             // Key Insights - Dynamic bullet points
             const insights = [];
@@ -8561,6 +8567,7 @@
             insightsContainer.innerHTML = insights.map(insight => `
                 <div class="insight-item">${insight}</div>
             `).join('');
+            console.log('✅ Set insights HTML, count:', insights.length);
             
             // Top Episodes - Sorted by signups, limit to top 5
             const episodes = (data.episode_attribution || []).slice().sort((a, b) => {
@@ -8580,6 +8587,11 @@
                     </div>
                 `).join('');
             }
+            console.log('✅ Set episodes HTML, count:', episodes.length);
+            
+            // Check if tab is visible
+            const insightsTab = document.getElementById('subscriber-tab-insights');
+            console.log('📋 Insights tab exists:', !!insightsTab, 'has active class:', insightsTab?.classList.contains('active'));
         }
         
         function renderSubscriberEpisodes(data) {

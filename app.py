@@ -3579,14 +3579,27 @@ def get_subscriber_iq_data(s3_key):
         print(f"✅ Got CSV content: {len(csv_content)} bytes")
         
         # Parse subscriber IQ CSV
+        print(f"📝 CSV content preview (first 500 chars): {csv_content[:500]}")
         parsed = parse_subscriber_iq_csv(csv_content)
         
-        # Log what was parsed
+        # Log what was parsed in detail
         print(f"📊 Parsed data summary:")
-        print(f"   Key metrics: {len(parsed.get('key_metrics', {}))} items")
-        print(f"   Episodes: {len(parsed.get('episode_attribution', []))} items")
-        print(f"   Signup timing: {len(parsed.get('signup_timing', []))} items")
-        print(f"   Metadata: {parsed.get('metadata', {})}")
+        print(f"   Metadata keys: {list(parsed.get('metadata', {}).keys())}")
+        print(f"   Key metrics keys: {list(parsed.get('key_metrics', {}).keys())}")
+        print(f"   Key metrics values: {parsed.get('key_metrics', {})}")
+        print(f"   Episodes count: {len(parsed.get('episode_attribution', []))}")
+        print(f"   Signup timing count: {len(parsed.get('signup_timing', []))}")
+        print(f"   Attribution summary keys: {list(parsed.get('attribution_summary', {}).keys())}")
+        print(f"   Attribution summary: {parsed.get('attribution_summary', {})}")
+        
+        # Check if data is actually empty
+        has_data = any([
+            parsed.get('key_metrics', {}),
+            parsed.get('episode_attribution', []),
+            parsed.get('signup_timing', []),
+            parsed.get('attribution_summary', {})
+        ])
+        print(f"   Has any data: {has_data}")
         
         # Extract show name from filename
         name_without_ext = s3_key.replace('.csv', '')
@@ -3601,14 +3614,26 @@ def get_subscriber_iq_data(s3_key):
         
         print(f"✅ Returning subscriber IQ data for show: {show_name.upper()}")
         print(f"   Data keys: {list(parsed.keys())}")
+        print(f"   Data structure check - key_metrics type: {type(parsed.get('key_metrics'))}")
+        print(f"   Data structure check - key_metrics content: {parsed.get('key_metrics')}")
         
-        return jsonify({
+        response_data = {
             'success': True,
             'data': parsed,
             'show': show_name.upper(),
             'date_range': date_range,
             's3_key': s3_key
-        })
+        }
+        
+        # Verify the response can be serialized
+        try:
+            import json
+            json_str = json.dumps(response_data, default=str)
+            print(f"   ✅ Response serializes successfully ({len(json_str)} bytes)")
+        except Exception as e:
+            print(f"   ❌ Response serialization error: {e}")
+        
+        return jsonify(response_data)
     except Exception as e:
         print(f"❌ Error in get_subscriber_iq_data: {e}")
         import traceback
