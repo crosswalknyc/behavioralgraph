@@ -1076,14 +1076,8 @@
         .dash-profile-info {
             display: flex;
             flex-direction: row;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .dash-profile-info {
-            display: flex;
             align-items: flex-start;
-            gap: 0.75rem;
+            gap: 1rem;
         }
         
         .dash-profile-image {
@@ -1127,7 +1121,17 @@
         .dash-brand-container {
             display: flex;
             flex-direction: column;
-            gap: 0.25rem;
+            gap: 0.5rem;
+            flex: 0 0 auto;
+        }
+        
+        .dash-meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto auto;
+            gap: 0.5rem;
+            flex: 1;
+            margin-left: 1rem;
         }
 
         .dash-brand-box {
@@ -1158,13 +1162,13 @@
             border: 1px solid var(--border-color);
         }
         .dash-meta-box {
-            color: var(--text-secondary);
+            color: var(--text-primary);
             font-size: 0.75rem;
-            background: var(--bg-input);
-            padding: 0.35rem 0.6rem;
-            border-radius: 6px;
+            background: var(--bg-card);
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
             border: 1px solid var(--border-color);
-            margin-top: 0.25rem;
+            white-space: nowrap;
         }
 
         /* Profile Tabs Bar */
@@ -8442,9 +8446,11 @@
                                 <div class="dash-brand-container">
                                     <div class="dash-brand-box" id="subscriberShowNameHeader"></div>
                                     <div class="dash-meta-box" id="subscriberPlatformHeader" style="display: none;"></div>
+                                </div>
+                                <div class="dash-meta-grid">
                                     <div class="dash-meta-box" id="subscriberDateRangeHeader" style="display: none;"></div>
-                                    <div class="dash-meta-box" id="subscriberExclusionWindow" style="display: none;"></div>
                                     <div class="dash-meta-box" id="subscriberAttributionWindow" style="display: none;"></div>
+                                    <div class="dash-meta-box" id="subscriberExclusionWindow" style="display: none;"></div>
                                 </div>
                             </div>
                         </div>
