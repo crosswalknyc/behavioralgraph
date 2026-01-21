@@ -9423,28 +9423,28 @@
                 <div class="executive-summary-card">
                     <div class="exec-summary-header">
                         <h2>Executive Summary</h2>
-                        <div class="performance-badge ${performanceLabel.toLowerCase()}">
+                        <div class="performance-badge ${performanceLabel.toLowerCase()} has-tooltip" data-tooltip="Performance Score: ${performanceScore}/100 - ${performanceLabel} performance. Based on total subscriber acquisition and reactivation metrics. Higher scores indicate stronger platform value.">
                             <span class="performance-score">${performanceScore}</span>
                             <span class="performance-label">${performanceLabel}</span>
                         </div>
                     </div>
                     <div class="exec-summary-grid">
-                        <div class="exec-summary-metric">
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Total Platform Impact: Total number of subscribers acquired or reactivated due to this show. This includes both new signups and dormant users who returned to watch.">
                             <div class="exec-metric-label">Total Platform Impact</div>
                             <div class="exec-metric-value">${formatValue(totalSignups, totalSignupsGenPop)}</div>
                             <div class="exec-metric-desc">Subscribers acquired or reactivated</div>
                         </div>
-                        <div class="exec-summary-metric">
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="New Subscriber Acquisition: Confirmed new subscribers to the streaming platform who signed up specifically to watch this show.">
                             <div class="exec-metric-label">New Subscriber Acquisition</div>
                             <div class="exec-metric-value">${formatValue(attributedSignups, attributedSignupsGenPop)}</div>
                             <div class="exec-metric-desc">Attributed new signups</div>
                         </div>
-                        <div class="exec-summary-metric">
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Audience Reach: Total number of people who watched the series during the tracking period.">
                             <div class="exec-metric-label">Audience Reach</div>
                             <div class="exec-metric-value">${formatValue(totalWatchers, totalWatchersGenPop)}</div>
                             <div class="exec-metric-desc">Total show viewers</div>
                         </div>
-                        <div class="exec-summary-metric">
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Conversion Rate: Percentage of total show viewers who signed up for the platform to watch this show.">
                             <div class="exec-metric-label">Conversion Rate</div>
                             <div class="exec-metric-value">${conversionPct}%</div>
                             <div class="exec-metric-desc">Viewers to subscribers</div>
@@ -9464,7 +9464,7 @@
                 <div class="strategic-card">
                     <h3>💰 Platform Value Assessment</h3>
                     <div class="value-assessment-grid">
-                        <div class="value-metric-card">
+                        <div class="value-metric-card has-tooltip" data-tooltip="Subscriber Growth: Total number of subscribers acquired or reactivated. New Signups are confirmed new platform subscribers. Reactivations are dormant users who returned to watch this show.">
                             <div class="value-metric-header">
                                 <span class="value-icon">📈</span>
                                 <span class="value-label">Subscriber Growth</span>
@@ -9481,25 +9481,25 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="value-metric-card">
+                        <div class="value-metric-card has-tooltip" data-tooltip="Attribution Rate: Percentage of total signups directly attributed to this show. Higher percentages indicate stronger platform value and ROI.">
                             <div class="value-metric-header">
                                 <span class="value-icon">🎯</span>
                                 <span class="value-label">Attribution Rate</span>
                             </div>
                             <div class="value-metric-value">${attributionPct}%</div>
                             <div class="value-metric-desc">Directly attributed to ${show}</div>
-                            <div class="value-indicator ${attributionPct > 70 ? 'strong' : attributionPct > 50 ? 'moderate' : 'developing'}">
+                            <div class="value-indicator ${attributionPct > 70 ? 'strong' : attributionPct > 50 ? 'moderate' : 'developing'} has-tooltip" data-tooltip="${attributionPct > 70 ? 'Strong ROI: Over 70% attribution indicates exceptional platform value' : attributionPct > 50 ? 'Clear Value: 50-70% attribution shows strong platform value' : 'Developing: Under 50% attribution, opportunity to improve'}">
                                 ${attributionPct > 70 ? 'Strong ROI' : attributionPct > 50 ? 'Clear Value' : 'Developing'}
                             </div>
                         </div>
-                        <div class="value-metric-card">
+                        <div class="value-metric-card has-tooltip" data-tooltip="Speed to Conversion: Average number of days between when the show became available and when users signed up for the platform. Lower numbers indicate immediate platform value and urgency-driven acquisition.">
                             <div class="value-metric-header">
                                 <span class="value-icon">⚡</span>
                                 <span class="value-label">Speed to Conversion</span>
                             </div>
                             <div class="value-metric-value">${avgDaysToSignup !== 'N/A' ? avgDaysToSignup : 'N/A'}</div>
                             <div class="value-metric-desc">Average days to signup</div>
-                            <div class="value-indicator ${isFastConversion ? 'strong' : 'moderate'}">
+                            <div class="value-indicator ${isFastConversion ? 'strong' : 'moderate'} has-tooltip" data-tooltip="${isFastConversion ? 'Immediate Impact: Average signup time under 7 days indicates urgent platform value and fast conversion' : 'Sustained Interest: Average signup time 7+ days shows viewers take time to evaluate before subscribing'}">
                                 ${isFastConversion ? 'Immediate Impact' : 'Sustained Interest'}
                             </div>
                         </div>
@@ -9526,7 +9526,7 @@
                             ${topEpisodes.map((ep, idx) => {
                                 const episodePct = totalSignups > 0 ? ((ep.signups / totalSignups) * 100).toFixed(1) : 0;
                                 return `
-                                    <div class="episode-performance-card ${idx === 0 ? 'top-performer' : ''}">
+                                    <div class="episode-performance-card ${idx === 0 ? 'top-performer' : ''} has-tooltip" data-tooltip="Episode ${ep.episode}: Drove ${formatNumber(ep.signups)} platform signups (${episodePct}% of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
                                         <div class="episode-rank">#${idx + 1}</div>
                                         <div class="episode-title">Episode ${ep.episode}</div>
                                         <div class="episode-impact">
@@ -9554,18 +9554,18 @@
                 <div class="strategic-card">
                     <h3>👥 Audience Acquisition Insights</h3>
                     <div class="acquisition-grid">
-                        <div class="acquisition-metric">
+                        <div class="acquisition-metric has-tooltip" data-tooltip="New Audience Appeal: Percentage of viewers who had not watched this show before. Higher percentages indicate strong appeal to new audiences and platform acquisition potential.">
                             <div class="acquisition-header">
                                 <span class="acquisition-icon">🆕</span>
                                 <span class="acquisition-label">New Audience Appeal</span>
                             </div>
                             <div class="acquisition-value">${newViewerPct}%</div>
                             <div class="acquisition-desc">First-time viewers</div>
-                            <div class="acquisition-indicator ${isStrongNewViewerAppeal ? 'strong' : 'moderate'}">
+                            <div class="acquisition-indicator ${isStrongNewViewerAppeal ? 'strong' : 'moderate'} has-tooltip" data-tooltip="${isStrongNewViewerAppeal ? 'Strong New Audience Draw: Over 50% first-time viewers indicates exceptional appeal to new audiences and platform acquisition potential' : 'Balanced Audience: Mix of new and returning viewers shows broad appeal'}">
                                 ${isStrongNewViewerAppeal ? 'Strong New Audience Draw' : 'Balanced Audience'}
                             </div>
                         </div>
-                        <div class="acquisition-metric">
+                        <div class="acquisition-metric has-tooltip" data-tooltip="Returning Viewers: Number of people who watched a previous season of the series before watching this season. Shows retention value and existing fan base engagement.">
                             <div class="acquisition-header">
                                 <span class="acquisition-icon">🔄</span>
                                 <span class="acquisition-label">Returning Viewers</span>
@@ -9573,18 +9573,18 @@
                             <div class="acquisition-value">${formatValue(preExisting, preExistingGenPop)}</div>
                             <div class="acquisition-desc">Pre-existing series viewers</div>
                         </div>
-                        <div class="acquisition-metric">
+                        <div class="acquisition-metric has-tooltip" data-tooltip="New Viewer Conversion: Percentage of first-time viewers who signed up for the platform to watch the show. Higher rates indicate strong appeal to platform newcomers.">
                             <div class="acquisition-header">
                                 <span class="acquisition-icon">📊</span>
                                 <span class="acquisition-label">New Viewer Conversion</span>
                             </div>
                             <div class="acquisition-value">${newViewerConversionPct}%</div>
                             <div class="acquisition-desc">First-time viewers to subscribers</div>
-                            <div class="acquisition-indicator ${parseFloat(newViewerConversionPct) > 5 ? 'strong' : 'moderate'}">
+                            <div class="acquisition-indicator ${parseFloat(newViewerConversionPct) > 5 ? 'strong' : 'moderate'} has-tooltip" data-tooltip="${parseFloat(newViewerConversionPct) > 5 ? 'High Conversion: Over 5% conversion rate for first-time viewers indicates strong appeal to platform newcomers' : 'Moderate Conversion: 5% or lower conversion rate shows room for improvement in new viewer acquisition'}">
                                 ${parseFloat(newViewerConversionPct) > 5 ? 'High Conversion' : 'Moderate Conversion'}
                             </div>
                         </div>
-                        <div class="acquisition-metric">
+                        <div class="acquisition-metric has-tooltip" data-tooltip="Overall Conversion: Percentage of total show viewers (both new and returning) who signed up for the platform to watch this show.">
                             <div class="acquisition-header">
                                 <span class="acquisition-icon">🎯</span>
                                 <span class="acquisition-label">Overall Conversion</span>
@@ -10212,19 +10212,19 @@
                 container.innerHTML = `
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
                         ${episodes.map(ep => `
-                            <div class="episode-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;">
+                            <div class="episode-card has-tooltip" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;" data-tooltip="Episode ${ep.episode}: Drove ${formatNumber(ep.signups)} platform signups (${ep.percentage || 'N/A'} of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
                                 <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-cyan);">Episode ${ep.episode}</h4>
                                 <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                                    <div style="display: flex; justify-content: space-between;">
+                                    <div class="has-tooltip" data-tooltip="Signups: Number of people who signed up for the platform specifically to watch this episode" style="display: flex; justify-content: space-between;">
                                         <span style="color: var(--text-secondary);">Signups:</span>
                                         <span style="font-weight: 700; color: var(--accent-lime);">${formatNumber(ep.signups)}</span>
                                     </div>
-                                    <div style="display: flex; justify-content: space-between;">
+                                    <div class="has-tooltip" data-tooltip="% of Total: This episode's signups as a percentage of all signups across all episodes" style="display: flex; justify-content: space-between;">
                                         <span style="color: var(--text-secondary);">% of Total:</span>
                                         <span style="color: var(--text-primary);">${ep.percentage || 'N/A'}</span>
                                     </div>
                                     ${ep.days_avg ? `
-                                    <div style="display: flex; justify-content: space-between;">
+                                    <div class="has-tooltip" data-tooltip="Avg Days to Signup: Average number of days between when this episode became available and when users signed up for the platform" style="display: flex; justify-content: space-between;">
                                         <span style="color: var(--text-secondary);">Avg Days to Signup:</span>
                                         <span style="color: var(--text-primary);">${ep.days_avg}</span>
                                     </div>
@@ -10325,22 +10325,22 @@
                 const latePct = totalSignups > 0 ? ((lateSignups / totalSignups) * 100).toFixed(1) : 0;
                 
                 metricsContainer.innerHTML = `
-                    <div class="timing-metric-card">
+                    <div class="timing-metric-card has-tooltip" data-tooltip="Average Days to Signup: Mean number of days between when the show became available and when users signed up for the platform. Lower numbers indicate faster conversion and immediate platform value.">
                         <div class="timing-metric-label">Average Days to Signup</div>
                         <div class="timing-metric-value">${avgDaysToSignup}</div>
                         <div class="timing-metric-desc">Mean conversion time</div>
                     </div>
-                    <div class="timing-metric-card">
+                    <div class="timing-metric-card has-tooltip" data-tooltip="Early Signups (0-7 days): Percentage and count of subscribers who signed up within the first week after the show became available. High percentages indicate strong premiere impact and urgency-driven acquisition.">
                         <div class="timing-metric-label">Early Signups (0-7 days)</div>
                         <div class="timing-metric-value">${earlyPct}%</div>
                         <div class="timing-metric-desc">${formatNumber(earlySignups)} subscribers</div>
                     </div>
-                    <div class="timing-metric-card">
+                    <div class="timing-metric-card has-tooltip" data-tooltip="Mid-Term (8-30 days): Percentage and count of subscribers who signed up between 8-30 days after the show became available. Shows sustained interest and consideration-driven acquisition.">
                         <div class="timing-metric-label">Mid-Term (8-30 days)</div>
                         <div class="timing-metric-value">${midPct}%</div>
                         <div class="timing-metric-desc">${formatNumber(midSignups)} subscribers</div>
                     </div>
-                    <div class="timing-metric-card">
+                    <div class="timing-metric-card has-tooltip" data-tooltip="Late Signups (30+ days): Percentage and count of subscribers who signed up more than 30 days after the show became available. Shows long-term discovery and word-of-mouth growth.">
                         <div class="timing-metric-label">Late Signups (30+ days)</div>
                         <div class="timing-metric-value">${latePct}%</div>
                         <div class="timing-metric-desc">${formatNumber(lateSignups)} subscribers</div>
@@ -10559,11 +10559,11 @@
                     const timings = episodeTiming[epNum];
                     if (timings && timings.length > 0) {
                         html += `
-                            <div class="episode-timing-card">
+                            <div class="episode-timing-card has-tooltip" data-tooltip="Episode ${epNum} Signup Timing: Breakdown of when users signed up relative to when this episode became available.">
                                 <h4>Episode ${epNum}</h4>
                                 <div class="timing-list">
                                     ${timings.map(t => `
-                                        <div class="timing-item">
+                                        <div class="timing-item has-tooltip" data-tooltip="${t.timing}: ${formatNumber(t.signups)} people signed up ${t.timing.toLowerCase()} after Episode ${epNum} became available (${t.percentage} of Episode ${epNum} signups)">
                                             <span>${t.timing}:</span>
                                             <span>${formatNumber(t.signups)} people (${t.percentage})</span>
                                         </div>
@@ -10627,7 +10627,7 @@
                 platformsContainer.innerHTML = '<p style="color: var(--text-secondary);">No competitive platform data available</p>';
             } else {
                 platformsContainer.innerHTML = platforms.map(p => `
-                    <div class="platform-item">
+                    <div class="platform-item has-tooltip" data-tooltip="${p.platform}: ${p.percentage} of people who watched this show also use this platform. Shows cross-platform engagement and audience overlap.">
                         <span class="platform-name">${p.platform}</span>
                         <span class="platform-pct">${p.percentage} of show watchers</span>
                     </div>
@@ -10939,10 +10939,10 @@
                             <table class="demographics-table">
                                 <thead>
                                     <tr>
-                                        <th>Age Range</th>
-                                        <th>${subscriberGenPopMode ? 'Gen Pop Projection' : 'Count'}</th>
-                                        <th>Percentage</th>
-                                        ${!subscriberGenPopMode ? '<th>Gen Pop Projection</th>' : '<th>Actual Count</th>'}
+                                        <th class="has-tooltip" data-tooltip="Age Range: Demographic age groups of people who signed up for the platform to watch this show">Age Range</th>
+                                        <th class="has-tooltip" data-tooltip="${subscriberGenPopMode ? 'Gen Pop Projection: Projected number of signups for this age group based on general population demographics' : 'Count: Actual number of new signups in this age group'}">${subscriberGenPopMode ? 'Gen Pop Projection' : 'Count'}</th>
+                                        <th class="has-tooltip" data-tooltip="Percentage: This age group's share of total new signups">Percentage</th>
+                                        ${!subscriberGenPopMode ? '<th class="has-tooltip" data-tooltip="Gen Pop Projection: Projected number of signups for this age group based on general population demographics">Gen Pop Projection</th>' : '<th class="has-tooltip" data-tooltip="Actual Count: Actual number of new signups in this age group">Actual Count</th>'}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -10953,8 +10953,10 @@
                                         const genPop = item.gen_pop || '';
                                         const displayValue = getDisplayValue(item.count, genPop);
                                         const comparisonValue = subscriberGenPopMode ? count : (genPop ? parseNumber(genPop) : 0);
+                                        const actualCount = parseNumber(item.count) || 0;
+                                        const genPopCount = genPop ? parseNumber(genPop) : 0;
                                         return `
-                                            <tr>
+                                            <tr class="has-tooltip" data-tooltip="Age ${ageRange}: ${formatNumber(actualCount)} new signups (${percentage} of total). Gen Pop projection: ${genPopCount > 0 ? formatNumber(genPopCount) : 'N/A'}. ${subscriberGenPopMode ? 'Currently showing Gen Pop projection.' : 'Currently showing actual count.'}">
                                                 <td><strong>${ageRange}</strong></td>
                                                 <td>${formatNumber(displayValue)}</td>
                                                 <td>${percentage}</td>
@@ -11038,10 +11040,10 @@
                             <table class="demographics-table">
                                 <thead>
                                     <tr>
-                                        <th>Gender</th>
-                                        <th>${subscriberGenPopMode ? 'Gen Pop Projection' : 'Count'}</th>
-                                        <th>Percentage</th>
-                                        ${!subscriberGenPopMode ? '<th>Gen Pop Projection</th>' : '<th>Actual Count</th>'}
+                                        <th class="has-tooltip" data-tooltip="Gender: Gender identity of people who signed up for the platform to watch this show">Gender</th>
+                                        <th class="has-tooltip" data-tooltip="${subscriberGenPopMode ? 'Gen Pop Projection: Projected number of signups for this gender based on general population demographics' : 'Count: Actual number of new signups for this gender'}">${subscriberGenPopMode ? 'Gen Pop Projection' : 'Count'}</th>
+                                        <th class="has-tooltip" data-tooltip="Percentage: This gender's share of total new signups">Percentage</th>
+                                        ${!subscriberGenPopMode ? '<th class="has-tooltip" data-tooltip="Gen Pop Projection: Projected number of signups for this gender based on general population demographics">Gen Pop Projection</th>' : '<th class="has-tooltip" data-tooltip="Actual Count: Actual number of new signups for this gender">Actual Count</th>'}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -11053,7 +11055,7 @@
                                         const displayValue = getDisplayValue(count, genPop);
                                         const comparisonValue = subscriberGenPopMode ? count : (genPop > 0 ? genPop : 0);
                                         return `
-                                            <tr>
+                                            <tr class="has-tooltip" data-tooltip="${gender}: ${formatNumber(count)} new signups (${percentage} of total). Gen Pop projection: ${genPop > 0 ? formatNumber(genPop) : 'N/A'}. ${subscriberGenPopMode ? 'Currently showing Gen Pop projection.' : 'Currently showing actual count.'}">
                                                 <td><strong>${gender}</strong></td>
                                                 <td>${formatNumber(displayValue)}</td>
                                                 <td>${percentage}</td>
