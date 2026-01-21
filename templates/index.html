@@ -8476,6 +8476,14 @@
                         <!-- Episodes Tab -->
                         <div id="subscriber-tab-episodes" class="tab-content">
                             <div id="subscriberEpisodesInsights" class="tab-insights-section"></div>
+                            
+                            <!-- Timeline Chart -->
+                            <div class="tab-section">
+                                <h3>📈 Subscriptions Over Time</h3>
+                                <p class="section-description">Signup activity with episode releases marked</p>
+                                <div id="subscriberEpisodeTimelineChart" class="chart-container" style="height: 400px; margin-bottom: 2rem;"></div>
+                            </div>
+                            
                             <div class="tab-section">
                                 <h3>📺 Episode Performance</h3>
                                 <p class="section-description">Which episodes drove the most platform signups</p>
@@ -9760,6 +9768,336 @@
                         `).join('')}
                     </div>
                 ` : '';
+            }
+            
+            // Render Timeline Chart
+            const timelineContainer = document.getElementById('subscriberEpisodeTimelineChart');
+            if (timelineContainer) {
+                const episodes = (data.episode_attribution || []).slice().sort((a, b) => {
+                    const aEp = parseInt(a.episode) || 0;
+                    const bEp = parseInt(b.episode) || 0;
+                    return aEp - bEp;
+                });
+                
+                const monthlySignups = (data.monthly_signups || []).slice().sort((a, b) => {
+                    return a.month.localeCompare(b.month);
+                });
+                
+                if (episodes.length > 0 || monthlySignups.length > 0) {
+                    // Destroy existing chart if it exists
+                    if (charts.subscriberEpisodeTimeline) {
+                        charts.subscriberEpisodeTimeline.destroy();
+                    }
+                    
+                    const ctx = document.createElement('canvas');
+                    timelineContainer.innerHTML = '';
+                    timelineContainer.appendChild(ctx);
+                    
+                    let chartConfig;
+                    
+                    // Use monthly data if available for more accurate timeline
+                    if (monthlySignups.length > 0) {
+                        const months = monthlySignups.map(m => {
+                            const [year, month] = m.month.split('-');
+                            const date = new Date(year, parseInt(month) - 1);
+                            return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                        });
+                        const monthlySignupCounts = monthlySignups.map(m => parseNumber(m.signups) || 0);
+                        
+                        // Calculate cumulative
+                        let cumulative = 0;
+                        const cumulativeMonthly = monthlySignupCounts.map(count => {
+                            cumulative += count;
+                            return cumulative;
+                        });
+                        
+                        chartConfig = {
+                            type: 'line',
+                            data: {
+                                labels: months,
+                                datasets: [
+                                    {
+                                        label: 'Cumulative Signups',
+                                        data: cumulativeMonthly,
+                                        borderColor: 'rgba(166, 226, 46, 1)',
+                                        backgroundColor: 'rgba(166, 226, 46, 0.1)',
+                                        fill: true,
+                                        tension: 0.4,
+                                        yAxisID: 'y',
+                                        order: 1
+                                    },
+                                    {
+                                        label: 'Monthly Signups',
+                                        data: monthlySignupCounts,
+                                        type: 'bar',
+                                        backgroundColor: 'rgba(74, 222, 128, 0.6)',
+                                        borderColor: 'rgba(74, 222, 128, 1)',
+                                        borderWidth: 1,
+                                        yAxisID: 'y1',
+                                        order: 2
+                                    }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: {
+                                    mode: 'index',
+                                    intersect: false
+                                },
+                                plugins: {
+                                    title: {
+                                        display: true,
+                                        text: 'Monthly Subscriptions Over Time',
+                                        color: '#e6f1ff',
+                                        font: {
+                                            size: 16,
+                                            weight: 'bold'
+                                        }
+                                    },
+                                    legend: {
+                                        display: true,
+                                        position: 'top',
+                                        labels: {
+                                            color: '#e6f1ff',
+                                            usePointStyle: true
+                                        }
+                                    },
+                                    tooltip: {
+                                        backgroundColor: 'rgba(26, 42, 58, 0.95)',
+                                        titleColor: '#e6f1ff',
+                                        bodyColor: '#e6f1ff',
+                                        borderColor: 'rgba(166, 226, 46, 0.5)',
+                                        borderWidth: 1,
+                                        callbacks: {
+                                            label: function(context) {
+                                                let label = context.dataset.label || '';
+                                                if (label) {
+                                                    label += ': ';
+                                                }
+                                                if (context.parsed.y !== null) {
+                                                    label += formatNumber(context.parsed.y);
+                                                    if (context.datasetIndex === 0) {
+                                                        label += ' (cumulative)';
+                                                    }
+                                                }
+                                                return label;
+                                            }
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    x: {
+                                        display: true,
+                                        title: {
+                                            display: true,
+                                            text: 'Month',
+                                            color: '#e6f1ff'
+                                        },
+                                        ticks: {
+                                            color: '#a6b3c7',
+                                            maxRotation: 45,
+                                            minRotation: 45
+                                        },
+                                        grid: {
+                                            color: 'rgba(166, 226, 46, 0.1)'
+                                        }
+                                    },
+                                    y: {
+                                        type: 'linear',
+                                        display: true,
+                                        position: 'left',
+                                        title: {
+                                            display: true,
+                                            text: 'Cumulative Signups',
+                                            color: '#e6f1ff'
+                                        },
+                                        ticks: {
+                                            color: '#a6b3c7',
+                                            callback: function(value) {
+                                                return formatNumber(value);
+                                            }
+                                        },
+                                        grid: {
+                                            color: 'rgba(166, 226, 46, 0.1)'
+                                        }
+                                    },
+                                    y1: {
+                                        type: 'linear',
+                                        display: true,
+                                        position: 'right',
+                                        title: {
+                                            display: true,
+                                            text: 'Monthly Signups',
+                                            color: '#e6f1ff'
+                                        },
+                                        ticks: {
+                                            color: '#a6b3c7',
+                                            callback: function(value) {
+                                                return formatNumber(value);
+                                            }
+                                        },
+                                        grid: {
+                                            drawOnChartArea: false
+                                        }
+                                    }
+                                }
+                            }
+                        };
+                    } else if (episodes.length > 0) {
+                        // Fall back to episode-based chart
+                        const episodeNumbers = episodes.map(ep => `Ep ${ep.episode}`);
+                        const episodeSignups = episodes.map(ep => parseNumber(ep.signups) || 0);
+                        
+                        // Calculate cumulative signups
+                        let cumulative = 0;
+                        const cumulativeSignups = episodeSignups.map(signups => {
+                            cumulative += signups;
+                            return cumulative;
+                        });
+                        
+                        chartConfig = {
+                            type: 'line',
+                            data: {
+                                labels: episodeNumbers,
+                                datasets: [
+                                    {
+                                        label: 'Cumulative Signups',
+                                        data: cumulativeSignups,
+                                        borderColor: 'rgba(166, 226, 46, 1)',
+                                        backgroundColor: 'rgba(166, 226, 46, 0.1)',
+                                        fill: true,
+                                        tension: 0.4,
+                                        yAxisID: 'y',
+                                        order: 1
+                                    },
+                                    {
+                                        label: 'Signups per Episode',
+                                        data: episodeSignups,
+                                        type: 'bar',
+                                        backgroundColor: 'rgba(74, 222, 128, 0.6)',
+                                        borderColor: 'rgba(74, 222, 128, 1)',
+                                        borderWidth: 1,
+                                        yAxisID: 'y1',
+                                        order: 2
+                                    }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: {
+                                    mode: 'index',
+                                    intersect: false
+                                },
+                                plugins: {
+                                    title: {
+                                        display: true,
+                                        text: 'Subscriptions Over Time with Episode Drops',
+                                        color: '#e6f1ff',
+                                        font: {
+                                            size: 16,
+                                            weight: 'bold'
+                                        }
+                                    },
+                                    legend: {
+                                        display: true,
+                                        position: 'top',
+                                        labels: {
+                                            color: '#e6f1ff',
+                                            usePointStyle: true
+                                        }
+                                    },
+                                    tooltip: {
+                                        backgroundColor: 'rgba(26, 42, 58, 0.95)',
+                                        titleColor: '#e6f1ff',
+                                        bodyColor: '#e6f1ff',
+                                        borderColor: 'rgba(166, 226, 46, 0.5)',
+                                        borderWidth: 1,
+                                        callbacks: {
+                                            label: function(context) {
+                                                let label = context.dataset.label || '';
+                                                if (label) {
+                                                    label += ': ';
+                                                }
+                                                if (context.parsed.y !== null) {
+                                                    label += formatNumber(context.parsed.y);
+                                                    if (context.datasetIndex === 0) {
+                                                        label += ' (cumulative)';
+                                                    } else {
+                                                        const pct = episodeSignups[context.dataIndex] / cumulativeSignups[cumulativeSignups.length - 1] * 100;
+                                                        label += ` (${pct.toFixed(1)}% of total)`;
+                                                    }
+                                                }
+                                                return label;
+                                            }
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    x: {
+                                        display: true,
+                                        title: {
+                                            display: true,
+                                            text: 'Episode Number',
+                                            color: '#e6f1ff'
+                                        },
+                                        ticks: {
+                                            color: '#a6b3c7'
+                                        },
+                                        grid: {
+                                            color: 'rgba(166, 226, 46, 0.1)'
+                                        }
+                                    },
+                                    y: {
+                                        type: 'linear',
+                                        display: true,
+                                        position: 'left',
+                                        title: {
+                                            display: true,
+                                            text: 'Cumulative Signups',
+                                            color: '#e6f1ff'
+                                        },
+                                        ticks: {
+                                            color: '#a6b3c7',
+                                            callback: function(value) {
+                                                return formatNumber(value);
+                                            }
+                                        },
+                                        grid: {
+                                            color: 'rgba(166, 226, 46, 0.1)'
+                                        }
+                                    },
+                                    y1: {
+                                        type: 'linear',
+                                        display: true,
+                                        position: 'right',
+                                        title: {
+                                            display: true,
+                                            text: 'Signups per Episode',
+                                            color: '#e6f1ff'
+                                        },
+                                        ticks: {
+                                            color: '#a6b3c7',
+                                            callback: function(value) {
+                                                return formatNumber(value);
+                                            }
+                                        },
+                                        grid: {
+                                            drawOnChartArea: false
+                                        }
+                                    }
+                                }
+                            }
+                        };
+                    }
+                    
+                    if (chartConfig) {
+                        charts.subscriberEpisodeTimeline = new Chart(ctx, chartConfig);
+                    }
+                } else {
+                    timelineContainer.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No episode data available for timeline</p>';
+                }
             }
             
             const container = document.getElementById('subscriberEpisodeAttribution');
