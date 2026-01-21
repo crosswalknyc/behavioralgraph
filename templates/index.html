@@ -314,12 +314,14 @@
             background: var(--bg-card);
             border-bottom: 1px solid var(--border-color);
             padding: 0;
+            flex-shrink: 0;
         }
         
         .custom-analysis-tabs {
             display: flex;
             gap: 0.5rem;
             padding: 1rem;
+            justify-content: center;
         }
         
         .custom-analysis-tab {
@@ -354,6 +356,13 @@
         
         .custom-analysis-tab-content.active {
             display: block;
+        }
+        
+        #customAnalysisView {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow: hidden;
         }
         
         /* Disabled view buttons */
@@ -6806,22 +6815,24 @@
         </div>
 
         <!-- CUSTOM ANALYSIS VIEW -->
-        <div id="customAnalysisView">
-            <div class="dashboard-layout">
-                <!-- Custom Analysis Tabs -->
-                <div class="custom-analysis-tabs-container">
-                    <div class="custom-analysis-tabs">
-                        <button class="custom-analysis-tab active" onclick="switchCustomAnalysisTab('profile-iq')" id="customAnalysisTabProfileIQ">
-                            🎯 Profile IQ
-                        </button>
-                        <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-search')" id="customAnalysisTabTalentSearch">
-                            🔍 Talent Search IQ
-                        </button>
-                        <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-theater')" id="customAnalysisTabTalentTheater">
-                            🎭 Talent Ticket Sale IQ
-                        </button>
-                    </div>
+        <div id="customAnalysisView" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+            <!-- Custom Analysis Tabs - At the top -->
+            <div class="custom-analysis-tabs-container">
+                <div class="custom-analysis-tabs">
+                    <button class="custom-analysis-tab active" onclick="switchCustomAnalysisTab('profile-iq')" id="customAnalysisTabProfileIQ">
+                        🎯 Profile IQ
+                    </button>
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-search')" id="customAnalysisTabTalentSearch">
+                        🔍 Talent Search IQ
+                    </button>
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-theater')" id="customAnalysisTabTalentTheater">
+                        🎭 Talent Ticket Sale IQ
+                    </button>
                 </div>
+            </div>
+            
+            <!-- Tab Content Area -->
+            <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column;">
 
                 <!-- Profile IQ Tab Content (bg.py form) - Integrated two-column layout -->
                 <div id="customAnalysisTabContentProfileIQ" class="custom-analysis-tab-content active">
@@ -7253,7 +7264,8 @@
                         </div>
                     </div>
                 </div>
-            </div>
+                </div>
+            </div><!-- End tab content area -->
         </div><!-- End customAnalysisView -->
 
         <!-- DASHBOARD VIEW -->
