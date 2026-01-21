@@ -8480,7 +8480,7 @@
                             <!-- Timeline Chart -->
                             <div class="tab-section">
                                 <h3>📈 Subscriptions Over Time</h3>
-                                <p class="section-description">Signup activity with episode releases marked</p>
+                                <p class="section-description">Monthly platform signups attributed to this show (from MONTHLY PLATFORM SIGNUPS data). Green bars show monthly signups, yellow line shows cumulative total. This represents people who signed up for the platform each month and watched this show.</p>
                                 <div id="subscriberEpisodeTimelineChart" class="chart-container" style="height: 400px; margin-bottom: 2rem;"></div>
                             </div>
                             
@@ -9850,7 +9850,7 @@
                                 plugins: {
                                     title: {
                                         display: true,
-                                        text: 'Monthly Subscriptions Over Time',
+                                        text: 'Monthly Platform Signups Attributed to This Show',
                                         color: '#e6f1ff',
                                         font: {
                                             size: 16,
@@ -9872,6 +9872,9 @@
                                         borderColor: 'rgba(166, 226, 46, 0.5)',
                                         borderWidth: 1,
                                         callbacks: {
+                                            title: function(context) {
+                                                return context[0].label;
+                                            },
                                             label: function(context) {
                                                 let label = context.dataset.label || '';
                                                 if (label) {
@@ -9880,7 +9883,9 @@
                                                 if (context.parsed.y !== null) {
                                                     label += formatNumber(context.parsed.y);
                                                     if (context.datasetIndex === 0) {
-                                                        label += ' (cumulative)';
+                                                        label += ' (cumulative total)';
+                                                    } else {
+                                                        label += ' (this month)';
                                                     }
                                                 }
                                                 return label;
