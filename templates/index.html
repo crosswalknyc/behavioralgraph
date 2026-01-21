@@ -9439,7 +9439,7 @@
                         </div>
                     </div>
                     <div class="exec-summary-insight">
-                        <strong>${show}</strong> demonstrates ${totalSignups > 10000 ? 'exceptional' : totalSignups > 5000 ? 'strong' : 'moderate'} platform value, 
+                        <strong>${show}</strong> demonstrated ${totalSignups > 10000 ? 'exceptional' : totalSignups > 5000 ? 'strong' : 'moderate'} platform value, 
                         ${isStrongNewViewerAppeal ? 'strongly appealing to new audiences' : 'engaging both new and existing viewers'} 
                         with ${isFastConversion ? 'immediate' : 'sustained'} conversion patterns.
                     </div>
@@ -9493,9 +9493,9 @@
                         </div>
                     </div>
                     <div class="value-insight-box">
-                        <strong>Strategic Value:</strong> ${show} delivers ${valueStrength}-value subscriber growth for ${platform}, 
+                        <strong>Strategic Value:</strong> ${show} delivered ${valueStrength}-value subscriber growth for ${platform}, 
                         with ${attributionPct}% direct attribution demonstrating clear ROI. 
-                        ${isStrongReactivation ? `Strong reactivation (${reactivationPct}%) indicates retention value beyond new acquisition.` : 
+                        ${isStrongReactivation ? `Strong reactivation (${reactivationPct}%) indicated retention value beyond new acquisition.` : 
                         'Focus on new subscriber acquisition with opportunity to improve reactivation.'}
                     </div>
                 </div>
@@ -9529,8 +9529,8 @@
                         </div>
                         <div class="performance-insight">
                             <strong>Content Strategy Insight:</strong> 
-                            ${topEpisodes[0] ? `Episode ${topEpisodes[0].episode} drives the highest subscriber acquisition (${formatNumber(topEpisodes[0].signups)} signups, ${((topEpisodes[0].signups / totalSignups) * 100).toFixed(1)}% of total). ` : ''}
-                            ${topEpisodes.length > 1 ? `Top 3 episodes account for ${((topEpisodes.slice(0, 3).reduce((sum, ep) => sum + (ep.signups || 0), 0) / totalSignups) * 100).toFixed(1)}% of all signups, ` : ''}
+                            ${topEpisodes[0] ? `Episode ${topEpisodes[0].episode} drove the highest subscriber acquisition (${formatNumber(topEpisodes[0].signups)} signups, ${((topEpisodes[0].signups / totalSignups) * 100).toFixed(1)}% of total). ` : ''}
+                            ${topEpisodes.length > 1 ? `Top 3 episodes accounted for ${((topEpisodes.slice(0, 3).reduce((sum, ep) => sum + (ep.signups || 0), 0) / totalSignups) * 100).toFixed(1)}% of all signups, ` : ''}
                             indicating ${topEpisodes.length > 0 && topEpisodes[0].signups > (totalSignups / topEpisodes.length) ? 'strong episode-level performance' : 'distributed engagement'}.
                         </div>
                     ` : '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No episode performance data available</p>'}
@@ -9583,11 +9583,11 @@
                     </div>
                     <div class="acquisition-insight">
                         <strong>Audience Strategy:</strong> 
-                        ${show} ${isStrongNewViewerAppeal ? 'strongly appeals to new audiences' : 'engages a mix of new and returning viewers'}, 
+                        ${show} ${isStrongNewViewerAppeal ? 'strongly appealed to new audiences' : 'engaged a mix of new and returning viewers'}, 
                         with ${newViewerPct}% first-time viewers demonstrating ${isStrongNewViewerAppeal ? 'exceptional' : 'solid'} new audience acquisition capability. 
                         ${parseFloat(newViewerConversionPct) > parseFloat(conversionPct) ? 
-                        `New viewers convert at a higher rate (${newViewerConversionPct}% vs ${conversionPct}%), indicating strong appeal to platform newcomers.` :
-                        `Conversion rates are consistent across viewer types, showing broad appeal.`}
+                        `New viewers converted at a higher rate (${newViewerConversionPct}% vs ${conversionPct}%), indicating strong appeal to platform newcomers.` :
+                        `Conversion rates were consistent across viewer types, showing broad appeal.`}
                     </div>
                 </div>
             `;
@@ -9599,7 +9599,7 @@
                 recommendations.push({
                     icon: '🚀',
                     title: 'Leverage Fast Conversion',
-                    insight: `With ${avgDaysToSignup} days average conversion, ${show} drives immediate platform value. Consider front-loading marketing spend and platform promotion to maximize early signup momentum.`
+                    insight: `With ${avgDaysToSignup} days average conversion, ${show} drove immediate platform value. Consider front-loading marketing spend and platform promotion to maximize early signup momentum.`
                 });
             }
             
@@ -9607,7 +9607,7 @@
                 recommendations.push({
                     icon: '🎯',
                     title: 'Target New Audience Acquisition',
-                    insight: `${newViewerPct}% first-time viewers with ${newViewerConversionPct}% conversion demonstrates strong new audience appeal. Position ${show} as a platform acquisition driver in marketing and distribution strategy.`
+                    insight: `${newViewerPct}% first-time viewers with ${newViewerConversionPct}% conversion demonstrated strong new audience appeal. Position ${show} as a platform acquisition driver in marketing and distribution strategy.`
                 });
             }
             
@@ -9615,7 +9615,7 @@
                 recommendations.push({
                     icon: '📺',
                     title: 'Amplify Top-Performing Episodes',
-                    insight: `Episode ${topEpisodes[0].episode} drives ${((topEpisodes[0].signups / totalSignups) * 100).toFixed(1)}% of signups. Use this episode in marketing campaigns, trailers, and platform promotion to maximize subscriber acquisition.`
+                    insight: `Episode ${topEpisodes[0].episode} drove ${((topEpisodes[0].signups / totalSignups) * 100).toFixed(1)}% of signups. Use this episode in marketing campaigns, trailers, and platform promotion to maximize subscriber acquisition.`
                 });
             }
             
@@ -9623,7 +9623,7 @@
                 recommendations.push({
                     icon: '🔄',
                     title: 'Capitalize on Retention Value',
-                    insight: `${reactivationPct}% reactivation rate shows ${show} brings back dormant subscribers. Highlight this retention value in renewal discussions and platform partnership conversations.`
+                    insight: `${reactivationPct}% reactivation rate showed ${show} brought back dormant subscribers. Highlight this retention value in renewal discussions and platform partnership conversations.`
                 });
             }
             
@@ -9631,7 +9631,7 @@
                 recommendations.push({
                     icon: '💰',
                     title: 'Demonstrate Clear ROI',
-                    insight: `${attributionPct}% direct attribution provides strong evidence of ${show}'s platform value. Use this data in content valuation, licensing negotiations, and strategic planning.`
+                    insight: `${attributionPct}% direct attribution provided strong evidence of ${show}'s platform value. Use this data in content valuation, licensing negotiations, and strategic planning.`
                 });
             }
             
@@ -9738,13 +9738,13 @@
                     
                     insights.push({
                         icon: '🎬',
-                        text: `<strong>Episode ${topEpisode.episode} drives the most signups</strong> with ${formatNumber(topEpisode.signups)} subscribers (${topEpisode.percentage || 'N/A'} of total).`
+                        text: `<strong>Episode ${topEpisode.episode} drove the most signups</strong> with ${formatNumber(topEpisode.signups)} subscribers (${topEpisode.percentage || 'N/A'} of total).`
                     });
                     
                     if (episodes.length >= 3) {
                         insights.push({
                             icon: '📊',
-                            text: `<strong>Top 3 episodes account for ${top3Pct}%</strong> of all signups, indicating concentrated performance in key episodes.`
+                            text: `<strong>Top 3 episodes accounted for ${top3Pct}%</strong> of all signups, indicating concentrated performance in key episodes.`
                         });
                     }
                 }
@@ -9821,17 +9821,17 @@
                     if (days < 7) {
                         insights.push({
                             icon: '⚡',
-                            text: `<strong>Immediate conversion:</strong> Average ${avgDaysToSignup} days to signup indicates strong immediate platform value and urgency-driven acquisition.`
+                            text: `<strong>Immediate conversion:</strong> Average ${avgDaysToSignup} days to signup indicated strong immediate platform value and urgency-driven acquisition.`
                         });
                     } else if (days < 30) {
                         insights.push({
                             icon: '📈',
-                            text: `<strong>Fast conversion:</strong> Average ${avgDaysToSignup} days shows viewers quickly convert to subscribers, demonstrating strong content appeal.`
+                            text: `<strong>Fast conversion:</strong> Average ${avgDaysToSignup} days showed viewers quickly converted to subscribers, demonstrating strong content appeal.`
                         });
                     } else {
                         insights.push({
                             icon: '🔄',
-                            text: `<strong>Sustained interest:</strong> Average ${avgDaysToSignup} days suggests viewers take time to evaluate before subscribing, indicating consideration-driven acquisition.`
+                            text: `<strong>Sustained interest:</strong> Average ${avgDaysToSignup} days suggested viewers took time to evaluate before subscribing, indicating consideration-driven acquisition.`
                         });
                     }
                 }
@@ -9847,7 +9847,7 @@
                     if (earlyPct > 50) {
                         insights.push({
                             icon: '🎯',
-                            text: `<strong>Early adoption pattern:</strong> ${earlyPct}% of signups occur within the first week, showing strong premiere impact and marketing effectiveness.`
+                            text: `<strong>Early adoption pattern:</strong> ${earlyPct}% of signups occurred within the first week, showing strong premiere impact and marketing effectiveness.`
                         });
                     }
                 }
@@ -10152,7 +10152,7 @@
                     const topPlatform = platforms[0];
                     insights.push({
                         icon: '📱',
-                        text: `<strong>${topPlatform.platform}</strong> is used by ${topPlatform.percentage} of show watchers, indicating strong cross-platform engagement.`
+                        text: `<strong>${topPlatform.platform}</strong> was used by ${topPlatform.percentage} of show watchers, indicating strong cross-platform engagement.`
                     });
                 }
                 
@@ -10269,7 +10269,7 @@
                     const ageRange = topAgeGroup.age_range || topAgeGroup.age || 'N/A';
                     insights.push({
                         icon: '👥',
-                        text: `<strong>${ageRange}</strong> age group represents the largest segment of new signups (${topAgeGroup.percentage || 'N/A'}), indicating primary audience appeal.`
+                        text: `<strong>${ageRange}</strong> age group represented the largest segment of new signups (${topAgeGroup.percentage || 'N/A'}), indicating primary audience appeal.`
                     });
                 }
                 
@@ -10277,7 +10277,7 @@
                     const topGender = genderData[0];
                     insights.push({
                         icon: '📊',
-                        text: `<strong>${topGender.gender}</strong> viewers account for ${topGender.percentage || 'N/A'} of new signups, showing demographic concentration.`
+                        text: `<strong>${topGender.gender}</strong> viewers accounted for ${topGender.percentage || 'N/A'} of new signups, showing demographic concentration.`
                     });
                 }
                 
@@ -10542,7 +10542,7 @@
                     if (totalChurn > 0) {
                         insights.push({
                             icon: '📉',
-                            text: `Monthly churn trends show ${formatNumber(totalChurn)} total churned subscribers, providing insights into retention patterns and platform stickiness.`
+                            text: `Monthly churn trends showed ${formatNumber(totalChurn)} total churned subscribers, providing insights into retention patterns and platform stickiness.`
                         });
                     }
                 }
