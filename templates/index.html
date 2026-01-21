@@ -13255,14 +13255,6 @@
                         statusErrorElements.forEach(el => el.style.display = 'block');
                         errorMessageElements.forEach(el => el.textContent = data.error || 'Error');
                         
-                        // Update custom form
-                        const customStatusRunning = document.getElementById('customStatusRunning');
-                        const customStatusError = document.getElementById('customStatusError');
-                        const customErrorMessage = document.getElementById('customErrorMessage');
-                        if (customStatusRunning) customStatusRunning.style.display = 'none';
-                        if (customStatusError) customStatusError.style.display = 'block';
-                        if (customErrorMessage) customErrorMessage.textContent = data.error || 'Error';
-                        
                         loadJobs();
                     }
                 }
