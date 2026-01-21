@@ -8432,6 +8432,9 @@
                         <div class="display-mode-toggle" id="subscriberUSPercentToggle" onclick="toggleSubscriberUSPercent()" title="Toggle between US % and US #">
                             <span id="subscriberDisplayModeLabel">US %</span>
                         </div>
+                        <div class="display-mode-toggle" id="subscriberGenPopToggle" onclick="toggleSubscriberGenPop()" title="Toggle between actual numbers and Gen Pop projections">
+                            <span id="subscriberGenPopToggleLabel">ACTUAL</span>
+                        </div>
                         <div class="display-mode-toggle" id="subscriberHoverToggle" onclick="toggleSubscriberHover()" title="Toggle hover tooltips on/off">
                             <span id="subscriberHoverToggleLabel">HOVER ON</span>
                         </div>
@@ -9277,6 +9280,7 @@
         
         // Subscriber IQ display mode (US % vs US #)
         let subscriberDisplayMode = 'percent'; // 'percent' or 'projection'
+        let subscriberGenPopMode = false; // false = actual numbers, true = gen pop projections
         let subscriberHoverEnabled = true;
         
         function toggleSubscriberUSPercent() {
@@ -9288,6 +9292,18 @@
             // Re-render all tabs if data is loaded
             if (currentSubscriberData) {
                 renderSubscriberInsights(currentSubscriberData);
+                renderSubscriberDemographics(currentSubscriberData);
+            }
+        }
+        
+        function toggleSubscriberGenPop() {
+            subscriberGenPopMode = !subscriberGenPopMode;
+            const label = document.getElementById('subscriberGenPopToggleLabel');
+            if (label) {
+                label.textContent = subscriberGenPopMode ? 'GEN POP' : 'ACTUAL';
+            }
+            // Re-render demographics to show gen pop projections
+            if (currentSubscriberData) {
                 renderSubscriberDemographics(currentSubscriberData);
             }
         }
@@ -10236,9 +10252,10 @@
                 
                 if (ageData.length > 0) {
                     const topAgeGroup = ageData[0];
+                    const ageRange = topAgeGroup.age_range || topAgeGroup.age || 'N/A';
                     insights.push({
                         icon: '👥',
-                        text: `<strong>${topAgeGroup.age}</strong> age group represents the largest segment of new signups (${topAgeGroup.percentage || 'N/A'}), indicating primary audience appeal.`
+                        text: `<strong>${ageRange}</strong> age group represents the largest segment of new signups (${topAgeGroup.percentage || 'N/A'}), indicating primary audience appeal.`
                     });
                 }
                 
@@ -10274,6 +10291,14 @@
                 return formatNumber(value);
             };
             
+            // Get the value to display (actual or gen pop projection)
+            const getDisplayValue = (actual, genPop) => {
+                if (subscriberGenPopMode && genPop) {
+                    return parseNumber(genPop) || 0;
+                }
+                return parseNumber(actual) || 0;
+            };
+            
             // Age Table
             const ageTableContainer = document.getElementById('subscriberAgeTable');
             if (ageTableContainer) {
@@ -10284,9 +10309,9 @@
                                 <thead>
                                     <tr>
                                         <th>Age Range</th>
-                                        <th>Count</th>
+                                        <th>${subscriberGenPopMode ? 'Gen Pop Projection' : 'Count'}</th>
                                         <th>Percentage</th>
-                                        ${subscriberDisplayMode === 'projection' ? '<th>Gen Pop Projection</th>' : '<th>Gen Pop %</th>'}
+                                        ${!subscriberGenPopMode ? '<th>Gen Pop Projection</th>' : '<th>Actual Count</th>'}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -10295,12 +10320,14 @@
                                         const count = parseNumber(item.count) || 0;
                                         const percentage = item.percentage || 'N/A';
                                         const genPop = item.gen_pop || '';
+                                        const displayValue = getDisplayValue(item.count, genPop);
+                                        const comparisonValue = subscriberGenPopMode ? count : (genPop ? parseNumber(genPop) : 0);
                                         return `
                                             <tr>
                                                 <td><strong>${ageRange}</strong></td>
-                                                <td>${formatNumber(count)}</td>
+                                                <td>${formatNumber(displayValue)}</td>
                                                 <td>${percentage}</td>
-                                                <td>${genPop ? formatValue(count, genPop) : 'N/A'}</td>
+                                                <td>${comparisonValue > 0 ? formatNumber(comparisonValue) : 'N/A'}</td>
                                             </tr>
                                         `;
                                     }).join('')}
@@ -10325,7 +10352,7 @@
                 ageContainer.appendChild(ctx);
                 
                 const labels = ageData.map(a => a.age_range || a.age || 'N/A');
-                const counts = ageData.map(a => parseNumber(a.count) || 0);
+                const counts = ageData.map(a => getDisplayValue(a.count, a.gen_pop));
                 const percentages = ageData.map(a => parseFloat(a.percentage) || 0);
                 
                 charts.subscriberAge = new Chart(ctx, {
@@ -10333,7 +10360,7 @@
                     data: {
                         labels: labels,
                         datasets: [{
-                            label: 'New Signups by Age',
+                            label: subscriberGenPopMode ? 'Gen Pop Projection by Age' : 'New Signups by Age',
                             data: counts,
                             backgroundColor: 'rgba(74, 222, 128, 0.6)',
                             borderColor: 'rgba(74, 222, 128, 1)',
@@ -10346,7 +10373,7 @@
                         plugins: {
                             title: {
                                 display: true,
-                                text: 'Age Distribution of New Platform Signups',
+                                text: subscriberGenPopMode ? 'Gen Pop Projection: Age Distribution' : 'Age Distribution of New Platform Signups',
                                 color: '#fff'
                             },
                             legend: {
@@ -10380,9 +10407,9 @@
                                 <thead>
                                     <tr>
                                         <th>Gender</th>
-                                        <th>Count</th>
+                                        <th>${subscriberGenPopMode ? 'Gen Pop Projection' : 'Count'}</th>
                                         <th>Percentage</th>
-                                        ${subscriberDisplayMode === 'projection' ? '<th>Gen Pop Projection</th>' : '<th>Gen Pop %</th>'}
+                                        ${!subscriberGenPopMode ? '<th>Gen Pop Projection</th>' : '<th>Actual Count</th>'}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -10391,12 +10418,14 @@
                                         const count = parseNumber(item.count) || 0;
                                         const percentage = item.percentage || 'N/A';
                                         const genPop = item.gen_pop || '';
+                                        const displayValue = getDisplayValue(item.count, genPop);
+                                        const comparisonValue = subscriberGenPopMode ? count : (genPop ? parseNumber(genPop) : 0);
                                         return `
                                             <tr>
                                                 <td><strong>${gender}</strong></td>
-                                                <td>${formatNumber(count)}</td>
+                                                <td>${formatNumber(displayValue)}</td>
                                                 <td>${percentage}</td>
-                                                <td>${genPop ? formatValue(count, genPop) : 'N/A'}</td>
+                                                <td>${comparisonValue > 0 ? formatNumber(comparisonValue) : 'N/A'}</td>
                                             </tr>
                                         `;
                                     }).join('')}
@@ -10427,7 +10456,8 @@
                     if (!genderGroups[key]) {
                         genderGroups[key] = { label: g.gender, count: 0, percentage: 0 };
                     }
-                    genderGroups[key].count += parseNumber(g.count) || 0;
+                    const value = getDisplayValue(g.count, g.gen_pop);
+                    genderGroups[key].count += value;
                     genderGroups[key].percentage += parseFloat(g.percentage) || 0;
                 });
                 
@@ -10439,7 +10469,7 @@
                     data: {
                         labels: labels,
                         datasets: [{
-                            label: 'New Signups by Gender',
+                            label: subscriberGenPopMode ? 'Gen Pop Projection by Gender' : 'New Signups by Gender',
                             data: counts,
                             backgroundColor: [
                                 'rgba(74, 222, 128, 0.8)',
@@ -10456,7 +10486,7 @@
                         plugins: {
                             title: {
                                 display: true,
-                                text: 'Gender Distribution of New Platform Signups',
+                                text: subscriberGenPopMode ? 'Gen Pop Projection: Gender Distribution' : 'Gender Distribution of New Platform Signups',
                                 color: '#fff'
                             },
                             legend: {
