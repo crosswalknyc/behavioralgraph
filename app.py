@@ -6368,6 +6368,7 @@ def submit_talent_search():
             'created_at': datetime.now().isoformat(),
             'error': None,
             'result_file': None,
+            'logs': [],
             'params': {
                 'start_date': start_date,
                 'end_date': end_date,
@@ -6437,6 +6438,7 @@ def submit_talent_theater():
             'created_at': datetime.now().isoformat(),
             'error': None,
             'result_file': None,
+            'logs': [],
             'params': {
                 'talent_name': talent_name,
                 'competitive_talents': data.get('competitive_talents', []),
