@@ -7928,6 +7928,7 @@
             
             // Use event delegation for all .has-tooltip elements
             document.addEventListener('mouseenter', function(e) {
+                if (!e.target || typeof e.target.closest !== 'function') return;
                 const target = e.target.closest('.has-tooltip');
                 if (!target) return;
                 
@@ -7996,6 +7997,7 @@
             }, true);
             
             document.addEventListener('mouseleave', function(e) {
+                if (!e.target || typeof e.target.closest !== 'function') return;
                 const target = e.target.closest('.has-tooltip');
                 if (!target) return;
                 
