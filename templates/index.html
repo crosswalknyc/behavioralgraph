@@ -305,7 +305,8 @@
         #formView { display: none; flex: 1; overflow-y: auto; }
         #dashboardView { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
         #subscriberIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
-        #attributionIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+        #talentSearchIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+        #talentTheaterIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         
         /* Disabled view buttons */
         .view-btn.disabled {
@@ -6438,7 +6439,8 @@
                 <div class="view-toggle" id="iqTabsContainer">
                     <button class="view-btn active {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" onclick="showProfileIQ()" {% if not has_profile_iq_access %}disabled{% endif %}>🎯 Profile IQ</button>
                     <button class="view-btn {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" onclick="showSubscriberIQ()" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</button>
-                    <button class="view-btn {% if not has_attribution_iq_access %}disabled{% endif %}" id="attributionIQTab" onclick="showAttributionIQ()" {% if not has_attribution_iq_access %}disabled{% endif %}>🔍 Attribution IQ</button>
+                    <button class="view-btn {% if not has_attribution_iq_access %}disabled{% endif %}" id="talentSearchIQTab" onclick="showTalentSearchIQ()" {% if not has_attribution_iq_access %}disabled{% endif %}>🔍 Talent Search IQ</button>
+                    <button class="view-btn {% if not has_attribution_iq_access %}disabled{% endif %}" id="talentTheaterIQTab" onclick="showTalentTheaterIQ()" {% if not has_attribution_iq_access %}disabled{% endif %}>🎭 Talent Ticket Sale IQ</button>
                     <button class="view-btn" id="dashboardViewBtn" onclick="showDashboardView()" style="display: none;">📊 Dashboard</button>
                     {% if role == 'admin' or role == 'enterprise' %}
                     <button class="view-btn" id="formViewBtn" onclick="showFormView()">📝 New Analysis</button>
@@ -8661,23 +8663,11 @@
             </div>
         </div><!-- End subscriberIQView -->
 
-        <!-- ATTRIBUTION IQ VIEW -->
-        <div id="attributionIQView">
+        <!-- TALENT SEARCH IQ VIEW -->
+        <div id="talentSearchIQView" style="display: none;">
             <div class="dashboard-layout">
-                <!-- Attribution IQ Tabs -->
-                <div class="attribution-tabs-container">
-                    <div class="attribution-tabs">
-                        <button class="attribution-tab active" onclick="switchAttributionTab('talent-search')" id="attributionTabTalentSearch">
-                            🔍 Talent Search IQ
-                        </button>
-                        <button class="attribution-tab" onclick="switchAttributionTab('talent-theater')" id="attributionTabTalentTheater">
-                            🎭 Talent Ticket Sale IQ
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Talent Search IQ Tab -->
-                <div id="attributionTabContentTalentSearch" class="attribution-tab-content active">
+                <div class="dashboard-tab-content" style="padding: 2rem;">
+                    <div class="card">
                     <div class="card">
                         <h2>🔍 Talent Search IQ</h2>
                         <p class="section-description">Track search terms across platforms to measure search attribution</p>
@@ -8745,8 +8735,11 @@
                     </div>
                 </div>
 
-                <!-- Talent Ticket Sale IQ Tab -->
-                <div id="attributionTabContentTalentTheater" class="attribution-tab-content">
+        <!-- TALENT TICKET SALE IQ VIEW -->
+        <div id="talentTheaterIQView" style="display: none;">
+            <div class="dashboard-layout">
+                <div class="dashboard-tab-content" style="padding: 2rem;">
+                    <div class="card">
                     <div class="card">
                         <h2>🎭 Talent Ticket Sale IQ</h2>
                         <p class="section-description">Track how many users went from talent searches to theater platforms</p>
@@ -8803,7 +8796,7 @@
                     </div>
                 </div>
             </div>
-        </div><!-- End attributionIQView -->
+        </div><!-- End talentTheaterIQView -->
 
     </div>
 
@@ -9220,16 +9213,20 @@
             formView.style.display = 'block';
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'none';
-            const attributionView = document.getElementById('attributionIQView');
-            if (attributionView) attributionView.style.display = 'none';
+            const talentSearchView = document.getElementById('talentSearchIQView');
+            if (talentSearchView) talentSearchView.style.display = 'none';
+            const talentTheaterView = document.getElementById('talentTheaterIQView');
+            if (talentTheaterView) talentTheaterView.style.display = 'none';
             
             // Update button states
             const formBtn = document.getElementById('formViewBtn');
             if (formBtn) formBtn.classList.add('active');
             document.getElementById('profileIQTab').classList.remove('active');
             document.getElementById('subscriberIQTab').classList.remove('active');
-            const attributionTab = document.getElementById('attributionIQTab');
-            if (attributionTab) attributionTab.classList.remove('active');
+            const talentSearchTab = document.getElementById('talentSearchIQTab');
+            if (talentSearchTab) talentSearchTab.classList.remove('active');
+            const talentTheaterTab = document.getElementById('talentTheaterIQTab');
+            if (talentTheaterTab) talentTheaterTab.classList.remove('active');
         }
 
         function showDashboardView() {
@@ -9246,16 +9243,20 @@
             // Update tab active states
             document.getElementById('profileIQTab').classList.add('active');
             document.getElementById('subscriberIQTab').classList.remove('active');
-            const attributionTab = document.getElementById('attributionIQTab');
-            if (attributionTab) attributionTab.classList.remove('active');
+            const talentSearchTab = document.getElementById('talentSearchIQTab');
+            if (talentSearchTab) talentSearchTab.classList.remove('active');
+            const talentTheaterTab = document.getElementById('talentTheaterIQTab');
+            if (talentTheaterTab) talentTheaterTab.classList.remove('active');
             const formBtn = document.getElementById('formViewBtn');
             if (formBtn) formBtn.classList.remove('active');
             
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'flex';
             document.getElementById('subscriberIQView').style.display = 'none';
-            const attributionView = document.getElementById('attributionIQView');
-            if (attributionView) attributionView.style.display = 'none';
+            const talentSearchView = document.getElementById('talentSearchIQView');
+            if (talentSearchView) talentSearchView.style.display = 'none';
+            const talentTheaterView = document.getElementById('talentTheaterIQView');
+            if (talentTheaterView) talentTheaterView.style.display = 'none';
             const formView = document.getElementById('formView');
             if (formView) formView.style.display = 'none';
             
@@ -9270,16 +9271,20 @@
             // Update tab active states
             document.getElementById('profileIQTab').classList.remove('active');
             document.getElementById('subscriberIQTab').classList.add('active');
-            const attributionTab = document.getElementById('attributionIQTab');
-            if (attributionTab) attributionTab.classList.remove('active');
+            const talentSearchTab = document.getElementById('talentSearchIQTab');
+            if (talentSearchTab) talentSearchTab.classList.remove('active');
+            const talentTheaterTab = document.getElementById('talentTheaterIQTab');
+            if (talentTheaterTab) talentTheaterTab.classList.remove('active');
             const formBtn = document.getElementById('formViewBtn');
             if (formBtn) formBtn.classList.remove('active');
             
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'flex';
-            const attributionView = document.getElementById('attributionIQView');
-            if (attributionView) attributionView.style.display = 'none';
+            const talentSearchView = document.getElementById('talentSearchIQView');
+            if (talentSearchView) talentSearchView.style.display = 'none';
+            const talentTheaterView = document.getElementById('talentTheaterIQView');
+            if (talentTheaterView) talentTheaterView.style.display = 'none';
             const formView = document.getElementById('formView');
             if (formView) formView.style.display = 'none';
             
@@ -9292,43 +9297,52 @@
             }
         }
         
-        function showAttributionIQ() {
-            const attributionTab = document.getElementById('attributionIQTab');
-            if (attributionTab && attributionTab.classList.contains('disabled')) return;
+        function showTalentSearchIQ() {
+            const talentSearchTab = document.getElementById('talentSearchIQTab');
+            if (talentSearchTab && talentSearchTab.classList.contains('disabled')) return;
             
             // Update tab active states
             document.getElementById('profileIQTab').classList.remove('active');
             document.getElementById('subscriberIQTab').classList.remove('active');
-            if (attributionTab) attributionTab.classList.add('active');
+            if (talentSearchTab) talentSearchTab.classList.add('active');
+            const talentTheaterTab = document.getElementById('talentTheaterIQTab');
+            if (talentTheaterTab) talentTheaterTab.classList.remove('active');
             const formBtn = document.getElementById('formViewBtn');
             if (formBtn) formBtn.classList.remove('active');
             
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'none';
-            const attributionView = document.getElementById('attributionIQView');
-            if (attributionView) attributionView.style.display = 'flex';
+            const talentSearchView = document.getElementById('talentSearchIQView');
+            if (talentSearchView) talentSearchView.style.display = 'flex';
+            const talentTheaterView = document.getElementById('talentTheaterIQView');
+            if (talentTheaterView) talentTheaterView.style.display = 'none';
             const formView = document.getElementById('formView');
             if (formView) formView.style.display = 'none';
         }
         
-        function switchAttributionTab(tabName) {
-            // Update tab buttons
-            document.getElementById('attributionTabTalentSearch').classList.remove('active');
-            document.getElementById('attributionTabTalentTheater').classList.remove('active');
+        function showTalentTheaterIQ() {
+            const talentTheaterTab = document.getElementById('talentTheaterIQTab');
+            if (talentTheaterTab && talentTheaterTab.classList.contains('disabled')) return;
             
-            // Hide all tab contents
-            document.getElementById('attributionTabContentTalentSearch').classList.remove('active');
-            document.getElementById('attributionTabContentTalentTheater').classList.remove('active');
+            // Update tab active states
+            document.getElementById('profileIQTab').classList.remove('active');
+            document.getElementById('subscriberIQTab').classList.remove('active');
+            const talentSearchTab = document.getElementById('talentSearchIQTab');
+            if (talentSearchTab) talentSearchTab.classList.remove('active');
+            if (talentTheaterTab) talentTheaterTab.classList.add('active');
+            const formBtn = document.getElementById('formViewBtn');
+            if (formBtn) formBtn.classList.remove('active');
             
-            // Show selected tab
-            if (tabName === 'talent-search') {
-                document.getElementById('attributionTabTalentSearch').classList.add('active');
-                document.getElementById('attributionTabContentTalentSearch').classList.add('active');
-            } else if (tabName === 'talent-theater') {
-                document.getElementById('attributionTabTalentTheater').classList.add('active');
-                document.getElementById('attributionTabContentTalentTheater').classList.add('active');
-            }
+            // Show/hide views
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('subscriberIQView').style.display = 'none';
+            const talentSearchView = document.getElementById('talentSearchIQView');
+            if (talentSearchView) talentSearchView.style.display = 'none';
+            const talentTheaterView = document.getElementById('talentTheaterIQView');
+            if (talentTheaterView) talentTheaterView.style.display = 'flex';
+            const formView = document.getElementById('formView');
+            if (formView) formView.style.display = 'none';
         }
         
         // Talent Search Form Handler
