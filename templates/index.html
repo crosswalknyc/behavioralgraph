@@ -8579,6 +8579,13 @@
         let currentCSVData = null;
         let currentS3Key = null;
         let charts = {};
+        
+        // Subscriber IQ state variables (declared early for tooltip system access)
+        let subscriberDisplayMode = 'percent'; // 'percent' or 'projection'
+        let subscriberGenPopMode = false; // false = actual numbers, true = gen pop projections
+        let subscriberHoverEnabled = true; // Default to enabled
+        let subscriberProfiles = [];
+        let currentSubscriberData = null;
 
         document.addEventListener('DOMContentLoaded', function() {
             const today = new Date();
@@ -8609,6 +8616,15 @@
                 if (!e.target || typeof e.target.closest !== 'function') return;
                 const target = e.target.closest('.has-tooltip');
                 if (!target) return;
+                
+                // Check if this is in Subscriber IQ view and hover is disabled
+                const subscriberView = document.getElementById('subscriberIQView');
+                if (subscriberView && window.getComputedStyle(subscriberView).display !== 'none') {
+                    // Check if subscriberHoverEnabled is defined and false
+                    if (typeof subscriberHoverEnabled !== 'undefined' && !subscriberHoverEnabled) {
+                        return;
+                    }
+                }
                 
                 const text = target.getAttribute('data-tooltip');
                 if (!text) return;
@@ -9023,10 +9039,6 @@
             loadSubscriberProfiles();
         }
         
-        // Subscriber IQ data
-        let subscriberProfiles = [];
-        let currentSubscriberData = null;
-        
         async function loadSubscriberProfiles() {
             try {
                 const response = await fetch('/api/subscriber-iq/list', { credentials: 'same-origin' });
@@ -9278,11 +9290,6 @@
             window.scrollTo(0, 0);
         }
         
-        // Subscriber IQ display mode (US % vs US #)
-        let subscriberDisplayMode = 'percent'; // 'percent' or 'projection'
-        let subscriberGenPopMode = false; // false = actual numbers, true = gen pop projections
-        let subscriberHoverEnabled = true;
-        
         function toggleSubscriberUSPercent() {
             subscriberDisplayMode = subscriberDisplayMode === 'percent' ? 'projection' : 'percent';
             const label = document.getElementById('subscriberDisplayModeLabel');
@@ -9313,6 +9320,14 @@
             const label = document.getElementById('subscriberHoverToggleLabel');
             if (label) {
                 label.textContent = subscriberHoverEnabled ? 'HOVER ON' : 'HOVER OFF';
+            }
+            
+            // Hide tooltip if disabling hover
+            if (!subscriberHoverEnabled) {
+                const tooltip = document.getElementById('globalTooltip');
+                if (tooltip) {
+                    tooltip.classList.remove('visible');
+                }
             }
         }
         
