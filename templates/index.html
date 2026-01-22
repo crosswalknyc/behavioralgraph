@@ -2323,24 +2323,18 @@
         /* Behavioral Tab */
         .behavioral-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 0.75rem;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
             width: 100%;
         }
         
-        @media (max-width: 1400px) {
-            .behavioral-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
-        }
-        
-        @media (max-width: 1000px) {
+        @media (max-width: 1200px) {
             .behavioral-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
         
-        @media (max-width: 600px) {
+        @media (max-width: 800px) {
             .behavioral-grid {
                 grid-template-columns: 1fr;
             }
@@ -2755,19 +2749,14 @@
         .behavioral-card {
             background: var(--bg-card);
             border-radius: 8px;
-            padding: 0.75rem;
-            height: 350px;
+            padding: 1rem;
+            height: 500px;
             display: flex;
             flex-direction: column;
             min-width: 0;
             transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
             cursor: grab;
             user-select: none;
-            border: 1px solid var(--border-color);
-        }
-        
-        .behavioral-card:hover {
-            border-color: var(--accent-blue);
         }
         
         .behavioral-card:active {
@@ -2810,9 +2799,9 @@
         }
 
         .behavioral-card h3 {
-            font-size: 0.8rem;
+            font-size: 0.9rem;
             color: var(--text-primary);
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.75rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -2820,8 +2809,6 @@
             gap: 0.25rem;
             flex-wrap: nowrap;
             overflow: hidden;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid var(--border-color);
         }
         
         .behavioral-card h3 > span:first-child {
@@ -2864,9 +2851,9 @@
 
         .behavioral-filter {
             display: flex;
-            gap: 0.25rem;
+            gap: 0.35rem;
             align-items: center;
-            margin-bottom: 0.35rem;
+            margin-bottom: 0.5rem;
             flex-shrink: 0;
         }
         .behavioral-filter input {
@@ -2897,10 +2884,9 @@
         .behavioral-item {
             display: flex;
             align-items: center;
-            padding: 0.35rem 0;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-            gap: 0.4rem;
-            font-size: 0.75rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color);
+            gap: 0.5rem;
         }
 
         .behavioral-item:hover {
@@ -9343,106 +9329,60 @@
             initGlobalTooltip();
         });
         
-        // Global tooltip system to avoid overflow clipping
+        // Global tooltip system
         function initGlobalTooltip() {
             const tooltip = document.getElementById('globalTooltip');
-            if (!tooltip) return;
-            
-            let hideTimeout = null;
-            let currentTarget = null;
-            
-            // Show tooltip function
-            function showTooltip(target) {
-                if (!target) return;
-                
-                // Check if hover is disabled globally
-                if (document.body.classList.contains('hover-disabled')) {
-                    return;
-                }
-                
-                // Check if this is in Subscriber IQ view and hover is disabled
-                const subscriberView = document.getElementById('subscriberIQView');
-                if (subscriberView && window.getComputedStyle(subscriberView).display !== 'none') {
-                    if (typeof subscriberHoverEnabled !== 'undefined' && !subscriberHoverEnabled) {
-                        return;
-                    }
-                }
-                
-                const text = target.getAttribute('data-tooltip');
-                if (!text) return;
-                
-                currentTarget = target;
-                clearTimeout(hideTimeout);
-                
-                // Set content first
-                tooltip.textContent = text;
-                tooltip.classList.remove('below', 'visible');
-                
-                // Get element position
-                const rect = target.getBoundingClientRect();
-                const tooltipWidth = 300;
-                
-                // Calculate horizontal position (center on element, but keep in viewport)
-                let left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
-                if (left < 10) left = 10;
-                if (left + tooltipWidth > window.innerWidth - 10) {
-                    left = window.innerWidth - tooltipWidth - 10;
-                }
-                
-                // Calculate vertical position (prefer above)
-                let top = rect.top - 80;
-                let showBelow = false;
-                
-                if (top < 10) {
-                    // Not enough room above, show below
-                    top = rect.bottom + 10;
-                    showBelow = true;
-                }
-                
-                // Make sure tooltip doesn't go off bottom of screen
-                if (top > window.innerHeight - 100) {
-                    top = window.innerHeight - 100;
-                }
-                
-                // Apply position and show
-                tooltip.style.left = left + 'px';
-                tooltip.style.top = top + 'px';
-                tooltip.style.width = tooltipWidth + 'px';
-                
-                if (showBelow) {
-                    tooltip.classList.add('below');
-                }
-                tooltip.classList.add('visible');
+            if (!tooltip) {
+                console.error('globalTooltip not found');
+                return;
             }
             
-            // Hide tooltip function
-            function hideTooltip() {
-                hideTimeout = setTimeout(() => {
-                    tooltip.classList.remove('visible');
-                    tooltip.style.opacity = '0';
-                    tooltip.style.visibility = 'hidden';
-                    currentTarget = null;
-                }, 150);
+            // Attach tooltips to all elements with has-tooltip class
+            function attachTooltips() {
+                document.querySelectorAll('.has-tooltip[data-tooltip]').forEach(el => {
+                    // Skip if already has listeners
+                    if (el.dataset.tooltipAttached) return;
+                    el.dataset.tooltipAttached = 'true';
+                    
+                    el.addEventListener('mouseenter', function() {
+                        // Check if hover is disabled
+                        if (document.body.classList.contains('hover-disabled')) return;
+                        
+                        const text = this.getAttribute('data-tooltip');
+                        if (!text) return;
+                        
+                        tooltip.textContent = text;
+                        tooltip.classList.remove('below');
+                        
+                        const rect = this.getBoundingClientRect();
+                        let left = rect.left + (rect.width / 2) - 150;
+                        let top = rect.top - 80;
+                        
+                        // Keep in viewport
+                        if (left < 10) left = 10;
+                        if (left > window.innerWidth - 320) left = window.innerWidth - 320;
+                        if (top < 10) {
+                            top = rect.bottom + 10;
+                            tooltip.classList.add('below');
+                        }
+                        
+                        tooltip.style.left = left + 'px';
+                        tooltip.style.top = top + 'px';
+                        tooltip.classList.add('visible');
+                    });
+                    
+                    el.addEventListener('mouseleave', function() {
+                        tooltip.classList.remove('visible');
+                    });
+                });
             }
             
-            // Use mouseover/mouseout for better event delegation
-            document.body.addEventListener('mouseover', function(e) {
-                const target = e.target.closest('.has-tooltip');
-                if (target && target !== currentTarget) {
-                    showTooltip(target);
-                }
-            });
+            // Attach now and watch for new elements
+            attachTooltips();
             
-            document.body.addEventListener('mouseout', function(e) {
-                const target = e.target.closest('.has-tooltip');
-                if (target) {
-                    const relatedTarget = e.relatedTarget;
-                    // Check if we're moving to another part of the same tooltip element
-                    if (!relatedTarget || !target.contains(relatedTarget)) {
-                        hideTooltip();
-                    }
-                }
-            });
+            // Re-attach when DOM changes (for dynamically added content)
+            const observer = new MutationObserver(attachTooltips);
+            observer.observe(document.body, { childList: true, subtree: true });
         }
 
         function formatDate(date) { return date.toISOString().split('T')[0]; }
@@ -15538,14 +15478,6 @@
             // Interests
             'INTEREST', 'INTERESTS', 'HOBBIES'
         ];
-        // Category groupings for organized display
-        const categoryGroups = {
-            '🛒 Shopping & Retail': ['MOST PURCHASED BRANDS', 'WHERE THEY SHOP', 'APPAREL/FOOTWEAR', 'RETAIL', 'QSR'],
-            '📱 Digital & Technology': ['APP/PLATFORM', 'APP/PLATFORM USAGE', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'TECHNOLOGY/DEVICE'],
-            '📺 Media & Entertainment': ['STREAMING/VIDEO', 'STREAMING VIDEO', 'STREAMING/MUSIC', 'STREAMING MUSIC', 'STREAMING/PLATFORM', 'BROADCAST/CABLE', 'VIRTUAL MVPD/FAST'],
-            '🎮 Lifestyle & Interests': ['GAMES', 'SPORTS', 'MEDIA', 'INTEREST']
-        };
-        
         const defaultPriorityCategories = ['MOST PURCHASED BRANDS', 'WHERE THEY SHOP', 'APPAREL/FOOTWEAR', 'RETAIL', 'APP/PLATFORM', 'APP/PLATFORM USAGE', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING/VIDEO', 'STREAMING VIDEO', 'STREAMING/MUSIC', 'STREAMING MUSIC', 'STREAMING/PLATFORM', 'BROADCAST/CABLE', 'VIRTUAL MVPD/FAST', 'QSR', 'TECHNOLOGY/DEVICE', 'GAMES', 'SPORTS', 'MEDIA', 'INTEREST'];
 
         function renderBehavioralCards(behavioral, highlightCategory = null) {
@@ -15581,7 +15513,7 @@
             container.innerHTML = sortedCats.map((cat, idx) => {
                 const catId = cat.replace(/[^a-zA-Z0-9]/g, '');
                 const items = behavioral[cat];
-                const displayItems = items.slice(0, 15);
+                const displayItems = items.slice(0, 30);
                 const maxPct = Math.max(...displayItems.map(i => i.pct), 1);
                 const isHighlighted = cat === highlightCategory;
                 const positionBadge = idx === 0 ? '<span style="background: var(--accent-lime); color: #000; padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.55rem;">1ST</span>' : '';
