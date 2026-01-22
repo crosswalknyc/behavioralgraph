@@ -25,6 +25,30 @@
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        /* Global Scrollbar Styling - Dark Theme */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: #1e3a5f var(--bg-dark);
+        }
+
+        *::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        *::-webkit-scrollbar-track {
+            background: var(--bg-dark);
+        }
+
+        *::-webkit-scrollbar-thumb {
+            background: #1e3a5f;
+            border-radius: 4px;
+        }
+
+        *::-webkit-scrollbar-thumb:hover {
+            background: #2a4a6f;
+        }
+
         body {
             font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--bg-dark);
