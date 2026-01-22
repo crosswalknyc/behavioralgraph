@@ -7420,21 +7420,21 @@
             <!-- Row 3: Actions -->
             <div class="dash-bottom-row">
                 <div class="row-right">
-                    <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" data-tooltip="US %: Toggle between showing percentages of audience vs. projected US population numbers.">
-                        <span id="dashDisplayLabel">US %</span>
-                    </div>
-                    <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements.">
-                        <span id="hoverToggleLabel">HOVER ON</span>
-                    </div>
                     <div class="dash-dropdown">
-                        <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, or full report as PDF." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
+                        <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, full report as PDF, or add page to deck." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
                         <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
                             <a onclick="exportAllCSV()">📄 All Data (CSV)</a>
                             <a onclick="exportAllPNG()">🖼️ All Charts (PNG)</a>
                             <a onclick="exportPDF()">📑 Full Report (PDF)</a>
+                            <a onclick="addCurrentTabToDeck()">➕ Add Page to Deck</a>
                         </div>
                     </div>
-                    <button class="dash-action-btn accent has-tooltip" data-tooltip="Add Page to Deck: Save the current tab view to your presentation deck for export." onclick="addCurrentTabToDeck()">ADD PAGE TO DECK</button>
+                    <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements.">
+                        <span id="hoverToggleLabel">HOVER ON</span>
+                    </div>
+                    <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" data-tooltip="US %: Toggle between showing percentages of audience vs. projected US population numbers.">
+                        <span id="dashDisplayLabel">US %</span>
+                    </div>
                 </div>
             </div>
             
