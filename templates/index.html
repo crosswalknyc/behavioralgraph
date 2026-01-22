@@ -18124,14 +18124,32 @@
                 return STREAMING_CATEGORIES.some(c => cat.includes(c)) || cat.includes('STREAMING');
             }).sort((a, b) => b.index - a.index).slice(0, 10);
             const maxStreamPct = Math.max(...streamingItems.map(i => i.pct), 1);
-            document.getElementById('streamingPreferences').innerHTML = streamingItems.map(item => `
-                <div class="media-pref-item">
-                    <span class="media-pref-icon">📺</span>
-                    <span class="media-pref-name">${item.name} <span class="category-tag-small">${item.category}</span></span>
+            const US_POP_STREAM = 324700000;
+            const isProjectionStream = dashDisplayMode === 'projection';
+            document.getElementById('streamingPreferences').innerHTML = streamingItems.map(item => {
+                const profilePct = item.pct || 0;
+                const genPopPct = item.genPopPct || 0;
+                const profileDisplay = isProjectionStream 
+                    ? formatNumber(Math.round((profilePct / 100) * US_POP_STREAM))
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjectionStream 
+                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_STREAM))
+                    : genPopPct.toFixed(1) + '%';
+                return `
+                <div class="media-pref-item" style="display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="media-pref-icon">📺</span>
+                        <span class="media-pref-name" style="flex: 1;">${item.name} <span class="category-tag-small">${item.category}</span></span>
+                    </div>
                     <div class="media-pref-bar"><div class="media-pref-bar-fill" style="width: ${(item.pct / maxStreamPct) * 100}%"></div></div>
-                    <span class="media-pref-pct">${item.pct.toFixed(1)}%</span>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; gap: 0.5rem;">
+                        <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Profile:</span> <span style="font-weight: 600;">${profileDisplay}</span></div>
+                        <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Gen Pop:</span> <span>${genPopDisplay}</span></div>
+                        <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Index:</span> <span style="font-weight: 600; color: var(--accent-lime);">${formatIndex(item.index)}</span></div>
+                    </div>
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No streaming data</p>';
+            `;
+            }).join('') || '<p style="color: var(--text-secondary);">No streaming data</p>';
             
             // Social media usage - only from SOCIAL MEDIA category
             const socialItems = allItems.filter(i => {
@@ -18139,14 +18157,32 @@
                 return SOCIAL_CATEGORIES.some(c => cat.includes(c)) || cat === 'SOCIAL MEDIA';
             }).sort((a, b) => b.index - a.index).slice(0, 10);
             const maxSocialPct = Math.max(...socialItems.map(i => i.pct), 1);
-            document.getElementById('socialMediaUsage').innerHTML = socialItems.map(item => `
-                <div class="media-pref-item">
-                    <span class="media-pref-icon">📱</span>
-                    <span class="media-pref-name">${item.name} <span class="category-tag-small">${item.category}</span></span>
+            const US_POP_SOCIAL = 324700000;
+            const isProjectionSocial = dashDisplayMode === 'projection';
+            document.getElementById('socialMediaUsage').innerHTML = socialItems.map(item => {
+                const profilePct = item.pct || 0;
+                const genPopPct = item.genPopPct || 0;
+                const profileDisplay = isProjectionSocial 
+                    ? formatNumber(Math.round((profilePct / 100) * US_POP_SOCIAL))
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjectionSocial 
+                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_SOCIAL))
+                    : genPopPct.toFixed(1) + '%';
+                return `
+                <div class="media-pref-item" style="display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="media-pref-icon">📱</span>
+                        <span class="media-pref-name" style="flex: 1;">${item.name} <span class="category-tag-small">${item.category}</span></span>
+                    </div>
                     <div class="media-pref-bar"><div class="media-pref-bar-fill" style="width: ${(item.pct / maxSocialPct) * 100}%"></div></div>
-                    <span class="media-pref-pct">${item.pct.toFixed(1)}%</span>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; gap: 0.5rem;">
+                        <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Profile:</span> <span style="font-weight: 600;">${profileDisplay}</span></div>
+                        <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Gen Pop:</span> <span>${genPopDisplay}</span></div>
+                        <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Index:</span> <span style="font-weight: 600; color: var(--accent-lime);">${formatIndex(item.index)}</span></div>
+                    </div>
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No social media data</p>';
+            `;
+            }).join('') || '<p style="color: var(--text-secondary);">No social media data</p>';
             
             // Audio preferences - only from music/podcast categories
             const audioItems = allItems.filter(i => {
@@ -18154,14 +18190,32 @@
                 return AUDIO_CATEGORIES.some(c => cat.includes(c)) || cat.includes('MUSIC') || cat.includes('PODCAST');
             }).sort((a, b) => b.index - a.index).slice(0, 10);
             const maxAudioPct = Math.max(...audioItems.map(i => i.pct), 1);
-            document.getElementById('audioPreferences').innerHTML = audioItems.map(item => `
-                <div class="media-pref-item">
-                    <span class="media-pref-icon">🎵</span>
-                    <span class="media-pref-name">${item.name} <span class="category-tag-small">${item.category}</span></span>
+            const US_POP_AUDIO = 324700000;
+            const isProjectionAudio = dashDisplayMode === 'projection';
+            document.getElementById('audioPreferences').innerHTML = audioItems.map(item => {
+                const profilePct = item.pct || 0;
+                const genPopPct = item.genPopPct || 0;
+                const profileDisplay = isProjectionAudio 
+                    ? formatNumber(Math.round((profilePct / 100) * US_POP_AUDIO))
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjectionAudio 
+                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_AUDIO))
+                    : genPopPct.toFixed(1) + '%';
+                return `
+                <div class="media-pref-item" style="display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="media-pref-icon">🎵</span>
+                        <span class="media-pref-name" style="flex: 1;">${item.name} <span class="category-tag-small">${item.category}</span></span>
+                    </div>
                     <div class="media-pref-bar"><div class="media-pref-bar-fill" style="width: ${(item.pct / maxAudioPct) * 100}%"></div></div>
-                    <span class="media-pref-pct">${item.pct.toFixed(1)}%</span>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; gap: 0.5rem;">
+                        <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Profile:</span> <span style="font-weight: 600;">${profileDisplay}</span></div>
+                        <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Gen Pop:</span> <span>${genPopDisplay}</span></div>
+                        <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Index:</span> <span style="font-weight: 600; color: var(--accent-lime);">${formatIndex(item.index)}</span></div>
+                    </div>
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No audio data</p>';
+            `;
+            }).join('') || '<p style="color: var(--text-secondary);">No audio data</p>';
             
             // Gaming affinity - only from gaming categories
             const gamingItems = allItems.filter(i => {
@@ -18169,14 +18223,32 @@
                 return GAMING_CATEGORIES.some(c => cat.includes(c)) || cat.includes('GAME');
             }).sort((a, b) => b.index - a.index).slice(0, 10);
             const maxGamingPct = Math.max(...gamingItems.map(i => i.pct), 1);
-            document.getElementById('gamingAffinity').innerHTML = gamingItems.map(item => `
-                <div class="media-pref-item">
-                    <span class="media-pref-icon">🎮</span>
-                    <span class="media-pref-name">${item.name} <span class="category-tag-small">${item.category}</span></span>
+            const US_POP_GAMING = 324700000;
+            const isProjectionGaming = dashDisplayMode === 'projection';
+            document.getElementById('gamingAffinity').innerHTML = gamingItems.map(item => {
+                const profilePct = item.pct || 0;
+                const genPopPct = item.genPopPct || 0;
+                const profileDisplay = isProjectionGaming 
+                    ? formatNumber(Math.round((profilePct / 100) * US_POP_GAMING))
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjectionGaming 
+                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_GAMING))
+                    : genPopPct.toFixed(1) + '%';
+                return `
+                <div class="media-pref-item" style="display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="media-pref-icon">🎮</span>
+                        <span class="media-pref-name" style="flex: 1;">${item.name} <span class="category-tag-small">${item.category}</span></span>
+                    </div>
                     <div class="media-pref-bar"><div class="media-pref-bar-fill" style="width: ${(item.pct / maxGamingPct) * 100}%"></div></div>
-                    <span class="media-pref-pct">${item.pct.toFixed(1)}%</span>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; gap: 0.5rem;">
+                        <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Profile:</span> <span style="font-weight: 600;">${profileDisplay}</span></div>
+                        <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Gen Pop:</span> <span>${genPopDisplay}</span></div>
+                        <div><span style="color: var(--text-secondary); font-size: 0.7rem;">Index:</span> <span style="font-weight: 600; color: var(--accent-lime);">${formatIndex(item.index)}</span></div>
+                    </div>
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No gaming data</p>';
+            `;
+            }).join('') || '<p style="color: var(--text-secondary);">No gaming data</p>';
             
             // Media consumption summary - use proper category matching and labels
             const mediaCategoryConfig = [
