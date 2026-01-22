@@ -14037,6 +14037,7 @@
             hoverEnabled = !hoverEnabled;
             const toggle = document.getElementById('hoverToggle');
             const label = document.getElementById('hoverToggleLabel');
+            const tooltip = document.getElementById('globalTooltip');
             
             if (hoverEnabled) {
                 if (toggle) toggle.classList.remove('active');
@@ -14047,22 +14048,18 @@
                 if (label) label.textContent = 'HOVER OFF';
                 document.body.classList.add('hover-disabled');
                 
-                // Hide any currently visible tooltip
-                const tooltip = document.getElementById('globalTooltip');
+                // Hide any currently visible tooltip using inline styles
                 if (tooltip) {
-                    tooltip.classList.remove('visible');
+                    tooltip.style.opacity = '0';
+                    tooltip.style.visibility = 'hidden';
+                    tooltip.style.left = '-9999px';
+                    tooltip.style.top = '-9999px';
                 }
             }
-            
-            // Save preference to localStorage
-            localStorage.setItem('hoverEnabled', hoverEnabled);
         }
         
         // Expose to window for onclick handlers
         window.toggleHoverDescriptors = toggleHoverDescriptors;
-        
-        // Clear any saved preference so tooltips always start enabled
-        localStorage.removeItem('hoverEnabled');
         
         // ============================================================================
         // BEHAVIORAL INSIGHTS
