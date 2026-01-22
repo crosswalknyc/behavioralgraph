@@ -1496,7 +1496,6 @@
             display: flex;
             gap: 0.5rem;
             flex-wrap: wrap;
-            margin-bottom: 1rem;
         }
 
         .tab-btn {
@@ -1551,7 +1550,6 @@
             display: none; 
             padding: 1.5rem; 
             margin: 0; 
-            margin-top: 0.5rem;
             min-height: 200px;
         }
         .tab-content.active { 
@@ -7420,29 +7418,31 @@
             </div>
             
             <!-- Dashboard Layout: Fixed Sidebar + Tab Content -->
+            <!-- Action Buttons - Above Select Profile -->
+            <div class="sidebar-action-buttons" style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+                <div class="dash-dropdown">
+                    <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, full report as PDF, or add page to deck." onclick="toggleExportMenu()" style="font-size: 0.75rem; padding: 0.4rem 0.6rem;">📥 EXPORT ▾</button>
+                    <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
+                        <a onclick="exportAllCSV()">📄 All Data (CSV)</a>
+                        <a onclick="exportAllPNG()">🖼️ All Charts (PNG)</a>
+                        <a onclick="exportPDF()">📑 Full Report (PDF)</a>
+                        <a onclick="addCurrentTabToDeck()">➕ Add Page to Deck</a>
+                    </div>
+                </div>
+                <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements." style="font-size: 0.75rem; padding: 0.4rem 0.6rem;">
+                    <span id="hoverToggleLabel">HOVER ON</span>
+                </div>
+                <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" data-tooltip="US %: Toggle between showing percentages of audience vs. projected US population numbers." style="font-size: 0.75rem; padding: 0.4rem 0.6rem;">
+                    <span id="dashDisplayLabel">US %</span>
+                </div>
+            </div>
+            
             <div class="dashboard-layout">
                 <!-- Persistent Sidebar - Always Visible -->
                 <div class="persistent-sidebar">
                     <div class="sidebar-header-section">
                         <h3>Select Profile</h3>
                         <input type="text" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()">
-                        <div class="sidebar-action-buttons" style="display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap;">
-                            <div class="dash-dropdown">
-                                <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, full report as PDF, or add page to deck." onclick="toggleExportMenu()" style="font-size: 0.75rem; padding: 0.4rem 0.6rem;">📥 EXPORT ▾</button>
-                                <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
-                                    <a onclick="exportAllCSV()">📄 All Data (CSV)</a>
-                                    <a onclick="exportAllPNG()">🖼️ All Charts (PNG)</a>
-                                    <a onclick="exportPDF()">📑 Full Report (PDF)</a>
-                                    <a onclick="addCurrentTabToDeck()">➕ Add Page to Deck</a>
-                                </div>
-                            </div>
-                            <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements." style="font-size: 0.75rem; padding: 0.4rem 0.6rem;">
-                                <span id="hoverToggleLabel">HOVER ON</span>
-                            </div>
-                            <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" data-tooltip="US %: Toggle between showing percentages of audience vs. projected US population numbers." style="font-size: 0.75rem; padding: 0.4rem 0.6rem;">
-                                <span id="dashDisplayLabel">US %</span>
-                            </div>
-                        </div>
                     </div>
                     <div class="profile-select-tree" id="dashProfileTree">
                         <!-- Profiles will be loaded here -->
