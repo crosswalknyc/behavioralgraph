@@ -8845,7 +8845,7 @@
                             <div class="sidebar-section">
                                 <h3>Select Profiles</h3>
                                 <div style="background: rgba(0,217,255,0.1); border: 1px solid rgba(0,217,255,0.3); border-radius: 6px; padding: 0.5rem; margin-bottom: 0.75rem; font-size: 0.75rem;">
-                                    💡 <strong>Current profile</strong> and <strong>Gen Pop</strong> are auto-selected for comparison
+                                    💡 <strong>All open tabs</strong> and <strong>Gen Pop</strong> are auto-selected for comparison
                                 </div>
                                 <div style="position: relative; margin-bottom: 0.75rem;">
                                     <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
@@ -8879,7 +8879,7 @@
                                 <div id="comparisonResults">
                                     <div class="comparison-empty">
                                         <p>Select profiles from the left and click "Compare Selected"</p>
-                                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Current profile and Gen Pop are auto-selected when you switch to this tab</p>
+                                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">All open tabs and Gen Pop are auto-selected when you switch to this tab</p>
                                     </div>
                                 </div>
                             </div>
@@ -12851,6 +12851,30 @@
                 // Default to comparison report view
                 setCompReportType('comparison');
                 loadComparisonProfiles();
+                
+                // Hide the main profile selector sidebar when in comparison mode
+                const mainSidebar = document.querySelector('.persistent-sidebar');
+                if (mainSidebar) {
+                    mainSidebar.style.display = 'none';
+                }
+                
+                // Expand the comparison main area to full width
+                const dashboardLayout = document.querySelector('.dashboard-layout');
+                if (dashboardLayout) {
+                    dashboardLayout.style.gap = '0';
+                }
+            } else {
+                // Show the main profile selector sidebar for other tabs
+                const mainSidebar = document.querySelector('.persistent-sidebar');
+                if (mainSidebar) {
+                    mainSidebar.style.display = 'flex';
+                }
+                
+                // Restore normal gap
+                const dashboardLayout = document.querySelector('.dashboard-layout');
+                if (dashboardLayout) {
+                    dashboardLayout.style.gap = '1rem';
+                }
             }
             
             if (tabName === 'collaboration') {
@@ -21592,26 +21616,33 @@
         }
         
         function autoSelectDefaultProfiles() {
-            // Clear existing selections first time only
-            if (selectedForComparison.size === 0) {
-                // Add current profile if we have one
-                if (currentS3Key) {
-                    selectedForComparison.add(currentS3Key);
-                }
-                
-                // Try to find and add Gen Pop profile
-                const genPopProfile = comparisonProfiles.find(p => {
-                    const name = (p.project_name || p.s3_key || '').toLowerCase();
-                    return name.includes('gen pop') || name.includes('genpop') || name.includes('general population') || name.includes('us_population');
+            // Always clear and re-select to include all open tabs
+            selectedForComparison.clear();
+            
+            // Add all profiles that are currently open in tabs
+            if (openProfileTabs && openProfileTabs.length > 0) {
+                openProfileTabs.forEach(tab => {
+                    if (tab.id) {
+                        selectedForComparison.add(tab.id);
+                    }
                 });
-                
-                if (genPopProfile) {
-                    const genPopId = genPopProfile.s3_key || genPopProfile.job_id;
-                    selectedForComparison.add(genPopId);
-                }
-                
-                updateSelectedCount();
+            } else if (currentS3Key) {
+                // Fallback to current profile if no tabs are open
+                selectedForComparison.add(currentS3Key);
             }
+            
+            // Always try to find and add Gen Pop profile
+            const genPopProfile = comparisonProfiles.find(p => {
+                const name = (p.project_name || p.s3_key || '').toLowerCase();
+                return name.includes('gen pop') || name.includes('genpop') || name.includes('general population') || name.includes('us_population');
+            });
+            
+            if (genPopProfile) {
+                const genPopId = genPopProfile.s3_key || genPopProfile.job_id;
+                selectedForComparison.add(genPopId);
+            }
+            
+            updateSelectedCount();
         }
 
         function getProfileFullName(profile) {
