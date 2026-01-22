@@ -9391,15 +9391,9 @@
                 }
                 
                 // Apply position and show
-                tooltip.style.cssText = `
-                    position: fixed;
-                    left: ${left}px;
-                    top: ${top}px;
-                    width: ${tooltipWidth}px;
-                    opacity: 1;
-                    visibility: visible;
-                    z-index: 2147483647;
-                `;
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+                tooltip.style.width = tooltipWidth + 'px';
                 
                 if (showBelow) {
                     tooltip.classList.add('below');
@@ -14105,14 +14099,8 @@
         // Expose to window for onclick handlers
         window.toggleHoverDescriptors = toggleHoverDescriptors;
         
-        // Load hover preference on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            const savedPref = localStorage.getItem('hoverEnabled');
-            if (savedPref === 'false') {
-                hoverEnabled = true; // Will be toggled to false
-                toggleHoverDescriptors();
-            }
-        });
+        // Clear any saved preference so tooltips always start enabled
+        localStorage.removeItem('hoverEnabled');
         
         // ============================================================================
         // BEHAVIORAL INSIGHTS
