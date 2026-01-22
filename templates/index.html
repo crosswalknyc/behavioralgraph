@@ -7391,7 +7391,7 @@
                 <div class="persistent-sidebar">
                     <div class="sidebar-header-section">
                         <h3>Select Profile</h3>
-                        <input type="text" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search" onkeyup="filterDashboardProfiles()">
+                        <input type="text" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()">
                     </div>
                     <div class="profile-select-tree" id="dashProfileTree">
                         <!-- Profiles will be loaded here -->
@@ -7420,7 +7420,7 @@
             <div id="tab-demographics" class="tab-content">
                 <div class="tab-header">
                     <h2>👥 Demographics</h2>
-                    <p class="section-description">Audience breakdown by gender, age, income. <span style="color: #10b981;">Green = over-indexes</span> | <span style="color: #ef4444;">Red = under-indexes</span>. Second % = Gen Pop baseline.</p>
+                    <p class="section-description has-tooltip" data-tooltip="Demographics Overview: This section shows detailed demographic breakdowns. Green bars indicate over-indexing vs Gen Pop (more of this audience than average). Red bars indicate under-indexing (less than average). The second percentage shown is the Gen Pop baseline for comparison.">Audience breakdown by gender, age, income. <span style="color: #10b981;">Green = over-indexes</span> | <span style="color: #ef4444;">Red = under-indexes</span>. Second % = Gen Pop baseline.</p>
                 </div>
                 <div class="demo-main">
                         <div class="stats-row">
@@ -7473,21 +7473,21 @@
                                 <h3>
                                     <span class="has-tooltip" data-tooltip="Age Distribution: Breakdown by age bracket. Green = your audience over-indexes vs Gen Pop (GP). Red = under-indexes. Hover bars for exact %.">📅 AGE</span>
                                     <div style="display: flex; gap: 0.25rem; align-items: center;">
-                                        <select id="ageChartType" onchange="changeChartType('age', this.value)" class="chart-type-select" title="Chart Type">
+                                        <select id="ageChartType" onchange="changeChartType('age', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type: Choose how to visualize the age data - Bar (comparison), Doughnut (proportions), Pie (slices), Polar Area (radial), or Line (trends).">
                                             <option value="bar">📊</option>
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                             <option value="line">📈</option>
                                         </select>
-                                        <select id="ageSortSelect" onchange="sortAgeChart(this.value)" class="chart-type-select">
+                                        <select id="ageSortSelect" onchange="sortAgeChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort: Age ↓ = sort by age range (youngest to oldest), Val ↓ = sort by percentage value (highest to lowest).">
                                             <option value="age">Age ↓</option>
                                             <option value="value">Val ↓</option>
                                         </select>
                                         <span class="module-action-btns">
-                                            <button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Age')" title="CSV">CSV</button>
-                                            <button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Age')" title="PNG">PNG</button>
-                                            <button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Age')" title="Add to Deck">➕</button>
+                                            <button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('demographic', 'Age')" data-tooltip="Export CSV: Download age demographic data as a CSV file for analysis in Excel or other tools.">CSV</button>
+                                            <button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Age')" data-tooltip="Export PNG: Download the age chart as a PNG image for presentations or reports.">PNG</button>
+                                            <button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('demographic', 'Age')" data-tooltip="Add to Deck: Save this age chart to your presentation deck for later export.">➕</button>
                                         </span>
                                     </div>
                                 </h3>
@@ -7497,13 +7497,13 @@
                                 <h3>
                                     <span class="has-tooltip" data-tooltip="Gender Distribution: Breakdown by gender identity. Green = over-indexes vs Gen Pop. Red = under-indexes. % shows audience composition.">👫 GENDER</span>
                                     <div style="display: flex; gap: 0.25rem; align-items: center;">
-                                        <select id="genderChartType" onchange="changeChartType('gender', this.value)" class="chart-type-select" title="Chart Type">
+                                        <select id="genderChartType" onchange="changeChartType('gender', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type: Choose visualization - Doughnut (proportions), Pie (slices), Bar (comparison), or Polar Area (radial).">
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="bar">📊</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
-                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Gender')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Gender')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Gender')" title="Add to Deck">➕</button></span>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('demographic', 'Gender')" data-tooltip="Export CSV: Download gender demographic data as a CSV file.">CSV</button><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Gender')" data-tooltip="Export PNG: Download the gender chart as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('demographic', 'Gender')" data-tooltip="Add to Deck: Save this gender chart to your presentation deck.">➕</button></span>
                                     </div>
                                 </h3>
                                 <div class="chart-container"><canvas id="genderChart"></canvas></div>
@@ -7512,13 +7512,13 @@
                                 <h3>
                                     <span class="has-tooltip" data-tooltip="Ethnicity Distribution: Racial/ethnic makeup of this audience. Compare to Gen Pop (GP) to see which groups over/under-index.">🌍 ETHNICITY</span>
                                     <div style="display: flex; gap: 0.25rem; align-items: center;">
-                                        <select id="ethnicityChartType" onchange="changeChartType('ethnicity', this.value)" class="chart-type-select" title="Chart Type">
+                                        <select id="ethnicityChartType" onchange="changeChartType('ethnicity', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type: Choose visualization - Doughnut (proportions), Pie (slices), Bar (comparison), or Polar Area (radial).">
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="bar">📊</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
-                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Ethnicity')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Ethnicity')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Ethnicity')" title="Add to Deck">➕</button></span>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('demographic', 'Ethnicity')" data-tooltip="Export CSV: Download ethnicity demographic data as a CSV file.">CSV</button><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Ethnicity')" data-tooltip="Export PNG: Download the ethnicity chart as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('demographic', 'Ethnicity')" data-tooltip="Add to Deck: Save this ethnicity chart to your presentation deck.">➕</button></span>
                                     </div>
                                 </h3>
                                 <div class="chart-container"><canvas id="ethnicityChart"></canvas></div>
@@ -7527,21 +7527,21 @@
                                 <h3>
                                     <span class="has-tooltip" data-tooltip="Income Distribution: Household income breakdown. Green = over-indexes vs Gen Pop, Red = under-indexes. Useful for pricing and premium vs mass-market positioning.">💰 INCOME</span>
                                     <div style="display: flex; gap: 0.25rem; align-items: center;">
-                                        <select id="incomeChartType" onchange="changeChartType('income', this.value)" class="chart-type-select" title="Chart Type">
+                                        <select id="incomeChartType" onchange="changeChartType('income', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type: Choose visualization - Bar (comparison), Doughnut (proportions), Pie (slices), Polar Area (radial), or Line (trends).">
                                             <option value="bar">📊</option>
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                             <option value="line">📈</option>
                                         </select>
-                                        <select id="incomeSortSelect" onchange="sortIncomeChart(this.value)" class="chart-type-select">
+                                        <select id="incomeSortSelect" onchange="sortIncomeChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort: Inc ↓ = sort by income level (lowest to highest), Val ↓ = sort by percentage value (highest to lowest).">
                                             <option value="income">Inc ↓</option>
                                             <option value="value">Val ↓</option>
                                         </select>
                                         <span class="module-action-btns">
-                                            <button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Income')" title="CSV">CSV</button>
-                                            <button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Income')" title="PNG">PNG</button>
-                                            <button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Income')" title="Add to Deck">➕</button>
+                                            <button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('demographic', 'Income')" data-tooltip="Export CSV: Download income demographic data as a CSV file.">CSV</button>
+                                            <button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Income')" data-tooltip="Export PNG: Download the income chart as a PNG image.">PNG</button>
+                                            <button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('demographic', 'Income')" data-tooltip="Add to Deck: Save this income chart to your presentation deck.">➕</button>
                                         </span>
                                     </div>
                                 </h3>
@@ -7551,13 +7551,13 @@
                                 <h3>
                                     <span class="has-tooltip" data-tooltip="Education Level: Highest education attained. Useful for messaging sophistication and professional targeting.">🎓 EDUCATION</span>
                                     <div style="display: flex; gap: 0.25rem; align-items: center;">
-                                        <select id="educationChartType" onchange="changeChartType('education', this.value)" class="chart-type-select" title="Chart Type">
+                                        <select id="educationChartType" onchange="changeChartType('education', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type: Choose visualization - Bar (comparison), Doughnut (proportions), Pie (slices), or Polar Area (radial).">
                                             <option value="bar">📊</option>
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
-                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Education')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Education')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Education')" title="Add to Deck">➕</button></span>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('demographic', 'Education')" data-tooltip="Export CSV: Download education demographic data as a CSV file.">CSV</button><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Education')" data-tooltip="Export PNG: Download the education chart as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('demographic', 'Education')" data-tooltip="Add to Deck: Save this education chart to your presentation deck.">➕</button></span>
                                     </div>
                                 </h3>
                                 <div class="chart-container"><canvas id="educationChart"></canvas></div>
@@ -7566,43 +7566,43 @@
                                 <h3>
                                     <span class="has-tooltip" data-tooltip="Relationship Status: Marital and relationship status breakdown. Useful for family-oriented vs singles targeting.">💑 RELATIONSHIP</span>
                                     <div style="display: flex; gap: 0.25rem; align-items: center;">
-                                        <select id="relationshipChartType" onchange="changeChartType('relationship', this.value)" class="chart-type-select" title="Chart Type">
+                                        <select id="relationshipChartType" onchange="changeChartType('relationship', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type: Choose how to visualize relationship status distribution - Doughnut, Pie, Bar, or Polar Area chart.">
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="bar">📊</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
-                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Relationship')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Relationship')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Relationship')" title="Add to Deck">➕</button></span>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('demographic', 'Relationship')" data-tooltip="Export CSV: Download relationship status demographic data as a CSV file.">CSV</button><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Relationship')" data-tooltip="Export PNG: Download the relationship chart as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('demographic', 'Relationship')" data-tooltip="Add to Deck: Save this relationship chart to your presentation deck.">➕</button></span>
                                     </div>
                                 </h3>
                                 <div class="chart-container"><canvas id="relationshipChart"></canvas></div>
                             </div>
                             <div class="chart-card">
                                 <h3>
-                                    <span>🏳️‍🌈 ORIENTATION</span>
+                                    <span class="has-tooltip" data-tooltip="Sexual Orientation: Distribution of sexual orientation and identity within this audience. Compare to Gen Pop to see over/under-indexing.">🏳️‍🌈 ORIENTATION</span>
                                     <div style="display: flex; gap: 0.25rem; align-items: center;">
-                                        <select id="sexualOrientationChartType" onchange="changeChartType('sexualOrientation', this.value)" class="chart-type-select" title="Chart Type">
+                                        <select id="sexualOrientationChartType" onchange="changeChartType('sexualOrientation', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type: Choose how to visualize sexual orientation distribution - Doughnut, Pie, Bar, or Polar Area chart.">
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="bar">📊</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
-                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Sexual Orientation')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Sexual Orientation')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Sexual Orientation')" title="Add to Deck">➕</button></span>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('demographic', 'Sexual Orientation')" data-tooltip="Export CSV: Download sexual orientation demographic data as a CSV file.">CSV</button><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Sexual Orientation')" data-tooltip="Export PNG: Download the sexual orientation chart as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('demographic', 'Sexual Orientation')" data-tooltip="Add to Deck: Save this sexual orientation chart to your presentation deck.">➕</button></span>
                                     </div>
                                 </h3>
                                 <div class="chart-container"><canvas id="sexualOrientationChart"></canvas></div>
                             </div>
                             <div class="chart-card">
                                 <h3>
-                                    <span>👶 PARENTAL</span>
+                                    <span class="has-tooltip" data-tooltip="Parental Status: Whether this audience has children or not. Useful for family-oriented vs. singles targeting and messaging.">👶 PARENTAL</span>
                                     <div style="display: flex; gap: 0.25rem; align-items: center;">
-                                        <select id="parentalStatusChartType" onchange="changeChartType('parentalStatus', this.value)" class="chart-type-select" title="Chart Type">
+                                        <select id="parentalStatusChartType" onchange="changeChartType('parentalStatus', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type: Choose how to visualize parental status distribution - Doughnut, Pie, Bar, or Polar Area chart.">
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
                                             <option value="bar">📊</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
-                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Parental Status')" title="CSV">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Parental Status')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Parental Status')" title="Add to Deck">➕</button></span>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('demographic', 'Parental Status')" data-tooltip="Export CSV: Download parental status demographic data as a CSV file.">CSV</button><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Parental Status')" data-tooltip="Export PNG: Download the parental status chart as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('demographic', 'Parental Status')" data-tooltip="Add to Deck: Save this parental status chart to your presentation deck.">➕</button></span>
                                     </div>
                                 </h3>
                                 <div class="chart-container"><canvas id="parentalStatusChart"></canvas></div>
@@ -7615,7 +7615,7 @@
             <div id="tab-behavioral" class="tab-content">
                 <div class="tab-header">
                     <h2>📈 Behavioral</h2>
-                    <p class="section-description">What your audience does, watches, buys, and engages with.</p>
+                    <p class="section-description has-tooltip" data-tooltip="Behavioral Analysis: This section shows what your audience actually does - what they watch, buy, use, and engage with. Each item shows your audience's percentage, Gen Pop percentage, and an index score. Index > 1.0x means they're more likely than average to engage.">What your audience does, watches, buys, and engages with.</p>
                 </div>
                 <div class="metric-legend" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem; background: rgba(90, 154, 217, 0.1); border-radius: 8px; font-size: 0.75rem;">
                     <span class="has-tooltip" data-tooltip="The percentage of this specific audience that engages with each item."><strong style="color: var(--accent-blue);">Profile %</strong> — Audience penetration</span>
@@ -7671,10 +7671,10 @@
                 
                 <!-- Category Reorder Controls -->
                 <div class="behavioral-controls">
-                    <select id="categoryReorderSelect" onchange="moveCategoryToTop(this.value)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                    <select id="categoryReorderSelect" onchange="moveCategoryToTop(this.value)" class="has-tooltip" data-tooltip="Move Category to Top: Select a behavioral category to move it to the top of the list for easier viewing." style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                         <option value="">📌 Move to top...</option>
                     </select>
-                    <button class="btn btn-small btn-secondary" onclick="resetCategoryOrder()" style="padding: 0.3rem 0.5rem; font-size: 0.7rem;">↻</button>
+                    <button class="btn btn-small btn-secondary has-tooltip" data-tooltip="Reset Category Order: Restore the default category order if you've moved any categories to the top." onclick="resetCategoryOrder()" style="padding: 0.3rem 0.5rem; font-size: 0.7rem;">↻</button>
                 </div>
                 
                 <div class="behavioral-grid" id="behavioralGrid"></div>
@@ -7684,7 +7684,7 @@
             <div id="tab-interests" class="tab-content">
                 <div class="tab-header">
                     <h2>💡 Interests</h2>
-                    <p class="section-description">What your audience is passionate about. <span style="color: #10b981;">1.0x+ = over-indexes</span> | <span style="color: #ef4444;">&lt;1.0x = under-indexes</span>.</p>
+                    <p class="section-description has-tooltip" data-tooltip="Interests Overview: This section shows what your audience is passionate about across different interest categories. Index 1.0x+ means they over-index (more interested than average). Index < 1.0x means they under-index (less interested than average).">What your audience is passionate about. <span style="color: #10b981;">1.0x+ = over-indexes</span> | <span style="color: #ef4444;">&lt;1.0x = under-indexes</span>.</p>
                 </div>
                 <!-- Interests Insights Summary -->
                 <div class="interests-insights-row" id="interestsInsightsRow">
@@ -7727,8 +7727,8 @@
                     <h3 style="display: flex; justify-content: space-between; align-items: center;">
                         🗺️ Interest Category Heatmap
                         <span class="module-action-btns">
-                            <button class="module-btn csv-btn" onclick="exportModuleCSV('interests', 'Category Heatmap')" title="CSV">CSV</button>
-                            <button class="module-btn deck-btn" onclick="addModuleToDeck('interests', 'Category Heatmap')" title="Add to Deck">➕</button>
+                            <button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('interests', 'Category Heatmap')" data-tooltip="Export CSV: Download the interest category heatmap data as a CSV file.">CSV</button>
+                            <button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('interests', 'Category Heatmap')" data-tooltip="Add to Deck: Save the interest category heatmap to your presentation deck.">➕</button>
                         </span>
                     </h3>
                     <div class="heatmap-legend" style="margin-bottom: 0.75rem;">
@@ -7760,8 +7760,8 @@
                     <div class="interests-header">
                         <h3>📋 All Interests</h3>
                         <div class="interests-filter">
-                            <input type="text" id="interestsSearchInput" placeholder="🔍 Search interests..." oninput="filterInterests()" style="padding: 0.5rem 1rem; font-size: 0.85rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); width: 250px;">
-                            <select id="interestsSortSelect" onchange="sortInterests(this.value)" style="padding: 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                            <input type="text" id="interestsSearchInput" placeholder="🔍 Search interests..." class="has-tooltip" data-tooltip="Search Interests: Type to filter the interests list by name. Results update as you type." oninput="filterInterests()" style="padding: 0.5rem 1rem; font-size: 0.85rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); width: 250px;">
+                            <select id="interestsSortSelect" onchange="sortInterests(this.value)" class="has-tooltip" data-tooltip="Sort Interests: Index ↓ = highest index first, % ↓ = highest percentage first, A-Z = alphabetical order." style="padding: 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                                 <option value="index">Sort: Index ↓</option>
                                 <option value="pct">Sort: % ↓</option>
                                 <option value="alpha">Sort: A-Z</option>
@@ -7778,19 +7778,19 @@
             <div id="tab-location" class="tab-content">
                 <div class="location-header">
                     <h2>📍 Geographic Distribution</h2>
-                    <p class="section-description">Where your audience lives. Darker = higher concentration. <span style="color: #10b981;">1.0x+ = over-indexes</span> | <span style="color: #ef4444;">&lt;1.0x = under-indexes</span>.</p>
+                    <p class="section-description has-tooltip" data-tooltip="Geographic Distribution: This section shows where your audience is concentrated geographically. Darker colors on the heat map indicate higher concentration. Index 1.0x+ means the market over-indexes (more of your audience than average). Index < 1.0x means under-indexes (less than average).">Where your audience lives. Darker = higher concentration. <span style="color: #10b981;">1.0x+ = over-indexes</span> | <span style="color: #ef4444;">&lt;1.0x = under-indexes</span>.</p>
                     <div class="location-stats" id="locationStats"></div>
                 </div>
                 
                 <!-- Regional Breakdown - at top for quick overview -->
                 <div class="regional-breakdown location-section">
-                    <h3 style="display: flex; justify-content: space-between; align-items: center;">📊 Regional Breakdown <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('location', 'Regional Breakdown')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'Regional Breakdown')" title="Add to Deck">➕</button></span></h3>
+                    <h3 style="display: flex; justify-content: space-between; align-items: center;">📊 Regional Breakdown <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('location', 'Regional Breakdown')" data-tooltip="Export CSV: Download regional breakdown data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('location', 'Regional Breakdown')" data-tooltip="Add to Deck: Save the regional breakdown to your presentation deck.">➕</button></span></h3>
                     <div id="regionalBreakdown" class="regional-grid"></div>
                 </div>
                 
                 <!-- US Heat Map -->
                 <div class="heatmap-container location-section">
-                    <h3 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">🗺️ Heat Map <span class="module-action-btns"><button class="module-btn png-btn" onclick="exportModulePNG('location', 'Heat Map')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'Heat Map')" title="Add to Deck">➕</button></span></h3>
+                    <h3 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">🗺️ Heat Map <span class="module-action-btns"><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('location', 'Heat Map')" data-tooltip="Export PNG: Download the geographic heat map as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('location', 'Heat Map')" data-tooltip="Add to Deck: Save the heat map to your presentation deck.">➕</button></span></h3>
                     <div class="heatmap-legend">
                         <span class="legend-label">Low</span>
                         <div class="legend-gradient"></div>
@@ -7803,7 +7803,7 @@
                     <div class="location-table location-section" style="flex: 1;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
                             <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;" class="has-tooltip" data-tooltip="Over-Indexing DMAs: Markets where your audience is more concentrated than Gen Pop. Index ≥1.0x means equal to or higher concentration. Target these for media buys and activations.">🔥 Over-Indexing DMAs (≥1.0x) <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('location', 'Over-Indexing DMAs')">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'Over-Indexing DMAs')">➕</button></span></h3>
-                            <input type="text" id="locationSearchTop" placeholder="🔍 Search DMAs..." oninput="filterLocationList('top')" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; width: 150px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                            <input type="text" id="locationSearchTop" placeholder="🔍 Search DMAs..." class="has-tooltip" data-tooltip="Search Over-Indexing DMAs: Type to filter the list of markets where your audience over-indexes. Results update as you type." oninput="filterLocationList('top')" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; width: 150px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                         </div>
                         <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
                         <div id="locationList" style="max-height: 500px; overflow-y: auto;"></div>
@@ -7812,7 +7812,7 @@
                     <div class="location-table location-section" style="flex: 1;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
                             <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;" class="has-tooltip" data-tooltip="Under-Indexing DMAs: Markets where your audience is less concentrated than Gen Pop. Index <1.0x means lower concentration. Consider reducing spend or using different messaging in these areas.">❄️ Under-Indexing DMAs (&lt;1.0x) <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('location', 'Under-Indexing DMAs')">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'Under-Indexing DMAs')">➕</button></span></h3>
-                            <input type="text" id="locationSearchBottom" placeholder="🔍 Search DMAs..." oninput="filterLocationList('bottom')" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; width: 150px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                            <input type="text" id="locationSearchBottom" placeholder="🔍 Search DMAs..." class="has-tooltip" data-tooltip="Search Under-Indexing DMAs: Type to filter the list of markets where your audience under-indexes. Results update as you type." oninput="filterLocationList('bottom')" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; width: 150px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                         </div>
                         <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
                         <div id="locationListBottom" style="max-height: 500px; overflow-y: auto;"></div>
@@ -7823,8 +7823,8 @@
                 <!-- All Locations by Percentage -->
                 <div class="location-table location-section" style="margin-top: 1rem;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
-                        <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">📊 All Locations by Percentage <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('location', 'All Locations')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'All Locations')" title="Add to Deck">➕</button></span></h3>
-                        <input type="text" id="locationSearchAll" placeholder="🔍 Search DMAs..." oninput="filterAllLocations()" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); width: 200px;">
+                        <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">📊 All Locations by Percentage <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('location', 'All Locations')" data-tooltip="Export CSV: Download all location data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('location', 'All Locations')" data-tooltip="Add to Deck: Save all locations data to your presentation deck.">➕</button></span></h3>
+                        <input type="text" id="locationSearchAll" placeholder="🔍 Search DMAs..." class="has-tooltip" data-tooltip="Search All Locations: Type to filter the complete list of all DMAs by name. Results update as you type." oninput="filterAllLocations()" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); width: 200px;">
                     </div>
                     <div class="location-row header"><span>#</span><span>Location</span><span>Percentage</span><span>Index</span></div>
                     <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
@@ -7837,7 +7837,7 @@
                 <div class="affinity-container">
                     <div class="tab-header">
                         <h2>🔗 Audience Affinity Map</h2>
-                        <p class="section-description">Discover brands, shows, and talent that share audiences. <span style="color: #fbbf24;">100-199 = moderate</span> | <span style="color: #10b981;">200-499 = strong</span> | <span style="color: #10b981; font-weight: bold;">500+ = exceptional</span>.</p>
+                        <p class="section-description has-tooltip" data-tooltip="Audience Affinity Map: This section shows brands, shows, and talent that share audiences with your profile. Affinity scores: 100-199 = moderate overlap, 200-499 = strong overlap, 500+ = exceptional overlap. Higher scores indicate better partnership opportunities.">Discover brands, shows, and talent that share audiences. <span style="color: #fbbf24;">100-199 = moderate</span> | <span style="color: #10b981;">200-499 = strong</span> | <span style="color: #10b981; font-weight: bold;">500+ = exceptional</span>.</p>
                     </div>
                     
                     <!-- Affinity Insights Summary -->
@@ -7879,7 +7879,7 @@
                     
                     <div class="affinity-grid">
                         <div class="affinity-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Content & Entertainment: Shows, movies, streaming services, and entertainment content this audience engages with significantly more than the general population. Higher index = stronger affinity.">🎬 Content & Entertainment</span> <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Content & Entertainment')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Content & Entertainment')" title="Add to Deck">➕</button></span></h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Content & Entertainment: Shows, movies, streaming services, and entertainment content this audience engages with significantly more than the general population. Higher index = stronger affinity.">🎬 Content & Entertainment</span> <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Content & Entertainment')" data-tooltip="Export CSV: Download content & entertainment affinity data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Content & Entertainment')" data-tooltip="Add to Deck: Save content & entertainment affinities to your presentation deck.">➕</button></span></h3>
                             <p class="affinity-desc">Shows, movies, and streaming platforms this audience loves</p>
                             <div class="affinity-col-header">
                                 <span class="has-tooltip" data-tooltip="Item: The content, show, or platform name.">Item</span>
@@ -7889,7 +7889,7 @@
                         </div>
                         
                         <div class="affinity-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Brand Affinities: Consumer brands this audience over-indexes for based on purchase behavior and engagement. Great for identifying sponsorship and partnership opportunities.">🛍️ Brand Affinities</span> <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Brand Affinities')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Brand Affinities')" title="Add to Deck">➕</button></span></h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Brand Affinities: Consumer brands this audience over-indexes for based on purchase behavior and engagement. Great for identifying sponsorship and partnership opportunities.">🛍️ Brand Affinities</span> <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Brand Affinities')" data-tooltip="Export CSV: Download brand affinity data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Brand Affinities')" data-tooltip="Add to Deck: Save brand affinities to your presentation deck.">➕</button></span></h3>
                             <p class="affinity-desc">Brands this audience over-indexes for</p>
                             <div class="affinity-col-header">
                                 <span class="has-tooltip" data-tooltip="Brand: The brand or company name.">Brand</span>
@@ -7899,7 +7899,7 @@
                         </div>
                         
                         <div class="affinity-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Digital Platforms: Social media, apps, streaming services, and digital platforms this audience uses more than the general population. Useful for digital media planning and targeting.">📱 Digital Platforms</span> <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Digital Platforms')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Digital Platforms')" title="Add to Deck">➕</button></span></h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Digital Platforms: Social media, apps, streaming services, and digital platforms this audience uses more than the general population. Useful for digital media planning and targeting.">📱 Digital Platforms</span> <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Digital Platforms')" data-tooltip="Export CSV: Download digital platform affinity data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Digital Platforms')" data-tooltip="Add to Deck: Save digital platform affinities to your presentation deck.">➕</button></span></h3>
                             <p class="affinity-desc">Apps, websites, and social platforms they use</p>
                             <div class="affinity-col-header">
                                 <span class="has-tooltip" data-tooltip="Platform: The app, website, or social platform.">Platform</span>
@@ -7909,7 +7909,7 @@
                         </div>
                         
                         <div class="affinity-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Music & Audio: Music streaming services, genres, artists, and podcast preferences. Shows audio content affinities for media planning and sponsorship opportunities.">🎵 Music & Audio</span> <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Music & Audio')" title="CSV">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Music & Audio')" title="Add to Deck">➕</button></span></h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Music & Audio: Music streaming services, genres, artists, and podcast preferences. Shows audio content affinities for media planning and sponsorship opportunities.">🎵 Music & Audio</span> <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Music & Audio')" data-tooltip="Export CSV: Download music & audio affinity data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Music & Audio')" data-tooltip="Add to Deck: Save music & audio affinities to your presentation deck.">➕</button></span></h3>
                             <p class="affinity-desc">Music genres, artists, and podcasts</p>
                             <div class="affinity-col-header">
                                 <span class="has-tooltip" data-tooltip="Artist/Service: The artist, genre, or music streaming service.">Artist/Service</span>
@@ -7919,7 +7919,7 @@
                         </div>
                         
                         <div class="affinity-card wide">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Affinity Network: Interactive visualization showing the strongest connections for this audience. Click nodes to see details. Filter by category. Node size = index strength.">🌐 Affinity Network</span> <span class="module-action-btns"><button class="module-btn png-btn" onclick="exportModulePNG('affinity', 'Affinity Network')" title="PNG">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Affinity Network')" title="Add to Deck">➕</button></span></h3>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Affinity Network: Interactive visualization showing the strongest connections for this audience. Click nodes to see details. Filter by category. Node size = index strength.">🌐 Affinity Network</span> <span class="module-action-btns"><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('affinity', 'Affinity Network')" data-tooltip="Export PNG: Download the affinity network visualization as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Affinity Network')" data-tooltip="Add to Deck: Save the affinity network to your presentation deck.">➕</button></span></h3>
                             <div class="affinity-network-container">
                                 <div class="affinity-network-controls" id="networkFilterControls">
                                     <span style="font-size: 0.7rem; color: var(--text-secondary);">Filter:</span>
@@ -8122,7 +8122,7 @@
                 <div class="media-container">
                     <div class="tab-header">
                         <h2>📺 Media Channel Optimizer</h2>
-                        <p class="section-description">Find the best channels and platforms to reach this audience. <span style="color: #10b981;">Higher index = better reach efficiency</span>.</p>
+                        <p class="section-description has-tooltip" data-tooltip="Media Channel Optimizer: This section helps you find the best media channels and platforms to reach this audience. Higher index scores indicate better reach efficiency - meaning you'll reach more of your target audience per dollar spent compared to Gen Pop.">Find the best channels and platforms to reach this audience. <span style="color: #10b981;">Higher index = better reach efficiency</span>.</p>
                     </div>
                     
                     <!-- Channel Reach Analysis - FIRST -->
@@ -8386,7 +8386,7 @@
                 <div class="insights-container">
                     <div class="tab-header">
                         <h2>🔬 Deep Insights</h2>
-                        <p class="section-description">Deep-dive analysis across behavioral patterns, media consumption, and activation opportunities.</p>
+                        <p class="section-description has-tooltip" data-tooltip="Deep Insights: This section provides comprehensive analysis across behavioral patterns, media consumption habits, and activation opportunities. Use the sub-tabs to explore different aspects of the audience analysis.">Deep-dive analysis across behavioral patterns, media consumption, and activation opportunities.</p>
                     </div>
                     <!-- Insights Sub-tabs -->
                     <div class="insights-tabs">
@@ -15540,9 +15540,9 @@
                             </span>
                             <span style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0;">
                                 <span class="module-action-btns">
-                                    <button class="module-btn csv-btn" onclick="event.stopPropagation(); exportModuleCSV('behavioral', '${cat}')" title="CSV">CSV</button>
-                                    <button class="module-btn png-btn" onclick="event.stopPropagation(); exportModulePNG('behavioral', '${cat}')" title="PNG">PNG</button>
-                                    <button class="module-btn deck-btn" onclick="event.stopPropagation(); addModuleToDeck('behavioral', '${cat}')" title="Add to Deck">➕</button>
+                                    <button class="module-btn csv-btn has-tooltip" onclick="event.stopPropagation(); exportModuleCSV('behavioral', '${cat}')" data-tooltip="Export CSV: Download this behavioral category data as a CSV file.">CSV</button>
+                                    <button class="module-btn png-btn has-tooltip" onclick="event.stopPropagation(); exportModulePNG('behavioral', '${cat}')" data-tooltip="Export PNG: Download this behavioral category chart as a PNG image.">PNG</button>
+                                    <button class="module-btn deck-btn has-tooltip" onclick="event.stopPropagation(); addModuleToDeck('behavioral', '${cat}')" data-tooltip="Add to Deck: Save this behavioral category to your presentation deck.">➕</button>
                                 </span>
                                 <span class="count">${items.length}</span>
                             </span>
