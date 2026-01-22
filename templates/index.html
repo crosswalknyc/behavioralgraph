@@ -9335,14 +9335,13 @@
             if (!tooltip) return;
             
             let hideTimeout = null;
+            let currentTarget = null;
             
-            // Use event delegation for all .has-tooltip elements
-            document.addEventListener('mouseenter', function(e) {
-                if (!e.target || typeof e.target.closest !== 'function') return;
-                const target = e.target.closest('.has-tooltip');
+            // Show tooltip function
+            function showTooltip(target) {
                 if (!target) return;
                 
-                // Check if hover is disabled globally (Profile IQ uses body.hover-disabled)
+                // Check if hover is disabled globally
                 if (document.body.classList.contains('hover-disabled')) {
                     return;
                 }
@@ -9350,7 +9349,6 @@
                 // Check if this is in Subscriber IQ view and hover is disabled
                 const subscriberView = document.getElementById('subscriberIQView');
                 if (subscriberView && window.getComputedStyle(subscriberView).display !== 'none') {
-                    // Check if subscriberHoverEnabled is defined and false
                     if (typeof subscriberHoverEnabled !== 'undefined' && !subscriberHoverEnabled) {
                         return;
                     }
@@ -9359,26 +9357,16 @@
                 const text = target.getAttribute('data-tooltip');
                 if (!text) return;
                 
+                currentTarget = target;
                 clearTimeout(hideTimeout);
                 
                 // Set content first
                 tooltip.textContent = text;
                 tooltip.classList.remove('below', 'visible');
                 
-                // Temporarily show tooltip off-screen to measure its height
-                tooltip.style.left = '-9999px';
-                tooltip.style.top = '-9999px';
-                tooltip.style.visibility = 'hidden';
-                tooltip.style.opacity = '0';
-                tooltip.style.display = 'block';
-                
-                // Force reflow to get accurate dimensions
-                const tooltipWidth = Math.min(300, window.innerWidth - 20);
-                tooltip.style.width = tooltipWidth + 'px';
-                const tooltipHeight = tooltip.offsetHeight;
-                
                 // Get element position
                 const rect = target.getBoundingClientRect();
+                const tooltipWidth = 300;
                 
                 // Calculate horizontal position (center on element, but keep in viewport)
                 let left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
@@ -9387,48 +9375,66 @@
                     left = window.innerWidth - tooltipWidth - 10;
                 }
                 
-                // Calculate vertical position (prefer above, but show below if no room)
-                let top = rect.top - tooltipHeight - 12;
+                // Calculate vertical position (prefer above)
+                let top = rect.top - 80;
                 let showBelow = false;
                 
                 if (top < 10) {
                     // Not enough room above, show below
-                    top = rect.bottom + 12;
+                    top = rect.bottom + 10;
                     showBelow = true;
                 }
                 
-                // Make sure tooltip doesn't go off bottom of screen either
-                if (top + tooltipHeight > window.innerHeight - 10) {
-                    top = window.innerHeight - tooltipHeight - 10;
+                // Make sure tooltip doesn't go off bottom of screen
+                if (top > window.innerHeight - 100) {
+                    top = window.innerHeight - 100;
                 }
                 
-                // Apply final position
-                tooltip.style.left = left + 'px';
-                tooltip.style.top = top + 'px';
-                tooltip.style.visibility = '';
-                tooltip.style.opacity = '';
-                tooltip.style.display = '';
+                // Apply position and show
+                tooltip.style.cssText = `
+                    position: fixed;
+                    left: ${left}px;
+                    top: ${top}px;
+                    width: ${tooltipWidth}px;
+                    opacity: 1;
+                    visibility: visible;
+                    z-index: 2147483647;
+                `;
                 
                 if (showBelow) {
                     tooltip.classList.add('below');
                 }
-                
-                // Small delay before showing for smooth animation
-                requestAnimationFrame(() => {
-                    tooltip.classList.add('visible');
-                });
-                
-            }, true);
+                tooltip.classList.add('visible');
+            }
             
-            document.addEventListener('mouseleave', function(e) {
-                if (!e.target || typeof e.target.closest !== 'function') return;
-                const target = e.target.closest('.has-tooltip');
-                if (!target) return;
-                
+            // Hide tooltip function
+            function hideTooltip() {
                 hideTimeout = setTimeout(() => {
                     tooltip.classList.remove('visible');
-                }, 100);
-            }, true);
+                    tooltip.style.opacity = '0';
+                    tooltip.style.visibility = 'hidden';
+                    currentTarget = null;
+                }, 150);
+            }
+            
+            // Use mouseover/mouseout for better event delegation
+            document.body.addEventListener('mouseover', function(e) {
+                const target = e.target.closest('.has-tooltip');
+                if (target && target !== currentTarget) {
+                    showTooltip(target);
+                }
+            });
+            
+            document.body.addEventListener('mouseout', function(e) {
+                const target = e.target.closest('.has-tooltip');
+                if (target) {
+                    const relatedTarget = e.relatedTarget;
+                    // Check if we're moving to another part of the same tooltip element
+                    if (!relatedTarget || !target.contains(relatedTarget)) {
+                        hideTooltip();
+                    }
+                }
+            });
         }
 
         function formatDate(date) { return date.toISOString().split('T')[0]; }
