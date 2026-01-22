@@ -8452,6 +8452,12 @@
                             <!-- Demographic Highlights -->
                             <div class="insight-card-v2">
                                 <h3 class="has-tooltip" data-tooltip="Demographic Highlights: Shows which demographic segments (age, gender, income, etc.) significantly over-index (>110) or under-index (<80) compared to Gen Pop. Helps identify who your core audience is.">👥 Demographic Highlights</h3>
+                                <div class="differentiator-header" style="margin-bottom: 0.5rem;">
+                                    <span class="diff-col-name">Segment</span>
+                                    <span class="diff-col-pct has-tooltip" data-tooltip="Profile %: The percentage of THIS audience in this demographic segment.">Profile %</span>
+                                    <span class="diff-col-gp has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population in this demographic segment.">Gen Pop %</span>
+                                    <span class="diff-col-index has-tooltip" data-tooltip="Index: How much more/less likely this segment is vs Gen Pop. 100 = same as Gen Pop. Green = over-indexes, Red = under-indexes.">Index</span>
+                                </div>
                                 <div id="demoHighlights" class="highlight-list"></div>
                             </div>
                             
@@ -8511,12 +8517,28 @@
                             <div class="insight-card-v2">
                                 <h3 class="has-tooltip" data-tooltip="Hidden Gems: High-indexing items (130+) in niche or emerging categories that may have lower audience reach (<5%). Great for targeted activations with less competitive clutter.">💎 Hidden Gems</h3>
                                 <p class="card-desc">High-index items with lower competition</p>
+                                <div class="insight-list-header">
+                                    <span class="col-rank">#</span>
+                                    <span class="col-name">Item</span>
+                                    <span class="col-cat">Category</span>
+                                    <span class="col-pct has-tooltip" data-tooltip="Profile %: Percentage of this audience that engages.">Profile</span>
+                                    <span class="col-gp has-tooltip" data-tooltip="Gen Pop %: Percentage of general population that engages.">GP</span>
+                                    <span class="col-idx has-tooltip" data-tooltip="Index: Over/under-index vs Gen Pop. 2.0x = twice as likely.">Index</span>
+                                </div>
                                 <div id="hiddenGems" class="insight-list-v2"></div>
                             </div>
                             
                             <div class="insight-card-v2">
                                 <h3 class="has-tooltip" data-tooltip="Rising Behaviors: Items in categories like podcasts, emerging platforms, and gaming that show strong indexing. Indicates where this audience is leaning into newer/growing media behaviors.">⚡ Rising Behaviors</h3>
                                 <p class="card-desc">Emerging categories with strong indexing</p>
+                                <div class="insight-list-header">
+                                    <span class="col-rank">#</span>
+                                    <span class="col-name">Item</span>
+                                    <span class="col-cat">Category</span>
+                                    <span class="col-pct has-tooltip" data-tooltip="Profile %: Percentage of this audience that engages.">Profile</span>
+                                    <span class="col-gp has-tooltip" data-tooltip="Gen Pop %: Percentage of general population that engages.">GP</span>
+                                    <span class="col-idx has-tooltip" data-tooltip="Index: Over/under-index vs Gen Pop. 2.0x = twice as likely.">Index</span>
+                                </div>
                                 <div id="risingBehaviors" class="insight-list-v2"></div>
                             </div>
                         </div>
@@ -8569,6 +8591,13 @@
                             
                             <div class="insight-card-v2">
                                 <h3>🛒 Shopping & Retail</h3>
+                                <div class="insight-list-header">
+                                    <span class="col-rank">#</span>
+                                    <span class="col-name">Item</span>
+                                    <span class="col-pct has-tooltip" data-tooltip="Profile %: Percentage of this audience that engages.">Profile</span>
+                                    <span class="col-gp has-tooltip" data-tooltip="Gen Pop %: Percentage of general population that engages.">GP</span>
+                                    <span class="col-idx has-tooltip" data-tooltip="Index: Over/under-index vs Gen Pop. 2.0x = twice as likely.">Index</span>
+                                </div>
                                 <div id="shoppingAffinity" class="insight-list-v2"></div>
                             </div>
                             
@@ -17846,23 +17875,50 @@
             
             // Demographic highlights - top over/under indexing demographics
             const demoHighlights = [];
-            if (data.demographicsIndex) {
+            if (data.demographicsIndex && data.demographics && data.demographicsGenPop) {
                 Object.entries(data.demographicsIndex).forEach(([cat, values]) => {
                     Object.entries(values).forEach(([val, idx]) => {
-                        if (idx > 110) demoHighlights.push({ label: `${cat}: ${val}`, value: idx, type: 'over' });
-                        else if (idx < 80) demoHighlights.push({ label: `${cat}: ${val}`, value: idx, type: 'under' });
+                        const profilePct = data.demographics[cat.toLowerCase()]?.[val] || 0;
+                        const genPopPct = data.demographicsGenPop[cat.toLowerCase()]?.[val] || 0;
+                        const projection = data.demographicsProjection?.[cat.toLowerCase()]?.[val] || 0;
+                        
+                        if (idx > 110 || idx < 80) {
+                            demoHighlights.push({ 
+                                category: cat, 
+                                value: val, 
+                                label: `${cat}: ${val}`, 
+                                index: idx, 
+                                profilePct: profilePct,
+                                genPopPct: genPopPct,
+                                projection: projection,
+                                type: idx > 110 ? 'over' : 'under' 
+                            });
+                        }
                     });
                 });
             }
+            const US_POP_DEMO = 324700000;
+            const isProjectionDemo = dashDisplayMode === 'projection';
             document.getElementById('demoHighlights').innerHTML = demoHighlights
-                .sort((a,b) => b.value - a.value)
+                .sort((a,b) => Math.abs(b.index - 100) - Math.abs(a.index - 100))
                 .slice(0, 6)
-                .map(h => `
-                    <div class="highlight-item">
-                        <span class="label">${h.label}</span>
-                        <span class="value ${h.type === 'under' ? 'under' : ''}">${h.value} index</span>
+                .map(h => {
+                    const profileDisplay = isProjectionDemo 
+                        ? formatNumber(Math.round((h.profilePct / 100) * (data.sampleSize || 0)))
+                        : h.profilePct.toFixed(1) + '%';
+                    const genPopDisplay = isProjectionDemo 
+                        ? formatNumber(Math.round((h.genPopPct / 100) * US_POP_DEMO))
+                        : h.genPopPct.toFixed(1) + '%';
+                    const indexClass = h.index >= 100 ? 'high' : 'low';
+                    return `
+                    <div class="highlight-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
+                        <span class="label" style="flex: 1; font-size: 0.85rem;">${h.value}</span>
+                        <span class="diff-col-pct" style="min-width: 80px; text-align: right; font-size: 0.85rem;">${profileDisplay}</span>
+                        <span class="diff-col-gp" style="min-width: 80px; text-align: right; font-size: 0.85rem; color: var(--text-secondary);">${genPopDisplay}</span>
+                        <span class="differentiator-index ${indexClass}" style="min-width: 70px; text-align: right;">${formatIndex(h.index)}</span>
                     </div>
-                `).join('') || '<p style="color: var(--text-secondary);">No significant demographic differences</p>';
+                `;
+                }).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No significant demographic differences</p>';
             
             // Top differentiators - get top item from EACH category for diverse mix
             const topByCategory = {};
@@ -17957,23 +18013,45 @@
                 `;
             }).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No under-indexing items</p>';
             
-            // Category champions
+            // Category champions - show Profile %, Gen Pop %, and Index
             const categoryChampions = {};
             allItems.forEach(item => {
                 if (!categoryChampions[item.category] || item.index > categoryChampions[item.category].index) {
                     categoryChampions[item.category] = item;
                 }
             });
+            const US_POP_CHAMP = 324700000;
+            const isProjectionChamp = dashDisplayMode === 'projection';
             document.getElementById('categoryChampions').innerHTML = Object.entries(categoryChampions)
                 .sort((a, b) => b[1].index - a[1].index)
                 .slice(0, 24)
-                .map(([cat, item]) => `
+                .map(([cat, item]) => {
+                    const profilePct = item.pct || 0;
+                    const genPopPct = item.genPopPct || 0;
+                    const profileDisplay = isProjectionChamp 
+                        ? formatNumber(Math.round((profilePct / 100) * US_POP_CHAMP))
+                        : profilePct.toFixed(1) + '%';
+                    const genPopDisplay = isProjectionChamp 
+                        ? formatNumber(Math.round((genPopPct / 100) * US_POP_CHAMP))
+                        : genPopPct.toFixed(1) + '%';
+                    return `
                     <div class="champion-item">
                         <div class="champion-category">${cat}</div>
                         <div class="champion-name" title="${item.name}">${item.name}</div>
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; margin-top: 0.5rem;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: var(--text-secondary);">Profile:</span>
+                                <span style="font-weight: 600;">${profileDisplay}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: var(--text-secondary);">Gen Pop:</span>
+                                <span>${genPopDisplay}</span>
+                            </div>
+                        </div>
                         <div class="champion-index">${formatIndex(item.index)}</div>
                     </div>
-                `).join('');
+                `;
+                }).join('');
             
             // Hidden gems - high index but lower visibility categories
             const nicheCategories = ['PODCAST', 'GAMING', 'EMERGING', 'NICHE', 'LOCAL'];
@@ -17981,13 +18059,27 @@
                 .filter(i => i.index > 130 && (i.pct < 5 || nicheCategories.some(n => i.category.toUpperCase().includes(n))))
                 .sort((a, b) => b.index - a.index)
                 .slice(0, 12);
-            document.getElementById('hiddenGems').innerHTML = hiddenGems.map((item, i) => `
+            const US_POP_HIDDEN = 324700000;
+            const isProjectionHidden = dashDisplayMode === 'projection';
+            document.getElementById('hiddenGems').innerHTML = hiddenGems.map((item, i) => {
+                const profilePct = item.pct || 0;
+                const genPopPct = item.genPopPct || 0;
+                const profileDisplay = isProjectionHidden 
+                    ? formatNumber(Math.round((profilePct / 100) * US_POP_HIDDEN))
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjectionHidden 
+                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_HIDDEN))
+                    : genPopPct.toFixed(1) + '%';
+                return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
                     <span class="name">${item.name} <span class="category-tag">${item.category}</span></span>
+                    <span class="item-pct">${profileDisplay}</span>
+                    <span class="item-gp">${genPopDisplay}</span>
                     <span class="index-badge high">${formatIndex(item.index)}</span>
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No hidden gems found</p>';
+            `;
+            }).join('') || '<p style="color: var(--text-secondary);">No hidden gems found</p>';
             
             // Rising behaviors (emerging categories)
             const emergingCats = ['STREAMING', 'APP', 'SOCIAL', 'GAMING', 'CRYPTO', 'WELLNESS'];
@@ -17995,14 +18087,28 @@
                 .filter(i => i.index > 110 && emergingCats.some(e => i.category.toUpperCase().includes(e)))
                 .sort((a, b) => b.index - a.index)
                 .slice(0, 12);
-            document.getElementById('risingBehaviors').innerHTML = risingBehaviors.map((item, i) => `
+            const US_POP_RISING = 324700000;
+            const isProjectionRising = dashDisplayMode === 'projection';
+            document.getElementById('risingBehaviors').innerHTML = risingBehaviors.map((item, i) => {
+                const profilePct = item.pct || 0;
+                const genPopPct = item.genPopPct || 0;
+                const profileDisplay = isProjectionRising 
+                    ? formatNumber(Math.round((profilePct / 100) * US_POP_RISING))
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjectionRising 
+                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_RISING))
+                    : genPopPct.toFixed(1) + '%';
+                return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
                     <span class="name">${item.name}</span>
                     <span class="category-tag">${item.category}</span>
+                    <span class="item-pct">${profileDisplay}</span>
+                    <span class="item-gp">${genPopDisplay}</span>
                     <span class="index-badge high">${formatIndex(item.index)}</span>
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No rising behaviors detected</p>';
+            `;
+            }).join('') || '<p style="color: var(--text-secondary);">No rising behaviors detected</p>';
             
             // ===== MEDIA PATTERNS TAB =====
             
@@ -18087,15 +18193,42 @@
                     return cfg.match.some(m => cat.includes(m));
                 });
                 const avgIdx = catItems.length ? Math.round(catItems.reduce((s,i) => s + i.index, 0) / catItems.length) : 0;
-                return { category: cfg.label, avgIndex: avgIdx, icon: cfg.icon, count: catItems.length };
+                const avgProfilePct = catItems.length ? catItems.reduce((s,i) => s + (i.pct || 0), 0) / catItems.length : 0;
+                const avgGenPopPct = catItems.length ? catItems.reduce((s,i) => s + (i.genPopPct || 0), 0) / catItems.length : 0;
+                return { category: cfg.label, avgIndex: avgIdx, avgProfilePct: avgProfilePct, avgGenPopPct: avgGenPopPct, icon: cfg.icon, count: catItems.length };
             }).filter(m => m.avgIndex > 0 && m.count > 0);
-            document.getElementById('mediaConsumptionSummary').innerHTML = mediaSummary.map(m => `
-                <div class="media-summary-item">
-                    <div class="media-summary-icon">${m.icon}</div>
-                    <div class="media-summary-label">${m.category}</div>
-                    <div class="media-summary-value">${formatIndex(m.avgIndex)}</div>
+            const US_POP_MEDIA = 324700000;
+            const isProjectionMedia = dashDisplayMode === 'projection';
+            document.getElementById('mediaConsumptionSummary').innerHTML = mediaSummary.map(m => {
+                const profileDisplay = isProjectionMedia 
+                    ? formatNumber(Math.round((m.avgProfilePct / 100) * US_POP_MEDIA))
+                    : m.avgProfilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjectionMedia 
+                    ? formatNumber(Math.round((m.avgGenPopPct / 100) * US_POP_MEDIA))
+                    : m.avgGenPopPct.toFixed(1) + '%';
+                return `
+                <div class="media-summary-item" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <div class="media-summary-icon">${m.icon}</div>
+                        <div class="media-summary-label" style="flex: 1;">${m.category}</div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; gap: 0.5rem;">
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            <span style="color: var(--text-secondary); font-size: 0.7rem;">Profile:</span>
+                            <span style="font-weight: 600;">${profileDisplay}</span>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem; text-align: right;">
+                            <span style="color: var(--text-secondary); font-size: 0.7rem;">Gen Pop:</span>
+                            <span>${genPopDisplay}</span>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem; text-align: right;">
+                            <span style="color: var(--text-secondary); font-size: 0.7rem;">Index:</span>
+                            <span class="media-summary-value">${formatIndex(m.avgIndex)}</span>
+                        </div>
+                    </div>
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No media summary available</p>';
+            `;
+            }).join('') || '<p style="color: var(--text-secondary);">No media summary available</p>';
             
             // ===== OPPORTUNITIES TAB =====
             
@@ -18103,39 +18236,85 @@
             const brandItems = allItems.filter(i => 
                 i.category.toUpperCase().includes('BRAND') || i.category.toUpperCase().includes('SHOP') || i.category.toUpperCase().includes('APPAREL')
             ).sort((a, b) => b.index - a.index).slice(0, 10);
-            document.getElementById('brandOpportunities').innerHTML = brandItems.map((item, i) => `
-                <div class="opportunity-item">
+            const US_POP_BRAND = 324700000;
+            const isProjectionBrand = dashDisplayMode === 'projection';
+            document.getElementById('brandOpportunities').innerHTML = brandItems.map((item, i) => {
+                const profilePct = item.pct || 0;
+                const genPopPct = item.genPopPct || 0;
+                const profileDisplay = isProjectionBrand 
+                    ? formatNumber(Math.round((profilePct / 100) * US_POP_BRAND))
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjectionBrand 
+                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_BRAND))
+                    : genPopPct.toFixed(1) + '%';
+                return `
+                <div class="opportunity-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
                     <span class="opportunity-rank">#${i + 1}</span>
-                    <div class="opportunity-content">
+                    <div class="opportunity-content" style="flex: 1;">
                         <div class="opportunity-name">${item.name}</div>
-                        <div class="opportunity-reason">${item.category} • ${item.pct.toFixed(1)}% audience reach</div>
+                        <div class="opportunity-reason" style="font-size: 0.75rem; color: var(--text-secondary);">${item.category}</div>
                     </div>
-                    <span class="opportunity-score">${item.index}</span>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem; text-align: right; font-size: 0.8rem; min-width: 60px;">
+                        <span style="color: var(--text-secondary); font-size: 0.7rem;">Profile:</span>
+                        <span style="font-weight: 600;">${profileDisplay}</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem; text-align: right; font-size: 0.8rem; min-width: 60px;">
+                        <span style="color: var(--text-secondary); font-size: 0.7rem;">Gen Pop:</span>
+                        <span>${genPopDisplay}</span>
+                    </div>
+                    <span class="opportunity-score" style="min-width: 70px; text-align: right;">${formatIndex(item.index)}</span>
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No brand opportunities found</p>';
+            `;
+            }).join('') || '<p style="color: var(--text-secondary);">No brand opportunities found</p>';
             
             // Untapped categories - categories with fewer items but high indexes
             const categoryStats = {};
             allItems.forEach(item => {
-                if (!categoryStats[item.category]) categoryStats[item.category] = { items: [], totalIndex: 0 };
+                if (!categoryStats[item.category]) categoryStats[item.category] = { items: [], totalIndex: 0, totalProfilePct: 0, totalGenPopPct: 0 };
                 categoryStats[item.category].items.push(item);
                 categoryStats[item.category].totalIndex += item.index;
+                categoryStats[item.category].totalProfilePct += (item.pct || 0);
+                categoryStats[item.category].totalGenPopPct += (item.genPopPct || 0);
             });
             const untappedCats = Object.entries(categoryStats)
-                .map(([cat, stats]) => ({ category: cat, avgIndex: Math.round(stats.totalIndex / stats.items.length), count: stats.items.length }))
+                .map(([cat, stats]) => ({ 
+                    category: cat, 
+                    avgIndex: Math.round(stats.totalIndex / stats.items.length), 
+                    avgProfilePct: stats.totalProfilePct / stats.items.length,
+                    avgGenPopPct: stats.totalGenPopPct / stats.items.length,
+                    count: stats.items.length 
+                }))
                 .filter(c => c.avgIndex > 110 && c.count < 20)
                 .sort((a, b) => b.avgIndex - a.avgIndex)
                 .slice(0, 10);
-            document.getElementById('untappedCategories').innerHTML = untappedCats.map((cat, i) => `
-                <div class="opportunity-item">
+            const US_POP_UNTAPPED = 324700000;
+            const isProjectionUntapped = dashDisplayMode === 'projection';
+            document.getElementById('untappedCategories').innerHTML = untappedCats.map((cat, i) => {
+                const profileDisplay = isProjectionUntapped 
+                    ? formatNumber(Math.round((cat.avgProfilePct / 100) * US_POP_UNTAPPED))
+                    : cat.avgProfilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjectionUntapped 
+                    ? formatNumber(Math.round((cat.avgGenPopPct / 100) * US_POP_UNTAPPED))
+                    : cat.avgGenPopPct.toFixed(1) + '%';
+                return `
+                <div class="opportunity-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
                     <span class="opportunity-rank">#${i + 1}</span>
-                    <div class="opportunity-content">
+                    <div class="opportunity-content" style="flex: 1;">
                         <div class="opportunity-name">${cat.category}</div>
-                        <div class="opportunity-reason">${cat.count} items • Niche opportunity</div>
+                        <div class="opportunity-reason" style="font-size: 0.75rem; color: var(--text-secondary);">${cat.count} items • Niche opportunity</div>
                     </div>
-                    <span class="opportunity-score">${formatIndex(cat.avgIndex)}</span>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem; text-align: right; font-size: 0.8rem; min-width: 60px;">
+                        <span style="color: var(--text-secondary); font-size: 0.7rem;">Profile:</span>
+                        <span style="font-weight: 600;">${profileDisplay}</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem; text-align: right; font-size: 0.8rem; min-width: 60px;">
+                        <span style="color: var(--text-secondary); font-size: 0.7rem;">Gen Pop:</span>
+                        <span>${genPopDisplay}</span>
+                    </div>
+                    <span class="opportunity-score" style="min-width: 70px; text-align: right;">${formatIndex(cat.avgIndex)}</span>
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No untapped categories</p>';
+            `;
+            }).join('') || '<p style="color: var(--text-secondary);">No untapped categories</p>';
             
             // Shopping affinity
             const shoppingCategories = ['WHERE THEY SHOP', 'MOST PURCHASED BRANDS', 'MOST PURCHASED CATEGORIES', 'APPAREL', 'BEAUTY'];
@@ -18143,38 +18322,93 @@
                 .filter(i => shoppingCategories.some(sc => i.category.toUpperCase().includes(sc)))
                 .sort((a, b) => b.index - a.index)
                 .slice(0, 12);
-            document.getElementById('shoppingAffinity').innerHTML = shoppingItems.map((item, i) => `
+            const US_POP_SHOP = 324700000;
+            const isProjectionShop = dashDisplayMode === 'projection';
+            document.getElementById('shoppingAffinity').innerHTML = shoppingItems.map((item, i) => {
+                const profilePct = item.pct || 0;
+                const genPopPct = item.genPopPct || 0;
+                const profileDisplay = isProjectionShop 
+                    ? formatNumber(Math.round((profilePct / 100) * US_POP_SHOP))
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjectionShop 
+                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_SHOP))
+                    : genPopPct.toFixed(1) + '%';
+                return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
                     <span class="name">${item.name}</span>
-                    <span class="index-badge ${item.index >= 100 ? 'high' : 'low'}">${item.index}</span>
+                    <span class="item-pct">${profileDisplay}</span>
+                    <span class="item-gp">${genPopDisplay}</span>
+                    <span class="index-badge ${item.index >= 100 ? 'high' : 'low'}">${formatIndex(item.index)}</span>
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No shopping data</p>';
+            `;
+            }).join('') || '<p style="color: var(--text-secondary);">No shopping data</p>';
             
             // Content partnerships
             const contentItems = allItems.filter(i => 
                 i.category.toUpperCase().includes('BROADCAST') || i.category.toUpperCase().includes('SERIES') || i.category.toUpperCase().includes('MOVIE') || i.category.toUpperCase().includes('CHANNEL')
             ).sort((a, b) => b.index - a.index).slice(0, 10);
-            document.getElementById('contentPartnerships').innerHTML = contentItems.map((item, i) => `
-                <div class="opportunity-item">
+            const US_POP_CONTENT = 324700000;
+            const isProjectionContent = dashDisplayMode === 'projection';
+            document.getElementById('contentPartnerships').innerHTML = contentItems.map((item, i) => {
+                const profilePct = item.pct || 0;
+                const genPopPct = item.genPopPct || 0;
+                const profileDisplay = isProjectionContent 
+                    ? formatNumber(Math.round((profilePct / 100) * US_POP_CONTENT))
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjectionContent 
+                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_CONTENT))
+                    : genPopPct.toFixed(1) + '%';
+                return `
+                <div class="opportunity-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
                     <span class="opportunity-rank">#${i + 1}</span>
-                    <div class="opportunity-content">
+                    <div class="opportunity-content" style="flex: 1;">
                         <div class="opportunity-name">${item.name}</div>
-                        <div class="opportunity-reason">${item.category}</div>
+                        <div class="opportunity-reason" style="font-size: 0.75rem; color: var(--text-secondary);">${item.category}</div>
                     </div>
-                    <span class="opportunity-score">${item.index}</span>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem; text-align: right; font-size: 0.8rem; min-width: 60px;">
+                        <span style="color: var(--text-secondary); font-size: 0.7rem;">Profile:</span>
+                        <span style="font-weight: 600;">${profileDisplay}</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem; text-align: right; font-size: 0.8rem; min-width: 60px;">
+                        <span style="color: var(--text-secondary); font-size: 0.7rem;">Gen Pop:</span>
+                        <span>${genPopDisplay}</span>
+                    </div>
+                    <span class="opportunity-score" style="min-width: 70px; text-align: right;">${formatIndex(item.index)}</span>
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No content data</p>';
+            `;
+            }).join('') || '<p style="color: var(--text-secondary);">No content data</p>';
             
             // Geographic opportunities
             const topLocations = (data.locations || []).filter(l => l.index > 100).sort((a, b) => b.index - a.index).slice(0, 10);
-            document.getElementById('geoOpportunities').innerHTML = topLocations.map(loc => `
+            const US_POP_GEO = 324700000;
+            const isProjectionGeo = dashDisplayMode === 'projection';
+            document.getElementById('geoOpportunities').innerHTML = topLocations.map(loc => {
+                const profilePct = loc.pct || 0;
+                const genPopPct = loc.genPopPct || 0;
+                const profileDisplay = isProjectionGeo 
+                    ? formatNumber(Math.round((profilePct / 100) * (data.sampleSize || 0)))
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjectionGeo 
+                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_GEO))
+                    : genPopPct.toFixed(1) + '%';
+                return `
                 <div class="geo-opportunity">
                     <div class="geo-name">${loc.name}</div>
-                    <div class="geo-index">${loc.index}</div>
-                    <div class="geo-pct">${loc.pct.toFixed(1)}%</div>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; margin-top: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-secondary); font-size: 0.7rem;">Profile:</span>
+                            <span style="font-weight: 600;">${profileDisplay}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: var(--text-secondary); font-size: 0.7rem;">Gen Pop:</span>
+                            <span>${genPopDisplay}</span>
+                        </div>
+                    </div>
+                    <div class="geo-index">${formatIndex(loc.index)}</div>
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No geographic data</p>';
+            `;
+            }).join('') || '<p style="color: var(--text-secondary);">No geographic data</p>';
             
             // ===== ACTIVATION TAB =====
             
