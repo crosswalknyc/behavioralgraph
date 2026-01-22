@@ -8428,24 +8428,7 @@
                     <!-- Summary Tab -->
                     <div id="insights-tab-summary" class="insights-tab-content active">
                         <div class="insights-summary-grid">
-                            <!-- Key Statistics (At-a-Glance) - FIRST -->
-                            <div class="insight-card-v2 full-width">
-                                <h3 class="has-tooltip" data-tooltip="At-a-Glance Statistics: Summary metrics including total behavioral items tracked, number of categories, and counts of items where this audience over/under-indexes vs. Gen Pop.">📊 At-a-Glance Statistics</h3>
-                                <div id="keyStatsGrid" class="key-stats-grid"></div>
-                            </div>
-                            
-                            <!-- Audience Snapshot -->
-                            <div class="insight-card-v2 full-width">
-                                <div class="insight-card-header">
-                                    <h3 class="has-tooltip" data-tooltip="Audience Snapshot: Quick demographic overview showing the dominant characteristic in each category. The percentage shows what portion of your audience falls into each segment.">👤 Audience Snapshot</h3>
-                                    <span class="data-quality-badge has-tooltip" id="dataQualityBadge" data-tooltip="Data Quality: Based on sample size. High Confidence (10,000+) = statistically reliable. Moderate (1,000-10,000) = directionally accurate. Low (<1,000) = indicative only.">High Confidence</span>
-                                </div>
-                                <div id="audienceSnapshot" class="audience-snapshot">
-                                    <div class="snapshot-loading">Loading audience profile...</div>
-                                </div>
-                            </div>
-                            
-                            <!-- Key Metrics Row -->
+                            <!-- Key Metrics Row - FIRST -->
                             <div class="metrics-row">
                                 <div class="metric-card has-tooltip" data-tooltip="Sample Size: The number of matched respondents in this audience profile. Larger samples (10,000+) provide higher statistical confidence. Calculated from unique user IDs that match the search criteria.">
                                     <div class="metric-icon">📊</div>
@@ -8477,6 +8460,17 @@
                                 </div>
                             </div>
                             
+                            <!-- Audience Snapshot -->
+                            <div class="insight-card-v2 full-width">
+                                <div class="insight-card-header">
+                                    <h3 class="has-tooltip" data-tooltip="Audience Snapshot: Quick demographic overview showing the dominant characteristic in each category. The percentage shows what portion of your audience falls into each segment.">👤 Audience Snapshot</h3>
+                                    <span class="data-quality-badge has-tooltip" id="dataQualityBadge" data-tooltip="Data Quality: Based on sample size. High Confidence (10,000+) = statistically reliable. Moderate (1,000-10,000) = directionally accurate. Low (<1,000) = indicative only.">High Confidence</span>
+                                </div>
+                                <div id="audienceSnapshot" class="audience-snapshot">
+                                    <div class="snapshot-loading">Loading audience profile...</div>
+                                </div>
+                            </div>
+                            
                             <!-- Demographic Highlights -->
                             <div class="insight-card-v2">
                                 <h3 class="has-tooltip" data-tooltip="Demographic Highlights: Shows which demographic segments (age, gender, income, etc.) significantly over-index (>110) or under-index (<80) compared to Gen Pop. Helps identify who your core audience is.">👥 Demographic Highlights</h3>
@@ -8501,6 +8495,12 @@
                                     <span class="diff-col-index has-tooltip" data-tooltip="Index: How much more/less likely this audience is to engage vs Gen Pop. 2.0x = twice as likely. Green = over-indexes, Red = under-indexes.">Index</span>
                                 </div>
                                 <div id="topDifferentiators" class="differentiator-list"></div>
+                            </div>
+                            
+                            <!-- Key Statistics (At-a-Glance) - LAST -->
+                            <div class="insight-card-v2 full-width">
+                                <h3 class="has-tooltip" data-tooltip="At-a-Glance Statistics: Summary metrics including total behavioral items tracked, number of categories, and counts of items where this audience over/under-indexes vs. Gen Pop.">📊 At-a-Glance Statistics</h3>
+                                <div id="keyStatsGrid" class="key-stats-grid"></div>
                             </div>
                         </div>
                     </div>
