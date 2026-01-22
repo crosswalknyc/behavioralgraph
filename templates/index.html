@@ -7351,7 +7351,6 @@
                 <button class="tab-btn" onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
                 <button class="tab-btn" onclick="showTab('affinity')"><span class="tab-icon">🔗</span><span class="tab-label">AFFINITY</span></button>
                 <button class="tab-btn" onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span></button>
-                <button class="tab-btn" onclick="showTab('talent')"><span class="tab-icon">🤝</span><span class="tab-label">PARTNERSHIP</span></button>
                 <button class="tab-btn" onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">MEDIA</span></button>
                 <button class="tab-btn" onclick="showTab('content')"><span class="tab-icon">🎬</span><span class="tab-label">CONTENT</span></button>
                 <button class="tab-btn" onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span></button>
@@ -8061,60 +8060,55 @@
                             <div id="sponsorMatrix" class="sponsor-matrix"></div>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- Partnership Value Tab -->
-            <div id="tab-talent" class="tab-content">
-                <div class="talent-container">
-                    <div class="talent-header">
-                        <h2>📈 Partnership Value Analysis</h2>
-                        <p>Evaluate this audience's value for brand partnerships and sponsorships</p>
-                    </div>
                     
-                    <div class="talent-summary">
-                        <div class="talent-score-card">
-                            <div class="talent-score" id="talentScore">--</div>
-                            <div class="talent-score-label">Partnership Score</div>
-                        </div>
-                        <div class="talent-metrics">
-                            <div class="talent-metric">
-                                <span class="metric-value" id="talentReach">--</span>
-                                <span class="metric-label">Est. Reach</span>
+                    <!-- Partnership Value Analysis Section (formerly separate tab) -->
+                    <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid var(--border-color);">
+                        <h2 style="margin-bottom: 1rem;">📈 Partnership Value Analysis</h2>
+                        <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Evaluate this audience's value for brand partnerships and sponsorships</p>
+                        
+                        <div class="talent-summary">
+                            <div class="talent-score-card">
+                                <div class="talent-score" id="talentScore">--</div>
+                                <div class="talent-score-label">Partnership Score</div>
                             </div>
-                            <div class="talent-metric">
-                                <span class="metric-value" id="talentEngagement">--</span>
-                                <span class="metric-label">Engagement Index</span>
-                            </div>
-                            <div class="talent-metric">
-                                <span class="metric-value" id="talentBrandSafety">--</span>
-                                <span class="metric-label">Brand Safety</span>
+                            <div class="talent-metrics">
+                                <div class="talent-metric">
+                                    <span class="metric-value" id="talentReach">--</span>
+                                    <span class="metric-label">Est. Reach</span>
+                                </div>
+                                <div class="talent-metric">
+                                    <span class="metric-value" id="talentEngagement">--</span>
+                                    <span class="metric-label">Engagement Index</span>
+                                </div>
+                                <div class="talent-metric">
+                                    <span class="metric-value" id="talentBrandSafety">--</span>
+                                    <span class="metric-label">Brand Safety</span>
+                                </div>
                             </div>
                         </div>
+                        
+                        <div class="talent-grid">
+                            <div class="talent-card">
+                                <h3>👥 Audience Quality</h3>
+                                <div id="talentAudienceQuality" class="talent-list"></div>
+                            </div>
+                            
+                            <div class="talent-card">
+                                <h3>🎯 Brand Alignment</h3>
+                                <div id="talentBrandAlignment" class="talent-list"></div>
+                            </div>
+                            
+                            <div class="talent-card">
+                                <h3>📈 Growth Indicators</h3>
+                                <div id="talentGrowth" class="talent-list"></div>
+                            </div>
+                            
+                            <div class="talent-card">
+                                <h3>⚠️ Risk Factors</h3>
+                                <div id="talentRisks" class="talent-list warning"></div>
+                            </div>
+                        </div>
                     </div>
-                    
-                    <div class="talent-grid">
-                        <div class="talent-card">
-                            <h3>👥 Audience Quality</h3>
-                            <div id="talentAudienceQuality" class="talent-list"></div>
-                        </div>
-                        
-                        <div class="talent-card">
-                            <h3>🎯 Brand Alignment</h3>
-                            <div id="talentBrandAlignment" class="talent-list"></div>
-                        </div>
-                        
-                        <div class="talent-card">
-                            <h3>📈 Growth Indicators</h3>
-                            <div id="talentGrowth" class="talent-list"></div>
-                        </div>
-                        
-                        <div class="talent-card">
-                            <h3>⚠️ Risk Factors</h3>
-                            <div id="talentRisks" class="talent-list warning"></div>
-                        </div>
-                    </div>
-                    
                 </div>
             </div>
 
@@ -12818,8 +12812,7 @@
             interests: '<strong>Interests</strong> — What your audience is passionate about. <strong>Index:</strong> <span class="highlight-green">1.0x+ = over-indexes</span> | <span class="highlight-red">&lt;1.0x = under-indexes</span>.',
             location: '<strong>Location</strong> — Where your audience lives. Darker = higher concentration. <span class="highlight-green">1.0x+ = over-indexes</span> | <span class="highlight-red">&lt;1.0x = under-indexes</span>.',
             affinity: '<strong>Affinity Map</strong> — Brands/content your audience loves. <span class="highlight-yellow">100-199 = moderate</span> | <span class="highlight-green">200-499 = strong</span> | <span class="highlight-green">500+ = exceptional</span>.',
-            sponsorship: '<strong>Sponsorship</strong> — Best brand partners. <span class="highlight-red">&lt;100 = weak</span> | <span class="highlight-yellow">100-130 = moderate</span> | <span class="highlight-green">130+ = strong fit</span>.',
-            talent: '<strong>Partnership</strong> — Potential brand partnership opportunities and synergies with your audience.',
+            sponsorship: '<strong>Sponsorship</strong> — Best brand partners and partnership value analysis. <span class="highlight-red">&lt;100 = weak</span> | <span class="highlight-yellow">100-130 = moderate</span> | <span class="highlight-green">130+ = strong fit</span>.',
             media: '<strong>Media</strong> — Streaming, social, audio preferences and platform usage patterns for this audience.',
             content: '<strong>Content</strong> — Content development insights including talent, genres, and platform opportunities.',
             segmentation: '<strong>Segment</strong> — Build custom audience segments with demographic and behavioral filters.',
