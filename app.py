@@ -18,7 +18,7 @@ import re
 import io
 import hashlib
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, render_template, request, jsonify, send_file, Response, redirect, url_for, session
 from flask_cors import CORS
@@ -3131,6 +3131,262 @@ def get_csv_data(s3_key):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
+
+
+@app.route('/api/segment-data', methods=['POST'])
+@requires_auth
+def get_segment_data():
+    """Get segmented behavioral data based on demographic filters."""
+    try:
+        data = request.get_json()
+        s3_key = data.get('s3_key')
+        filters = data.get('filters', {})
+        
+        if not s3_key:
+            return jsonify({'success': False, 'error': 's3_key is required'}), 400
+        
+        if not s3_client:
+            return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+        
+        # Get the CSV to extract metadata (brand name, date ranges)
+        print(f"📥 Getting segment data for: {s3_key}")
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        csv_content = response['Body'].read().decode('utf-8')
+        df = pd.read_csv(io.StringIO(csv_content))
+        
+        # Extract brand name from filename
+        name_without_ext = s3_key.replace('.csv', '')
+        match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+        if match:
+            brand_name = match.group(1).replace('_', ' ')
+        else:
+            brand_name = name_without_ext.replace('_', ' ')
+        
+        # Extract date ranges from INPUT_METADATA
+        metadata_rows = df[df['Column'] == 'INPUT_METADATA']
+        sample_start = None
+        sample_end = None
+        behavior_start = None
+        behavior_end = None
+        
+        if not metadata_rows.empty:
+            metadata_value = str(metadata_rows.iloc[0]['Value'])
+            # Parse SAMPLE_START and SAMPLE_END from metadata
+            if 'SAMPLE_START:' in metadata_value:
+                try:
+                    sample_str = metadata_value.split('SAMPLE_START:')[1].split('_')[0]
+                    sample_start = datetime.strptime(sample_str, '%Y-%m-%d').strftime('%Y-%m-%d')
+                except:
+                    pass
+            if 'SAMPLE_END:' in metadata_value:
+                try:
+                    sample_str = metadata_value.split('SAMPLE_END:')[1].split('_')[0]
+                    sample_end = datetime.strptime(sample_str, '%Y-%m-%d').strftime('%Y-%m-%d')
+                except:
+                    pass
+            if 'BEHAVIOR_START:' in metadata_value:
+                try:
+                    behavior_str = metadata_value.split('BEHAVIOR_START:')[1].split('_')[0]
+                    behavior_start = datetime.strptime(behavior_str, '%Y-%m-%d').strftime('%Y-%m-%d')
+                except:
+                    pass
+            if 'BEHAVIOR_END:' in metadata_value:
+                try:
+                    behavior_str = metadata_value.split('BEHAVIOR_END:')[1].split('_')[0]
+                    behavior_end = datetime.strptime(behavior_str, '%Y-%m-%d').strftime('%Y-%m-%d')
+                except:
+                    pass
+        
+        # Use sample dates for behavior if behavior dates not found
+        if not behavior_start:
+            behavior_start = sample_start
+        if not behavior_end:
+            behavior_end = sample_end
+        
+        # Default to last 90 days if no dates found
+        if not sample_start or not sample_end:
+            sample_end = datetime.now().strftime('%Y-%m-%d')
+            sample_start = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
+            behavior_start = sample_start
+            behavior_end = sample_end
+        
+        print(f"📊 Querying segment data for brand: {brand_name}, dates: {sample_start} to {sample_end}")
+        print(f"   Filters: {filters}")
+        
+        # Import bg module to use its functions
+        try:
+            import bg
+            conn = bg.connect_snowflake()
+            cur = conn.cursor()
+        except Exception as e:
+            return jsonify({'success': False, 'error': f'Database connection failed: {str(e)}'}), 500
+        
+        # Build demographic filter clause
+        demo_conditions = []
+        demo_field_mapping = {
+            'gender': 'GENDER',
+            'age': 'AGE',
+            'income': 'INCOME',
+            'ethnicity': 'ETHNICITY',
+            'relationship': 'RELATIONSHIP',
+            'parental': 'PARENTAL_STATUS'
+        }
+        
+        for frontend_key, db_field in demo_field_mapping.items():
+            if filters.get(frontend_key) and len(filters[frontend_key]) > 0:
+                vals = ",".join(f"'{v}'" for v in filters[frontend_key])
+                demo_conditions.append(f"d.{db_field} IN ({vals})")
+        
+        demo_filter_clause = " AND ".join(demo_conditions) if demo_conditions else "1=1"
+        
+        # Build brand filter
+        brand_filter = f"c.COMMON_NAME ILIKE '%{brand_name}%'"
+        
+        # Query to get UIDs matching the demographic filters and brand
+        print(f"🔍 Querying UIDs with filters: {demo_filter_clause}")
+        uid_query = f"""
+            SELECT DISTINCT c.UID
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
+            INNER JOIN PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d ON c.UID = d.UID
+            WHERE c.DELIVERED >= '{sample_start}'::DATE 
+              AND c.DELIVERED <= '{sample_end}'::DATE
+              AND ({brand_filter})
+              AND c.COMMON_NAME IS NOT NULL
+              AND c.COMMON_NAME != ''
+              AND {demo_filter_clause}
+            LIMIT 100000
+        """
+        
+        try:
+            uid_results = cur.execute(uid_query).fetchall()
+            uids = [row[0] for row in uid_results]
+            segment_size = len(uids)
+            
+            if segment_size == 0:
+                return jsonify({
+                    'success': True,
+                    'segmentSize': 0,
+                    'behavioral': {},
+                    'demographics': {},
+                    'message': 'No users found matching the selected filters'
+                })
+            
+            print(f"✅ Found {segment_size} UIDs matching filters")
+            
+            # Limit to 10k UIDs for performance, but use actual segment size for percentages
+            uids_to_use = uids[:10000]
+            actual_segment_size = len(uids_to_use)
+            
+            # Now query behavioral data for these UIDs
+            # Get behavioral data from the behavior date range
+            if len(uids_to_use) > 0:
+                # Use IN clause with proper escaping
+                uid_list = "','".join([str(uid).replace("'", "''") for uid in uids_to_use])
+                behavior_query = f"""
+                    SELECT 
+                        c.CATEGORY,
+                        c.COMMON_NAME as VALUE,
+                        COUNT(DISTINCT c.UID) as UID_COUNT
+                    FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL c
+                    WHERE c.UID IN ('{uid_list}')
+                      AND c.DELIVERED >= '{behavior_start}'::DATE
+                      AND c.DELIVERED <= '{behavior_end}'::DATE
+                      AND c.COMMON_NAME IS NOT NULL
+                      AND c.COMMON_NAME != ''
+                      AND c.CATEGORY NOT IN ('GENDER', 'AGE', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'SAMPLE SIZE')
+                    GROUP BY c.CATEGORY, c.COMMON_NAME
+                    ORDER BY UID_COUNT DESC
+                """
+            else:
+                behavior_query = "SELECT NULL as CATEGORY, NULL as VALUE, 0 as UID_COUNT WHERE 1=0"
+            
+            behavior_results = cur.execute(behavior_query).fetchall()
+            
+            # Organize behavioral data by category
+            behavioral = {}
+            for row in behavior_results:
+                category = row[0]
+                value = row[1]
+                uid_count = row[2]
+                pct = (uid_count / actual_segment_size) * 100 if actual_segment_size > 0 else 0
+                
+                if category not in behavioral:
+                    behavioral[category] = []
+                
+                behavioral[category].append({
+                    'name': value,
+                    'pct': round(pct, 2),
+                    'raw': uid_count
+                })
+            
+            # Sort each category by percentage
+            for category in behavioral:
+                behavioral[category].sort(key=lambda x: x['pct'], reverse=True)
+            
+            # Get demographics for the segment
+            if len(uids_to_use) > 0:
+                uid_list = "','".join([str(uid).replace("'", "''") for uid in uids_to_use])
+                demo_query = f"""
+                    SELECT 
+                        d.GENDER,
+                        d.AGE,
+                        d.INCOME,
+                        d.ETHNICITY,
+                        COUNT(*) as COUNT
+                    FROM PROCESSEDUSERFILES.PUBLIC.USER_DATA_SANITIZED d
+                    WHERE d.UID IN ('{uid_list}')
+                    GROUP BY d.GENDER, d.AGE, d.INCOME, d.ETHNICITY
+                """
+            else:
+                demo_query = "SELECT NULL as GENDER, NULL as AGE, NULL as INCOME, NULL as ETHNICITY, 0 as COUNT WHERE 1=0"
+            
+            demo_results = cur.execute(demo_query).fetchall()
+            demographics = {
+                'gender': {},
+                'age': {},
+                'income': {},
+                'ethnicity': {}
+            }
+            
+            for row in demo_results:
+                gender, age, income, ethnicity, count = row
+                if gender:
+                    demographics['gender'][gender] = demographics['gender'].get(gender, 0) + count
+                if age:
+                    demographics['age'][age] = demographics['age'].get(age, 0) + count
+                if income:
+                    demographics['income'][income] = demographics['income'].get(income, 0) + count
+                if ethnicity:
+                    demographics['ethnicity'][ethnicity] = demographics['ethnicity'].get(ethnicity, 0) + count
+            
+            # Convert counts to percentages
+            total_demo = sum(demographics['gender'].values()) if demographics['gender'] else actual_segment_size
+            for demo_type in demographics:
+                for key in demographics[demo_type]:
+                    demographics[demo_type][key] = (demographics[demo_type][key] / total_demo * 100) if total_demo > 0 else 0
+            
+            conn.close()
+            
+            return jsonify({
+                'success': True,
+                'segmentSize': actual_segment_size,
+                'behavioral': behavioral,
+                'demographics': demographics,
+                'sampleSize': actual_segment_size
+            })
+            
+        except Exception as e:
+            conn.close()
+            print(f"❌ Error querying segment data: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': str(e)}), 500
+            
+    except Exception as e:
+        print(f"❌ Error in get_segment_data: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 def parse_number(value):

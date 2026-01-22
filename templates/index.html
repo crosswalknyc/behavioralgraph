@@ -7349,39 +7349,39 @@
 
             <!-- Row 2: Tab Navigation + Action Buttons -->
             <div class="dashboard-tabs">
-                <button class="tab-btn active" onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
-                <button class="tab-btn" onclick="showTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
-                <button class="tab-btn" onclick="showTab('behavioral')"><span class="tab-icon">📈</span><span class="tab-label">BEHAVIORAL</span></button>
-                <button class="tab-btn" onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
-                <button class="tab-btn" onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
-                <button class="tab-btn" onclick="showTab('affinity')"><span class="tab-icon">🔗</span><span class="tab-label">AFFINITY</span></button>
-                <button class="tab-btn" onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span></button>
-                <button class="tab-btn" onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">MEDIA</span></button>
-                <button class="tab-btn" onclick="showTab('content')"><span class="tab-icon">🎬</span><span class="tab-label">CONTENT</span></button>
-                <button class="tab-btn" onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span></button>
-                <button class="tab-btn" onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span></button>
-                <button class="tab-btn" onclick="showTab('collaboration')"><span class="tab-icon">🤝</span><span class="tab-label">COLLABORATE</span></button>
-                <button class="tab-btn" onclick="openDeckWorkspace()"><span class="tab-icon">📊</span><span class="tab-label">DECK BUILDER</span></button>
+                <button class="tab-btn active has-tooltip" data-tooltip="Insights: Executive summary with key audience statistics, demographic highlights, and behavioral patterns at a glance." onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
+                <button class="tab-btn has-tooltip" data-tooltip="Demographics: Detailed breakdown of age, gender, ethnicity, income, education, and other demographic characteristics." onclick="showTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
+                <button class="tab-btn has-tooltip" data-tooltip="Behavioral: Analysis of consumer behaviors, brand preferences, purchase patterns, and lifestyle activities." onclick="showTab('behavioral')"><span class="tab-icon">📈</span><span class="tab-label">BEHAVIORAL</span></button>
+                <button class="tab-btn has-tooltip" data-tooltip="Interests: Top interests and passions of this audience, categorized by topic area with index scores." onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
+                <button class="tab-btn has-tooltip" data-tooltip="Location: Geographic distribution showing where this audience is concentrated by state and metro area." onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
+                <button class="tab-btn has-tooltip" data-tooltip="Affinity: Cross-category affinities showing what else this audience engages with across brands and content." onclick="showTab('affinity')"><span class="tab-icon">🔗</span><span class="tab-label">AFFINITY</span></button>
+                <button class="tab-btn has-tooltip" data-tooltip="Sponsorship: Sponsorship valuation and partnership opportunity analysis for brand collaborations." onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span></button>
+                <button class="tab-btn has-tooltip" data-tooltip="Media: Media consumption patterns including TV, streaming, social media, and digital platform preferences." onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">MEDIA</span></button>
+                <button class="tab-btn has-tooltip" data-tooltip="Content: Content consumption preferences including genres, formats, and viewing habits." onclick="showTab('content')"><span class="tab-icon">🎬</span><span class="tab-label">CONTENT</span></button>
+                <button class="tab-btn has-tooltip" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span></button>
+                <button class="tab-btn has-tooltip" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span></button>
+                <button class="tab-btn has-tooltip" data-tooltip="Collaborate: Share insights and collaborate with team members on audience analysis." onclick="showTab('collaboration')"><span class="tab-icon">🤝</span><span class="tab-label">COLLABORATE</span></button>
+                <button class="tab-btn has-tooltip" data-tooltip="Deck Builder: Create and export presentation decks from your saved insights and charts." onclick="openDeckWorkspace()"><span class="tab-icon">📊</span><span class="tab-label">DECK BUILDER</span></button>
             </div>
             
             <!-- Row 3: Actions -->
             <div class="dash-bottom-row">
                 <div class="row-right">
-                    <div class="display-mode-toggle" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" title="Toggle between percentages and US population numbers">
+                    <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" data-tooltip="US %: Toggle between showing percentages of audience vs. projected US population numbers.">
                         <span id="dashDisplayLabel">US %</span>
                     </div>
-                    <div class="display-mode-toggle" id="hoverToggle" onclick="toggleHoverDescriptors()" title="Toggle hover tooltips on/off">
+                    <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements.">
                         <span id="hoverToggleLabel">HOVER ON</span>
                     </div>
                     <div class="dash-dropdown">
-                        <button class="dash-action-btn" onclick="toggleExportMenu()">📥 EXPORT ▾</button>
+                        <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, or full report as PDF." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
                         <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
                             <a onclick="exportAllCSV()">📄 All Data (CSV)</a>
                             <a onclick="exportAllPNG()">🖼️ All Charts (PNG)</a>
                             <a onclick="exportPDF()">📑 Full Report (PDF)</a>
                         </div>
                     </div>
-                    <button class="dash-action-btn accent" onclick="addCurrentTabToDeck()" title="Add Page to Deck">ADD PAGE TO DECK</button>
+                    <button class="dash-action-btn accent has-tooltip" data-tooltip="Add Page to Deck: Save the current tab view to your presentation deck for export." onclick="addCurrentTabToDeck()">ADD PAGE TO DECK</button>
                 </div>
             </div>
             
@@ -19960,44 +19960,19 @@
             const results = document.getElementById('segResults');
             
             status.className = 'seg-status loading';
-            status.textContent = hasFilters ? '🔄 Analyzing segment...' : 'ℹ️ No filters selected - showing full audience';
+            status.textContent = hasFilters ? '🔄 Querying segmented data from database...' : 'ℹ️ No filters selected - showing full audience';
             
-            // For now, estimate from existing data (in production, this would query Snowflake)
-            // This is a simplified estimation based on demographic percentages
-            setTimeout(() => {
+            // If no filters, show full audience data
+            if (!hasFilters) {
                 const demographics = currentProfileData.demographics || {};
                 const behavioral = currentProfileData.behavioral || {};
                 const sampleSize = currentProfileData.sampleSize || 0;
                 
-                // Estimate segment size based on selected demographics
-                let segmentMultiplier = 1;
+                document.getElementById('segName').textContent = 'All Audience';
+                document.getElementById('segSize').textContent = sampleSize.toLocaleString();
+                document.getElementById('segPercent').textContent = '100%';
                 
-                if (filters.gender.length && demographics.gender) {
-                    const genderPct = filters.gender.reduce((sum, g) => sum + (demographics.gender[g] || 0), 0) / 100;
-                    segmentMultiplier *= genderPct || 1;
-                }
-                if (filters.age.length && demographics.age) {
-                    const agePct = filters.age.reduce((sum, a) => sum + (demographics.age[a] || 0), 0) / 100;
-                    segmentMultiplier *= agePct || 1;
-                }
-                if (filters.income.length && demographics.income) {
-                    const incomePct = filters.income.reduce((sum, i) => sum + (demographics.income[i] || 0), 0) / 100;
-                    segmentMultiplier *= incomePct || 1;
-                }
-                if (filters.ethnicity.length && demographics.ethnicity) {
-                    const ethPct = filters.ethnicity.reduce((sum, e) => sum + (demographics.ethnicity[e] || 0), 0) / 100;
-                    segmentMultiplier *= ethPct || 1;
-                }
-                
-                const estimatedSize = Math.round(sampleSize * segmentMultiplier);
-                const percentOfTotal = (segmentMultiplier * 100).toFixed(1);
-                
-                // Update results
-                document.getElementById('segName').textContent = getSegmentName(filters);
-                document.getElementById('segSize').textContent = estimatedSize.toLocaleString();
-                document.getElementById('segPercent').textContent = percentOfTotal + '%';
-                
-                // Get top behaviors (would be recalculated in production)
+                // Get top behaviors
                 const allBehaviors = [];
                 Object.entries(behavioral).forEach(([cat, items]) => {
                     if (Array.isArray(items)) {
@@ -20005,8 +19980,7 @@
                             allBehaviors.push({
                                 name: item.name || item.value,
                                 category: cat,
-                                pct: item.pct,
-                                index: item.index || 100
+                                pct: item.pct || 0
                             });
                         });
                     }
@@ -20020,20 +19994,7 @@
                     </div>
                 `).join('');
                 
-                // Differences (simulated - would be calculated in production)
-                const differences = allBehaviors
-                    .filter(b => b.index > 110 || b.index < 90)
-                    .sort((a, b) => Math.abs(b.index - 100) - Math.abs(a.index - 100))
-                    .slice(0, 10);
-                document.getElementById('segDifferences').innerHTML = differences.map(b => {
-                    const diff = b.index - 100;
-                    return `
-                        <div class="seg-item">
-                            <span>${b.name}</span>
-                            <span class="diff ${diff > 0 ? 'up' : 'down'}">${diff > 0 ? '+' : ''}${diff}%</span>
-                        </div>
-                    `;
-                }).join('');
+                document.getElementById('segDifferences').innerHTML = '<p style="color: var(--text-secondary);">No comparison available</p>';
                 
                 // Media items
                 const mediaItems = allBehaviors
@@ -20060,10 +20021,157 @@
                 `).join('') || '<p style="color: var(--text-secondary);">No shopping data</p>';
                 
                 status.className = 'seg-status';
-                status.textContent = `✅ Analysis complete for ${getSegmentName(filters)}`;
+                status.textContent = '✅ Showing full audience data';
+                results.style.display = 'block';
+                return;
+            }
+            
+            // Query backend for segmented data
+            try {
+                const s3Key = currentProfileData.s3Key;
+                if (!s3Key) {
+                    throw new Error('Profile S3 key not found');
+                }
+                
+                const response = await fetch('/api/segment-data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        s3_key: s3Key,
+                        filters: filters
+                    })
+                });
+                
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to get segment data');
+                }
+                
+                if (data.segmentSize === 0) {
+                    status.className = 'seg-status error';
+                    status.textContent = '⚠️ No users found matching the selected filters';
+                    results.style.display = 'block';
+                    document.getElementById('segName').textContent = getSegmentName(filters);
+                    document.getElementById('segSize').textContent = '0';
+                    document.getElementById('segPercent').textContent = '0%';
+                    document.getElementById('segTopBehaviors').innerHTML = '<p style="color: var(--text-secondary);">No data available</p>';
+                    document.getElementById('segDifferences').innerHTML = '<p style="color: var(--text-secondary);">No data available</p>';
+                    document.getElementById('segMedia').innerHTML = '<p style="color: var(--text-secondary);">No data available</p>';
+                    document.getElementById('segShopping').innerHTML = '<p style="color: var(--text-secondary);">No data available</p>';
+                    return;
+                }
+                
+                const segmentSize = data.segmentSize;
+                const behavioral = data.behavioral || {};
+                const fullSampleSize = currentProfileData.sampleSize || segmentSize;
+                const percentOfTotal = ((segmentSize / fullSampleSize) * 100).toFixed(1);
+                
+                // Update results
+                document.getElementById('segName').textContent = getSegmentName(filters);
+                document.getElementById('segSize').textContent = segmentSize.toLocaleString();
+                document.getElementById('segPercent').textContent = percentOfTotal + '%';
+                
+                // Get top behaviors from segmented data
+                const allBehaviors = [];
+                Object.entries(behavioral).forEach(([cat, items]) => {
+                    if (Array.isArray(items)) {
+                        items.forEach(item => {
+                            allBehaviors.push({
+                                name: item.name || item.value,
+                                category: cat,
+                                pct: item.pct || 0
+                            });
+                        });
+                    }
+                });
+                
+                const topBehaviors = allBehaviors.sort((a, b) => b.pct - a.pct).slice(0, 15);
+                document.getElementById('segTopBehaviors').innerHTML = topBehaviors.map(b => `
+                    <div class="seg-item">
+                        <span>${b.name}</span>
+                        <span>${b.pct.toFixed(1)}%</span>
+                    </div>
+                `).join('') || '<p style="color: var(--text-secondary);">No behavioral data</p>';
+                
+                // Compare with full audience to show differences
+                const fullBehavioral = currentProfileData.behavioral || {};
+                const differences = [];
+                allBehaviors.forEach(segBehavior => {
+                    // Find corresponding behavior in full audience
+                    const fullCat = Object.keys(fullBehavioral).find(c => 
+                        c.toUpperCase() === segBehavior.category.toUpperCase()
+                    );
+                    if (fullCat) {
+                        const fullItems = fullBehavioral[fullCat] || [];
+                        const fullItem = fullItems.find(item => 
+                            (item.name || item.value || '').toUpperCase() === segBehavior.name.toUpperCase()
+                        );
+                        if (fullItem) {
+                            const fullPct = fullItem.pct || 0;
+                            const diff = segBehavior.pct - fullPct;
+                            if (Math.abs(diff) > 1) { // Only show significant differences
+                                differences.push({
+                                    name: segBehavior.name,
+                                    diff: diff,
+                                    segmentPct: segBehavior.pct,
+                                    fullPct: fullPct
+                                });
+                            }
+                        }
+                    }
+                });
+                
+                differences.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+                document.getElementById('segDifferences').innerHTML = differences.slice(0, 10).map(b => `
+                    <div class="seg-item">
+                        <span>${b.name}</span>
+                        <span class="diff ${b.diff > 0 ? 'up' : 'down'}">${b.diff > 0 ? '+' : ''}${b.diff.toFixed(1)}%</span>
+                    </div>
+                `).join('') || '<p style="color: var(--text-secondary);">No significant differences</p>';
+                
+                // Media items
+                const mediaItems = allBehaviors
+                    .filter(b => ['SOCIAL MEDIA', 'STREAMING', 'APP/PLATFORM', 'PODCAST', 'MEDIA'].some(m => b.category.toUpperCase().includes(m)))
+                    .sort((a, b) => b.pct - a.pct)
+                    .slice(0, 10);
+                document.getElementById('segMedia').innerHTML = mediaItems.map(b => `
+                    <div class="seg-item">
+                        <span>${b.name}</span>
+                        <span>${b.pct.toFixed(1)}%</span>
+                    </div>
+                `).join('') || '<p style="color: var(--text-secondary);">No media data</p>';
+                
+                // Shopping items
+                const shoppingItems = allBehaviors
+                    .filter(b => ['SHOP', 'BRAND', 'PURCHASE', 'APPAREL'].some(s => b.category.toUpperCase().includes(s)))
+                    .sort((a, b) => b.pct - a.pct)
+                    .slice(0, 10);
+                document.getElementById('segShopping').innerHTML = shoppingItems.map(b => `
+                    <div class="seg-item">
+                        <span>${b.name}</span>
+                        <span>${b.pct.toFixed(1)}%</span>
+                    </div>
+                `).join('') || '<p style="color: var(--text-secondary);">No shopping data</p>';
+                
+                status.className = 'seg-status';
+                status.textContent = `✅ Analysis complete for ${getSegmentName(filters)} (${segmentSize.toLocaleString()} users)`;
                 results.style.display = 'block';
                 
-            }, 500);
+            } catch (error) {
+                console.error('Segment analysis error:', error);
+                status.className = 'seg-status error';
+                status.textContent = `❌ Error: ${error.message}`;
+                results.style.display = 'block';
+            }
         }
         
         function clearSegmentFilters() {
