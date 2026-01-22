@@ -7534,7 +7534,9 @@
                                 </h4>
                                 <div class="insight-col-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
                                     <span class="has-tooltip" data-tooltip="Characteristic: The dominant demographic trait in each category (gender, age, income, ethnicity).">Characteristic</span>
-                                    <span class="has-tooltip" data-tooltip="Index vs GP: How this segment compares to Gen Pop. Positive = over-indexes (more of this audience). Negative = under-indexes.">Index vs GP</span>
+                                    <span class="has-tooltip" data-tooltip="Profile %: The percentage of THIS audience in this demographic segment." style="min-width: 80px; text-align: right;">Profile %</span>
+                                    <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population in this demographic segment." style="min-width: 80px; text-align: right;">Gen Pop %</span>
+                                    <span class="has-tooltip" data-tooltip="Index: How this segment compares to Gen Pop. 1.0x = same as Gen Pop. Higher = over-indexes, Lower = under-indexes." style="min-width: 70px; text-align: right;">Index</span>
                                 </div>
                                 <div id="demoProfileSummary" class="demo-insight-content">
                                     <div class="loading-placeholder">Analyzing demographics...</div>
@@ -7547,7 +7549,9 @@
                                 </h4>
                                 <div class="insight-col-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
                                     <span class="has-tooltip" data-tooltip="Segment: A specific demographic group (e.g., 18-24, Female, $100K+).">Segment</span>
-                                    <span class="has-tooltip" data-tooltip="Index Diff: Percentage difference from Gen Pop. +50% means 1.5x more likely than average. -30% means 30% less likely.">Index Diff</span>
+                                    <span class="has-tooltip" data-tooltip="Profile %: The percentage of THIS audience in this demographic segment." style="min-width: 80px; text-align: right;">Profile %</span>
+                                    <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population in this demographic segment." style="min-width: 80px; text-align: right;">Gen Pop %</span>
+                                    <span class="has-tooltip" data-tooltip="Index: How this segment compares to Gen Pop. 1.0x = same as Gen Pop. Higher = over-indexes, Lower = under-indexes." style="min-width: 70px; text-align: right;">Index</span>
                                 </div>
                                 <div id="demoDifferentiators" class="demo-insight-content">
                                     <div class="loading-placeholder">Loading...</div>
@@ -14231,6 +14235,7 @@
             if (currentDashboardData) {
                 renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
                 renderBehavioralCards(currentDashboardData.behavioral);
+                renderDemoInsights(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsGenPop);
                 renderLocationTable(currentDashboardData.locations);
                 
                 // Re-render interests
@@ -14471,71 +14476,122 @@
                 return;
             }
             
+            const US_POP_DEMO_INSIGHTS = 324700000;
+            const isProjection = dashDisplayMode === 'projection';
+            const sampleSize = currentDashboardData?.sampleSize || 0;
+            
             // === PROFILE SUMMARY ===
             const summaryItems = [];
             
             // Find dominant gender
             const genderData = demographics.gender || {};
+            const genderGenPop = demographicsGenPop?.gender || {};
             const genderEntries = Object.entries(genderData).filter(([k, v]) => v > 0);
             if (genderEntries.length > 0) {
                 const topGender = genderEntries.sort((a, b) => b[1] - a[1])[0];
                 const genderIdx = demographicsIndex.gender?.[topGender[0]] || 100;
+                const genderGenPopPct = genderGenPop[topGender[0]] || 0;
+                const profilePct = topGender[1];
+                const profileDisplay = isProjection 
+                    ? formatNumber(Math.round((profilePct / 100) * sampleSize))
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjection 
+                    ? formatNumber(Math.round((genderGenPopPct / 100) * US_POP_DEMO_INSIGHTS))
+                    : genderGenPopPct.toFixed(1) + '%';
                 summaryItems.push({
                     icon: topGender[0].toLowerCase().includes('female') ? '👩' : topGender[0].toLowerCase().includes('male') ? '👨' : '👤',
-                    text: `<span class="demo-highlight">${topGender[1].toFixed(0)}%</span> ${topGender[0]}`,
-                    value: genderIdx > 100 ? `+${(genderIdx - 100).toFixed(0)}` : `${(genderIdx - 100).toFixed(0)}`,
+                    text: `${topGender[0]}`,
+                    profilePct: profileDisplay,
+                    genPopPct: genPopDisplay,
+                    value: formatIndex(genderIdx),
                     valueClass: genderIdx >= 100 ? 'positive' : 'negative'
                 });
             }
             
-                // Find dominant age range
-                const ageData = demographics.age || {};
-                const ageEntries = Object.entries(ageData).filter(([k, v]) => v > 0);
-                if (ageEntries.length > 0) {
-                    const topAge = ageEntries.sort((a, b) => b[1] - a[1])[0];
-                    const ageIdx = demographicsIndex.age?.[topAge[0]] || 100;
-                    const displayAge = getAgeDisplayLabel(topAge[0]);
-                    summaryItems.push({
-                        icon: '📅',
-                        text: `Core age: <span class="demo-highlight">${displayAge}</span> (${topAge[1].toFixed(0)}%)`,
-                        value: ageIdx > 100 ? `+${(ageIdx - 100).toFixed(0)}` : `${(ageIdx - 100).toFixed(0)}`,
-                        valueClass: ageIdx >= 100 ? 'positive' : 'negative'
-                    });
-                }
+            // Find dominant age range
+            const ageData = demographics.age || {};
+            const ageGenPop = demographicsGenPop?.age || {};
+            const ageEntries = Object.entries(ageData).filter(([k, v]) => v > 0);
+            if (ageEntries.length > 0) {
+                const topAge = ageEntries.sort((a, b) => b[1] - a[1])[0];
+                const ageIdx = demographicsIndex.age?.[topAge[0]] || 100;
+                const ageGenPopPct = ageGenPop[topAge[0]] || 0;
+                const profilePct = topAge[1];
+                const displayAge = getAgeDisplayLabel(topAge[0]);
+                const profileDisplay = isProjection 
+                    ? formatNumber(Math.round((profilePct / 100) * sampleSize))
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjection 
+                    ? formatNumber(Math.round((ageGenPopPct / 100) * US_POP_DEMO_INSIGHTS))
+                    : ageGenPopPct.toFixed(1) + '%';
+                summaryItems.push({
+                    icon: '📅',
+                    text: `Core age: ${displayAge}`,
+                    profilePct: profileDisplay,
+                    genPopPct: genPopDisplay,
+                    value: formatIndex(ageIdx),
+                    valueClass: ageIdx >= 100 ? 'positive' : 'negative'
+                });
+            }
             
             // Find dominant income
             const incomeData = demographics.income || {};
+            const incomeGenPop = demographicsGenPop?.income || {};
             const incomeEntries = Object.entries(incomeData).filter(([k, v]) => v > 0);
             if (incomeEntries.length > 0) {
                 const topIncome = incomeEntries.sort((a, b) => b[1] - a[1])[0];
                 const incomeIdx = demographicsIndex.income?.[topIncome[0]] || 100;
+                const incomeGenPopPct = incomeGenPop[topIncome[0]] || 0;
+                const profilePct = topIncome[1];
+                const profileDisplay = isProjection 
+                    ? formatNumber(Math.round((profilePct / 100) * sampleSize))
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjection 
+                    ? formatNumber(Math.round((incomeGenPopPct / 100) * US_POP_DEMO_INSIGHTS))
+                    : incomeGenPopPct.toFixed(1) + '%';
                 summaryItems.push({
                     icon: '💰',
-                    text: `Top income: <span class="demo-highlight">${topIncome[0]}</span>`,
-                    value: incomeIdx > 100 ? `+${(incomeIdx - 100).toFixed(0)}` : `${(incomeIdx - 100).toFixed(0)}`,
+                    text: `Top income: ${topIncome[0]}`,
+                    profilePct: profileDisplay,
+                    genPopPct: genPopDisplay,
+                    value: formatIndex(incomeIdx),
                     valueClass: incomeIdx >= 100 ? 'positive' : 'negative'
                 });
             }
             
             // Find dominant ethnicity
             const ethData = demographics.ethnicity || {};
+            const ethGenPop = demographicsGenPop?.ethnicity || {};
             const ethEntries = Object.entries(ethData).filter(([k, v]) => v > 0);
             if (ethEntries.length > 0) {
                 const topEth = ethEntries.sort((a, b) => b[1] - a[1])[0];
+                const ethIdx = demographicsIndex.ethnicity?.[topEth[0]] || 100;
+                const ethGenPopPct = ethGenPop[topEth[0]] || 0;
+                const profilePct = topEth[1];
+                const profileDisplay = isProjection 
+                    ? formatNumber(Math.round((profilePct / 100) * sampleSize))
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjection 
+                    ? formatNumber(Math.round((ethGenPopPct / 100) * US_POP_DEMO_INSIGHTS))
+                    : ethGenPopPct.toFixed(1) + '%';
                 summaryItems.push({
                     icon: '🌍',
-                    text: `<span class="demo-highlight">${topEth[1].toFixed(0)}%</span> ${topEth[0]}`,
-                    value: '',
-                    valueClass: 'neutral'
+                    text: `${topEth[0]}`,
+                    profilePct: profileDisplay,
+                    genPopPct: genPopDisplay,
+                    value: formatIndex(ethIdx),
+                    valueClass: ethIdx >= 100 ? 'positive' : 'negative'
                 });
             }
             
             document.getElementById('demoProfileSummary').innerHTML = summaryItems.length > 0
                 ? summaryItems.map(i => `
-                    <div class="demo-insight-item">
+                    <div class="demo-insight-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
                         <span class="icon">${i.icon}</span>
-                        <span class="text">${i.text}</span>
-                        ${i.value ? `<span class="value ${i.valueClass}">${i.value}</span>` : ''}
+                        <span class="text" style="flex: 1; font-size: 0.85rem;">${i.text}</span>
+                        <span class="diff-col-pct" style="min-width: 80px; text-align: right; font-size: 0.85rem;">${i.profilePct}</span>
+                        <span class="diff-col-gp" style="min-width: 80px; text-align: right; font-size: 0.85rem; color: var(--text-secondary);">${i.genPopPct}</span>
+                        <span class="value ${i.valueClass}" style="min-width: 70px; text-align: right;">${i.value}</span>
                     </div>
                 `).join('')
                 : '<p style="color: var(--text-secondary);">No data available</p>';
@@ -14548,9 +14604,16 @@
             ['gender', 'age', 'income', 'ethnicity', 'education', 'relationship'].forEach(cat => {
                 const catIdx = demographicsIndex[cat] || {};
                 const catData = demographics[cat] || {};
+                const catGenPop = demographicsGenPop?.[cat] || {};
                 Object.entries(catIdx).forEach(([key, idx]) => {
                     if (idx > 110 && catData[key] > 2) { // Over-index by 10%+ with at least 2% of audience
-                        allIndexes.push({ category: cat, key, idx, pct: catData[key] });
+                        allIndexes.push({ 
+                            category: cat, 
+                            key, 
+                            idx, 
+                            pct: catData[key],
+                            genPopPct: catGenPop[key] || 0
+                        });
                     }
                 });
             });
@@ -14566,11 +14629,21 @@
                 
                 // Use getAgeDisplayLabel for age ranges to match demographics page
                 const displayKey = d.category === 'age' ? getAgeDisplayLabel(d.key) : d.key;
+                const profilePct = d.pct;
+                const genPopPct = d.genPopPct;
+                const profileDisplay = isProjection 
+                    ? formatNumber(Math.round((profilePct / 100) * sampleSize))
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjection 
+                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_DEMO_INSIGHTS))
+                    : genPopPct.toFixed(1) + '%';
                 
                 differentiators.push({
                     icon: catEmoji,
                     text: `${displayKey}`,
-                    value: `+${(d.idx - 100).toFixed(0)}%`,
+                    profilePct: profileDisplay,
+                    genPopPct: genPopDisplay,
+                    value: formatIndex(d.idx),
                     valueClass: 'positive'
                 });
             });
@@ -14579,10 +14652,17 @@
             const underIndexes = [];
             ['gender', 'age', 'income', 'ethnicity'].forEach(cat => {
                 const catIdx = demographicsIndex[cat] || {};
-                const catGenPop = demographicsGenPop[cat] || {};
+                const catGenPop = demographicsGenPop?.[cat] || {};
+                const catData = demographics[cat] || {};
                 Object.entries(catIdx).forEach(([key, idx]) => {
                     if (idx < 80 && catGenPop[key] > 10) { // Under-index by 20%+ for segments that are 10%+ of Gen Pop
-                        underIndexes.push({ category: cat, key, idx });
+                        underIndexes.push({ 
+                            category: cat, 
+                            key, 
+                            idx,
+                            pct: catData[key] || 0,
+                            genPopPct: catGenPop[key] || 0
+                        });
                     }
                 });
             });
@@ -14591,20 +14671,33 @@
             topUnder.forEach(u => {
                 // Use getAgeDisplayLabel for age ranges to match demographics page
                 const displayKey = u.category === 'age' ? getAgeDisplayLabel(u.key) : u.key;
+                const profilePct = u.pct;
+                const genPopPct = u.genPopPct;
+                const profileDisplay = isProjection 
+                    ? formatNumber(Math.round((profilePct / 100) * sampleSize))
+                    : profilePct.toFixed(1) + '%';
+                const genPopDisplay = isProjection 
+                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_DEMO_INSIGHTS))
+                    : genPopPct.toFixed(1) + '%';
+                
                 differentiators.push({
                     icon: '⚠️',
                     text: `Under-indexes: ${displayKey}`,
-                    value: `${(u.idx - 100).toFixed(0)}%`,
+                    profilePct: profileDisplay,
+                    genPopPct: genPopDisplay,
+                    value: formatIndex(u.idx),
                     valueClass: 'negative'
                 });
             });
             
             document.getElementById('demoDifferentiators').innerHTML = differentiators.length > 0
                 ? differentiators.map(i => `
-                    <div class="demo-insight-item">
+                    <div class="demo-insight-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
                         <span class="icon">${i.icon}</span>
-                        <span class="text">${i.text}</span>
-                        <span class="value ${i.valueClass}">${i.value}</span>
+                        <span class="text" style="flex: 1; font-size: 0.85rem;">${i.text}</span>
+                        <span class="diff-col-pct" style="min-width: 80px; text-align: right; font-size: 0.85rem;">${i.profilePct}</span>
+                        <span class="diff-col-gp" style="min-width: 80px; text-align: right; font-size: 0.85rem; color: var(--text-secondary);">${i.genPopPct}</span>
+                        <span class="value ${i.valueClass}" style="min-width: 70px; text-align: right;">${i.value}</span>
                     </div>
                 `).join('')
                 : '<p style="color: var(--text-secondary);">Similar to general population</p>';
