@@ -12359,9 +12359,10 @@
                 if (validAgeData.length > 0) {
                     const topAgeGroup = validAgeData[0];
                     const ageRange = topAgeGroup.age_range || topAgeGroup.age || 'N/A';
+                    const displayAgeRange = getAgeDisplayLabel(ageRange);
                     insights.push({
                         icon: '👥',
-                        text: `<strong>${ageRange}</strong> age group represented the largest segment of new signups (${topAgeGroup.percentage || 'N/A'}), indicating primary audience appeal.`
+                        text: `<strong>${displayAgeRange}</strong> age group represented the largest segment of new signups (${topAgeGroup.percentage || 'N/A'}), indicating primary audience appeal.`
                     });
                 }
                 
@@ -12440,6 +12441,7 @@
                                 <tbody>
                                     ${validAgeData.map(item => {
                                         const ageRange = item.age_range || item.age || 'N/A';
+                                        const displayAgeRange = getAgeDisplayLabel(ageRange);
                                         const count = parseNumber(item.count) || 0;
                                         const percentage = item.percentage || 'N/A';
                                         const genPop = item.gen_pop || item.genPop || '';
@@ -12448,8 +12450,8 @@
                                         const actualCount = parseNumber(item.count) || 0;
                                         const genPopCount = genPop ? parseNumber(genPop) : 0;
                                         return `
-                                            <tr class="has-tooltip" data-tooltip="Age ${ageRange}: ${formatNumber(actualCount)} new signups (${percentage} of total). Gen Pop projection: ${genPopCount > 0 ? formatNumber(genPopCount) : 'N/A'}. ${subscriberGenPopMode ? 'Currently showing Gen Pop projection.' : 'Currently showing actual count.'}">
-                                                <td><strong>${ageRange}</strong></td>
+                                            <tr class="has-tooltip" data-tooltip="Age ${displayAgeRange}: ${formatNumber(actualCount)} new signups (${percentage} of total). Gen Pop projection: ${genPopCount > 0 ? formatNumber(genPopCount) : 'N/A'}. ${subscriberGenPopMode ? 'Currently showing Gen Pop projection.' : 'Currently showing actual count.'}">
+                                                <td><strong>${displayAgeRange}</strong></td>
                                                 <td>${formatNumber(displayValue)}</td>
                                                 <td>${percentage}</td>
                                                 <td>${comparisonValue > 0 ? formatNumber(comparisonValue) : 'N/A'}</td>
@@ -12476,7 +12478,7 @@
                 ageContainer.innerHTML = '';
                 ageContainer.appendChild(ctx);
                 
-                const labels = validAgeData.map(a => a.age_range || a.age || 'N/A');
+                const labels = validAgeData.map(a => getAgeDisplayLabel(a.age_range || a.age || 'N/A'));
                 const counts = validAgeData.map(a => getDisplayValue(a.count, a.gen_pop));
                 const percentages = validAgeData.map(a => parseFloat(a.percentage) || 0);
                 
@@ -14353,19 +14355,20 @@
                 });
             }
             
-            // Find dominant age range
-            const ageData = demographics.age || {};
-            const ageEntries = Object.entries(ageData).filter(([k, v]) => v > 0);
-            if (ageEntries.length > 0) {
-                const topAge = ageEntries.sort((a, b) => b[1] - a[1])[0];
-                const ageIdx = demographicsIndex.age?.[topAge[0]] || 100;
-                summaryItems.push({
-                    icon: '📅',
-                    text: `Core age: <span class="demo-highlight">${topAge[0]}</span> (${topAge[1].toFixed(0)}%)`,
-                    value: ageIdx > 100 ? `+${(ageIdx - 100).toFixed(0)}` : `${(ageIdx - 100).toFixed(0)}`,
-                    valueClass: ageIdx >= 100 ? 'positive' : 'negative'
-                });
-            }
+                // Find dominant age range
+                const ageData = demographics.age || {};
+                const ageEntries = Object.entries(ageData).filter(([k, v]) => v > 0);
+                if (ageEntries.length > 0) {
+                    const topAge = ageEntries.sort((a, b) => b[1] - a[1])[0];
+                    const ageIdx = demographicsIndex.age?.[topAge[0]] || 100;
+                    const displayAge = getAgeDisplayLabel(topAge[0]);
+                    summaryItems.push({
+                        icon: '📅',
+                        text: `Core age: <span class="demo-highlight">${displayAge}</span> (${topAge[1].toFixed(0)}%)`,
+                        value: ageIdx > 100 ? `+${(ageIdx - 100).toFixed(0)}` : `${(ageIdx - 100).toFixed(0)}`,
+                        valueClass: ageIdx >= 100 ? 'positive' : 'negative'
+                    });
+                }
             
             // Find dominant income
             const incomeData = demographics.income || {};
@@ -18060,7 +18063,10 @@
                 
                 // Top age group
                 const topAge = Object.entries(data.demographics.age || {}).sort((a,b) => b[1] - a[1])[0];
-                if (topAge) demoInsights.push({ label: 'Largest Age Group', value: topAge[0], sub: topAge[1].toFixed(1) + '%' });
+                if (topAge) {
+                    const displayAge = getAgeDisplayLabel(topAge[0]);
+                    demoInsights.push({ label: 'Largest Age Group', value: displayAge, sub: topAge[1].toFixed(1) + '%' });
+                }
                 
                 // Top ethnicity
                 const topEth = Object.entries(data.demographics.ethnicity || {}).sort((a,b) => b[1] - a[1])[0];
@@ -22965,9 +22971,11 @@
             }
 
             return dataRows.map(row => {
+                // Use display label for age ranges
+                const displayValue = demoType === 'age' ? getAgeDisplayLabel(row.value) : row.value.toUpperCase();
                 return `
                     <tr>
-                        <td>${row.value.toUpperCase()}</td>
+                        <td>${displayValue}</td>
                         ${profiles.map((p, i) => {
                             const pct = row.pctData[i];
                             const proj = row.projData[i];
