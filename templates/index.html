@@ -4386,7 +4386,17 @@
             border: 1px solid var(--border-color);
             border-radius: 10px;
             padding: 1rem;
+            position: relative;
         }
+        
+        .media-reach-chart-card.dragging, .media-reach-insights-card.dragging {
+            opacity: 0.5;
+        }
+        
+        .media-reach-chart-card.drag-over, .media-reach-insights-card.drag-over {
+            border: 2px dashed var(--accent-blue);
+        }
+        
         .media-reach-chart-card { border-color: var(--accent-cyan); }
         .media-reach-chart-card h3, .media-reach-insights-card h3 {
             margin: 0 0 0.75rem 0;
