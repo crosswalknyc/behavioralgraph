@@ -1790,6 +1790,7 @@
         .persistent-sidebar {
             width: 280px;
             min-width: 280px;
+            max-width: 280px;
             background: var(--bg-card);
             border-radius: 8px;
             padding: 1rem;
@@ -2013,9 +2014,11 @@
         .profile-select-tree {
             flex: 1;
             overflow-y: auto;
+            overflow-x: hidden;
             background: var(--bg-input);
             border-radius: 8px;
             padding: 0.5rem;
+            min-width: 0;
         }
 
         .profile-cat-item {
@@ -2026,6 +2029,8 @@
             align-items: center;
             gap: 0.4rem;
             border-radius: 4px;
+            min-width: 0;
+            overflow: hidden;
         }
 
         .profile-cat-item:hover { background: var(--bg-dark); }
@@ -2038,6 +2043,8 @@
         .profile-cat-children {
             padding-left: 1rem;
             display: none;
+            min-width: 0;
+            overflow: hidden;
         }
 
         .profile-cat-children.open { display: block; }
@@ -2052,6 +2059,8 @@
             overflow: hidden;
             text-overflow: ellipsis;
             transition: all 0.15s;
+            min-width: 0;
+            max-width: 100%;
         }
 
         .profile-select-item:hover {
