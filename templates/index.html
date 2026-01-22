@@ -3530,12 +3530,14 @@
             border-top-color: transparent;
             border-bottom-color: var(--accent-lime);
         }
-        /* Hide tooltips when hover is disabled */
+        /* Hide tooltips when hover is disabled - TEMPORARILY DISABLED FOR DEBUGGING */
+        /*
         body.hover-disabled #globalTooltip {
             display: none !important;
             opacity: 0 !important;
             visibility: hidden !important;
         }
+        */
         .has-tooltip-legacy::before,
         .has-tooltip-legacy::after {
             opacity: 1;
@@ -23257,6 +23259,6 @@
     </div>
     
     <!-- Global Tooltip Element - placed at end of body to ensure highest z-index layer -->
-    <div id="globalTooltip" class="visible" style="left: 100px; top: 100px;">Test tooltip - if you see this, CSS is working</div>
+    <div id="globalTooltip" style="position: fixed !important; left: 100px !important; top: 100px !important; background: red !important; color: white !important; padding: 20px !important; z-index: 2147483647 !important; opacity: 1 !important; visibility: visible !important; display: block !important;">TEST TOOLTIP - YOU SHOULD SEE THIS RED BOX</div>
 </body>
 </html>
