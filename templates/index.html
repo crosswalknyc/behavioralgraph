@@ -2323,18 +2323,24 @@
         /* Behavioral Tab */
         .behavioral-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1rem;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
             width: 100%;
         }
         
-        @media (max-width: 1200px) {
+        @media (max-width: 1400px) {
+            .behavioral-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        
+        @media (max-width: 1000px) {
             .behavioral-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
         
-        @media (max-width: 800px) {
+        @media (max-width: 600px) {
             .behavioral-grid {
                 grid-template-columns: 1fr;
             }
@@ -2749,14 +2755,19 @@
         .behavioral-card {
             background: var(--bg-card);
             border-radius: 8px;
-            padding: 1rem;
-            height: 500px;
+            padding: 0.75rem;
+            height: 350px;
             display: flex;
             flex-direction: column;
             min-width: 0;
             transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
             cursor: grab;
             user-select: none;
+            border: 1px solid var(--border-color);
+        }
+        
+        .behavioral-card:hover {
+            border-color: var(--accent-blue);
         }
         
         .behavioral-card:active {
@@ -2799,9 +2810,9 @@
         }
 
         .behavioral-card h3 {
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             color: var(--text-primary);
-            margin-bottom: 0.75rem;
+            margin-bottom: 0.5rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -2809,6 +2820,8 @@
             gap: 0.25rem;
             flex-wrap: nowrap;
             overflow: hidden;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
         }
         
         .behavioral-card h3 > span:first-child {
@@ -2851,9 +2864,9 @@
 
         .behavioral-filter {
             display: flex;
-            gap: 0.35rem;
+            gap: 0.25rem;
             align-items: center;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.35rem;
             flex-shrink: 0;
         }
         .behavioral-filter input {
@@ -2884,9 +2897,10 @@
         .behavioral-item {
             display: flex;
             align-items: center;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid var(--border-color);
-            gap: 0.5rem;
+            padding: 0.35rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            gap: 0.4rem;
+            font-size: 0.75rem;
         }
 
         .behavioral-item:hover {
@@ -15524,6 +15538,14 @@
             // Interests
             'INTEREST', 'INTERESTS', 'HOBBIES'
         ];
+        // Category groupings for organized display
+        const categoryGroups = {
+            '🛒 Shopping & Retail': ['MOST PURCHASED BRANDS', 'WHERE THEY SHOP', 'APPAREL/FOOTWEAR', 'RETAIL', 'QSR'],
+            '📱 Digital & Technology': ['APP/PLATFORM', 'APP/PLATFORM USAGE', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'TECHNOLOGY/DEVICE'],
+            '📺 Media & Entertainment': ['STREAMING/VIDEO', 'STREAMING VIDEO', 'STREAMING/MUSIC', 'STREAMING MUSIC', 'STREAMING/PLATFORM', 'BROADCAST/CABLE', 'VIRTUAL MVPD/FAST'],
+            '🎮 Lifestyle & Interests': ['GAMES', 'SPORTS', 'MEDIA', 'INTEREST']
+        };
+        
         const defaultPriorityCategories = ['MOST PURCHASED BRANDS', 'WHERE THEY SHOP', 'APPAREL/FOOTWEAR', 'RETAIL', 'APP/PLATFORM', 'APP/PLATFORM USAGE', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING/VIDEO', 'STREAMING VIDEO', 'STREAMING/MUSIC', 'STREAMING MUSIC', 'STREAMING/PLATFORM', 'BROADCAST/CABLE', 'VIRTUAL MVPD/FAST', 'QSR', 'TECHNOLOGY/DEVICE', 'GAMES', 'SPORTS', 'MEDIA', 'INTEREST'];
 
         function renderBehavioralCards(behavioral, highlightCategory = null) {
@@ -15559,7 +15581,7 @@
             container.innerHTML = sortedCats.map((cat, idx) => {
                 const catId = cat.replace(/[^a-zA-Z0-9]/g, '');
                 const items = behavioral[cat];
-                const displayItems = items.slice(0, 30);
+                const displayItems = items.slice(0, 15);
                 const maxPct = Math.max(...displayItems.map(i => i.pct), 1);
                 const isHighlighted = cat === highlightCategory;
                 const positionBadge = idx === 0 ? '<span style="background: var(--accent-lime); color: #000; padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.55rem;">1ST</span>' : '';
