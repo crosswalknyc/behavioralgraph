@@ -23,7 +23,7 @@ COPY . .
 # Copy config example as config
 RUN cp config.example.py config.py
 
-# Expose port
+# Expose port (Render will set PORT env var)
 EXPOSE 10000
 
 # Set environment variables
@@ -34,5 +34,6 @@ ENV PYTHONUNBUFFERED=1
 # --access-logfile - logs to stdout
 # --error-logfile - logs to stderr
 # Removed --preload for faster startup
-# Reduced timeout to 60s for faster health check response
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:10000", "--workers", "1", "--threads", "2", "--timeout", "60", "--access-logfile", "-", "--error-logfile", "-"]
+# Increased timeout to 120s to allow for initialization
+# Use PORT env var from Render (defaults to 10000 if not set)
+CMD gunicorn app:app --bind 0.0.0.0:${PORT:-10000} --workers 1 --threads 2 --timeout 120 --access-logfile - --error-logfile - --keep-alive 5
