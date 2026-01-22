@@ -2887,6 +2887,7 @@
             padding: 0.5rem 0;
             border-bottom: 1px solid var(--border-color);
             gap: 0.5rem;
+            position: relative;
         }
 
         .behavioral-item:hover {
@@ -2910,21 +2911,38 @@
             overflow: hidden;
             text-overflow: ellipsis;
             min-width: 0;
+            position: relative;
+            z-index: 2;
+            padding: 0.2rem 0.4rem;
+            cursor: help;
+        }
+
+        .behavioral-name-wrapper {
+            position: relative;
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            align-items: center;
         }
 
         .behavioral-bar-container {
-            width: 80px;
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 100%;
             height: 14px;
             background: var(--bg-dark);
             border-radius: 3px;
             overflow: hidden;
-            flex-shrink: 0;
+            z-index: 1;
         }
 
         .behavioral-bar {
             height: 100%;
             background: linear-gradient(90deg, var(--accent-blue), #4a8ac9);
             border-radius: 3px;
+            transition: width 0.3s ease;
         }
 
         .behavioral-pct {
@@ -15803,12 +15821,17 @@
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP))
                     : genPopPct.toFixed(1) + '%';
                 
+                // Bar width should always be based on percentage, not projection numbers
+                const barWidth = (profilePct / maxPct) * 100;
+                
                 return `
                     <div class="behavioral-item">
                         <span class="behavioral-rank">${idx + 1}</span>
-                        <span class="behavioral-name" title="${item.name}">${item.name}</span>
-                        <div class="behavioral-bar-container">
-                            <div class="behavioral-bar" style="width: ${(profilePct / maxPct) * 100}%"></div>
+                        <div class="behavioral-name-wrapper">
+                            <div class="behavioral-bar-container">
+                                <div class="behavioral-bar" style="width: ${barWidth}%"></div>
+                            </div>
+                            <span class="behavioral-name has-tooltip" data-tooltip="${item.name}">${item.name}</span>
                         </div>
                         <span class="behavioral-index" style="color: ${indexColor}; font-weight: 700;">${formatIndex(index)}</span>
                         <span class="behavioral-pct" style="color: var(--text-primary);">${profileDisplay}</span>
