@@ -15810,7 +15810,7 @@
             
             container.innerHTML = sortedCats.map((cat, idx) => {
                 const catId = cat.replace(/[^a-zA-Z0-9]/g, '');
-                const items = behavioral[cat];
+                const items = aggregatedBehavioral[cat];
                 // Default sort by percentage descending
                 const sortedItems = items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
                 const displayItems = sortedItems.slice(0, 30);
