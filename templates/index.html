@@ -14456,9 +14456,12 @@
                     education: '🎓', relationship: '💑'
                 }[d.category] || '📊';
                 
+                // Use getAgeDisplayLabel for age ranges to match demographics page
+                const displayKey = d.category === 'age' ? getAgeDisplayLabel(d.key) : d.key;
+                
                 differentiators.push({
                     icon: catEmoji,
-                    text: `${d.key}`,
+                    text: `${displayKey}`,
                     value: `+${(d.idx - 100).toFixed(0)}%`,
                     valueClass: 'positive'
                 });
@@ -14478,9 +14481,11 @@
             
             const topUnder = underIndexes.sort((a, b) => a.idx - b.idx).slice(0, 2);
             topUnder.forEach(u => {
+                // Use getAgeDisplayLabel for age ranges to match demographics page
+                const displayKey = u.category === 'age' ? getAgeDisplayLabel(u.key) : u.key;
                 differentiators.push({
                     icon: '⚠️',
-                    text: `Under-indexes: ${u.key}`,
+                    text: `Under-indexes: ${displayKey}`,
                     value: `${(u.idx - 100).toFixed(0)}%`,
                     valueClass: 'negative'
                 });
@@ -18161,9 +18166,11 @@
                         ? formatNumber(Math.round((h.genPopPct / 100) * US_POP_DEMO))
                         : h.genPopPct.toFixed(1) + '%';
                     const indexClass = h.index >= 100 ? 'high' : 'low';
+                    // Use getAgeDisplayLabel for age ranges to match demographics page
+                    const displayValue = h.category.toLowerCase() === 'age' ? getAgeDisplayLabel(h.value) : h.value;
                     return `
                     <div class="highlight-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
-                        <span class="label" style="flex: 1; font-size: 0.85rem;">${h.value}</span>
+                        <span class="label" style="flex: 1; font-size: 0.85rem;">${displayValue}</span>
                         <span class="diff-col-pct" style="min-width: 80px; text-align: right; font-size: 0.85rem;">${profileDisplay}</span>
                         <span class="diff-col-gp" style="min-width: 80px; text-align: right; font-size: 0.85rem; color: var(--text-secondary);">${genPopDisplay}</span>
                         <span class="differentiator-index ${indexClass}" style="min-width: 70px; text-align: right;">${formatIndex(h.index)}</span>
