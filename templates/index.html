@@ -9332,20 +9332,15 @@
         // Global tooltip system to avoid overflow clipping
         function initGlobalTooltip() {
             const tooltip = document.getElementById('globalTooltip');
-            if (!tooltip) {
-                console.error('❌ globalTooltip element not found!');
-                return;
-            }
-            console.log('✅ Global tooltip system initialized');
+            if (!tooltip) return;
             
             let hideTimeout = null;
             
             // Use event delegation for all .has-tooltip elements
-            document.addEventListener('mouseover', function(e) {
+            document.addEventListener('mouseenter', function(e) {
+                if (!e.target || typeof e.target.closest !== 'function') return;
                 const target = e.target.closest('.has-tooltip');
                 if (!target) return;
-                
-                console.log('🎯 Tooltip target found:', target, 'hover-disabled:', document.body.classList.contains('hover-disabled'));
                 
                 // Check if hover is disabled globally (Profile IQ uses body.hover-disabled)
                 if (document.body.classList.contains('hover-disabled')) {
@@ -9362,12 +9357,7 @@
                 }
                 
                 const text = target.getAttribute('data-tooltip');
-                if (!text) {
-                    console.log('❌ No tooltip text found');
-                    return;
-                }
-                
-                console.log('✅ Showing tooltip:', text.substring(0, 50) + '...');
+                if (!text) return;
                 
                 clearTimeout(hideTimeout);
                 
@@ -9387,59 +9377,46 @@
                 tooltip.style.width = tooltipWidth + 'px';
                 const tooltipHeight = tooltip.offsetHeight;
                 
-                // Get element position relative to viewport
+                // Get element position
                 const rect = target.getBoundingClientRect();
                 
-                // Position tooltip ABOVE the element by default
-                let finalTop = rect.top - 80; // 80px above element
-                let finalLeft = rect.left + (rect.width / 2) - 150; // Center horizontally
+                // Calculate horizontal position (center on element, but keep in viewport)
+                let left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
+                if (left < 10) left = 10;
+                if (left + tooltipWidth > window.innerWidth - 10) {
+                    left = window.innerWidth - tooltipWidth - 10;
+                }
+                
+                // Calculate vertical position (prefer above, but show below if no room)
+                let top = rect.top - tooltipHeight - 12;
                 let showBelow = false;
                 
-                // If tooltip would go off top, show below element instead
-                if (finalTop < 10) {
-                    finalTop = rect.bottom + 10;
+                if (top < 10) {
+                    // Not enough room above, show below
+                    top = rect.bottom + 12;
                     showBelow = true;
                 }
                 
-                // Keep within horizontal bounds
-                if (finalLeft < 10) finalLeft = 10;
-                if (finalLeft > window.innerWidth - 320) finalLeft = window.innerWidth - 320;
-                
-                // Keep within vertical bounds - if still off bottom, force to top
-                if (finalTop > window.innerHeight - 100) {
-                    finalTop = Math.max(10, rect.top - 80);
+                // Make sure tooltip doesn't go off bottom of screen either
+                if (top + tooltipHeight > window.innerHeight - 10) {
+                    top = window.innerHeight - tooltipHeight - 10;
                 }
                 
-                tooltip.setAttribute('style', `
-                    position: fixed !important;
-                    left: ${finalLeft}px !important;
-                    top: ${finalTop}px !important;
-                    visibility: visible !important;
-                    opacity: 1 !important;
-                    display: block !important;
-                    z-index: 2147483647 !important;
-                    background: #1a2a3a !important;
-                    color: #ffffff !important;
-                    padding: 12px 16px !important;
-                    border-radius: 8px !important;
-                    font-size: 14px !important;
-                    max-width: 300px !important;
-                    min-width: 200px !important;
-                    box-shadow: 0 8px 32px rgba(0,0,0,0.8), 0 0 0 3px #c8e600 !important;
-                    pointer-events: none !important;
-                    transform: none !important;
-                    animation: none !important;
-                    transition: none !important;
-                `);
-                
-                console.log('🎨 Tooltip showing at:', finalLeft, finalTop);
+                // Apply final position
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+                tooltip.style.visibility = '';
+                tooltip.style.opacity = '';
+                tooltip.style.display = '';
                 
                 if (showBelow) {
                     tooltip.classList.add('below');
                 }
                 
-                // Show tooltip
-                tooltip.classList.add('visible');
+                // Small delay before showing for smooth animation
+                requestAnimationFrame(() => {
+                    tooltip.classList.add('visible');
+                });
                 
             }, true);
             
@@ -23332,6 +23309,6 @@
     </div>
     
     <!-- Global Tooltip Element - placed at end of body to ensure highest z-index layer -->
-    <div id="globalTooltip" style="position: fixed !important; z-index: 2147483647 !important; pointer-events: none;"></div>
+    <div id="globalTooltip"></div>
 </body>
 </html>
