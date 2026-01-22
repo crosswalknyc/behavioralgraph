@@ -15825,6 +15825,10 @@
                 const isMostPurchased = cat.toUpperCase().includes('MOST PURCHASED BRANDS') || cat.toUpperCase() === 'MOST PURCHASED';
                 const sliceOptions = ['all', 'apparel/footwear', 'accessories', 'beauty/wellness', 'health & wellness', 'home/outdoor', 'toys'];
                 
+                // Check if this is WHERE THEY SHOP for slice dropdown
+                const isWhereTheyShop = cat.toUpperCase() === 'WHERE THEY SHOP';
+                const whereTheyShopSliceOptions = ['all', 'apparel/footwear', 'accessories', 'beauty/wellness', 'health & wellness', 'home/outdoor', 'toys'];
+                
                 // Check if this is SPORTS for slice dropdown
                 const isSports = cat.toUpperCase() === 'SPORTS';
                 const sportsSliceOptions = ['all', 'AFC', 'Sports Team', 'la liga', 'metropolitan division', 'MLB', 'MLS', 'eastern conference', 'central division', 'atlantic division', 'AFC EAST', 'NBA', 'NFC east', 'nfc north', 'nfc south', 'nfc west', 'nfl', 'NFC', 'AFC North', 'NWSL', 'premier league', 'rugby', 'serie a', 'soccer', 'pacific division', 'afc south', 'afc west', 'AL', 'wnba', 'al central', 'al east', 'al west', 'sports organizations', 'horse racing'];
@@ -15863,6 +15867,12 @@
                                 <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceMostPurchased('${catId}', '${cat}', this.value)" style="padding: 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); margin-right: 0.5rem;">
                                     <option value="all">Slice By: All</option>
                                     ${sliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${opt.charAt(0).toUpperCase() + opt.slice(1)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isWhereTheyShop ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceWhereTheyShop('${catId}', '${cat}', this.value)" style="padding: 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); margin-right: 0.5rem;">
+                                    <option value="all">Slice By: All</option>
+                                    ${whereTheyShopSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${opt.charAt(0).toUpperCase() + opt.slice(1)}</option>`).join('')}
                                 </select>
                             ` : ''}
                             ${isSports ? `
@@ -16199,7 +16209,7 @@
                 const sliceValue = sliceSelect.value;
                 const catUpper = cat.toUpperCase();
                 
-                if (catUpper === 'MOST PURCHASED BRANDS' || catUpper === 'MOST PURCHASED') {
+                if (catUpper === 'MOST PURCHASED BRANDS' || catUpper === 'MOST PURCHASED' || catUpper === 'WHERE THEY SHOP') {
                     const sliceMap = {
                         'apparel/footwear': ['APPAREL', 'FOOTWEAR', 'APPAREL/FOOTWEAR', 'CLOTHING', 'SHOES'],
                         'accessories': ['ACCESSORIES', 'ACCESSORY', 'JEWELRY', 'WATCHES', 'BAGS'],
@@ -16289,7 +16299,7 @@
                 const sliceValue = sliceSelect.value;
                 const catUpper = cat.toUpperCase();
                 
-                if (catUpper === 'MOST PURCHASED BRANDS' || catUpper === 'MOST PURCHASED') {
+                if (catUpper === 'MOST PURCHASED BRANDS' || catUpper === 'MOST PURCHASED' || catUpper === 'WHERE THEY SHOP') {
                     const sliceMap = {
                         'apparel/footwear': ['APPAREL', 'FOOTWEAR', 'APPAREL/FOOTWEAR', 'CLOTHING', 'SHOES'],
                         'accessories': ['ACCESSORIES', 'ACCESSORY', 'JEWELRY', 'WATCHES', 'BAGS'],
@@ -16483,6 +16493,66 @@
                 filtered = items.filter(item => {
                     const originalCat = item.originalCategory || '';
                     return sliceKeywords.some(keyword => originalCat.toUpperCase() === keyword.toUpperCase());
+                });
+            }
+            
+            // Apply current search filter if any
+            const searchInput = listEl.closest('.behavioral-card').querySelector('input[type="text"]');
+            if (searchInput && searchInput.value.trim()) {
+                filtered = filtered.filter(i => i.name.toLowerCase().includes(searchInput.value.toLowerCase()));
+            }
+            
+            // Apply current sort
+            const sortSelect = listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select');
+            if (sortSelect) {
+                const sortValue = sortSelect.value;
+                if (sortValue === 'index') {
+                    filtered = filtered.sort((a, b) => (b.index || 0) - (a.index || 0));
+                } else if (sortValue === 'pct') {
+                    filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                } else if (sortValue === 'alpha') {
+                    filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                }
+            }
+            
+            const displayItems = filtered.slice(0, 50);
+            const maxPct = Math.max(...displayItems.map(i => i.pct), 1);
+            listEl.innerHTML = displayItems.length > 0 
+                ? renderBehavioralItems(displayItems, maxPct)
+                : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found</div>';
+        }
+        
+        function sliceWhereTheyShop(catId, cat, sliceValue) {
+            currentSlices[cat] = sliceValue;
+            const listEl = document.getElementById('list-' + catId);
+            const items = allBehavioralData[cat] || [];
+            
+            // Filter items based on slice
+            let filtered = items;
+            if (sliceValue && sliceValue !== 'all') {
+                // Map slice values to possible category/subcategory matches
+                const sliceMap = {
+                    'apparel/footwear': ['APPAREL', 'FOOTWEAR', 'APPAREL/FOOTWEAR', 'CLOTHING', 'SHOES'],
+                    'accessories': ['ACCESSORIES', 'ACCESSORY', 'JEWELRY', 'WATCHES', 'BAGS'],
+                    'beauty/wellness': ['BEAUTY', 'WELLNESS', 'BEAUTY/WELLNESS', 'COSMETICS', 'SKINCARE', 'MAKEUP'],
+                    'health & wellness': ['HEALTH', 'WELLNESS', 'HEALTH & WELLNESS', 'HEALTH AND WELLNESS', 'VITAMINS', 'SUPPLEMENTS'],
+                    'home/outdoor': ['HOME', 'OUTDOOR', 'HOME/OUTDOOR', 'FURNITURE', 'GARDEN', 'DECOR'],
+                    'toys': ['TOYS', 'TOY', 'GAMES', 'GAMING']
+                };
+                
+                const sliceKeywords = sliceMap[sliceValue.toLowerCase()] || [];
+                
+                // Filter items that match the slice
+                // Check if item has subcategory field, or check item name/category
+                filtered = items.filter(item => {
+                    // Check subcategory if it exists
+                    if (item.subcategory) {
+                        const subcatUpper = item.subcategory.toUpperCase();
+                        return sliceKeywords.some(keyword => subcatUpper.includes(keyword));
+                    }
+                    // Check item name for keywords
+                    const nameUpper = (item.name || '').toUpperCase();
+                    return sliceKeywords.some(keyword => nameUpper.includes(keyword));
                 });
             }
             
