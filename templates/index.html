@@ -15647,7 +15647,9 @@
             container.innerHTML = sortedCats.map((cat, idx) => {
                 const catId = cat.replace(/[^a-zA-Z0-9]/g, '');
                 const items = behavioral[cat];
-                const displayItems = items.slice(0, 30);
+                // Default sort by percentage descending
+                const sortedItems = items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                const displayItems = sortedItems.slice(0, 30);
                 const maxPct = Math.max(...displayItems.map(i => i.pct), 1);
                 const isHighlighted = cat === highlightCategory;
                 const positionBadge = idx === 0 ? '<span style="background: var(--accent-lime); color: #000; padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.55rem;">1ST</span>' : '';
@@ -15694,7 +15696,7 @@
                             <input type="text" placeholder="Search..." oninput="searchInCard('${catId}', this.value)">
                             <select class="behavioral-sort-select" onchange="sortBehavioralCard('${catId}', '${cat}', this.value)">
                                 <option value="index">Index ↓</option>
-                                <option value="pct">% ↓</option>
+                                <option value="pct" selected>% ↓</option>
                                 <option value="alpha">A-Z</option>
                             </select>
                         </div>
