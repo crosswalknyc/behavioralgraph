@@ -6466,10 +6466,8 @@
     </style>
 </head>
 <body>
-    <!-- TEST RED BOX - SHOULD BE VISIBLE AT TOP LEFT -->
-    <div id="testRedBox2" style="position: fixed !important; left: 20px !important; top: 20px !important; width: 400px !important; height: 80px !important; background: red !important; color: white !important; padding: 15px !important; font-size: 16px !important; font-weight: bold !important; z-index: 2147483647 !important; border: 3px solid yellow !important;">
-        TEST BOX AT TOP OF BODY - IF YOU SEE THIS, IT WORKS
-    </div>
+    <!-- Global Tooltip Element - MUST be at top of body to render correctly -->
+    <div id="globalTooltip" style="position: fixed; left: -9999px; top: -9999px; background: linear-gradient(135deg, #1a2a3a, #0d1a2a); color: #e6f1ff; padding: 12px 16px; border-radius: 8px; font-size: 14px; max-width: 300px; z-index: 2147483647; box-shadow: 0 8px 32px rgba(0,0,0,0.8), 0 0 0 2px #c8e600; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity 0.15s ease;"></div>
     
     <div class="container">
         <header>
@@ -9359,27 +9357,30 @@
                         if (!text) return;
                         
                         tooltip.textContent = text;
-                        tooltip.classList.remove('below');
                         
                         const rect = this.getBoundingClientRect();
                         let left = rect.left + (rect.width / 2) - 150;
-                        let top = rect.top - 80;
+                        let top = rect.top - 70;
                         
                         // Keep in viewport
                         if (left < 10) left = 10;
                         if (left > window.innerWidth - 320) left = window.innerWidth - 320;
                         if (top < 10) {
                             top = rect.bottom + 10;
-                            tooltip.classList.add('below');
                         }
                         
+                        // Show tooltip with inline styles
                         tooltip.style.left = left + 'px';
                         tooltip.style.top = top + 'px';
-                        tooltip.classList.add('visible');
+                        tooltip.style.opacity = '1';
+                        tooltip.style.visibility = 'visible';
                     });
                     
                     el.addEventListener('mouseleave', function() {
-                        tooltip.classList.remove('visible');
+                        tooltip.style.opacity = '0';
+                        tooltip.style.visibility = 'hidden';
+                        tooltip.style.left = '-9999px';
+                        tooltip.style.top = '-9999px';
                     });
                 });
             }
@@ -23263,12 +23264,5 @@
         </div>
     </div>
     
-    <!-- Test element to verify rendering -->
-    <div id="testRedBox" style="position: fixed; left: 50px; top: 50px; width: 300px; height: 100px; background-color: #ff0000; color: #ffffff; padding: 20px; font-size: 18px; font-weight: bold; z-index: 999999999; border: 5px solid yellow;">
-        IF YOU SEE THIS RED BOX, HTML IS RENDERING
-    </div>
-    
-    <!-- Global Tooltip Element - placed at end of body to ensure highest z-index layer -->
-    <div id="globalTooltip"></div>
 </body>
 </html>
