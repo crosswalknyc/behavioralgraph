@@ -25350,11 +25350,19 @@
                         stateData[state] = { pct: 0, genPopPct: 0, index: 0, count: 0, names: [], cities: [] };
                     }
                     stateData[state].pct += loc.pct;
-                    // Sum gen pop percentage the same way as profile pct (apples to apples)
-                    let genPopPct = loc.genPopPct || 0;
-                    // Normalize: if it's a decimal like 0.04, convert to 4%
-                    if (genPopPct > 0 && genPopPct < 1) {
-                        genPopPct = genPopPct * 100;
+                    // Calculate gen pop percentage from profile pct and index (apples to apples)
+                    // Formula: genPopPct = (profilePct / index) * 100
+                    // If index is 200, that means profile is 2x gen pop, so genPopPct = profilePct / 2
+                    let genPopPct = 0;
+                    if (loc.index && loc.index > 0) {
+                        genPopPct = (loc.pct / loc.index) * 100;
+                    } else if (loc.genPopPct) {
+                        // Fallback: use provided genPopPct if available
+                        genPopPct = loc.genPopPct;
+                        // Normalize: if it's a decimal like 0.04, convert to 4%
+                        if (genPopPct > 0 && genPopPct < 1) {
+                            genPopPct = genPopPct * 100;
+                        }
                     }
                     stateData[state].genPopPct += genPopPct;
                     stateData[state].index += loc.index || 100;
