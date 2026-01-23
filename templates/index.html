@@ -14478,6 +14478,13 @@
                 if (dashboardLayout) {
                     dashboardLayout.style.gap = '0';
                 }
+                
+                // Auto-run comparison if profiles are selected
+                setTimeout(() => {
+                    if (selectedForComparison.size > 0) {
+                        runComparison();
+                    }
+                }, 100);
             } else {
                 // Show the main profile selector sidebar for other tabs
                 const mainSidebar = document.querySelector('.persistent-sidebar');
