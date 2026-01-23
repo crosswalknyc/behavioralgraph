@@ -4890,7 +4890,10 @@ def rename_file():
                     raw_name = raw_name.replace('_', ' ')
                     new_display_name = smart_title_case(raw_name)
                     
+                    # Update ALL name fields used for display
                     job['name'] = new_display_name
+                    job['project_name'] = new_display_name
+                    job['brand'] = new_display_name
                     print(f"📝 Updated display name to: {new_display_name}")
                     break
             save_persisted_cache()
