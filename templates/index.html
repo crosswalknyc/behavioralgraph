@@ -16232,6 +16232,7 @@
             const departmentStores = ['MACY\'S', 'NORDSTROM', 'BLOOMINGDALE\'S', 'NEIMAN MARCUS', 'SAKS', 'DILLARD\'S', 'JC PENNEY', 'JCPENNEY', 'BELK', 'VON MAUR', 'LORD & TAYLOR'];
             const ecommerceStores = ['AMAZON', 'EBAY', 'ETSY', 'CHEWY', 'WAYFAIR', 'OVERSTOCK', 'ZAPPOS', 'WISH', 'SHEIN', 'TEMU', 'ALIBABA', 'ALIEXPRESS', 'MERCARI', 'POSHMARK', 'THREDDUP'];
             const groceryStores = ['PUBLIX', 'HEB', 'H-E-B', 'KROGER', 'SAFEWAY', 'ALBERTSONS', 'WHOLE FOODS', 'TRADER JOE\'S', 'ALDI', 'LIDL', 'WEGMANS', 'SPROUTS', 'FOOD LION', 'GIANT', 'STOP & SHOP', 'HARRIS TEETER', 'MEIJER', 'WINN-DIXIE', 'PIGGLY WIGGLY', 'SAVE-A-LOT', 'GROCERY OUTLET'];
+            const searchEngines = ['GOOGLE', 'YAHOO', 'BING', 'DUCKDUCKGO', 'DUCK DUCK GO', 'ASK', 'AOL', 'BAIDU', 'YANDEX', 'ECOSIA', 'STARTPAGE', 'BRAVE SEARCH'];
             
             // Get all shopping/purchased items
             const shoppingItems = allItems.filter(i => 
@@ -16283,6 +16284,20 @@
                     icon: '🥬',
                     text: `<strong>Grocery:</strong> ${groceryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${groceryMatches[0].pct.toFixed(1)}% | GP: ${groceryMatches[0].genPop.toFixed(1)}% | ${formatIndex(groceryMatches[0].index)})</span>`,
                     tooltip: `Grocery: This audience shops at ${groceryMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store sampling, circular ads, or loyalty card targeting.`
+                });
+            }
+            
+            // Search Engines
+            const searchMatches = allItems.filter(i => 
+                searchEngines.some(engine => i.name.toUpperCase().includes(engine)) ||
+                i.category.toUpperCase().includes('SEARCH') ||
+                i.name.toUpperCase().includes('SEARCH')
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (searchMatches.length > 0) {
+                activations.push({
+                    icon: '🔍',
+                    text: `<strong>Search:</strong> ${searchMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${searchMatches[0].pct.toFixed(1)}% | GP: ${searchMatches[0].genPop.toFixed(1)}% | ${formatIndex(searchMatches[0].index)})</span>`,
+                    tooltip: `Search Engines: This audience uses ${searchMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Prioritize SEM/PPC campaigns on these platforms for maximum reach.`
                 });
             }
             
