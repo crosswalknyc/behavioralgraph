@@ -16234,6 +16234,18 @@
             const groceryStores = ['PUBLIX', 'HEB', 'H-E-B', 'KROGER', 'SAFEWAY', 'ALBERTSONS', 'WHOLE FOODS', 'TRADER JOE\'S', 'ALDI', 'LIDL', 'WEGMANS', 'SPROUTS', 'FOOD LION', 'GIANT', 'STOP & SHOP', 'HARRIS TEETER', 'MEIJER', 'WINN-DIXIE', 'PIGGLY WIGGLY', 'SAVE-A-LOT', 'GROCERY OUTLET'];
             const searchEngines = ['GOOGLE', 'YAHOO', 'BING', 'DUCKDUCKGO', 'DUCK DUCK GO', 'ASK', 'AOL', 'BAIDU', 'YANDEX', 'ECOSIA', 'STARTPAGE', 'BRAVE SEARCH'];
             
+            // App/Platform categories
+            const foodDeliveryApps = ['DOORDASH', 'DOOR DASH', 'UBER EATS', 'UBEREATS', 'GRUBHUB', 'GRUB HUB', 'POSTMATES', 'INSTACART', 'SEAMLESS', 'CAVIAR', 'GOPUFF', 'GO PUFF', 'FAVOR', 'BITE SQUAD', 'WAITR', 'SLICE', 'CHOWNOW', 'EAT24', 'DELIVERY.COM', 'HUNGRY HOWIES'];
+            const rideshareApps = ['UBER', 'LYFT', 'WAYMO', 'CURB', 'VIA', 'GETT', 'JUNO', 'WINGZ', 'ALTO', 'EMPOWER'];
+            const fitnessApps = ['PELOTON', 'STRAVA', 'MYFITNESSPAL', 'MY FITNESS PAL', 'FITBIT', 'NIKE TRAINING', 'NIKE RUN', 'ADIDAS RUNNING', 'CALM', 'HEADSPACE', 'NOOM', 'WEIGHT WATCHERS', 'WW', 'ORANGETHEORY', 'CLASSPASS', 'MINDBODY', 'BEACHBODY', 'APPLE FITNESS', 'GARMIN', 'WHOOP', 'OURA'];
+            const financeApps = ['VENMO', 'PAYPAL', 'ZELLE', 'CASH APP', 'CASHAPP', 'APPLE PAY', 'GOOGLE PAY', 'SAMSUNG PAY', 'ROBINHOOD', 'COINBASE', 'ACORNS', 'MINT', 'CREDIT KARMA', 'CHIME', 'SOFI', 'MARCUS', 'ALLY', 'DISCOVER', 'CAPITAL ONE', 'BETTERMENT', 'WEALTHFRONT', 'PERSONAL CAPITAL', 'YNAB', 'KLARNA', 'AFTERPAY', 'AFFIRM'];
+            const travelApps = ['AIRBNB', 'VRBO', 'BOOKING.COM', 'EXPEDIA', 'HOTELS.COM', 'KAYAK', 'HOPPER', 'SKYSCANNER', 'PRICELINE', 'TRAVELOCITY', 'ORBITZ', 'TRIPADVISOR', 'TRIP ADVISOR', 'GOOGLE FLIGHTS', 'SOUTHWEST', 'DELTA', 'UNITED', 'AMERICAN AIRLINES', 'JETBLUE', 'SPIRIT', 'FRONTIER'];
+            const datingApps = ['TINDER', 'BUMBLE', 'HINGE', 'MATCH', 'OKCUPID', 'OK CUPID', 'PLENTY OF FISH', 'POF', 'EHARMONY', 'GRINDR', 'HER', 'COFFEE MEETS BAGEL', 'HAPPN', 'BADOO', 'ZOOSK', 'FEELD', 'RAYA'];
+            const gamingPlatforms = ['PLAYSTATION', 'XBOX', 'NINTENDO', 'STEAM', 'EPIC GAMES', 'ROBLOX', 'MINECRAFT', 'FORTNITE', 'CALL OF DUTY', 'FIFA', 'MADDEN', 'NBA 2K', 'TWITCH', 'DISCORD'];
+            const musicApps = ['SPOTIFY', 'APPLE MUSIC', 'PANDORA', 'TIDAL', 'AMAZON MUSIC', 'YOUTUBE MUSIC', 'SOUNDCLOUD', 'DEEZER', 'IHEART', 'IHEARTRADIO', 'AUDIBLE', 'SIRIUS', 'SIRIUSXM'];
+            const newsApps = ['CNN', 'FOX NEWS', 'MSNBC', 'NBC NEWS', 'ABC NEWS', 'CBS NEWS', 'BBC', 'NPR', 'NEW YORK TIMES', 'NYT', 'WASHINGTON POST', 'WALL STREET JOURNAL', 'WSJ', 'USA TODAY', 'HUFFPOST', 'BUZZFEED', 'REUTERS', 'AP NEWS', 'FLIPBOARD', 'APPLE NEWS', 'GOOGLE NEWS'];
+            const messagingApps = ['WHATSAPP', 'TELEGRAM', 'SIGNAL', 'IMESSAGE', 'FACEBOOK MESSENGER', 'MESSENGER', 'SNAPCHAT', 'WECHAT', 'LINE', 'VIBER', 'KIK', 'GROUPME', 'SLACK', 'TEAMS', 'ZOOM', 'WEBEX', 'GOOGLE MEET'];
+            
             // Get all shopping/purchased items
             const shoppingItems = allItems.filter(i => 
                 i.category.toUpperCase().includes('PURCHASED') || i.category.toUpperCase().includes('SHOP') || i.category.toUpperCase().includes('RETAIL')
@@ -16301,6 +16313,96 @@
                 });
             }
             
+            // Get all app/platform items for smart categorization
+            const appItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('APP') || i.category.toUpperCase().includes('PLATFORM') || 
+                i.category.toUpperCase().includes('USAGE') || i.category.toUpperCase().includes('SERVICE')
+            );
+            
+            // Food Delivery Apps
+            const foodDeliveryMatches = allItems.filter(i => 
+                foodDeliveryApps.some(app => i.name.toUpperCase().includes(app))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (foodDeliveryMatches.length > 0) {
+                activations.push({
+                    icon: '🍔',
+                    text: `<strong>Food Delivery:</strong> ${foodDeliveryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${foodDeliveryMatches[0].pct.toFixed(1)}% | GP: ${foodDeliveryMatches[0].genPop.toFixed(1)}% | ${formatIndex(foodDeliveryMatches[0].index)})</span>`,
+                    tooltip: `Food Delivery: This audience uses ${foodDeliveryMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider sponsored placements, promo code partnerships, or in-app advertising.`
+                });
+            }
+            
+            // Rideshare Apps
+            const rideshareMatches = allItems.filter(i => 
+                rideshareApps.some(app => i.name.toUpperCase().includes(app)) && !i.name.toUpperCase().includes('EATS')
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (rideshareMatches.length > 0) {
+                activations.push({
+                    icon: '🚗',
+                    text: `<strong>Rideshare:</strong> ${rideshareMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${rideshareMatches[0].pct.toFixed(1)}% | GP: ${rideshareMatches[0].genPop.toFixed(1)}% | ${formatIndex(rideshareMatches[0].index)})</span>`,
+                    tooltip: `Rideshare: This audience uses ${rideshareMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-app ads, promo partnerships, or event transportation sponsorships.`
+                });
+            }
+            
+            // Fitness Apps
+            const fitnessMatches = allItems.filter(i => 
+                fitnessApps.some(app => i.name.toUpperCase().includes(app))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (fitnessMatches.length > 0) {
+                activations.push({
+                    icon: '💪',
+                    text: `<strong>Fitness:</strong> ${fitnessMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${fitnessMatches[0].pct.toFixed(1)}% | GP: ${fitnessMatches[0].genPop.toFixed(1)}% | ${formatIndex(fitnessMatches[0].index)})</span>`,
+                    tooltip: `Fitness/Wellness: This audience uses ${fitnessMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider health-focused partnerships, workout integrations, or wellness sponsorships.`
+                });
+            }
+            
+            // Finance Apps
+            const financeMatches = allItems.filter(i => 
+                financeApps.some(app => i.name.toUpperCase().includes(app))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (financeMatches.length > 0) {
+                activations.push({
+                    icon: '💳',
+                    text: `<strong>Finance:</strong> ${financeMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${financeMatches[0].pct.toFixed(1)}% | GP: ${financeMatches[0].genPop.toFixed(1)}% | ${formatIndex(financeMatches[0].index)})</span>`,
+                    tooltip: `Finance/Payments: This audience uses ${financeMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider payment integrations, cashback offers, or fintech partnerships.`
+                });
+            }
+            
+            // Travel Apps
+            const travelMatches = allItems.filter(i => 
+                travelApps.some(app => i.name.toUpperCase().includes(app))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (travelMatches.length > 0) {
+                activations.push({
+                    icon: '✈️',
+                    text: `<strong>Travel:</strong> ${travelMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${travelMatches[0].pct.toFixed(1)}% | GP: ${travelMatches[0].genPop.toFixed(1)}% | ${formatIndex(travelMatches[0].index)})</span>`,
+                    tooltip: `Travel: This audience uses ${travelMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider travel package partnerships, destination marketing, or loyalty program integrations.`
+                });
+            }
+            
+            // Music/Audio Apps
+            const musicMatches = allItems.filter(i => 
+                musicApps.some(app => i.name.toUpperCase().includes(app))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (musicMatches.length > 0) {
+                activations.push({
+                    icon: '🎵',
+                    text: `<strong>Music/Audio:</strong> ${musicMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${musicMatches[0].pct.toFixed(1)}% | GP: ${musicMatches[0].genPop.toFixed(1)}% | ${formatIndex(musicMatches[0].index)})</span>`,
+                    tooltip: `Music/Audio: This audience uses ${musicMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider audio ads, playlist sponsorships, or podcast integrations.`
+                });
+            }
+            
+            // Gaming Platforms
+            const gamingMatches = allItems.filter(i => 
+                gamingPlatforms.some(platform => i.name.toUpperCase().includes(platform))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (gamingMatches.length > 0) {
+                activations.push({
+                    icon: '🎮',
+                    text: `<strong>Gaming:</strong> ${gamingMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${gamingMatches[0].pct.toFixed(1)}% | GP: ${gamingMatches[0].genPop.toFixed(1)}% | ${formatIndex(gamingMatches[0].index)})</span>`,
+                    tooltip: `Gaming: This audience engages with ${gamingMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-game advertising, esports sponsorships, or gaming influencer partnerships.`
+                });
+            }
+            
             // Fallback: General shopping if no specific matches
             if (bigBoxMatches.length === 0 && deptMatches.length === 0 && ecomMatches.length === 0 && groceryMatches.length === 0) {
                 const purchaseBrands = shoppingItems.sort((a, b) => b.index - a.index).slice(0, 2);
@@ -16358,7 +16460,7 @@
                 });
             }
             
-            document.getElementById('behavioralActivations').innerHTML = activations.slice(0, 7).map(a => `
+            document.getElementById('behavioralActivations').innerHTML = activations.slice(0, 10).map(a => `
                 <div class="behavioral-activation-item has-tooltip" data-tooltip="${a.tooltip || ''}">
                     <span class="icon">${a.icon}</span>
                     <span class="text">${a.text}</span>
