@@ -8568,147 +8568,195 @@
                     
                     <div class="affinity-grid" id="affinityGrid">
                         <div class="affinity-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Content & Entertainment">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
                                 <span style="display: flex; align-items: center; gap: 0.3rem;">
                                     <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                    <span class="has-tooltip" data-tooltip="Content & Entertainment: Shows, movies, streaming services, and entertainment content this audience engages with significantly more than the general population. Higher index = stronger affinity.">🎬 Content & Entertainment</span>
+                                    <span class="has-tooltip" data-tooltip="Content & Entertainment">🎬 Content</span>
                                 </span>
-                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Content & Entertainment')" data-tooltip="Export CSV: Download content & entertainment affinity data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Content & Entertainment')" data-tooltip="Add to Deck: Save content & entertainment affinities to your presentation deck.">➕</button></span>
+                                <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <select class="affinity-sort-select" onchange="sortAffinityList('affinityContent', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <option value="index">Idx ↓</option>
+                                        <option value="pct">% ↓</option>
+                                        <option value="genpop">GP ↓</option>
+                                    </select>
+                                    <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Content & Entertainment')">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Content & Entertainment')">➕</button></span>
+                                </span>
                             </h3>
-                            <p class="affinity-desc">Shows, movies, and streaming platforms this audience loves</p>
                             <div class="affinity-col-header">
-                                <span class="has-tooltip" data-tooltip="Item: The content, show, or platform name.">Item</span>
-                                <span class="has-tooltip" data-tooltip="Profile %: The percentage of this audience that engages with this item.">Profile %</span>
-                                <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that engages with this item.">Gen Pop %</span>
-                                <span class="has-tooltip" data-tooltip="Index: Affinity score vs Gen Pop. Higher = stronger preference. 200 = 2x more likely than average. Green = strong affinity.">Index</span>
+                                <span>Item</span>
+                                <span>Profile %</span>
+                                <span>GP %</span>
+                                <span>Index</span>
                             </div>
-                            <div id="affinityContent" class="affinity-list"></div>
+                            <div id="affinityContent" class="affinity-list" data-sort="index"></div>
                         </div>
                         
                         <div class="affinity-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Content & Entertainment (Under-Indexing)">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
                                 <span style="display: flex; align-items: center; gap: 0.3rem;">
                                     <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                    <span class="has-tooltip" data-tooltip="Content & Entertainment (Under-Indexing): Shows, movies, and streaming platforms where this audience under-indexes (<100 index). These are content types this audience engages with less than the general population.">❄️ Content & Entertainment (Under-Indexing)</span>
+                                    <span class="has-tooltip" data-tooltip="Content Under-Indexing">❄️ Content (Under)</span>
                                 </span>
-                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Content & Entertainment (Under-Indexing)')" data-tooltip="Export CSV: Download under-indexing content & entertainment data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Content & Entertainment (Under-Indexing)')" data-tooltip="Add to Deck: Save under-indexing content & entertainment data to your presentation deck.">➕</button></span>
+                                <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <select class="affinity-sort-select" onchange="sortAffinityList('affinityContentUnder', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <option value="index">Idx ↑</option>
+                                        <option value="pct">% ↓</option>
+                                        <option value="genpop">GP ↓</option>
+                                    </select>
+                                    <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Content & Entertainment (Under-Indexing)')">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Content & Entertainment (Under-Indexing)')">➕</button></span>
+                                </span>
                             </h3>
-                            <p class="affinity-desc">Content where this audience under-indexes</p>
                             <div class="affinity-col-header">
-                                <span class="has-tooltip" data-tooltip="Item: The content, show, or platform name.">Item</span>
-                                <span class="has-tooltip" data-tooltip="Profile %: The percentage of this audience that engages with this item.">Profile %</span>
-                                <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that engages with this item.">Gen Pop %</span>
-                                <span class="has-tooltip" data-tooltip="Index: Affinity score vs Gen Pop. Lower = less likely to engage. Red = under-indexing.">Index</span>
+                                <span>Item</span>
+                                <span>Profile %</span>
+                                <span>GP %</span>
+                                <span>Index</span>
                             </div>
-                            <div id="affinityContentUnder" class="affinity-list"></div>
+                            <div id="affinityContentUnder" class="affinity-list" data-sort="index"></div>
                         </div>
                         
                         <div class="affinity-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Brand Affinities">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
                                 <span style="display: flex; align-items: center; gap: 0.3rem;">
                                     <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                    <span class="has-tooltip" data-tooltip="Brand Affinities: Consumer brands this audience over-indexes for based on purchase behavior and engagement. Great for identifying sponsorship and partnership opportunities.">🛍️ Brand Affinities</span>
+                                    <span class="has-tooltip" data-tooltip="Brand Affinities">🛍️ Brands</span>
                                 </span>
-                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Brand Affinities')" data-tooltip="Export CSV: Download brand affinity data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Brand Affinities')" data-tooltip="Add to Deck: Save brand affinities to your presentation deck.">➕</button></span>
+                                <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <select class="affinity-sort-select" onchange="sortAffinityList('affinityBrands', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <option value="index">Idx ↓</option>
+                                        <option value="pct">% ↓</option>
+                                        <option value="genpop">GP ↓</option>
+                                    </select>
+                                    <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Brand Affinities')">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Brand Affinities')">➕</button></span>
+                                </span>
                             </h3>
-                            <p class="affinity-desc">Brands this audience over-indexes for</p>
                             <div class="affinity-col-header">
-                                <span class="has-tooltip" data-tooltip="Brand: The brand or company name.">Brand</span>
-                                <span class="has-tooltip" data-tooltip="Profile %: The percentage of this audience that engages with this brand.">Profile %</span>
-                                <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that engages with this brand.">Gen Pop %</span>
-                                <span class="has-tooltip" data-tooltip="Index: Affinity score vs Gen Pop. Higher = stronger brand preference. 500+ = very strong affinity.">Index</span>
+                                <span>Brand</span>
+                                <span>Profile %</span>
+                                <span>GP %</span>
+                                <span>Index</span>
                             </div>
-                            <div id="affinityBrands" class="affinity-list"></div>
+                            <div id="affinityBrands" class="affinity-list" data-sort="index"></div>
                         </div>
                         
                         <div class="affinity-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Brand Affinities (Under-Indexing)">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
                                 <span style="display: flex; align-items: center; gap: 0.3rem;">
                                     <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                    <span class="has-tooltip" data-tooltip="Brand Affinities (Under-Indexing): Brands where this audience under-indexes (<100 index). These are brands this audience engages with less than the general population.">❄️ Brand Affinities (Under-Indexing)</span>
+                                    <span class="has-tooltip" data-tooltip="Brand Under-Indexing">❄️ Brands (Under)</span>
                                 </span>
-                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Brand Affinities (Under-Indexing)')" data-tooltip="Export CSV: Download under-indexing brand data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Brand Affinities (Under-Indexing)')" data-tooltip="Add to Deck: Save under-indexing brand data to your presentation deck.">➕</button></span>
+                                <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <select class="affinity-sort-select" onchange="sortAffinityList('affinityBrandsUnder', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <option value="index">Idx ↑</option>
+                                        <option value="pct">% ↓</option>
+                                        <option value="genpop">GP ↓</option>
+                                    </select>
+                                    <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Brand Affinities (Under-Indexing)')">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Brand Affinities (Under-Indexing)')">➕</button></span>
+                                </span>
                             </h3>
-                            <p class="affinity-desc">Brands where this audience under-indexes</p>
                             <div class="affinity-col-header">
-                                <span class="has-tooltip" data-tooltip="Brand: The brand or company name.">Brand</span>
-                                <span class="has-tooltip" data-tooltip="Profile %: The percentage of this audience that engages with this brand.">Profile %</span>
-                                <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that engages with this brand.">Gen Pop %</span>
-                                <span class="has-tooltip" data-tooltip="Index: Affinity score vs Gen Pop. Lower = less likely to engage. Red = under-indexing.">Index</span>
+                                <span>Brand</span>
+                                <span>Profile %</span>
+                                <span>GP %</span>
+                                <span>Index</span>
                             </div>
-                            <div id="affinityBrandsUnder" class="affinity-list"></div>
+                            <div id="affinityBrandsUnder" class="affinity-list" data-sort="index"></div>
                         </div>
                         
                         <div class="affinity-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Digital Platforms">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
                                 <span style="display: flex; align-items: center; gap: 0.3rem;">
                                     <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                    <span class="has-tooltip" data-tooltip="Digital Platforms: Social media, apps, streaming services, and digital platforms this audience uses more than the general population. Useful for digital media planning and targeting.">📱 Digital Platforms</span>
+                                    <span class="has-tooltip" data-tooltip="Digital Platforms">📱 Platforms</span>
                                 </span>
-                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Digital Platforms')" data-tooltip="Export CSV: Download digital platform affinity data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Digital Platforms')" data-tooltip="Add to Deck: Save digital platform affinities to your presentation deck.">➕</button></span>
+                                <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <select class="affinity-sort-select" onchange="sortAffinityList('affinityPlatforms', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <option value="index">Idx ↓</option>
+                                        <option value="pct">% ↓</option>
+                                        <option value="genpop">GP ↓</option>
+                                    </select>
+                                    <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Digital Platforms')">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Digital Platforms')">➕</button></span>
+                                </span>
                             </h3>
-                            <p class="affinity-desc">Apps, websites, and social platforms they use</p>
                             <div class="affinity-col-header">
-                                <span class="has-tooltip" data-tooltip="Platform: The app, website, or social platform.">Platform</span>
-                                <span class="has-tooltip" data-tooltip="Profile %: The percentage of this audience that uses this platform.">Profile %</span>
-                                <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that uses this platform.">Gen Pop %</span>
-                                <span class="has-tooltip" data-tooltip="Index: Usage index vs Gen Pop. Higher = more likely to use this platform.">Index</span>
+                                <span>Platform</span>
+                                <span>Profile %</span>
+                                <span>GP %</span>
+                                <span>Index</span>
                             </div>
-                            <div id="affinityPlatforms" class="affinity-list"></div>
+                            <div id="affinityPlatforms" class="affinity-list" data-sort="index"></div>
                         </div>
                         
                         <div class="affinity-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Digital Platforms (Under-Indexing)">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
                                 <span style="display: flex; align-items: center; gap: 0.3rem;">
                                     <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                    <span class="has-tooltip" data-tooltip="Digital Platforms (Under-Indexing): Digital platforms where this audience under-indexes (<100 index). These are platforms this audience uses less than the general population.">❄️ Digital Platforms (Under-Indexing)</span>
+                                    <span class="has-tooltip" data-tooltip="Platform Under-Indexing">❄️ Platforms (Under)</span>
                                 </span>
-                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Digital Platforms (Under-Indexing)')" data-tooltip="Export CSV: Download under-indexing platform data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Digital Platforms (Under-Indexing)')" data-tooltip="Add to Deck: Save under-indexing platform data to your presentation deck.">➕</button></span>
+                                <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <select class="affinity-sort-select" onchange="sortAffinityList('affinityPlatformsUnder', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <option value="index">Idx ↑</option>
+                                        <option value="pct">% ↓</option>
+                                        <option value="genpop">GP ↓</option>
+                                    </select>
+                                    <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Digital Platforms (Under-Indexing)')">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Digital Platforms (Under-Indexing)')">➕</button></span>
+                                </span>
                             </h3>
-                            <p class="affinity-desc">Platforms where this audience under-indexes</p>
                             <div class="affinity-col-header">
-                                <span class="has-tooltip" data-tooltip="Platform: The app, website, or social platform.">Platform</span>
-                                <span class="has-tooltip" data-tooltip="Profile %: The percentage of this audience that uses this platform.">Profile %</span>
-                                <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that uses this platform.">Gen Pop %</span>
-                                <span class="has-tooltip" data-tooltip="Index: Usage index vs Gen Pop. Lower = less likely to use. Red = under-indexing.">Index</span>
+                                <span>Platform</span>
+                                <span>Profile %</span>
+                                <span>GP %</span>
+                                <span>Index</span>
                             </div>
-                            <div id="affinityPlatformsUnder" class="affinity-list"></div>
+                            <div id="affinityPlatformsUnder" class="affinity-list" data-sort="index"></div>
                         </div>
                         
                         <div class="affinity-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Music & Audio">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
                                 <span style="display: flex; align-items: center; gap: 0.3rem;">
                                     <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                    <span class="has-tooltip" data-tooltip="Music & Audio: Music streaming services, genres, artists, and podcast preferences. Shows audio content affinities for media planning and sponsorship opportunities.">🎵 Music & Audio</span>
+                                    <span class="has-tooltip" data-tooltip="Music & Audio">🎵 Music</span>
                                 </span>
-                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Music & Audio')" data-tooltip="Export CSV: Download music & audio affinity data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Music & Audio')" data-tooltip="Add to Deck: Save music & audio affinities to your presentation deck.">➕</button></span>
+                                <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <select class="affinity-sort-select" onchange="sortAffinityList('affinityMusic', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <option value="index">Idx ↓</option>
+                                        <option value="pct">% ↓</option>
+                                        <option value="genpop">GP ↓</option>
+                                    </select>
+                                    <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Music & Audio')">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Music & Audio')">➕</button></span>
+                                </span>
                             </h3>
-                            <p class="affinity-desc">Music genres, artists, and podcasts</p>
                             <div class="affinity-col-header">
-                                <span class="has-tooltip" data-tooltip="Artist/Service: The artist, genre, or music streaming service.">Artist/Service</span>
-                                <span class="has-tooltip" data-tooltip="Profile %: The percentage of this audience that engages with this music/audio content.">Profile %</span>
-                                <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that engages with this music/audio content.">Gen Pop %</span>
-                                <span class="has-tooltip" data-tooltip="Index: Listening/engagement index vs Gen Pop. Higher = stronger music affinity.">Index</span>
+                                <span>Artist/Service</span>
+                                <span>Profile %</span>
+                                <span>GP %</span>
+                                <span>Index</span>
                             </div>
-                            <div id="affinityMusic" class="affinity-list"></div>
+                            <div id="affinityMusic" class="affinity-list" data-sort="index"></div>
                         </div>
                         
                         <div class="affinity-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Music & Audio (Under-Indexing)">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
                                 <span style="display: flex; align-items: center; gap: 0.3rem;">
                                     <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                    <span class="has-tooltip" data-tooltip="Music & Audio (Under-Indexing): Music and audio content where this audience under-indexes (<100 index). These are music genres, artists, or services this audience engages with less than the general population.">❄️ Music & Audio (Under-Indexing)</span>
+                                    <span class="has-tooltip" data-tooltip="Music Under-Indexing">❄️ Music (Under)</span>
                                 </span>
-                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Music & Audio (Under-Indexing)')" data-tooltip="Export CSV: Download under-indexing music & audio data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Music & Audio (Under-Indexing)')" data-tooltip="Add to Deck: Save under-indexing music & audio data to your presentation deck.">➕</button></span>
+                                <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <select class="affinity-sort-select" onchange="sortAffinityList('affinityMusicUnder', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <option value="index">Idx ↑</option>
+                                        <option value="pct">% ↓</option>
+                                        <option value="genpop">GP ↓</option>
+                                    </select>
+                                    <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('affinity', 'Music & Audio (Under-Indexing)')">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('affinity', 'Music & Audio (Under-Indexing)')">➕</button></span>
+                                </span>
                             </h3>
-                            <p class="affinity-desc">Music and audio where this audience under-indexes</p>
                             <div class="affinity-col-header">
-                                <span class="has-tooltip" data-tooltip="Artist/Service: The artist, genre, or music streaming service.">Artist/Service</span>
-                                <span class="has-tooltip" data-tooltip="Profile %: The percentage of this audience that engages with this music/audio content.">Profile %</span>
-                                <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that engages with this music/audio content.">Gen Pop %</span>
-                                <span class="has-tooltip" data-tooltip="Index: Listening/engagement index vs Gen Pop. Lower = less likely to engage. Red = under-indexing.">Index</span>
+                                <span>Artist/Service</span>
+                                <span>Profile %</span>
+                                <span>GP %</span>
+                                <span>Index</span>
                             </div>
-                            <div id="affinityMusicUnder" class="affinity-list"></div>
+                            <div id="affinityMusicUnder" class="affinity-list" data-sort="index"></div>
                         </div>
                         
                         <div class="affinity-card wide" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Affinity Network">
@@ -8821,27 +8869,51 @@
                     
                     <div class="sponsorship-grid">
                         <div class="sponsor-card highlight">
-                            <h3 class="has-tooltip" data-tooltip="Top Sponsor Categories: Brand categories where this audience significantly over-indexes, making them ideal sponsorship targets.">🏆 Top Sponsor Categories</h3>
-                            <p class="sponsor-desc">Categories where this audience significantly over-indexes</p>
-                            <div id="sponsorCategories" class="sponsor-list"></div>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
+                                <span class="has-tooltip" data-tooltip="Top Sponsor Categories">🏆 Top Categories</span>
+                                <select class="affinity-sort-select" onchange="sortSponsorList('sponsorCategories', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="index">Idx ↓</option>
+                                    <option value="pct">% ↓</option>
+                                    <option value="genpop">GP ↓</option>
+                                </select>
+                            </h3>
+                            <div id="sponsorCategories" class="sponsor-list" data-sort="index"></div>
                         </div>
                         
                         <div class="sponsor-card">
-                            <h3 class="has-tooltip" data-tooltip="Ideal Brand Partners: Specific brands with the highest audience overlap - these are your best-fit sponsorship targets.">🎯 Ideal Brand Partners</h3>
-                            <p class="sponsor-desc">Specific brands with highest audience overlap</p>
-                            <div id="sponsorBrands" class="sponsor-list"></div>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
+                                <span class="has-tooltip" data-tooltip="Ideal Brand Partners">🎯 Brand Partners</span>
+                                <select class="affinity-sort-select" onchange="sortSponsorList('sponsorBrands', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="index">Idx ↓</option>
+                                    <option value="pct">% ↓</option>
+                                    <option value="genpop">GP ↓</option>
+                                </select>
+                            </h3>
+                            <div id="sponsorBrands" class="sponsor-list" data-sort="index"></div>
                         </div>
                         
                         <div class="sponsor-card">
-                            <h3 class="has-tooltip" data-tooltip="Purchase Behaviors: What this audience buys, revealing their shopping preferences and purchase intent.">💳 Purchase Behaviors</h3>
-                            <p class="sponsor-desc">What this audience buys</p>
-                            <div id="sponsorPurchase" class="sponsor-list"></div>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
+                                <span class="has-tooltip" data-tooltip="Purchase Behaviors">💳 Purchase Behaviors</span>
+                                <select class="affinity-sort-select" onchange="sortSponsorList('sponsorPurchase', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="index">Idx ↓</option>
+                                    <option value="pct">% ↓</option>
+                                    <option value="genpop">GP ↓</option>
+                                </select>
+                            </h3>
+                            <div id="sponsorPurchase" class="sponsor-list" data-sort="index"></div>
                         </div>
                         
                         <div class="sponsor-card">
-                            <h3>🚫 Avoid These Categories</h3>
-                            <p class="sponsor-desc">Categories where audience under-indexes</p>
-                            <div id="sponsorAvoid" class="sponsor-list negative"></div>
+                            <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
+                                <span>🚫 Avoid Categories</span>
+                                <select class="affinity-sort-select" onchange="sortSponsorList('sponsorAvoid', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="index">Idx ↑</option>
+                                    <option value="pct">% ↓</option>
+                                    <option value="genpop">GP ↓</option>
+                                </select>
+                            </h3>
+                            <div id="sponsorAvoid" class="sponsor-list negative" data-sort="index"></div>
                         </div>
                         
                         <div class="sponsor-card wide">
@@ -21535,6 +21607,18 @@
             document.getElementById('affinityMusic').innerHTML = renderAffinityList(musicItems);
             document.getElementById('affinityMusicUnder').innerHTML = renderAffinityList(musicItemsUnder);
             
+            // Store data globally for sorting
+            window.affinityListData = {
+                affinityContent: contentItems,
+                affinityContentUnder: contentItemsUnder,
+                affinityBrands: brandItems,
+                affinityBrandsUnder: brandItemsUnder,
+                affinityPlatforms: platformItems,
+                affinityPlatformsUnder: platformItemsUnder,
+                affinityMusic: musicItems,
+                affinityMusicUnder: musicItemsUnder
+            };
+            
             // Restore module order after rendering
             restoreAffinityModuleOrder();
             
@@ -21582,6 +21666,34 @@
                 </div>
             `;
             }).join('');
+        }
+        
+        // Sort affinity list by different criteria
+        function sortAffinityList(listId, sortBy) {
+            const container = document.getElementById(listId);
+            if (!container || !window.affinityListData || !window.affinityListData[listId]) return;
+            
+            let items = [...window.affinityListData[listId]];
+            const isUnderList = listId.includes('Under');
+            
+            // Sort based on criteria
+            if (sortBy === 'index') {
+                // Under-indexing lists sort ascending (lowest first), over-indexing sort descending
+                items.sort((a, b) => isUnderList ? a.index - b.index : b.index - a.index);
+            } else if (sortBy === 'pct') {
+                items.sort((a, b) => b.pct - a.pct);
+            } else if (sortBy === 'genpop') {
+                items.sort((a, b) => {
+                    let gpA = a.genPopPct || 0;
+                    let gpB = b.genPopPct || 0;
+                    if (gpA > 0 && gpA < 1) gpA *= 100;
+                    if (gpB > 0 && gpB < 1) gpB *= 100;
+                    return gpB - gpA;
+                });
+            }
+            
+            container.innerHTML = renderAffinityList(items);
+            container.dataset.sort = sortBy;
         }
         
         // Store network data globally for filtering
@@ -21976,15 +22088,85 @@
                 .sort((a, b) => a[1].avgIndex - b[1].avgIndex)
                 .slice(0, 8);
             
-            document.getElementById('sponsorAvoid').innerHTML = avoidCategories.map(([cat, data]) => `
+            // Convert avoid categories to item format for sorting
+            const avoidItems = avoidCategories.map(([cat, data]) => ({
+                name: cat,
+                index: data.avgIndex,
+                pct: data.items.reduce((sum, i) => sum + i.pct, 0) / data.items.length,
+                genPopPct: data.items.reduce((sum, i) => sum + (i.genPopPct || 0), 0) / data.items.length
+            }));
+            
+            document.getElementById('sponsorAvoid').innerHTML = avoidItems.map(item => `
                 <div class="sponsor-item">
-                    <span class="name">${cat}</span>
-                    <span class="index" style="background: rgba(239,68,68,0.2); color: #ef4444;">${data.avgIndex - 100}%</span>
+                    <span class="name">${item.name}</span>
+                    <span class="index" style="background: rgba(239,68,68,0.2); color: #ef4444;">${item.index - 100}%</span>
                 </div>
             `).join('') || '<p style="color: var(--text-secondary);">No under-indexing categories</p>';
             
+            // Convert top categories to item format for sorting
+            const categoryItems = topCategories.map(([cat, data]) => ({
+                name: cat,
+                index: data.avgIndex,
+                pct: data.items.reduce((sum, i) => sum + i.pct, 0) / data.items.length,
+                genPopPct: data.items.reduce((sum, i) => sum + (i.genPopPct || 0), 0) / data.items.length
+            }));
+            
+            // Store sponsor data globally for sorting
+            window.sponsorListData = {
+                sponsorCategories: categoryItems,
+                sponsorBrands: sponsorBrandItems,
+                sponsorPurchase: purchaseItems,
+                sponsorAvoid: avoidItems
+            };
+            
             // Sponsor matrix
             renderSponsorMatrix(topCategories);
+        }
+        
+        // Sort sponsor list by different criteria
+        function sortSponsorList(listId, sortBy) {
+            const container = document.getElementById(listId);
+            if (!container || !window.sponsorListData || !window.sponsorListData[listId]) return;
+            
+            let items = [...window.sponsorListData[listId]];
+            const isAvoidList = listId === 'sponsorAvoid';
+            
+            // Sort based on criteria
+            if (sortBy === 'index') {
+                // Avoid list sorts ascending (lowest first), others sort descending
+                items.sort((a, b) => isAvoidList ? a.index - b.index : b.index - a.index);
+            } else if (sortBy === 'pct') {
+                items.sort((a, b) => b.pct - a.pct);
+            } else if (sortBy === 'genpop') {
+                items.sort((a, b) => {
+                    let gpA = a.genPopPct || 0;
+                    let gpB = b.genPopPct || 0;
+                    if (gpA > 0 && gpA < 1) gpA *= 100;
+                    if (gpB > 0 && gpB < 1) gpB *= 100;
+                    return gpB - gpA;
+                });
+            }
+            
+            // Render based on list type
+            if (listId === 'sponsorCategories') {
+                container.innerHTML = items.map(item => `
+                    <div class="sponsor-item">
+                        <span class="name">${item.name}</span>
+                        <span class="index" style="background: rgba(245,158,11,0.2); color: #f59e0b;">${formatIndex(item.index)}</span>
+                    </div>
+                `).join('') || '<p style="color: var(--text-secondary);">No high-indexing categories</p>';
+            } else if (listId === 'sponsorAvoid') {
+                container.innerHTML = items.map(item => `
+                    <div class="sponsor-item">
+                        <span class="name">${item.name}</span>
+                        <span class="index" style="background: rgba(239,68,68,0.2); color: #ef4444;">${item.index - 100}%</span>
+                    </div>
+                `).join('') || '<p style="color: var(--text-secondary);">No under-indexing categories</p>';
+            } else {
+                container.innerHTML = renderAffinityList(items);
+            }
+            
+            container.dataset.sort = sortBy;
         }
         
         function renderSponsorMatrix(categories) {
