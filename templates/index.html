@@ -17452,14 +17452,18 @@
                 categories[item.category].count++;
             });
             
-            // Calculate averages
+            // Calculate averages and get top 3 items for each category
             const categoryData = Object.entries(categories)
-                .map(([name, data]) => ({
-                    name,
-                    avgIndex: Math.round(data.totalIndex / data.count),
-                    count: data.count,
-                    topItem: data.items.sort((a, b) => b.index - a.index)[0]
-                }));
+                .map(([name, data]) => {
+                    const sortedItems = data.items.sort((a, b) => b.index - a.index);
+                    return {
+                        name,
+                        avgIndex: Math.round(data.totalIndex / data.count),
+                        count: data.count,
+                        topItem: sortedItems[0],
+                        top3: sortedItems.slice(0, 3)
+                    };
+                });
             
             // Split into 3 tiers relative to the data
             const allIndices = categoryData.map(c => c.avgIndex);
@@ -17486,12 +17490,15 @@
                             <span style="opacity: 0.7; font-size: 0.7rem; margin-left: 0.5rem;">(${items.length} categories)</span>
                         </div>
                         <div class="heatmap-group-items">
-                            ${items.map(cat => `
-                                <div class="heatmap-cell" style="background: ${colors.bg}; color: ${colors.text}; border: 1px solid ${colors.border};" onclick="filterInterestsByCategory('${cat.name}')" title="${cat.name}: Avg ${formatIndex(cat.avgIndex)}">
+                            ${items.map(cat => {
+                                const top3Text = cat.top3.map((item, i) => `${i + 1}. ${item.name} (${formatIndex(item.index)})`).join(' | ');
+                                const tooltipText = `${cat.name}: Avg ${formatIndex(cat.avgIndex)} | ${cat.count} items | Top 3: ${top3Text}`;
+                                return `
+                                <div class="heatmap-cell has-tooltip" style="background: ${colors.bg}; color: ${colors.text}; border: 1px solid ${colors.border};" onclick="filterInterestsByCategory('${cat.name}')" data-tooltip="${tooltipText.replace(/"/g, '&quot;')}">
                                     <div class="cell-name">${cat.name}</div>
                                     <div class="cell-stats">${formatIndex(cat.avgIndex)} · ${cat.count}</div>
                                 </div>
-                            `).join('')}
+                            `}).join('')}
                         </div>
                     </div>
                 `;
