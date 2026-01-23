@@ -2264,7 +2264,14 @@ def get_admin_content():
                 # Try to get category and project_name from cache (which has proper brand categories from CSV)
                 cached = cached_lookup.get(key, {})
                 category = cached.get('category', 'Uncategorized')
-                project_name = cached.get('project_name', smart_title_case(filename.replace('.csv', '').replace('_', ' ')))
+                
+                # Generate display name with timestamp removal
+                if 'project_name' not in cached:
+                    name_without_ext = filename.replace('.csv', '')
+                    name_without_timestamp = remove_timestamp_from_name(name_without_ext)
+                    project_name = smart_title_case(name_without_timestamp.replace('_', ' '))
+                else:
+                    project_name = cached['project_name']
                 last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
                 
                 active_files.append({
@@ -2349,7 +2356,9 @@ def get_admin_content():
                     continue
                 
                 filename = key.split('/')[-1]
-                project_name = smart_title_case(filename.replace('.csv', '').replace('_', ' '))
+                name_without_ext = filename.replace('.csv', '')
+                name_without_timestamp = remove_timestamp_from_name(name_without_ext)
+                project_name = smart_title_case(name_without_timestamp.replace('_', ' '))
                 last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
                 
                 archived_files.append({
@@ -4885,15 +4894,13 @@ def rename_file():
                     else:
                         # Extract name from new filename (remove extension and clean up)
                         new_filename = new_key.split('/')[-1]
-                        raw_name = new_filename.rsplit('.', 1)[0] if '.' in new_filename else new_filename
+                        name_without_ext = new_filename.rsplit('.', 1)[0] if '.' in new_filename else new_filename
                         
-                        # Remove timestamp patterns like _MM_DD_YYYY or _YYYY_MM_DD
-                        import re
-                        raw_name = re.sub(r'_\d{1,2}_\d{1,2}_\d{4}(_\d{1,2}_\d{1,2})?$', '', raw_name)
-                        raw_name = re.sub(r'_\d{4}_\d{1,2}_\d{1,2}(_\d{1,2}_\d{1,2})?$', '', raw_name)
+                        # Remove timestamp patterns
+                        name_without_timestamp = remove_timestamp_from_name(name_without_ext)
                         
                         # Replace underscores with spaces and apply smart title case
-                        raw_name = raw_name.replace('_', ' ')
+                        raw_name = name_without_timestamp.replace('_', ' ')
                         new_display_name = smart_title_case(raw_name)
                         print(f"📝 Auto-generated display name: {new_display_name}")
                     
@@ -5635,6 +5642,34 @@ def refresh_s3_cache(incremental=True):
         print(f"Error in full scan: {e}")
         return {'error': str(e)}
 
+def remove_timestamp_from_name(name):
+    """Remove various timestamp patterns from filename.
+    
+    Handles patterns like:
+    - Taylor_Swift_09_22_2025_20_22 -> Taylor_Swift
+    - Cleveland_Browns_01_23_2026 -> Cleveland_Browns
+    - HBO_Max_11_07_2025_16_46 -> HBO_Max
+    """
+    import re
+    
+    # Remove timestamp patterns at the end:
+    # Pattern 1: _MM_DD_YYYY_HH_MM (e.g., _09_22_2025_20_22)
+    name = re.sub(r'_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$', '', name)
+    
+    # Pattern 2: _MM_DD_YYYY (e.g., _01_23_2026)
+    name = re.sub(r'_\d{2}_\d{2}_\d{4}$', '', name)
+    
+    # Pattern 3: _YYYY_MM_DD_HH_MM (e.g., _2025_09_22_20_22)
+    name = re.sub(r'_\d{4}_\d{2}_\d{2}_\d{2}_\d{2}$', '', name)
+    
+    # Pattern 4: _YYYY_MM_DD (e.g., _2025_09_22)
+    name = re.sub(r'_\d{4}_\d{2}_\d{2}$', '', name)
+    
+    # Pattern 5: _DD_MM_YYYY (European format)
+    name = re.sub(r'_\d{2}_\d{2}_\d{4}$', '', name)
+    
+    return name
+
 def smart_title_case(text):
     """Convert to title case but preserve all-caps words (like JD, AOC, NFL, etc.)"""
     words = text.split(' ')
@@ -5656,12 +5691,14 @@ def process_s3_file_metadata(key, obj):
     import re
     
     # Extract project name from filename - use smart title case for display
-    name_without_ext = key.replace('.csv', '')
-    match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
-    if match:
-        raw_name = match.group(1).replace('_', ' ')
-    else:
-        raw_name = name_without_ext.replace('_', ' ')
+    filename = key.split('/')[-1]  # Get just the filename, not the full path
+    name_without_ext = filename.replace('.csv', '')
+    
+    # Remove timestamp patterns
+    name_without_timestamp = remove_timestamp_from_name(name_without_ext)
+    
+    # Replace underscores with spaces
+    raw_name = name_without_timestamp.replace('_', ' ')
     
     project_name = smart_title_case(raw_name)
     
