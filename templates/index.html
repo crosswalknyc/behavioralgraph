@@ -5988,7 +5988,8 @@
             display: grid;
             grid-template-columns: 280px 1fr;
             gap: 1rem;
-            min-height: 70vh;
+            min-height: calc(100vh - 200px);
+            height: 100%;
         }
 
         .comparison-sidebar {
@@ -6009,7 +6010,6 @@
         .comparison-profile-list {
             flex: 1;
             overflow-y: auto;
-            max-height: 500px;
             font-size: 0.85rem;
         }
 
@@ -6184,7 +6184,8 @@
             padding: 1rem;
             overflow-x: auto;
             overflow-y: auto;
-            max-height: calc(100vh - 250px);
+            flex: 1;
+            min-height: calc(100vh - 280px);
         }
 
         .comp-table-wrapper {
