@@ -26386,8 +26386,8 @@
             }
 
             // Re-render comparison if data is loaded
-            if (loadedComparisonData.profiles && loadedComparisonData.profiles.length > 0) {
-                renderComparison(loadedComparisonData.profiles, currentSort.column, currentSort.direction);
+            if (window.comparisonProfilesData && window.comparisonProfilesData.length > 0) {
+                renderComparison(window.comparisonProfilesData, currentSortSection, currentSortColumn);
             }
 
             // Re-render profile report if a profile is loaded
@@ -26757,11 +26757,14 @@
                 </div>
             `;
 
+            // Dynamic label based on display mode
+            const modeLabel = displayMode === 'projection' ? 'US POP #' : 'US %';
+
             // Gender Comparison (if selected)
             if (selectedCategories.has('demo_gender')) {
                 html += `
                 <div class="comp-section">
-                    <div class="comp-section-title">Gender (US %)</div>
+                    <div class="comp-section-title">Gender (${modeLabel})</div>
                     <table class="comp-table">
                         <thead>
                             <tr>
@@ -26780,7 +26783,7 @@
             if (selectedCategories.has('demo_age')) {
                 html += `
                 <div class="comp-section">
-                    <div class="comp-section-title">Age (US %)</div>
+                    <div class="comp-section-title">Age (${modeLabel})</div>
                     <table class="comp-table">
                         <thead>
                             <tr>
@@ -26799,7 +26802,7 @@
             if (selectedCategories.has('demo_ethnicity')) {
                 html += `
                 <div class="comp-section">
-                    <div class="comp-section-title">Ethnicity (US %)</div>
+                    <div class="comp-section-title">Ethnicity (${modeLabel})</div>
                     <table class="comp-table">
                         <thead>
                             <tr>
@@ -26818,7 +26821,7 @@
             if (selectedCategories.has('demo_income')) {
                 html += `
                 <div class="comp-section">
-                    <div class="comp-section-title">Income (US %)</div>
+                    <div class="comp-section-title">Income (${modeLabel})</div>
                     <table class="comp-table">
                         <thead>
                             <tr>
