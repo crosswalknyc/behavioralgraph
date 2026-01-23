@@ -16227,16 +16227,75 @@
             // === ACTIVATION OPPORTUNITIES ===
             const activations = [];
             
-            // Purchase-based activation
-            const purchaseBrands = allItems.filter(i => 
-                i.category.toUpperCase().includes('PURCHASED') || i.category.toUpperCase().includes('SHOP')
+            // Define retail store categories for matching
+            const bigBoxStores = ['TARGET', 'WALMART', 'COSTCO', 'SAM\'S CLUB', 'BJ\'S', 'KOHL\'S', 'BEST BUY', 'HOME DEPOT', 'LOWE\'S', 'MENARDS', 'BIG LOTS', 'FIVE BELOW', 'DOLLAR GENERAL', 'DOLLAR TREE', 'FAMILY DOLLAR'];
+            const departmentStores = ['MACY\'S', 'NORDSTROM', 'BLOOMINGDALE\'S', 'NEIMAN MARCUS', 'SAKS', 'DILLARD\'S', 'JC PENNEY', 'JCPENNEY', 'BELK', 'VON MAUR', 'LORD & TAYLOR'];
+            const ecommerceStores = ['AMAZON', 'EBAY', 'ETSY', 'CHEWY', 'WAYFAIR', 'OVERSTOCK', 'ZAPPOS', 'WISH', 'SHEIN', 'TEMU', 'ALIBABA', 'ALIEXPRESS', 'MERCARI', 'POSHMARK', 'THREDDUP'];
+            const groceryStores = ['PUBLIX', 'HEB', 'H-E-B', 'KROGER', 'SAFEWAY', 'ALBERTSONS', 'WHOLE FOODS', 'TRADER JOE\'S', 'ALDI', 'LIDL', 'WEGMANS', 'SPROUTS', 'FOOD LION', 'GIANT', 'STOP & SHOP', 'HARRIS TEETER', 'MEIJER', 'WINN-DIXIE', 'PIGGLY WIGGLY', 'SAVE-A-LOT', 'GROCERY OUTLET'];
+            
+            // Get all shopping/purchased items
+            const shoppingItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('PURCHASED') || i.category.toUpperCase().includes('SHOP') || i.category.toUpperCase().includes('RETAIL')
+            );
+            
+            // Big Box Stores
+            const bigBoxMatches = shoppingItems.filter(i => 
+                bigBoxStores.some(store => i.name.toUpperCase().includes(store))
             ).sort((a, b) => b.index - a.index).slice(0, 2);
-            if (purchaseBrands.length > 0) {
+            if (bigBoxMatches.length > 0) {
                 activations.push({
-                    icon: '🛍️',
-                    text: `<strong>Shopping:</strong> Partner with ${purchaseBrands.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${purchaseBrands[0].pct.toFixed(1)}% | GP: ${purchaseBrands[0].genPop.toFixed(1)}%)</span>`,
-                    tooltip: `Shopping Partnership: This audience strongly over-indexes on these brands (${purchaseBrands.map(b => `${b.name}: ${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)}`).join('; ')}). Co-branded campaigns or retail activations could drive high engagement.`
+                    icon: '🏬',
+                    text: `<strong>Big Box:</strong> ${bigBoxMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${bigBoxMatches[0].pct.toFixed(1)}% | GP: ${bigBoxMatches[0].genPop.toFixed(1)}% | ${formatIndex(bigBoxMatches[0].index)})</span>`,
+                    tooltip: `Big Box Retail: This audience shops at ${bigBoxMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store activations, endcap displays, or retail media network ads.`
                 });
+            }
+            
+            // Department Stores
+            const deptMatches = shoppingItems.filter(i => 
+                departmentStores.some(store => i.name.toUpperCase().includes(store))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (deptMatches.length > 0) {
+                activations.push({
+                    icon: '👔',
+                    text: `<strong>Dept Store:</strong> ${deptMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${deptMatches[0].pct.toFixed(1)}% | GP: ${deptMatches[0].genPop.toFixed(1)}% | ${formatIndex(deptMatches[0].index)})</span>`,
+                    tooltip: `Department Stores: This audience shops at ${deptMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider premium placement, store events, or loyalty program partnerships.`
+                });
+            }
+            
+            // E-commerce
+            const ecomMatches = shoppingItems.filter(i => 
+                ecommerceStores.some(store => i.name.toUpperCase().includes(store))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (ecomMatches.length > 0) {
+                activations.push({
+                    icon: '🛒',
+                    text: `<strong>E-commerce:</strong> ${ecomMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${ecomMatches[0].pct.toFixed(1)}% | GP: ${ecomMatches[0].genPop.toFixed(1)}% | ${formatIndex(ecomMatches[0].index)})</span>`,
+                    tooltip: `E-commerce: This audience shops online at ${ecomMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider sponsored products, display ads, or marketplace partnerships.`
+                });
+            }
+            
+            // Grocery
+            const groceryMatches = shoppingItems.filter(i => 
+                groceryStores.some(store => i.name.toUpperCase().includes(store))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (groceryMatches.length > 0) {
+                activations.push({
+                    icon: '🥬',
+                    text: `<strong>Grocery:</strong> ${groceryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${groceryMatches[0].pct.toFixed(1)}% | GP: ${groceryMatches[0].genPop.toFixed(1)}% | ${formatIndex(groceryMatches[0].index)})</span>`,
+                    tooltip: `Grocery: This audience shops at ${groceryMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store sampling, circular ads, or loyalty card targeting.`
+                });
+            }
+            
+            // Fallback: General shopping if no specific matches
+            if (bigBoxMatches.length === 0 && deptMatches.length === 0 && ecomMatches.length === 0 && groceryMatches.length === 0) {
+                const purchaseBrands = shoppingItems.sort((a, b) => b.index - a.index).slice(0, 2);
+                if (purchaseBrands.length > 0) {
+                    activations.push({
+                        icon: '🛍️',
+                        text: `<strong>Shopping:</strong> Partner with ${purchaseBrands.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${purchaseBrands[0].pct.toFixed(1)}% | GP: ${purchaseBrands[0].genPop.toFixed(1)}%)</span>`,
+                        tooltip: `Shopping Partnership: This audience strongly over-indexes on these brands (${purchaseBrands.map(b => `${b.name}: ${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)}`).join('; ')}). Co-branded campaigns or retail activations could drive high engagement.`
+                    });
+                }
             }
             
             // Streaming/content activation
@@ -16263,18 +16322,6 @@
                 });
             }
             
-            // Interest-based activation
-            const interestItems = allItems.filter(i => 
-                i.category.toUpperCase().includes('INTEREST') && i.index >= 150
-            ).slice(0, 1);
-            if (interestItems.length > 0) {
-                activations.push({
-                    icon: '💡',
-                    text: `<strong>Interest:</strong> Leverage ${interestItems[0].name} for targeting`,
-                    tooltip: `Interest Targeting: "${interestItems[0].name}" is a strong audience passion point (${formatIndex(interestItems[0].index)}). Use this as a keyword/interest target in paid campaigns or for content themes.`
-                });
-            }
-            
             // Sports activation
             const sportsItems = allItems.filter(i => 
                 i.category.toUpperCase().includes('SPORT') || i.category.toUpperCase().includes('ATHLETE')
@@ -16296,7 +16343,7 @@
                 });
             }
             
-            document.getElementById('behavioralActivations').innerHTML = activations.slice(0, 5).map(a => `
+            document.getElementById('behavioralActivations').innerHTML = activations.slice(0, 7).map(a => `
                 <div class="behavioral-activation-item has-tooltip" data-tooltip="${a.tooltip || ''}">
                     <span class="icon">${a.icon}</span>
                     <span class="text">${a.text}</span>
