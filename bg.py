@@ -420,7 +420,7 @@ RECLASSIFY_SECTIONS = [
     'Most Purchased Brands',
     'Home/Outdoor',
     'Technology Brand',
-    'GPG',
+    'CPG',
     'Beauty/Wellness',
     'Apparel/Footwear',
     'Accessories',
@@ -4981,7 +4981,7 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         "NHL", "NWSL", "MLS", "PREMIER LEAGUE",
         "MLB", "LA LIGA", "GOLF", "SERIE A", "SOCCER", "TENNIS", "UEFA",
         "RUGBY", "VOLLEYBALL", "COLLEGE/UNIVERSITY", "ACCESSORIES", "APPAREL/FOOTWEAR",
-        "BEAUTY/WELLNESS", "BRAND CATEGORY", "HOME/OUTDOOR", "MOST PURCHASED CATEGORIES", 
+        "BEAUTY/WELLNESS", "BRAND CATEGORY", "CPG", "HOME/OUTDOOR", "MOST PURCHASED CATEGORIES", 
         "PETS", "TECHNOLOGY BRAND"
     ]
     
@@ -8196,7 +8196,7 @@ def main():
                 "AFC", "AFC EAST", "AFC NORTH", "AFC SOUTH", "AFC WEST", "AL", "AL CENTRAL", "AL EAST",
                 "AL WEST", "SERIE A", "SOCCER", "TENNIS", "UEFA", "WESTERN CONFERENCE", "SPORTS",
                 "RUGBY", "VOLLEYBALL", "COLLEGE/UNIVERSITY", "ACCESSORIES", "APPAREL/FOOTWEAR",
-                "BEAUTY/WELLNESS", "BRAND CATEGORY", "HOME/OUTDOOR", "MOST PURCHASED CATEGORIES", 
+                "BEAUTY/WELLNESS", "BRAND CATEGORY", "CPG", "HOME/OUTDOOR", "MOST PURCHASED CATEGORIES", 
                 "PETS", "TECHNOLOGY BRAND"
             ]
             
@@ -12094,7 +12094,7 @@ def apply_final_category_ordering(df):
         "CREDIT PROVIDER", "INVESTMENTS", "INSURANCE", "INFLUENCERS", 
         "SOCIAL MEDIA", "MEDIA", "SEARCH ENGINE", "TELECOM", "DEVICE", 
         "TECHNOLOGY", "GAMES", "WHERE THEY SHOP",         "MOST PURCHASED BRANDS", 
-        "HOME/OUTDOOR", "TECHNOLOGY BRAND", "GPG", "BEAUTY/WELLNESS", 
+        "HOME/OUTDOOR", "TECHNOLOGY BRAND", "CPG", "BEAUTY/WELLNESS", 
         "APPAREL/FOOTWEAR", "ACCESSORIES", "PETS", "MOVIE THEATER", "STREAMING/MUSIC", "STREAMING/PLATFORM",
         "STREAMING/CHANNEL", "QSR", "WHERE THEY DINE", "EVENTS", "VENUE", 
         "TICKETING", "TRAVEL", "WORKOUT FACILITY", "NON PROFIT/CHARITY", 
