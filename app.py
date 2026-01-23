@@ -2533,6 +2533,60 @@ def delete_content():
         print(f"Delete error: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/admin/restore-metadata', methods=['POST'])
+@requires_admin
+def restore_metadata():
+    """Restore metadata (images, categories) from profile_image_cache to current files based on project name."""
+    global s3_cache, profile_image_cache
+    
+    try:
+        # Load caches if not loaded
+        if not profile_image_cache:
+            load_profile_image_cache()
+        
+        if not s3_cache.get('jobs'):
+            load_persisted_cache()
+        
+        restored_count = 0
+        image_matches = 0
+        
+        print(f"🔄 Restoring metadata for {len(s3_cache.get('jobs', []))} files...")
+        print(f"   Profile image cache has {len(profile_image_cache)} entries")
+        
+        # Go through each job and try to match with profile image cache
+        for job in s3_cache.get('jobs', []):
+            project_name = job.get('project_name', '')
+            if not project_name:
+                continue
+            
+            cache_key = project_name.lower().strip()
+            
+            # Check if there's a matching profile image
+            if cache_key in profile_image_cache:
+                cached = profile_image_cache[cache_key]
+                if cached.get('is_custom') and cached.get('image_url'):
+                    job['custom_image'] = cached['image_url']
+                    image_matches += 1
+                    print(f"   ✅ Matched image for: {project_name}")
+            
+            restored_count += 1
+        
+        # Save updated cache
+        save_persisted_cache()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Restored metadata for {restored_count} files, matched {image_matches} images',
+            'restored_count': restored_count,
+            'image_matches': image_matches
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"Restore metadata error: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/api/admin/activity-log')
 @requires_auth
 def get_activity_log():
