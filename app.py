@@ -5453,13 +5453,13 @@ def process_s3_file_metadata(key, obj):
     """Process a single S3 file and extract metadata."""
     import re
     
-    # Extract project name from filename
+    # Extract project name from filename - use title case for display
     name_without_ext = key.replace('.csv', '')
     match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
     if match:
-        project_name = match.group(1).replace('_', ' ').upper()
+        project_name = match.group(1).replace('_', ' ').title()
     else:
-        project_name = name_without_ext.replace('_', ' ').upper()
+        project_name = name_without_ext.replace('_', ' ').title()
     
     # Try to get category from BRAND CATEGORY row in CSV
     category = 'UNCATEGORIZED'
