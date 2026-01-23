@@ -160,6 +160,24 @@
             text-decoration: none;
         }
 
+        .forgot-password {
+            text-align: right;
+            margin-top: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .forgot-password a {
+            color: var(--accent-cyan);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: color 0.2s;
+        }
+
+        .forgot-password a:hover {
+            color: var(--accent-blue);
+            text-decoration: underline;
+        }
+
         /* Animated background elements */
         .bg-decoration {
             position: fixed;
@@ -222,6 +240,10 @@
                     <input type="password" id="password" name="password" placeholder="Enter your password" required>
                 </div>
 
+                <div class="forgot-password">
+                    <a href="#" onclick="handleForgotPassword(event)">Forgot Password?</a>
+                </div>
+
                 <button type="submit" class="btn btn-primary">Sign In</button>
             </form>
 
@@ -240,6 +262,22 @@
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('error') === '1') {
             document.getElementById('errorMessage').classList.add('show');
+        }
+
+        // Handle forgot password
+        function handleForgotPassword(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            
+            if (!username) {
+                alert('Please enter your username first, then click "Forgot Password?"');
+                document.getElementById('username').focus();
+                return;
+            }
+
+            // Show confirmation message
+            const message = `Password reset request for username: ${username}\n\nPlease contact your administrator at:\njenna@crosswalknyc.com\n\nInclude your username in the email.`;
+            alert(message);
         }
 
         // Form submission
