@@ -8915,7 +8915,7 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Occupation')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Occupation')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Occupation')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container"><canvas id="occupationChart"></canvas></div>
+                                <div class="chart-container" style="height: 400px; overflow-y: auto; overflow-x: hidden;"><canvas id="occupationChart"></canvas></div>
                             </div>
                         </div>
                     </div>
@@ -18113,7 +18113,14 @@
                 // Calculate max for x-axis with padding for labels (horizontal bar)
                 const occMax = occChartType === 'bar' ? Math.max(...occData) * 1.5 : undefined; // 50% padding for horizontal labels
                 
-                charts.occupation = new Chart(document.getElementById('occupationChart'), {
+                // Set canvas height based on number of categories (for bar chart scrolling)
+                const occCanvas = document.getElementById('occupationChart');
+                if (occChartType === 'bar' && occCanvas) {
+                    const barHeight = 40; // Height per bar
+                    occCanvas.style.height = (occLabels.length * barHeight) + 'px';
+                }
+                
+                charts.occupation = new Chart(occCanvas, {
                     type: occChartType,
                     data: { labels: occLabels, datasets: [{ data: occData, backgroundColor: colors, borderRadius: occChartType === 'bar' ? 4 : 0 }] },
                     options: { 
