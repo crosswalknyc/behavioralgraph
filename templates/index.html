@@ -17443,8 +17443,33 @@
                         },
                         y: { 
                             grid: { display: false }, 
-                            ticks: { color: '#e6f1ff', font: { size: 14 } },
-                            afterFit: (scale) => { scale.width = Math.max(scale.width, 140); } // Ensure y-axis has enough width
+                            ticks: { 
+                                color: '#e6f1ff', 
+                                font: { size: 13 },
+                                autoSkip: false,
+                                callback: function(value, index, ticks) {
+                                    const label = this.getLabelForValue(value);
+                                    // Split long labels into multiple lines at 20 characters
+                                    if (label.length > 20) {
+                                        const words = label.split(' ');
+                                        const lines = [];
+                                        let currentLine = '';
+                                        
+                                        words.forEach(word => {
+                                            if ((currentLine + ' ' + word).trim().length > 20 && currentLine.length > 0) {
+                                                lines.push(currentLine.trim());
+                                                currentLine = word;
+                                            } else {
+                                                currentLine = currentLine ? currentLine + ' ' + word : word;
+                                            }
+                                        });
+                                        if (currentLine) lines.push(currentLine.trim());
+                                        return lines;
+                                    }
+                                    return label;
+                                }
+                            },
+                            afterFit: (scale) => { scale.width = Math.max(scale.width, 180); } // Increased width for longer labels
                         }
                     }
                 },
@@ -17531,8 +17556,33 @@
                         },
                         y: { 
                             grid: { display: false }, 
-                            ticks: { color: '#e6f1ff', font: { size: 14 } },
-                            afterFit: (scale) => { scale.width = Math.max(scale.width, 140); } // Ensure y-axis has enough width
+                            ticks: { 
+                                color: '#e6f1ff', 
+                                font: { size: 13 },
+                                autoSkip: false,
+                                callback: function(value, index, ticks) {
+                                    const label = this.getLabelForValue(value);
+                                    // Split long labels into multiple lines at 20 characters
+                                    if (label.length > 20) {
+                                        const words = label.split(' ');
+                                        const lines = [];
+                                        let currentLine = '';
+                                        
+                                        words.forEach(word => {
+                                            if ((currentLine + ' ' + word).trim().length > 20 && currentLine.length > 0) {
+                                                lines.push(currentLine.trim());
+                                                currentLine = word;
+                                            } else {
+                                                currentLine = currentLine ? currentLine + ' ' + word : word;
+                                            }
+                                        });
+                                        if (currentLine) lines.push(currentLine.trim());
+                                        return lines;
+                                    }
+                                    return label;
+                                }
+                            },
+                            afterFit: (scale) => { scale.width = Math.max(scale.width, 180); } // Increased width for longer labels
                         }
                     }
                 },
@@ -17612,8 +17662,33 @@
                     scales: incomeIsCircular ? {} : { 
                         y: { 
                             grid: { display: false }, 
-                            ticks: { color: '#e6f1ff', font: { size: 14 } },
-                            afterFit: (scale) => { scale.width = Math.max(scale.width, 140); }
+                            ticks: { 
+                                color: '#e6f1ff', 
+                                font: { size: 13 },
+                                autoSkip: false,
+                                callback: function(value, index, ticks) {
+                                    const label = this.getLabelForValue(value);
+                                    // Split long labels into multiple lines at 20 characters
+                                    if (label.length > 20) {
+                                        const words = label.split(' ');
+                                        const lines = [];
+                                        let currentLine = '';
+                                        
+                                        words.forEach(word => {
+                                            if ((currentLine + ' ' + word).trim().length > 20 && currentLine.length > 0) {
+                                                lines.push(currentLine.trim());
+                                                currentLine = word;
+                                            } else {
+                                                currentLine = currentLine ? currentLine + ' ' + word : word;
+                                            }
+                                        });
+                                        if (currentLine) lines.push(currentLine.trim());
+                                        return lines;
+                                    }
+                                    return label;
+                                }
+                            },
+                            afterFit: (scale) => { scale.width = Math.max(scale.width, 180); }
                         }, 
                         x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 13 } }, suggestedMax: incomeMax } 
                     } 
@@ -17664,7 +17739,36 @@
                         }, 
                         scales: educationIsCircular ? {} : { 
                             x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 13 } }, suggestedMax: eduMax }, 
-                            y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 14 } } } 
+                            y: { 
+                                grid: { display: false }, 
+                                ticks: { 
+                                    color: '#e6f1ff', 
+                                    font: { size: 13 },
+                                    autoSkip: false,
+                                    callback: function(value, index, ticks) {
+                                        const label = this.getLabelForValue(value);
+                                        // Split long labels into multiple lines at 20 characters
+                                        if (label.length > 20) {
+                                            const words = label.split(' ');
+                                            const lines = [];
+                                            let currentLine = '';
+                                            
+                                            words.forEach(word => {
+                                                if ((currentLine + ' ' + word).trim().length > 20 && currentLine.length > 0) {
+                                                    lines.push(currentLine.trim());
+                                                    currentLine = word;
+                                                } else {
+                                                    currentLine = currentLine ? currentLine + ' ' + word : word;
+                                                }
+                                            });
+                                            if (currentLine) lines.push(currentLine.trim());
+                                            return lines;
+                                        }
+                                        return label;
+                                    }
+                                },
+                                afterFit: (scale) => { scale.width = Math.max(scale.width, 180); }
+                            } 
                         } 
                     },
                     plugins: [ChartDataLabels]
@@ -17741,8 +17845,33 @@
                             },
                             y: { 
                                 grid: { display: false }, 
-                                ticks: { color: '#e6f1ff', font: { size: 14 } },
-                                afterFit: (scale) => { scale.width = Math.max(scale.width, 140); } // Ensure y-axis has enough width
+                                ticks: { 
+                                    color: '#e6f1ff', 
+                                    font: { size: 13 },
+                                    autoSkip: false,
+                                    callback: function(value, index, ticks) {
+                                        const label = this.getLabelForValue(value);
+                                        // Split long labels into multiple lines at 20 characters
+                                        if (label.length > 20) {
+                                            const words = label.split(' ');
+                                            const lines = [];
+                                            let currentLine = '';
+                                            
+                                            words.forEach(word => {
+                                                if ((currentLine + ' ' + word).trim().length > 20 && currentLine.length > 0) {
+                                                    lines.push(currentLine.trim());
+                                                    currentLine = word;
+                                                } else {
+                                                    currentLine = currentLine ? currentLine + ' ' + word : word;
+                                                }
+                                            });
+                                            if (currentLine) lines.push(currentLine.trim());
+                                            return lines;
+                                        }
+                                        return label;
+                                    }
+                                },
+                                afterFit: (scale) => { scale.width = Math.max(scale.width, 180); } // Increased width for longer labels
                             }
                         }
                     },
@@ -17820,8 +17949,33 @@
                             },
                             y: { 
                                 grid: { display: false }, 
-                                ticks: { color: '#e6f1ff', font: { size: 14 } },
-                                afterFit: (scale) => { scale.width = Math.max(scale.width, 140); } // Ensure y-axis has enough width
+                                ticks: { 
+                                    color: '#e6f1ff', 
+                                    font: { size: 13 },
+                                    autoSkip: false,
+                                    callback: function(value, index, ticks) {
+                                        const label = this.getLabelForValue(value);
+                                        // Split long labels into multiple lines at 20 characters
+                                        if (label.length > 20) {
+                                            const words = label.split(' ');
+                                            const lines = [];
+                                            let currentLine = '';
+                                            
+                                            words.forEach(word => {
+                                                if ((currentLine + ' ' + word).trim().length > 20 && currentLine.length > 0) {
+                                                    lines.push(currentLine.trim());
+                                                    currentLine = word;
+                                                } else {
+                                                    currentLine = currentLine ? currentLine + ' ' + word : word;
+                                                }
+                                            });
+                                            if (currentLine) lines.push(currentLine.trim());
+                                            return lines;
+                                        }
+                                        return label;
+                                    }
+                                },
+                                afterFit: (scale) => { scale.width = Math.max(scale.width, 180); } // Increased width for longer labels
                             }
                         }
                     },
@@ -17909,8 +18063,33 @@
                             },
                             y: { 
                                 grid: { display: false }, 
-                                ticks: { color: '#e6f1ff', font: { size: 14 } },
-                                afterFit: (scale) => { scale.width = Math.max(scale.width, 140); } // Ensure y-axis has enough width
+                                ticks: { 
+                                    color: '#e6f1ff', 
+                                    font: { size: 13 },
+                                    autoSkip: false,
+                                    callback: function(value, index, ticks) {
+                                        const label = this.getLabelForValue(value);
+                                        // Split long labels into multiple lines at 20 characters
+                                        if (label.length > 20) {
+                                            const words = label.split(' ');
+                                            const lines = [];
+                                            let currentLine = '';
+                                            
+                                            words.forEach(word => {
+                                                if ((currentLine + ' ' + word).trim().length > 20 && currentLine.length > 0) {
+                                                    lines.push(currentLine.trim());
+                                                    currentLine = word;
+                                                } else {
+                                                    currentLine = currentLine ? currentLine + ' ' + word : word;
+                                                }
+                                            });
+                                            if (currentLine) lines.push(currentLine.trim());
+                                            return lines;
+                                        }
+                                        return label;
+                                    }
+                                },
+                                afterFit: (scale) => { scale.width = Math.max(scale.width, 180); } // Increased width for longer labels
                             }
                         }
                     },
@@ -17986,8 +18165,33 @@
                             },
                             y: { 
                                 grid: { display: false }, 
-                                ticks: { color: '#e6f1ff', font: { size: 14 } },
-                                afterFit: (scale) => { scale.width = Math.max(scale.width, 140); } // Ensure y-axis has enough width
+                                ticks: { 
+                                    color: '#e6f1ff', 
+                                    font: { size: 13 },
+                                    autoSkip: false,
+                                    callback: function(value, index, ticks) {
+                                        const label = this.getLabelForValue(value);
+                                        // Split long labels into multiple lines at 20 characters
+                                        if (label.length > 20) {
+                                            const words = label.split(' ');
+                                            const lines = [];
+                                            let currentLine = '';
+                                            
+                                            words.forEach(word => {
+                                                if ((currentLine + ' ' + word).trim().length > 20 && currentLine.length > 0) {
+                                                    lines.push(currentLine.trim());
+                                                    currentLine = word;
+                                                } else {
+                                                    currentLine = currentLine ? currentLine + ' ' + word : word;
+                                                }
+                                            });
+                                            if (currentLine) lines.push(currentLine.trim());
+                                            return lines;
+                                        }
+                                        return label;
+                                    }
+                                },
+                                afterFit: (scale) => { scale.width = Math.max(scale.width, 180); } // Increased width for longer labels
                             }
                         }
                     },
