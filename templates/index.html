@@ -23662,8 +23662,7 @@
                 'Other': '#6b7280'
             };
             
-            const isProjection = dashDisplayMode === 'projection';
-            const US_POP = 324700000;
+            // Note: isProjection and US_POP already declared above
             const maxRegionPct = Math.max(...Object.values(regionData).map(r => r.pct));
             
             document.getElementById('regionalBreakdown').innerHTML = Object.entries(regionData)
