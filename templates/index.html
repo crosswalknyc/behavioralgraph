@@ -9024,7 +9024,7 @@
                             <div class="insight-detail" id="interestIndexRange">Range: --</div>
                         </div>
                     </div>
-                    <div class="insight-card hover-list-card" id="overIndexCard" title="Hover to see top over-indexing interests">
+                    <div class="insight-card hover-list-card" id="overIndexCard" title="Hover to see top 5 over-indexing interests">
                         <div class="insight-icon">⬆️</div>
                         <div class="insight-content">
                             <div class="insight-label">OVER-INDEXING</div>
@@ -9032,11 +9032,11 @@
                             <div class="insight-detail">above median</div>
                         </div>
                         <div class="hover-list-tooltip" id="overIndexTooltip">
-                            <div class="hover-list-title">Top Over-Indexing Interests</div>
+                            <div class="hover-list-title">Top 5 Over-Indexing Interests</div>
                             <div class="hover-list-items" id="overIndexItems">Loading...</div>
                         </div>
                     </div>
-                    <div class="insight-card hover-list-card" id="underIndexCard" title="Hover to see top under-indexing interests">
+                    <div class="insight-card hover-list-card" id="underIndexCard" title="Hover to see top 5 under-indexing interests">
                         <div class="insight-icon">⬇️</div>
                         <div class="insight-content">
                             <div class="insight-label">UNDER-INDEXING</div>
@@ -9044,7 +9044,7 @@
                             <div class="insight-detail">below median</div>
                         </div>
                         <div class="hover-list-tooltip" id="underIndexTooltip">
-                            <div class="hover-list-title">Top Under-Indexing Interests</div>
+                            <div class="hover-list-title">Top 5 Under-Indexing Interests</div>
                             <div class="hover-list-items" id="underIndexItems">Loading...</div>
                         </div>
                     </div>
@@ -18594,9 +18594,9 @@
             document.getElementById('overIndexCount').textContent = overIndexing.length;
             document.getElementById('underIndexCount').textContent = underIndexing.length;
             
-            // Populate hover tooltips with top items
-            const topOverItems = overIndexing.slice(0, 8);
-            const topUnderItems = underIndexing.sort((a, b) => a.index - b.index).slice(0, 8);
+            // Populate hover tooltips with top 5 items
+            const topOverItems = overIndexing.slice(0, 5);
+            const topUnderItems = underIndexing.sort((a, b) => a.index - b.index).slice(0, 5);
             
             document.getElementById('overIndexItems').innerHTML = topOverItems.length > 0 
                 ? topOverItems.map(item => `
