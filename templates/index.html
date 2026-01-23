@@ -8699,7 +8699,9 @@
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Age Distribution: Breakdown by age bracket. Green = your audience over-indexes vs Gen Pop (GP). Red = under-indexes. Hover bars for exact %.">📅 AGE</span>
                                     </span>
-                                    <span id="ageMedianDisplay" class="median-display" style="display: block; margin-top: 0.25rem;"></span>
+                                </h3>
+                                <span id="ageMedianDisplay" class="median-display" style="display: block; margin-top: 0.25rem; margin-bottom: 0.5rem; padding: 0 1rem;"></span>
+                                <h3>
                                     <span class="chart-card-controls-row">
                                         <select id="ageChartType" onchange="changeChartType('age', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type: Choose how to visualize the age data.">
                                             <option value="bar">📊</option>
@@ -8726,8 +8728,9 @@
                                     <span class="chart-card-title-row">
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Gender Distribution: Breakdown by gender identity.">👫 GENDER</span>
-                                        <span id="genderMedianDisplay" class="median-display"></span>
                                     </span>
+                                </h3>
+                                <h3>
                                     <span class="chart-card-controls-row">
                                         <select id="genderChartType" onchange="changeChartType('gender', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type">
                                             <option value="doughnut">🍩</option>
@@ -8745,8 +8748,9 @@
                                     <span class="chart-card-title-row">
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Ethnicity Distribution">🌍 ETHNICITY</span>
-                                        <span id="ethnicityMedianDisplay" class="median-display"></span>
                                     </span>
+                                </h3>
+                                <h3>
                                     <span class="chart-card-controls-row">
                                         <select id="ethnicityChartType" onchange="changeChartType('ethnicity', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type">
                                             <option value="bar">📊</option>
@@ -8765,7 +8769,9 @@
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Income Distribution">💰 INCOME</span>
                                     </span>
-                                    <span id="incomeMedianDisplay" class="median-display" style="display: block; margin-top: 0.25rem;"></span>
+                                </h3>
+                                <span id="incomeMedianDisplay" class="median-display" style="display: block; margin-top: 0.25rem; margin-bottom: 0.5rem; padding: 0 1rem;"></span>
+                                <h3>
                                     <span class="chart-card-controls-row">
                                         <select id="incomeChartType" onchange="changeChartType('income', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type">
                                             <option value="bar">📊</option>
@@ -8792,8 +8798,9 @@
                                     <span class="chart-card-title-row">
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Education Level">🎓 EDUCATION</span>
-                                        <span id="educationMedianDisplay" class="median-display"></span>
                                     </span>
+                                </h3>
+                                <h3>
                                     <span class="chart-card-controls-row">
                                         <select id="educationChartType" onchange="changeChartType('education', this.value)" class="chart-type-select">
                                             <option value="bar">📊</option>
@@ -8811,8 +8818,9 @@
                                     <span class="chart-card-title-row">
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Relationship Status">💑 RELATIONSHIP</span>
-                                        <span id="relationshipMedianDisplay" class="median-display"></span>
                                     </span>
+                                </h3>
+                                <h3>
                                     <span class="chart-card-controls-row">
                                         <select id="relationshipChartType" onchange="changeChartType('relationship', this.value)" class="chart-type-select">
                                             <option value="bar">📊</option>
@@ -8830,8 +8838,9 @@
                                     <span class="chart-card-title-row">
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Sexual Orientation: Yes = identifies as LGBTQ+, No = does not identify as LGBTQ+">🏳️‍🌈 SEXUAL ORIENTATION</span>
-                                        <span id="sexualOrientationMedianDisplay" class="median-display"></span>
                                     </span>
+                                </h3>
+                                <h3>
                                     <span class="chart-card-controls-row">
                                         <select id="sexualOrientationChartType" onchange="changeChartType('sexualOrientation', this.value)" class="chart-type-select">
                                             <option value="doughnut">🍩</option>
@@ -9087,9 +9096,9 @@
                         <span class="module-action-btns"><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('location', 'Heat Map')" data-tooltip="Export PNG: Download the geographic heat map as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('location', 'Heat Map')" data-tooltip="Add to Deck: Save the heat map to your presentation deck.">➕</button></span>
                     </h3>
                     <div class="heatmap-legend">
-                        <span class="legend-label">Low</span>
-                        <div class="legend-gradient"></div>
                         <span class="legend-label">High</span>
+                        <div class="legend-gradient"></div>
+                        <span class="legend-label">Low</span>
                     </div>
                     <div id="usHeatmap" class="us-heatmap"></div>
                 </div>
@@ -17298,16 +17307,7 @@
             // Calculate max for x-axis with padding for labels (horizontal bar)
             const genderMax = genderChartType === 'bar' ? Math.max(...genderData) * 1.5 : undefined; // 50% padding for horizontal labels
             
-            // Calculate and show dominant gender
-            const genderMedian = calculateDemographicMedian(demographics.gender, demographicsGenPop.gender, 'gender');
-            const genderMedianDisplay = document.getElementById('genderMedianDisplay');
-            if (genderMedianDisplay) {
-                const profileName = currentProfileData?.name || 'Profile';
-                const profileVal = genderMedian.profile ? `${genderMedian.profile.value} (${genderMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
-                const genPopVal = genderMedian.genPop ? `${genderMedian.genPop.value} (${genderMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                genderMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName}: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
-                genderMedianDisplay.style.display = '';
-            }
+            // Gender median display removed - not needed for categorical data
             
             charts.gender = new Chart(document.getElementById('genderChart'), {
                 type: genderChartType,
@@ -17395,16 +17395,7 @@
             // Calculate max for x-axis with padding for labels (horizontal bar)
             const ethMax = ethnicityChartType === 'bar' ? Math.max(...ethData) * 1.5 : undefined; // 50% padding for horizontal labels
             
-            // Calculate and show dominant ethnicity
-            const ethMedian = calculateDemographicMedian(demographics.ethnicity, demographicsGenPop.ethnicity, 'ethnicity');
-            const ethMedianDisplay = document.getElementById('ethnicityMedianDisplay');
-            if (ethMedianDisplay) {
-                const profileName = currentProfileData?.name || 'Profile';
-                const profileVal = ethMedian.profile ? `${ethMedian.profile.value} (${ethMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
-                const genPopVal = ethMedian.genPop ? `${ethMedian.genPop.value} (${ethMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                ethMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName}: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
-                ethMedianDisplay.style.display = '';
-            }
+            // Ethnicity median display removed - not needed for categorical data
             
             charts.ethnicity = new Chart(document.getElementById('ethnicityChart'), {
                 type: ethnicityChartType,
@@ -17571,17 +17562,7 @@
                 const educationChartType = chartTypePrefs.education || 'bar';
                 const educationIsCircular = ['doughnut', 'pie', 'polarArea'].includes(educationChartType);
                 
-                // Calculate median for education
-                const eduMedian = calculateDemographicMedian(demographics.education, demographicsGenPop.education, 'education');
-                
-                // Update median display in chart header
-                const eduMedianDisplay = document.getElementById('educationMedianDisplay');
-                if (eduMedianDisplay) {
-                    const profileName = currentProfileData?.name || 'Profile';
-                    const profileVal = eduMedian.profile ? `${eduMedian.profile.value} (${eduMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
-                    const genPopVal = eduMedian.genPop ? `${eduMedian.genPop.value} (${eduMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                    eduMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName}: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
-                }
+                // Education median display removed - not needed for categorical data
                 
                 charts.education = new Chart(document.getElementById('educationChart'), {
                     type: educationChartType,
@@ -17633,17 +17614,7 @@
                 // Calculate max for x-axis with padding for labels (horizontal bar)
                 const relMax = relationshipChartType === 'bar' ? Math.max(...relData) * 1.5 : undefined; // 50% padding for horizontal labels
                 
-                // Calculate median for relationship
-                const relMedian = calculateDemographicMedian(demographics.relationship, demographicsGenPop.relationship, 'relationship');
-                
-                // Update median display in chart header
-                const relMedianDisplay = document.getElementById('relationshipMedianDisplay');
-                if (relMedianDisplay) {
-                    const profileName = currentProfileData?.name || 'Profile';
-                    const profileVal = relMedian.profile ? `${relMedian.profile.value} (${relMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
-                    const genPopVal = relMedian.genPop ? `${relMedian.genPop.value} (${relMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                    relMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName}: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
-                }
+                // Relationship median display removed - not needed for categorical data
                 
                 charts.relationship = new Chart(document.getElementById('relationshipChart'), {
                     type: relationshipChartType,
@@ -17707,17 +17678,7 @@
                 // Calculate max for x-axis with padding for labels (horizontal bar)
                 const soMax = soChartType === 'bar' ? Math.max(...soData) * 1.5 : undefined; // 50% padding for horizontal labels
                 
-                // Calculate median for sexual orientation
-                const soMedian = calculateDemographicMedian(demographics.sexual_orientation, demographicsGenPop.sexual_orientation, 'sexual_orientation');
-                
-                // Update median display in chart header
-                const soMedianDisplay = document.getElementById('sexualOrientationMedianDisplay');
-                if (soMedianDisplay) {
-                    const profileName = currentProfileData?.name || 'Profile';
-                    const profileVal = soMedian.profile ? `${soMedian.profile.value} (${soMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
-                    const genPopVal = soMedian.genPop ? `${soMedian.genPop.value} (${soMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                    soMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName}: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
-                }
+                // Sexual orientation median display removed - not needed for categorical data
                 
                 charts.sexualOrientation = new Chart(document.getElementById('sexualOrientationChart'), {
                     type: soChartType,
