@@ -4834,6 +4834,7 @@ def rename_file():
         data = request.get_json()
         old_key = data.get('old_key')
         new_name = data.get('new_name')
+        display_name = data.get('display_name')  # Optional display name override
         
         if not old_key or not new_name:
             return jsonify({'success': False, 'error': 'Old key and new name required'})
@@ -4876,25 +4877,31 @@ def rename_file():
                     job['key'] = new_key
                     job['s3_key'] = new_key
                     
-                    # Update the display name based on new filename
-                    # Extract name from new filename (remove extension and clean up)
-                    new_filename = new_key.split('/')[-1]
-                    raw_name = new_filename.rsplit('.', 1)[0] if '.' in new_filename else new_filename
-                    
-                    # Remove timestamp patterns like _MM_DD_YYYY or _YYYY_MM_DD
-                    import re
-                    raw_name = re.sub(r'_\d{1,2}_\d{1,2}_\d{4}(_\d{1,2}_\d{1,2})?$', '', raw_name)
-                    raw_name = re.sub(r'_\d{4}_\d{1,2}_\d{1,2}(_\d{1,2}_\d{1,2})?$', '', raw_name)
-                    
-                    # Replace underscores with spaces and apply smart title case
-                    raw_name = raw_name.replace('_', ' ')
-                    new_display_name = smart_title_case(raw_name)
+                    # Update the display name
+                    # If display_name was provided, use it; otherwise auto-generate from filename
+                    if display_name and display_name.strip():
+                        new_display_name = display_name.strip()
+                        print(f"📝 Using custom display name: {new_display_name}")
+                    else:
+                        # Extract name from new filename (remove extension and clean up)
+                        new_filename = new_key.split('/')[-1]
+                        raw_name = new_filename.rsplit('.', 1)[0] if '.' in new_filename else new_filename
+                        
+                        # Remove timestamp patterns like _MM_DD_YYYY or _YYYY_MM_DD
+                        import re
+                        raw_name = re.sub(r'_\d{1,2}_\d{1,2}_\d{4}(_\d{1,2}_\d{1,2})?$', '', raw_name)
+                        raw_name = re.sub(r'_\d{4}_\d{1,2}_\d{1,2}(_\d{1,2}_\d{1,2})?$', '', raw_name)
+                        
+                        # Replace underscores with spaces and apply smart title case
+                        raw_name = raw_name.replace('_', ' ')
+                        new_display_name = smart_title_case(raw_name)
+                        print(f"📝 Auto-generated display name: {new_display_name}")
                     
                     # Update ALL name fields used for display
                     job['name'] = new_display_name
                     job['project_name'] = new_display_name
                     job['brand'] = new_display_name
-                    print(f"📝 Updated display name to: {new_display_name}")
+                    print(f"✅ Updated display name to: {new_display_name}")
                     break
             save_persisted_cache()
         
