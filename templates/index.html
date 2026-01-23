@@ -3963,16 +3963,10 @@
         #globalTooltip::before {
             content: '';
             position: absolute;
-            bottom: -6px;
+            top: -6px;
             left: 50%;
             transform: translateX(-50%);
             border: 6px solid transparent;
-            border-top-color: var(--accent-lime);
-        }
-        #globalTooltip.below::before {
-            bottom: auto;
-            top: -6px;
-            border-top-color: transparent;
             border-bottom-color: var(--accent-lime);
         }
         /* Hide tooltips when hover is disabled - TEMPORARILY DISABLED FOR DEBUGGING */
@@ -10534,7 +10528,7 @@
                     if (el.dataset.tooltipAttached) return;
                     el.dataset.tooltipAttached = 'true';
                     
-                    el.addEventListener('mouseenter', function() {
+                    el.addEventListener('mouseenter', function(e) {
                         // Check if hover is disabled
                         if (document.body.classList.contains('hover-disabled')) return;
                         
@@ -10543,15 +10537,17 @@
                         
                         tooltip.textContent = text;
                         
-                        const rect = this.getBoundingClientRect();
-                        let left = rect.left + (rect.width / 2) - 150;
-                        let top = rect.top - 70;
+                        // Position below the mouse pointer
+                        let left = e.clientX - 150;
+                        let top = e.clientY + 20; // 20px below cursor
                         
-                        // Keep in viewport
+                        // Keep in viewport horizontally
                         if (left < 10) left = 10;
                         if (left > window.innerWidth - 320) left = window.innerWidth - 320;
-                        if (top < 10) {
-                            top = rect.bottom + 10;
+                        
+                        // If tooltip would go below viewport, show above cursor instead
+                        if (top + 100 > window.innerHeight) {
+                            top = e.clientY - 80;
                         }
                         
                         // Show tooltip with inline styles
@@ -10559,6 +10555,23 @@
                         tooltip.style.top = top + 'px';
                         tooltip.style.opacity = '1';
                         tooltip.style.visibility = 'visible';
+                    });
+                    
+                    el.addEventListener('mousemove', function(e) {
+                        // Update tooltip position as mouse moves
+                        if (tooltip.style.opacity !== '1') return;
+                        
+                        let left = e.clientX - 150;
+                        let top = e.clientY + 20;
+                        
+                        if (left < 10) left = 10;
+                        if (left > window.innerWidth - 320) left = window.innerWidth - 320;
+                        if (top + 100 > window.innerHeight) {
+                            top = e.clientY - 80;
+                        }
+                        
+                        tooltip.style.left = left + 'px';
+                        tooltip.style.top = top + 'px';
                     });
                     
                     el.addEventListener('mouseleave', function() {
