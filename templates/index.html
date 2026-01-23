@@ -9944,11 +9944,17 @@
                         </div>
                         
                         <div class="seg-results" id="segResults" style="display: none;">
-                            <div class="seg-results-header">
-                                <h3>📊 Segment Results: <span id="segName">Custom Segment</span></h3>
-                                <div class="seg-sample-info">
-                                    <span>Estimated Size: <strong id="segSize">--</strong></span>
-                                    <span>% of Total: <strong id="segPercent">--</strong></span>
+                            <div class="seg-results-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem;">
+                                <div>
+                                    <h3>📊 Segment Results: <span id="segName">Custom Segment</span></h3>
+                                    <div class="seg-sample-info">
+                                        <span>Estimated Size: <strong id="segSize">--</strong></span>
+                                        <span>% of Total: <strong id="segPercent">--</strong></span>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <button class="btn btn-secondary" onclick="saveCurrentSegment()" style="font-size: 0.75rem; padding: 0.4rem 0.75rem;">💾 Save Segment</button>
+                                    <button class="btn btn-primary" onclick="sendSegmentToCompare()" style="font-size: 0.75rem; padding: 0.4rem 0.75rem;">📊 Send to Compare</button>
                                 </div>
                             </div>
                             
@@ -24225,9 +24231,20 @@
             const percentOfTotal = (segmentMultiplier * 100);
             
             // Update header info
-            document.getElementById('segName').textContent = hasFilters ? getSegmentName(filters) : 'All Audience';
+            const segmentName = hasFilters ? getSegmentName(filters) : 'All Audience';
+            document.getElementById('segName').textContent = segmentName;
             document.getElementById('segSize').textContent = estimatedSegmentSize.toLocaleString();
             document.getElementById('segPercent').textContent = percentOfTotal.toFixed(1) + '%';
+            
+            // Store current segment data for potential comparison
+            currentSegmentData = {
+                name: segmentName,
+                filters: filters,
+                segmentMultiplier: segmentMultiplier,
+                estimatedSize: estimatedSegmentSize,
+                percentOfTotal: percentOfTotal,
+                profileData: currentProfileData
+            };
             
             // Build ALL behavioral data with adjusted percentages
             // Exclude items with 100% original value (not meaningful for segmentation)
@@ -24393,7 +24410,11 @@
         function renderSavedSegments() {
             const container = document.getElementById('savedSegmentsList');
             container.innerHTML = savedSegments.map((seg, idx) => `
-                <span class="saved-segment-chip" onclick="loadSavedSegment(${idx})">${seg.name}</span>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <span class="saved-segment-chip" onclick="loadSavedSegment(${idx})" style="flex: 1;">${seg.name}</span>
+                    <button class="btn btn-small" onclick="sendSavedSegmentToCompare(${idx})" style="font-size: 0.65rem; padding: 0.25rem 0.5rem; white-space: nowrap;">📊 Compare</button>
+                    <button class="btn btn-small btn-danger" onclick="deleteSavedSegment(${idx})" style="font-size: 0.65rem; padding: 0.25rem 0.5rem;">✕</button>
+                </div>
             `).join('') || '<p style="color: var(--text-secondary); font-size: 0.85rem;">No saved segments yet</p>';
         }
         
@@ -24417,6 +24438,79 @@
             });
             
             runSegmentAnalysis();
+        }
+        
+        function deleteSavedSegment(idx) {
+            if (confirm('Delete this saved segment?')) {
+                savedSegments.splice(idx, 1);
+                renderSavedSegments();
+            }
+        }
+        
+        // Store current segment data for sending to compare
+        let currentSegmentData = null;
+        
+        function saveCurrentSegment() {
+            // Same as saveSegment but called from results header
+            saveSegment();
+        }
+        
+        function sendSegmentToCompare() {
+            if (!currentSegmentData) {
+                alert('Please run a segment analysis first');
+                return;
+            }
+            
+            const segmentName = document.getElementById('segName').textContent;
+            addSegmentToComparison(segmentName, currentSegmentData);
+        }
+        
+        function sendSavedSegmentToCompare(idx) {
+            const seg = savedSegments[idx];
+            if (!seg) return;
+            
+            // Load the segment first to get its data
+            loadSavedSegment(idx);
+            
+            // Wait for analysis to complete then send to compare
+            setTimeout(() => {
+                if (currentSegmentData) {
+                    addSegmentToComparison(seg.name, currentSegmentData);
+                }
+            }, 500);
+        }
+        
+        function addSegmentToComparison(name, segmentData) {
+            // Create a virtual profile for the segment
+            const segmentProfile = {
+                name: name,
+                isSegment: true,
+                color: getNextSegmentColor(),
+                data: segmentData
+            };
+            
+            // Add to comparison profiles if not already there
+            if (!comparisonProfiles.some(p => p.name === name && p.isSegment)) {
+                comparisonProfiles.push(segmentProfile);
+                selectedForComparison.add(name);
+            }
+            
+            // Switch to compare tab and run comparison
+            showTab('comparison');
+            setTimeout(() => {
+                runComparison();
+            }, 200);
+            
+            alert(`Segment "${name}" added to comparison!`);
+        }
+        
+        // Get a color for segment profiles
+        let segmentColorIndex = 0;
+        const segmentColors = ['#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1'];
+        function getNextSegmentColor() {
+            const color = segmentColors[segmentColorIndex % segmentColors.length];
+            segmentColorIndex++;
+            return color;
         }
         
         // Initialize saved segments
@@ -25548,8 +25642,49 @@
                 
                 html += `</div>`;
             });
+            
+            // Add segment profiles section if any exist
+            const segmentProfiles = comparisonProfiles.filter(p => p.isSegment);
+            if (segmentProfiles.length > 0) {
+                const segmentsExpanded = expandedCategories.has('comp_segments');
+                html += `
+                    <div class="tree-item category-item" onclick="toggleCategoryGroup('comp_segments')" style="background: rgba(245, 158, 11, 0.2); margin-top: 0.5rem;">
+                        <span class="tree-arrow ${segmentsExpanded ? 'expanded' : ''}" id="arrow-comp_segments">▶</span>
+                        <span class="tree-label" style="font-weight: 600;">🎯 SEGMENTS</span>
+                        <span class="tree-count">(${segmentProfiles.length})</span>
+                    </div>
+                    <div class="tree-children ${segmentsExpanded ? 'open' : ''}" id="cat-comp_segments">
+                        ${segmentProfiles.map(p => {
+                            const isSelected = selectedForComparison.has(p.name);
+                            const colorIdx = Array.from(selectedForComparison).indexOf(p.name);
+                            const color = isSelected && colorIdx >= 0 ? p.color || profileColors[colorIdx % profileColors.length] : '#555';
+                            return `
+                                <div class="tree-item profile-item ${isSelected ? 'selected' : ''}" onclick="event.stopPropagation(); toggleComparisonProfile('${p.name}')" title="${p.name}">
+                                    <input type="checkbox" class="tree-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleComparisonProfile('${p.name}')">
+                                    <span class="tree-color" style="background: ${color}"></span>
+                                    <span class="tree-label">${p.name}</span>
+                                    <button class="btn btn-small btn-danger" onclick="event.stopPropagation(); removeSegmentFromComparison('${p.name}')" style="font-size: 0.6rem; padding: 0.15rem 0.3rem; margin-left: auto;">✕</button>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            }
 
             container.innerHTML = html || '<div style="padding: 1rem; color: var(--text-secondary);">No profiles found</div>';
+        }
+        
+        function removeSegmentFromComparison(name) {
+            // Remove from comparisonProfiles
+            const idx = comparisonProfiles.findIndex(p => p.name === name && p.isSegment);
+            if (idx >= 0) {
+                comparisonProfiles.splice(idx, 1);
+            }
+            // Remove from selection
+            selectedForComparison.delete(name);
+            // Re-render
+            renderComparisonProfiles(comparisonProfiles);
+            updateSelectedCount();
         }
 
         function toggleBrandCategory() {
@@ -26164,6 +26299,39 @@
             for (let idx = 0; idx < selectedIds.length; idx++) {
                 const id = selectedIds[idx];
                 resultsContainer.innerHTML = `<div class="comparison-empty"><p>Loading profile ${idx + 1} of ${selectedIds.length}...</p><p style="font-size: 0.75rem; color: var(--text-secondary);">${id}</p></div>`;
+                
+                // Check if this is a segment profile (virtual profile from segment builder)
+                const segmentProfile = comparisonProfiles.find(p => p.name === id && p.isSegment);
+                if (segmentProfile) {
+                    // Handle segment profile - use stored segment data
+                    const segData = segmentProfile.data;
+                    if (segData && segData.profileData) {
+                        const baseProfile = segData.profileData;
+                        const multiplier = segData.segmentMultiplier || 1;
+                        
+                        // Create profile data from segment
+                        const profileData = {
+                            id: id,
+                            name: segmentProfile.name.toUpperCase(),
+                            color: segmentProfile.color || profileColors[idx % profileColors.length],
+                            isSegment: true,
+                            sampleSize: segData.estimatedSize || 0,
+                            projectedUS: Math.round((segData.estimatedSize || 0) * 324.7), // Rough projection
+                            medianAge: baseProfile.medianAge || 0,
+                            demographics: baseProfile.demographics || {},
+                            demographicsProjection: baseProfile.demographicsProjection || {},
+                            demographicsIndex: baseProfile.demographicsIndex || {},
+                            behavioral: baseProfile.behavioral || {},
+                            behavioralProjection: baseProfile.behavioralProjection || {},
+                            locations: baseProfile.locations || [],
+                            segmentMultiplier: multiplier
+                        };
+                        
+                        profilesData.push(profileData);
+                        console.log(`✓ Loaded segment ${segmentProfile.name}: size=${segData.estimatedSize}`);
+                    }
+                    continue;
+                }
                 
                 try {
                     console.log(`Loading profile ${idx + 1}/${selectedIds.length}:`, id);
