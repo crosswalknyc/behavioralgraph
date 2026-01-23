@@ -8571,10 +8571,6 @@
 
             <!-- Demographics Tab -->
             <div id="tab-demographics" class="tab-content">
-                <div class="tab-header">
-                    <h2>👥 Demographics</h2>
-                    <p class="section-description has-tooltip" data-tooltip="Demographics Overview: This section shows detailed demographic breakdowns. Green bars indicate over-indexing vs Gen Pop (more of this audience than average). Red bars indicate under-indexing (less than average). The second percentage shown is the Gen Pop baseline for comparison.">Audience breakdown by gender, age, income. <span style="color: #10b981;">Green = over-indexes</span> | <span style="color: #ef4444;">Red = under-indexes</span>. Second % = Gen Pop baseline.</p>
-                </div>
                 <div class="demo-main">
                         <div class="stats-row">
                             <div class="stat-card has-tooltip" data-tooltip="Sample Size: Number of matched respondents in this profile. Larger samples (10,000+) = higher confidence. Calculated from unique user IDs matching search criteria.">
@@ -8804,10 +8800,6 @@
 
             <!-- Behavioral Tab -->
             <div id="tab-behavioral" class="tab-content">
-                <div class="tab-header">
-                    <h2>📈 Behavioral</h2>
-                    <p class="section-description has-tooltip" data-tooltip="Behavioral Analysis: This section shows what your audience actually does - what they watch, buy, use, and engage with. Each item shows your audience's percentage, Gen Pop percentage, and an index score. Index > 1.0x means they're more likely than average to engage.">What your audience does, watches, buys, and engages with.</p>
-                </div>
                 <div class="metric-legend" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem; background: rgba(90, 154, 217, 0.1); border-radius: 8px; font-size: 0.75rem;">
                     <span class="has-tooltip" data-tooltip="The percentage of this specific audience that engages with each item."><strong style="color: var(--accent-blue);">Profile %</strong> — Audience penetration</span>
                     <span class="has-tooltip" data-tooltip="The percentage of the general US population that engages with each item."><strong style="color: var(--text-secondary);">(GP: X%)</strong> — Gen Pop penetration</span>
@@ -8883,10 +8875,6 @@
 
             <!-- Interests Tab -->
             <div id="tab-interests" class="tab-content">
-                <div class="tab-header">
-                    <h2>💡 Interests</h2>
-                    <p class="section-description has-tooltip" data-tooltip="Interests Overview: This section shows what your audience is passionate about across different interest categories. Index 1.0x+ means they over-index (more interested than average). Index < 1.0x means they under-index (less interested than average).">What your audience is passionate about. <span style="color: #10b981;">1.0x+ = over-indexes</span> | <span style="color: #ef4444;">&lt;1.0x = under-indexes</span>.</p>
-                </div>
                 <!-- Interests Insights Summary -->
                 <div class="interests-insights-row" id="interestsInsightsRow" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Interests Insights" style="position: relative;">
                     <span class="drag-handle" title="Drag to reorder" style="position: absolute; top: 0.5rem; right: 0.5rem; cursor: move; opacity: 0.5; z-index: 10;">⋮⋮</span>
@@ -26584,8 +26572,11 @@
 
                 if (category === 'SAMPLE SIZE') {
                     result.sampleSize = rawNum || catShare || brandPen || 0;
+                    // Projected US comes from F4 (US Gen Pop Projection column on SAMPLE SIZE row)
+                    if (usGenPop > 0) result.projectedUS = usGenPop;
                 }
-                if (category === 'BRAND INPUT') {
+                // Fallback: also check BRAND INPUT row for projectedUS if not already set
+                if (category === 'BRAND INPUT' && result.projectedUS === 0) {
                     result.projectedUS = usGenPop || 0;
                 }
                 if (category.includes('MEDIAN') && category.includes('AGE')) {
@@ -26815,9 +26806,11 @@
                                         );
                                         if (matchKey) {
                                             segmentDemographics[demoKey][matchKey] = pctPerValue;
-                                            // Calculate projection based on segment size
+                                            // Calculate projection based on segment size using formula: (sampleSize / 10M) * 324,838,700
                                             if (segmentDemographicsProjection[demoKey]) {
-                                                segmentDemographicsProjection[demoKey][matchKey] = Math.round((segData.estimatedSize || 0) * (pctPerValue / 100) * 324.7);
+                                                const segSize = segData.estimatedSize || 0;
+                                                const segProjection = (segSize / 10000000) * 324838700;
+                                                segmentDemographicsProjection[demoKey][matchKey] = Math.round(segProjection * (pctPerValue / 100));
                                             }
                                         }
                                     });
@@ -26826,13 +26819,17 @@
                         });
                         
                         // Create profile data from segment
+                        // Formula: (sampleSize / 10,000,000) * 324,838,700
+                        const segmentSampleSize = segData.estimatedSize || 0;
+                        const segmentProjectedUS = Math.round((segmentSampleSize / 10000000) * 324838700);
+                        
                         const profileData = {
                             id: id,
                             name: segmentProfile.name.toUpperCase(),
                             color: segmentProfile.color || profileColors[idx % profileColors.length],
                             isSegment: true,
-                            sampleSize: segData.estimatedSize || 0,
-                            projectedUS: Math.round((segData.estimatedSize || 0) * 324.7), // Rough projection
+                            sampleSize: segmentSampleSize,
+                            projectedUS: segmentProjectedUS,
                             medianAge: baseProfile.medianAge || 0,
                             demographics: segmentDemographics,
                             demographicsProjection: segmentDemographicsProjection,
