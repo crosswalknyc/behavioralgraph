@@ -5710,8 +5710,11 @@
             color: var(--accent-blue);
         }
         .seg-list {
-            max-height: 250px;
+            max-height: 500px;
             overflow-y: auto;
+        }
+        .seg-result-card:nth-child(2) .seg-list {
+            max-height: 600px;
         }
         .seg-item {
             display: flex;
@@ -5726,6 +5729,27 @@
         }
         .seg-item .diff.up { color: #10b981; }
         .seg-item .diff.down { color: #ef4444; }
+        .seg-category-section {
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .seg-category-section:last-child {
+            margin-bottom: 0;
+            border-bottom: none;
+        }
+        .seg-category-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.4rem 0.5rem;
+            background: rgba(90, 154, 217, 0.15);
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            font-size: 0.8rem;
+            color: var(--accent-blue);
+        }
         .saved-segments {
             margin-top: 1.5rem;
             background: var(--bg-card);
@@ -24131,72 +24155,8 @@
             // Get profile data
             const demographics = currentProfileData.demographics || {};
             const behavioral = currentProfileData.behavioral || {};
+            const locations = currentProfileData.locations || [];
             const sampleSize = currentProfileData.sampleSize || 0;
-            
-            // If no filters, show full audience data
-            if (!hasFilters) {
-                document.getElementById('segName').textContent = 'All Audience';
-                document.getElementById('segSize').textContent = sampleSize.toLocaleString();
-                document.getElementById('segPercent').textContent = '100%';
-                
-                // Get top behaviors
-                const allBehaviors = [];
-                Object.entries(behavioral).forEach(([cat, items]) => {
-                    if (Array.isArray(items)) {
-                        items.forEach(item => {
-                            allBehaviors.push({
-                                name: item.name || item.value,
-                                category: cat,
-                                pct: item.pct || 0
-                            });
-                        });
-                    }
-                });
-                
-                const topBehaviors = allBehaviors.sort((a, b) => b.pct - a.pct).slice(0, 15);
-                document.getElementById('segTopBehaviors').innerHTML = topBehaviors.map(b => `
-                    <div class="seg-item">
-                        <span>${b.name}</span>
-                        <span>${b.pct.toFixed(1)}%</span>
-                    </div>
-                `).join('');
-                
-                document.getElementById('segDifferences').innerHTML = '<p style="color: var(--text-secondary);">No comparison available</p>';
-                
-                // Media items
-                const mediaItems = allBehaviors
-                    .filter(b => ['SOCIAL MEDIA', 'STREAMING', 'APP/PLATFORM', 'PODCAST', 'MEDIA'].some(m => b.category.toUpperCase().includes(m)))
-                    .sort((a, b) => b.pct - a.pct)
-                    .slice(0, 10);
-                document.getElementById('segMedia').innerHTML = mediaItems.map(b => `
-                    <div class="seg-item">
-                        <span>${b.name}</span>
-                        <span>${b.pct.toFixed(1)}%</span>
-                    </div>
-                `).join('') || '<p style="color: var(--text-secondary);">No media data</p>';
-                
-                // Shopping items
-                const shoppingItems = allBehaviors
-                    .filter(b => ['SHOP', 'BRAND', 'PURCHASE', 'APPAREL'].some(s => b.category.toUpperCase().includes(s)))
-                    .sort((a, b) => b.pct - a.pct)
-                    .slice(0, 10);
-                document.getElementById('segShopping').innerHTML = shoppingItems.map(b => `
-                    <div class="seg-item">
-                        <span>${b.name}</span>
-                        <span>${b.pct.toFixed(1)}%</span>
-                    </div>
-                `).join('') || '<p style="color: var(--text-secondary);">No shopping data</p>';
-                
-                status.className = 'seg-status';
-                status.textContent = '✅ Showing full audience data';
-                results.style.display = 'block';
-                return;
-            }
-            
-            // Calculate segment size from demographic percentages
-            // Multiply the percentages together to estimate the overlap
-            let segmentMultiplier = 1;
-            const filterDetails = [];
             
             // Map frontend filter keys to demographic keys
             const demoMapping = {
@@ -24208,89 +24168,169 @@
                 'parental': 'parental_status'
             };
             
-            // Calculate segment multiplier for each filter category
-            for (const [filterKey, demoKey] of Object.entries(demoMapping)) {
-                if (filters[filterKey] && filters[filterKey].length > 0 && demographics[demoKey]) {
-                    // Sum up the percentages for selected values
-                    let categoryPct = 0;
-                    filters[filterKey].forEach(value => {
-                        // Try to match the value (case-insensitive, handle variations)
-                        const matchedKey = Object.keys(demographics[demoKey]).find(k => 
-                            k.toUpperCase() === value.toUpperCase() || 
-                            k.toUpperCase().replace(/\s+/g, '') === value.toUpperCase().replace(/\s+/g, '')
-                        );
-                        if (matchedKey) {
-                            categoryPct += demographics[demoKey][matchedKey] || 0;
+            // Calculate segment multiplier from demographic percentages
+            // Each filter multiplies the previous (e.g., Female 20% * Black 10% = 2% of total)
+            let segmentMultiplier = 1;
+            const filterDetails = [];
+            
+            if (hasFilters) {
+                for (const [filterKey, demoKey] of Object.entries(demoMapping)) {
+                    if (filters[filterKey] && filters[filterKey].length > 0 && demographics[demoKey]) {
+                        // Sum up the percentages for selected values in this category
+                        let categoryPct = 0;
+                        filters[filterKey].forEach(value => {
+                            const matchedKey = Object.keys(demographics[demoKey]).find(k => 
+                                k.toUpperCase() === value.toUpperCase() || 
+                                k.toUpperCase().replace(/\s+/g, '') === value.toUpperCase().replace(/\s+/g, '')
+                            );
+                            if (matchedKey) {
+                                categoryPct += demographics[demoKey][matchedKey] || 0;
+                            }
+                        });
+                        
+                        if (categoryPct > 0) {
+                            segmentMultiplier *= (categoryPct / 100);
+                            filterDetails.push(`${filters[filterKey].join('/')}: ${categoryPct.toFixed(1)}%`);
                         }
-                    });
-                    
-                    if (categoryPct > 0) {
-                        segmentMultiplier *= (categoryPct / 100);
-                        filterDetails.push(`${filterKey}: ${categoryPct.toFixed(1)}%`);
                     }
                 }
             }
             
             // Calculate estimated segment size
             const estimatedSegmentSize = Math.round(sampleSize * segmentMultiplier);
-            const percentOfTotal = (segmentMultiplier * 100).toFixed(1);
+            const percentOfTotal = (segmentMultiplier * 100);
             
-            // Update results
-            document.getElementById('segName').textContent = getSegmentName(filters);
+            // Update header info
+            document.getElementById('segName').textContent = hasFilters ? getSegmentName(filters) : 'All Audience';
             document.getElementById('segSize').textContent = estimatedSegmentSize.toLocaleString();
-            document.getElementById('segPercent').textContent = percentOfTotal + '%';
+            document.getElementById('segPercent').textContent = percentOfTotal.toFixed(1) + '%';
             
-            // Use the same behavioral data as the full profile (since we're estimating)
-            const allBehaviors = [];
+            // Build ALL behavioral data with adjusted percentages
+            const allBehaviorsByCategory = {};
             Object.entries(behavioral).forEach(([cat, items]) => {
                 if (Array.isArray(items)) {
-                    items.forEach(item => {
-                        allBehaviors.push({
-                            name: item.name || item.value,
-                            category: cat,
-                            pct: item.pct || 0
-                        });
-                    });
+                    allBehaviorsByCategory[cat] = items.map(item => ({
+                        name: item.name || item.value,
+                        category: cat,
+                        originalPct: item.pct || 0,
+                        segmentPct: (item.pct || 0) * segmentMultiplier,
+                        index: item.index || 100
+                    })).sort((a, b) => b.segmentPct - a.segmentPct);
                 }
             });
             
-            const topBehaviors = allBehaviors.sort((a, b) => b.pct - a.pct).slice(0, 15);
-            document.getElementById('segTopBehaviors').innerHTML = topBehaviors.map(b => `
-                <div class="seg-item">
-                    <span>${b.name}</span>
-                    <span>${b.pct.toFixed(1)}%</span>
-                </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No behavioral data</p>';
+            // Build location data with adjusted percentages
+            const segmentedLocations = locations.map(loc => ({
+                name: loc.name,
+                originalPct: loc.pct || 0,
+                segmentPct: (loc.pct || 0) * segmentMultiplier,
+                index: loc.index || 100
+            })).sort((a, b) => b.segmentPct - a.segmentPct);
             
-            // Show note that behavioral data is estimated (same as full profile)
-            document.getElementById('segDifferences').innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem; font-style: italic;">Note: Behavioral data shown is estimated based on the full profile. Segment size is calculated from demographic overlap.</p>';
+            // Render Top Behaviors (across all categories)
+            const allBehaviorsFlat = Object.values(allBehaviorsByCategory).flat();
+            const topBehaviors = [...allBehaviorsFlat].sort((a, b) => b.segmentPct - a.segmentPct).slice(0, 20);
             
-            // Media items
-            const mediaItems = allBehaviors
-                .filter(b => ['SOCIAL MEDIA', 'STREAMING', 'APP/PLATFORM', 'PODCAST', 'MEDIA'].some(m => b.category.toUpperCase().includes(m)))
-                .sort((a, b) => b.pct - a.pct)
-                .slice(0, 10);
-            document.getElementById('segMedia').innerHTML = mediaItems.map(b => `
-                <div class="seg-item">
-                    <span>${b.name}</span>
-                    <span>${b.pct.toFixed(1)}%</span>
+            document.getElementById('segTopBehaviors').innerHTML = `
+                <div class="seg-category-section">
+                    <div class="seg-category-header">
+                        <span>Top 20 Behaviors for Segment</span>
+                        <span style="font-size: 0.7rem; color: var(--text-secondary);">Est. % of Segment</span>
+                    </div>
+                    ${topBehaviors.map(b => `
+                        <div class="seg-item">
+                            <span title="${b.category}">${b.name}</span>
+                            <span style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span style="color: var(--accent-lime);">${b.segmentPct.toFixed(2)}%</span>
+                                <span style="color: var(--text-secondary); font-size: 0.7rem;">(${b.originalPct.toFixed(1)}% orig)</span>
+                            </span>
+                        </div>
+                    `).join('')}
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No media data</p>';
+            `;
             
-            // Shopping items
-            const shoppingItems = allBehaviors
-                .filter(b => ['SHOP', 'BRAND', 'PURCHASE', 'APPAREL'].some(s => b.category.toUpperCase().includes(s)))
-                .sort((a, b) => b.pct - a.pct)
-                .slice(0, 10);
-            document.getElementById('segShopping').innerHTML = shoppingItems.map(b => `
-                <div class="seg-item">
-                    <span>${b.name}</span>
-                    <span>${b.pct.toFixed(1)}%</span>
+            // Render ALL Behavioral Categories
+            const categoryHTML = Object.entries(allBehaviorsByCategory)
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([cat, items]) => {
+                    const topItems = items.slice(0, 10);
+                    return `
+                        <div class="seg-category-section">
+                            <div class="seg-category-header">
+                                <span>${cat}</span>
+                                <span style="font-size: 0.7rem; color: var(--text-secondary);">${items.length} items</span>
+                            </div>
+                            ${topItems.map(b => `
+                                <div class="seg-item">
+                                    <span>${b.name}</span>
+                                    <span style="display: flex; gap: 0.5rem; align-items: center;">
+                                        <span style="color: var(--accent-lime);">${b.segmentPct.toFixed(2)}%</span>
+                                        <span style="color: var(--text-secondary); font-size: 0.7rem;">(${b.originalPct.toFixed(1)}%)</span>
+                                    </span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }).join('');
+            
+            document.getElementById('segDifferences').innerHTML = `
+                <div style="max-height: 400px; overflow-y: auto;">
+                    <p style="color: var(--accent-cyan); font-size: 0.8rem; margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(0,200,200,0.1); border-radius: 4px;">
+                        📊 <strong>Calculation:</strong> ${filterDetails.length > 0 ? filterDetails.join(' × ') + ' = ' + percentOfTotal.toFixed(2) + '% of audience' : '100% (no filters)'}
+                    </p>
+                    ${categoryHTML}
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No shopping data</p>';
+            `;
+            
+            // Render Location data
+            const topLocations = segmentedLocations.slice(0, 15);
+            document.getElementById('segMedia').innerHTML = `
+                <div class="seg-category-section">
+                    <div class="seg-category-header">
+                        <span>Top Locations</span>
+                        <span style="font-size: 0.7rem; color: var(--text-secondary);">Est. % of Segment</span>
+                    </div>
+                    ${topLocations.length > 0 ? topLocations.map(loc => `
+                        <div class="seg-item">
+                            <span>${loc.name}</span>
+                            <span style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span style="color: var(--accent-lime);">${loc.segmentPct.toFixed(2)}%</span>
+                                <span style="color: var(--text-secondary); font-size: 0.7rem;">(${loc.originalPct.toFixed(1)}%)</span>
+                            </span>
+                        </div>
+                    `).join('') : '<p style="color: var(--text-secondary);">No location data</p>'}
+                </div>
+            `;
+            
+            // Render Shopping/Brand preferences
+            const shoppingCategories = ['WHERE THEY SHOP', 'MOST PURCHASED BRANDS', 'APPAREL', 'QSR', 'WHERE THEY DINE'];
+            const shoppingItems = allBehaviorsFlat
+                .filter(b => shoppingCategories.some(s => b.category.toUpperCase().includes(s)))
+                .sort((a, b) => b.segmentPct - a.segmentPct)
+                .slice(0, 15);
+            
+            document.getElementById('segShopping').innerHTML = `
+                <div class="seg-category-section">
+                    <div class="seg-category-header">
+                        <span>Shopping & Dining</span>
+                        <span style="font-size: 0.7rem; color: var(--text-secondary);">Est. % of Segment</span>
+                    </div>
+                    ${shoppingItems.length > 0 ? shoppingItems.map(b => `
+                        <div class="seg-item">
+                            <span title="${b.category}">${b.name}</span>
+                            <span style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span style="color: var(--accent-lime);">${b.segmentPct.toFixed(2)}%</span>
+                                <span style="color: var(--text-secondary); font-size: 0.7rem;">(${b.originalPct.toFixed(1)}%)</span>
+                            </span>
+                        </div>
+                    `).join('') : '<p style="color: var(--text-secondary);">No shopping data</p>'}
+                </div>
+            `;
             
             status.className = 'seg-status';
-            status.textContent = `✅ Segment estimate complete: ${percentOfTotal}% of audience (${estimatedSegmentSize.toLocaleString()} estimated users)`;
+            status.textContent = hasFilters 
+                ? `✅ Segment: ${percentOfTotal.toFixed(2)}% of audience (${estimatedSegmentSize.toLocaleString()} estimated users)`
+                : '✅ Showing full audience data (100%)';
             results.style.display = 'block';
         }
         
