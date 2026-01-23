@@ -18854,7 +18854,7 @@
                 
                 // Check if this is MOST PURCHASED BRANDS for slice dropdown
                 const isMostPurchased = cat.toUpperCase().includes('MOST PURCHASED BRANDS') || cat.toUpperCase() === 'MOST PURCHASED';
-                const mostPurchasedOptions = ['all', 'accessories', 'apparel/footwear', 'beauty/wellness', 'health & wellness', 'home/outdoor', 'pets', 'technology brand', 'toys'];
+                const mostPurchasedOptions = ['all', 'accessories', 'apparel/footwear', 'beauty/wellness', 'cpg', 'health & wellness', 'home/outdoor', 'pets', 'technology brand', 'toys'];
                 const sliceOptions = mostPurchasedOptions.sort((a, b) => {
                     if (a === 'all') return -1;
                     if (b === 'all') return 1;
@@ -19635,6 +19635,7 @@
                         'apparel/footwear': ['APPAREL/FOOTWEAR', 'APPAREL', 'FOOTWEAR', 'CLOTHING', 'SHOES'],
                         'accessories': ['ACCESSORIES', 'ACCESSORY', 'JEWELRY', 'WATCHES', 'BAGS'],
                         'beauty/wellness': ['BEAUTY/WELLNESS', 'BEAUTY', 'WELLNESS', 'COSMETICS', 'SKINCARE', 'MAKEUP'],
+                        'cpg': ['CPG', 'CONSUMER PACKAGED GOODS', 'FOOD', 'BEVERAGE', 'SNACKS', 'DRINKS', 'GROCERY'],
                         'health & wellness': ['HEALTH & WELLNESS', 'HEALTH AND WELLNESS', 'HEALTH', 'WELLNESS', 'VITAMINS', 'SUPPLEMENTS'],
                         'home/outdoor': ['HOME/OUTDOOR', 'HOME', 'OUTDOOR', 'FURNITURE', 'GARDEN', 'DECOR'],
                         'toys': ['TOYS', 'TOY', 'GAMES', 'GAMING'],
