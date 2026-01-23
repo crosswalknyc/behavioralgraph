@@ -3035,6 +3035,7 @@
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 0.75rem;
             margin-bottom: 1rem;
+            overflow: visible;
         }
         
         .insight-card {
@@ -3046,6 +3047,7 @@
             align-items: center;
             gap: 0.75rem;
             position: relative;
+            overflow: visible;
         }
         
         .insight-card.highlight {
@@ -3056,29 +3058,35 @@
         /* Hover list tooltip for over/under indexing cards */
         .hover-list-card {
             cursor: pointer;
+            position: relative;
+            overflow: visible;
         }
         
         .hover-list-tooltip {
             position: absolute;
-            bottom: calc(100% + 8px);
+            bottom: calc(100% + 12px);
             left: 50%;
             transform: translateX(-50%);
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
+            background: var(--bg-input);
+            border: 2px solid var(--accent-cyan);
             border-radius: 8px;
-            padding: 0.75rem;
-            min-width: 220px;
-            max-width: 280px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-            z-index: 1000;
+            padding: 1rem;
+            min-width: 240px;
+            max-width: 300px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+            z-index: 10000;
             opacity: 0;
             visibility: hidden;
-            transition: opacity 0.2s, visibility 0.2s;
+            pointer-events: none;
+            transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
+            transform: translateX(-50%) translateY(5px);
         }
         
         .hover-list-card:hover .hover-list-tooltip {
             opacity: 1;
             visibility: visible;
+            pointer-events: auto;
+            transform: translateX(-50%) translateY(0);
         }
         
         .hover-list-tooltip::after {
@@ -3087,8 +3095,8 @@
             top: 100%;
             left: 50%;
             transform: translateX(-50%);
-            border: 8px solid transparent;
-            border-top-color: var(--border-color);
+            border: 10px solid transparent;
+            border-top-color: var(--accent-cyan);
         }
         
         .hover-list-title {
