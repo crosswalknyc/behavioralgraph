@@ -2700,11 +2700,98 @@
             display: flex;
             align-items: center;
             gap: 0.75rem;
+            position: relative;
         }
         
         .insight-card.highlight {
             border-color: var(--accent-lime);
             background: rgba(200, 230, 0, 0.05);
+        }
+        
+        /* Hover list tooltip for over/under indexing cards */
+        .hover-list-card {
+            cursor: pointer;
+        }
+        
+        .hover-list-tooltip {
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+            min-width: 220px;
+            max-width: 280px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+        }
+        
+        .hover-list-card:hover .hover-list-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .hover-list-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 8px solid transparent;
+            border-top-color: var(--border-color);
+        }
+        
+        .hover-list-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.35rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .hover-list-items {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .hover-list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+            padding: 0.25rem 0;
+        }
+        
+        .hover-list-item .item-name {
+            color: var(--text-primary);
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: 0.5rem;
+        }
+        
+        .hover-list-item .item-index {
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        
+        .hover-list-item .item-index.over {
+            color: #10b981;
+        }
+        
+        .hover-list-item .item-index.under {
+            color: #ef4444;
         }
         
         .insight-icon {
@@ -8340,20 +8427,28 @@
                             <div class="insight-detail" id="interestIndexRange">Range: --</div>
                         </div>
                     </div>
-                    <div class="insight-card has-tooltip" data-tooltip="Over-Indexing Count: Number of interests where this audience indexes above the median - these are interests they're more engaged with than typical.">
+                    <div class="insight-card hover-list-card" id="overIndexCard">
                         <div class="insight-icon">⬆️</div>
                         <div class="insight-content">
                             <div class="insight-label">OVER-INDEXING</div>
                             <div class="insight-value" id="overIndexCount">--</div>
                             <div class="insight-detail">above median</div>
                         </div>
+                        <div class="hover-list-tooltip" id="overIndexTooltip">
+                            <div class="hover-list-title">Top Over-Indexing Interests</div>
+                            <div class="hover-list-items" id="overIndexItems">Loading...</div>
+                        </div>
                     </div>
-                    <div class="insight-card has-tooltip" data-tooltip="Under-Indexing Count: Number of interests where this audience indexes below the median - these are interests they engage with less than typical.">
+                    <div class="insight-card hover-list-card" id="underIndexCard">
                         <div class="insight-icon">⬇️</div>
                         <div class="insight-content">
                             <div class="insight-label">UNDER-INDEXING</div>
                             <div class="insight-value" id="underIndexCount">--</div>
                             <div class="insight-detail">below median</div>
+                        </div>
+                        <div class="hover-list-tooltip" id="underIndexTooltip">
+                            <div class="hover-list-title">Top Under-Indexing Interests</div>
+                            <div class="hover-list-items" id="underIndexItems">Loading...</div>
                         </div>
                     </div>
                 </div>
@@ -17115,6 +17210,28 @@
             // Show relative counts (above/below median) with absolute in parentheses if different
             document.getElementById('overIndexCount').textContent = overIndexing.length;
             document.getElementById('underIndexCount').textContent = underIndexing.length;
+            
+            // Populate hover tooltips with top items
+            const topOverItems = overIndexing.slice(0, 8);
+            const topUnderItems = underIndexing.sort((a, b) => a.index - b.index).slice(0, 8);
+            
+            document.getElementById('overIndexItems').innerHTML = topOverItems.length > 0 
+                ? topOverItems.map(item => `
+                    <div class="hover-list-item">
+                        <span class="item-name" title="${item.name}">${item.name}</span>
+                        <span class="item-index over">${formatIndex(item.index)}</span>
+                    </div>
+                `).join('')
+                : '<div style="color: var(--text-secondary); font-size: 0.75rem;">No over-indexing interests</div>';
+            
+            document.getElementById('underIndexItems').innerHTML = topUnderItems.length > 0 
+                ? topUnderItems.map(item => `
+                    <div class="hover-list-item">
+                        <span class="item-name" title="${item.name}">${item.name}</span>
+                        <span class="item-index under">${formatIndex(item.index)}</span>
+                    </div>
+                `).join('')
+                : '<div style="color: var(--text-secondary); font-size: 0.75rem;">No under-indexing interests</div>';
         }
         
         function renderInterestsHeatmap(items) {
