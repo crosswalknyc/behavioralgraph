@@ -25377,11 +25377,14 @@
             
             // Regional breakdown - also collect all cities per region
             const regionData = {};
+            const isGenPopProfile = currentProfileData?.name?.toUpperCase().includes('GEN POP') || currentS3Key?.toUpperCase().includes('GEN_POP');
+            
             Object.entries(stateData).forEach(([state, data]) => {
                 const region = getRegionForState(state);
                 if (!regionData[region]) regionData[region] = { pct: 0, genPopPct: 0, count: 0, cities: [] };
                 regionData[region].pct += data.pct;
-                regionData[region].genPopPct += data.genPopPct;
+                // If viewing Gen Pop profile, use profile pct as gen pop pct (they should be the same)
+                regionData[region].genPopPct += isGenPopProfile ? data.pct : data.genPopPct;
                 regionData[region].count++;
                 // Add all cities from this state to the region
                 regionData[region].cities.push(...data.cities);
