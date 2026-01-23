@@ -8836,8 +8836,10 @@
                         </h4>
                         <div class="top-cat-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.25rem; font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">
                             <span>Category</span>
-                            <span style="display: flex; gap: 0.75rem;">
-                                <span class="has-tooltip" data-tooltip="Avg Index: Average index across all items in this category. 1.0x = same as Gen Pop, 2.0x = 2x more likely than Gen Pop.">Avg Index</span>
+                            <span style="display: flex; gap: 0.5rem;">
+                                <span class="has-tooltip" data-tooltip="Profile %: Average percentage of this audience engaging with items in this category." style="min-width: 45px; text-align: right;">Profile</span>
+                                <span class="has-tooltip" data-tooltip="Gen Pop %: Average percentage of general population engaging with items in this category." style="min-width: 55px; text-align: right;">GP</span>
+                                <span class="has-tooltip" data-tooltip="Avg Index: Average index across all items in this category. 1.0x = same as Gen Pop, 2.0x = 2x more likely than Gen Pop." style="min-width: 45px; text-align: right;">Index</span>
                                 <span class="has-tooltip" data-tooltip="Hot Count: Number of items in this category with index above 1.5x (strong over-indexers).">Hot 🔥</span>
                             </span>
                         </div>
@@ -16138,10 +16140,10 @@
             if (topItem) {
                 summaryItems.push({
                     icon: '🔥',
-                    text: `Strongest signal: <strong style="color: var(--accent-lime);">${topItem.name}</strong> (${topItem.category})`,
+                    text: `Strongest signal: <strong style="color: var(--accent-lime);">${topItem.name}</strong> (${topItem.category}) <span style="font-size: 0.75rem; color: var(--text-secondary);">${topItem.pct.toFixed(1)}% | GP: ${topItem.genPop.toFixed(1)}%</span>`,
                     value: topItem.index,
                     valueClass: 'high',
-                    tooltip: `Strongest Signal: The single item where this audience most over-indexes vs Gen Pop. ${topItem.name} has an index of ${formatIndex(topItem.index)}, meaning this audience is ${(topItem.index / 100).toFixed(1)}x more likely to engage with it than the average American.`
+                    tooltip: `Strongest Signal: The single item where this audience most over-indexes vs Gen Pop. ${topItem.name} has an index of ${formatIndex(topItem.index)} (Profile: ${topItem.pct.toFixed(1)}%, Gen Pop: ${topItem.genPop.toFixed(1)}%), meaning this audience is ${(topItem.index / 100).toFixed(1)}x more likely to engage with it than the average American.`
                 });
             }
             
@@ -16196,8 +16198,14 @@
                 const avgIdx = items.length > 0 
                     ? Math.round(items.reduce((s, i) => s + (i.index || 100), 0) / items.length) 
                     : 100;
+                const avgPct = items.length > 0
+                    ? items.reduce((s, i) => s + (i.pct || i.percentage || 0), 0) / items.length
+                    : 0;
+                const avgGenPop = items.length > 0
+                    ? items.reduce((s, i) => s + (i.genPop || i.gen_pop || 0), 0) / items.length
+                    : 0;
                 const highCount = items.filter(i => (i.index || 100) >= 150).length;
-                categoryStats[cat] = { avgIndex: avgIdx, count: items.length, highCount };
+                categoryStats[cat] = { avgIndex: avgIdx, avgPct: avgPct, avgGenPop: avgGenPop, count: items.length, highCount };
             });
             
             const topCategories = Object.entries(categoryStats)
@@ -16205,10 +16213,12 @@
                 .slice(0, 6);
             
             document.getElementById('behavioralTopCategories').innerHTML = topCategories.map(([cat, stats]) => `
-                <div class="behavioral-top-cat has-tooltip" data-tooltip="${cat}: ${stats.count} items tracked, avg index ${formatIndex(stats.avgIndex)}, ${stats.highCount} strong over-indexers (>1.5x). This audience is ${stats.avgIndex > 100 ? (stats.avgIndex / 100).toFixed(1) + 'x more' : 'less'} likely to engage with ${cat} content vs. Gen Pop.">
+                <div class="behavioral-top-cat has-tooltip" data-tooltip="${cat}: ${stats.count} items tracked, avg profile ${stats.avgPct.toFixed(1)}%, avg Gen Pop ${stats.avgGenPop.toFixed(1)}%, avg index ${formatIndex(stats.avgIndex)}, ${stats.highCount} strong over-indexers (>1.5x).">
                     <span class="cat-name">${cat}</span>
                     <span class="cat-stats">
-                        <span class="cat-idx" style="color: ${stats.avgIndex >= 100 ? '#10b981' : '#ef4444'}">${formatIndex(stats.avgIndex)}</span>
+                        <span class="cat-pct" style="color: var(--accent-lime); min-width: 45px; text-align: right;">${stats.avgPct.toFixed(1)}%</span>
+                        <span class="cat-gp" style="color: var(--text-secondary); min-width: 55px; text-align: right;">GP: ${stats.avgGenPop.toFixed(1)}%</span>
+                        <span class="cat-idx" style="color: ${stats.avgIndex >= 100 ? '#10b981' : '#ef4444'}; min-width: 45px; text-align: right;">${formatIndex(stats.avgIndex)}</span>
                         <span class="cat-high" style="min-width: 35px; text-align: right;">${stats.highCount > 0 ? stats.highCount + '🔥' : '-'}</span>
                     </span>
                 </div>
@@ -16224,8 +16234,8 @@
             if (purchaseBrands.length > 0) {
                 activations.push({
                     icon: '🛍️',
-                    text: `<strong>Shopping:</strong> Partner with ${purchaseBrands.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')}`,
-                    tooltip: `Shopping Partnership: This audience strongly over-indexes on these brands (${purchaseBrands.map(b => formatIndex(b.index)).join(', ')}). Co-branded campaigns or retail activations could drive high engagement.`
+                    text: `<strong>Shopping:</strong> Partner with ${purchaseBrands.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${purchaseBrands[0].pct.toFixed(1)}% | GP: ${purchaseBrands[0].genPop.toFixed(1)}%)</span>`,
+                    tooltip: `Shopping Partnership: This audience strongly over-indexes on these brands (${purchaseBrands.map(b => `${b.name}: ${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)}`).join('; ')}). Co-branded campaigns or retail activations could drive high engagement.`
                 });
             }
             
@@ -16236,8 +16246,8 @@
             if (streamingBrands.length > 0) {
                 activations.push({
                     icon: '📺',
-                    text: `<strong>Content:</strong> ${streamingBrands[0].name} integration (${formatIndex(streamingBrands[0].index)})`,
-                    tooltip: `Content Integration: ${streamingBrands[0].name} is a top streaming/content choice for this audience. Consider product placement, sponsored content, or ad buys on this platform.`
+                    text: `<strong>Content:</strong> ${streamingBrands[0].name} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${streamingBrands[0].pct.toFixed(1)}% | GP: ${streamingBrands[0].genPop.toFixed(1)}% | ${formatIndex(streamingBrands[0].index)})</span>`,
+                    tooltip: `Content Integration: ${streamingBrands[0].name} is a top streaming/content choice for this audience (${streamingBrands[0].pct.toFixed(1)}% vs GP ${streamingBrands[0].genPop.toFixed(1)}%). Consider product placement, sponsored content, or ad buys on this platform.`
                 });
             }
             
@@ -16248,8 +16258,8 @@
             if (socialBrands.length > 0) {
                 activations.push({
                     icon: '📱',
-                    text: `<strong>Social:</strong> Focus on ${socialBrands[0].name} (${formatIndex(socialBrands[0].index)})`,
-                    tooltip: `Social Media Focus: ${socialBrands[0].name} is the preferred social platform for this audience. Prioritize paid media and organic content on this channel for maximum reach.`
+                    text: `<strong>Social:</strong> Focus on ${socialBrands[0].name} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${socialBrands[0].pct.toFixed(1)}% | GP: ${socialBrands[0].genPop.toFixed(1)}% | ${formatIndex(socialBrands[0].index)})</span>`,
+                    tooltip: `Social Media Focus: ${socialBrands[0].name} is the preferred social platform for this audience (${socialBrands[0].pct.toFixed(1)}% vs GP ${socialBrands[0].genPop.toFixed(1)}%). Prioritize paid media and organic content on this channel for maximum reach.`
                 });
             }
             
@@ -16272,8 +16282,8 @@
             if (sportsItems.length > 0) {
                 activations.push({
                     icon: '🏆',
-                    text: `<strong>Sports:</strong> ${sportsItems[0].name} sponsorship (${formatIndex(sportsItems[0].index)})`,
-                    tooltip: `Sports Sponsorship: This audience over-indexes on ${sportsItems[0].name} (${formatIndex(sportsItems[0].index)}). Consider sponsorship, athlete partnerships, or sports-related activations.`
+                    text: `<strong>Sports:</strong> ${sportsItems[0].name} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${sportsItems[0].pct.toFixed(1)}% | GP: ${sportsItems[0].genPop.toFixed(1)}% | ${formatIndex(sportsItems[0].index)})</span>`,
+                    tooltip: `Sports Sponsorship: This audience over-indexes on ${sportsItems[0].name} (${sportsItems[0].pct.toFixed(1)}% vs GP ${sportsItems[0].genPop.toFixed(1)}%, ${formatIndex(sportsItems[0].index)}). Consider sponsorship, athlete partnerships, or sports-related activations.`
                 });
             }
             
