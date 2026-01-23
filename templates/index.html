@@ -8354,8 +8354,6 @@
                                     <span style="display: flex; align-items: center; gap: 0.3rem; flex-shrink: 0;">
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Age Distribution: Breakdown by age bracket. Green = your audience over-indexes vs Gen Pop (GP). Red = under-indexes. Hover bars for exact %.">📅 AGE</span>
-                                    </span>
-                                    <div style="display: flex; gap: 0.2rem; align-items: center; flex-wrap: wrap;">
                                         <select id="ageChartType" onchange="changeChartType('age', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type: Choose how to visualize the age data.">
                                             <option value="bar">📊</option>
                                             <option value="doughnut">🍩</option>
@@ -8372,7 +8370,7 @@
                                             <button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Age')" data-tooltip="Export PNG">PNG</button>
                                             <button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('demographic', 'Age')" data-tooltip="Add to Deck">➕</button>
                                         </span>
-                                    </div>
+                                    </span>
                                     <span id="ageMedianDisplay" class="median-display"></span>
                                 </h3>
                                 <div class="chart-container"><canvas id="ageChart"></canvas></div>
@@ -8382,8 +8380,6 @@
                                     <span style="display: flex; align-items: center; gap: 0.3rem; flex-shrink: 0;">
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Gender Distribution: Breakdown by gender identity.">👫 GENDER</span>
-                                    </span>
-                                    <div style="display: flex; gap: 0.2rem; align-items: center; flex-wrap: wrap;">
                                         <select id="genderChartType" onchange="changeChartType('gender', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type">
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
@@ -8391,7 +8387,7 @@
                                             <option value="polarArea">🎯</option>
                                         </select>
                                         <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Gender')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Gender')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Gender')">➕</button></span>
-                                    </div>
+                                    </span>
                                     <span id="genderMedianDisplay" class="median-display"></span>
                                 </h3>
                                 <div class="chart-container"><canvas id="genderChart"></canvas></div>
@@ -8401,8 +8397,6 @@
                                     <span style="display: flex; align-items: center; gap: 0.3rem; flex-shrink: 0;">
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Ethnicity Distribution">🌍 ETHNICITY</span>
-                                    </span>
-                                    <div style="display: flex; gap: 0.2rem; align-items: center; flex-wrap: wrap;">
                                         <select id="ethnicityChartType" onchange="changeChartType('ethnicity', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type">
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
@@ -8410,7 +8404,7 @@
                                             <option value="polarArea">🎯</option>
                                         </select>
                                         <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Ethnicity')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Ethnicity')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Ethnicity')">➕</button></span>
-                                    </div>
+                                    </span>
                                     <span id="ethnicityMedianDisplay" class="median-display"></span>
                                 </h3>
                                 <div class="chart-container"><canvas id="ethnicityChart"></canvas></div>
@@ -8420,8 +8414,6 @@
                                     <span style="display: flex; align-items: center; gap: 0.3rem; flex-shrink: 0;">
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Income Distribution">💰 INCOME</span>
-                                    </span>
-                                    <div style="display: flex; gap: 0.2rem; align-items: center; flex-wrap: wrap;">
                                         <select id="incomeChartType" onchange="changeChartType('income', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type">
                                             <option value="bar">📊</option>
                                             <option value="doughnut">🍩</option>
@@ -8438,7 +8430,7 @@
                                             <button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Income')">PNG</button>
                                             <button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Income')">➕</button>
                                         </span>
-                                    </div>
+                                    </span>
                                     <span id="incomeMedianDisplay" class="median-display"></span>
                                 </h3>
                                 <div class="chart-container"><canvas id="incomeChart"></canvas></div>
