@@ -15543,7 +15543,6 @@
                 },
                 'PARENTAL_STATUS': {
                     'Has Kids': 40.0, 'HAS KIDS': 40.0,
-                    "Doesn't Have Kids": 55.0, "DOESN'T HAVE KIDS": 55.0,
                     'Other': 5.0, 'OTHER': 5.0
                 }
             };
@@ -15674,10 +15673,14 @@
                     result.demographicsProjection.sexual_orientation[value] = usProjection;
                 }
                 if (category === 'PARENTAL_STATUS' && value) {
-                    result.demographics.parental_status[value] = pct;
-                    result.demographicsIndex.parental_status[value] = index;
-                    result.demographicsGenPop.parental_status[value] = genPopPct;
-                    result.demographicsProjection.parental_status[value] = usProjection;
+                    // Filter out "Doesn't Have Kids" entries
+                    const valueUpper = value.toUpperCase();
+                    if (valueUpper !== "DOESN'T HAVE KIDS" && valueUpper !== "DOESNT HAVE KIDS") {
+                        result.demographics.parental_status[value] = pct;
+                        result.demographicsIndex.parental_status[value] = index;
+                        result.demographicsGenPop.parental_status[value] = genPopPct;
+                        result.demographicsProjection.parental_status[value] = usProjection;
+                    }
                 }
                 
                 // Interests category (handle both singular and plural)
