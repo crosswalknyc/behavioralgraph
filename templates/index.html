@@ -3124,45 +3124,79 @@
         
         .interests-category-cards {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 0.75rem;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+        
+        @media (max-width: 1200px) {
+            .interests-category-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .interests-category-cards {
+                grid-template-columns: 1fr;
+            }
         }
         
         .interest-category-card {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            padding: 0.75rem;
+            padding: 1rem;
         }
         
         .interest-category-card h4 {
-            font-size: 0.85rem;
-            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            margin-bottom: 0.75rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
         }
         
         .interest-category-card .cat-avg {
             font-size: 0.7rem;
-            padding: 0.15rem 0.4rem;
+            padding: 0.2rem 0.5rem;
             border-radius: 4px;
             background: rgba(0,0,0,0.3);
         }
         
         .interest-category-items {
-            font-size: 0.75rem;
+            font-size: 0.8rem;
         }
         
         .interest-category-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 0.25rem 0;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 1rem;
+            padding: 0.35rem 0;
             border-bottom: 1px solid var(--border-color);
+            align-items: center;
         }
         
         .interest-category-item:last-child {
             border-bottom: none;
+        }
+        
+        .interest-category-item .item-name {
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .interest-category-item .item-stats {
+            display: grid;
+            grid-template-columns: 45px 65px 85px;
+            gap: 0.5rem;
+            text-align: left;
+        }
+        
+        .interest-category-item .item-stats span {
+            text-align: left;
         }
         
         /* Interests List Section */
@@ -17860,11 +17894,11 @@
                                     : 'GP: ' + formatValueOrNA(genPopPct, true);
                                 
                                 return `<div class="interest-category-item">
-                                    <span>${item.name}</span>
-                                    <span style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span class="item-name">${item.name}</span>
+                                    <span class="item-stats">
                                         <span style="color: ${idxColor}; font-weight: 600;">${formatIndex(item.index)}</span>
-                                        <span style="color: ${idxColor}; font-size: 0.85rem;">${profileDisplay}</span>
-                                        <span style="color: ${isOverIndex ? '#6b7280' : '#fca5a5'}; font-size: 0.85rem;">(${genPopDisplay})</span>
+                                        <span style="color: ${idxColor};">${profileDisplay}</span>
+                                        <span style="color: ${isOverIndex ? '#6b7280' : '#fca5a5'};">(${genPopDisplay})</span>
                                     </span>
                                 </div>`;
                             }).join('')}
