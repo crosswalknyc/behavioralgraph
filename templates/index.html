@@ -27330,6 +27330,7 @@
                         <div class="summary-header">
                             <h2>📄 Executive Summary</h2>
                             <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-small" onclick="sendSummaryToDeck()" style="background: rgba(139, 92, 246, 0.3); border-color: #8b5cf6;">📊 Add to Deck</button>
                                 <button class="btn btn-small" onclick="copySummaryToClipboard()">📋 Copy</button>
                                 <button class="btn btn-small" onclick="printSummary()">🖨️ Print</button>
                                 <button class="btn btn-small" onclick="closeSummaryModal()">✕ Close</button>
@@ -27445,6 +27446,44 @@
                 </html>
             `);
             printWindow.document.close();
+        }
+        
+        function sendSummaryToDeck() {
+            const content = document.querySelector('.summary-modal-content');
+            if (!content) {
+                alert('No summary content found');
+                return;
+            }
+            
+            // Create a deck slide from the summary
+            const profiles = window.comparisonProfilesData || [];
+            const profileNames = profiles.map(p => p.name).join(' vs ');
+            
+            // Capture the summary content as HTML
+            const summaryHTML = content.innerHTML;
+            
+            // Add to deck
+            const deckItem = {
+                id: 'exec-summary-' + Date.now(),
+                type: 'executive-summary',
+                title: 'Executive Summary: ' + profileNames,
+                content: summaryHTML,
+                timestamp: new Date().toISOString(),
+                profiles: profiles.map(p => ({ name: p.name, color: p.color }))
+            };
+            
+            // Add to deck items array
+            if (!window.deckItems) window.deckItems = [];
+            window.deckItems.push(deckItem);
+            
+            // Update deck count badge if it exists
+            updateDeckBadge();
+            
+            // Show confirmation
+            alert('Executive Summary added to Deck Builder!');
+            
+            // Close the modal
+            closeSummaryModal();
             printWindow.print();
         }
         
