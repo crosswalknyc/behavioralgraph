@@ -24230,26 +24230,32 @@
             document.getElementById('segPercent').textContent = percentOfTotal.toFixed(1) + '%';
             
             // Build ALL behavioral data with adjusted percentages
+            // Exclude items with 100% original value (not meaningful for segmentation)
             const allBehaviorsByCategory = {};
             Object.entries(behavioral).forEach(([cat, items]) => {
                 if (Array.isArray(items)) {
-                    allBehaviorsByCategory[cat] = items.map(item => ({
-                        name: item.name || item.value,
-                        category: cat,
-                        originalPct: item.pct || 0,
-                        segmentPct: (item.pct || 0) * segmentMultiplier,
-                        index: item.index || 100
-                    })).sort((a, b) => b.segmentPct - a.segmentPct);
+                    allBehaviorsByCategory[cat] = items
+                        .filter(item => (item.pct || 0) < 100) // Exclude 100% values
+                        .map(item => ({
+                            name: item.name || item.value,
+                            category: cat,
+                            originalPct: item.pct || 0,
+                            segmentPct: (item.pct || 0) * segmentMultiplier,
+                            index: item.index || 100
+                        })).sort((a, b) => b.segmentPct - a.segmentPct);
                 }
             });
             
             // Build location data with adjusted percentages
-            const segmentedLocations = locations.map(loc => ({
-                name: loc.name,
-                originalPct: loc.pct || 0,
-                segmentPct: (loc.pct || 0) * segmentMultiplier,
-                index: loc.index || 100
-            })).sort((a, b) => b.segmentPct - a.segmentPct);
+            // Exclude items with 100% original value
+            const segmentedLocations = locations
+                .filter(loc => (loc.pct || 0) < 100) // Exclude 100% values
+                .map(loc => ({
+                    name: loc.name,
+                    originalPct: loc.pct || 0,
+                    segmentPct: (loc.pct || 0) * segmentMultiplier,
+                    index: loc.index || 100
+                })).sort((a, b) => b.segmentPct - a.segmentPct);
             
             // Render Top Behaviors (across all categories)
             const allBehaviorsFlat = Object.values(allBehaviorsByCategory).flat();
