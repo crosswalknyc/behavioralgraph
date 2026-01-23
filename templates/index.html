@@ -24809,23 +24809,29 @@
             };
             
             // Add to persistent segment storage if not already there
+            // This is critical - must happen BEFORE showTab which calls loadComparisonProfiles
             if (!segmentProfilesForComparison.some(p => p.name === name)) {
                 segmentProfilesForComparison.push(segmentProfile);
+            } else {
+                // Update existing segment data
+                const existingIdx = segmentProfilesForComparison.findIndex(p => p.name === name);
+                if (existingIdx >= 0) {
+                    segmentProfilesForComparison[existingIdx] = segmentProfile;
+                }
             }
             
-            // Also add to comparison profiles if not already there
-            if (!comparisonProfiles.some(p => p.name === name && p.isSegment)) {
-                comparisonProfiles.push(segmentProfile);
-            }
-            
-            // Add to selection
+            // Add to selection BEFORE switching tabs
             selectedForComparison.add(name);
             
-            // Switch to compare tab and run comparison
+            // Switch to compare tab - this will call loadComparisonProfiles which re-adds segments from segmentProfilesForComparison
             showTab('comparison');
+            
+            // Run comparison after a short delay to ensure profiles are loaded
             setTimeout(() => {
+                // Ensure the segment is still selected (loadComparisonProfiles preserves segment selections)
+                selectedForComparison.add(name);
                 runComparison();
-            }, 300);
+            }, 400);
             
             alert(`Segment "${name}" added to comparison!`);
         }
@@ -26676,7 +26682,14 @@
                 resultsContainer.innerHTML = `<div class="comparison-empty"><p>Loading profile ${idx + 1} of ${selectedIds.length}...</p><p style="font-size: 0.75rem; color: var(--text-secondary);">${id}</p></div>`;
                 
                 // Check if this is a segment profile (virtual profile from segment builder)
-                const segmentProfile = comparisonProfiles.find(p => p.name === id && p.isSegment);
+                // First check persistent storage, then comparisonProfiles
+                let segmentProfile = segmentProfilesForComparison.find(p => p.name === id);
+                if (!segmentProfile) {
+                    segmentProfile = comparisonProfiles.find(p => p.name === id && p.isSegment);
+                }
+                console.log(`Checking for segment "${id}":`, segmentProfile ? 'FOUND' : 'not found', 
+                    'segmentProfilesForComparison:', segmentProfilesForComparison.map(p => p.name),
+                    'comparisonProfiles segments:', comparisonProfiles.filter(p => p.isSegment).map(p => p.name));
                 if (segmentProfile) {
                     // Handle segment profile - use stored segment data
                     const segData = segmentProfile.data;
