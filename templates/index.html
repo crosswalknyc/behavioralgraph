@@ -8247,22 +8247,28 @@
                 <button class="tab-btn tool-tab has-tooltip" data-tooltip="Deck Builder: Create and export presentation decks from your saved insights and charts." onclick="openDeckWorkspace()"><span class="tab-icon">📊</span><span class="tab-label">DECK BUILDER</span></button>
             </div>
             
-            <!-- Action Buttons - Above the sidebar and content -->
-            <div class="content-action-buttons" id="contentActionButtons" style="margin-bottom: 0.5rem;">
-                <div class="dash-dropdown">
-                    <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, full report as PDF, or add page to deck." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
-                    <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
-                        <a onclick="exportAllCSV()">📄 All Data (CSV)</a>
-                        <a onclick="exportAllPNG()">🖼️ All Charts (PNG)</a>
-                        <a onclick="exportPDF()">📑 Full Report (PDF)</a>
-                        <a onclick="addCurrentTabToDeck()">➕ Add Page to Deck</a>
+            <!-- Action Buttons Row with Tab Title -->
+            <div class="action-buttons-row" style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+                <div class="content-action-buttons" id="contentActionButtons" style="margin-top: 0;">
+                    <div class="dash-dropdown">
+                        <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, full report as PDF, or add page to deck." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
+                        <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
+                            <a onclick="exportAllCSV()">📄 All Data (CSV)</a>
+                            <a onclick="exportAllPNG()">🖼️ All Charts (PNG)</a>
+                            <a onclick="exportPDF()">📑 Full Report (PDF)</a>
+                            <a onclick="addCurrentTabToDeck()">➕ Add Page to Deck</a>
+                        </div>
+                    </div>
+                    <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements.">
+                        <span id="hoverToggleLabel">HOVER ON</span>
+                    </div>
+                    <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" data-tooltip="US %: Toggle between showing percentages of audience vs. projected US population numbers.">
+                        <span id="dashDisplayLabel">US %</span>
                     </div>
                 </div>
-                <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements.">
-                    <span id="hoverToggleLabel">HOVER ON</span>
-                </div>
-                <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" data-tooltip="US %: Toggle between showing percentages of audience vs. projected US population numbers.">
-                    <span id="dashDisplayLabel">US %</span>
+                <div class="inline-tab-header" id="inlineTabHeader" style="display: flex; align-items: center; gap: 0.75rem;">
+                    <h2 style="margin: 0; font-size: 1.1rem;">🔬 Deep Insights</h2>
+                    <p style="margin: 0; color: var(--text-secondary); font-size: 0.8rem;">Deep-dive analysis across behavioral patterns, media consumption, and activation opportunities.</p>
                 </div>
             </div>
             
@@ -9587,10 +9593,6 @@
             <!-- Top Insights Tab -->
             <div id="tab-insights" class="tab-content active">
                 <div class="insights-container">
-                    <div class="tab-header">
-                        <h2>🔬 Deep Insights</h2>
-                        <p class="section-description has-tooltip" data-tooltip="Deep Insights: This section provides comprehensive analysis across behavioral patterns, media consumption habits, and activation opportunities. Use the sub-tabs to explore different aspects of the audience analysis.">Deep-dive analysis across behavioral patterns, media consumption, and activation opportunities.</p>
-                    </div>
                     <!-- Insights Sub-tabs -->
                     <div class="insights-tabs">
                         <button class="insights-tab active" onclick="showInsightsTab('summary')">📋 Summary</button>
@@ -14429,10 +14431,40 @@
             collaboration: '<strong>Collaborate</strong> — Team workspace for sharing insights and collaborative analysis.'
         };
         
+        // Tab header titles and descriptions for inline header
+        const TAB_HEADERS = {
+            insights: { icon: '🔬', title: 'Deep Insights', desc: 'Deep-dive analysis across behavioral patterns, media consumption, and activation opportunities.' },
+            demographics: { icon: '👥', title: 'Demographics', desc: 'Audience breakdown by gender, age, ethnicity, income, and other demographic characteristics.' },
+            behavioral: { icon: '📈', title: 'Behavioral', desc: 'Consumer behaviors, brand preferences, purchase patterns, and lifestyle activities.' },
+            interests: { icon: '🎯', title: 'Interests', desc: 'Top interests and passions categorized by topic area with index scores.' },
+            location: { icon: '📍', title: 'Location', desc: 'Geographic distribution showing where this audience is concentrated.' },
+            affinity: { icon: '🔗', title: 'Affinity', desc: 'Cross-category affinities showing what else this audience engages with.' },
+            sponsorship: { icon: '💰', title: 'Sponsorship', desc: 'Sponsorship valuation and partnership opportunity analysis.' },
+            media: { icon: '📺', title: 'Media', desc: 'Media consumption patterns including TV, streaming, social media preferences.' },
+            content: { icon: '🎬', title: 'Content', desc: 'Content consumption preferences including genres, formats, and viewing habits.' },
+            segmentation: { icon: '🎛️', title: 'Segment Builder', desc: 'Build custom audience segments with demographic and behavioral filters.' },
+            comparison: { icon: '⚖️', title: 'Compare', desc: 'Side-by-side comparison of multiple profiles.' },
+            collaboration: { icon: '🤝', title: 'Collaborate', desc: 'Share insights and collaborate with team members.' }
+        };
+        
+        function updateInlineTabHeader(tabName) {
+            const header = document.getElementById('inlineTabHeader');
+            if (header && TAB_HEADERS[tabName]) {
+                const info = TAB_HEADERS[tabName];
+                header.innerHTML = `
+                    <h2 style="margin: 0; font-size: 1.1rem;">${info.icon} ${info.title}</h2>
+                    <p style="margin: 0; color: var(--text-secondary); font-size: 0.8rem;">${info.desc}</p>
+                `;
+            }
+        }
+        
         function showTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('tab-' + tabName).classList.add('active');
+            
+            // Update inline tab header
+            updateInlineTabHeader(tabName);
             
             // Find and activate the corresponding tab button
             // Try to find button by onclick attribute first
