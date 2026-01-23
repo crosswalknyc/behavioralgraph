@@ -1267,17 +1267,15 @@
         .dash-profile-info {
             display: flex;
             flex-direction: row;
-            align-items: flex-start;
+            align-items: stretch;
             gap: 1rem;
         }
         
         .dash-profile-image {
-            width: 78px;
-            height: 78px;
-            min-width: 78px;
-            min-height: 78px;
-            max-width: 78px;
-            max-height: 78px;
+            width: auto;
+            aspect-ratio: 1;
+            min-width: 70px;
+            align-self: stretch;
             border-radius: 12px;
             overflow: hidden;
             border: 3px solid #4a5568;
@@ -1291,15 +1289,15 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            object-position: center;
+            object-position: center top;
         }
         
         .dash-profile-image.loaded {
-            display: block;
+            display: flex;
         }
         
         .dash-profile-image.loading {
-            display: block;
+            display: flex;
             background: linear-gradient(135deg, var(--bg-card), var(--bg-input));
             animation: pulse 1.5s infinite;
         }
