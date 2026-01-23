@@ -17968,25 +17968,25 @@
                         <div class="behavioral-filter" style="display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center;">
                             ${isMostPurchased ? `
                                 <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceMostPurchased('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                    <option value="all">Slice By: All</option>
+                                    <option value="all">Slice By</option>
                                     ${sliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
                                 </select>
                             ` : ''}
                             ${isWhereTheyShop ? `
                                 <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceWhereTheyShop('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                    <option value="all">Slice By: All</option>
+                                    <option value="all">Slice By</option>
                                     ${whereTheyShopSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
                                 </select>
                             ` : ''}
                             ${isSports ? `
                                 <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceSports('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                    <option value="all">Slice By: All</option>
+                                    <option value="all">Slice By</option>
                                     ${sportsSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
                                 </select>
                             ` : ''}
                             ${isTalent ? `
                                 <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceTalent('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                    <option value="all">Slice By: All</option>
+                                    <option value="all">Slice By</option>
                                     ${talentSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
                                 </select>
                             ` : ''}
