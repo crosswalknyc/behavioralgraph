@@ -16227,24 +16227,45 @@
             // === ACTIVATION OPPORTUNITIES ===
             const activations = [];
             
-            // Define retail store categories for matching
-            const bigBoxStores = ['TARGET', 'WALMART', 'COSTCO', 'SAM\'S CLUB', 'BJ\'S', 'KOHL\'S', 'BEST BUY', 'HOME DEPOT', 'LOWE\'S', 'MENARDS', 'BIG LOTS', 'FIVE BELOW', 'DOLLAR GENERAL', 'DOLLAR TREE', 'FAMILY DOLLAR'];
-            const departmentStores = ['MACY\'S', 'NORDSTROM', 'BLOOMINGDALE\'S', 'NEIMAN MARCUS', 'SAKS', 'DILLARD\'S', 'JC PENNEY', 'JCPENNEY', 'BELK', 'VON MAUR', 'LORD & TAYLOR'];
-            const ecommerceStores = ['AMAZON', 'EBAY', 'ETSY', 'CHEWY', 'WAYFAIR', 'OVERSTOCK', 'ZAPPOS', 'WISH', 'SHEIN', 'TEMU', 'ALIBABA', 'ALIEXPRESS', 'MERCARI', 'POSHMARK', 'THREDDUP'];
-            const groceryStores = ['PUBLIX', 'HEB', 'H-E-B', 'KROGER', 'SAFEWAY', 'ALBERTSONS', 'WHOLE FOODS', 'TRADER JOE\'S', 'ALDI', 'LIDL', 'WEGMANS', 'SPROUTS', 'FOOD LION', 'GIANT', 'STOP & SHOP', 'HARRIS TEETER', 'MEIJER', 'WINN-DIXIE', 'PIGGLY WIGGLY', 'SAVE-A-LOT', 'GROCERY OUTLET'];
+            // ============ COMPREHENSIVE BRAND/BUSINESS CATEGORIZATION ============
+            // Retail Store Categories
+            const bigBoxStores = ['TARGET', 'WALMART', 'COSTCO', 'SAM\'S CLUB', 'BJ\'S', 'KOHL\'S', 'BEST BUY', 'HOME DEPOT', 'LOWE\'S', 'MENARDS', 'BIG LOTS', 'FIVE BELOW', 'DOLLAR GENERAL', 'DOLLAR TREE', 'FAMILY DOLLAR', 'ROSS', 'TJ MAXX', 'TJMAXX', 'MARSHALLS', 'BURLINGTON', 'OLLIE\'S', 'TUESDAY MORNING', 'HOMEGOODS', 'BED BATH', 'CONTAINER STORE', 'IKEA', 'AT HOME', 'MICHAELS', 'JOANN', 'HOBBY LOBBY', 'ACE HARDWARE', 'TRUE VALUE', 'HARBOR FREIGHT', 'NORTHERN TOOL', 'TRACTOR SUPPLY', 'RURAL KING', 'BASS PRO', 'CABELA\'S', 'REI', 'DICK\'S SPORTING', 'ACADEMY SPORTS', 'BIG 5'];
+            const departmentStores = ['MACY\'S', 'NORDSTROM', 'BLOOMINGDALE\'S', 'NEIMAN MARCUS', 'SAKS', 'DILLARD\'S', 'JC PENNEY', 'JCPENNEY', 'BELK', 'VON MAUR', 'LORD & TAYLOR', 'BERGDORF', 'BARNEYS', 'SEARS', 'STAGE', 'BEALLS', 'BOSCOV\'S', 'STEIN MART'];
+            const ecommerceStores = ['AMAZON', 'EBAY', 'ETSY', 'CHEWY', 'WAYFAIR', 'OVERSTOCK', 'ZAPPOS', 'WISH', 'SHEIN', 'TEMU', 'ALIBABA', 'ALIEXPRESS', 'MERCARI', 'POSHMARK', 'THREDDUP', 'DEPOP', 'OFFERUP', 'LETGO', 'CRAIGSLIST', 'FACEBOOK MARKETPLACE', 'NEXTDOOR', 'NEWEGG', 'B&H', 'ADORAMA', 'ZULILY', 'BOXED', 'JET.COM', 'RAKUTEN', 'GILT', 'HAUTELOOK', 'RUE LA LA', 'THREDUP', 'THE REALREAL', 'STOCKX', 'GOAT'];
+            const groceryStores = ['PUBLIX', 'HEB', 'H-E-B', 'KROGER', 'SAFEWAY', 'ALBERTSONS', 'WHOLE FOODS', 'TRADER JOE\'S', 'ALDI', 'LIDL', 'WEGMANS', 'SPROUTS', 'FOOD LION', 'GIANT', 'STOP & SHOP', 'HARRIS TEETER', 'MEIJER', 'WINN-DIXIE', 'PIGGLY WIGGLY', 'SAVE-A-LOT', 'GROCERY OUTLET', 'FRESH MARKET', 'LUCKY\'S', 'NATURAL GROCERS', 'EARTH FARE', 'MARKET BASKET', 'PRICE CHOPPER', 'SHOPRITE', 'ACME', 'JEWEL-OSCO', 'VONS', 'RALPHS', 'FRED MEYER', 'QFC', 'KING SOOPERS', 'CITY MARKET', 'SMITH\'S', 'FRY\'S', 'DILLONS', 'BAKER\'S', 'GERBES', 'PAY LESS', 'MARIANO\'S', 'PICK N SAVE', 'METRO MARKET', 'COPPS', 'ROUNDY\'S', 'HANNAFORD', 'FOOD EMPORIUM', 'GRISTEDES', 'FAIRWAY', 'ZABAR\'S', 'CITARELLA', 'EREWHON', 'BRISTOL FARMS', 'GELSON\'S', 'LAZY ACRES', 'NEW SEASONS', 'NEW LEAF', 'CENTRAL MARKET', 'LUNDS', 'BYERLY\'S', 'KOWALSKI\'S', 'JERRY\'S', 'SENDIK\'S', 'HEINEN\'S', 'GIANT EAGLE', 'MARKET DISTRICT', 'INGLES', 'BI-LO', 'HARVEYS', 'FRESCO Y MAS', 'SEDANO\'S', 'PRESIDENTE', 'NORTHGATE', 'CARDENAS', 'VALLARTA', 'EL SUPER', 'FOOD 4 LESS', 'WINCO', 'GROCERY OUTLET', 'SMART & FINAL', 'RESTAURANT DEPOT', 'COSTCO', 'SAM\'S CLUB', 'BJ\'S'];
             const searchEngines = ['GOOGLE', 'YAHOO', 'BING', 'DUCKDUCKGO', 'DUCK DUCK GO', 'ASK', 'AOL', 'BAIDU', 'YANDEX', 'ECOSIA', 'STARTPAGE', 'BRAVE SEARCH'];
             
+            // ============ RESTAURANT CATEGORIES ============
+            // QSR / Fast Food
+            const qsrBurger = ['MCDONALD\'S', 'MCDONALDS', 'BURGER KING', 'WENDY\'S', 'WENDYS', 'FIVE GUYS', 'SHAKE SHACK', 'IN-N-OUT', 'IN N OUT', 'WHATABURGER', 'CULVER\'S', 'CULVERS', 'STEAK N SHAKE', 'STEAK \'N SHAKE', 'CHECKERS', 'RALLY\'S', 'RALLYS', 'HARDEE\'S', 'HARDEES', 'CARL\'S JR', 'CARLS JR', 'JACK IN THE BOX', 'SONIC', 'SMASHBURGER', 'FATBURGER', 'FUDDRUCKERS', 'RED ROBIN', 'JOHNNY ROCKETS', 'WAYBACK BURGERS', 'MOOYAH', 'ELEVATION BURGER', 'BJ\'S RESTAURANT', 'HABIT BURGER', 'THE HABIT', 'FREDDY\'S', 'FREDDYS', 'GOOD TIMES', 'COOKOUT', 'COOK OUT', 'KRYSTAL', 'WHITE CASTLE', 'PORTILLO\'S', 'PORTILLOS'];
+            const qsrChicken = ['CHICK-FIL-A', 'CHICKFILA', 'CHICK FIL A', 'KFC', 'KENTUCKY FRIED', 'POPEYES', 'POPEYE\'S', 'RAISING CANE\'S', 'RAISING CANES', 'CANES', 'WINGSTOP', 'BUFFALO WILD WINGS', 'BWW', 'ZAXBY\'S', 'ZAXBYS', 'BOJANGLES', 'BOJANGLE\'S', 'CHURCH\'S', 'CHURCHS', 'LEE\'S FAMOUS', 'GOLDEN CHICK', 'SLIM CHICKENS', 'HUEY MAGOO\'S', 'PDQ', 'CHESTER\'S', 'CHESTER FRIED', 'MARY BROWN\'S', 'JOLLIBEE', 'BONCHON', 'BB.Q CHICKEN', 'KYOCHON', 'PELICANA', 'GAMI', 'NENE CHICKEN', 'DAVE\'S HOT CHICKEN', 'HOWLIN RAY\'S'];
+            const qsrPizza = ['PIZZA HUT', 'DOMINO\'S', 'DOMINOS', 'PAPA JOHN\'S', 'PAPA JOHNS', 'LITTLE CAESARS', 'LITTLE CAESAR\'S', 'PAPA MURPHY\'S', 'PAPA MURPHYS', 'MARCO\'S', 'MARCOS', 'ROUND TABLE', 'MOUNTAIN MIKE\'S', 'MOUNTAIN MIKES', 'GODFATHER\'S', 'GODFATHERS', 'HUNGRY HOWIE\'S', 'HUNGRY HOWIES', 'JET\'S PIZZA', 'JETS PIZZA', 'DONATOS', 'TOPPERS', 'GIORDANO\'S', 'GIORDANOS', 'LOU MALNATI\'S', 'LOU MALNATIS', 'GINO\'S EAST', 'GINOS EAST', 'UNO', 'SBARRO', 'CICIS', 'CiCi\'S', 'BLAZE PIZZA', 'MOD PIZZA', 'PIEOLOGY', '&PIZZA', 'ZPIZZA', 'PIE FIVE', 'YOUR PIE', 'FIRENZA', 'RAPID FIRED', 'UNCLE MADDIO\'S', 'MELLOW MUSHROOM', 'CALIFORNIA PIZZA KITCHEN', 'CPK'];
+            const qsrMexican = ['TACO BELL', 'CHIPOTLE', 'QDOBA', 'MOE\'S', 'MOES', 'DEL TACO', 'TACO CABANA', 'TACO BUENO', 'TACO JOHN\'S', 'TACO JOHNS', 'TACO TIME', 'GREEN BURRITO', 'BAJA FRESH', 'RUBIO\'S', 'RUBIOS', 'EL POLLO LOCO', 'CHRONIC TACOS', 'TORCHY\'S', 'TORCHYS', 'FUZZY\'S TACO', 'FUZZYS', 'TIJUANA FLATS', 'CAFE RIO', 'COSTA VIDA', 'FREEBIRDS', 'WILLY\'S', 'WILLYS', 'BARBERITOS', 'PANCHEROS', 'SALSARITA\'S', 'SALSARITAS', 'CALIFORNIA TORTILLA', 'IZZO\'S', 'IZZOS', 'ILLEGAL PETE\'S', 'ILLEGAL PETES', 'DOS TOROS', 'CHUY\'S', 'CHUYS', 'ON THE BORDER', 'CHEVYS', 'CHI-CHI\'S', 'CHICHIS'];
+            const qsrSandwich = ['SUBWAY', 'JIMMY JOHN\'S', 'JIMMY JOHNS', 'JERSEY MIKE\'S', 'JERSEY MIKES', 'FIREHOUSE SUBS', 'POTBELLY', 'WHICH WICH', 'MCALISTER\'S', 'MCALISTERS', 'JASON\'S DELI', 'JASONS DELI', 'SCHLOTZSKY\'S', 'SCHLOTZSKYS', 'QUIZNOS', 'PENN STATION', 'CAPRIOTTI\'S', 'CAPRIOTTIS', 'ERBERT & GERBERT\'S', 'ERBERT AND GERBERTS', 'PORT OF SUBS', 'TOGO\'S', 'TOGOS', 'LEE\'S SANDWICHES', 'LEES SANDWICHES', 'PUBLIX DELI', 'WAWA', 'SHEETZ', 'QUICKCHEK', 'ROYAL FARMS', 'RUTTER\'S', 'RUTTERS', 'CASEY\'S', 'CASEYS', 'KWICK TRIP', 'KWIK TRIP', 'PILOT', 'FLYING J', 'LOVE\'S', 'LOVES', 'TA', 'PETRO'];
+            const qsrCoffee = ['STARBUCKS', 'DUNKIN', 'DUNKIN\'', 'DUNKIN DONUTS', 'PEET\'S', 'PEETS', 'CARIBOU', 'DUTCH BROS', 'SCOOTER\'S', 'SCOOTERS', 'BIGGBY', 'TIM HORTONS', 'TIM HORTON\'S', 'KRISPY KREME', 'EINSTEIN', 'EINSTEIN BROS', 'BRUEGGER\'S', 'BRUEGGERS', 'PANERA', 'AU BON PAIN', 'CORNER BAKERY', 'LA BOULANGE', 'BLUE BOTTLE', 'INTELLIGENTSIA', 'STUMPTOWN', 'COUNTER CULTURE', 'PHILZ', 'VERVE', 'EQUATOR', 'RITUAL', 'FOUR BARREL', 'SIGHTGLASS', 'COAVA', 'HEART', 'CASE STUDY', 'ONYX', 'GEORGE HOWELL', 'LA COLOMBE', 'BLUESTONE LANE', 'GREGORYS', 'BIRCH', 'DEVOCION', 'PARTNERS', 'TOBY\'S ESTATE', 'TOBYS ESTATE', 'COFFEE PROJECT', 'BLANK STREET', 'BLACK RIFLE'];
+            const qsrAsian = ['PANDA EXPRESS', 'P.F. CHANG\'S', 'PF CHANGS', 'BENIHANA', 'KONA GRILL', 'RA SUSHI', 'YARD HOUSE', 'PICK UP STIX', 'YOSHINOYA', 'TERIYAKI MADNESS', 'SARKU JAPAN', 'MANCHU WOK', 'LEEANN CHIN', 'PANDA INN', 'WOK BOX', 'FLAME BROILER', 'THE FLAME BROILER', 'L&L HAWAIIAN', 'L & L', 'ALOHA POKE', 'POKEWORKS', 'SWEETFIN', 'CAVA', 'ROTI', 'NOODLES & COMPANY', 'NOODLES AND COMPANY', 'WAGAMAMA', 'JINYA', 'KURA SUSHI', 'GENKI SUSHI', 'SUSHI TRAIN', 'CONVEYOR BELT SUSHI'];
+            const qsrOther = ['ARBY\'S', 'ARBYS', 'LONG JOHN SILVER\'S', 'LONG JOHN SILVERS', 'CAPTAIN D\'S', 'CAPTAIN DS', 'CULVER\'S', 'CULVERS', 'DAIRY QUEEN', 'DQ', 'A&W', 'BRAUM\'S', 'BRAUMS', 'COOK OUT', 'COOKOUT', 'STEAK \'N SHAKE', 'STEAK N SHAKE', 'WAFFLE HOUSE', 'HUDDLE HOUSE', 'IHOP', 'DENNY\'S', 'DENNYS', 'PERKINS', 'VILLAGE INN', 'SHONEY\'S', 'SHONEYS', 'BOB EVANS', 'CRACKER BARREL', 'GOLDEN CORRAL', 'RYAN\'S', 'RYANS', 'HOMETOWN BUFFET', 'OLD COUNTRY BUFFET', 'SIZZLER', 'PONDEROSA', 'BONANZA', 'FURR\'S', 'FURRS', 'LUBY\'S', 'LUBYS', 'PICCADILLY', 'MORRISON\'S', 'MORRISONS', 'K&W', 'S&S'];
+            
+            // Casual Dining
+            const casualDining = ['APPLEBEE\'S', 'APPLEBEES', 'CHILI\'S', 'CHILIS', 'TGI FRIDAY\'S', 'TGI FRIDAYS', 'FRIDAYS', 'OLIVE GARDEN', 'RED LOBSTER', 'LONGHORN', 'LONGHORN STEAKHOUSE', 'OUTBACK', 'OUTBACK STEAKHOUSE', 'TEXAS ROADHOUSE', 'LOGAN\'S ROADHOUSE', 'LOGANS ROADHOUSE', 'CARRABBA\'S', 'CARRABBAS', 'BONEFISH GRILL', 'BONEFISH', 'SEASONS 52', 'BAHAMA BREEZE', 'YARD HOUSE', 'CHEESECAKE FACTORY', 'THE CHEESECAKE FACTORY', 'BJ\'S RESTAURANT', 'BJS RESTAURANT', 'BUFFALO WILD WINGS', 'BWW', 'HOOTERS', 'TWIN PEAKS', 'TILTED KILT', 'WALK-ON\'S', 'WALK ONS', 'DAVE & BUSTER\'S', 'DAVE AND BUSTERS', 'TOPGOLF', 'MAIN EVENT', 'ROUND1', 'BOWLERO', 'LUCKY STRIKE', 'PINSTRIPES', 'PUNCH BOWL SOCIAL', 'CHICKEN N PICKLE'];
+            
+            // Fast Casual
+            const fastCasual = ['PANERA', 'CHIPOTLE', 'FIVE GUYS', 'SHAKE SHACK', 'SWEETGREEN', 'CAVA', 'JUST SALAD', 'CHOPT', 'DIG', 'TENDER GREENS', 'TRUE FOOD KITCHEN', 'FLOWER CHILD', 'NORTH ITALIA', 'BLAZE PIZZA', 'MOD PIZZA', 'PIEOLOGY', 'NOODLES & COMPANY', 'NOODLES AND COMPANY', 'ZOES KITCHEN', 'ZOE\'S KITCHEN', 'NEWK\'S', 'NEWKS', 'JASON\'S DELI', 'JASONS DELI', 'MCALISTER\'S', 'MCALISTERS', 'POTBELLY', 'CORNER BAKERY', 'AU BON PAIN', 'PRET A MANGER', 'PRET', 'LE PAIN QUOTIDIEN', 'FIRST WATCH', 'ANOTHER BROKEN EGG', 'SNOOZE', 'HASH HOUSE', 'BROKEN YOLK', 'ORIGINAL PANCAKE HOUSE', 'ORIGINAL PANCAKE', 'KEKE\'S', 'KEKES', 'OVER EASY', 'SUNNY STREET', 'TOAST', 'EGGSLUT', 'BREAKFAST REPUBLIC'];
+            
+            // Fine Dining / Upscale
+            const fineDining = ['RUTH\'S CHRIS', 'RUTHS CHRIS', 'MORTON\'S', 'MORTONS', 'CAPITAL GRILLE', 'THE CAPITAL GRILLE', 'FLEMING\'S', 'FLEMINGS', 'EDDIE V\'S', 'EDDIE VS', 'MASTRO\'S', 'MASTROS', 'STK', 'BOA', 'CUT', 'NOBU', 'KATSUYA', 'MATSUHISA', 'SUSHI NAKAZAWA', 'MASA', 'ELEVEN MADISON', 'ELEVEN MADISON PARK', 'LE BERNARDIN', 'DANIEL', 'JEAN-GEORGES', 'JEAN GEORGES', 'PER SE', 'THE FRENCH LAUNDRY', 'FRENCH LAUNDRY', 'ALINEA', 'NEXT', 'ORIOLE', 'SMYTH', 'EVER', 'ELSKE', 'BOKA', 'GIRL & THE GOAT', 'GIRL AND THE GOAT', 'AU CHEVAL', 'AVEC', 'BLACKBIRD', 'SEPIA', 'SPIAGGIA', 'TOPOLOBAMPO', 'FRONTERA GRILL', 'XOCO', 'LEÑA BRAVA', 'LENA BRAVA', 'CRUZ BLANCA', 'BAR SOTANO'];
+            
             // App/Platform categories
-            const foodDeliveryApps = ['DOORDASH', 'DOOR DASH', 'UBER EATS', 'UBEREATS', 'GRUBHUB', 'GRUB HUB', 'POSTMATES', 'INSTACART', 'SEAMLESS', 'CAVIAR', 'GOPUFF', 'GO PUFF', 'FAVOR', 'BITE SQUAD', 'WAITR', 'SLICE', 'CHOWNOW', 'EAT24', 'DELIVERY.COM', 'HUNGRY HOWIES'];
-            const rideshareApps = ['UBER', 'LYFT', 'WAYMO', 'CURB', 'VIA', 'GETT', 'JUNO', 'WINGZ', 'ALTO', 'EMPOWER'];
-            const fitnessApps = ['PELOTON', 'STRAVA', 'MYFITNESSPAL', 'MY FITNESS PAL', 'FITBIT', 'NIKE TRAINING', 'NIKE RUN', 'ADIDAS RUNNING', 'CALM', 'HEADSPACE', 'NOOM', 'WEIGHT WATCHERS', 'WW', 'ORANGETHEORY', 'CLASSPASS', 'MINDBODY', 'BEACHBODY', 'APPLE FITNESS', 'GARMIN', 'WHOOP', 'OURA'];
-            const financeApps = ['VENMO', 'PAYPAL', 'ZELLE', 'CASH APP', 'CASHAPP', 'APPLE PAY', 'GOOGLE PAY', 'SAMSUNG PAY', 'ROBINHOOD', 'COINBASE', 'ACORNS', 'MINT', 'CREDIT KARMA', 'CHIME', 'SOFI', 'MARCUS', 'ALLY', 'DISCOVER', 'CAPITAL ONE', 'BETTERMENT', 'WEALTHFRONT', 'PERSONAL CAPITAL', 'YNAB', 'KLARNA', 'AFTERPAY', 'AFFIRM'];
-            const travelApps = ['AIRBNB', 'VRBO', 'BOOKING.COM', 'EXPEDIA', 'HOTELS.COM', 'KAYAK', 'HOPPER', 'SKYSCANNER', 'PRICELINE', 'TRAVELOCITY', 'ORBITZ', 'TRIPADVISOR', 'TRIP ADVISOR', 'GOOGLE FLIGHTS', 'SOUTHWEST', 'DELTA', 'UNITED', 'AMERICAN AIRLINES', 'JETBLUE', 'SPIRIT', 'FRONTIER'];
-            const datingApps = ['TINDER', 'BUMBLE', 'HINGE', 'MATCH', 'OKCUPID', 'OK CUPID', 'PLENTY OF FISH', 'POF', 'EHARMONY', 'GRINDR', 'HER', 'COFFEE MEETS BAGEL', 'HAPPN', 'BADOO', 'ZOOSK', 'FEELD', 'RAYA'];
-            const gamingPlatforms = ['PLAYSTATION', 'XBOX', 'NINTENDO', 'STEAM', 'EPIC GAMES', 'ROBLOX', 'MINECRAFT', 'FORTNITE', 'CALL OF DUTY', 'FIFA', 'MADDEN', 'NBA 2K', 'TWITCH', 'DISCORD'];
-            const musicApps = ['SPOTIFY', 'APPLE MUSIC', 'PANDORA', 'TIDAL', 'AMAZON MUSIC', 'YOUTUBE MUSIC', 'SOUNDCLOUD', 'DEEZER', 'IHEART', 'IHEARTRADIO', 'AUDIBLE', 'SIRIUS', 'SIRIUSXM'];
-            const newsApps = ['CNN', 'FOX NEWS', 'MSNBC', 'NBC NEWS', 'ABC NEWS', 'CBS NEWS', 'BBC', 'NPR', 'NEW YORK TIMES', 'NYT', 'WASHINGTON POST', 'WALL STREET JOURNAL', 'WSJ', 'USA TODAY', 'HUFFPOST', 'BUZZFEED', 'REUTERS', 'AP NEWS', 'FLIPBOARD', 'APPLE NEWS', 'GOOGLE NEWS'];
-            const messagingApps = ['WHATSAPP', 'TELEGRAM', 'SIGNAL', 'IMESSAGE', 'FACEBOOK MESSENGER', 'MESSENGER', 'SNAPCHAT', 'WECHAT', 'LINE', 'VIBER', 'KIK', 'GROUPME', 'SLACK', 'TEAMS', 'ZOOM', 'WEBEX', 'GOOGLE MEET'];
+            const foodDeliveryApps = ['DOORDASH', 'DOOR DASH', 'UBER EATS', 'UBEREATS', 'GRUBHUB', 'GRUB HUB', 'POSTMATES', 'INSTACART', 'SEAMLESS', 'CAVIAR', 'GOPUFF', 'GO PUFF', 'FAVOR', 'BITE SQUAD', 'WAITR', 'SLICE', 'CHOWNOW', 'EAT24', 'DELIVERY.COM', 'HUNGRY HOWIES', 'SNACKPASS', 'RITUAL', 'ALLSET', 'FANTUAN', 'CHOWBUS', 'WEEE', 'SAYWEEE', 'HUNGRYPANDA', 'HUNGRY PANDA'];
+            const rideshareApps = ['UBER', 'LYFT', 'WAYMO', 'CURB', 'VIA', 'GETT', 'JUNO', 'WINGZ', 'ALTO', 'EMPOWER', 'BLACKLANE', 'CAREEM', 'GRAB', 'GOJEK', 'DIDI', 'OLA', 'BOLT', 'FREENOW', 'KAPTEN', 'HEETCH', 'TAXIFY'];
+            const fitnessApps = ['PELOTON', 'STRAVA', 'MYFITNESSPAL', 'MY FITNESS PAL', 'FITBIT', 'NIKE TRAINING', 'NIKE RUN', 'ADIDAS RUNNING', 'CALM', 'HEADSPACE', 'NOOM', 'WEIGHT WATCHERS', 'WW', 'ORANGETHEORY', 'CLASSPASS', 'MINDBODY', 'BEACHBODY', 'APPLE FITNESS', 'GARMIN', 'WHOOP', 'OURA', 'EIGHT SLEEP', 'MIRROR', 'TONAL', 'TEMPO', 'FUTURE', 'TRAINIAC', 'LADDER', 'FITURE', 'LITEBOXER', 'HYDROW', 'ERGATTA', 'AVIRON', 'NORDICTRACK', 'BOWFLEX', 'ECHELON', 'MOTOSUMO', 'ZWIFT', 'SUFFERFEST', 'TRAINERROAD', 'WAHOO', 'TACX', 'ROUVY', 'BKOOL', 'FULGAZ', 'KINOMAP'];
+            const financeApps = ['VENMO', 'PAYPAL', 'ZELLE', 'CASH APP', 'CASHAPP', 'APPLE PAY', 'GOOGLE PAY', 'SAMSUNG PAY', 'ROBINHOOD', 'COINBASE', 'ACORNS', 'MINT', 'CREDIT KARMA', 'CHIME', 'SOFI', 'MARCUS', 'ALLY', 'DISCOVER', 'CAPITAL ONE', 'BETTERMENT', 'WEALTHFRONT', 'PERSONAL CAPITAL', 'YNAB', 'KLARNA', 'AFTERPAY', 'AFFIRM', 'SEZZLE', 'ZIP', 'QUADPAY', 'SPLITIT', 'BREAD', 'UPLIFT', 'GREENSKY', 'SYNCHRONY', 'COMENITY', 'WEBBANK', 'CROSS RIVER', 'CELTIC BANK', 'COASTAL COMMUNITY', 'BLUE RIDGE', 'SUTTON', 'TRANSPORTATION ALLIANCE', 'TAB BANK', 'NBKC', 'LEAD BANK', 'EVOLVE', 'CHOICE FINANCIAL', 'LINCOLN SAVINGS', 'BANCORP', 'THE BANCORP', 'METABANK', 'PATHWARD', 'STRIDE', 'AXOS', 'CUSTOMERS BANK', 'CROSS RIVER BANK'];
+            const travelApps = ['AIRBNB', 'VRBO', 'BOOKING.COM', 'EXPEDIA', 'HOTELS.COM', 'KAYAK', 'HOPPER', 'SKYSCANNER', 'PRICELINE', 'TRAVELOCITY', 'ORBITZ', 'TRIPADVISOR', 'TRIP ADVISOR', 'GOOGLE FLIGHTS', 'SOUTHWEST', 'DELTA', 'UNITED', 'AMERICAN AIRLINES', 'JETBLUE', 'SPIRIT', 'FRONTIER', 'ALLEGIANT', 'ALASKA', 'HAWAIIAN', 'SUN COUNTRY', 'BREEZE', 'AVELO', 'JSX', 'WHEELS UP', 'NETJETS', 'XOJET', 'SENTIENT', 'FLEXJET', 'VISTAJET', 'SURF AIR', 'BLADE', 'UBER COPTER', 'GOTHAM AIR'];
+            const datingApps = ['TINDER', 'BUMBLE', 'HINGE', 'MATCH', 'OKCUPID', 'OK CUPID', 'PLENTY OF FISH', 'POF', 'EHARMONY', 'GRINDR', 'HER', 'COFFEE MEETS BAGEL', 'HAPPN', 'BADOO', 'ZOOSK', 'FEELD', 'RAYA', 'THE LEAGUE', 'INNER CIRCLE', 'ONCE', 'SHIP', 'SNACK', 'THURSDAY', 'LUMEN', 'OURTIME', 'SILVERSINGLES', 'SENIOR MATCH', 'STIR', 'FACEBOOK DATING', 'ARCHER', 'LEX', 'TAIMI', 'SCRUFF', 'JACK\'D', 'JACKD', 'GROWLR', 'HORNET', 'ADAM4ADAM', 'MANHUNT', 'SNIFFIES'];
+            const gamingPlatforms = ['PLAYSTATION', 'XBOX', 'NINTENDO', 'STEAM', 'EPIC GAMES', 'ROBLOX', 'MINECRAFT', 'FORTNITE', 'CALL OF DUTY', 'FIFA', 'MADDEN', 'NBA 2K', 'TWITCH', 'DISCORD', 'ORIGIN', 'UBISOFT', 'BATTLE.NET', 'BATTLENET', 'GOG', 'HUMBLE BUNDLE', 'ITCH.IO', 'GAME PASS', 'XBOX GAME PASS', 'PS NOW', 'PS PLUS', 'PLAYSTATION PLUS', 'NINTENDO SWITCH ONLINE', 'GEFORCE NOW', 'STADIA', 'LUNA', 'XCLOUD', 'SHADOW', 'BOOSTEROID', 'PARSEC', 'MOONLIGHT', 'RAINWAY'];
+            const musicApps = ['SPOTIFY', 'APPLE MUSIC', 'PANDORA', 'TIDAL', 'AMAZON MUSIC', 'YOUTUBE MUSIC', 'SOUNDCLOUD', 'DEEZER', 'IHEART', 'IHEARTRADIO', 'AUDIBLE', 'SIRIUS', 'SIRIUSXM', 'TUNEIN', 'RADIO.COM', 'STITCHER', 'POCKET CASTS', 'OVERCAST', 'CASTRO', 'BREAKER', 'ANCHOR', 'SPREAKER', 'PODBEAN', 'BUZZSPROUT', 'TRANSISTOR', 'SIMPLECAST', 'CAPTIVATE', 'CASTOS', 'RESONATE', 'BANDCAMP', 'BEATPORT', 'TRAXSOURCE', 'JUNO', 'BOOMPLAY', 'AUDIOMACK', 'MIXCLOUD', 'HEARTHIS', 'DATPIFF', 'LIVEMIXTAPES', 'SPINRILLA'];
+            const newsApps = ['CNN', 'FOX NEWS', 'MSNBC', 'NBC NEWS', 'ABC NEWS', 'CBS NEWS', 'BBC', 'NPR', 'NEW YORK TIMES', 'NYT', 'WASHINGTON POST', 'WALL STREET JOURNAL', 'WSJ', 'USA TODAY', 'HUFFPOST', 'BUZZFEED', 'REUTERS', 'AP NEWS', 'FLIPBOARD', 'APPLE NEWS', 'GOOGLE NEWS', 'NEWSBREAK', 'SMARTNEWS', 'GROUND NEWS', 'ARTIFACT', 'FEEDLY', 'INOREADER', 'POCKET', 'INSTAPAPER', 'MATTER', 'READWISE', 'OMNIVORE', 'WALLABAG', 'RAINDROP', 'PINBOARD'];
+            const messagingApps = ['WHATSAPP', 'TELEGRAM', 'SIGNAL', 'IMESSAGE', 'FACEBOOK MESSENGER', 'MESSENGER', 'SNAPCHAT', 'WECHAT', 'LINE', 'VIBER', 'KIK', 'GROUPME', 'SLACK', 'TEAMS', 'ZOOM', 'WEBEX', 'GOOGLE MEET', 'GOOGLE CHAT', 'DISCORD', 'ELEMENT', 'MATRIX', 'MATTERMOST', 'ROCKET.CHAT', 'ZULIP', 'FLOCK', 'CHANTY', 'TWIST', 'PUMBLE', 'SPIKE', 'FRONT', 'MISSIVE', 'HELPSCOUT', 'INTERCOM', 'DRIFT', 'CRISP', 'TAWK', 'LIVECHAT', 'ZENDESK CHAT', 'FRESHCHAT', 'OLARK'];
             
             // Get all shopping/purchased items
             const shoppingItems = allItems.filter(i => 
@@ -16403,6 +16424,134 @@
                 });
             }
             
+            // ============ RESTAURANT CATEGORIES ============
+            // Get all dining/restaurant items
+            const diningItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('QSR') || i.category.toUpperCase().includes('RESTAURANT') || 
+                i.category.toUpperCase().includes('DINING') || i.category.toUpperCase().includes('DINE') ||
+                i.category.toUpperCase().includes('FAST FOOD') || i.category.toUpperCase().includes('FOOD')
+            );
+            
+            // QSR Burgers
+            const burgerMatches = diningItems.filter(i => 
+                qsrBurger.some(r => i.name.toUpperCase().includes(r))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (burgerMatches.length > 0) {
+                activations.push({
+                    icon: '🍔',
+                    text: `<strong>QSR Burger:</strong> ${burgerMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${burgerMatches[0].pct.toFixed(1)}% | GP: ${burgerMatches[0].genPop.toFixed(1)}% | ${formatIndex(burgerMatches[0].index)})</span>`,
+                    tooltip: `QSR Burgers: This audience dines at ${burgerMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, app partnerships, or sponsorship activations.`
+                });
+            }
+            
+            // QSR Chicken
+            const chickenMatches = diningItems.filter(i => 
+                qsrChicken.some(r => i.name.toUpperCase().includes(r))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (chickenMatches.length > 0) {
+                activations.push({
+                    icon: '🍗',
+                    text: `<strong>QSR Chicken:</strong> ${chickenMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${chickenMatches[0].pct.toFixed(1)}% | GP: ${chickenMatches[0].genPop.toFixed(1)}% | ${formatIndex(chickenMatches[0].index)})</span>`,
+                    tooltip: `QSR Chicken: This audience dines at ${chickenMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, app partnerships, or sponsorship activations.`
+                });
+            }
+            
+            // QSR Pizza
+            const pizzaMatches = diningItems.filter(i => 
+                qsrPizza.some(r => i.name.toUpperCase().includes(r))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (pizzaMatches.length > 0) {
+                activations.push({
+                    icon: '🍕',
+                    text: `<strong>QSR Pizza:</strong> ${pizzaMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${pizzaMatches[0].pct.toFixed(1)}% | GP: ${pizzaMatches[0].genPop.toFixed(1)}% | ${formatIndex(pizzaMatches[0].index)})</span>`,
+                    tooltip: `QSR Pizza: This audience orders from ${pizzaMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider delivery app partnerships, box toppers, or loyalty program integrations.`
+                });
+            }
+            
+            // QSR Mexican
+            const mexicanMatches = diningItems.filter(i => 
+                qsrMexican.some(r => i.name.toUpperCase().includes(r))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (mexicanMatches.length > 0) {
+                activations.push({
+                    icon: '🌮',
+                    text: `<strong>QSR Mexican:</strong> ${mexicanMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${mexicanMatches[0].pct.toFixed(1)}% | GP: ${mexicanMatches[0].genPop.toFixed(1)}% | ${formatIndex(mexicanMatches[0].index)})</span>`,
+                    tooltip: `QSR Mexican: This audience dines at ${mexicanMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, catering partnerships, or app integrations.`
+                });
+            }
+            
+            // QSR Sandwich/Subs
+            const sandwichMatches = diningItems.filter(i => 
+                qsrSandwich.some(r => i.name.toUpperCase().includes(r))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (sandwichMatches.length > 0) {
+                activations.push({
+                    icon: '🥪',
+                    text: `<strong>QSR Subs:</strong> ${sandwichMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${sandwichMatches[0].pct.toFixed(1)}% | GP: ${sandwichMatches[0].genPop.toFixed(1)}% | ${formatIndex(sandwichMatches[0].index)})</span>`,
+                    tooltip: `QSR Sandwiches: This audience dines at ${sandwichMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider catering partnerships, loyalty programs, or delivery promotions.`
+                });
+            }
+            
+            // Coffee/Breakfast
+            const coffeeMatches = diningItems.filter(i => 
+                qsrCoffee.some(r => i.name.toUpperCase().includes(r))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (coffeeMatches.length > 0) {
+                activations.push({
+                    icon: '☕',
+                    text: `<strong>Coffee/Cafe:</strong> ${coffeeMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${coffeeMatches[0].pct.toFixed(1)}% | GP: ${coffeeMatches[0].genPop.toFixed(1)}% | ${formatIndex(coffeeMatches[0].index)})</span>`,
+                    tooltip: `Coffee/Cafe: This audience frequents ${coffeeMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider morning daypart targeting, rewards program partnerships, or in-store activations.`
+                });
+            }
+            
+            // Asian QSR
+            const asianMatches = diningItems.filter(i => 
+                qsrAsian.some(r => i.name.toUpperCase().includes(r))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (asianMatches.length > 0) {
+                activations.push({
+                    icon: '🥡',
+                    text: `<strong>Asian QSR:</strong> ${asianMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${asianMatches[0].pct.toFixed(1)}% | GP: ${asianMatches[0].genPop.toFixed(1)}% | ${formatIndex(asianMatches[0].index)})</span>`,
+                    tooltip: `Asian QSR: This audience dines at ${asianMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider delivery partnerships, cultural event sponsorships, or app promotions.`
+                });
+            }
+            
+            // Casual Dining
+            const casualMatches = diningItems.filter(i => 
+                casualDining.some(r => i.name.toUpperCase().includes(r))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (casualMatches.length > 0) {
+                activations.push({
+                    icon: '🍽️',
+                    text: `<strong>Casual Dining:</strong> ${casualMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${casualMatches[0].pct.toFixed(1)}% | GP: ${casualMatches[0].genPop.toFixed(1)}% | ${formatIndex(casualMatches[0].index)})</span>`,
+                    tooltip: `Casual Dining: This audience dines at ${casualMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider gift card partnerships, event hosting, or loyalty program integrations.`
+                });
+            }
+            
+            // Fast Casual
+            const fastCasualMatches = diningItems.filter(i => 
+                fastCasual.some(r => i.name.toUpperCase().includes(r))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (fastCasualMatches.length > 0) {
+                activations.push({
+                    icon: '🥗',
+                    text: `<strong>Fast Casual:</strong> ${fastCasualMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${fastCasualMatches[0].pct.toFixed(1)}% | GP: ${fastCasualMatches[0].genPop.toFixed(1)}% | ${formatIndex(fastCasualMatches[0].index)})</span>`,
+                    tooltip: `Fast Casual: This audience dines at ${fastCasualMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider health-focused partnerships, catering, or corporate meal programs.`
+                });
+            }
+            
+            // Fine Dining
+            const fineMatches = diningItems.filter(i => 
+                fineDining.some(r => i.name.toUpperCase().includes(r))
+            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            if (fineMatches.length > 0) {
+                activations.push({
+                    icon: '🥂',
+                    text: `<strong>Fine Dining:</strong> ${fineMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${fineMatches[0].pct.toFixed(1)}% | GP: ${fineMatches[0].genPop.toFixed(1)}% | ${formatIndex(fineMatches[0].index)})</span>`,
+                    tooltip: `Fine Dining: This audience dines at ${fineMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider premium experiences, wine/spirits partnerships, or VIP events.`
+                });
+            }
+            
             // Fallback: General shopping if no specific matches
             if (bigBoxMatches.length === 0 && deptMatches.length === 0 && ecomMatches.length === 0 && groceryMatches.length === 0) {
                 const purchaseBrands = shoppingItems.sort((a, b) => b.index - a.index).slice(0, 2);
@@ -16460,7 +16609,7 @@
                 });
             }
             
-            document.getElementById('behavioralActivations').innerHTML = activations.slice(0, 10).map(a => `
+            document.getElementById('behavioralActivations').innerHTML = activations.slice(0, 15).map(a => `
                 <div class="behavioral-activation-item has-tooltip" data-tooltip="${a.tooltip || ''}">
                     <span class="icon">${a.icon}</span>
                     <span class="text">${a.text}</span>
