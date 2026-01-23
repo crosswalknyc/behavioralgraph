@@ -6923,6 +6923,12 @@
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('campaign-roi')" id="customAnalysisTabCampaignROI">
                         💰 Campaign ROI IQ
                     </button>
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('cross-show')" id="customAnalysisTabCrossShow">
+                        📺 Cross Show Watching
+                    </button>
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('watch-time')" id="customAnalysisTabWatchTime">
+                        ⏱️ Watch Time IQ
+                    </button>
                 </div>
             </div>
             
@@ -7545,6 +7551,127 @@
                             <div class="card">
                                 <h3>Job Status</h3>
                                 <div id="customCampaignROIJobStatusContent"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cross Show Watching Tab Content -->
+                <div id="customAnalysisTabContentCrossShow" class="custom-analysis-tab-content">
+                    <div class="card">
+                        <h2>📺 Cross Show Watching</h2>
+                        <p class="section-description">Track show watchers and platform usage metrics</p>
+                        
+                        <form id="customCrossShowForm">
+                            <div class="form-section">
+                                <div class="form-section-title">Analysis Parameters</div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Study Start Date</label>
+                                        <input type="date" id="customCrossShowStartDate" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Study End Date</label>
+                                        <input type="date" id="customCrossShowEndDate" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Show Title</label>
+                                        <input type="text" id="customCrossShowTitle" placeholder="e.g., Reacher" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Streaming Platform</label>
+                                        <input type="text" id="customCrossShowPlatform" placeholder="e.g., Amazon Prime Video" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Other Properties to Track (comma-separated, optional)</label>
+                                        <input type="text" id="customCrossShowOtherProperties" placeholder="e.g., Netflix, Hulu">
+                                        <small>Enter other properties separated by commas</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-primary">Run Analysis</button>
+                                </div>
+                            </div>
+                        </form>
+                        
+                        <!-- Job Status Display -->
+                        <div id="customCrossShowJobStatus" style="display: none; margin-top: 2rem;">
+                            <div class="card">
+                                <h3>Job Status</h3>
+                                <div id="customCrossShowJobStatusContent"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Watch Time IQ Tab Content -->
+                <div id="customAnalysisTabContentWatchTime" class="custom-analysis-tab-content">
+                    <div class="card">
+                        <h2>⏱️ Watch Time IQ</h2>
+                        <p class="section-description">Track total viewing time for multiple shows</p>
+                        
+                        <form id="customWatchTimeForm">
+                            <div class="form-section">
+                                <div class="form-section-title">Analysis Parameters</div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Study Start Date</label>
+                                        <input type="date" id="customWatchTimeStartDate" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Study End Date</label>
+                                        <input type="date" id="customWatchTimeEndDate" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Show Names (comma-separated)</label>
+                                        <input type="text" id="customWatchTimeShowNames" placeholder="e.g., Reacher, The Boys, Jack Ryan" required>
+                                        <small>Enter show names separated by commas</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                            <input type="checkbox" id="customWatchTimeUseLengths" style="margin: 0;">
+                                            <span>Enter show lengths (runtime per episode in minutes)?</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row" id="customWatchTimeLengthsRow" style="display: none;">
+                                    <div class="form-group">
+                                        <label>Show Lengths (format: Show1:45, Show2:60)</label>
+                                        <input type="text" id="customWatchTimeShowLengths" placeholder="e.g., Reacher:45, The Boys:60">
+                                        <small>Enter as ShowName:MinutesPerEpisode, comma-separated</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-primary">Run Analysis</button>
+                                </div>
+                            </div>
+                        </form>
+                        
+                        <!-- Job Status Display -->
+                        <div id="customWatchTimeJobStatus" style="display: none; margin-top: 2rem;">
+                            <div class="card">
+                                <h3>Job Status</h3>
+                                <div id="customWatchTimeJobStatusContent"></div>
                             </div>
                         </div>
                     </div>
@@ -10256,6 +10383,8 @@
             document.getElementById('customAnalysisTabTalentTheater').classList.remove('active');
             document.getElementById('customAnalysisTabSVODAcquisition').classList.remove('active');
             document.getElementById('customAnalysisTabCampaignROI').classList.remove('active');
+            document.getElementById('customAnalysisTabCrossShow').classList.remove('active');
+            document.getElementById('customAnalysisTabWatchTime').classList.remove('active');
             
             // Hide all tab contents
             document.getElementById('customAnalysisTabContentProfileIQ').classList.remove('active');
@@ -10266,6 +10395,12 @@
             }
             if (document.getElementById('customAnalysisTabContentCampaignROI')) {
                 document.getElementById('customAnalysisTabContentCampaignROI').classList.remove('active');
+            }
+            if (document.getElementById('customAnalysisTabContentCrossShow')) {
+                document.getElementById('customAnalysisTabContentCrossShow').classList.remove('active');
+            }
+            if (document.getElementById('customAnalysisTabContentWatchTime')) {
+                document.getElementById('customAnalysisTabContentWatchTime').classList.remove('active');
             }
             
             // Show selected tab
@@ -10287,6 +10422,16 @@
                 document.getElementById('customAnalysisTabCampaignROI').classList.add('active');
                 if (document.getElementById('customAnalysisTabContentCampaignROI')) {
                     document.getElementById('customAnalysisTabContentCampaignROI').classList.add('active');
+                }
+            } else if (tabName === 'cross-show') {
+                document.getElementById('customAnalysisTabCrossShow').classList.add('active');
+                if (document.getElementById('customAnalysisTabContentCrossShow')) {
+                    document.getElementById('customAnalysisTabContentCrossShow').classList.add('active');
+                }
+            } else if (tabName === 'watch-time') {
+                document.getElementById('customAnalysisTabWatchTime').classList.add('active');
+                if (document.getElementById('customAnalysisTabContentWatchTime')) {
+                    document.getElementById('customAnalysisTabContentWatchTime').classList.add('active');
                 }
             }
         }
@@ -10524,6 +10669,117 @@
             }
         });
         
+        // Custom Cross Show Watching Form Handler
+        document.getElementById('customCrossShowForm')?.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const startDate = document.getElementById('customCrossShowStartDate').value;
+            const endDate = document.getElementById('customCrossShowEndDate').value;
+            const showTitle = document.getElementById('customCrossShowTitle').value;
+            const platform = document.getElementById('customCrossShowPlatform').value;
+            const otherPropertiesInput = document.getElementById('customCrossShowOtherProperties').value;
+            
+            const otherProperties = otherPropertiesInput.split(',').map(p => p.trim()).filter(p => p);
+            
+            if (!startDate || !endDate || !showTitle || !platform) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            const payload = {
+                start_date: startDate,
+                end_date: endDate,
+                show_title: showTitle,
+                platform: platform,
+                other_properties: otherProperties
+            };
+            
+            try {
+                const response = await fetch('/api/attribution/cross-show', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('customCrossShowJobStatus').style.display = 'block';
+                    pollCustomCrossShowJobStatus(data.job_id);
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to submit job'));
+                }
+            } catch (error) {
+                alert('Error submitting job: ' + error.message);
+            }
+        });
+        
+        // Custom Watch Time IQ Form Handler
+        document.getElementById('customWatchTimeForm')?.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const startDate = document.getElementById('customWatchTimeStartDate').value;
+            const endDate = document.getElementById('customWatchTimeEndDate').value;
+            const showNamesInput = document.getElementById('customWatchTimeShowNames').value;
+            const useLengths = document.getElementById('customWatchTimeUseLengths').checked;
+            const showLengthsInput = document.getElementById('customWatchTimeShowLengths').value;
+            
+            const showNames = showNamesInput.split(',').map(s => s.trim()).filter(s => s);
+            
+            if (!startDate || !endDate || !showNames.length) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            const showLengths = {};
+            if (useLengths && showLengthsInput) {
+                showLengthsInput.split(',').forEach(item => {
+                    const parts = item.split(':');
+                    if (parts.length === 2) {
+                        const showName = parts[0].trim();
+                        const length = parseFloat(parts[1].trim());
+                        if (!isNaN(length)) {
+                            showLengths[showName] = length;
+                        }
+                    }
+                });
+            }
+            
+            const payload = {
+                start_date: startDate,
+                end_date: endDate,
+                show_names: showNames,
+                show_lengths: showLengths
+            };
+            
+            try {
+                const response = await fetch('/api/attribution/watch-time', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('customWatchTimeJobStatus').style.display = 'block';
+                    pollCustomWatchTimeJobStatus(data.job_id);
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to submit job'));
+                }
+            } catch (error) {
+                alert('Error submitting job: ' + error.message);
+            }
+        });
+        
+        // Toggle show lengths row
+        document.getElementById('customWatchTimeUseLengths')?.addEventListener('change', function(e) {
+            const row = document.getElementById('customWatchTimeLengthsRow');
+            if (row) {
+                row.style.display = e.target.checked ? 'block' : 'none';
+            }
+        });
+        
         // Polling functions for custom forms
         async function pollCustomTalentSearchJobStatus(jobId) {
             const maxAttempts = 120;
@@ -10628,6 +10884,68 @@
                     const data = await response.json();
                     
                     const statusContent = document.getElementById('customCampaignROIJobStatusContent');
+                    if (statusContent) {
+                        statusContent.innerHTML = `
+                            <div><strong>Status:</strong> ${data.status}</div>
+                            <div><strong>Progress:</strong> ${data.progress || 0}%</div>
+                            <div><strong>Message:</strong> ${data.message || 'Processing...'}</div>
+                            ${data.error ? `<div style="color: var(--accent-red);"><strong>Error:</strong> ${data.error}</div>` : ''}
+                        `;
+                    }
+                    
+                    if (data.status === 'completed' || data.status === 'failed' || attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                    }
+                } catch (error) {
+                    console.error('Error polling job status:', error);
+                    if (attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                    }
+                }
+            }, 2000);
+        }
+        
+        async function pollCustomCrossShowJobStatus(jobId) {
+            const maxAttempts = 120;
+            let attempts = 0;
+            const pollInterval = setInterval(async () => {
+                attempts++;
+                try {
+                    const response = await fetch(`/api/job-status/${jobId}`, { credentials: 'same-origin' });
+                    const data = await response.json();
+                    
+                    const statusContent = document.getElementById('customCrossShowJobStatusContent');
+                    if (statusContent) {
+                        statusContent.innerHTML = `
+                            <div><strong>Status:</strong> ${data.status}</div>
+                            <div><strong>Progress:</strong> ${data.progress || 0}%</div>
+                            <div><strong>Message:</strong> ${data.message || 'Processing...'}</div>
+                            ${data.error ? `<div style="color: var(--accent-red);"><strong>Error:</strong> ${data.error}</div>` : ''}
+                        `;
+                    }
+                    
+                    if (data.status === 'completed' || data.status === 'failed' || attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                    }
+                } catch (error) {
+                    console.error('Error polling job status:', error);
+                    if (attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                    }
+                }
+            }, 2000);
+        }
+        
+        async function pollCustomWatchTimeJobStatus(jobId) {
+            const maxAttempts = 120;
+            let attempts = 0;
+            const pollInterval = setInterval(async () => {
+                attempts++;
+                try {
+                    const response = await fetch(`/api/job-status/${jobId}`, { credentials: 'same-origin' });
+                    const data = await response.json();
+                    
+                    const statusContent = document.getElementById('customWatchTimeJobStatusContent');
                     if (statusContent) {
                         statusContent.innerHTML = `
                             <div><strong>Status:</strong> ${data.status}</div>

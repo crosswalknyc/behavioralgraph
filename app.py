@@ -7276,6 +7276,321 @@ def run_campaign_roi(job_id):
         update_job_status(job_id, status='failed', error=error_msg)
 
 
+@app.route('/api/attribution/cross-show', methods=['POST'])
+@requires_auth
+def submit_cross_show():
+    """Submit a Cross Show Watching analysis job."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Check access
+        role = user.get('role', 'user')
+        if role != 'admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+            return jsonify({'error': 'Attribution IQ access required'}), 403
+        
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate required fields
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        show_title = data.get('show_title')
+        platform = data.get('platform')
+        
+        if not start_date or not end_date:
+            return jsonify({'error': 'Start date and end date are required'}), 400
+        if not show_title:
+            return jsonify({'error': 'Show title is required'}), 400
+        if not platform:
+            return jsonify({'error': 'Platform is required'}), 400
+        
+        # Create job
+        job_id = str(uuid.uuid4())
+        username = user.get('username', 'unknown')
+        
+        jobs[job_id] = {
+            'job_id': job_id,
+            'username': username,
+            'type': 'cross_show',
+            'status': 'queued',
+            'progress': 0,
+            'message': 'Job queued...',
+            'created_at': datetime.now().isoformat(),
+            'error': None,
+            'result_file': None,
+            'logs': [],
+            'params': {
+                'start_date': start_date,
+                'end_date': end_date,
+                'show_title': show_title,
+                'platform': platform,
+                'other_properties': data.get('other_properties', [])
+            }
+        }
+        
+        # Start job in background thread
+        thread = threading.Thread(target=run_cross_show, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'job_id': job_id,
+            'message': 'Cross Show Watching job submitted successfully',
+            'status': 'queued'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/attribution/watch-time', methods=['POST'])
+@requires_auth
+def submit_watch_time():
+    """Submit a Watch Time IQ analysis job."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Check access
+        role = user.get('role', 'user')
+        if role != 'admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+            return jsonify({'error': 'Attribution IQ access required'}), 403
+        
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate required fields
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        show_names = data.get('show_names', [])
+        
+        if not start_date or not end_date:
+            return jsonify({'error': 'Start date and end date are required'}), 400
+        if not show_names:
+            return jsonify({'error': 'At least one show name is required'}), 400
+        
+        # Create job
+        job_id = str(uuid.uuid4())
+        username = user.get('username', 'unknown')
+        
+        jobs[job_id] = {
+            'job_id': job_id,
+            'username': username,
+            'type': 'watch_time',
+            'status': 'queued',
+            'progress': 0,
+            'message': 'Job queued...',
+            'created_at': datetime.now().isoformat(),
+            'error': None,
+            'result_file': None,
+            'logs': [],
+            'params': {
+                'start_date': start_date,
+                'end_date': end_date,
+                'show_names': show_names,
+                'show_lengths': data.get('show_lengths', {})
+            }
+        }
+        
+        # Start job in background thread
+        thread = threading.Thread(target=run_watch_time, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'job_id': job_id,
+            'message': 'Watch Time IQ job submitted successfully',
+            'status': 'queued'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def run_cross_show(job_id):
+    """Run the show_platform_tracker.py script."""
+    try:
+        update_job_status(job_id, progress=10, message='Initializing...')
+        
+        # Import the script module
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'show_platform_tracker.py')
+        if not os.path.exists(script_path):
+            update_job_status(job_id, status='failed', error=f'Script not found: {script_path}')
+            return
+        
+        # Get job parameters
+        job = jobs[job_id]
+        params = job['params']
+        
+        update_job_status(job_id, progress=30, message='Running analysis...')
+        
+        # Import and run the script
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("show_platform_tracker", script_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, os.path.dirname(script_path))
+        spec.loader.exec_module(module)
+        
+        # Prepare parameters for the script
+        from datetime import datetime
+        start_date = datetime.strptime(params['start_date'], '%Y-%m-%d')
+        end_date = datetime.strptime(params['end_date'], '%Y-%m-%d')
+        
+        # Build script parameters dict (matching what get_user_input returns)
+        script_params = {
+            'show_title': params['show_title'],
+            'platform': params['platform'],
+            'start_date': start_date,
+            'end_date': end_date,
+            'other_properties': params.get('other_properties', [])
+        }
+        
+        # Run the analysis function
+        conn = module.connect_snowflake()
+        try:
+            update_job_status(job_id, progress=50, message='Executing analysis...')
+            
+            # Call run_analysis directly with our params
+            if hasattr(module, 'run_analysis'):
+                results = module.run_analysis(conn, script_params)
+            else:
+                update_job_status(job_id, status='failed', error='Script does not have run_analysis function')
+                return
+            
+            update_job_status(job_id, progress=80, message='Writing output...')
+            
+            # Call write_output
+            if hasattr(module, 'write_output'):
+                module.write_output(results)
+            else:
+                update_job_status(job_id, status='failed', error='Script does not have write_output function')
+                return
+            
+            # Find the output file (it's written to Desktop folder)
+            from pathlib import Path
+            output_folder = Path.home() / "Desktop"
+            if output_folder.exists():
+                # Find the most recent CSV file (the script creates files with show title in name)
+                csv_files = list(output_folder.glob("*.csv"))
+                if csv_files:
+                    csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    output_file = str(csv_files[0])
+                    if os.path.exists(output_file):
+                        jobs[job_id]['result_file'] = output_file
+                        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
+                    else:
+                        update_job_status(job_id, status='failed', error='Output file not found')
+                else:
+                    update_job_status(job_id, status='failed', error='No output file created')
+            else:
+                update_job_status(job_id, status='failed', error='Output folder not found')
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+                
+    except Exception as e:
+        import traceback
+        error_msg = f"Error running cross show watching: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        update_job_status(job_id, status='failed', error=error_msg)
+
+
+def run_watch_time(job_id):
+    """Run the multi_show_time_tracker.py script."""
+    try:
+        update_job_status(job_id, progress=10, message='Initializing...')
+        
+        # Import the script module
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'multi_show_time_tracker.py')
+        if not os.path.exists(script_path):
+            update_job_status(job_id, status='failed', error=f'Script not found: {script_path}')
+            return
+        
+        # Get job parameters
+        job = jobs[job_id]
+        params = job['params']
+        
+        update_job_status(job_id, progress=30, message='Running analysis...')
+        
+        # Import and run the script
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("multi_show_time_tracker", script_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, os.path.dirname(script_path))
+        spec.loader.exec_module(module)
+        
+        # Prepare parameters for the script
+        from datetime import datetime
+        start_date = datetime.strptime(params['start_date'], '%Y-%m-%d')
+        end_date = datetime.strptime(params['end_date'], '%Y-%m-%d')
+        
+        # Build script parameters dict (matching what get_user_input returns)
+        script_params = {
+            'show_names': params['show_names'],
+            'start_date': start_date,
+            'end_date': end_date,
+            'show_lengths': params.get('show_lengths', {})
+        }
+        
+        # Run the analysis function
+        conn = module.connect_snowflake()
+        try:
+            update_job_status(job_id, progress=50, message='Executing analysis...')
+            
+            # Call run_analysis directly with our params
+            if hasattr(module, 'run_analysis'):
+                results = module.run_analysis(conn, script_params)
+            else:
+                update_job_status(job_id, status='failed', error='Script does not have run_analysis function')
+                return
+            
+            update_job_status(job_id, progress=80, message='Writing output...')
+            
+            # Call write_output
+            if hasattr(module, 'write_output'):
+                module.write_output(results)
+            else:
+                update_job_status(job_id, status='failed', error='Script does not have write_output function')
+                return
+            
+            # Find the output file (it's written to Desktop folder)
+            from pathlib import Path
+            output_folder = Path.home() / "Desktop"
+            if output_folder.exists():
+                # Find the most recent CSV file
+                csv_files = list(output_folder.glob("*.csv"))
+                if csv_files:
+                    csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    output_file = str(csv_files[0])
+                    if os.path.exists(output_file):
+                        jobs[job_id]['result_file'] = output_file
+                        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
+                    else:
+                        update_job_status(job_id, status='failed', error='Output file not found')
+                else:
+                    update_job_status(job_id, status='failed', error='No output file created')
+            else:
+                update_job_status(job_id, status='failed', error='Output folder not found')
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+                
+    except Exception as e:
+        import traceback
+        error_msg = f"Error running watch time IQ: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        update_job_status(job_id, status='failed', error=error_msg)
+
+
 # ============================================================================
 # MAIN
 # ============================================================================
