@@ -8703,6 +8703,7 @@
                             <select id="interestsCategorySelect" onchange="filterInterests()" class="has-tooltip" data-tooltip="Filter by Category" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                 <option value="all">All</option>
                             </select>
+                            <span style="font-size: 0.75rem; color: var(--text-secondary);">Sort:</span>
                             <select id="interestsSortSelect" onchange="sortInterests(this.value)" class="has-tooltip" data-tooltip="Sort Interests" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                 <option value="pct" selected>% ↓</option>
                                 <option value="index">Idx ↓</option>
@@ -8867,6 +8868,7 @@
                                     <span class="has-tooltip" data-tooltip="Content & Entertainment">🎬 Content</span>
                                 </span>
                                 <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
                                     <select class="affinity-sort-select" onchange="sortAffinityList('affinityContent', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                         <option value="index">Idx ↓</option>
                                         <option value="pct">% ↓</option>
@@ -8891,6 +8893,7 @@
                                     <span class="has-tooltip" data-tooltip="Content Under-Indexing">❄️ Content (Under)</span>
                                 </span>
                                 <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
                                     <select class="affinity-sort-select" onchange="sortAffinityList('affinityContentUnder', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                         <option value="index">Idx ↑</option>
                                         <option value="pct">% ↓</option>
@@ -8915,6 +8918,7 @@
                                     <span class="has-tooltip" data-tooltip="Brand Affinities">🛍️ Brands</span>
                                 </span>
                                 <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
                                     <select class="affinity-sort-select" onchange="sortAffinityList('affinityBrands', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                         <option value="index">Idx ↓</option>
                                         <option value="pct">% ↓</option>
@@ -8939,6 +8943,7 @@
                                     <span class="has-tooltip" data-tooltip="Brand Under-Indexing">❄️ Brands (Under)</span>
                                 </span>
                                 <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
                                     <select class="affinity-sort-select" onchange="sortAffinityList('affinityBrandsUnder', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                         <option value="index">Idx ↑</option>
                                         <option value="pct">% ↓</option>
@@ -8963,6 +8968,7 @@
                                     <span class="has-tooltip" data-tooltip="Digital Platforms">📱 Platforms</span>
                                 </span>
                                 <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
                                     <select class="affinity-sort-select" onchange="sortAffinityList('affinityPlatforms', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                         <option value="index">Idx ↓</option>
                                         <option value="pct">% ↓</option>
@@ -8987,6 +8993,7 @@
                                     <span class="has-tooltip" data-tooltip="Platform Under-Indexing">❄️ Platforms (Under)</span>
                                 </span>
                                 <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
                                     <select class="affinity-sort-select" onchange="sortAffinityList('affinityPlatformsUnder', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                         <option value="index">Idx ↑</option>
                                         <option value="pct">% ↓</option>
@@ -9011,6 +9018,7 @@
                                     <span class="has-tooltip" data-tooltip="Music & Audio">🎵 Music</span>
                                 </span>
                                 <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
                                     <select class="affinity-sort-select" onchange="sortAffinityList('affinityMusic', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                         <option value="index">Idx ↓</option>
                                         <option value="pct">% ↓</option>
@@ -9035,6 +9043,7 @@
                                     <span class="has-tooltip" data-tooltip="Music Under-Indexing">❄️ Music (Under)</span>
                                 </span>
                                 <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
                                     <select class="affinity-sort-select" onchange="sortAffinityList('affinityMusicUnder', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                         <option value="index">Idx ↑</option>
                                         <option value="pct">% ↓</option>
@@ -9164,11 +9173,14 @@
                         <div class="sponsor-card highlight">
                             <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
                                 <span class="has-tooltip" data-tooltip="Top Sponsor Categories">🏆 Top Categories</span>
-                                <select class="affinity-sort-select" onchange="sortSponsorList('sponsorCategories', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                    <option value="index">Idx ↓</option>
-                                    <option value="pct">% ↓</option>
-                                    <option value="genpop">GP ↓</option>
-                                </select>
+                                <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
+                                    <select class="affinity-sort-select" onchange="sortSponsorList('sponsorCategories', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <option value="index">Idx ↓</option>
+                                        <option value="pct">% ↓</option>
+                                        <option value="genpop">GP ↓</option>
+                                    </select>
+                                </span>
                             </h3>
                             <div id="sponsorCategories" class="sponsor-list" data-sort="index"></div>
                         </div>
@@ -9176,11 +9188,14 @@
                         <div class="sponsor-card">
                             <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
                                 <span class="has-tooltip" data-tooltip="Ideal Brand Partners">🎯 Brand Partners</span>
-                                <select class="affinity-sort-select" onchange="sortSponsorList('sponsorBrands', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                    <option value="index">Idx ↓</option>
-                                    <option value="pct">% ↓</option>
-                                    <option value="genpop">GP ↓</option>
-                                </select>
+                                <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
+                                    <select class="affinity-sort-select" onchange="sortSponsorList('sponsorBrands', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <option value="index">Idx ↓</option>
+                                        <option value="pct">% ↓</option>
+                                        <option value="genpop">GP ↓</option>
+                                    </select>
+                                </span>
                             </h3>
                             <div id="sponsorBrands" class="sponsor-list" data-sort="index"></div>
                         </div>
@@ -9188,11 +9203,14 @@
                         <div class="sponsor-card">
                             <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
                                 <span class="has-tooltip" data-tooltip="Purchase Behaviors">💳 Purchase Behaviors</span>
-                                <select class="affinity-sort-select" onchange="sortSponsorList('sponsorPurchase', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                    <option value="index">Idx ↓</option>
-                                    <option value="pct">% ↓</option>
-                                    <option value="genpop">GP ↓</option>
-                                </select>
+                                <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
+                                    <select class="affinity-sort-select" onchange="sortSponsorList('sponsorPurchase', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <option value="index">Idx ↓</option>
+                                        <option value="pct">% ↓</option>
+                                        <option value="genpop">GP ↓</option>
+                                    </select>
+                                </span>
                             </h3>
                             <div id="sponsorPurchase" class="sponsor-list" data-sort="index"></div>
                         </div>
@@ -9200,11 +9218,14 @@
                         <div class="sponsor-card">
                             <h3 style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.25rem;">
                                 <span>🚫 Avoid Categories</span>
-                                <select class="affinity-sort-select" onchange="sortSponsorList('sponsorAvoid', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                    <option value="index">Idx ↑</option>
-                                    <option value="pct">% ↓</option>
-                                    <option value="genpop">GP ↓</option>
-                                </select>
+                                <span style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
+                                    <select class="affinity-sort-select" onchange="sortSponsorList('sponsorAvoid', this.value)" style="padding: 0.2rem 0.3rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <option value="index">Idx ↑</option>
+                                        <option value="pct">% ↓</option>
+                                        <option value="genpop">GP ↓</option>
+                                    </select>
+                                </span>
                             </h3>
                             <div id="sponsorAvoid" class="sponsor-list negative" data-sort="index"></div>
                         </div>
@@ -18410,6 +18431,7 @@
                                     ${nonProfitSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
                                 </select>
                             ` : ''}
+                            <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
                             <select class="behavioral-sort-select" onchange="sortBehavioralCard('${catId}', '${cat}', this.value)" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
                                 <option value="pct" selected>% ↓</option>
                                 <option value="index">Idx ↓</option>
