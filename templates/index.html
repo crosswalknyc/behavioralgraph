@@ -2997,16 +2997,17 @@
 
         .behavioral-filter {
             display: flex;
-            gap: 0.35rem;
+            flex-wrap: wrap;
+            gap: 0.3rem;
             align-items: center;
             margin-bottom: 0.5rem;
             flex-shrink: 0;
         }
         .behavioral-filter input {
-            flex: 1;
-            min-width: 0;
-            font-size: 0.65rem;
-            padding: 0.25rem 0.4rem;
+            flex: 2;
+            min-width: 50px;
+            font-size: 0.7rem;
+            padding: 0.3rem 0.4rem;
             background: var(--bg-input);
             border: 1px solid var(--border-color);
             border-radius: 4px;
@@ -3018,6 +3019,14 @@
         }
         .behavioral-filter input::placeholder {
             color: var(--text-secondary);
+        }
+        .behavioral-filter select {
+            font-size: 0.7rem;
+            padding: 0.3rem 0.4rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
         }
 
         .behavioral-list {
@@ -17709,43 +17718,37 @@
                                 <span class="count">${items.length}</span>
                             </span>
                         </h3>
-                        <div class="behavioral-filter">
-                            ${isMostPurchased || isWhereTheyShop || isSports || isTalent ? `
-                                <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                    ${isMostPurchased ? `
-                                        <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceMostPurchased('${catId}', '${cat}', this.value)" style="padding: 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                            <option value="all">Slice By: All</option>
-                                            ${sliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
-                                        </select>
-                                    ` : ''}
-                                    ${isWhereTheyShop ? `
-                                        <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceWhereTheyShop('${catId}', '${cat}', this.value)" style="padding: 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                            <option value="all">Slice By: All</option>
-                                            ${whereTheyShopSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
-                                        </select>
-                                    ` : ''}
-                                    ${isSports ? `
-                                        <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceSports('${catId}', '${cat}', this.value)" style="padding: 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                            <option value="all">Slice By: All</option>
-                                            ${sportsSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
-                                        </select>
-                                    ` : ''}
-                                    ${isTalent ? `
-                                        <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceTalent('${catId}', '${cat}', this.value)" style="padding: 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                            <option value="all">Slice By: All</option>
-                                            ${talentSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
-                                        </select>
-                                    ` : ''}
-                                    <input type="text" placeholder="Search..." oninput="searchInCard('${catId}', this.value)" style="padding: 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                                </div>
-                            ` : `
-                                <input type="text" placeholder="Search..." oninput="searchInCard('${catId}', this.value)">
-                            `}
-                            <select class="behavioral-sort-select" onchange="sortBehavioralCard('${catId}', '${cat}', this.value)">
-                                <option value="index">Index ↓</option>
+                        <div class="behavioral-filter" style="display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center;">
+                            ${isMostPurchased ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceMostPurchased('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By: All</option>
+                                    ${sliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isWhereTheyShop ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceWhereTheyShop('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By: All</option>
+                                    ${whereTheyShopSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isSports ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceSports('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By: All</option>
+                                    ${sportsSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isTalent ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceTalent('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By: All</option>
+                                    ${talentSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            <select class="behavioral-sort-select" onchange="sortBehavioralCard('${catId}', '${cat}', this.value)" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
                                 <option value="pct" selected>% ↓</option>
+                                <option value="index">Idx ↓</option>
                                 <option value="alpha">A-Z</option>
                             </select>
+                            <input type="text" placeholder="Search..." oninput="searchInCard('${catId}', this.value)" style="flex: 2; min-width: 60px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                         </div>
                         <div class="behavioral-list" id="list-${catId}" data-cat="${cat}">
                             ${renderBehavioralItems(displayItems, maxPct)}
