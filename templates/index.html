@@ -8763,8 +8763,11 @@
                         <div class="location-row header">
                             <span>#</span>
                             <span>Location</span>
-                            <span class="sortable" onclick="sortLocationTable('top', 'target')" title="Sort by Target (Percentage)">Target</span>
-                            <span class="sortable" onclick="sortLocationTable('top', 'index')" title="Sort by Index">Index</span>
+                            <span style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap;">Sort By:</span>
+                                <span class="sortable" onclick="sortLocationTable('top', 'target')" title="Sort by Target (Percentage)">Target</span>
+                                <span class="sortable" onclick="sortLocationTable('top', 'index')" title="Sort by Index">Index</span>
+                            </span>
                         </div>
                         <div id="locationList" style="max-height: 500px; overflow-y: auto;"></div>
                         <div id="locationCountTop" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
@@ -8781,8 +8784,11 @@
                         <div class="location-row header">
                             <span>#</span>
                             <span>Location</span>
-                            <span class="sortable" onclick="sortLocationTable('bottom', 'target')" title="Sort by Target (Percentage)">Target</span>
-                            <span class="sortable" onclick="sortLocationTable('bottom', 'index')" title="Sort by Index">Index</span>
+                            <span style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap;">Sort By:</span>
+                                <span class="sortable" onclick="sortLocationTable('bottom', 'target')" title="Sort by Target (Percentage)">Target</span>
+                                <span class="sortable" onclick="sortLocationTable('bottom', 'index')" title="Sort by Index">Index</span>
+                            </span>
                         </div>
                         <div id="locationListBottom" style="max-height: 500px; overflow-y: auto;"></div>
                         <div id="locationCountBottom" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
@@ -8802,8 +8808,11 @@
                     <div class="location-row header">
                         <span>#</span>
                         <span>Location</span>
-                        <span class="sortable" onclick="sortLocationTable('all', 'percentage')" title="Sort by Percentage">Percentage</span>
-                        <span class="sortable" onclick="sortLocationTable('all', 'index')" title="Sort by Index">Index</span>
+                        <span style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap;">Sort By:</span>
+                            <span class="sortable" onclick="sortLocationTable('all', 'percentage')" title="Sort by Percentage">Percentage</span>
+                            <span class="sortable" onclick="sortLocationTable('all', 'index')" title="Sort by Index">Index</span>
+                        </span>
                     </div>
                     <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
                     <div id="locationCountAll" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
