@@ -2393,20 +2393,14 @@
 
         .charts-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            grid-template-columns: repeat(3, 1fr);
             gap: 0.75rem;
             width: 100%;
         }
         
-        @media (max-width: 1600px) {
-            .charts-grid {
-                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            }
-        }
-        
         @media (max-width: 1200px) {
             .charts-grid {
-                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                grid-template-columns: repeat(2, 1fr);
             }
         }
         
@@ -8497,7 +8491,7 @@
                                 <h3>
                                     <span class="chart-card-title-row">
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
-                                        <span class="has-tooltip" data-tooltip="Sexual Orientation">🏳️‍🌈 ORIENTATION</span>
+                                        <span class="has-tooltip" data-tooltip="Sexual Orientation">🏳️‍🌈 SEXUAL ORIENTATION</span>
                                     </span>
                                     <span class="chart-card-controls-row">
                                         <select id="sexualOrientationChartType" onchange="changeChartType('sexualOrientation', this.value)" class="chart-type-select">
