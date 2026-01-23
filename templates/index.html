@@ -8699,17 +8699,19 @@
                             </h3>
                             <span id="interestsCount" style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">0 interests</span>
                         </div>
-                        <div class="interests-filter">
-                            <select id="interestsCategorySelect" onchange="filterInterests()" class="has-tooltip" data-tooltip="Filter by Category" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                <option value="all">All</option>
-                            </select>
-                            <span style="font-size: 0.75rem; color: var(--text-secondary);">Sort:</span>
-                            <select id="interestsSortSelect" onchange="sortInterests(this.value)" class="has-tooltip" data-tooltip="Sort Interests" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                <option value="pct" selected>% ↓</option>
-                                <option value="index">Idx ↓</option>
-                                <option value="alpha">A-Z</option>
-                            </select>
-                            <input type="text" id="interestsSearchInput" placeholder="Search..." class="has-tooltip" data-tooltip="Search Interests" oninput="filterInterests()" style="flex: 2; min-width: 60px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                        <div class="interests-filter" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.35rem;">
+                                <span style="font-size: 0.75rem; color: var(--text-secondary);">Sort:</span>
+                                <select id="interestsCategorySelect" onchange="filterInterests()" class="has-tooltip" data-tooltip="Filter by Category" style="min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">All</option>
+                                </select>
+                                <select id="interestsSortSelect" onchange="sortInterests(this.value)" class="has-tooltip" data-tooltip="Sort Interests" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="pct" selected>% ↓</option>
+                                    <option value="index">Idx ↓</option>
+                                    <option value="alpha">A-Z</option>
+                                </select>
+                            </div>
+                            <input type="text" id="interestsSearchInput" placeholder="Search..." class="has-tooltip" data-tooltip="Search Interests" oninput="filterInterests()" style="width: 100%; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                         </div>
                     </div>
                     <div class="interests-grid" id="interestsGrid">
