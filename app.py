@@ -6917,6 +6917,365 @@ def run_talent_theater(job_id):
         update_job_status(job_id, status='failed', error=error_msg)
 
 
+@app.route('/api/attribution/svod-acquisition', methods=['POST'])
+@requires_auth
+def submit_svod_acquisition():
+    """Submit a SVOD Acquisition IQ analysis job."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Check access
+        role = user.get('role', 'user')
+        if role != 'admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+            return jsonify({'error': 'Attribution IQ access required'}), 403
+        
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate required fields
+        project_name = data.get('project_name')
+        campaign_start = data.get('campaign_start')
+        campaign_end = data.get('campaign_end')
+        exclusion_days = data.get('exclusion_days')
+        attribution_window = data.get('attribution_window')
+        show_search_terms = data.get('show_search_terms', [])
+        platform_name = data.get('platform_name')
+        platform_url_patterns = data.get('platform_url_patterns', [])
+        
+        if not project_name:
+            return jsonify({'error': 'Project name is required'}), 400
+        if not campaign_start or not campaign_end:
+            return jsonify({'error': 'Campaign start and end dates are required'}), 400
+        if not exclusion_days or not attribution_window:
+            return jsonify({'error': 'Exclusion days and attribution window are required'}), 400
+        if not show_search_terms:
+            return jsonify({'error': 'At least one show search term is required'}), 400
+        if not platform_name:
+            return jsonify({'error': 'Platform name is required'}), 400
+        if not platform_url_patterns:
+            return jsonify({'error': 'At least one platform URL pattern is required'}), 400
+        
+        # Create job
+        job_id = str(uuid.uuid4())
+        username = user.get('username', 'unknown')
+        
+        jobs[job_id] = {
+            'job_id': job_id,
+            'username': username,
+            'type': 'svod_acquisition',
+            'status': 'queued',
+            'progress': 0,
+            'message': 'Job queued...',
+            'created_at': datetime.now().isoformat(),
+            'error': None,
+            'result_file': None,
+            'logs': [],
+            'params': {
+                'project_name': project_name,
+                'campaign_start': campaign_start,
+                'campaign_end': campaign_end,
+                'exclusion_days': exclusion_days,
+                'attribution_window': attribution_window,
+                'show_search_terms': show_search_terms,
+                'is_new_show': data.get('is_new_show', False),
+                'platform_name': platform_name,
+                'platform_url_patterns': platform_url_patterns
+            }
+        }
+        
+        # Start job in background thread
+        thread = threading.Thread(target=run_svod_acquisition, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'job_id': job_id,
+            'message': 'SVOD Acquisition IQ job submitted successfully',
+            'status': 'queued'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/attribution/campaign-roi', methods=['POST'])
+@requires_auth
+def submit_campaign_roi():
+    """Submit a Campaign ROI IQ analysis job."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Check access
+        role = user.get('role', 'user')
+        if role != 'admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+            return jsonify({'error': 'Attribution IQ access required'}), 403
+        
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate required fields
+        project_name = data.get('project_name')
+        campaign_start = data.get('campaign_start')
+        campaign_end = data.get('campaign_end')
+        pre_campaign_days = data.get('pre_campaign_days')
+        attribution_window = data.get('attribution_window')
+        action_urls = data.get('action_urls', [])
+        post_domains = data.get('post_domains', [])
+        
+        if not project_name:
+            return jsonify({'error': 'Project name is required'}), 400
+        if not campaign_start or not campaign_end:
+            return jsonify({'error': 'Campaign start and end dates are required'}), 400
+        if not pre_campaign_days or not attribution_window:
+            return jsonify({'error': 'Pre campaign days and attribution window are required'}), 400
+        if not action_urls:
+            return jsonify({'error': 'At least one action URL is required'}), 400
+        if not post_domains:
+            return jsonify({'error': 'At least one post domain is required'}), 400
+        
+        # Create job
+        job_id = str(uuid.uuid4())
+        username = user.get('username', 'unknown')
+        
+        jobs[job_id] = {
+            'job_id': job_id,
+            'username': username,
+            'type': 'campaign_roi',
+            'status': 'queued',
+            'progress': 0,
+            'message': 'Job queued...',
+            'created_at': datetime.now().isoformat(),
+            'error': None,
+            'result_file': None,
+            'logs': [],
+            'params': {
+                'project_name': project_name,
+                'campaign_start': campaign_start,
+                'campaign_end': campaign_end,
+                'pre_campaign_days': pre_campaign_days,
+                'attribution_window': attribution_window,
+                'pre_domains': data.get('pre_domains', []),
+                'action_urls': action_urls,
+                'post_domains': post_domains,
+                'post_metrics': data.get('post_metrics', []),
+                'competitive_brands': data.get('competitive_brands', [])
+            }
+        }
+        
+        # Start job in background thread
+        thread = threading.Thread(target=run_campaign_roi, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'job_id': job_id,
+            'message': 'Campaign ROI IQ job submitted successfully',
+            'status': 'queued'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def run_svod_acquisition(job_id):
+    """Run the SVOD_Churn_Attribution.py script."""
+    try:
+        update_job_status(job_id, progress=10, message='Initializing...')
+        
+        # Import the script module
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'SVOD_Churn_Attribution.py')
+        if not os.path.exists(script_path):
+            update_job_status(job_id, status='failed', error=f'Script not found: {script_path}')
+            return
+        
+        # Get job parameters
+        job = jobs[job_id]
+        params = job['params']
+        
+        update_job_status(job_id, progress=30, message='Running analysis...')
+        
+        # Import and run the script
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("svod_churn_attribution", script_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, os.path.dirname(script_path))
+        spec.loader.exec_module(module)
+        
+        # Prepare parameters for the script
+        from datetime import datetime
+        campaign_start = datetime.strptime(params['campaign_start'], '%Y-%m-%d')
+        campaign_end = datetime.strptime(params['campaign_end'], '%Y-%m-%d')
+        
+        # Build script parameters dict (matching what get_user_input returns)
+        script_params = {
+            'project_name': params['project_name'],
+            'auto_format': True,
+            'campaign_start': campaign_start,
+            'campaign_end': campaign_end,
+            'exclusion_days': int(params['exclusion_days']),
+            'attribution_window': int(params['attribution_window']),
+            'show_search_terms': params['show_search_terms'],
+            'is_new_show': params.get('is_new_show', False),
+            'track_episodes': False,  # Simplified - can be enhanced later
+            'tracking_mode': None,
+            'episode_dates': [],
+            'platform_name': params['platform_name'],
+            'platform_url_patterns': params['platform_url_patterns']
+        }
+        
+        # Run the analysis function
+        conn = module.connect_snowflake()
+        try:
+            update_job_status(job_id, progress=50, message='Executing analysis...')
+            
+            # Call run_query directly with our params
+            if hasattr(module, 'run_query'):
+                summary_df, comp_df, demo_df, timing_df, episode_df, monthly_df, episode_timing_df, churn_df, post_signup_touchpoints_df = module.run_query(conn, script_params)
+            else:
+                update_job_status(job_id, status='failed', error='Script does not have run_query function')
+                return
+            
+            update_job_status(job_id, progress=80, message='Writing output...')
+            
+            # Call write_output
+            if hasattr(module, 'write_output'):
+                module.write_output(summary_df, comp_df, demo_df, timing_df, episode_df, monthly_df, episode_timing_df, churn_df, post_signup_touchpoints_df, script_params)
+            else:
+                update_job_status(job_id, status='failed', error='Script does not have write_output function')
+                return
+            
+            # Find the output file (it's written to Desktop/attribution folder)
+            from pathlib import Path
+            output_folder = Path.home() / "Desktop" / "attribution"
+            if output_folder.exists():
+                # Find the most recent CSV file matching the project name
+                csv_files = list(output_folder.glob(f"{params['project_name']}*.csv"))
+                if csv_files:
+                    csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    output_file = str(csv_files[0])
+                    if os.path.exists(output_file):
+                        jobs[job_id]['result_file'] = output_file
+                        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
+                    else:
+                        update_job_status(job_id, status='failed', error='Output file not found')
+                else:
+                    update_job_status(job_id, status='failed', error='No output file created')
+            else:
+                update_job_status(job_id, status='failed', error='Output folder not found')
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+                
+    except Exception as e:
+        import traceback
+        error_msg = f"Error running SVOD acquisition: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        update_job_status(job_id, status='failed', error=error_msg)
+
+
+def run_campaign_roi(job_id):
+    """Run the campaign_attribution.py script."""
+    try:
+        update_job_status(job_id, progress=10, message='Initializing...')
+        
+        # Import the script module
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'campaign_attribution.py')
+        if not os.path.exists(script_path):
+            update_job_status(job_id, status='failed', error=f'Script not found: {script_path}')
+            return
+        
+        # Get job parameters
+        job = jobs[job_id]
+        params = job['params']
+        
+        update_job_status(job_id, progress=30, message='Running analysis...')
+        
+        # Import and run the script
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("campaign_attribution", script_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, os.path.dirname(script_path))
+        spec.loader.exec_module(module)
+        
+        # Prepare parameters for the script
+        from datetime import datetime
+        campaign_start = datetime.strptime(params['campaign_start'], '%Y-%m-%d')
+        campaign_end = datetime.strptime(params['campaign_end'], '%Y-%m-%d')
+        
+        # Build script parameters dict (matching what get_user_input returns)
+        script_params = {
+            'project_name': params['project_name'],
+            'campaign_start': campaign_start,
+            'campaign_end': campaign_end,
+            'pre_campaign_days': int(params['pre_campaign_days']),
+            'attribution_window': int(params['attribution_window']),
+            'pre_domains': params.get('pre_domains', []),
+            'action_urls': params['action_urls'],
+            'post_domains': params['post_domains'],
+            'post_metrics': params.get('post_metrics', []),
+            'competitive_brands': params.get('competitive_brands', [])
+        }
+        
+        # Run the analysis function
+        conn = module.connect_snowflake()
+        try:
+            update_job_status(job_id, progress=50, message='Executing analysis...')
+            
+            # Call run_query directly with our params
+            if hasattr(module, 'run_query'):
+                summary_df, comp_df, demo_df, hours_action_df, hours_post_df = module.run_query(conn, script_params)
+            else:
+                update_job_status(job_id, status='failed', error='Script does not have run_query function')
+                return
+            
+            update_job_status(job_id, progress=80, message='Writing output...')
+            
+            # Call write_output
+            if hasattr(module, 'write_output'):
+                module.write_output(summary_df, comp_df, demo_df, hours_action_df, hours_post_df, script_params)
+            else:
+                update_job_status(job_id, status='failed', error='Script does not have write_output function')
+                return
+            
+            # Find the output file (it's written to Desktop/attribution folder)
+            from pathlib import Path
+            output_folder = Path.home() / "Desktop" / "attribution"
+            if output_folder.exists():
+                # Find the most recent CSV file matching the project name
+                csv_files = list(output_folder.glob(f"{params['project_name']}*.csv"))
+                if csv_files:
+                    csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    output_file = str(csv_files[0])
+                    if os.path.exists(output_file):
+                        jobs[job_id]['result_file'] = output_file
+                        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
+                    else:
+                        update_job_status(job_id, status='failed', error='Output file not found')
+                else:
+                    update_job_status(job_id, status='failed', error='No output file created')
+            else:
+                update_job_status(job_id, status='failed', error='Output folder not found')
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+                
+    except Exception as e:
+        import traceback
+        error_msg = f"Error running campaign ROI: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        update_job_status(job_id, status='failed', error=error_msg)
+
+
 # ============================================================================
 # MAIN
 # ============================================================================

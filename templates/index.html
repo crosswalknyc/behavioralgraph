@@ -6917,6 +6917,12 @@
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-theater')" id="customAnalysisTabTalentTheater">
                         🎭 Talent Ticket Sale IQ
                     </button>
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('svod-acquisition')" id="customAnalysisTabSVODAcquisition">
+                        📺 SVOD Acquisition IQ
+                    </button>
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('campaign-roi')" id="customAnalysisTabCampaignROI">
+                        💰 Campaign ROI IQ
+                    </button>
                 </div>
             </div>
             
@@ -7349,6 +7355,196 @@
                             <div class="card">
                                 <h3>Job Status</h3>
                                 <div id="customTalentTheaterJobStatusContent"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SVOD Acquisition IQ Tab Content -->
+                <div id="customAnalysisTabContentSVODAcquisition" class="custom-analysis-tab-content">
+                    <div class="card">
+                        <h2>📺 SVOD Acquisition IQ</h2>
+                        <p class="section-description">Track show-to-platform attribution with episode tracking</p>
+                        
+                        <form id="customSVODAcquisitionForm">
+                            <div class="form-section">
+                                <div class="form-section-title">Analysis Parameters</div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Project Name</label>
+                                        <input type="text" id="customSVODProjectName" placeholder="e.g., Reacher_Acquisition" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Campaign Start Date</label>
+                                        <input type="date" id="customSVODCampaignStart" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Campaign End Date</label>
+                                        <input type="date" id="customSVODCampaignEnd" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Exclusion Window (days before campaign to filter existing users)</label>
+                                        <input type="number" id="customSVODExclusionDays" placeholder="e.g., 30" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Attribution Window (days after episode watch to track signups)</label>
+                                        <input type="number" id="customSVODAttributionWindow" placeholder="e.g., 30" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Show/Content Name(s) (comma-separated)</label>
+                                        <input type="text" id="customSVODShowTerms" placeholder="e.g., Reacher, The Boys" required>
+                                        <small>Enter show names separated by commas</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                            <input type="checkbox" id="customSVODIsNewShow" style="margin: 0;">
+                                            <span>Is this a new show?</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Platform Name</label>
+                                        <input type="text" id="customSVODPlatformName" placeholder="e.g., Amazon Prime Video" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Platform URL Patterns (comma-separated)</label>
+                                        <input type="text" id="customSVODPlatformURLs" placeholder="e.g., primevideo.com, amazon.com/prime" required>
+                                        <small>Enter URL patterns separated by commas</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-primary">Run Analysis</button>
+                                </div>
+                            </div>
+                        </form>
+                        
+                        <!-- Job Status Display -->
+                        <div id="customSVODAcquisitionJobStatus" style="display: none; margin-top: 2rem;">
+                            <div class="card">
+                                <h3>Job Status</h3>
+                                <div id="customSVODAcquisitionJobStatusContent"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Campaign ROI IQ Tab Content -->
+                <div id="customAnalysisTabContentCampaignROI" class="custom-analysis-tab-content">
+                    <div class="card">
+                        <h2>💰 Campaign ROI IQ</h2>
+                        <p class="section-description">Track campaign attribution and ROI metrics</p>
+                        
+                        <form id="customCampaignROIForm">
+                            <div class="form-section">
+                                <div class="form-section-title">Analysis Parameters</div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Project Name</label>
+                                        <input type="text" id="customCampaignROIProjectName" placeholder="e.g., Nike_Q4_Campaign" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Campaign Start Date</label>
+                                        <input type="date" id="customCampaignROIStart" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Campaign End Date</label>
+                                        <input type="date" id="customCampaignROIEnd" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Ad Free Range Pre Campaign Duration (days)</label>
+                                        <input type="number" id="customCampaignROIPreDays" placeholder="e.g., 7" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Attribution Window Duration (days)</label>
+                                        <input type="number" id="customCampaignROIAttributionWindow" placeholder="e.g., 30" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Pre Visits to Domains (comma-separated, optional)</label>
+                                        <input type="text" id="customCampaignROIPreDomains" placeholder="e.g., competitor.com, otherbrand.com">
+                                        <small>Leave blank to skip</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Action URL(s) (exact URLs, comma-separated)</label>
+                                        <input type="text" id="customCampaignROIActionURLs" placeholder="e.g., https://example.com/campaign, https://example.com/promo" required>
+                                        <small>Enter exact campaign URLs</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Post Visits to Domains (comma-separated)</label>
+                                        <input type="text" id="customCampaignROIPostDomains" placeholder="e.g., brand.com, checkout.com" required>
+                                        <small>Domains to track after campaign action</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Post Visit Attribution Metrics (comma-separated, optional)</label>
+                                        <input type="text" id="customCampaignROIPostMetrics" placeholder="e.g., purchase, signup">
+                                        <small>Leave blank to skip conversions</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                            <input type="checkbox" id="customCampaignROITrackCompetitive" style="margin: 0;">
+                                            <span>Track Competitive Set?</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row" id="customCampaignROICompetitiveRow" style="display: none;">
+                                    <div class="form-group">
+                                        <label>Competitive Set (brand names, comma-separated)</label>
+                                        <input type="text" id="customCampaignROICompetitiveBrands" placeholder="e.g., Adidas, Puma">
+                                    </div>
+                                </div>
+                                
+                                <div class="form-actions">
+                                    <button type="submit" class="btn-primary">Run Analysis</button>
+                                </div>
+                            </div>
+                        </form>
+                        
+                        <!-- Job Status Display -->
+                        <div id="customCampaignROIJobStatus" style="display: none; margin-top: 2rem;">
+                            <div class="card">
+                                <h3>Job Status</h3>
+                                <div id="customCampaignROIJobStatusContent"></div>
                             </div>
                         </div>
                     </div>
@@ -10058,11 +10254,19 @@
             document.getElementById('customAnalysisTabProfileIQ').classList.remove('active');
             document.getElementById('customAnalysisTabTalentSearch').classList.remove('active');
             document.getElementById('customAnalysisTabTalentTheater').classList.remove('active');
+            document.getElementById('customAnalysisTabSVODAcquisition').classList.remove('active');
+            document.getElementById('customAnalysisTabCampaignROI').classList.remove('active');
             
             // Hide all tab contents
             document.getElementById('customAnalysisTabContentProfileIQ').classList.remove('active');
             document.getElementById('customAnalysisTabContentTalentSearch').classList.remove('active');
             document.getElementById('customAnalysisTabContentTalentTheater').classList.remove('active');
+            if (document.getElementById('customAnalysisTabContentSVODAcquisition')) {
+                document.getElementById('customAnalysisTabContentSVODAcquisition').classList.remove('active');
+            }
+            if (document.getElementById('customAnalysisTabContentCampaignROI')) {
+                document.getElementById('customAnalysisTabContentCampaignROI').classList.remove('active');
+            }
             
             // Show selected tab
             if (tabName === 'profile-iq') {
@@ -10074,6 +10278,16 @@
             } else if (tabName === 'talent-theater') {
                 document.getElementById('customAnalysisTabTalentTheater').classList.add('active');
                 document.getElementById('customAnalysisTabContentTalentTheater').classList.add('active');
+            } else if (tabName === 'svod-acquisition') {
+                document.getElementById('customAnalysisTabSVODAcquisition').classList.add('active');
+                if (document.getElementById('customAnalysisTabContentSVODAcquisition')) {
+                    document.getElementById('customAnalysisTabContentSVODAcquisition').classList.add('active');
+                }
+            } else if (tabName === 'campaign-roi') {
+                document.getElementById('customAnalysisTabCampaignROI').classList.add('active');
+                if (document.getElementById('customAnalysisTabContentCampaignROI')) {
+                    document.getElementById('customAnalysisTabContentCampaignROI').classList.add('active');
+                }
             }
         }
         
@@ -10185,6 +10399,131 @@
             }
         });
         
+        // Custom SVOD Acquisition Form Handler
+        document.getElementById('customSVODAcquisitionForm')?.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const projectName = document.getElementById('customSVODProjectName').value;
+            const campaignStart = document.getElementById('customSVODCampaignStart').value;
+            const campaignEnd = document.getElementById('customSVODCampaignEnd').value;
+            const exclusionDays = parseInt(document.getElementById('customSVODExclusionDays').value);
+            const attributionWindow = parseInt(document.getElementById('customSVODAttributionWindow').value);
+            const showTermsInput = document.getElementById('customSVODShowTerms').value;
+            const isNewShow = document.getElementById('customSVODIsNewShow').checked;
+            const platformName = document.getElementById('customSVODPlatformName').value;
+            const platformURLsInput = document.getElementById('customSVODPlatformURLs').value;
+            
+            const showTerms = showTermsInput.split(',').map(t => t.trim()).filter(t => t);
+            const platformURLs = platformURLsInput.split(',').map(u => u.trim()).filter(u => u);
+            
+            if (!projectName || !campaignStart || !campaignEnd || !exclusionDays || !attributionWindow || !showTerms.length || !platformName || !platformURLs.length) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            const payload = {
+                project_name: projectName,
+                campaign_start: campaignStart,
+                campaign_end: campaignEnd,
+                exclusion_days: exclusionDays,
+                attribution_window: attributionWindow,
+                show_search_terms: showTerms,
+                is_new_show: isNewShow,
+                platform_name: platformName,
+                platform_url_patterns: platformURLs
+            };
+            
+            try {
+                const response = await fetch('/api/attribution/svod-acquisition', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('customSVODAcquisitionJobStatus').style.display = 'block';
+                    pollCustomSVODAcquisitionJobStatus(data.job_id);
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to submit job'));
+                }
+            } catch (error) {
+                alert('Error submitting job: ' + error.message);
+            }
+        });
+        
+        // Custom Campaign ROI Form Handler
+        document.getElementById('customCampaignROIForm')?.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const projectName = document.getElementById('customCampaignROIProjectName').value;
+            const campaignStart = document.getElementById('customCampaignROIStart').value;
+            const campaignEnd = document.getElementById('customCampaignROIEnd').value;
+            const preDays = parseInt(document.getElementById('customCampaignROIPreDays').value);
+            const attributionWindow = parseInt(document.getElementById('customCampaignROIAttributionWindow').value);
+            const preDomainsInput = document.getElementById('customCampaignROIPreDomains').value;
+            const actionURLsInput = document.getElementById('customCampaignROIActionURLs').value;
+            const postDomainsInput = document.getElementById('customCampaignROIPostDomains').value;
+            const postMetricsInput = document.getElementById('customCampaignROIPostMetrics').value;
+            const trackCompetitive = document.getElementById('customCampaignROITrackCompetitive').checked;
+            const competitiveBrandsInput = document.getElementById('customCampaignROICompetitiveBrands').value;
+            
+            const preDomains = preDomainsInput.split(',').map(d => d.trim()).filter(d => d);
+            const actionURLs = actionURLsInput.split(',').map(u => u.trim()).filter(u => u);
+            const postDomains = postDomainsInput.split(',').map(d => d.trim()).filter(d => d);
+            const postMetrics = postMetricsInput.split(',').map(m => m.trim()).filter(m => m);
+            const competitiveBrands = competitiveBrandsInput.split(',').map(b => b.trim()).filter(b => b);
+            
+            if (!projectName || !campaignStart || !campaignEnd || !preDays || !attributionWindow || !actionURLs.length || !postDomains.length) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            const payload = {
+                project_name: projectName,
+                campaign_start: campaignStart,
+                campaign_end: campaignEnd,
+                pre_campaign_days: preDays,
+                attribution_window: attributionWindow,
+                pre_domains: preDomains,
+                action_urls: actionURLs,
+                post_domains: postDomains,
+                post_metrics: postMetrics
+            };
+            
+            if (trackCompetitive && competitiveBrands.length > 0) {
+                payload.competitive_brands = competitiveBrands;
+            }
+            
+            try {
+                const response = await fetch('/api/attribution/campaign-roi', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('customCampaignROIJobStatus').style.display = 'block';
+                    pollCustomCampaignROIJobStatus(data.job_id);
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to submit job'));
+                }
+            } catch (error) {
+                alert('Error submitting job: ' + error.message);
+            }
+        });
+        
+        // Toggle competitive brands row
+        document.getElementById('customCampaignROITrackCompetitive')?.addEventListener('change', function(e) {
+            const row = document.getElementById('customCampaignROICompetitiveRow');
+            if (row) {
+                row.style.display = e.target.checked ? 'block' : 'none';
+            }
+        });
+        
         // Polling functions for custom forms
         async function pollCustomTalentSearchJobStatus(jobId) {
             const maxAttempts = 120;
@@ -10227,6 +10566,68 @@
                     const data = await response.json();
                     
                     const statusContent = document.getElementById('customTalentTheaterJobStatusContent');
+                    if (statusContent) {
+                        statusContent.innerHTML = `
+                            <div><strong>Status:</strong> ${data.status}</div>
+                            <div><strong>Progress:</strong> ${data.progress || 0}%</div>
+                            <div><strong>Message:</strong> ${data.message || 'Processing...'}</div>
+                            ${data.error ? `<div style="color: var(--accent-red);"><strong>Error:</strong> ${data.error}</div>` : ''}
+                        `;
+                    }
+                    
+                    if (data.status === 'completed' || data.status === 'failed' || attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                    }
+                } catch (error) {
+                    console.error('Error polling job status:', error);
+                    if (attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                    }
+                }
+            }, 2000);
+        }
+        
+        async function pollCustomSVODAcquisitionJobStatus(jobId) {
+            const maxAttempts = 120;
+            let attempts = 0;
+            const pollInterval = setInterval(async () => {
+                attempts++;
+                try {
+                    const response = await fetch(`/api/job-status/${jobId}`, { credentials: 'same-origin' });
+                    const data = await response.json();
+                    
+                    const statusContent = document.getElementById('customSVODAcquisitionJobStatusContent');
+                    if (statusContent) {
+                        statusContent.innerHTML = `
+                            <div><strong>Status:</strong> ${data.status}</div>
+                            <div><strong>Progress:</strong> ${data.progress || 0}%</div>
+                            <div><strong>Message:</strong> ${data.message || 'Processing...'}</div>
+                            ${data.error ? `<div style="color: var(--accent-red);"><strong>Error:</strong> ${data.error}</div>` : ''}
+                        `;
+                    }
+                    
+                    if (data.status === 'completed' || data.status === 'failed' || attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                    }
+                } catch (error) {
+                    console.error('Error polling job status:', error);
+                    if (attempts >= maxAttempts) {
+                        clearInterval(pollInterval);
+                    }
+                }
+            }, 2000);
+        }
+        
+        async function pollCustomCampaignROIJobStatus(jobId) {
+            const maxAttempts = 120;
+            let attempts = 0;
+            const pollInterval = setInterval(async () => {
+                attempts++;
+                try {
+                    const response = await fetch(`/api/job-status/${jobId}`, { credentials: 'same-origin' });
+                    const data = await response.json();
+                    
+                    const statusContent = document.getElementById('customCampaignROIJobStatusContent');
                     if (statusContent) {
                         statusContent.innerHTML = `
                             <div><strong>Status:</strong> ${data.status}</div>
