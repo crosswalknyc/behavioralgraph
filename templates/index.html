@@ -23967,7 +23967,7 @@
                 return;
             }
             
-            // Group by state
+            // Group by state - sum both profile % and gen pop % the same way (apples to apples)
             const stateData = {};
             locations.forEach(loc => {
                 const state = getStateFromLocation(loc.name);
@@ -23976,9 +23976,9 @@
                         stateData[state] = { pct: 0, genPopPct: 0, index: 0, count: 0, names: [] };
                     }
                     stateData[state].pct += loc.pct;
-                    // Normalize gen pop percentage - it should be a decimal like 0.04 for 4%
+                    // Sum gen pop percentage the same way as profile pct (apples to apples)
                     let genPopPct = loc.genPopPct || 0;
-                    // If it's already > 1, it's likely already a percentage
+                    // Normalize: if it's a decimal like 0.04, convert to 4%
                     if (genPopPct > 0 && genPopPct < 1) {
                         genPopPct = genPopPct * 100;
                     }
@@ -23989,11 +23989,9 @@
                 }
             });
             
-            // Calculate averages - gen pop should NOT be summed, it should be averaged per state
+            // Calculate average index only (gen pop is already summed correctly like profile pct)
             Object.keys(stateData).forEach(state => {
                 stateData[state].avgIndex = Math.round(stateData[state].index / stateData[state].count);
-                // Average the gen pop percentage across DMAs in the state (not sum)
-                stateData[state].genPopPct = stateData[state].genPopPct / stateData[state].count;
             });
             
             // Get min/max for color scaling (keep heat colors for background, but add comparison colors for text)
@@ -24008,13 +24006,11 @@
             const sortedStates = Object.entries(stateData).sort((a, b) => b[1].pct - a[1].pct);
             
             document.getElementById('usHeatmap').innerHTML = sortedStates.map(([state, data]) => {
-                // Determine comparison color (green if profile >= gen pop, red/pink if profile < gen pop)
-                // Use a lighter pink/salmon for red backgrounds so text is visible
+                // Determine comparison color (green if profile >= gen pop, dark red if under)
                 const isOverIndex = data.pct >= data.genPopPct;
                 const bgColor = getHeatColor(data.pct, minVal, maxVal);
-                // Check if background is reddish (under-indexing state) - use lighter text
-                const isRedBg = bgColor.includes('239, 68, 68');
-                const comparisonColor = isOverIndex ? '#10b981' : (isRedBg ? '#fca5a5' : '#ef4444');
+                // Dark red (#b91c1c) for under-indexing, green for over-indexing
+                const comparisonColor = isOverIndex ? '#10b981' : '#b91c1c';
                 
                 // Format profile and gen pop displays
                 const profileDisplay = isProjection 
@@ -24023,14 +24019,14 @@
                 
                 const genPopDisplay = isProjection 
                     ? (data.genPopPct === 0 || data.genPopPct === null ? 'N/A' : formatNumber(Math.round((data.genPopPct / 100) * US_POP)))
-                    : 'GP: ' + formatValueOrNA(data.genPopPct, true);
+                    : formatValueOrNA(data.genPopPct, true);
                 
                 return `
                 <div class="state-box" style="background: ${bgColor};" title="${data.names.slice(0, 3).join(', ')}">
                     <div class="state-name">${state}</div>
                     <div class="state-pct" style="color: ${comparisonColor}; font-weight: 600;">
                         ${profileDisplay}
-                        <span style="color: ${isRedBg ? '#fecaca' : 'var(--text-secondary)'}; font-weight: 400; margin-left: 0.5rem;">(${genPopDisplay})</span>
+                        <span style="color: white; font-weight: 400; margin-left: 0.5rem;">(${genPopDisplay})</span>
                     </div>
                 </div>
             `;
@@ -24069,8 +24065,8 @@
             document.getElementById('regionalBreakdown').innerHTML = Object.entries(regionData)
                 .sort((a, b) => b[1].pct - a[1].pct)
                 .map(([region, data]) => {
-                    // Determine color based on comparison (green if profile > gen pop, red if profile < gen pop)
-                    const comparisonColor = data.pct >= data.genPopPct ? '#10b981' : '#ef4444';
+                    // Determine color based on comparison (green if profile > gen pop, dark red if under)
+                    const comparisonColor = data.pct >= data.genPopPct ? '#10b981' : '#b91c1c';
                     
                     // Format profile and gen pop displays
                     const profileDisplay = isProjection 
@@ -24079,7 +24075,7 @@
                     
                     const genPopDisplay = isProjection 
                         ? (data.genPopPct === 0 || data.genPopPct === null ? 'N/A' : formatNumber(Math.round((data.genPopPct / 100) * US_POP)))
-                        : 'GP: ' + formatValueOrNA(data.genPopPct, true);
+                        : formatValueOrNA(data.genPopPct, true);
                     
                     return `
                     <div class="region-card">
@@ -24089,7 +24085,7 @@
                         </div>
                         <span class="region-pct" style="color: ${comparisonColor}; font-weight: 600;">
                             ${profileDisplay}
-                            <span style="color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">(${genPopDisplay})</span>
+                            <span style="color: white; font-weight: 400; margin-left: 0.5rem;">(${genPopDisplay})</span>
                         </span>
                     </div>
                 `;
