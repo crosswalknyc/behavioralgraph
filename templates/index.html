@@ -17389,14 +17389,16 @@
                     indexAxis: genderChartType === 'bar' ? 'y' : 'x',
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: genderIsCircular ? {} : { right: 50 } }, // Increased padding for bar charts
+                    layout: { padding: genderIsCircular ? { right: 10 } : { right: 50 } }, // Increased padding for bar charts
                     plugins: { 
                         legend: { 
                             display: genderIsCircular,
                             position: 'right', 
                             labels: { 
                                 color: '#e6f1ff', 
-                                font: { size: 12 },
+                                font: { size: 10 },
+                                padding: 8,
+                                boxWidth: 12,
                                 generateLabels: genderIsCircular ? (chart) => {
                                     const data = chart.data;
                                     return data.labels.map((label, i) => {
@@ -17502,14 +17504,16 @@
                     indexAxis: ethnicityChartType === 'bar' ? 'y' : 'x',
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: ethnicityIsCircular ? {} : { right: 50 } }, // Increased padding to prevent text cutoff
+                    layout: { padding: ethnicityIsCircular ? { right: 10 } : { right: 50 } }, // Increased padding to prevent text cutoff
                     plugins: { 
                         legend: { 
                             display: ethnicityIsCircular,
                             position: 'right', 
                             labels: { 
                                 color: '#e6f1ff', 
-                                font: { size: 11 },
+                                font: { size: 10 },
+                                padding: 8,
+                                boxWidth: 12,
                                 generateLabels: ethnicityIsCircular ? (chart) => {
                                     const data = chart.data;
                                     return data.labels.map((label, i) => {
