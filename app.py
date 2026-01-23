@@ -5328,12 +5328,17 @@ def smart_cache_update():
     4. Files in cache but NOT in S3 are REMOVED
     
     This keeps cache in sync with actual S3 contents.
+    Preserves existing metadata (custom images, categories) when updating files.
     """
     import time
     from datetime import datetime, timezone, timedelta
     
     if not s3_client:
         return {'new': 0, 'updated': 0, 'deleted': 0, 'total': 0}
+    
+    # Ensure profile image cache is loaded for matching images to new files
+    if not profile_image_cache:
+        load_profile_image_cache()
     
     # Build lookup of existing files by key -> last_modified
     existing = {job['s3_key']: job.get('last_modified', '') for job in s3_cache.get('jobs', []) if job.get('s3_key')}
@@ -5362,6 +5367,15 @@ def smart_cache_update():
                     # NEW file
                     job_data = process_s3_file_metadata(key, obj)
                     job_data['last_modified'] = obj_modified
+                    
+                    # Check if there's an existing profile image for this project name
+                    if profile_image_cache:
+                        cache_key = job_data.get('project_name', '').lower().strip()
+                        if cache_key in profile_image_cache:
+                            cached_img = profile_image_cache[cache_key]
+                            if cached_img.get('is_custom'):
+                                job_data['custom_image'] = cached_img.get('image_url')
+                    
                     s3_cache['jobs'].append(job_data)
                     if job_data['category'] not in s3_cache['categories']:
                         s3_cache['categories'].append(job_data['category'])
@@ -5369,12 +5383,18 @@ def smart_cache_update():
                     print(f"   ➕ New: {key}")
                     
                 elif existing[key] != obj_modified:
-                    # MODIFIED file
+                    # MODIFIED file - preserve existing metadata
                     job_data = process_s3_file_metadata(key, obj)
                     job_data['last_modified'] = obj_modified
-                    # Update in place
+                    # Update in place, preserving custom metadata
                     for i, job in enumerate(s3_cache['jobs']):
                         if job.get('s3_key') == key:
+                            # Preserve custom image and manually set category if they exist
+                            if job.get('custom_image'):
+                                job_data['custom_image'] = job['custom_image']
+                            # Keep existing category if it was manually set (not UNCATEGORIZED)
+                            if job.get('category') and job.get('category') != 'UNCATEGORIZED':
+                                job_data['category'] = job['category']
                             s3_cache['jobs'][i] = job_data
                             break
                     updated_count += 1
