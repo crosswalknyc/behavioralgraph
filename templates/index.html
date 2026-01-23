@@ -8896,6 +8896,24 @@
                                 </h3>
                                 <div class="chart-container"><canvas id="parentalStatusChart"></canvas></div>
                             </div>
+                            <div class="chart-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Occupation">
+                                <h3>
+                                    <span class="chart-card-title-row">
+                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
+                                        <span class="has-tooltip" data-tooltip="Occupation">💼 OCCUPATION</span>
+                                    </span>
+                                    <span class="chart-card-controls-row">
+                                        <select id="occupationChartType" onchange="changeChartType('occupation', this.value)" class="chart-type-select">
+                                            <option value="bar">📊</option>
+                                            <option value="doughnut">🍩</option>
+                                            <option value="pie">🥧</option>
+                                            <option value="polarArea">🎯</option>
+                                        </select>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Occupation')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Occupation')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Occupation')">➕</button></span>
+                                    </span>
+                                </h3>
+                                <div class="chart-container"><canvas id="occupationChart"></canvas></div>
+                            </div>
                         </div>
                     </div>
             </div>
@@ -15462,10 +15480,10 @@
             const result = {
                 sampleSize: 0,
                 projectedUS: 0,
-                demographics: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {} },
-                demographicsIndex: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {} },
-                demographicsGenPop: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {} },
-                demographicsProjection: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {} },
+                demographics: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {} },
+                demographicsIndex: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {} },
+                demographicsGenPop: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {} },
+                demographicsProjection: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {} },
                 behavioral: {},
                 categories: {},
                 locations: [],
@@ -15544,6 +15562,15 @@
                 'PARENTAL_STATUS': {
                     'Has Kids': 40.0, 'HAS KIDS': 40.0,
                     'Other': 5.0, 'OTHER': 5.0
+                },
+                'OCCUPATION': {
+                    'Employed Full-Time': 48.0, 'EMPLOYED FULL-TIME': 48.0,
+                    'Employed Part-Time': 12.0, 'EMPLOYED PART-TIME': 12.0,
+                    'Self-Employed': 6.0, 'SELF-EMPLOYED': 6.0,
+                    'Unemployed': 4.0, 'UNEMPLOYED': 4.0,
+                    'Student': 8.0, 'STUDENT': 8.0,
+                    'Retired': 18.0, 'RETIRED': 18.0,
+                    'Homemaker': 4.0, 'HOMEMAKER': 4.0
                 }
             };
 
@@ -15681,6 +15708,12 @@
                         result.demographicsGenPop.parental_status[value] = genPopPct;
                         result.demographicsProjection.parental_status[value] = usProjection;
                     }
+                }
+                if (category === 'OCCUPATION' && value) {
+                    result.demographics.occupation[value] = pct;
+                    result.demographicsIndex.occupation[value] = index;
+                    result.demographicsGenPop.occupation[value] = genPopPct;
+                    result.demographicsProjection.occupation[value] = usProjection;
                 }
                 
                 // Interests category (handle both singular and plural)
@@ -17681,8 +17714,23 @@
                                 } 
                             }, 
                             datalabels: relationshipChartType === 'bar' ? {
-                                anchor: 'end', align: 'end', font: { size: 12, weight: 'bold' }, color: '#fff',
-                                formatter: (v) => isProjection ? formatNumber(Math.round(v)) : v.toFixed(1) + '%'
+                                anchor: 'end',
+                                align: 'end',
+                                font: { size: 12, weight: 'bold' },
+                                color: (ctx) => {
+                                    const pct = relPcts[ctx.dataIndex] || 0;
+                                    const genPop = relGenPop[ctx.dataIndex] || 0;
+                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
+                                },
+                                formatter: (value, ctx) => {
+                                    const pct = relPcts[ctx.dataIndex] || 0;
+                                    const genPop = relGenPop[ctx.dataIndex] || 0;
+                                    if (isProjection) {
+                                        const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                        return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                    }
+                                    return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
+                                }
                             } : { display: false }
                         },
                         scales: relationshipIsCircular ? {} : {
@@ -17745,8 +17793,23 @@
                                 } 
                             }, 
                             datalabels: soChartType === 'bar' ? {
-                                anchor: 'end', align: 'end', font: { size: 12, weight: 'bold' }, color: '#fff',
-                                formatter: (v) => isProjection ? formatNumber(Math.round(v)) : v.toFixed(1) + '%'
+                                anchor: 'end',
+                                align: 'end',
+                                font: { size: 12, weight: 'bold' },
+                                color: (ctx) => {
+                                    const pct = soPcts[ctx.dataIndex] || 0;
+                                    const genPop = soGenPop[ctx.dataIndex] || 0;
+                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
+                                },
+                                formatter: (value, ctx) => {
+                                    const pct = soPcts[ctx.dataIndex] || 0;
+                                    const genPop = soGenPop[ctx.dataIndex] || 0;
+                                    if (isProjection) {
+                                        const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                        return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                    }
+                                    return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
+                                }
                             } : { display: false }
                         },
                         scales: soIsCircular ? {} : {
@@ -17819,8 +17882,23 @@
                                 } 
                             }, 
                             datalabels: psChartType === 'bar' ? {
-                                anchor: 'end', align: 'end', font: { size: 12, weight: 'bold' }, color: '#fff',
-                                formatter: (v) => isProjection ? formatNumber(Math.round(v)) : v.toFixed(1) + '%'
+                                anchor: 'end',
+                                align: 'end',
+                                font: { size: 12, weight: 'bold' },
+                                color: (ctx) => {
+                                    const pct = psPcts[ctx.dataIndex] || 0;
+                                    const genPop = psGenPop[ctx.dataIndex] || 0;
+                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
+                                },
+                                formatter: (value, ctx) => {
+                                    const pct = psPcts[ctx.dataIndex] || 0;
+                                    const genPop = psGenPop[ctx.dataIndex] || 0;
+                                    if (isProjection) {
+                                        const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                        return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                    }
+                                    return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
+                                }
                             } : { display: false }
                         },
                         scales: psIsCircular ? {} : {
@@ -17828,6 +17906,83 @@
                                 grid: { color: '#1e3a5f' }, 
                                 ticks: { color: '#8892b0', font: { size: 13 } },
                                 suggestedMax: psMax // Add suggestedMax to prevent cutoff
+                            },
+                            y: { 
+                                grid: { display: false }, 
+                                ticks: { color: '#e6f1ff', font: { size: 14 } },
+                                afterFit: (scale) => { scale.width = Math.max(scale.width, 140); } // Ensure y-axis has enough width
+                            }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+            }
+            
+            // Occupation - bar chart with Gen Pop
+            if (demographics.occupation && Object.keys(demographics.occupation).length > 0) {
+                const occLabels = Object.keys(demographics.occupation);
+                const occGenPop = occLabels.map(k => demographicsGenPop.occupation?.[k] || 0);
+                const occPcts = Object.values(demographics.occupation);
+                const occData = isProjection ? occLabels.map(k => demographicsProjection.occupation?.[k] || 0) : occPcts;
+                
+                const occChartType = chartTypePrefs.occupation || 'bar';
+                const occIsCircular = ['doughnut', 'pie', 'polarArea'].includes(occChartType);
+                
+                // Calculate max for x-axis with padding for labels (horizontal bar)
+                const occMax = occChartType === 'bar' ? Math.max(...occData) * 1.5 : undefined; // 50% padding for horizontal labels
+                
+                charts.occupation = new Chart(document.getElementById('occupationChart'), {
+                    type: occChartType,
+                    data: { labels: occLabels, datasets: [{ data: occData, backgroundColor: colors, borderRadius: occChartType === 'bar' ? 4 : 0 }] },
+                    options: { 
+                        indexAxis: occChartType === 'bar' ? 'y' : 'x',
+                        responsive: true, 
+                        maintainAspectRatio: false,
+                        layout: { padding: occIsCircular ? {} : { right: 50 } }, // Increased padding to prevent text cutoff 
+                        plugins: { 
+                            legend: { 
+                                display: occIsCircular,
+                                position: 'right', 
+                                labels: { 
+                                    color: '#e6f1ff', 
+                                    font: { size: 11 },
+                                    generateLabels: occIsCircular ? (chart) => {
+                                        const data = chart.data;
+                                        return data.labels.map((label, i) => {
+                                            const pct = occPcts[i] || 0;
+                                            const genPop = occGenPop[i] || 0;
+                                            const valStr = isProjection ? formatNumber(Math.round(data.datasets[0].data[i])) : pct.toFixed(1) + '%';
+                                            const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
+                                            return { text: `${label} ${valStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
+                                        });
+                                    } : undefined
+                                } 
+                            }, 
+                            datalabels: occChartType === 'bar' ? {
+                                anchor: 'end',
+                                align: 'end',
+                                font: { size: 12, weight: 'bold' },
+                                color: (ctx) => {
+                                    const pct = occPcts[ctx.dataIndex] || 0;
+                                    const genPop = occGenPop[ctx.dataIndex] || 0;
+                                    return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
+                                },
+                                formatter: (value, ctx) => {
+                                    const pct = occPcts[ctx.dataIndex] || 0;
+                                    const genPop = occGenPop[ctx.dataIndex] || 0;
+                                    if (isProjection) {
+                                        const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                        return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                    }
+                                    return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
+                                }
+                            } : { display: false }
+                        },
+                        scales: occIsCircular ? {} : {
+                            x: { 
+                                grid: { color: '#1e3a5f' }, 
+                                ticks: { color: '#8892b0', font: { size: 13 } },
+                                suggestedMax: occMax // Add suggestedMax to prevent cutoff
                             },
                             y: { 
                                 grid: { display: false }, 
