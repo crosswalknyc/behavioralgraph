@@ -1662,28 +1662,49 @@
         }
 
         .tab-btn.active {
-            background: var(--accent-blue);
+            background: #5a9ad9;
             color: white;
-            border-color: var(--accent-blue);
+            border-color: #5a9ad9;
         }
 
-        /* Tool tabs - purple/violet to distinguish from data tabs */
+        /* Tool tabs - same style as data tabs */
         .tab-btn.tool-tab {
-            background: rgba(139, 92, 246, 0.2);
-            border-color: rgba(139, 92, 246, 0.5);
-            color: #c4b5fd;
+            background: rgba(90, 154, 217, 0.15);
+            border-color: rgba(90, 154, 217, 0.4);
+            color: var(--text-secondary);
         }
 
         .tab-btn.tool-tab:hover {
-            background: rgba(139, 92, 246, 0.35);
-            border-color: rgba(139, 92, 246, 0.7);
-            color: #e9d5ff;
+            background: rgba(90, 154, 217, 0.25);
+            border-color: #5a9ad9;
+            color: var(--text-primary);
         }
 
         .tab-btn.tool-tab.active {
-            background: rgba(139, 92, 246, 0.5);
-            border-color: rgba(139, 92, 246, 1);
+            background: #5a9ad9;
+            border-color: #5a9ad9;
             color: white;
+        }
+        
+        /* Tab section labels */
+        .tab-section-label {
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            margin-bottom: 0.35rem;
+        }
+        
+        .tab-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .tab-group-buttons {
+            display: flex;
+            gap: 0.35rem;
+            flex-wrap: wrap;
         }
 
         /* Responsive tab sizing */
@@ -9856,11 +9877,11 @@
                                         <span class="metric-label">Avg Over-Index</span>
                                     </div>
                                 </div>
-                                <div class="metric-card has-tooltip" data-tooltip="Uniqueness Score: How distinctive this audience is compared to the general population. Calculated as the percentage of over-indexing items that have an index above 150 (strongly differentiated). 100% = highly unique, 0% = similar to Gen Pop.">
-                                    <div class="metric-icon">🎯</div>
+                                <div class="metric-card has-tooltip" data-tooltip="Total Data Points: The complete count of behavioral items tracked for this audience including brands, media, content, interests, and more.">
+                                    <div class="metric-icon">📋</div>
                                     <div class="metric-content">
-                                        <span class="metric-value" id="uniquenesScore">--</span>
-                                        <span class="metric-label">Uniqueness Score</span>
+                                        <span class="metric-value" id="totalDataPoints">--</span>
+                                        <span class="metric-label">Total Data Points</span>
                                     </div>
                                 </div>
                             </div>
@@ -22109,7 +22130,7 @@
             document.getElementById('insightsSampleSize').textContent = formatNumber(data.sampleSize || 0);
             document.getElementById('insightsProjectedUS').textContent = formatNumber(data.projectedUS || 0);
             document.getElementById('avgOverIndex').textContent = avgOverIndex;
-            document.getElementById('uniquenesScore').textContent = uniquenessScore + '%';
+            document.getElementById('totalDataPoints').textContent = allItems.length.toLocaleString();
             
             // Demographic highlights - top over/under indexing demographics
             const demoHighlights = [];
@@ -22196,7 +22217,7 @@
             
             // Key stats grid with tooltips for each stat
             document.getElementById('keyStatsGrid').innerHTML = `
-                <div class="key-stat-item has-tooltip" data-tooltip="Total Data Points: The complete count of behavioral items tracked for this audience including brands, media, content, interests, and more."><div class="key-stat-label">Total Data Points on Audience</div><div class="key-stat-value neutral">${allItems.length.toLocaleString()}</div></div>
+                <div class="key-stat-item has-tooltip" data-tooltip="Uniqueness Score: How distinctive this audience is compared to the general population. Calculated as the percentage of over-indexing items that have an index above 150 (strongly differentiated). 100% = highly unique, 0% = similar to Gen Pop."><div class="key-stat-label">Uniqueness Score</div><div class="key-stat-value neutral">${uniquenessScore}%</div></div>
                 <div class="key-stat-item has-tooltip" data-tooltip="Categories: Number of unique behavioral categories this audience has data for (e.g., QSR, Streaming, Social Media, etc.)"><div class="key-stat-label">Categories</div><div class="key-stat-value neutral">${categoryCount}</div></div>
                 <div class="key-stat-item has-tooltip" data-tooltip="Over-Index Count: Number of items where this audience indexes above 1.0x (more likely to engage than Gen Pop). Higher = more distinct interests."><div class="key-stat-label">Over-Index</div><div class="key-stat-value">${over100Count.toLocaleString()}</div></div>
                 <div class="key-stat-item has-tooltip" data-tooltip="Under-Index Count: Number of items where this audience indexes below 1.0x (less likely to engage than Gen Pop). Helps identify what to avoid in targeting."><div class="key-stat-label">Under-Index</div><div class="key-stat-value" style="color:#ef4444">${under100Count.toLocaleString()}</div></div>
