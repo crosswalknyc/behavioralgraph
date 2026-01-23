@@ -7917,6 +7917,7 @@
                                             <option value="age">Age ↓</option>
                                             <option value="value">Val ↓</option>
                                         </select>
+                                        <span id="ageMedianDisplay" style="font-size: 0.75rem; color: var(--text-secondary); padding: 0 0.5rem; white-space: nowrap;"></span>
                                         <span class="module-action-btns">
                                             <button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('demographic', 'Age')" data-tooltip="Export CSV: Download age demographic data as a CSV file for analysis in Excel or other tools.">CSV</button>
                                             <button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Age')" data-tooltip="Export PNG: Download the age chart as a PNG image for presentations or reports.">PNG</button>
@@ -7938,6 +7939,7 @@
                                             <option value="bar">📊</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
+                                        <span id="genderMedianDisplay" style="font-size: 0.75rem; color: var(--text-secondary); padding: 0 0.5rem; white-space: nowrap;"></span>
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('demographic', 'Gender')" data-tooltip="Export CSV: Download gender demographic data as a CSV file.">CSV</button><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Gender')" data-tooltip="Export PNG: Download the gender chart as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('demographic', 'Gender')" data-tooltip="Add to Deck: Save this gender chart to your presentation deck.">➕</button></span>
                                     </div>
                                 </h3>
@@ -7955,6 +7957,7 @@
                                             <option value="bar">📊</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
+                                        <span id="ethnicityMedianDisplay" style="font-size: 0.75rem; color: var(--text-secondary); padding: 0 0.5rem; white-space: nowrap;"></span>
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('demographic', 'Ethnicity')" data-tooltip="Export CSV: Download ethnicity demographic data as a CSV file.">CSV</button><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Ethnicity')" data-tooltip="Export PNG: Download the ethnicity chart as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('demographic', 'Ethnicity')" data-tooltip="Add to Deck: Save this ethnicity chart to your presentation deck.">➕</button></span>
                                     </div>
                                 </h3>
@@ -7977,6 +7980,7 @@
                                             <option value="income">Inc ↓</option>
                                             <option value="value">Val ↓</option>
                                         </select>
+                                        <span id="incomeMedianDisplay" style="font-size: 0.75rem; color: var(--text-secondary); padding: 0 0.5rem; white-space: nowrap;"></span>
                                         <span class="module-action-btns">
                                             <button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('demographic', 'Income')" data-tooltip="Export CSV: Download income demographic data as a CSV file.">CSV</button>
                                             <button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Income')" data-tooltip="Export PNG: Download the income chart as a PNG image.">PNG</button>
@@ -7998,6 +8002,7 @@
                                             <option value="pie">🥧</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
+                                        <span id="educationMedianDisplay" style="font-size: 0.75rem; color: var(--text-secondary); padding: 0 0.5rem; white-space: nowrap;"></span>
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('demographic', 'Education')" data-tooltip="Export CSV: Download education demographic data as a CSV file.">CSV</button><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Education')" data-tooltip="Export PNG: Download the education chart as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('demographic', 'Education')" data-tooltip="Add to Deck: Save this education chart to your presentation deck.">➕</button></span>
                                     </div>
                                 </h3>
@@ -8015,6 +8020,7 @@
                                             <option value="bar">📊</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
+                                        <span id="relationshipMedianDisplay" style="font-size: 0.75rem; color: var(--text-secondary); padding: 0 0.5rem; white-space: nowrap;"></span>
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('demographic', 'Relationship')" data-tooltip="Export CSV: Download relationship status demographic data as a CSV file.">CSV</button><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Relationship')" data-tooltip="Export PNG: Download the relationship chart as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('demographic', 'Relationship')" data-tooltip="Add to Deck: Save this relationship chart to your presentation deck.">➕</button></span>
                                     </div>
                                 </h3>
@@ -8032,6 +8038,7 @@
                                             <option value="bar">📊</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
+                                        <span id="sexualOrientationMedianDisplay" style="font-size: 0.75rem; color: var(--text-secondary); padding: 0 0.5rem; white-space: nowrap;"></span>
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('demographic', 'Sexual Orientation')" data-tooltip="Export CSV: Download sexual orientation demographic data as a CSV file.">CSV</button><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Sexual Orientation')" data-tooltip="Export PNG: Download the sexual orientation chart as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('demographic', 'Sexual Orientation')" data-tooltip="Add to Deck: Save this sexual orientation chart to your presentation deck.">➕</button></span>
                                     </div>
                                 </h3>
@@ -8049,6 +8056,7 @@
                                             <option value="bar">📊</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
+                                        <span id="parentalStatusMedianDisplay" style="font-size: 0.75rem; color: var(--text-secondary); padding: 0 0.5rem; white-space: nowrap;"></span>
                                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('demographic', 'Parental Status')" data-tooltip="Export CSV: Download parental status demographic data as a CSV file.">CSV</button><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('demographic', 'Parental Status')" data-tooltip="Export PNG: Download the parental status chart as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('demographic', 'Parental Status')" data-tooltip="Add to Deck: Save this parental status chart to your presentation deck.">➕</button></span>
                                     </div>
                                 </h3>
@@ -15502,6 +15510,148 @@
             `).join('');
         }
         
+        // Helper function to calculate median for demographic data
+        function calculateDemographicMedian(data, genPopData, categoryType) {
+            if (!data || Object.keys(data).length === 0) return { profile: null, genPop: null };
+            
+            // For categorical data (gender, ethnicity, etc.), return the dominant category
+            if (['gender', 'ethnicity', 'education', 'relationship', 'sexual_orientation', 'parental_status'].includes(categoryType)) {
+                const profileEntries = Object.entries(data).filter(([k, v]) => v > 0);
+                const genPopEntries = genPopData ? Object.entries(genPopData).filter(([k, v]) => v > 0) : [];
+                
+                const profileDominant = profileEntries.length > 0 ? profileEntries.sort((a, b) => b[1] - a[1])[0] : null;
+                const genPopDominant = genPopEntries.length > 0 ? genPopEntries.sort((a, b) => b[1] - a[1])[0] : null;
+                
+                return {
+                    profile: profileDominant ? { value: profileDominant[0], percentage: profileDominant[1] } : null,
+                    genPop: genPopDominant ? { value: genPopDominant[0], percentage: genPopDominant[1] } : null
+                };
+            }
+            
+            // For numeric data (age, income), calculate weighted median
+            if (categoryType === 'age') {
+                // Age range to numeric midpoint mapping
+                const ageToNumeric = (ageRange) => {
+                    const lower = ageRange.toLowerCase();
+                    if (lower.includes('<16') || lower.includes('under 16')) return 14;
+                    if (lower.includes('16-18') || lower.includes('17-18')) return 17.5;
+                    if (lower.includes('18-20') || lower.includes('19-20')) return 19.5;
+                    if (lower.includes('21-25')) return 23;
+                    if (lower.includes('26-30')) return 28;
+                    if (lower.includes('31-40')) return 35.5;
+                    if (lower.includes('41-59')) return 50;
+                    if (lower.includes('60+') || lower.includes('65+') || lower.includes('over 65')) return 67.5;
+                    // Try to parse range like "26-30"
+                    const match = ageRange.match(/(\d+)-(\d+)/);
+                    if (match) return (parseInt(match[1]) + parseInt(match[2])) / 2;
+                    return null;
+                };
+                
+                // Create weighted array
+                const profileWeighted = [];
+                Object.entries(data).forEach(([range, pct]) => {
+                    const num = ageToNumeric(range);
+                    if (num !== null && pct > 0) {
+                        for (let i = 0; i < Math.round(pct * 10); i++) {
+                            profileWeighted.push(num);
+                        }
+                    }
+                });
+                
+                const genPopWeighted = [];
+                if (genPopData) {
+                    Object.entries(genPopData).forEach(([range, pct]) => {
+                        const num = ageToNumeric(range);
+                        if (num !== null && pct > 0) {
+                            for (let i = 0; i < Math.round(pct * 10); i++) {
+                                genPopWeighted.push(num);
+                            }
+                        }
+                    });
+                }
+                
+                const profileMedian = profileWeighted.length > 0 
+                    ? profileWeighted.sort((a, b) => a - b)[Math.floor(profileWeighted.length / 2)]
+                    : null;
+                const genPopMedian = genPopWeighted.length > 0
+                    ? genPopWeighted.sort((a, b) => a - b)[Math.floor(genPopWeighted.length / 2)]
+                    : null;
+                
+                return {
+                    profile: profileMedian !== null ? { value: profileMedian.toFixed(1), percentage: null } : null,
+                    genPop: genPopMedian !== null ? { value: genPopMedian.toFixed(1), percentage: null } : null
+                };
+            }
+            
+            if (categoryType === 'income') {
+                // Income range to numeric midpoint mapping
+                const incomeToNumeric = (incomeRange) => {
+                    const lower = incomeRange.toLowerCase();
+                    if (lower.includes('<') || lower.includes('under')) {
+                        const match = lower.match(/under\s*\$?(\d+)/) || lower.match(/<\s*\$?(\d+)/);
+                        if (match) return parseInt(match[1]) / 2;
+                        return 20000; // Default for <$40k
+                    }
+                    if (lower.includes('$40') && lower.includes('$60')) return 50000;
+                    if (lower.includes('$60') && lower.includes('$75')) return 67500;
+                    if (lower.includes('$75') && lower.includes('$100')) return 87500;
+                    if (lower.includes('$100') && lower.includes('$150')) return 125000;
+                    if (lower.includes('$150') && lower.includes('$250')) return 200000;
+                    if (lower.includes('$250+') || lower.includes('over $250')) return 300000;
+                    // Try to parse range
+                    const match = lower.match(/\$?(\d+)[kK]?\s*-\s*\$?(\d+)[kK]?/);
+                    if (match) {
+                        const low = parseInt(match[1]) * (match[1].includes('k') || match[1].includes('K') ? 1000 : 1);
+                        const high = parseInt(match[2]) * (match[2].includes('k') || match[2].includes('K') ? 1000 : 1);
+                        return (low + high) / 2;
+                    }
+                    const singleMatch = lower.match(/\$?(\d+)[kK]?\+/);
+                    if (singleMatch) {
+                        const val = parseInt(singleMatch[1]) * (singleMatch[1].includes('k') || singleMatch[1].includes('K') ? 1000 : 1);
+                        return val * 1.25; // Estimate above threshold
+                    }
+                    return null;
+                };
+                
+                // Create weighted array
+                const profileWeighted = [];
+                Object.entries(data).forEach(([range, pct]) => {
+                    const num = incomeToNumeric(range);
+                    if (num !== null && pct > 0) {
+                        for (let i = 0; i < Math.round(pct * 10); i++) {
+                            profileWeighted.push(num);
+                        }
+                    }
+                });
+                
+                const genPopWeighted = [];
+                if (genPopData) {
+                    Object.entries(genPopData).forEach(([range, pct]) => {
+                        const num = incomeToNumeric(range);
+                        if (num !== null && pct > 0) {
+                            for (let i = 0; i < Math.round(pct * 10); i++) {
+                                genPopWeighted.push(num);
+                            }
+                        }
+                    });
+                }
+                
+                const profileMedian = profileWeighted.length > 0 
+                    ? profileWeighted.sort((a, b) => a - b)[Math.floor(profileWeighted.length / 2)]
+                    : null;
+                const genPopMedian = genPopWeighted.length > 0
+                    ? genPopWeighted.sort((a, b) => a - b)[Math.floor(genPopWeighted.length / 2)]
+                    : null;
+                
+                return {
+                    profile: profileMedian !== null ? { value: formatNumber(Math.round(profileMedian)), percentage: null } : null,
+                    genPop: genPopMedian !== null ? { value: formatNumber(Math.round(genPopMedian)), percentage: null } : null
+                };
+            }
+            
+            return { profile: null, genPop: null };
+        }
+
         function renderCharts(demographics, demographicsIndex = {}, demographicsProjection = {}, demographicsGenPop = {}) {
             Object.values(charts).forEach(c => c.destroy());
             charts = {};
@@ -15524,6 +15674,17 @@
             
             // Calculate max for x-axis with padding for labels (horizontal bar)
             const ageMax = Math.max(...ageData) * 1.5; // 50% padding for horizontal labels
+            
+            // Calculate median for age
+            const ageMedian = calculateDemographicMedian(demographics.age, demographicsGenPop.age, 'age');
+            
+            // Update median display in chart header
+            const ageMedianDisplay = document.getElementById('ageMedianDisplay');
+            if (ageMedianDisplay) {
+                const profileVal = ageMedian.profile ? `${ageMedian.profile.value} years` : 'N/A';
+                const genPopVal = ageMedian.genPop ? `${ageMedian.genPop.value} years` : 'N/A';
+                ageMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">Profile: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
+            }
             
             const ageChartType = chartTypePrefs.age || 'bar';
             const ageIsCircular = ['doughnut', 'pie', 'polarArea'].includes(ageChartType);
@@ -15589,6 +15750,17 @@
             
             // Calculate max for x-axis with padding for labels (horizontal bar)
             const genderMax = genderChartType === 'bar' ? Math.max(...genderData) * 1.5 : undefined; // 50% padding for horizontal labels
+            
+            // Calculate median for gender
+            const genderMedian = calculateDemographicMedian(demographics.gender, demographicsGenPop.gender, 'gender');
+            
+            // Update median display in chart header
+            const genderMedianDisplay = document.getElementById('genderMedianDisplay');
+            if (genderMedianDisplay) {
+                const profileVal = genderMedian.profile ? `${genderMedian.profile.value} (${genderMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
+                const genPopVal = genderMedian.genPop ? `${genderMedian.genPop.value} (${genderMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
+                genderMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">Profile: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
+            }
             
             charts.gender = new Chart(document.getElementById('genderChart'), {
                 type: genderChartType,
@@ -15671,6 +15843,17 @@
             
             // Calculate max for x-axis with padding for labels (horizontal bar)
             const ethMax = ethnicityChartType === 'bar' ? Math.max(...ethData) * 1.5 : undefined; // 50% padding for horizontal labels
+            
+            // Calculate median for ethnicity
+            const ethMedian = calculateDemographicMedian(demographics.ethnicity, demographicsGenPop.ethnicity, 'ethnicity');
+            
+            // Update median display in chart header
+            const ethMedianDisplay = document.getElementById('ethnicityMedianDisplay');
+            if (ethMedianDisplay) {
+                const profileVal = ethMedian.profile ? `${ethMedian.profile.value} (${ethMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
+                const genPopVal = ethMedian.genPop ? `${ethMedian.genPop.value} (${ethMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
+                ethMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">Profile: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
+            }
             
             charts.ethnicity = new Chart(document.getElementById('ethnicityChart'), {
                 type: ethnicityChartType,
@@ -15758,6 +15941,17 @@
             const incomeChartType = chartTypePrefs.income || 'bar';
             const incomeIsCircular = ['doughnut', 'pie', 'polarArea'].includes(incomeChartType);
             
+            // Calculate median for income
+            const incomeMedian = calculateDemographicMedian(demographics.income, demographicsGenPop.income, 'income');
+            
+            // Update median display in chart header
+            const incomeMedianDisplay = document.getElementById('incomeMedianDisplay');
+            if (incomeMedianDisplay) {
+                const profileVal = incomeMedian.profile ? `$${incomeMedian.profile.value}` : 'N/A';
+                const genPopVal = incomeMedian.genPop ? `$${incomeMedian.genPop.value}` : 'N/A';
+                incomeMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">Profile: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
+            }
+            
             charts.income = new Chart(document.getElementById('incomeChart'), {
                 type: incomeChartType,
                 data: { 
@@ -15821,6 +16015,17 @@
                 const educationChartType = chartTypePrefs.education || 'bar';
                 const educationIsCircular = ['doughnut', 'pie', 'polarArea'].includes(educationChartType);
                 
+                // Calculate median for education
+                const eduMedian = calculateDemographicMedian(demographics.education, demographicsGenPop.education, 'education');
+                
+                // Update median display in chart header
+                const eduMedianDisplay = document.getElementById('educationMedianDisplay');
+                if (eduMedianDisplay) {
+                    const profileVal = eduMedian.profile ? `${eduMedian.profile.value} (${eduMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
+                    const genPopVal = eduMedian.genPop ? `${eduMedian.genPop.value} (${eduMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
+                    eduMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">Profile: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
+                }
+                
                 charts.education = new Chart(document.getElementById('educationChart'), {
                     type: educationChartType,
                     data: { labels: eduLabels, datasets: [{ data: eduData, backgroundColor: educationIsCircular ? colors : '#a6e22e', borderRadius: educationIsCircular ? 0 : 4 }] },
@@ -15870,6 +16075,17 @@
                 
                 // Calculate max for x-axis with padding for labels (horizontal bar)
                 const relMax = relationshipChartType === 'bar' ? Math.max(...relData) * 1.5 : undefined; // 50% padding for horizontal labels
+                
+                // Calculate median for relationship
+                const relMedian = calculateDemographicMedian(demographics.relationship, demographicsGenPop.relationship, 'relationship');
+                
+                // Update median display in chart header
+                const relMedianDisplay = document.getElementById('relationshipMedianDisplay');
+                if (relMedianDisplay) {
+                    const profileVal = relMedian.profile ? `${relMedian.profile.value} (${relMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
+                    const genPopVal = relMedian.genPop ? `${relMedian.genPop.value} (${relMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
+                    relMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">Profile: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
+                }
                 
                 charts.relationship = new Chart(document.getElementById('relationshipChart'), {
                     type: relationshipChartType,
@@ -15933,6 +16149,17 @@
                 // Calculate max for x-axis with padding for labels (horizontal bar)
                 const soMax = soChartType === 'bar' ? Math.max(...soData) * 1.5 : undefined; // 50% padding for horizontal labels
                 
+                // Calculate median for sexual orientation
+                const soMedian = calculateDemographicMedian(demographics.sexual_orientation, demographicsGenPop.sexual_orientation, 'sexual_orientation');
+                
+                // Update median display in chart header
+                const soMedianDisplay = document.getElementById('sexualOrientationMedianDisplay');
+                if (soMedianDisplay) {
+                    const profileVal = soMedian.profile ? `${soMedian.profile.value} (${soMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
+                    const genPopVal = soMedian.genPop ? `${soMedian.genPop.value} (${soMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
+                    soMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">Profile: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
+                }
+                
                 charts.sexualOrientation = new Chart(document.getElementById('sexualOrientationChart'), {
                     type: soChartType,
                     data: { labels: soLabels, datasets: [{ data: soData, backgroundColor: colors, borderRadius: soChartType === 'bar' ? 4 : 0 }] },
@@ -15994,6 +16221,17 @@
                 
                 // Calculate max for x-axis with padding for labels (horizontal bar)
                 const psMax = psChartType === 'bar' ? Math.max(...psData) * 1.5 : undefined; // 50% padding for horizontal labels
+                
+                // Calculate median for parental status
+                const psMedian = calculateDemographicMedian(demographics.parental_status, demographicsGenPop.parental_status, 'parental_status');
+                
+                // Update median display in chart header
+                const psMedianDisplay = document.getElementById('parentalStatusMedianDisplay');
+                if (psMedianDisplay) {
+                    const profileVal = psMedian.profile ? `${psMedian.profile.value} (${psMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
+                    const genPopVal = psMedian.genPop ? `${psMedian.genPop.value} (${psMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
+                    psMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">Profile: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
+                }
                 
                 charts.parentalStatus = new Chart(document.getElementById('parentalStatusChart'), {
                     type: psChartType,
