@@ -14583,6 +14583,8 @@
 
                 if (col === 'SAMPLE SIZE') {
                     sampleSize = rawNum || catShare || 0;
+                    // Projected US comes from F4 (US Gen Pop Projection column on SAMPLE SIZE row)
+                    if (usPop > 0) projectedUS = usPop;
                 }
 
                 if (col === 'MEDIAN AGE' || col.includes('MEDIAN') && col.includes('AGE')) {
@@ -14606,7 +14608,8 @@
                     }
                 }
 
-                if (col === 'BRAND INPUT') {
+                // Fallback: also check BRAND INPUT row for projectedUS if not already set
+                if (col === 'BRAND INPUT' && projectedUS === 0) {
                     projectedUS = usPop || 0;
                 }
             });
@@ -15178,15 +15181,23 @@
                 const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 100;
 
                 // Sample size is in Original Raw Numbers OR Category Share column for SAMPLE SIZE row
+                // Projected US is in US Gen Pop Projection column (F4) for SAMPLE SIZE row
                 if (category === 'SAMPLE SIZE') {
                     // Try different columns where sample size might be
                     const possibleSize = parseInt(row['Original Raw Numbers']) || 
                                         parseInt(row['Category Share']) || 
                                         parseInt(row['Brand Penetration (Row)']) || 0;
                     if (possibleSize > 0) result.sampleSize = possibleSize;
+                    
+                    // Projected US comes from F4 (US Gen Pop Projection column on SAMPLE SIZE row)
+                    const projectedFromF4 = parseInt(row['US Gen Pop Projection'] || 0);
+                    if (projectedFromF4 > 0) result.projectedUS = projectedFromF4;
                 }
                 
-                if (category === 'BRAND INPUT') result.projectedUS = usProjection;
+                // Fallback: also check BRAND INPUT row for projectedUS if not already set
+                if (category === 'BRAND INPUT' && result.projectedUS === 0) {
+                    result.projectedUS = usProjection;
+                }
 
                 // Demographics - store pct, genPopPct, index, and projection
                 if (category === 'AGE' && value) {
