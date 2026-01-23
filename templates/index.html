@@ -2494,12 +2494,16 @@
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            flex-shrink: 0;
         }
         .insight-col-header span {
             cursor: default;
         }
         .insight-col-header span:hover {
             color: var(--accent-lime);
+        }
+        .top-cat-header {
+            flex-shrink: 0;
         }
         .demo-insight-content {
             font-size: 0.8rem;
@@ -2792,6 +2796,9 @@
             border: 1px solid var(--border-color);
             border-radius: 10px;
             padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            height: 500px;
         }
         .behavioral-insight-card.highlight {
             border-color: var(--accent-lime);
@@ -2804,10 +2811,14 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            flex-shrink: 0;
         }
         .behavioral-insight-content {
             font-size: 0.85rem;
             line-height: 1.6;
+            overflow-y: auto;
+            flex: 1;
+            min-height: 0;
         }
         .behavioral-stat-row {
             display: flex;
