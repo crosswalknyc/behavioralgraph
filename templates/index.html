@@ -8680,8 +8680,8 @@
                                 <option value="all">All</option>
                             </select>
                             <select id="interestsSortSelect" onchange="sortInterests(this.value)" class="has-tooltip" data-tooltip="Sort Interests" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                <option value="pct" selected>% ↓</option>
                                 <option value="index">Idx ↓</option>
-                                <option value="pct">% ↓</option>
                                 <option value="alpha">A-Z</option>
                             </select>
                             <input type="text" id="interestsSearchInput" placeholder="Search..." class="has-tooltip" data-tooltip="Search Interests" oninput="filterInterests()" style="flex: 2; min-width: 60px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
@@ -17213,7 +17213,7 @@
         }
         
         let allInterestsData = [];
-        let currentInterestSort = 'index';
+        let currentInterestSort = 'pct';
         
         function renderInterests(interests) {
             const container = document.getElementById('interestsGrid');
