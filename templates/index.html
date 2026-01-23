@@ -26763,6 +26763,60 @@
                     if (segData && segData.profileData) {
                         const baseProfile = segData.profileData;
                         const multiplier = segData.segmentMultiplier || 1;
+                        const filters = segData.filters || {};
+                        
+                        // Build segment demographics based on filters
+                        // If a filter is selected, that demographic should be 100% for selected values
+                        const segmentDemographics = JSON.parse(JSON.stringify(baseProfile.demographics || {}));
+                        const segmentDemographicsProjection = JSON.parse(JSON.stringify(baseProfile.demographicsProjection || {}));
+                        const segmentDemographicsIndex = JSON.parse(JSON.stringify(baseProfile.demographicsIndex || {}));
+                        
+                        // Map filter keys to demographic keys
+                        const filterToDemoMap = {
+                            'gender': 'gender',
+                            'age': 'age', 
+                            'ethnicity': 'ethnicity',
+                            'income': 'income',
+                            'education': 'education',
+                            'relationship': 'relationship',
+                            'sexual_orientation': 'sexual_orientation',
+                            'parental_status': 'parental_status'
+                        };
+                        
+                        // Override demographics for filtered categories
+                        Object.entries(filterToDemoMap).forEach(([filterKey, demoKey]) => {
+                            if (filters[filterKey] && filters[filterKey].length > 0) {
+                                const selectedValues = filters[filterKey];
+                                const numSelected = selectedValues.length;
+                                const pctPerValue = 100 / numSelected;
+                                
+                                // Reset all values in this demographic to 0
+                                if (segmentDemographics[demoKey]) {
+                                    Object.keys(segmentDemographics[demoKey]).forEach(key => {
+                                        segmentDemographics[demoKey][key] = 0;
+                                        if (segmentDemographicsProjection[demoKey]) {
+                                            segmentDemographicsProjection[demoKey][key] = 0;
+                                        }
+                                    });
+                                    
+                                    // Set selected values to equal share of 100%
+                                    selectedValues.forEach(val => {
+                                        // Find matching key (case-insensitive)
+                                        const matchKey = Object.keys(segmentDemographics[demoKey]).find(k => 
+                                            k.toUpperCase() === val.toUpperCase() ||
+                                            k.toUpperCase().replace(/\s+/g, '') === val.toUpperCase().replace(/\s+/g, '')
+                                        );
+                                        if (matchKey) {
+                                            segmentDemographics[demoKey][matchKey] = pctPerValue;
+                                            // Calculate projection based on segment size
+                                            if (segmentDemographicsProjection[demoKey]) {
+                                                segmentDemographicsProjection[demoKey][matchKey] = Math.round((segData.estimatedSize || 0) * (pctPerValue / 100) * 324.7);
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                        });
                         
                         // Create profile data from segment
                         const profileData = {
@@ -26773,17 +26827,18 @@
                             sampleSize: segData.estimatedSize || 0,
                             projectedUS: Math.round((segData.estimatedSize || 0) * 324.7), // Rough projection
                             medianAge: baseProfile.medianAge || 0,
-                            demographics: baseProfile.demographics || {},
-                            demographicsProjection: baseProfile.demographicsProjection || {},
-                            demographicsIndex: baseProfile.demographicsIndex || {},
+                            demographics: segmentDemographics,
+                            demographicsProjection: segmentDemographicsProjection,
+                            demographicsIndex: segmentDemographicsIndex,
                             behavioral: baseProfile.behavioral || {},
                             behavioralProjection: baseProfile.behavioralProjection || {},
                             locations: baseProfile.locations || [],
-                            segmentMultiplier: multiplier
+                            segmentMultiplier: multiplier,
+                            filters: filters
                         };
                         
                         profilesData.push(profileData);
-                        console.log(`✓ Loaded segment ${segmentProfile.name}: size=${segData.estimatedSize}`);
+                        console.log(`✓ Loaded segment ${segmentProfile.name}: size=${segData.estimatedSize}, filters:`, filters);
                     }
                     continue;
                 }
