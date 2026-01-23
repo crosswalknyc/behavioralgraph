@@ -23621,8 +23621,9 @@
                         stateData[state] = { pct: 0, genPopPct: 0, index: 0, count: 0, names: [] };
                     }
                     stateData[state].pct += loc.pct;
-                    // Normalize and aggregate gen pop percentage
+                    // Normalize gen pop percentage - it should be a decimal like 0.04 for 4%
                     let genPopPct = loc.genPopPct || 0;
+                    // If it's already > 1, it's likely already a percentage
                     if (genPopPct > 0 && genPopPct < 1) {
                         genPopPct = genPopPct * 100;
                     }
@@ -23633,9 +23634,11 @@
                 }
             });
             
-            // Calculate averages
+            // Calculate averages - gen pop should NOT be summed, it should be averaged per state
             Object.keys(stateData).forEach(state => {
                 stateData[state].avgIndex = Math.round(stateData[state].index / stateData[state].count);
+                // Average the gen pop percentage across DMAs in the state (not sum)
+                stateData[state].genPopPct = stateData[state].genPopPct / stateData[state].count;
             });
             
             // Get min/max for color scaling (keep heat colors for background, but add comparison colors for text)
@@ -23650,8 +23653,13 @@
             const sortedStates = Object.entries(stateData).sort((a, b) => b[1].pct - a[1].pct);
             
             document.getElementById('usHeatmap').innerHTML = sortedStates.map(([state, data]) => {
-                // Determine comparison color (green if profile >= gen pop, red if profile < gen pop)
-                const comparisonColor = data.pct >= data.genPopPct ? '#10b981' : '#ef4444';
+                // Determine comparison color (green if profile >= gen pop, red/pink if profile < gen pop)
+                // Use a lighter pink/salmon for red backgrounds so text is visible
+                const isOverIndex = data.pct >= data.genPopPct;
+                const bgColor = getHeatColor(data.pct, minVal, maxVal);
+                // Check if background is reddish (under-indexing state) - use lighter text
+                const isRedBg = bgColor.includes('239, 68, 68');
+                const comparisonColor = isOverIndex ? '#10b981' : (isRedBg ? '#fca5a5' : '#ef4444');
                 
                 // Format profile and gen pop displays
                 const profileDisplay = isProjection 
@@ -23660,14 +23668,14 @@
                 
                 const genPopDisplay = isProjection 
                     ? (data.genPopPct === 0 || data.genPopPct === null ? 'N/A' : formatNumber(Math.round((data.genPopPct / 100) * US_POP)))
-                    : formatValueOrNA(data.genPopPct, true);
+                    : 'GP: ' + formatValueOrNA(data.genPopPct, true);
                 
                 return `
-                <div class="state-box" style="background: ${getHeatColor(data.pct, minVal, maxVal)};" title="${data.names.slice(0, 3).join(', ')}">
+                <div class="state-box" style="background: ${bgColor};" title="${data.names.slice(0, 3).join(', ')}">
                     <div class="state-name">${state}</div>
                     <div class="state-pct" style="color: ${comparisonColor}; font-weight: 600;">
                         ${profileDisplay}
-                        <span style="color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">(${genPopDisplay})</span>
+                        <span style="color: ${isRedBg ? '#fecaca' : 'var(--text-secondary)'}; font-weight: 400; margin-left: 0.5rem;">(${genPopDisplay})</span>
                     </div>
                 </div>
             `;
@@ -23716,7 +23724,7 @@
                     
                     const genPopDisplay = isProjection 
                         ? (data.genPopPct === 0 || data.genPopPct === null ? 'N/A' : formatNumber(Math.round((data.genPopPct / 100) * US_POP)))
-                        : formatValueOrNA(data.genPopPct, true);
+                        : 'GP: ' + formatValueOrNA(data.genPopPct, true);
                     
                     return `
                     <div class="region-card">
