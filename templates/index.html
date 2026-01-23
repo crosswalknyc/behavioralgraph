@@ -16471,7 +16471,7 @@
                                     const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
                                     return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                 }
-                                return pct.toFixed(1) + '%' + (genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '');
+                                return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
                             }
                         }
                     }, 
@@ -16525,8 +16525,8 @@
                                         const pct = genderPcts[i] || 0;
                                         const genPop = genderGenPop[i] || 0;
                                         const val = data.datasets[0].data[i];
-                                        const valStr = isProjection ? formatNumber(Math.round(val)) : pct.toFixed(1) + '%';
-                                        const gpStr = genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '';
+                                        const valStr = isProjection ? formatNumber(Math.round(val)) : formatPct(pct);
+                                        const gpStr = genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '';
                                         const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
                                         return {
                                             text: `${label} ${valStr}${gpStr}`,
@@ -16556,7 +16556,7 @@
                                     const gpVal = genPop > 0 ? Math.round(US_POPULATION * genPop / 100) : 0;
                                     return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                 }
-                                return pct.toFixed(1) + '%' + (genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '');
+                                return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
                             }
                         } : { display: false }
                     },
@@ -16618,8 +16618,8 @@
                                         const pct = ethPcts[i] || 0;
                                         const genPop = ethGenPop[i] || 0;
                                         const val = data.datasets[0].data[i];
-                                        const valStr = isProjection ? formatNumber(Math.round(val)) : pct.toFixed(1) + '%';
-                                        const gpStr = genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '';
+                                        const valStr = isProjection ? formatNumber(Math.round(val)) : formatPct(pct);
+                                        const gpStr = genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '';
                                         const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
                                         return {
                                             text: `${label} ${valStr}${gpStr}`,
@@ -16649,7 +16649,7 @@
                                     const gpVal = genPop > 0 ? Math.round(US_POPULATION * genPop / 100) : 0;
                                     return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                 }
-                                return pct.toFixed(1) + '%' + (genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '');
+                                return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
                             }
                         } : { display: false }
                     },
@@ -16735,7 +16735,7 @@
                                     const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
                                     return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                 }
-                                return pct.toFixed(1) + '%' + (genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '');
+                                return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
                             }
                         }
                     }, 
@@ -16798,7 +16798,7 @@
                                         const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
                                         return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                     }
-                                    return pct.toFixed(1) + '%' + (genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '');
+                                    return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
                                 }
                             } 
                         }, 
@@ -18679,15 +18679,27 @@
             draggedCategory = null;
         }
 
-        // Helper function to format value as N/A if 0
+        // Helper function to format value as N/A if 0 or very small
         function formatValueOrNA(value, isPercentage = false) {
             if (value === 0 || value === '0' || value === '0%' || value === null || value === undefined) {
                 return 'N/A';
             }
             if (isPercentage && typeof value === 'number') {
+                // If value rounds to 0.0%, show N/A instead
+                if (value < 0.05) {
+                    return 'N/A';
+                }
                 return value.toFixed(1) + '%';
             }
             return value;
+        }
+        
+        // Helper function to format percentage, showing N/A for 0 or very small values
+        function formatPct(value) {
+            if (value === 0 || value === null || value === undefined || value < 0.05) {
+                return 'N/A';
+            }
+            return value.toFixed(1) + '%';
         }
         
         function renderBehavioralItems(items, maxPct) {
