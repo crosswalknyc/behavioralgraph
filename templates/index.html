@@ -8677,9 +8677,9 @@
                                     </span>
                                     <span class="chart-card-controls-row">
                                         <select id="ethnicityChartType" onchange="changeChartType('ethnicity', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type">
+                                            <option value="bar">📊</option>
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
-                                            <option value="bar">📊</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
                                         <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Ethnicity')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Ethnicity')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Ethnicity')">➕</button></span>
@@ -8740,9 +8740,9 @@
                                     </span>
                                     <span class="chart-card-controls-row">
                                         <select id="relationshipChartType" onchange="changeChartType('relationship', this.value)" class="chart-type-select">
+                                            <option value="bar">📊</option>
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
-                                            <option value="bar">📊</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
                                         <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Relationship')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Relationship')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Relationship')">➕</button></span>
@@ -8776,9 +8776,9 @@
                                     </span>
                                     <span class="chart-card-controls-row">
                                         <select id="parentalStatusChartType" onchange="changeChartType('parentalStatus', this.value)" class="chart-type-select">
+                                            <option value="bar">📊</option>
                                             <option value="doughnut">🍩</option>
                                             <option value="pie">🥧</option>
-                                            <option value="bar">📊</option>
                                             <option value="polarArea">🎯</option>
                                         </select>
                                         <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Parental Status')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Parental Status')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Parental Status')">➕</button></span>
@@ -16955,7 +16955,7 @@
                 ? ethLabels.map(k => demographicsProjection.ethnicity?.[k] || 0)
                 : ethPcts;
             
-            const ethnicityChartType = chartTypePrefs.ethnicity || 'doughnut';
+            const ethnicityChartType = chartTypePrefs.ethnicity || 'bar';
             const ethnicityIsCircular = ['doughnut', 'pie', 'polarArea'].includes(ethnicityChartType);
             
             // Calculate max for x-axis with padding for labels (horizontal bar)
@@ -17189,7 +17189,7 @@
                 const relPcts = Object.values(demographics.relationship);
                 const relData = isProjection ? relLabels.map(k => demographicsProjection.relationship?.[k] || 0) : relPcts;
                 
-                const relationshipChartType = chartTypePrefs.relationship || 'doughnut';
+                const relationshipChartType = chartTypePrefs.relationship || 'bar';
                 const relationshipIsCircular = ['doughnut', 'pie', 'polarArea'].includes(relationshipChartType);
                 
                 // Calculate max for x-axis with padding for labels (horizontal bar)
@@ -17337,7 +17337,7 @@
                 const psPcts = Object.values(demographics.parental_status);
                 const psData = isProjection ? psLabels.map(k => demographicsProjection.parental_status?.[k] || 0) : psPcts;
                 
-                const psChartType = chartTypePrefs.parentalStatus || 'doughnut';
+                const psChartType = chartTypePrefs.parentalStatus || 'bar';
                 const psIsCircular = ['doughnut', 'pie', 'polarArea'].includes(psChartType);
                 
                 // Calculate max for x-axis with padding for labels (horizontal bar)
