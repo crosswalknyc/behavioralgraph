@@ -8687,8 +8687,8 @@
                                     <span class="chart-card-title-row">
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Age Distribution: Breakdown by age bracket. Green = your audience over-indexes vs Gen Pop (GP). Red = under-indexes. Hover bars for exact %.">📅 AGE</span>
-                                        <span id="ageMedianDisplay" class="median-display"></span>
                                     </span>
+                                    <span id="ageMedianDisplay" class="median-display" style="display: block; margin-top: 0.25rem;"></span>
                                     <span class="chart-card-controls-row">
                                         <select id="ageChartType" onchange="changeChartType('age', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type: Choose how to visualize the age data.">
                                             <option value="bar">📊</option>
@@ -8753,8 +8753,8 @@
                                     <span class="chart-card-title-row">
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Income Distribution">💰 INCOME</span>
-                                        <span id="incomeMedianDisplay" class="median-display"></span>
                                     </span>
+                                    <span id="incomeMedianDisplay" class="median-display" style="display: block; margin-top: 0.25rem;"></span>
                                     <span class="chart-card-controls-row">
                                         <select id="incomeChartType" onchange="changeChartType('income', this.value)" class="chart-type-select has-tooltip" data-tooltip="Chart Type">
                                             <option value="bar">📊</option>
@@ -17294,7 +17294,7 @@
                 const profileName = currentProfileData?.name || 'Profile';
                 const profileVal = genderMedian.profile ? `${genderMedian.profile.value} (${genderMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
                 const genPopVal = genderMedian.genPop ? `${genderMedian.genPop.value} (${genderMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                genderMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Top: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Top: ${genPopVal}</span>`;
+                genderMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName}: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
                 genderMedianDisplay.style.display = '';
             }
             
@@ -17391,7 +17391,7 @@
                 const profileName = currentProfileData?.name || 'Profile';
                 const profileVal = ethMedian.profile ? `${ethMedian.profile.value} (${ethMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
                 const genPopVal = ethMedian.genPop ? `${ethMedian.genPop.value} (${ethMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                ethMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Top: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Top: ${genPopVal}</span>`;
+                ethMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName}: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
                 ethMedianDisplay.style.display = '';
             }
             
@@ -17569,7 +17569,7 @@
                     const profileName = currentProfileData?.name || 'Profile';
                     const profileVal = eduMedian.profile ? `${eduMedian.profile.value} (${eduMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
                     const genPopVal = eduMedian.genPop ? `${eduMedian.genPop.value} (${eduMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                    eduMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Top: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Top: ${genPopVal}</span>`;
+                    eduMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName}: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
                 }
                 
                 charts.education = new Chart(document.getElementById('educationChart'), {
@@ -17631,7 +17631,7 @@
                     const profileName = currentProfileData?.name || 'Profile';
                     const profileVal = relMedian.profile ? `${relMedian.profile.value} (${relMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
                     const genPopVal = relMedian.genPop ? `${relMedian.genPop.value} (${relMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                    relMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Top: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Top: ${genPopVal}</span>`;
+                    relMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName}: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
                 }
                 
                 charts.relationship = new Chart(document.getElementById('relationshipChart'), {
@@ -17705,7 +17705,7 @@
                     const profileName = currentProfileData?.name || 'Profile';
                     const profileVal = soMedian.profile ? `${soMedian.profile.value} (${soMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
                     const genPopVal = soMedian.genPop ? `${soMedian.genPop.value} (${soMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                    soMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Top: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Top: ${genPopVal}</span>`;
+                    soMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName}: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
                 }
                 
                 charts.sexualOrientation = new Chart(document.getElementById('sexualOrientationChart'), {
@@ -17779,7 +17779,7 @@
                     const profileName = currentProfileData?.name || 'Profile';
                     const profileVal = psMedian.profile ? `${psMedian.profile.value} (${psMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
                     const genPopVal = psMedian.genPop ? `${psMedian.genPop.value} (${psMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                    psMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Top: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Top: ${genPopVal}</span>`;
+                    psMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName}: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
                 }
                 
                 charts.parentalStatus = new Chart(document.getElementById('parentalStatusChart'), {
