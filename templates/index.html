@@ -24538,8 +24538,8 @@
                 // Determine comparison color (green if profile >= gen pop, dark red if under)
                 const isOverIndex = data.pct >= data.genPopPct;
                 const bgColor = getHeatColor(data.pct, minVal, maxVal);
-                // Dark red (#b91c1c) for under-indexing, green for over-indexing
-                const comparisonColor = isOverIndex ? '#10b981' : '#b91c1c';
+                // Bright red (#ef4444) for under-indexing, green for over-indexing
+                const comparisonColor = isOverIndex ? '#10b981' : '#ef4444';
                 
                 // Format profile and gen pop displays
                 const profileDisplay = isProjection 
@@ -24607,8 +24607,8 @@
             document.getElementById('regionalBreakdown').innerHTML = Object.entries(regionData)
                 .sort((a, b) => b[1].pct - a[1].pct)
                 .map(([region, data]) => {
-                    // Determine color based on comparison (green if profile > gen pop, dark red if under)
-                    const comparisonColor = data.pct >= data.genPopPct ? '#10b981' : '#b91c1c';
+                    // Determine color based on comparison (green if profile > gen pop, bright red if under)
+                    const comparisonColor = data.pct >= data.genPopPct ? '#10b981' : '#ef4444';
                     
                     // Format profile and gen pop displays
                     const profileDisplay = isProjection 
