@@ -16497,16 +16497,11 @@
             // Calculate max for x-axis with padding for labels (horizontal bar)
             const genderMax = genderChartType === 'bar' ? Math.max(...genderData) * 1.5 : undefined; // 50% padding for horizontal labels
             
-            // Calculate median for gender
-            const genderMedian = calculateDemographicMedian(demographics.gender, demographicsGenPop.gender, 'gender');
-            
-            // Update median display in chart header
+            // Hide median display for gender (not applicable for categorical data)
             const genderMedianDisplay = document.getElementById('genderMedianDisplay');
             if (genderMedianDisplay) {
-                const profileName = currentProfileData?.name || 'Profile';
-                const profileVal = genderMedian.profile ? `${genderMedian.profile.value} (${genderMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
-                const genPopVal = genderMedian.genPop ? `${genderMedian.genPop.value} (${genderMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                genderMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
+                genderMedianDisplay.innerHTML = '';
+                genderMedianDisplay.style.display = 'none';
             }
             
             charts.gender = new Chart(document.getElementById('genderChart'), {
@@ -16595,16 +16590,11 @@
             // Calculate max for x-axis with padding for labels (horizontal bar)
             const ethMax = ethnicityChartType === 'bar' ? Math.max(...ethData) * 1.5 : undefined; // 50% padding for horizontal labels
             
-            // Calculate median for ethnicity
-            const ethMedian = calculateDemographicMedian(demographics.ethnicity, demographicsGenPop.ethnicity, 'ethnicity');
-            
-            // Update median display in chart header
+            // Hide median display for ethnicity (not applicable for categorical data)
             const ethMedianDisplay = document.getElementById('ethnicityMedianDisplay');
             if (ethMedianDisplay) {
-                const profileName = currentProfileData?.name || 'Profile';
-                const profileVal = ethMedian.profile ? `${ethMedian.profile.value} (${ethMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
-                const genPopVal = ethMedian.genPop ? `${ethMedian.genPop.value} (${ethMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                ethMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
+                ethMedianDisplay.innerHTML = '';
+                ethMedianDisplay.style.display = 'none';
             }
             
             charts.ethnicity = new Chart(document.getElementById('ethnicityChart'), {
