@@ -2896,6 +2896,31 @@
             align-items: flex-start;
         }
         
+        .interests-dropdown {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+        
+        .interests-dropdown:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--accent-blue);
+        }
+        
+        .interests-dropdown:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .interests-dropdown option {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            padding: 0.5rem;
+        }
+        
         .interests-grid {
             background: var(--bg-card);
             border-radius: 8px;
@@ -9007,7 +9032,7 @@
                         <div class="interests-filter" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
                             <div style="display: flex; align-items: center; gap: 0.35rem;">
                                 <span style="font-size: 0.75rem; color: var(--text-secondary);">Sort:</span>
-                                <select id="interestsCategorySelect" onchange="filterInterests()" class="has-tooltip" data-tooltip="Filter by Category" style="min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                <select id="interestsCategorySelect" onchange="filterInterests()" class="interests-dropdown has-tooltip" data-tooltip="Filter by Category" style="min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
                                     <option value="all">All</option>
                                 </select>
                                 <select id="interestsSortSelect" onchange="sortInterests(this.value)" class="has-tooltip" data-tooltip="Sort Interests" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
@@ -10956,7 +10981,7 @@
             const multiplier = index / 100;
             // If multiplier would display as 0.0x (less than 0.05), show N/A
             if (multiplier < 0.05) return 'N/A';
-            return multiplier.toFixed(2) + 'x';
+            return multiplier.toFixed(1) + 'x';
         }
 
         // Profile image cache to avoid repeated API calls
@@ -12719,11 +12744,11 @@
             };
             
             // Calculate strategic metrics
-            const newViewerPct = cleanSample > 0 && totalWatchers > 0 ? ((cleanSample / totalWatchers) * 100).toFixed(2) : 0;
-            const conversionPct = totalWatchers > 0 && newSignups > 0 ? ((newSignups / totalWatchers) * 100).toFixed(2) : 0;
-            const reactivationPct = totalSignups > 0 ? ((dormantReactive / totalSignups) * 100).toFixed(2) : 0;
-            const attributionPct = totalSignups > 0 ? ((attributedSignups / totalSignups) * 100).toFixed(2) : 0;
-            const newViewerConversionPct = cleanSample > 0 ? ((newSignups / cleanSample) * 100).toFixed(2) : 0;
+            const newViewerPct = cleanSample > 0 && totalWatchers > 0 ? ((cleanSample / totalWatchers) * 100).toFixed(1) : 0;
+            const conversionPct = totalWatchers > 0 && newSignups > 0 ? ((newSignups / totalWatchers) * 100).toFixed(1) : 0;
+            const reactivationPct = totalSignups > 0 ? ((dormantReactive / totalSignups) * 100).toFixed(1) : 0;
+            const attributionPct = totalSignups > 0 ? ((attributedSignups / totalSignups) * 100).toFixed(1) : 0;
+            const newViewerConversionPct = cleanSample > 0 ? ((newSignups / cleanSample) * 100).toFixed(1) : 0;
             
             // Performance indicators
             const isFastConversion = avgDaysToSignup !== 'N/A' && parseFloat(avgDaysToSignup) < 7;
@@ -12840,7 +12865,7 @@
                     ${topEpisodes.length > 0 ? `
                         <div class="episode-performance-grid">
                             ${topEpisodes.map((ep, idx) => {
-                                const episodePct = totalSignups > 0 ? ((ep.signups / totalSignups) * 100).toFixed(2) : 0;
+                                const episodePct = totalSignups > 0 ? ((ep.signups / totalSignups) * 100).toFixed(1) : 0;
                                 return `
                                     <div class="episode-performance-card ${idx === 0 ? 'top-performer' : ''} has-tooltip" data-tooltip="Episode ${ep.episode}: Drove ${formatNumber(ep.signups)} platform signups (${episodePct}% of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
                                         <div class="episode-rank">#${idx + 1}</div>
@@ -12857,8 +12882,8 @@
                         </div>
                         <div class="performance-insight">
                             <strong>Content Strategy Insight:</strong> 
-                            ${topEpisodes[0] ? `Episode ${topEpisodes[0].episode} drove the highest subscriber acquisition (${formatNumber(topEpisodes[0].signups)} signups, ${((topEpisodes[0].signups / totalSignups) * 100).toFixed(2)}% of total). ` : ''}
-                            ${topEpisodes.length > 1 ? `Top 3 episodes accounted for ${((topEpisodes.slice(0, 3).reduce((sum, ep) => sum + (ep.signups || 0), 0) / totalSignups) * 100).toFixed(2)}% of all signups, ` : ''}
+                            ${topEpisodes[0] ? `Episode ${topEpisodes[0].episode} drove the highest subscriber acquisition (${formatNumber(topEpisodes[0].signups)} signups, ${((topEpisodes[0].signups / totalSignups) * 100).toFixed(1)}% of total). ` : ''}
+                            ${topEpisodes.length > 1 ? `Top 3 episodes accounted for ${((topEpisodes.slice(0, 3).reduce((sum, ep) => sum + (ep.signups || 0), 0) / totalSignups) * 100).toFixed(1)}% of all signups, ` : ''}
                             indicating ${topEpisodes.length > 0 && topEpisodes[0].signups > (totalSignups / topEpisodes.length) ? 'strong episode-level performance' : 'distributed engagement'}.
                         </div>
                     ` : '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No episode performance data available</p>'}
@@ -12943,7 +12968,7 @@
                 recommendations.push({
                     icon: '📺',
                     title: 'Amplify Top-Performing Episodes',
-                    insight: `Episode ${topEpisodes[0].episode} drove ${((topEpisodes[0].signups / totalSignups) * 100).toFixed(2)}% of signups. Use this episode in marketing campaigns, trailers, and platform promotion to maximize subscriber acquisition.`
+                    insight: `Episode ${topEpisodes[0].episode} drove ${((topEpisodes[0].signups / totalSignups) * 100).toFixed(1)}% of signups. Use this episode in marketing campaigns, trailers, and platform promotion to maximize subscriber acquisition.`
                 });
             }
             
@@ -13062,7 +13087,7 @@
                     const topEpisode = episodes[0];
                     const top3Total = episodes.slice(0, 3).reduce((sum, ep) => sum + (parseNumber(ep.signups) || 0), 0);
                     const allTotal = episodes.reduce((sum, ep) => sum + (parseNumber(ep.signups) || 0), 0);
-                    const top3Pct = allTotal > 0 ? ((top3Total / allTotal) * 100).toFixed(2) : 0;
+                    const top3Pct = allTotal > 0 ? ((top3Total / allTotal) * 100).toFixed(1) : 0;
                     
                     insights.push({
                         icon: '🎬',
@@ -13441,7 +13466,7 @@
                                                         label += ' (cumulative)';
                                                     } else {
                                                         const pct = episodeSignups[context.dataIndex] / cumulativeSignups[cumulativeSignups.length - 1] * 100;
-                                                        label += ` (${pct.toFixed(2)}% of total)`;
+                                                        label += ` (${pct.toFixed(1)}% of total)`;
                                                     }
                                                 }
                                                 return label;
@@ -13595,7 +13620,7 @@
                         const days = parseInt(t.timing) || 999;
                         return days <= 7;
                     }).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
-                    const earlyPct = totalSignups > 0 ? ((earlySignups / totalSignups) * 100).toFixed(2) : 0;
+                    const earlyPct = totalSignups > 0 ? ((earlySignups / totalSignups) * 100).toFixed(1) : 0;
                     
                     if (earlyPct > 50) {
                         insights.push({
@@ -13626,19 +13651,19 @@
                     const days = parseInt(t.timing) || 999;
                     return days <= 7;
                 }).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
-                const earlyPct = totalSignups > 0 ? ((earlySignups / totalSignups) * 100).toFixed(2) : 0;
+                const earlyPct = totalSignups > 0 ? ((earlySignups / totalSignups) * 100).toFixed(1) : 0;
                 
                 const midSignups = timingData.filter(t => {
                     const days = parseInt(t.timing) || 999;
                     return days > 7 && days <= 30;
                 }).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
-                const midPct = totalSignups > 0 ? ((midSignups / totalSignups) * 100).toFixed(2) : 0;
+                const midPct = totalSignups > 0 ? ((midSignups / totalSignups) * 100).toFixed(1) : 0;
                 
                 const lateSignups = timingData.filter(t => {
                     const days = parseInt(t.timing) || 999;
                     return days > 30;
                 }).reduce((sum, t) => sum + (parseNumber(t.signups) || 0), 0);
-                const latePct = totalSignups > 0 ? ((lateSignups / totalSignups) * 100).toFixed(2) : 0;
+                const latePct = totalSignups > 0 ? ((lateSignups / totalSignups) * 100).toFixed(1) : 0;
                 
                 metricsContainer.innerHTML = `
                     <div class="timing-metric-card has-tooltip" data-tooltip="Average Days to Signup: Mean number of days between when the show became available and when users signed up for the platform. Lower numbers indicate faster conversion and immediate platform value.">
@@ -13915,7 +13940,7 @@
                         const totalUsers = parseNumber(totalTouchpoint.users) || 0;
                         const firstWatch = touchpoints.find(t => t.touchpoint === '1');
                         const firstWatchUsers = firstWatch ? parseNumber(firstWatch.users) || 0 : 0;
-                        const firstWatchPct = totalUsers > 0 ? ((firstWatchUsers / totalUsers) * 100).toFixed(2) : 0;
+                        const firstWatchPct = totalUsers > 0 ? ((firstWatchUsers / totalUsers) * 100).toFixed(1) : 0;
                         insights.push({
                             icon: '🔄',
                             text: `<strong>${formatNumber(totalUsers)} users</strong> watched this show within their first 5 platform watches after signup. ${firstWatchPct}% watched it as their first show, demonstrating strong immediate appeal.`
@@ -16160,10 +16185,10 @@
             if (topItem) {
                 summaryItems.push({
                     icon: '🔥',
-                    text: `Strongest signal: <strong style="color: var(--accent-lime);">${topItem.name}</strong> (${topItem.category}) <span style="font-size: 0.75rem; color: var(--text-secondary);">${topItem.pct.toFixed(2)}% | GP: ${topItem.genPop.toFixed(2)}%</span>`,
+                    text: `Strongest signal: <strong style="color: var(--accent-lime);">${topItem.name}</strong> (${topItem.category}) <span style="font-size: 0.75rem; color: var(--text-secondary);">${topItem.pct.toFixed(1)}% | GP: ${topItem.genPop.toFixed(1)}%</span>`,
                     value: topItem.index,
                     valueClass: 'high',
-                    tooltip: `Strongest Signal: The single item where this audience most over-indexes vs Gen Pop. ${topItem.name} has an index of ${formatIndex(topItem.index)} (Profile: ${topItem.pct.toFixed(2)}%, Gen Pop: ${topItem.genPop.toFixed(2)}%), meaning this audience is ${(topItem.index / 100).toFixed(2)}x more likely to engage with it than the average American.`
+                    tooltip: `Strongest Signal: The single item where this audience most over-indexes vs Gen Pop. ${topItem.name} has an index of ${formatIndex(topItem.index)} (Profile: ${topItem.pct.toFixed(1)}%, Gen Pop: ${topItem.genPop.toFixed(1)}%), meaning this audience is ${(topItem.index / 100).toFixed(1)}x more likely to engage with it than the average American.`
                 });
             }
             
@@ -16233,11 +16258,11 @@
                 .slice(0, 6);
             
             document.getElementById('behavioralTopCategories').innerHTML = topCategories.map(([cat, stats]) => `
-                <div class="behavioral-top-cat has-tooltip" data-tooltip="${cat}: ${stats.count} items tracked, avg profile ${stats.avgPct.toFixed(2)}%, avg Gen Pop ${stats.avgGenPop.toFixed(2)}%, avg index ${formatIndex(stats.avgIndex)}, ${stats.highCount} strong over-indexers (>1.5x).">
+                <div class="behavioral-top-cat has-tooltip" data-tooltip="${cat}: ${stats.count} items tracked, avg profile ${stats.avgPct.toFixed(1)}%, avg Gen Pop ${stats.avgGenPop.toFixed(1)}%, avg index ${formatIndex(stats.avgIndex)}, ${stats.highCount} strong over-indexers (>1.5x).">
                     <span class="cat-name">${cat}</span>
                     <span class="cat-stats">
-                        <span class="cat-pct" style="color: var(--accent-lime); min-width: 45px; text-align: right;">${stats.avgPct.toFixed(2)}%</span>
-                        <span class="cat-gp" style="color: var(--text-secondary); min-width: 55px; text-align: right;">GP: ${stats.avgGenPop.toFixed(2)}%</span>
+                        <span class="cat-pct" style="color: var(--accent-lime); min-width: 45px; text-align: right;">${stats.avgPct.toFixed(1)}%</span>
+                        <span class="cat-gp" style="color: var(--text-secondary); min-width: 55px; text-align: right;">GP: ${stats.avgGenPop.toFixed(1)}%</span>
                         <span class="cat-idx" style="color: ${stats.avgIndex >= 100 ? '#10b981' : '#ef4444'}; min-width: 45px; text-align: right;">${formatIndex(stats.avgIndex)}</span>
                         <span class="cat-high" style="min-width: 35px; text-align: right;">${stats.highCount > 0 ? stats.highCount + '🔥' : '-'}</span>
                     </span>
@@ -16299,8 +16324,8 @@
             if (bigBoxMatches.length > 0) {
                 activations.push({
                     icon: '🏬',
-                    text: `<strong>Big Box:</strong> ${bigBoxMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${bigBoxMatches[0].pct.toFixed(2)}% | GP: ${bigBoxMatches[0].genPop.toFixed(2)}% | ${formatIndex(bigBoxMatches[0].index)})</span>`,
-                    tooltip: `Big Box Retail: This audience shops at ${bigBoxMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store activations, endcap displays, or retail media network ads.`
+                    text: `<strong>Big Box:</strong> ${bigBoxMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${bigBoxMatches[0].pct.toFixed(1)}% | GP: ${bigBoxMatches[0].genPop.toFixed(1)}% | ${formatIndex(bigBoxMatches[0].index)})</span>`,
+                    tooltip: `Big Box Retail: This audience shops at ${bigBoxMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store activations, endcap displays, or retail media network ads.`
                 });
             }
             
@@ -16311,8 +16336,8 @@
             if (deptMatches.length > 0) {
                 activations.push({
                     icon: '👔',
-                    text: `<strong>Dept Store:</strong> ${deptMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${deptMatches[0].pct.toFixed(2)}% | GP: ${deptMatches[0].genPop.toFixed(2)}% | ${formatIndex(deptMatches[0].index)})</span>`,
-                    tooltip: `Department Stores: This audience shops at ${deptMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider premium placement, store events, or loyalty program partnerships.`
+                    text: `<strong>Dept Store:</strong> ${deptMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${deptMatches[0].pct.toFixed(1)}% | GP: ${deptMatches[0].genPop.toFixed(1)}% | ${formatIndex(deptMatches[0].index)})</span>`,
+                    tooltip: `Department Stores: This audience shops at ${deptMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider premium placement, store events, or loyalty program partnerships.`
                 });
             }
             
@@ -16323,8 +16348,8 @@
             if (ecomMatches.length > 0) {
                 activations.push({
                     icon: '🛒',
-                    text: `<strong>E-commerce:</strong> ${ecomMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${ecomMatches[0].pct.toFixed(2)}% | GP: ${ecomMatches[0].genPop.toFixed(2)}% | ${formatIndex(ecomMatches[0].index)})</span>`,
-                    tooltip: `E-commerce: This audience shops online at ${ecomMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider sponsored products, display ads, or marketplace partnerships.`
+                    text: `<strong>E-commerce:</strong> ${ecomMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${ecomMatches[0].pct.toFixed(1)}% | GP: ${ecomMatches[0].genPop.toFixed(1)}% | ${formatIndex(ecomMatches[0].index)})</span>`,
+                    tooltip: `E-commerce: This audience shops online at ${ecomMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider sponsored products, display ads, or marketplace partnerships.`
                 });
             }
             
@@ -16335,8 +16360,8 @@
             if (groceryMatches.length > 0) {
                 activations.push({
                     icon: '🥬',
-                    text: `<strong>Grocery:</strong> ${groceryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${groceryMatches[0].pct.toFixed(2)}% | GP: ${groceryMatches[0].genPop.toFixed(2)}% | ${formatIndex(groceryMatches[0].index)})</span>`,
-                    tooltip: `Grocery: This audience shops at ${groceryMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store sampling, circular ads, or loyalty card targeting.`
+                    text: `<strong>Grocery:</strong> ${groceryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${groceryMatches[0].pct.toFixed(1)}% | GP: ${groceryMatches[0].genPop.toFixed(1)}% | ${formatIndex(groceryMatches[0].index)})</span>`,
+                    tooltip: `Grocery: This audience shops at ${groceryMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store sampling, circular ads, or loyalty card targeting.`
                 });
             }
             
@@ -16349,8 +16374,8 @@
             if (searchMatches.length > 0) {
                 activations.push({
                     icon: '🔍',
-                    text: `<strong>Search:</strong> ${searchMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${searchMatches[0].pct.toFixed(2)}% | GP: ${searchMatches[0].genPop.toFixed(2)}% | ${formatIndex(searchMatches[0].index)})</span>`,
-                    tooltip: `Search Engines: This audience uses ${searchMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Prioritize SEM/PPC campaigns on these platforms for maximum reach.`
+                    text: `<strong>Search:</strong> ${searchMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${searchMatches[0].pct.toFixed(1)}% | GP: ${searchMatches[0].genPop.toFixed(1)}% | ${formatIndex(searchMatches[0].index)})</span>`,
+                    tooltip: `Search Engines: This audience uses ${searchMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Prioritize SEM/PPC campaigns on these platforms for maximum reach.`
                 });
             }
             
@@ -16367,8 +16392,8 @@
             if (foodDeliveryMatches.length > 0) {
                 activations.push({
                     icon: '🍔',
-                    text: `<strong>Food Delivery:</strong> ${foodDeliveryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${foodDeliveryMatches[0].pct.toFixed(2)}% | GP: ${foodDeliveryMatches[0].genPop.toFixed(2)}% | ${formatIndex(foodDeliveryMatches[0].index)})</span>`,
-                    tooltip: `Food Delivery: This audience uses ${foodDeliveryMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider sponsored placements, promo code partnerships, or in-app advertising.`
+                    text: `<strong>Food Delivery:</strong> ${foodDeliveryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${foodDeliveryMatches[0].pct.toFixed(1)}% | GP: ${foodDeliveryMatches[0].genPop.toFixed(1)}% | ${formatIndex(foodDeliveryMatches[0].index)})</span>`,
+                    tooltip: `Food Delivery: This audience uses ${foodDeliveryMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider sponsored placements, promo code partnerships, or in-app advertising.`
                 });
             }
             
@@ -16379,8 +16404,8 @@
             if (rideshareMatches.length > 0) {
                 activations.push({
                     icon: '🚗',
-                    text: `<strong>Rideshare:</strong> ${rideshareMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${rideshareMatches[0].pct.toFixed(2)}% | GP: ${rideshareMatches[0].genPop.toFixed(2)}% | ${formatIndex(rideshareMatches[0].index)})</span>`,
-                    tooltip: `Rideshare: This audience uses ${rideshareMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-app ads, promo partnerships, or event transportation sponsorships.`
+                    text: `<strong>Rideshare:</strong> ${rideshareMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${rideshareMatches[0].pct.toFixed(1)}% | GP: ${rideshareMatches[0].genPop.toFixed(1)}% | ${formatIndex(rideshareMatches[0].index)})</span>`,
+                    tooltip: `Rideshare: This audience uses ${rideshareMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-app ads, promo partnerships, or event transportation sponsorships.`
                 });
             }
             
@@ -16391,8 +16416,8 @@
             if (fitnessMatches.length > 0) {
                 activations.push({
                     icon: '💪',
-                    text: `<strong>Fitness:</strong> ${fitnessMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${fitnessMatches[0].pct.toFixed(2)}% | GP: ${fitnessMatches[0].genPop.toFixed(2)}% | ${formatIndex(fitnessMatches[0].index)})</span>`,
-                    tooltip: `Fitness/Wellness: This audience uses ${fitnessMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider health-focused partnerships, workout integrations, or wellness sponsorships.`
+                    text: `<strong>Fitness:</strong> ${fitnessMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${fitnessMatches[0].pct.toFixed(1)}% | GP: ${fitnessMatches[0].genPop.toFixed(1)}% | ${formatIndex(fitnessMatches[0].index)})</span>`,
+                    tooltip: `Fitness/Wellness: This audience uses ${fitnessMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider health-focused partnerships, workout integrations, or wellness sponsorships.`
                 });
             }
             
@@ -16403,8 +16428,8 @@
             if (financeMatches.length > 0) {
                 activations.push({
                     icon: '💳',
-                    text: `<strong>Finance:</strong> ${financeMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${financeMatches[0].pct.toFixed(2)}% | GP: ${financeMatches[0].genPop.toFixed(2)}% | ${formatIndex(financeMatches[0].index)})</span>`,
-                    tooltip: `Finance/Payments: This audience uses ${financeMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider payment integrations, cashback offers, or fintech partnerships.`
+                    text: `<strong>Finance:</strong> ${financeMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${financeMatches[0].pct.toFixed(1)}% | GP: ${financeMatches[0].genPop.toFixed(1)}% | ${formatIndex(financeMatches[0].index)})</span>`,
+                    tooltip: `Finance/Payments: This audience uses ${financeMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider payment integrations, cashback offers, or fintech partnerships.`
                 });
             }
             
@@ -16415,8 +16440,8 @@
             if (travelMatches.length > 0) {
                 activations.push({
                     icon: '✈️',
-                    text: `<strong>Travel:</strong> ${travelMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${travelMatches[0].pct.toFixed(2)}% | GP: ${travelMatches[0].genPop.toFixed(2)}% | ${formatIndex(travelMatches[0].index)})</span>`,
-                    tooltip: `Travel: This audience uses ${travelMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider travel package partnerships, destination marketing, or loyalty program integrations.`
+                    text: `<strong>Travel:</strong> ${travelMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${travelMatches[0].pct.toFixed(1)}% | GP: ${travelMatches[0].genPop.toFixed(1)}% | ${formatIndex(travelMatches[0].index)})</span>`,
+                    tooltip: `Travel: This audience uses ${travelMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider travel package partnerships, destination marketing, or loyalty program integrations.`
                 });
             }
             
@@ -16427,8 +16452,8 @@
             if (musicMatches.length > 0) {
                 activations.push({
                     icon: '🎵',
-                    text: `<strong>Music/Audio:</strong> ${musicMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${musicMatches[0].pct.toFixed(2)}% | GP: ${musicMatches[0].genPop.toFixed(2)}% | ${formatIndex(musicMatches[0].index)})</span>`,
-                    tooltip: `Music/Audio: This audience uses ${musicMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider audio ads, playlist sponsorships, or podcast integrations.`
+                    text: `<strong>Music/Audio:</strong> ${musicMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${musicMatches[0].pct.toFixed(1)}% | GP: ${musicMatches[0].genPop.toFixed(1)}% | ${formatIndex(musicMatches[0].index)})</span>`,
+                    tooltip: `Music/Audio: This audience uses ${musicMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider audio ads, playlist sponsorships, or podcast integrations.`
                 });
             }
             
@@ -16439,8 +16464,8 @@
             if (gamingMatches.length > 0) {
                 activations.push({
                     icon: '🎮',
-                    text: `<strong>Gaming:</strong> ${gamingMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${gamingMatches[0].pct.toFixed(2)}% | GP: ${gamingMatches[0].genPop.toFixed(2)}% | ${formatIndex(gamingMatches[0].index)})</span>`,
-                    tooltip: `Gaming: This audience engages with ${gamingMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-game advertising, esports sponsorships, or gaming influencer partnerships.`
+                    text: `<strong>Gaming:</strong> ${gamingMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${gamingMatches[0].pct.toFixed(1)}% | GP: ${gamingMatches[0].genPop.toFixed(1)}% | ${formatIndex(gamingMatches[0].index)})</span>`,
+                    tooltip: `Gaming: This audience engages with ${gamingMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-game advertising, esports sponsorships, or gaming influencer partnerships.`
                 });
             }
             
@@ -16459,8 +16484,8 @@
             if (burgerMatches.length > 0) {
                 activations.push({
                     icon: '🍔',
-                    text: `<strong>QSR Burger:</strong> ${burgerMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${burgerMatches[0].pct.toFixed(2)}% | GP: ${burgerMatches[0].genPop.toFixed(2)}% | ${formatIndex(burgerMatches[0].index)})</span>`,
-                    tooltip: `QSR Burgers: This audience dines at ${burgerMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, app partnerships, or sponsorship activations.`
+                    text: `<strong>QSR Burger:</strong> ${burgerMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${burgerMatches[0].pct.toFixed(1)}% | GP: ${burgerMatches[0].genPop.toFixed(1)}% | ${formatIndex(burgerMatches[0].index)})</span>`,
+                    tooltip: `QSR Burgers: This audience dines at ${burgerMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, app partnerships, or sponsorship activations.`
                 });
             }
             
@@ -16471,8 +16496,8 @@
             if (chickenMatches.length > 0) {
                 activations.push({
                     icon: '🍗',
-                    text: `<strong>QSR Chicken:</strong> ${chickenMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${chickenMatches[0].pct.toFixed(2)}% | GP: ${chickenMatches[0].genPop.toFixed(2)}% | ${formatIndex(chickenMatches[0].index)})</span>`,
-                    tooltip: `QSR Chicken: This audience dines at ${chickenMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, app partnerships, or sponsorship activations.`
+                    text: `<strong>QSR Chicken:</strong> ${chickenMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${chickenMatches[0].pct.toFixed(1)}% | GP: ${chickenMatches[0].genPop.toFixed(1)}% | ${formatIndex(chickenMatches[0].index)})</span>`,
+                    tooltip: `QSR Chicken: This audience dines at ${chickenMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, app partnerships, or sponsorship activations.`
                 });
             }
             
@@ -16483,8 +16508,8 @@
             if (pizzaMatches.length > 0) {
                 activations.push({
                     icon: '🍕',
-                    text: `<strong>QSR Pizza:</strong> ${pizzaMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${pizzaMatches[0].pct.toFixed(2)}% | GP: ${pizzaMatches[0].genPop.toFixed(2)}% | ${formatIndex(pizzaMatches[0].index)})</span>`,
-                    tooltip: `QSR Pizza: This audience orders from ${pizzaMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider delivery app partnerships, box toppers, or loyalty program integrations.`
+                    text: `<strong>QSR Pizza:</strong> ${pizzaMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${pizzaMatches[0].pct.toFixed(1)}% | GP: ${pizzaMatches[0].genPop.toFixed(1)}% | ${formatIndex(pizzaMatches[0].index)})</span>`,
+                    tooltip: `QSR Pizza: This audience orders from ${pizzaMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider delivery app partnerships, box toppers, or loyalty program integrations.`
                 });
             }
             
@@ -16495,8 +16520,8 @@
             if (mexicanMatches.length > 0) {
                 activations.push({
                     icon: '🌮',
-                    text: `<strong>QSR Mexican:</strong> ${mexicanMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${mexicanMatches[0].pct.toFixed(2)}% | GP: ${mexicanMatches[0].genPop.toFixed(2)}% | ${formatIndex(mexicanMatches[0].index)})</span>`,
-                    tooltip: `QSR Mexican: This audience dines at ${mexicanMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, catering partnerships, or app integrations.`
+                    text: `<strong>QSR Mexican:</strong> ${mexicanMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${mexicanMatches[0].pct.toFixed(1)}% | GP: ${mexicanMatches[0].genPop.toFixed(1)}% | ${formatIndex(mexicanMatches[0].index)})</span>`,
+                    tooltip: `QSR Mexican: This audience dines at ${mexicanMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, catering partnerships, or app integrations.`
                 });
             }
             
@@ -16507,8 +16532,8 @@
             if (sandwichMatches.length > 0) {
                 activations.push({
                     icon: '🥪',
-                    text: `<strong>QSR Subs:</strong> ${sandwichMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${sandwichMatches[0].pct.toFixed(2)}% | GP: ${sandwichMatches[0].genPop.toFixed(2)}% | ${formatIndex(sandwichMatches[0].index)})</span>`,
-                    tooltip: `QSR Sandwiches: This audience dines at ${sandwichMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider catering partnerships, loyalty programs, or delivery promotions.`
+                    text: `<strong>QSR Subs:</strong> ${sandwichMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${sandwichMatches[0].pct.toFixed(1)}% | GP: ${sandwichMatches[0].genPop.toFixed(1)}% | ${formatIndex(sandwichMatches[0].index)})</span>`,
+                    tooltip: `QSR Sandwiches: This audience dines at ${sandwichMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider catering partnerships, loyalty programs, or delivery promotions.`
                 });
             }
             
@@ -16519,8 +16544,8 @@
             if (coffeeMatches.length > 0) {
                 activations.push({
                     icon: '☕',
-                    text: `<strong>Coffee/Cafe:</strong> ${coffeeMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${coffeeMatches[0].pct.toFixed(2)}% | GP: ${coffeeMatches[0].genPop.toFixed(2)}% | ${formatIndex(coffeeMatches[0].index)})</span>`,
-                    tooltip: `Coffee/Cafe: This audience frequents ${coffeeMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider morning daypart targeting, rewards program partnerships, or in-store activations.`
+                    text: `<strong>Coffee/Cafe:</strong> ${coffeeMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${coffeeMatches[0].pct.toFixed(1)}% | GP: ${coffeeMatches[0].genPop.toFixed(1)}% | ${formatIndex(coffeeMatches[0].index)})</span>`,
+                    tooltip: `Coffee/Cafe: This audience frequents ${coffeeMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider morning daypart targeting, rewards program partnerships, or in-store activations.`
                 });
             }
             
@@ -16531,8 +16556,8 @@
             if (asianMatches.length > 0) {
                 activations.push({
                     icon: '🥡',
-                    text: `<strong>Asian QSR:</strong> ${asianMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${asianMatches[0].pct.toFixed(2)}% | GP: ${asianMatches[0].genPop.toFixed(2)}% | ${formatIndex(asianMatches[0].index)})</span>`,
-                    tooltip: `Asian QSR: This audience dines at ${asianMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider delivery partnerships, cultural event sponsorships, or app promotions.`
+                    text: `<strong>Asian QSR:</strong> ${asianMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${asianMatches[0].pct.toFixed(1)}% | GP: ${asianMatches[0].genPop.toFixed(1)}% | ${formatIndex(asianMatches[0].index)})</span>`,
+                    tooltip: `Asian QSR: This audience dines at ${asianMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider delivery partnerships, cultural event sponsorships, or app promotions.`
                 });
             }
             
@@ -16543,8 +16568,8 @@
             if (casualMatches.length > 0) {
                 activations.push({
                     icon: '🍽️',
-                    text: `<strong>Casual Dining:</strong> ${casualMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${casualMatches[0].pct.toFixed(2)}% | GP: ${casualMatches[0].genPop.toFixed(2)}% | ${formatIndex(casualMatches[0].index)})</span>`,
-                    tooltip: `Casual Dining: This audience dines at ${casualMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider gift card partnerships, event hosting, or loyalty program integrations.`
+                    text: `<strong>Casual Dining:</strong> ${casualMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${casualMatches[0].pct.toFixed(1)}% | GP: ${casualMatches[0].genPop.toFixed(1)}% | ${formatIndex(casualMatches[0].index)})</span>`,
+                    tooltip: `Casual Dining: This audience dines at ${casualMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider gift card partnerships, event hosting, or loyalty program integrations.`
                 });
             }
             
@@ -16555,8 +16580,8 @@
             if (fastCasualMatches.length > 0) {
                 activations.push({
                     icon: '🥗',
-                    text: `<strong>Fast Casual:</strong> ${fastCasualMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${fastCasualMatches[0].pct.toFixed(2)}% | GP: ${fastCasualMatches[0].genPop.toFixed(2)}% | ${formatIndex(fastCasualMatches[0].index)})</span>`,
-                    tooltip: `Fast Casual: This audience dines at ${fastCasualMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider health-focused partnerships, catering, or corporate meal programs.`
+                    text: `<strong>Fast Casual:</strong> ${fastCasualMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${fastCasualMatches[0].pct.toFixed(1)}% | GP: ${fastCasualMatches[0].genPop.toFixed(1)}% | ${formatIndex(fastCasualMatches[0].index)})</span>`,
+                    tooltip: `Fast Casual: This audience dines at ${fastCasualMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider health-focused partnerships, catering, or corporate meal programs.`
                 });
             }
             
@@ -16567,8 +16592,8 @@
             if (fineMatches.length > 0) {
                 activations.push({
                     icon: '🥂',
-                    text: `<strong>Fine Dining:</strong> ${fineMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${fineMatches[0].pct.toFixed(2)}% | GP: ${fineMatches[0].genPop.toFixed(2)}% | ${formatIndex(fineMatches[0].index)})</span>`,
-                    tooltip: `Fine Dining: This audience dines at ${fineMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider premium experiences, wine/spirits partnerships, or VIP events.`
+                    text: `<strong>Fine Dining:</strong> ${fineMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${fineMatches[0].pct.toFixed(1)}% | GP: ${fineMatches[0].genPop.toFixed(1)}% | ${formatIndex(fineMatches[0].index)})</span>`,
+                    tooltip: `Fine Dining: This audience dines at ${fineMatches.map(b => `${b.name} (${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)})`).join('; ')}. Consider premium experiences, wine/spirits partnerships, or VIP events.`
                 });
             }
             
@@ -16578,8 +16603,8 @@
                 if (purchaseBrands.length > 0) {
                     activations.push({
                         icon: '🛍️',
-                        text: `<strong>Shopping:</strong> Partner with ${purchaseBrands.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${purchaseBrands[0].pct.toFixed(2)}% | GP: ${purchaseBrands[0].genPop.toFixed(2)}%)</span>`,
-                        tooltip: `Shopping Partnership: This audience strongly over-indexes on these brands (${purchaseBrands.map(b => `${b.name}: ${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)}`).join('; ')}). Co-branded campaigns or retail activations could drive high engagement.`
+                        text: `<strong>Shopping:</strong> Partner with ${purchaseBrands.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${purchaseBrands[0].pct.toFixed(1)}% | GP: ${purchaseBrands[0].genPop.toFixed(1)}%)</span>`,
+                        tooltip: `Shopping Partnership: This audience strongly over-indexes on these brands (${purchaseBrands.map(b => `${b.name}: ${b.pct.toFixed(1)}% vs GP ${b.genPop.toFixed(1)}%, ${formatIndex(b.index)}`).join('; ')}). Co-branded campaigns or retail activations could drive high engagement.`
                     });
                 }
             }
@@ -16591,8 +16616,8 @@
             if (streamingBrands.length > 0) {
                 activations.push({
                     icon: '📺',
-                    text: `<strong>Content:</strong> ${streamingBrands[0].name} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${streamingBrands[0].pct.toFixed(2)}% | GP: ${streamingBrands[0].genPop.toFixed(2)}% | ${formatIndex(streamingBrands[0].index)})</span>`,
-                    tooltip: `Content Integration: ${streamingBrands[0].name} is a top streaming/content choice for this audience (${streamingBrands[0].pct.toFixed(2)}% vs GP ${streamingBrands[0].genPop.toFixed(2)}%). Consider product placement, sponsored content, or ad buys on this platform.`
+                    text: `<strong>Content:</strong> ${streamingBrands[0].name} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${streamingBrands[0].pct.toFixed(1)}% | GP: ${streamingBrands[0].genPop.toFixed(1)}% | ${formatIndex(streamingBrands[0].index)})</span>`,
+                    tooltip: `Content Integration: ${streamingBrands[0].name} is a top streaming/content choice for this audience (${streamingBrands[0].pct.toFixed(1)}% vs GP ${streamingBrands[0].genPop.toFixed(1)}%). Consider product placement, sponsored content, or ad buys on this platform.`
                 });
             }
             
@@ -16603,8 +16628,8 @@
             if (socialBrands.length > 0) {
                 activations.push({
                     icon: '📱',
-                    text: `<strong>Social:</strong> Focus on ${socialBrands[0].name} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${socialBrands[0].pct.toFixed(2)}% | GP: ${socialBrands[0].genPop.toFixed(2)}% | ${formatIndex(socialBrands[0].index)})</span>`,
-                    tooltip: `Social Media Focus: ${socialBrands[0].name} is the preferred social platform for this audience (${socialBrands[0].pct.toFixed(2)}% vs GP ${socialBrands[0].genPop.toFixed(2)}%). Prioritize paid media and organic content on this channel for maximum reach.`
+                    text: `<strong>Social:</strong> Focus on ${socialBrands[0].name} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${socialBrands[0].pct.toFixed(1)}% | GP: ${socialBrands[0].genPop.toFixed(1)}% | ${formatIndex(socialBrands[0].index)})</span>`,
+                    tooltip: `Social Media Focus: ${socialBrands[0].name} is the preferred social platform for this audience (${socialBrands[0].pct.toFixed(1)}% vs GP ${socialBrands[0].genPop.toFixed(1)}%). Prioritize paid media and organic content on this channel for maximum reach.`
                 });
             }
             
@@ -16615,8 +16640,8 @@
             if (sportsItems.length > 0) {
                 activations.push({
                     icon: '🏆',
-                    text: `<strong>Sports:</strong> ${sportsItems[0].name} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${sportsItems[0].pct.toFixed(2)}% | GP: ${sportsItems[0].genPop.toFixed(2)}% | ${formatIndex(sportsItems[0].index)})</span>`,
-                    tooltip: `Sports Sponsorship: This audience over-indexes on ${sportsItems[0].name} (${sportsItems[0].pct.toFixed(2)}% vs GP ${sportsItems[0].genPop.toFixed(2)}%, ${formatIndex(sportsItems[0].index)}). Consider sponsorship, athlete partnerships, or sports-related activations.`
+                    text: `<strong>Sports:</strong> ${sportsItems[0].name} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${sportsItems[0].pct.toFixed(1)}% | GP: ${sportsItems[0].genPop.toFixed(1)}% | ${formatIndex(sportsItems[0].index)})</span>`,
+                    tooltip: `Sports Sponsorship: This audience over-indexes on ${sportsItems[0].name} (${sportsItems[0].pct.toFixed(1)}% vs GP ${sportsItems[0].genPop.toFixed(1)}%, ${formatIndex(sportsItems[0].index)}). Consider sponsorship, athlete partnerships, or sports-related activations.`
                 });
             }
             
@@ -16663,10 +16688,10 @@
                 const profilePct = topGender[1];
                 const profileDisplay = isProjection 
                     ? formatNumber(Math.round((profilePct / 100) * sampleSize))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjection 
                     ? formatNumber(Math.round((genderGenPopPct / 100) * US_POP_DEMO_INSIGHTS))
-                    : genderGenPopPct.toFixed(2) + '%';
+                    : genderGenPopPct.toFixed(1) + '%';
                 summaryItems.push({
                     icon: topGender[0].toLowerCase().includes('female') ? '👩' : topGender[0].toLowerCase().includes('male') ? '👨' : '👤',
                     text: `${topGender[0]}`,
@@ -16689,10 +16714,10 @@
                 const displayAge = getAgeDisplayLabel(topAge[0]);
                 const profileDisplay = isProjection 
                     ? formatNumber(Math.round((profilePct / 100) * sampleSize))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjection 
                     ? formatNumber(Math.round((ageGenPopPct / 100) * US_POP_DEMO_INSIGHTS))
-                    : ageGenPopPct.toFixed(2) + '%';
+                    : ageGenPopPct.toFixed(1) + '%';
                 summaryItems.push({
                     icon: '📅',
                     text: `Core age: ${displayAge}`,
@@ -16714,10 +16739,10 @@
                 const profilePct = topIncome[1];
                 const profileDisplay = isProjection 
                     ? formatNumber(Math.round((profilePct / 100) * sampleSize))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjection 
                     ? formatNumber(Math.round((incomeGenPopPct / 100) * US_POP_DEMO_INSIGHTS))
-                    : incomeGenPopPct.toFixed(2) + '%';
+                    : incomeGenPopPct.toFixed(1) + '%';
                 summaryItems.push({
                     icon: '💰',
                     text: `Top income: ${topIncome[0]}`,
@@ -16739,10 +16764,10 @@
                 const profilePct = topEth[1];
                 const profileDisplay = isProjection 
                     ? formatNumber(Math.round((profilePct / 100) * sampleSize))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjection 
                     ? formatNumber(Math.round((ethGenPopPct / 100) * US_POP_DEMO_INSIGHTS))
-                    : ethGenPopPct.toFixed(2) + '%';
+                    : ethGenPopPct.toFixed(1) + '%';
                 summaryItems.push({
                     icon: '🌍',
                     text: `${topEth[0]}`,
@@ -16801,10 +16826,10 @@
                 const genPopPct = d.genPopPct;
                 const profileDisplay = isProjection 
                     ? formatNumber(Math.round((profilePct / 100) * sampleSize))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjection 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_DEMO_INSIGHTS))
-                    : genPopPct.toFixed(2) + '%';
+                    : genPopPct.toFixed(1) + '%';
                 
                 differentiators.push({
                     icon: catEmoji,
@@ -16843,10 +16868,10 @@
                 const genPopPct = u.genPopPct;
                 const profileDisplay = isProjection 
                     ? formatNumber(Math.round((profilePct / 100) * sampleSize))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjection 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_DEMO_INSIGHTS))
-                    : genPopPct.toFixed(2) + '%';
+                    : genPopPct.toFixed(1) + '%';
                 
                 differentiators.push({
                     icon: '⚠️',
@@ -17037,8 +17062,8 @@
                     : null;
                 
                 return {
-                    profile: profileMedian !== null ? { value: profileMedian.toFixed(2), percentage: null } : null,
-                    genPop: genPopMedian !== null ? { value: genPopMedian.toFixed(2), percentage: null } : null
+                    profile: profileMedian !== null ? { value: profileMedian.toFixed(1), percentage: null } : null,
+                    genPop: genPopMedian !== null ? { value: genPopMedian.toFixed(1), percentage: null } : null
                 };
             }
             
@@ -17216,8 +17241,8 @@
             const genderMedianDisplay = document.getElementById('genderMedianDisplay');
             if (genderMedianDisplay) {
                 const profileName = currentProfileData?.name || 'Profile';
-                const profileVal = genderMedian.profile ? `${genderMedian.profile.value} (${genderMedian.profile.percentage.toFixed(2)}%)` : 'N/A';
-                const genPopVal = genderMedian.genPop ? `${genderMedian.genPop.value} (${genderMedian.genPop.percentage.toFixed(2)}%)` : 'N/A';
+                const profileVal = genderMedian.profile ? `${genderMedian.profile.value} (${genderMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
+                const genPopVal = genderMedian.genPop ? `${genderMedian.genPop.value} (${genderMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
                 genderMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Top: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Top: ${genPopVal}</span>`;
                 genderMedianDisplay.style.display = '';
             }
@@ -17313,8 +17338,8 @@
             const ethMedianDisplay = document.getElementById('ethnicityMedianDisplay');
             if (ethMedianDisplay) {
                 const profileName = currentProfileData?.name || 'Profile';
-                const profileVal = ethMedian.profile ? `${ethMedian.profile.value} (${ethMedian.profile.percentage.toFixed(2)}%)` : 'N/A';
-                const genPopVal = ethMedian.genPop ? `${ethMedian.genPop.value} (${ethMedian.genPop.percentage.toFixed(2)}%)` : 'N/A';
+                const profileVal = ethMedian.profile ? `${ethMedian.profile.value} (${ethMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
+                const genPopVal = ethMedian.genPop ? `${ethMedian.genPop.value} (${ethMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
                 ethMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Top: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Top: ${genPopVal}</span>`;
                 ethMedianDisplay.style.display = '';
             }
@@ -17491,8 +17516,8 @@
                 const eduMedianDisplay = document.getElementById('educationMedianDisplay');
                 if (eduMedianDisplay) {
                     const profileName = currentProfileData?.name || 'Profile';
-                    const profileVal = eduMedian.profile ? `${eduMedian.profile.value} (${eduMedian.profile.percentage.toFixed(2)}%)` : 'N/A';
-                    const genPopVal = eduMedian.genPop ? `${eduMedian.genPop.value} (${eduMedian.genPop.percentage.toFixed(2)}%)` : 'N/A';
+                    const profileVal = eduMedian.profile ? `${eduMedian.profile.value} (${eduMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
+                    const genPopVal = eduMedian.genPop ? `${eduMedian.genPop.value} (${eduMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
                     eduMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Top: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Top: ${genPopVal}</span>`;
                 }
                 
@@ -17553,8 +17578,8 @@
                 const relMedianDisplay = document.getElementById('relationshipMedianDisplay');
                 if (relMedianDisplay) {
                     const profileName = currentProfileData?.name || 'Profile';
-                    const profileVal = relMedian.profile ? `${relMedian.profile.value} (${relMedian.profile.percentage.toFixed(2)}%)` : 'N/A';
-                    const genPopVal = relMedian.genPop ? `${relMedian.genPop.value} (${relMedian.genPop.percentage.toFixed(2)}%)` : 'N/A';
+                    const profileVal = relMedian.profile ? `${relMedian.profile.value} (${relMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
+                    const genPopVal = relMedian.genPop ? `${relMedian.genPop.value} (${relMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
                     relMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Top: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Top: ${genPopVal}</span>`;
                 }
                 
@@ -17578,7 +17603,7 @@
                                         return data.labels.map((label, i) => {
                                             const pct = relPcts[i] || 0;
                                             const genPop = relGenPop[i] || 0;
-                                            const valStr = isProjection ? formatNumber(Math.round(data.datasets[0].data[i])) : pct.toFixed(2) + '%';
+                                            const valStr = isProjection ? formatNumber(Math.round(data.datasets[0].data[i])) : pct.toFixed(1) + '%';
                                             const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
                                             return { text: `${label} ${valStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
@@ -17587,7 +17612,7 @@
                             }, 
                             datalabels: relationshipChartType === 'bar' ? {
                                 anchor: 'end', align: 'end', font: { size: 12, weight: 'bold' }, color: '#fff',
-                                formatter: (v) => isProjection ? formatNumber(Math.round(v)) : v.toFixed(2) + '%'
+                                formatter: (v) => isProjection ? formatNumber(Math.round(v)) : v.toFixed(1) + '%'
                             } : { display: false }
                         },
                         scales: relationshipIsCircular ? {} : {
@@ -17627,8 +17652,8 @@
                 const soMedianDisplay = document.getElementById('sexualOrientationMedianDisplay');
                 if (soMedianDisplay) {
                     const profileName = currentProfileData?.name || 'Profile';
-                    const profileVal = soMedian.profile ? `${soMedian.profile.value} (${soMedian.profile.percentage.toFixed(2)}%)` : 'N/A';
-                    const genPopVal = soMedian.genPop ? `${soMedian.genPop.value} (${soMedian.genPop.percentage.toFixed(2)}%)` : 'N/A';
+                    const profileVal = soMedian.profile ? `${soMedian.profile.value} (${soMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
+                    const genPopVal = soMedian.genPop ? `${soMedian.genPop.value} (${soMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
                     soMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
                 }
                 
@@ -17652,7 +17677,7 @@
                                         return data.labels.map((label, i) => {
                                             const pct = soPcts[i] || 0;
                                             const genPop = soGenPop[i] || 0;
-                                            const valStr = isProjection ? formatNumber(Math.round(data.datasets[0].data[i])) : pct.toFixed(2) + '%';
+                                            const valStr = isProjection ? formatNumber(Math.round(data.datasets[0].data[i])) : pct.toFixed(1) + '%';
                                             const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
                                             return { text: `${label} ${valStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
@@ -17661,7 +17686,7 @@
                             }, 
                             datalabels: soChartType === 'bar' ? {
                                 anchor: 'end', align: 'end', font: { size: 12, weight: 'bold' }, color: '#fff',
-                                formatter: (v) => isProjection ? formatNumber(Math.round(v)) : v.toFixed(2) + '%'
+                                formatter: (v) => isProjection ? formatNumber(Math.round(v)) : v.toFixed(1) + '%'
                             } : { display: false }
                         },
                         scales: soIsCircular ? {} : {
@@ -17701,8 +17726,8 @@
                 const psMedianDisplay = document.getElementById('parentalStatusMedianDisplay');
                 if (psMedianDisplay) {
                     const profileName = currentProfileData?.name || 'Profile';
-                    const profileVal = psMedian.profile ? `${psMedian.profile.value} (${psMedian.profile.percentage.toFixed(2)}%)` : 'N/A';
-                    const genPopVal = psMedian.genPop ? `${psMedian.genPop.value} (${psMedian.genPop.percentage.toFixed(2)}%)` : 'N/A';
+                    const profileVal = psMedian.profile ? `${psMedian.profile.value} (${psMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
+                    const genPopVal = psMedian.genPop ? `${psMedian.genPop.value} (${psMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
                     psMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
                 }
                 
@@ -17726,7 +17751,7 @@
                                         return data.labels.map((label, i) => {
                                             const pct = psPcts[i] || 0;
                                             const genPop = psGenPop[i] || 0;
-                                            const valStr = isProjection ? formatNumber(Math.round(data.datasets[0].data[i])) : pct.toFixed(2) + '%';
+                                            const valStr = isProjection ? formatNumber(Math.round(data.datasets[0].data[i])) : pct.toFixed(1) + '%';
                                             const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
                                             return { text: `${label} ${valStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
@@ -17735,7 +17760,7 @@
                             }, 
                             datalabels: psChartType === 'bar' ? {
                                 anchor: 'end', align: 'end', font: { size: 12, weight: 'bold' }, color: '#fff',
-                                formatter: (v) => isProjection ? formatNumber(Math.round(v)) : v.toFixed(2) + '%'
+                                formatter: (v) => isProjection ? formatNumber(Math.round(v)) : v.toFixed(1) + '%'
                             } : { display: false }
                         },
                         scales: psIsCircular ? {} : {
@@ -18256,7 +18281,7 @@
             
             container.innerHTML = categoryCards.map(cat => {
                 const avgColor = cat.avgIndex >= 100 ? '#10b981' : '#ef4444';
-                const avgPctDisplay = cat.avgPct.toFixed(2) + '%';
+                const avgPctDisplay = cat.avgPct.toFixed(1) + '%';
                 return `
                     <div class="interest-category-card">
                         <h4>
@@ -18508,7 +18533,7 @@
                 const indexBadge = item.index > 0 ? `<span style="color: ${indexColor}; font-weight: 600;">${formatIndex(item.index)}</span>` : '-';
                 return `<div style="display: flex; justify-content: space-between; padding: 2px 0; font-size: 0.7rem;">
                     <span>${item.label}</span>
-                    <span>${item.pct.toFixed(2)}% ${indexBadge}</span>
+                    <span>${item.pct.toFixed(1)}% ${indexBadge}</span>
                 </div>`;
             }).join('');
         }
@@ -19412,7 +19437,7 @@
                 if (value < 0.05) {
                     return 'N/A';
                 }
-                return value.toFixed(2) + '%';
+                return value.toFixed(1) + '%';
             }
             return value;
         }
@@ -19422,7 +19447,7 @@
             if (value === 0 || value === null || value === undefined || value < 0.05) {
                 return 'N/A';
             }
-            return value.toFixed(2) + '%';
+            return value.toFixed(1) + '%';
         }
         
         function renderBehavioralItems(items, maxPct) {
@@ -20570,8 +20595,8 @@
                 csvContent = `${profileName} - ${category}\n`;
                 csvContent += `Label,Profile %,Gen Pop %,Index\n`;
                 Object.keys(data).forEach(label => {
-                    const val = (parseFloat(data[label]) || 0).toFixed(2);
-                    const gp = (parseFloat(genPop[label]) || 0).toFixed(2);
+                    const val = (parseFloat(data[label]) || 0).toFixed(1);
+                    const gp = (parseFloat(genPop[label]) || 0).toFixed(1);
                     const idx = Math.round(parseFloat(index[label]) || 100);
                     csvContent += `"${label}",${val}%,${gp}%,${idx}\n`;
                 });
@@ -20580,7 +20605,7 @@
                 csvContent = `${profileName} - ${category}\n`;
                 csvContent += `Name,Audience %,Index\n`;
                 items.forEach(item => {
-                    csvContent += `"${item.name} - ${category}",${item.pct.toFixed(2)}%,${item.index}\n`;
+                    csvContent += `"${item.name} - ${category}",${item.pct.toFixed(1)}%,${item.index}\n`;
                 });
             } else if (type === 'location') {
                 const locations = currentDashboardData.locations || [];
@@ -20592,7 +20617,7 @@
                     ? locations.filter(l => l.index < 100)
                     : locations;
                 filteredLocs.forEach(loc => {
-                    csvContent += `"${loc.name}",${loc.pct.toFixed(2)}%,${loc.genPopPct?.toFixed(2) || 0}%,${loc.index}\n`;
+                    csvContent += `"${loc.name}",${loc.pct.toFixed(1)}%,${loc.genPopPct?.toFixed(1) || 0}%,${loc.index}\n`;
                 });
             } else if (type === 'affinity') {
                 const elementId = {
@@ -21429,23 +21454,23 @@
                         Object.entries(item.data.values).forEach(([k, v]) => {
                             const genPop = item.data.genPop?.[k] || 0;
                             const index = item.data.index?.[k] || 100;
-                            content += `  ${k}: ${typeof v === 'number' ? v.toFixed(2) : v}% (Gen Pop: ${genPop.toFixed(2)}%, Index: ${index})\n`;
+                            content += `  ${k}: ${typeof v === 'number' ? v.toFixed(1) : v}% (Gen Pop: ${genPop.toFixed(1)}%, Index: ${index})\n`;
                         });
                     } else if (item.type === 'behavioral' && item.data.items) {
                         item.data.items.slice(0, 15).forEach(i => {
-                            content += `  ${i.name}: ${i.pct?.toFixed(2) || 0}% (Index: ${i.index || 100})\n`;
+                            content += `  ${i.name}: ${i.pct?.toFixed(1) || 0}% (Index: ${i.index || 100})\n`;
                         });
                         if (item.data.items.length > 15) content += `  ... and ${item.data.items.length - 15} more\n`;
                     } else if (item.type === 'location' && item.data.locations) {
                         item.data.locations.slice(0, 10).forEach(loc => {
-                            content += `  ${loc.name}: ${loc.pct?.toFixed(2) || 0}% (Index: ${loc.index || 100})\n`;
+                            content += `  ${loc.name}: ${loc.pct?.toFixed(1) || 0}% (Index: ${loc.index || 100})\n`;
                         });
                         if (item.data.locations.length > 10) content += `  ... and ${item.data.locations.length - 10} more DMAs\n`;
                     } else if (item.data.demographics) {
                         Object.entries(item.data.demographics).forEach(([cat, vals]) => {
                             content += `  ${cat.toUpperCase()}:\n`;
                             Object.entries(vals).forEach(([k, v]) => {
-                                content += `    ${k}: ${typeof v === 'number' ? v.toFixed(2) : v}%\n`;
+                                content += `    ${k}: ${typeof v === 'number' ? v.toFixed(1) : v}%\n`;
                             });
                         });
                     }
@@ -22106,22 +22131,22 @@
             if (data.demographics) {
                 // Top gender
                 const topGender = Object.entries(data.demographics.gender || {}).sort((a,b) => b[1] - a[1])[0];
-                if (topGender) demoInsights.push({ label: 'Dominant Gender', value: topGender[0], sub: topGender[1].toFixed(2) + '%' });
+                if (topGender) demoInsights.push({ label: 'Dominant Gender', value: topGender[0], sub: topGender[1].toFixed(1) + '%' });
                 
                 // Top age group
                 const topAge = Object.entries(data.demographics.age || {}).sort((a,b) => b[1] - a[1])[0];
                 if (topAge) {
                     const displayAge = getAgeDisplayLabel(topAge[0]);
-                    demoInsights.push({ label: 'Largest Age Group', value: displayAge, sub: topAge[1].toFixed(2) + '%' });
+                    demoInsights.push({ label: 'Largest Age Group', value: displayAge, sub: topAge[1].toFixed(1) + '%' });
                 }
                 
                 // Top ethnicity
                 const topEth = Object.entries(data.demographics.ethnicity || {}).sort((a,b) => b[1] - a[1])[0];
-                if (topEth) demoInsights.push({ label: 'Top Ethnicity', value: topEth[0], sub: topEth[1].toFixed(2) + '%' });
+                if (topEth) demoInsights.push({ label: 'Top Ethnicity', value: topEth[0], sub: topEth[1].toFixed(1) + '%' });
                 
                 // Top income
                 const topIncome = Object.entries(data.demographics.income || {}).sort((a,b) => b[1] - a[1])[0];
-                if (topIncome) demoInsights.push({ label: 'Top Income', value: topIncome[0], sub: topIncome[1].toFixed(2) + '%' });
+                if (topIncome) demoInsights.push({ label: 'Top Income', value: topIncome[0], sub: topIncome[1].toFixed(1) + '%' });
             }
             
             // Tooltip descriptions for each snapshot category
@@ -22178,10 +22203,10 @@
                 .map(h => {
                     const profileDisplay = isProjectionDemo 
                         ? formatNumber(Math.round((h.profilePct / 100) * (data.sampleSize || 0)))
-                        : h.profilePct.toFixed(2) + '%';
+                        : h.profilePct.toFixed(1) + '%';
                     const genPopDisplay = isProjectionDemo 
                         ? formatNumber(Math.round((h.genPopPct / 100) * US_POP_DEMO))
-                        : h.genPopPct.toFixed(2) + '%';
+                        : h.genPopPct.toFixed(1) + '%';
                     const indexClass = h.index >= 100 ? 'high' : 'low';
                     // Use getAgeDisplayLabel for age ranges to match demographics page
                     const displayValue = h.category.toLowerCase() === 'age' ? getAgeDisplayLabel(h.value) : h.value;
@@ -22213,10 +22238,10 @@
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionDiff 
                     ? formatNumber(Math.round((profilePct / 100) * US_POP_DIFF))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjectionDiff 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_DIFF))
-                    : genPopPct.toFixed(2) + '%';
+                    : genPopPct.toFixed(1) + '%';
                 const indexClass = item.index >= 100 ? 'high' : 'low';
                 return `
                 <div class="differentiator-item">
@@ -22250,10 +22275,10 @@
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionInsights 
                     ? formatNumber(Math.round((profilePct / 100) * US_POP_INSIGHTS))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjectionInsights 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_INSIGHTS))
-                    : genPopPct.toFixed(2) + '%';
+                    : genPopPct.toFixed(1) + '%';
                 return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
@@ -22272,10 +22297,10 @@
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionInsights 
                     ? formatNumber(Math.round((profilePct / 100) * US_POP_INSIGHTS))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjectionInsights 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_INSIGHTS))
-                    : genPopPct.toFixed(2) + '%';
+                    : genPopPct.toFixed(1) + '%';
                 return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
@@ -22305,10 +22330,10 @@
                     const genPopPct = item.genPopPct || 0;
                     const profileDisplay = isProjectionChamp 
                         ? formatNumber(Math.round((profilePct / 100) * US_POP_CHAMP))
-                        : profilePct.toFixed(2) + '%';
+                        : profilePct.toFixed(1) + '%';
                     const genPopDisplay = isProjectionChamp 
                         ? formatNumber(Math.round((genPopPct / 100) * US_POP_CHAMP))
-                        : genPopPct.toFixed(2) + '%';
+                        : genPopPct.toFixed(1) + '%';
                     return `
                     <div class="champion-item">
                         <div class="champion-category">${cat}</div>
@@ -22341,10 +22366,10 @@
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionHidden 
                     ? formatNumber(Math.round((profilePct / 100) * US_POP_HIDDEN))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjectionHidden 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_HIDDEN))
-                    : genPopPct.toFixed(2) + '%';
+                    : genPopPct.toFixed(1) + '%';
                 return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
@@ -22369,10 +22394,10 @@
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionRising 
                     ? formatNumber(Math.round((profilePct / 100) * US_POP_RISING))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjectionRising 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_RISING))
-                    : genPopPct.toFixed(2) + '%';
+                    : genPopPct.toFixed(1) + '%';
                 return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
@@ -22406,10 +22431,10 @@
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionStream 
                     ? formatNumber(Math.round((profilePct / 100) * US_POP_STREAM))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjectionStream 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_STREAM))
-                    : genPopPct.toFixed(2) + '%';
+                    : genPopPct.toFixed(1) + '%';
                 return `
                 <div class="media-pref-item" style="display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -22439,10 +22464,10 @@
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionSocial 
                     ? formatNumber(Math.round((profilePct / 100) * US_POP_SOCIAL))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjectionSocial 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_SOCIAL))
-                    : genPopPct.toFixed(2) + '%';
+                    : genPopPct.toFixed(1) + '%';
                 return `
                 <div class="media-pref-item" style="display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -22472,10 +22497,10 @@
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionAudio 
                     ? formatNumber(Math.round((profilePct / 100) * US_POP_AUDIO))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjectionAudio 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_AUDIO))
-                    : genPopPct.toFixed(2) + '%';
+                    : genPopPct.toFixed(1) + '%';
                 return `
                 <div class="media-pref-item" style="display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -22505,10 +22530,10 @@
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionGaming 
                     ? formatNumber(Math.round((profilePct / 100) * US_POP_GAMING))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjectionGaming 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_GAMING))
-                    : genPopPct.toFixed(2) + '%';
+                    : genPopPct.toFixed(1) + '%';
                 return `
                 <div class="media-pref-item" style="display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -22549,10 +22574,10 @@
             document.getElementById('mediaConsumptionSummary').innerHTML = mediaSummary.map(m => {
                 const profileDisplay = isProjectionMedia 
                     ? formatNumber(Math.round((m.avgProfilePct / 100) * US_POP_MEDIA))
-                    : m.avgProfilePct.toFixed(2) + '%';
+                    : m.avgProfilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjectionMedia 
                     ? formatNumber(Math.round((m.avgGenPopPct / 100) * US_POP_MEDIA))
-                    : m.avgGenPopPct.toFixed(2) + '%';
+                    : m.avgGenPopPct.toFixed(1) + '%';
                 return `
                 <div class="media-summary-item" style="display: flex; flex-direction: column; gap: 0.5rem;">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -22590,10 +22615,10 @@
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionBrand 
                     ? formatNumber(Math.round((profilePct / 100) * US_POP_BRAND))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjectionBrand 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_BRAND))
-                    : genPopPct.toFixed(2) + '%';
+                    : genPopPct.toFixed(1) + '%';
                 return `
                 <div class="opportunity-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
                     <span class="opportunity-rank">#${i + 1}</span>
@@ -22639,10 +22664,10 @@
             document.getElementById('untappedCategories').innerHTML = untappedCats.map((cat, i) => {
                 const profileDisplay = isProjectionUntapped 
                     ? formatNumber(Math.round((cat.avgProfilePct / 100) * US_POP_UNTAPPED))
-                    : cat.avgProfilePct.toFixed(2) + '%';
+                    : cat.avgProfilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjectionUntapped 
                     ? formatNumber(Math.round((cat.avgGenPopPct / 100) * US_POP_UNTAPPED))
-                    : cat.avgGenPopPct.toFixed(2) + '%';
+                    : cat.avgGenPopPct.toFixed(1) + '%';
                 return `
                 <div class="opportunity-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
                     <span class="opportunity-rank">#${i + 1}</span>
@@ -22676,10 +22701,10 @@
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionShop 
                     ? formatNumber(Math.round((profilePct / 100) * US_POP_SHOP))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjectionShop 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_SHOP))
-                    : genPopPct.toFixed(2) + '%';
+                    : genPopPct.toFixed(1) + '%';
                 return `
                 <div class="insight-item-v2">
                     <span class="rank">${i + 1}</span>
@@ -22702,10 +22727,10 @@
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionContent 
                     ? formatNumber(Math.round((profilePct / 100) * US_POP_CONTENT))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjectionContent 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_CONTENT))
-                    : genPopPct.toFixed(2) + '%';
+                    : genPopPct.toFixed(1) + '%';
                 return `
                 <div class="opportunity-item" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
                     <span class="opportunity-rank">#${i + 1}</span>
@@ -22735,10 +22760,10 @@
                 const genPopPct = loc.genPopPct || 0;
                 const profileDisplay = isProjectionGeo 
                     ? formatNumber(Math.round((profilePct / 100) * (data.sampleSize || 0)))
-                    : profilePct.toFixed(2) + '%';
+                    : profilePct.toFixed(1) + '%';
                 const genPopDisplay = isProjectionGeo 
                     ? formatNumber(Math.round((genPopPct / 100) * US_POP_GEO))
-                    : genPopPct.toFixed(2) + '%';
+                    : genPopPct.toFixed(1) + '%';
                 return `
                 <div class="geo-opportunity">
                     <div class="geo-name">${loc.name}</div>
@@ -23633,7 +23658,7 @@
             if (!ageData) return 0;
             let total = 0;
             groups.forEach(g => { total += ageData[g] || 0; });
-            return total.toFixed(2);
+            return total.toFixed(1);
         }
         
         // ============================================================================
@@ -23976,7 +24001,7 @@
                         label: 'Audience Reach %',
                         data: channelScores.map(c => {
                             const val = c.reach || c.avgIndex || 0;
-                            return total > 0 ? ((val / total) * 100).toFixed(2) : 0;
+                            return total > 0 ? ((val / total) * 100).toFixed(1) : 0;
                         }),
                         backgroundColor: channelScores.map((c, i) => {
                             const colors = ['rgba(16, 185, 129, 0.7)', 'rgba(59, 130, 246, 0.7)', 'rgba(249, 115, 22, 0.7)', 'rgba(139, 92, 246, 0.7)', 'rgba(236, 72, 153, 0.7)', 'rgba(20, 184, 166, 0.7)', 'rgba(245, 158, 11, 0.7)', 'rgba(99, 102, 241, 0.7)'];
@@ -24015,7 +24040,7 @@
                                 label: function(context) {
                                     const dataIndex = context.dataIndex;
                                     const channel = window.mediaReachChartData[dataIndex];
-                                    const percentage = context.parsed.x.toFixed(2);
+                                    const percentage = context.parsed.x.toFixed(1);
                                     
                                     if (!channel || !channel.items || channel.items.length === 0) {
                                         return percentage + '% of audience';
@@ -24889,7 +24914,7 @@
                         
                         if (categoryPct > 0) {
                             segmentMultiplier *= (categoryPct / 100);
-                            filterDetails.push(`${filters[filterKey].join('/')}: ${categoryPct.toFixed(2)}%`);
+                            filterDetails.push(`${filters[filterKey].join('/')}: ${categoryPct.toFixed(1)}%`);
                         }
                     }
                 }
@@ -24903,7 +24928,7 @@
             const segmentName = hasFilters ? getSegmentName(filters) : 'All Audience';
             document.getElementById('segName').textContent = segmentName;
             document.getElementById('segSize').textContent = estimatedSegmentSize.toLocaleString();
-            document.getElementById('segPercent').textContent = percentOfTotal.toFixed(2) + '%';
+            document.getElementById('segPercent').textContent = percentOfTotal.toFixed(1) + '%';
             
             // Store current segment data for potential comparison
             currentSegmentData = {
@@ -24958,7 +24983,7 @@
                             <span title="${b.category}">${b.name}</span>
                             <span style="display: flex; gap: 0.5rem; align-items: center;">
                                 <span style="color: var(--accent-lime);">${b.segmentPct.toFixed(2)}%</span>
-                                <span style="color: var(--text-secondary); font-size: 0.7rem;">(${b.originalPct.toFixed(2)}% orig)</span>
+                                <span style="color: var(--text-secondary); font-size: 0.7rem;">(${b.originalPct.toFixed(1)}% orig)</span>
                             </span>
                         </div>
                     `).join('')}
@@ -24981,7 +25006,7 @@
                                     <span>${b.name}</span>
                                     <span style="display: flex; gap: 0.5rem; align-items: center;">
                                         <span style="color: var(--accent-lime);">${b.segmentPct.toFixed(2)}%</span>
-                                        <span style="color: var(--text-secondary); font-size: 0.7rem;">(${b.originalPct.toFixed(2)}%)</span>
+                                        <span style="color: var(--text-secondary); font-size: 0.7rem;">(${b.originalPct.toFixed(1)}%)</span>
                                     </span>
                                 </div>
                             `).join('')}
@@ -25011,7 +25036,7 @@
                             <span>${loc.name}</span>
                             <span style="display: flex; gap: 0.5rem; align-items: center;">
                                 <span style="color: var(--accent-lime);">${loc.segmentPct.toFixed(2)}%</span>
-                                <span style="color: var(--text-secondary); font-size: 0.7rem;">(${loc.originalPct.toFixed(2)}%)</span>
+                                <span style="color: var(--text-secondary); font-size: 0.7rem;">(${loc.originalPct.toFixed(1)}%)</span>
                             </span>
                         </div>
                     `).join('') : '<p style="color: var(--text-secondary);">No location data</p>'}
@@ -25036,7 +25061,7 @@
                             <span title="${b.category}">${b.name}</span>
                             <span style="display: flex; gap: 0.5rem; align-items: center;">
                                 <span style="color: var(--accent-lime);">${b.segmentPct.toFixed(2)}%</span>
-                                <span style="color: var(--text-secondary); font-size: 0.7rem;">(${b.originalPct.toFixed(2)}%)</span>
+                                <span style="color: var(--text-secondary); font-size: 0.7rem;">(${b.originalPct.toFixed(1)}%)</span>
                             </span>
                         </div>
                     `).join('') : '<p style="color: var(--text-secondary);">No shopping data</p>'}
@@ -25328,7 +25353,7 @@
                 // Build top 5 cities tooltip
                 const top5Cities = data.cities.slice(0, 5);
                 const citiesText = top5Cities.length > 0 
-                    ? `Top Cities in ${state}: ${top5Cities.map((c, i) => `${i + 1}. ${c.name} (${c.pct.toFixed(2)}%)`).join(' | ')}`
+                    ? `Top Cities in ${state}: ${top5Cities.map((c, i) => `${i + 1}. ${c.name} (${c.pct.toFixed(1)}%)`).join(' | ')}`
                     : `${state}: No city data`;
                 
                 return `
@@ -25347,7 +25372,7 @@
             const topState = sortedStates[0];
             document.getElementById('locationStats').innerHTML = `
                 <span class="stat">📍 ${totalLocations} DMAs</span>
-                <span class="stat">🏆 Top: ${topState ? topState[0] + ' (' + topState[1].pct.toFixed(2) + '%)' : '-'}</span>
+                <span class="stat">🏆 Top: ${topState ? topState[0] + ' (' + topState[1].pct.toFixed(1) + '%)' : '-'}</span>
             `;
             
             // Regional breakdown - also collect all cities per region
@@ -25397,7 +25422,7 @@
                     // Build top 5 cities tooltip for region
                     const top5Cities = data.cities.slice(0, 5);
                     const citiesText = top5Cities.length > 0 
-                        ? `Top Cities in ${region}: ${top5Cities.map((c, i) => `${i + 1}. ${c.name} (${c.pct.toFixed(2)}%)`).join(' | ')}`
+                        ? `Top Cities in ${region}: ${top5Cities.map((c, i) => `${i + 1}. ${c.name} (${c.pct.toFixed(1)}%)`).join(' | ')}`
                         : `${region}: No city data`;
                     
                     return `
@@ -26720,7 +26745,7 @@
                         </div>
                     </div>
                     <div class="profile-chart-card">
-                        <h3>Age <span class="median">Median: ${profile.medianAge > 0 ? profile.medianAge.toFixed(2) : '23.0'}</span></h3>
+                        <h3>Age <span class="median">Median: ${profile.medianAge > 0 ? profile.medianAge.toFixed(1) : '23.0'}</span></h3>
                         <div class="profile-chart-container"><canvas id="profileAgeChart"></canvas></div>
                     </div>
                     <div class="profile-chart-card">
@@ -27485,7 +27510,7 @@
                             </tr>
                             <tr>
                                 <td>Median Age</td>
-                                ${profiles.map(p => `<td>${p.medianAge > 0 ? p.medianAge.toFixed(2) + ' years' : '-'}</td>`).join('')}
+                                ${profiles.map(p => `<td>${p.medianAge > 0 ? p.medianAge.toFixed(1) + ' years' : '-'}</td>`).join('')}
                             </tr>
                         </tbody>
                     </table>
@@ -28041,7 +28066,7 @@
                             <tr>
                                 <td>Over vs Under Ratio</td>
                                 ${benchmarks.map(b => {
-                                    const ratio = b.underIndexCount > 0 ? (b.overIndexCount / b.underIndexCount).toFixed(2) : b.overIndexCount;
+                                    const ratio = b.underIndexCount > 0 ? (b.overIndexCount / b.underIndexCount).toFixed(1) : b.overIndexCount;
                                     return `<td style="color: ${ratio >= 1 ? 'var(--accent-green)' : 'var(--accent-red)'};">${ratio}:1</td>`;
                                 }).join('')}
                             </tr>
