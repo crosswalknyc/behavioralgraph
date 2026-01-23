@@ -10271,6 +10271,16 @@
                 <div class="comparison-header">
                     <h1 class="comp-title">COMPARISON</h1>
                     <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <select id="compJumpToSelect" onchange="jumpToCompSection(this.value)" style="padding: 0.5rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.8rem; cursor: pointer;">
+                            <option value="">📍 Jump to...</option>
+                            <option value="comp-summary">📊 Summary Data</option>
+                            <option value="comp-gender">👫 Gender</option>
+                            <option value="comp-age">📅 Age</option>
+                            <option value="comp-ethnicity">🌍 Ethnicity</option>
+                            <option value="comp-income">💰 Income</option>
+                            <option value="comp-behavioral">🎯 Behavioral</option>
+                            <option value="comp-location">📍 Location</option>
+                        </select>
                         <button class="btn btn-small" onclick="generateExecutiveSummary()" title="Generate Executive Summary">📄 Executive Summary</button>
                         <div class="comp-mode-toggle" id="displayModeToggle" onclick="toggleDisplayMode()" title="Click to toggle between percentages and US population numbers">
                             <span id="displayModeLabel">US %</span>
@@ -26626,6 +26636,56 @@
             return result;
         }
 
+        // Calculate median age from age distribution percentages
+        function calculateMedianAgeFromDistribution(ageData) {
+            if (!ageData || Object.keys(ageData).length === 0) return 0;
+            
+            // Age bracket midpoints
+            const ageMidpoints = {
+                '<16': 14, '16-18': 17, '18-20': 19, '21-25': 23, '26-30': 28,
+                '31-40': 35.5, '41-59': 50, '60+': 70,
+                '13-17': 15, '18-24': 21, '25-34': 29.5, '35-44': 39.5, '45-54': 49.5, '55-64': 59.5, '65+': 72
+            };
+            
+            // Build cumulative distribution
+            let total = 0;
+            const brackets = [];
+            Object.entries(ageData).forEach(([bracket, pct]) => {
+                const midpoint = ageMidpoints[bracket] || 30;
+                brackets.push({ bracket, pct, midpoint });
+                total += pct;
+            });
+            
+            if (total === 0) return 0;
+            
+            // Sort by midpoint
+            brackets.sort((a, b) => a.midpoint - b.midpoint);
+            
+            // Find median (50th percentile)
+            let cumulative = 0;
+            for (const b of brackets) {
+                cumulative += b.pct;
+                if (cumulative >= total / 2) {
+                    return b.midpoint;
+                }
+            }
+            
+            return brackets.length > 0 ? brackets[Math.floor(brackets.length / 2)].midpoint : 0;
+        }
+
+        // Jump to comparison section
+        function jumpToCompSection(sectionId) {
+            if (!sectionId) return;
+            
+            const section = document.getElementById(sectionId);
+            if (section) {
+                section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            
+            // Reset dropdown
+            document.getElementById('compJumpToSelect').value = '';
+        }
+
         function toggleDisplayMode() {
             displayMode = displayMode === 'percent' ? 'projection' : 'percent';
             const toggle = document.getElementById('displayModeToggle');
@@ -26984,9 +27044,16 @@
                 return `<th class="sortable ${isSorted ? 'sorted' : ''}" style="border-bottom: 3px solid ${color}" onclick="sortComparisonTable('${section}', ${idx})">${name}</th>`;
             };
 
+            // Calculate median age from age distribution if not available
+            profiles.forEach(p => {
+                if (!p.medianAge || p.medianAge <= 0) {
+                    p.medianAge = calculateMedianAgeFromDistribution(p.demographics?.age || {});
+                }
+            });
+
             let html = `
                 <!-- Summary Data -->
-                <div class="comp-section">
+                <div class="comp-section" id="comp-summary">
                     <div class="comp-section-title">Comparison Data</div>
                     <table class="comp-table">
                         <thead>
@@ -27011,7 +27078,7 @@
                             </tr>
                             <tr>
                                 <td>Median Age</td>
-                                ${profiles.map(p => `<td>${p.medianAge > 0 ? p.medianAge.toFixed(2) : '-'}</td>`).join('')}
+                                ${profiles.map(p => `<td>${p.medianAge > 0 ? p.medianAge.toFixed(1) + ' years' : '-'}</td>`).join('')}
                             </tr>
                         </tbody>
                     </table>
@@ -27024,7 +27091,7 @@
             // Gender Comparison (if selected)
             if (selectedCategories.has('demo_gender')) {
                 html += `
-                <div class="comp-section">
+                <div class="comp-section" id="comp-gender">
                     <div class="comp-section-title">Gender (${modeLabel})</div>
                     <table class="comp-table">
                         <thead>
@@ -27043,7 +27110,7 @@
             // Age Comparison (if selected)
             if (selectedCategories.has('demo_age')) {
                 html += `
-                <div class="comp-section">
+                <div class="comp-section" id="comp-age">
                     <div class="comp-section-title">Age (${modeLabel})</div>
                     <table class="comp-table">
                         <thead>
@@ -27062,7 +27129,7 @@
             // Ethnicity Comparison (if selected)
             if (selectedCategories.has('demo_ethnicity')) {
                 html += `
-                <div class="comp-section">
+                <div class="comp-section" id="comp-ethnicity">
                     <div class="comp-section-title">Ethnicity (${modeLabel})</div>
                     <table class="comp-table">
                         <thead>
@@ -27081,7 +27148,7 @@
             // Income Comparison (if selected)
             if (selectedCategories.has('demo_income')) {
                 html += `
-                <div class="comp-section">
+                <div class="comp-section" id="comp-income">
                     <div class="comp-section-title">Income (${modeLabel})</div>
                     <table class="comp-table">
                         <thead>
@@ -27099,12 +27166,16 @@
 
             // Add behavioral categories (only if selected)
             const sortedBehavioralCats = Array.from(allBehavioralCats).sort();
+            let firstBehavioral = true;
             sortedBehavioralCats.forEach(cat => {
                 const catKey = 'beh_' + cat;
                 if (!selectedCategories.has(catKey)) return; // Skip if not selected
                 
+                const sectionId = firstBehavioral ? 'id="comp-behavioral"' : '';
+                firstBehavioral = false;
+                
                 html += `
-                    <div class="comp-section">
+                    <div class="comp-section" ${sectionId}>
                         <div class="comp-section-title">${cat} (Top 15) <span style="font-size: 0.7rem; font-weight: normal; margin-left: 10px;">Index: <span style="color: #10b981;">●</span> &gt;100 Over | <span style="color: #ef4444;">●</span> &lt;100 Under</span></div>
                         <table class="comp-table">
                             <thead>
@@ -27125,7 +27196,7 @@
             const hasLocations = profiles.some(p => p.locations && p.locations.length > 0);
             if (hasLocations && selectedCategories.has('location')) {
                 html += `
-                    <div class="comp-section">
+                    <div class="comp-section" id="comp-location">
                         <div class="comp-section-title">Top Locations/DMAs</div>
                         <table class="comp-table">
                             <thead>
