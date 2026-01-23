@@ -1947,15 +1947,13 @@
             position: relative;
         }
         
-        /* Content action buttons - positioned inline with content */
+        /* Content action buttons - positioned above sidebar and content */
         .content-action-buttons {
             display: flex;
             gap: 0.4rem;
             flex-wrap: wrap;
             flex-shrink: 0;
-            position: absolute;
-            top: 0;
-            left: 0;
+            position: relative;
             z-index: 100;
             background: transparent;
         }
@@ -8236,8 +8234,27 @@
                 <button class="tab-btn tool-tab has-tooltip" data-tooltip="Deck Builder: Create and export presentation decks from your saved insights and charts." onclick="openDeckWorkspace()"><span class="tab-icon">📊</span><span class="tab-label">DECK BUILDER</span></button>
             </div>
             
+            <!-- Action Buttons - Above the sidebar and content -->
+            <div class="content-action-buttons" id="contentActionButtons" style="margin-bottom: 0.5rem;">
+                <div class="dash-dropdown">
+                    <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, full report as PDF, or add page to deck." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
+                    <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
+                        <a onclick="exportAllCSV()">📄 All Data (CSV)</a>
+                        <a onclick="exportAllPNG()">🖼️ All Charts (PNG)</a>
+                        <a onclick="exportPDF()">📑 Full Report (PDF)</a>
+                        <a onclick="addCurrentTabToDeck()">➕ Add Page to Deck</a>
+                    </div>
+                </div>
+                <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements.">
+                    <span id="hoverToggleLabel">HOVER ON</span>
+                </div>
+                <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" data-tooltip="US %: Toggle between showing percentages of audience vs. projected US population numbers.">
+                    <span id="dashDisplayLabel">US %</span>
+                </div>
+            </div>
+            
             <!-- Dashboard Layout: Fixed Sidebar + Tab Content -->
-            <div class="dashboard-layout" style="margin-top: 1rem;">
+            <div class="dashboard-layout" style="margin-top: 0.5rem;">
                 <!-- Persistent Sidebar - Always Visible -->
                 <div class="persistent-sidebar">
                     <div class="sidebar-header-section">
@@ -8251,25 +8268,6 @@
                 
                 <!-- Tab Content Area -->
                 <div class="dashboard-tab-content">
-                    <!-- Action Buttons - Floating, positioned at top left of content area -->
-                    <div class="content-action-buttons" id="contentActionButtons">
-                        <div class="dash-dropdown">
-                            <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, full report as PDF, or add page to deck." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
-                            <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
-                                <a onclick="exportAllCSV()">📄 All Data (CSV)</a>
-                                <a onclick="exportAllPNG()">🖼️ All Charts (PNG)</a>
-                                <a onclick="exportPDF()">📑 Full Report (PDF)</a>
-                                <a onclick="addCurrentTabToDeck()">➕ Add Page to Deck</a>
-                            </div>
-                        </div>
-                        <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements.">
-                            <span id="hoverToggleLabel">HOVER ON</span>
-                        </div>
-                        <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" data-tooltip="US %: Toggle between showing percentages of audience vs. projected US population numbers.">
-                            <span id="dashDisplayLabel">US %</span>
-                        </div>
-                    </div>
-                    
                     <!-- Empty State - Show when no profile selected -->
                     <div id="dashboardEmptyState" class="dashboard-empty-state">
                         <div class="empty-state-content">
