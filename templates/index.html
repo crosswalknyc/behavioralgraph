@@ -17536,18 +17536,20 @@
                 .map(([name, catItems]) => {
                     const sorted = catItems.sort((a, b) => b.index - a.index);
                     const avgIndex = Math.round(sorted.reduce((sum, i) => sum + i.index, 0) / sorted.length);
-                    return { name, items: sorted.slice(0, 5), avgIndex };
+                    const avgPct = sorted.reduce((sum, i) => sum + (i.pct || 0), 0) / sorted.length;
+                    return { name, items: sorted.slice(0, 5), avgIndex, avgPct };
                 })
                 .sort((a, b) => b.avgIndex - a.avgIndex)
                 .slice(0, 6);
             
             container.innerHTML = categoryCards.map(cat => {
                 const avgColor = cat.avgIndex >= 100 ? '#10b981' : '#ef4444';
+                const avgPctDisplay = cat.avgPct.toFixed(1) + '%';
                 return `
                     <div class="interest-category-card">
                         <h4>
                             <span>${cat.name}</span>
-                            <span class="cat-avg" style="color: ${avgColor};">Avg: ${formatIndex(cat.avgIndex)}</span>
+                            <span class="cat-avg" style="color: ${avgColor};">Avg: ${avgPctDisplay}</span>
                         </h4>
                         <div class="interest-category-items">
                             ${cat.items.map(item => {
