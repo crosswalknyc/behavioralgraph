@@ -24516,6 +24516,9 @@
             }, 500);
         }
         
+        // Store segment profiles separately so they persist across tab switches
+        let segmentProfilesForComparison = [];
+        
         function addSegmentToComparison(name, segmentData) {
             // Create a virtual profile for the segment
             const segmentProfile = {
@@ -24525,17 +24528,24 @@
                 data: segmentData
             };
             
-            // Add to comparison profiles if not already there
+            // Add to persistent segment storage if not already there
+            if (!segmentProfilesForComparison.some(p => p.name === name)) {
+                segmentProfilesForComparison.push(segmentProfile);
+            }
+            
+            // Also add to comparison profiles if not already there
             if (!comparisonProfiles.some(p => p.name === name && p.isSegment)) {
                 comparisonProfiles.push(segmentProfile);
-                selectedForComparison.add(name);
             }
+            
+            // Add to selection
+            selectedForComparison.add(name);
             
             // Switch to compare tab and run comparison
             showTab('comparison');
             setTimeout(() => {
                 runComparison();
-            }, 200);
+            }, 300);
             
             alert(`Segment "${name}" added to comparison!`);
         }
@@ -25518,17 +25528,36 @@
                 return;
             }
             
+            // Load regular profiles from allJobs
             comparisonProfiles = allJobs.filter(j => j.status === 'cached' || j.status === 'completed');
             
-            // Auto-select current profile + GenPop if available
+            // Re-add any segment profiles from persistent storage
+            segmentProfilesForComparison.forEach(seg => {
+                if (!comparisonProfiles.some(p => p.name === seg.name && p.isSegment)) {
+                    comparisonProfiles.push(seg);
+                }
+            });
+            
+            // Auto-select current profile + GenPop if available (but preserve segment selections)
             autoSelectDefaultProfiles();
             
             renderComparisonProfiles(comparisonProfiles);
         }
         
         function autoSelectDefaultProfiles() {
-            // Always clear and re-select to include all open tabs
+            // Preserve any segment selections before clearing
+            const segmentSelections = [];
+            comparisonProfiles.filter(p => p.isSegment).forEach(seg => {
+                if (selectedForComparison.has(seg.name)) {
+                    segmentSelections.push(seg.name);
+                }
+            });
+            
+            // Clear and re-select to include all open tabs
             selectedForComparison.clear();
+            
+            // Re-add segment selections
+            segmentSelections.forEach(name => selectedForComparison.add(name));
             
             // Add all profiles that are currently open in tabs
             if (openProfileTabs && openProfileTabs.length > 0) {
