@@ -1947,7 +1947,7 @@
             position: relative;
         }
         
-        /* Content action buttons - positioned above sidebar and content */
+        /* Content action buttons - positioned above sidebar, matching sidebar width */
         .content-action-buttons {
             display: flex;
             gap: 0.4rem;
@@ -1956,6 +1956,9 @@
             position: relative;
             z-index: 100;
             background: transparent;
+            width: 280px;
+            max-width: 280px;
+            justify-content: flex-start;
         }
         
         .content-action-buttons .dash-action-btn,
