@@ -18850,7 +18850,7 @@
                 const items = aggregatedBehavioral[cat];
                 // Default sort by percentage descending
                 const sortedItems = items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
-                const displayItems = sortedItems.slice(0, 30);
+                const displayItems = sortedItems; // Show all items, no limit
                 const maxPct = Math.max(...displayItems.map(i => i.pct), 1);
                 const isHighlighted = cat === highlightCategory;
                 const positionBadge = idx === 0 ? '<span style="background: var(--accent-lime); color: #000; padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.55rem;">1ST</span>' : '';
@@ -19701,9 +19701,8 @@
             // Apply search filter
             if (searchTerm.trim()) {
                 filtered = filtered.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
-            } else if (!sliceSelect || !sliceSelect.value || sliceSelect.value === 'all') {
-                filtered = items.slice(0, 30);
             }
+            // Show all items, no limit
             
             // Apply current sort
             const sortSelect = listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select');
