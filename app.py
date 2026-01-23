@@ -4869,12 +4869,29 @@ def rename_file():
         if old_key != new_key:
             s3_client.delete_object(Bucket=S3_BUCKET, Key=old_key)
         
-        # Update cache - find job in s3_cache and update its key
+        # Update cache - find job in s3_cache and update its key AND display name
         if s3_cache and 'jobs' in s3_cache:
             for job in s3_cache.get('jobs', []):
                 if job.get('key') == old_key or job.get('s3_key') == old_key:
                     job['key'] = new_key
                     job['s3_key'] = new_key
+                    
+                    # Update the display name based on new filename
+                    # Extract name from new filename (remove extension and clean up)
+                    new_filename = new_key.split('/')[-1]
+                    raw_name = new_filename.rsplit('.', 1)[0] if '.' in new_filename else new_filename
+                    
+                    # Remove timestamp patterns like _MM_DD_YYYY or _YYYY_MM_DD
+                    import re
+                    raw_name = re.sub(r'_\d{1,2}_\d{1,2}_\d{4}(_\d{1,2}_\d{1,2})?$', '', raw_name)
+                    raw_name = re.sub(r'_\d{4}_\d{1,2}_\d{1,2}(_\d{1,2}_\d{1,2})?$', '', raw_name)
+                    
+                    # Replace underscores with spaces and apply smart title case
+                    raw_name = raw_name.replace('_', ' ')
+                    new_display_name = smart_title_case(raw_name)
+                    
+                    job['name'] = new_display_name
+                    print(f"📝 Updated display name to: {new_display_name}")
                     break
             save_persisted_cache()
         
