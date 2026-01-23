@@ -89,6 +89,13 @@
             padding: 0.5rem 1rem;
             border-radius: 25px;
             font-family: 'Space Mono', monospace;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .credits-display:hover {
+            background: linear-gradient(135deg, rgba(200, 255, 0, 0.25), rgba(166, 226, 46, 0.2));
+            border-color: var(--accent-lime);
         }
 
         .credits-icon { font-size: 1.1rem; }
@@ -104,6 +111,113 @@
         }
         .credits-value.low { color: var(--accent-orange); }
         .credits-value.empty { color: var(--accent-red); }
+        
+        /* Credits Modal */
+        .credits-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .credits-modal.active {
+            display: flex;
+        }
+        
+        .credits-modal-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 450px;
+            width: 90%;
+            text-align: center;
+        }
+        
+        .credits-modal-content h2 {
+            margin: 0 0 1rem 0;
+            color: var(--accent-lime);
+        }
+        
+        .credits-info {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .credits-info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .credits-info-row:last-child {
+            border-bottom: none;
+        }
+        
+        .credits-info-label {
+            color: var(--text-secondary);
+        }
+        
+        .credits-info-value {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .request-credits-btn {
+            background: linear-gradient(135deg, var(--accent-lime), #9acd32);
+            color: #000;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 1rem;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+        
+        .request-credits-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(200, 255, 0, 0.3);
+        }
+        
+        .request-credits-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .credits-contact-info {
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        
+        .credits-contact-info a {
+            color: var(--accent-lime);
+            text-decoration: none;
+        }
+        
+        .credits-success-message {
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid #10b981;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            color: #10b981;
+        }
 
         .user-menu {
             display: flex;
@@ -7029,12 +7143,66 @@
     <!-- Global Tooltip Element - MUST be at top of body to render correctly -->
     <div id="globalTooltip" style="position: fixed; left: -9999px; top: -9999px; background: linear-gradient(135deg, #1a2a3a, #0d1a2a); color: #e6f1ff; padding: 12px 16px; border-radius: 8px; font-size: 14px; max-width: 300px; z-index: 2147483647; box-shadow: 0 8px 32px rgba(0,0,0,0.8), 0 0 0 2px #c8e600; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity 0.15s ease;"></div>
     
+    <!-- Credits Modal -->
+    <div class="credits-modal" id="creditsModal" onclick="if(event.target === this) closeCreditsModal()">
+        <div class="credits-modal-content">
+            <h2>💳 Your Credits</h2>
+            <div class="credits-info">
+                <div class="credits-info-row">
+                    <span class="credits-info-label">Available Credits</span>
+                    <span class="credits-info-value" id="modalCreditsAvailable">{{ 'Unlimited' if credits == -1 else credits }}</span>
+                </div>
+                <div class="credits-info-row">
+                    <span class="credits-info-label">Credits Used</span>
+                    <span class="credits-info-value">{{ credits_used }}</span>
+                </div>
+                <div class="credits-info-row">
+                    <span class="credits-info-label">Account</span>
+                    <span class="credits-info-value">{{ username }}</span>
+                </div>
+            </div>
+            
+            <div id="creditsRequestSection">
+                {% if credits != -1 %}
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                    Need more credits? Click below to request additional credits for your account.
+                </p>
+                <button class="request-credits-btn" id="requestCreditsBtn" onclick="requestMoreCredits()">
+                    🛒 Request More Credits
+                </button>
+                {% else %}
+                <p style="color: var(--accent-lime); font-size: 0.9rem;">
+                    ✨ You have unlimited credits!
+                </p>
+                {% endif %}
+            </div>
+            
+            <div id="creditsSuccessMessage" class="credits-success-message" style="display: none;">
+                <p style="margin: 0 0 0.5rem 0; font-weight: 600;">✅ Request Sent!</p>
+                <p style="margin: 0; font-size: 0.85rem;">Your request for more credits has been sent. Someone will reach out to you shortly.</p>
+            </div>
+            
+            <div class="credits-contact-info">
+                <p style="margin: 0 0 0.5rem 0;">For immediate assistance:</p>
+                <p style="margin: 0;">
+                    <strong>Liz Huszarik</strong><br>
+                    <a href="tel:+18182312610">+1 (818) 231-2610</a><br>
+                    <a href="mailto:liz@crosswalknyc.com">liz@crosswalknyc.com</a>
+                </p>
+            </div>
+            
+            <button onclick="closeCreditsModal()" style="margin-top: 1.5rem; background: var(--bg-dark); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1.5rem; border-radius: 6px; cursor: pointer;">
+                Close
+            </button>
+        </div>
+    </div>
+    
     <div class="container">
         <header>
             <img src="/static/crosswalk-logo-stacked.svg" alt="Crosswalk Logo" class="logo" style="height: 80px; width: auto;">
             <div class="header-right-section">
                 <div class="user-info-bar">
-                    <div class="credits-display" id="creditsDisplay">
+                    <div class="credits-display" id="creditsDisplay" onclick="openCreditsModal()" title="Click to view credits and request more">
                         <span class="credits-icon">💳</span>
                         <span class="credits-label">Credits:</span>
                         <span class="credits-value" id="creditsValue">{{ 'Unlimited' if credits == -1 else credits }}</span>
@@ -7056,8 +7224,8 @@
                     <button class="view-btn active {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" onclick="showProfileIQ()" {% if not has_profile_iq_access %}disabled{% endif %}>🎯 Profile IQ</button>
                     <button class="view-btn {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" onclick="showSubscriberIQ()" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</button>
                     <button class="view-btn" id="dashboardViewBtn" onclick="showDashboardView()" style="display: none;">📊 Dashboard</button>
-                    {% if role == 'admin' or role == 'enterprise' %}
-                    <button class="view-btn" id="customAnalysisBtn" onclick="showCustomAnalysis()">🔧 Custom Analysis</button>
+                    {% if role == 'admin' or role == 'enterprise' or has_analysis_iq_access %}
+                    <button class="view-btn" id="customAnalysisBtn" onclick="showCustomAnalysis()">🔧 Analysis IQ</button>
                     {% endif %}
                     {% if role == 'admin' %}
                     <a href="/admin" class="view-btn" id="adminViewBtn">🔐 Admin</a>
@@ -7375,27 +7543,41 @@
             <!-- Custom Analysis Tabs - At the top -->
             <div class="custom-analysis-tabs-container">
                 <div class="custom-analysis-tabs">
+                    {% if 'profile_analysis' in analysis_iq_modules or role == 'admin' %}
                     <button class="custom-analysis-tab active" onclick="switchCustomAnalysisTab('profile-iq')" id="customAnalysisTabProfileIQ">
                         🎯 Profile Analysis
                     </button>
+                    {% endif %}
+                    {% if 'talent_search' in analysis_iq_modules or role == 'admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-search')" id="customAnalysisTabTalentSearch">
                         🔍 Talent Search IQ
                     </button>
+                    {% endif %}
+                    {% if 'talent_theater' in analysis_iq_modules or role == 'admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-theater')" id="customAnalysisTabTalentTheater">
                         🎭 Talent Ticket Sale IQ
                     </button>
+                    {% endif %}
+                    {% if 'svod' in analysis_iq_modules or role == 'admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('svod-acquisition')" id="customAnalysisTabSVODAcquisition">
                         📺 SVOD Acquisition IQ
                     </button>
+                    {% endif %}
+                    {% if 'campaign' in analysis_iq_modules or role == 'admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('campaign-roi')" id="customAnalysisTabCampaignROI">
                         💰 Campaign ROI IQ
                     </button>
+                    {% endif %}
+                    {% if 'cross_show' in analysis_iq_modules or role == 'admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('cross-show')" id="customAnalysisTabCrossShow">
                         📺 Cross Show Watching
                     </button>
+                    {% endif %}
+                    {% if 'watch_time' in analysis_iq_modules or role == 'admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('watch-time')" id="customAnalysisTabWatchTime">
                         ⏱️ Watch Time IQ
                     </button>
+                    {% endif %}
                 </div>
             </div>
             
@@ -8248,7 +8430,7 @@
             </div>
             
             <!-- Action Buttons Row with Tab Title -->
-            <div class="action-buttons-row" style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+            <div class="action-buttons-row" style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem; margin-bottom: 0.5rem;">
                 <div class="content-action-buttons" id="contentActionButtons" style="margin-top: 0;">
                     <div class="dash-dropdown">
                         <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, full report as PDF, or add page to deck." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
@@ -11134,62 +11316,57 @@
         }
         
         function switchCustomAnalysisTab(tabName) {
-            // Update tab buttons
-            document.getElementById('customAnalysisTabProfileIQ').classList.remove('active');
-            document.getElementById('customAnalysisTabTalentSearch').classList.remove('active');
-            document.getElementById('customAnalysisTabTalentTheater').classList.remove('active');
-            document.getElementById('customAnalysisTabSVODAcquisition').classList.remove('active');
-            document.getElementById('customAnalysisTabCampaignROI').classList.remove('active');
-            document.getElementById('customAnalysisTabCrossShow').classList.remove('active');
-            document.getElementById('customAnalysisTabWatchTime').classList.remove('active');
+            // Update tab buttons - use optional chaining for tabs that may not exist
+            const tabIds = ['customAnalysisTabProfileIQ', 'customAnalysisTabTalentSearch', 'customAnalysisTabTalentTheater', 
+                           'customAnalysisTabSVODAcquisition', 'customAnalysisTabCampaignROI', 'customAnalysisTabCrossShow', 
+                           'customAnalysisTabWatchTime'];
+            tabIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.remove('active');
+            });
             
             // Hide all tab contents
-            document.getElementById('customAnalysisTabContentProfileIQ').classList.remove('active');
-            document.getElementById('customAnalysisTabContentTalentSearch').classList.remove('active');
-            document.getElementById('customAnalysisTabContentTalentTheater').classList.remove('active');
-            if (document.getElementById('customAnalysisTabContentSVODAcquisition')) {
-                document.getElementById('customAnalysisTabContentSVODAcquisition').classList.remove('active');
-            }
-            if (document.getElementById('customAnalysisTabContentCampaignROI')) {
-                document.getElementById('customAnalysisTabContentCampaignROI').classList.remove('active');
-            }
-            if (document.getElementById('customAnalysisTabContentCrossShow')) {
-                document.getElementById('customAnalysisTabContentCrossShow').classList.remove('active');
-            }
-            if (document.getElementById('customAnalysisTabContentWatchTime')) {
-                document.getElementById('customAnalysisTabContentWatchTime').classList.remove('active');
-            }
+            const contentIds = ['customAnalysisTabContentProfileIQ', 'customAnalysisTabContentTalentSearch', 
+                               'customAnalysisTabContentTalentTheater', 'customAnalysisTabContentSVODAcquisition',
+                               'customAnalysisTabContentCampaignROI', 'customAnalysisTabContentCrossShow',
+                               'customAnalysisTabContentWatchTime'];
+            contentIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.remove('active');
+            });
             
             // Show selected tab
             if (tabName === 'profile-iq') {
-                document.getElementById('customAnalysisTabProfileIQ').classList.add('active');
-                document.getElementById('customAnalysisTabContentProfileIQ').classList.add('active');
+                const tab = document.getElementById('customAnalysisTabProfileIQ');
+                const content = document.getElementById('customAnalysisTabContentProfileIQ');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
             } else if (tabName === 'talent-search') {
-                document.getElementById('customAnalysisTabTalentSearch').classList.add('active');
-                document.getElementById('customAnalysisTabContentTalentSearch').classList.add('active');
+                const tab = document.getElementById('customAnalysisTabTalentSearch');
+                const content = document.getElementById('customAnalysisTabContentTalentSearch');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
             } else if (tabName === 'talent-theater') {
-                document.getElementById('customAnalysisTabTalentTheater').classList.add('active');
-                document.getElementById('customAnalysisTabContentTalentTheater').classList.add('active');
+                const tab = document.getElementById('customAnalysisTabTalentTheater');
+                const content = document.getElementById('customAnalysisTabContentTalentTheater');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
             } else if (tabName === 'svod-acquisition') {
-                document.getElementById('customAnalysisTabSVODAcquisition').classList.add('active');
-                if (document.getElementById('customAnalysisTabContentSVODAcquisition')) {
-                    document.getElementById('customAnalysisTabContentSVODAcquisition').classList.add('active');
-                }
+                const tab = document.getElementById('customAnalysisTabSVODAcquisition');
+                const content = document.getElementById('customAnalysisTabContentSVODAcquisition');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
             } else if (tabName === 'campaign-roi') {
-                document.getElementById('customAnalysisTabCampaignROI').classList.add('active');
-                if (document.getElementById('customAnalysisTabContentCampaignROI')) {
-                    document.getElementById('customAnalysisTabContentCampaignROI').classList.add('active');
-                }
+                const tab = document.getElementById('customAnalysisTabCampaignROI');
+                const content = document.getElementById('customAnalysisTabContentCampaignROI');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
             } else if (tabName === 'cross-show') {
-                document.getElementById('customAnalysisTabCrossShow').classList.add('active');
-                if (document.getElementById('customAnalysisTabContentCrossShow')) {
-                    document.getElementById('customAnalysisTabContentCrossShow').classList.add('active');
-                }
             } else if (tabName === 'watch-time') {
-                document.getElementById('customAnalysisTabWatchTime').classList.add('active');
-                if (document.getElementById('customAnalysisTabContentWatchTime')) {
-                    document.getElementById('customAnalysisTabContentWatchTime').classList.add('active');
-                }
+                const tab = document.getElementById('customAnalysisTabWatchTime');
+                const content = document.getElementById('customAnalysisTabContentWatchTime');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
             }
         }
         
@@ -27864,6 +28041,59 @@
             
             btn.disabled = false;
             btn.textContent = '🔄';
+        }
+        
+        // ============================================================================
+        // CREDITS MODAL
+        // ============================================================================
+        
+        function openCreditsModal() {
+            document.getElementById('creditsModal').classList.add('active');
+            // Reset the success message when opening
+            document.getElementById('creditsSuccessMessage').style.display = 'none';
+            const requestSection = document.getElementById('creditsRequestSection');
+            if (requestSection) requestSection.style.display = 'block';
+            const requestBtn = document.getElementById('requestCreditsBtn');
+            if (requestBtn) {
+                requestBtn.disabled = false;
+                requestBtn.textContent = '🛒 Request More Credits';
+            }
+        }
+        
+        function closeCreditsModal() {
+            document.getElementById('creditsModal').classList.remove('active');
+        }
+        
+        async function requestMoreCredits() {
+            const btn = document.getElementById('requestCreditsBtn');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⏳ Sending request...';
+            
+            try {
+                const response = await fetch('/api/request-credits', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Show success message
+                    document.getElementById('creditsRequestSection').style.display = 'none';
+                    document.getElementById('creditsSuccessMessage').style.display = 'block';
+                } else {
+                    // Show error but also show fallback contact info
+                    alert(data.error + '\n\n' + (data.fallback_message || 'Please contact Liz Huszarik at liz@crosswalknyc.com or +1 (818) 231-2610'));
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
+            } catch (error) {
+                console.error('Error requesting credits:', error);
+                alert('Failed to send request. Please contact Liz Huszarik directly at liz@crosswalknyc.com or +1 (818) 231-2610');
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
         }
         
         // ============================================================================

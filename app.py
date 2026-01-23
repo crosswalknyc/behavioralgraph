@@ -1694,7 +1694,8 @@ def create_user():
             'allowed_runs': req_data.get('allowed_runs', ['*']),
             'has_profile_iq_access': req_data.get('has_profile_iq_access', True),
             'has_subscriber_iq_access': req_data.get('has_subscriber_iq_access', False),
-            'has_attribution_iq_access': req_data.get('has_attribution_iq_access', False)
+            'has_analysis_iq_access': req_data.get('has_analysis_iq_access', False),
+            'analysis_iq_modules': req_data.get('analysis_iq_modules', [])
         }
         
         save_users(data)
@@ -1764,8 +1765,10 @@ def update_user(username):
             user['has_profile_iq_access'] = req_data['has_profile_iq_access']
         if 'has_subscriber_iq_access' in req_data:
             user['has_subscriber_iq_access'] = req_data['has_subscriber_iq_access']
-        if 'has_attribution_iq_access' in req_data:
-            user['has_attribution_iq_access'] = req_data['has_attribution_iq_access']
+        if 'has_analysis_iq_access' in req_data:
+            user['has_analysis_iq_access'] = req_data['has_analysis_iq_access']
+        if 'analysis_iq_modules' in req_data:
+            user['analysis_iq_modules'] = req_data['analysis_iq_modules']
         
         # Handle username change
         new_username = req_data.get('new_username', '').strip().lower()
@@ -2669,15 +2672,22 @@ def get_user_info():
 def index():
     user = get_current_user()
     role = user.get('role', 'user') if user else 'user'
-    # Admins always have access to all dashboards
+    # Admins always have access to all dashboards and modules
     if role == 'admin':
         has_profile_iq = True
         has_subscriber_iq = True
-        has_attribution_iq = True
+        has_analysis_iq = True
+        analysis_iq_modules = ['profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign', 'cross_show', 'watch_time']
     else:
         has_profile_iq = user.get('has_profile_iq_access', True) if user else True  # Default True for backward compat
         has_subscriber_iq = user.get('has_subscriber_iq_access', False) if user else False
-        has_attribution_iq = user.get('has_attribution_iq_access', False) if user else False
+        has_analysis_iq = user.get('has_analysis_iq_access', False) if user else False
+        analysis_iq_modules = user.get('analysis_iq_modules', []) if user else []
+    
+    # Get user info for credits request
+    first_name = user.get('first_name', '') if user else ''
+    last_name = user.get('last_name', '') if user else ''
+    email = user.get('email', '') if user else ''
     
     return render_template('index.html', 
                            username=session.get('username'),
@@ -2687,7 +2697,82 @@ def index():
                            profile_picture=user.get('profile_picture', '') if user else '',
                            has_profile_iq_access=has_profile_iq,
                            has_subscriber_iq_access=has_subscriber_iq,
-                           has_attribution_iq_access=has_attribution_iq)
+                           has_analysis_iq_access=has_analysis_iq,
+                           analysis_iq_modules=analysis_iq_modules,
+                           first_name=first_name,
+                           last_name=last_name,
+                           user_email=email)
+
+
+@app.route('/api/request-credits', methods=['POST'])
+@requires_auth
+def request_credits():
+    """Send email to Liz requesting more credits for the user."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'success': False, 'error': 'User not authenticated'}), 401
+        
+        first_name = user.get('first_name', session.get('username', 'Unknown'))
+        last_name = user.get('last_name', '')
+        user_email = user.get('email', 'No email on file')
+        username = session.get('username', 'Unknown')
+        
+        # Build email content
+        subject = "NEEDS MORE CREDITS"
+        
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2 style="color: #c8e600;">Credit Request from Crosswalk IQ</h2>
+            <p><strong>{first_name} {last_name}</strong> would like to buy more credits.</p>
+            <p><strong>Username:</strong> {username}</p>
+            <p><strong>Email:</strong> {user_email}</p>
+            <p><strong>Current Credits:</strong> {user.get('credits', 0)}</p>
+            <p><strong>Credits Used:</strong> {user.get('credits_used', 0)}</p>
+            <hr style="border: 1px solid #333;">
+            <p style="color: #888; font-size: 12px;">This request was sent from the Crosswalk IQ dashboard.</p>
+        </div>
+        """
+        
+        text_content = f"""Credit Request from Crosswalk IQ
+
+{first_name} {last_name} would like to buy more credits.
+
+Username: {username}
+Email: {user_email}
+Current Credits: {user.get('credits', 0)}
+Credits Used: {user.get('credits_used', 0)}
+
+This request was sent from the Crosswalk IQ dashboard.
+"""
+        
+        # Send email to Liz
+        success, message = send_email_via_gmail(
+            'liz@crosswalknyc.com',
+            subject,
+            html_content,
+            text_content
+        )
+        
+        if success:
+            return jsonify({
+                'success': True, 
+                'message': 'Your request for more credits has been sent. Someone will reach out to you shortly. For immediate assistance on credits, call Liz Huszarik at +1 (818) 231-2610'
+            })
+        else:
+            return jsonify({
+                'success': False, 
+                'error': f'Failed to send email: {message}',
+                'fallback_message': 'Please contact Liz Huszarik directly at liz@crosswalknyc.com or call +1 (818) 231-2610'
+            })
+            
+    except Exception as e:
+        print(f"❌ Error requesting credits: {e}")
+        return jsonify({
+            'success': False, 
+            'error': str(e),
+            'fallback_message': 'Please contact Liz Huszarik directly at liz@crosswalknyc.com or call +1 (818) 231-2610'
+        }), 500
 
 
 @app.route('/api/health')

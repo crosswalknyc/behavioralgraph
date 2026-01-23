@@ -1156,11 +1156,47 @@
                             <span>Subscriber IQ</span>
                         </label>
                         <label class="checkbox-group">
-                            <input type="checkbox" id="hasAttributionIQAccess">
-                            <span>Attribution IQ</span>
+                            <input type="checkbox" id="hasAnalysisIQAccess" onchange="toggleAnalysisIQModules()">
+                            <span>Analysis IQ</span>
                         </label>
                     </div>
                     <small style="color: var(--text-secondary); font-size: 0.7rem; display: block; margin-top: 0.5rem;">Select which dashboards this user can access</small>
+                    
+                    <!-- Analysis IQ Module Access -->
+                    <div id="analysisIQModulesSection" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-dark); border-radius: 8px; border: 1px solid var(--border-color);">
+                        <h5 style="margin: 0 0 0.75rem 0; font-size: 0.85rem; color: var(--accent-lime);">📊 Analysis IQ Modules</h5>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="moduleProfileAnalysis" class="analysis-module-checkbox">
+                                <span>🎯 Profile Analysis</span>
+                            </label>
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="moduleTalentSearch" class="analysis-module-checkbox">
+                                <span>🔍 Talent Search</span>
+                            </label>
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="moduleTalentTheater" class="analysis-module-checkbox">
+                                <span>🎭 Ticket Sales</span>
+                            </label>
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="moduleSVOD" class="analysis-module-checkbox">
+                                <span>📺 SVOD</span>
+                            </label>
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="moduleCampaign" class="analysis-module-checkbox">
+                                <span>📈 Campaign</span>
+                            </label>
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="moduleCrossShow" class="analysis-module-checkbox">
+                                <span>🔄 Cross Show</span>
+                            </label>
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="moduleWatchTime" class="analysis-module-checkbox">
+                                <span>⏱️ Watch Time</span>
+                            </label>
+                        </div>
+                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">Credits can be used on any selected module</small>
+                    </div>
                 </div>
 
                 <div class="access-section">
@@ -2009,7 +2045,9 @@
             document.getElementById('allRuns').checked = true;
             document.getElementById('hasProfileIQAccess').checked = true;
             document.getElementById('hasSubscriberIQAccess').checked = false;
-            document.getElementById('hasAttributionIQAccess').checked = false;
+            document.getElementById('hasAnalysisIQAccess').checked = false;
+            document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
+            document.getElementById('analysisIQModulesSection').style.display = 'none';
             document.getElementById('originalUsername').value = '';
             
             populateCategoryCheckboxes();
@@ -2044,7 +2082,12 @@
             document.getElementById('allRuns').checked = user.allowed_runs?.includes('*');
             document.getElementById('hasProfileIQAccess').checked = user.has_profile_iq_access !== false; // Default true
             document.getElementById('hasSubscriberIQAccess').checked = user.has_subscriber_iq_access === true; // Default false
-            document.getElementById('hasAttributionIQAccess').checked = user.has_attribution_iq_access === true; // Default false
+            document.getElementById('hasAnalysisIQAccess').checked = user.has_analysis_iq_access === true; // Default false
+            
+            // Set Analysis IQ modules and show/hide section
+            setAnalysisIQModules(user.analysis_iq_modules || []);
+            toggleAnalysisIQModules();
+            
             document.getElementById('originalUsername').value = username;
             document.getElementById('newUsername').disabled = false; // Allow editing username
             
@@ -2294,6 +2337,49 @@
             }
         }
 
+        function toggleAnalysisIQModules() {
+            const checkbox = document.getElementById('hasAnalysisIQAccess');
+            const modulesSection = document.getElementById('analysisIQModulesSection');
+            if (checkbox.checked) {
+                modulesSection.style.display = 'block';
+            } else {
+                modulesSection.style.display = 'none';
+                // Uncheck all module checkboxes when Analysis IQ is unchecked
+                document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
+            }
+        }
+
+        function getAnalysisIQModules() {
+            const modules = [];
+            if (document.getElementById('moduleProfileAnalysis').checked) modules.push('profile_analysis');
+            if (document.getElementById('moduleTalentSearch').checked) modules.push('talent_search');
+            if (document.getElementById('moduleTalentTheater').checked) modules.push('talent_theater');
+            if (document.getElementById('moduleSVOD').checked) modules.push('svod');
+            if (document.getElementById('moduleCampaign').checked) modules.push('campaign');
+            if (document.getElementById('moduleCrossShow').checked) modules.push('cross_show');
+            if (document.getElementById('moduleWatchTime').checked) modules.push('watch_time');
+            return modules;
+        }
+
+        function setAnalysisIQModules(modules) {
+            // Reset all checkboxes first
+            document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
+            
+            if (!modules || modules.length === 0) return;
+            
+            modules.forEach(mod => {
+                switch(mod) {
+                    case 'profile_analysis': document.getElementById('moduleProfileAnalysis').checked = true; break;
+                    case 'talent_search': document.getElementById('moduleTalentSearch').checked = true; break;
+                    case 'talent_theater': document.getElementById('moduleTalentTheater').checked = true; break;
+                    case 'svod': document.getElementById('moduleSVOD').checked = true; break;
+                    case 'campaign': document.getElementById('moduleCampaign').checked = true; break;
+                    case 'cross_show': document.getElementById('moduleCrossShow').checked = true; break;
+                    case 'watch_time': document.getElementById('moduleWatchTime').checked = true; break;
+                }
+            });
+        }
+
         function toggleAccessExpires() {
             const unlimited = document.getElementById('unlimitedAccess').checked;
             const dateInput = document.getElementById('accessExpires');
@@ -2475,7 +2561,8 @@
                     Array.from(document.querySelectorAll('#runCheckboxes input:checked')).map(cb => cb.value),
                 has_profile_iq_access: document.getElementById('hasProfileIQAccess').checked,
                 has_subscriber_iq_access: document.getElementById('hasSubscriberIQAccess').checked,
-                has_attribution_iq_access: document.getElementById('hasAttributionIQAccess').checked,
+                has_analysis_iq_access: document.getElementById('hasAnalysisIQAccess').checked,
+                analysis_iq_modules: getAnalysisIQModules(),
                 send_welcome_email: document.getElementById('sendWelcomeEmail').checked
             };
             
