@@ -6091,7 +6091,7 @@
         .legend-gradient {
             width: 150px;
             height: 12px;
-            background: linear-gradient(to right, #3b82f6, #10b981, #eab308, #f97316, #ef4444);
+            background: linear-gradient(to right, #ef4444, #f97316, #eab308, #10b981, #3b82f6);
             border-radius: 3px;
         }
         .us-heatmap {
@@ -9096,9 +9096,9 @@
                         <span class="module-action-btns"><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('location', 'Heat Map')" data-tooltip="Export PNG: Download the geographic heat map as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('location', 'Heat Map')" data-tooltip="Add to Deck: Save the heat map to your presentation deck.">➕</button></span>
                     </h3>
                     <div class="heatmap-legend">
-                        <span class="legend-label">High</span>
-                        <div class="legend-gradient"></div>
                         <span class="legend-label">Low</span>
+                        <div class="legend-gradient"></div>
+                        <span class="legend-label">High</span>
                     </div>
                     <div id="usHeatmap" class="us-heatmap"></div>
                 </div>
