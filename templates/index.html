@@ -24472,7 +24472,7 @@
                 const state = getStateFromLocation(loc.name);
                 if (state) {
                     if (!stateData[state]) {
-                        stateData[state] = { pct: 0, genPopPct: 0, index: 0, count: 0, names: [] };
+                        stateData[state] = { pct: 0, genPopPct: 0, index: 0, count: 0, names: [], cities: [] };
                     }
                     stateData[state].pct += loc.pct;
                     // Sum gen pop percentage the same way as profile pct (apples to apples)
@@ -24485,12 +24485,15 @@
                     stateData[state].index += loc.index || 100;
                     stateData[state].count++;
                     stateData[state].names.push(loc.name);
+                    // Store city with its percentage for tooltip
+                    stateData[state].cities.push({ name: loc.name, pct: loc.pct || 0, index: loc.index || 100 });
                 }
             });
             
-            // Calculate average index only (gen pop is already summed correctly like profile pct)
+            // Calculate average index and sort cities by percentage
             Object.keys(stateData).forEach(state => {
                 stateData[state].avgIndex = Math.round(stateData[state].index / stateData[state].count);
+                stateData[state].cities.sort((a, b) => b.pct - a.pct);
             });
             
             // Get min/max for color scaling (keep heat colors for background, but add comparison colors for text)
@@ -24520,8 +24523,14 @@
                     ? (data.genPopPct === 0 || data.genPopPct === null ? 'N/A' : formatNumber(Math.round((data.genPopPct / 100) * US_POP)))
                     : formatValueOrNA(data.genPopPct, true);
                 
+                // Build top 5 cities tooltip
+                const top5Cities = data.cities.slice(0, 5);
+                const citiesText = top5Cities.length > 0 
+                    ? `Top Cities in ${state}: ${top5Cities.map((c, i) => `${i + 1}. ${c.name} (${c.pct.toFixed(1)}%)`).join(' | ')}`
+                    : `${state}: No city data`;
+                
                 return `
-                <div class="state-box" style="background: ${bgColor};" title="${data.names.slice(0, 3).join(', ')}">
+                <div class="state-box has-tooltip" style="background: ${bgColor};" data-tooltip="${citiesText.replace(/"/g, '&quot;')}">
                     <div class="state-name">${state}</div>
                     <div class="state-pct" style="color: ${comparisonColor}; font-weight: 600;">
                         ${profileDisplay}
@@ -24539,14 +24548,21 @@
                 <span class="stat">🏆 Top: ${topState ? topState[0] + ' (' + topState[1].pct.toFixed(1) + '%)' : '-'}</span>
             `;
             
-            // Regional breakdown
+            // Regional breakdown - also collect all cities per region
             const regionData = {};
             Object.entries(stateData).forEach(([state, data]) => {
                 const region = getRegionForState(state);
-                if (!regionData[region]) regionData[region] = { pct: 0, genPopPct: 0, count: 0 };
+                if (!regionData[region]) regionData[region] = { pct: 0, genPopPct: 0, count: 0, cities: [] };
                 regionData[region].pct += data.pct;
                 regionData[region].genPopPct += data.genPopPct;
                 regionData[region].count++;
+                // Add all cities from this state to the region
+                regionData[region].cities.push(...data.cities);
+            });
+            
+            // Sort cities by percentage within each region
+            Object.keys(regionData).forEach(region => {
+                regionData[region].cities.sort((a, b) => b.pct - a.pct);
             });
             
             const regionColors = {
@@ -24576,8 +24592,14 @@
                         ? (data.genPopPct === 0 || data.genPopPct === null ? 'N/A' : formatNumber(Math.round((data.genPopPct / 100) * US_POP)))
                         : formatValueOrNA(data.genPopPct, true);
                     
+                    // Build top 5 cities tooltip for region
+                    const top5Cities = data.cities.slice(0, 5);
+                    const citiesText = top5Cities.length > 0 
+                        ? `Top Cities in ${region}: ${top5Cities.map((c, i) => `${i + 1}. ${c.name} (${c.pct.toFixed(1)}%)`).join(' | ')}`
+                        : `${region}: No city data`;
+                    
                     return `
-                    <div class="region-card">
+                    <div class="region-card has-tooltip" data-tooltip="${citiesText.replace(/"/g, '&quot;')}">
                         <h4>${region}</h4>
                         <div class="region-bar">
                             <div class="region-bar-fill" style="width: ${(data.pct / maxRegionPct * 100)}%; background: ${regionColors[region] || '#6b7280'};"></div>
