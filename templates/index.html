@@ -10468,9 +10468,12 @@
         }
         
         // Format index as multiplier (e.g., 150 → 1.5x, 100 → 1.0x, 75 → 0.75x)
+        // Returns N/A for very small values (0.0x)
         function formatIndex(index) {
             if (index === null || index === undefined || isNaN(index)) return '1.0x';
             const multiplier = index / 100;
+            // If multiplier would display as 0.0x (less than 0.05), show N/A
+            if (multiplier < 0.05) return 'N/A';
             return multiplier.toFixed(1) + 'x';
         }
 
