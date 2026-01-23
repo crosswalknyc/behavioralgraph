@@ -17949,6 +17949,149 @@
                     return a.localeCompare(b);
                 });
                 
+                // Check if this is APP/PLATFORM for slice dropdown
+                const isAppPlatform = cat.toUpperCase() === 'APP/PLATFORM' || cat.toUpperCase().includes('APP/PLATFORM');
+                const appPlatformOptions = ['all', 'social media', 'streaming', 'gaming', 'productivity', 'shopping', 'finance', 'health/fitness', 'news', 'dating', 'food delivery', 'travel', 'music', 'messaging'];
+                const appPlatformSliceOptions = appPlatformOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
+                
+                // Check if this is SEARCH ENGINE/AI for slice dropdown
+                const isSearchAI = cat.toUpperCase() === 'SEARCH ENGINE/AI' || cat.toUpperCase().includes('SEARCH ENGINE');
+                const searchAIOptions = ['all', 'search', 'ai'];
+                const searchAISliceOptions = searchAIOptions;
+                
+                // Check if this is QSR for slice dropdown
+                const isQSR = cat.toUpperCase() === 'QSR' || cat.toUpperCase().includes('QSR');
+                const qsrOptions = ['all', 'burger', 'chicken', 'pizza', 'mexican', 'sandwich', 'coffee', 'ice cream', 'asian', 'breakfast', 'seafood'];
+                const qsrSliceOptions = qsrOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
+                
+                // Check if this is WHERE THEY DINE for slice dropdown
+                const isWhereTheyDine = cat.toUpperCase() === 'WHERE THEY DINE' || cat.toUpperCase().includes('WHERE THEY DINE');
+                const whereTheyDineOptions = ['all', 'casual dining', 'fast casual', 'fine dining', 'family', 'steakhouse', 'italian', 'mexican', 'asian', 'seafood', 'american'];
+                const whereTheyDineSliceOptions = whereTheyDineOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
+                
+                // Check if this is TRAVEL for slice dropdown
+                const isTravel = cat.toUpperCase() === 'TRAVEL' || cat.toUpperCase().includes('TRAVEL');
+                const travelOptions = ['all', 'airline', 'hotel', 'cruise', 'rental car', 'booking', 'destination', 'vacation'];
+                const travelSliceOptions = travelOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
+                
+                // Check if this is PETS for slice dropdown
+                const isPets = cat.toUpperCase() === 'PETS' || cat.toUpperCase().includes('PETS');
+                const petsOptions = ['all', 'dog', 'cat', 'bird', 'fish', 'reptile', 'small animal', 'pet food', 'pet supplies', 'veterinary'];
+                const petsSliceOptions = petsOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
+                
+                // Check if this is PHARMACY for slice dropdown
+                const isPharmacy = cat.toUpperCase() === 'PHARMACY' || cat.toUpperCase().includes('PHARMACY');
+                const pharmacyOptions = ['all', 'retail pharmacy', 'online pharmacy', 'specialty', 'otc', 'prescription'];
+                const pharmacySliceOptions = pharmacyOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
+                
+                // Check if this is TECHNOLOGY/DEVICE for slice dropdown
+                const isTechDevice = cat.toUpperCase() === 'TECHNOLOGY/DEVICE' || cat.toUpperCase().includes('TECHNOLOGY/DEVICE') || cat.toUpperCase() === 'TECHNOLOGY BRAND';
+                const techDeviceOptions = ['all', 'smartphone', 'computer', 'tablet', 'wearable', 'smart home', 'gaming', 'audio', 'tv/display', 'accessories'];
+                const techDeviceSliceOptions = techDeviceOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
+                
+                // Check if this is WORKOUT FACILITY for slice dropdown
+                const isWorkoutFacility = cat.toUpperCase() === 'WORKOUT FACILITY' || cat.toUpperCase().includes('WORKOUT FACILITY') || cat.toUpperCase().includes('GYM');
+                const workoutFacilityOptions = ['all', 'gym', 'fitness studio', 'yoga', 'crossfit', 'boutique', 'budget', 'premium'];
+                const workoutFacilitySliceOptions = workoutFacilityOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
+                
+                // Check if this is GAMES for slice dropdown
+                const isGames = cat.toUpperCase() === 'GAMES' || cat.toUpperCase() === 'GAME PLAYERS';
+                const gamesOptions = ['all', 'console', 'pc', 'mobile', 'vr', 'sports', 'action', 'rpg', 'puzzle', 'strategy', 'simulation'];
+                const gamesSliceOptions = gamesOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
+                
+                // Check if this is AUTOMOBILE for slice dropdown
+                const isAutomobile = cat.toUpperCase() === 'AUTOMOBILE' || cat.toUpperCase().includes('AUTOMOBILE') || cat.toUpperCase().includes('AUTOMOTIVE');
+                const automobileOptions = ['all', 'luxury', 'economy', 'suv', 'truck', 'sedan', 'electric', 'hybrid', 'sports car', 'minivan'];
+                const automobileSliceOptions = automobileOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
+                
+                // Check if this is INVESTMENTS for slice dropdown
+                const isInvestments = cat.toUpperCase() === 'INVESTMENTS' || cat.toUpperCase().includes('INVESTMENT');
+                const investmentsOptions = ['all', 'stocks', 'bonds', 'mutual funds', 'etf', 'crypto', 'real estate', 'retirement', 'brokerage'];
+                const investmentsSliceOptions = investmentsOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
+                
+                // Check if this is INSURANCE for slice dropdown
+                const isInsurance = cat.toUpperCase() === 'INSURANCE' || cat.toUpperCase().includes('INSURANCE');
+                const insuranceOptions = ['all', 'auto', 'home', 'life', 'health', 'renters', 'pet', 'travel', 'business'];
+                const insuranceSliceOptions = insuranceOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
+                
+                // Check if this is EDUCATION & LEARNING for slice dropdown
+                const isEducation = cat.toUpperCase() === 'EDUCATION & LEARNING' || cat.toUpperCase().includes('EDUCATION') || cat.toUpperCase().includes('LEARNING');
+                const educationOptions = ['all', 'online courses', 'university', 'k-12', 'tutoring', 'language', 'professional', 'certification', 'test prep'];
+                const educationSliceOptions = educationOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
+                
+                // Check if this is FRANCHISE for slice dropdown
+                const isFranchise = cat.toUpperCase() === 'FRANCHISE' || cat.toUpperCase().includes('FRANCHISE');
+                const franchiseOptions = ['all', 'food', 'retail', 'service', 'fitness', 'automotive', 'home services', 'business services'];
+                const franchiseSliceOptions = franchiseOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
+                
+                // Check if this is NON PROFIT/CHARITY for slice dropdown
+                const isNonProfit = cat.toUpperCase() === 'NON PROFIT/CHARITY' || cat.toUpperCase().includes('NON PROFIT') || cat.toUpperCase().includes('CHARITY') || cat.toUpperCase().includes('NONPROFIT');
+                const nonProfitOptions = ['all', 'health', 'education', 'environment', 'humanitarian', 'animal welfare', 'arts/culture', 'religious', 'community'];
+                const nonProfitSliceOptions = nonProfitOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
+                
+                // Check if any slicer should be shown
+                const hasSlicers = isMostPurchased || isWhereTheyShop || isSports || isTalent || isAppPlatform || isSearchAI || isQSR || isWhereTheyDine || isTravel || isPets || isPharmacy || isTechDevice || isWorkoutFacility || isGames || isAutomobile || isInvestments || isInsurance || isEducation || isFranchise || isNonProfit;
+                
                 return `
                     <div class="behavioral-card ${isHighlighted ? 'highlighted' : ''}" 
                          data-category="${cat}" 
@@ -17997,6 +18140,102 @@
                                 <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceTalent('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                     <option value="all">Slice By</option>
                                     ${talentSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isAppPlatform ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By</option>
+                                    ${appPlatformSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isSearchAI ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By</option>
+                                    ${searchAISliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isQSR ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By</option>
+                                    ${qsrSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isWhereTheyDine ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By</option>
+                                    ${whereTheyDineSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isTravel ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By</option>
+                                    ${travelSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isPets ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By</option>
+                                    ${petsSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isPharmacy ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By</option>
+                                    ${pharmacySliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isTechDevice ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By</option>
+                                    ${techDeviceSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isWorkoutFacility ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By</option>
+                                    ${workoutFacilitySliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isGames ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By</option>
+                                    ${gamesSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isAutomobile ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By</option>
+                                    ${automobileSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isInvestments ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By</option>
+                                    ${investmentsSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isInsurance ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By</option>
+                                    ${insuranceSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isEducation ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By</option>
+                                    ${educationSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isFranchise ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By</option>
+                                    ${franchiseSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                </select>
+                            ` : ''}
+                            ${isNonProfit ? `
+                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceGeneric('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="all">Slice By</option>
+                                    ${nonProfitSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
                                 </select>
                             ` : ''}
                             <select class="behavioral-sort-select" onchange="sortBehavioralCard('${catId}', '${cat}', this.value)" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
@@ -18805,6 +19044,57 @@
             
             // Apply current sort
             const sortSelect = listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select');
+            if (sortSelect) {
+                const sortValue = sortSelect.value;
+                if (sortValue === 'index') {
+                    filtered = filtered.sort((a, b) => (b.index || 0) - (a.index || 0));
+                } else if (sortValue === 'pct') {
+                    filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                } else if (sortValue === 'alpha') {
+                    filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                }
+            }
+            
+            const displayItems = filtered.slice(0, 50);
+            const maxPct = Math.max(...displayItems.map(i => i.pct), 1);
+            listEl.innerHTML = displayItems.length > 0 
+                ? renderBehavioralItems(displayItems, maxPct)
+                : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found</div>';
+        }
+        
+        // Generic slice function for all new category slicers
+        function sliceGeneric(catId, cat, sliceValue) {
+            currentSlices[cat] = sliceValue;
+            const listEl = document.getElementById('list-' + catId);
+            const items = allBehavioralData[cat] || [];
+            
+            // Filter items based on slice
+            let filtered = items;
+            if (sliceValue && sliceValue !== 'all') {
+                const sliceUpper = sliceValue.toUpperCase();
+                
+                // Filter items that match the slice value in name, subcategory, or tags
+                filtered = items.filter(item => {
+                    const nameUpper = (item.name || '').toUpperCase();
+                    const subcatUpper = (item.subcategory || '').toUpperCase();
+                    const tagsUpper = (item.tags || []).map(t => t.toUpperCase()).join(' ');
+                    
+                    // Check for match in name, subcategory, or tags
+                    return nameUpper.includes(sliceUpper) || 
+                           subcatUpper.includes(sliceUpper) || 
+                           tagsUpper.includes(sliceUpper);
+                });
+            }
+            
+            // Apply current search filter if any
+            const searchInput = document.querySelector(`#list-${catId}`)?.closest('.behavioral-card')?.querySelector('input[type="text"]');
+            if (searchInput && searchInput.value.trim()) {
+                const searchTerm = searchInput.value.toLowerCase();
+                filtered = filtered.filter(item => (item.name || '').toLowerCase().includes(searchTerm));
+            }
+            
+            // Apply current sort
+            const sortSelect = document.querySelector(`#list-${catId}`)?.closest('.behavioral-card')?.querySelector('.behavioral-sort-select');
             if (sortSelect) {
                 const sortValue = sortSelect.value;
                 if (sortValue === 'index') {
