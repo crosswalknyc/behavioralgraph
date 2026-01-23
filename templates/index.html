@@ -17150,7 +17150,8 @@
                         </h4>
                         <div class="interest-category-items">
                             ${cat.items.map(item => {
-                                const idxColor = item.index >= 100 ? '#10b981' : '#ef4444';
+                                const isOverIndex = item.index >= 100;
+                                const idxColor = isOverIndex ? '#10b981' : '#ef4444';
                                 
                                 // Normalize gen pop percentage
                                 let genPopPct = item.genPopPct || 0;
@@ -17165,14 +17166,14 @@
                                 
                                 const genPopDisplay = isProjection 
                                     ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
-                                    : formatValueOrNA(genPopPct, true);
+                                    : 'GP: ' + formatValueOrNA(genPopPct, true);
                                 
                                 return `<div class="interest-category-item">
                                     <span>${item.name}</span>
                                     <span style="display: flex; align-items: center; gap: 0.5rem;">
                                         <span style="color: ${idxColor}; font-weight: 600;">${formatIndex(item.index)}</span>
-                                        <span style="color: var(--text-primary); font-size: 0.85rem;">${profileDisplay}</span>
-                                        <span style="color: var(--text-secondary); font-size: 0.85rem;">(${genPopDisplay})</span>
+                                        <span style="color: ${idxColor}; font-size: 0.85rem;">${profileDisplay}</span>
+                                        <span style="color: ${isOverIndex ? '#6b7280' : '#fca5a5'}; font-size: 0.85rem;">(${genPopDisplay})</span>
                                     </span>
                                 </div>`;
                             }).join('')}
@@ -17217,7 +17218,8 @@
             const maxPct = Math.max(...sorted.map(i => i.pct), 1);
             
             container.innerHTML = sorted.map((item, idx) => {
-                const indexColor = item.index >= 100 ? '#10b981' : '#ef4444';
+                const isOverIndex = item.index >= 100;
+                const indexColor = isOverIndex ? '#10b981' : '#ef4444';
                 
                 // Normalize gen pop percentage
                 let genPopPct = item.genPopPct || 0;
@@ -17230,7 +17232,7 @@
                     : formatValueOrNA(item.pct, true);
                 const genPopDisplay = isProjection 
                     ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
-                    : formatValueOrNA(genPopPct, true);
+                    : 'GP: ' + formatValueOrNA(genPopPct, true);
                 
                 return `
                     <div class="interest-item" data-name="${item.name.toLowerCase()}" data-category="${item.category}">
@@ -17240,8 +17242,8 @@
                             <div class="interest-bar" style="width: ${(item.pct / maxPct) * 100}%"></div>
                         </div>
                         <span class="interest-index" style="color: ${indexColor};">${formatIndex(item.index)}</span>
-                        <span class="interest-pct">${profileDisplay}</span>
-                        <span class="interest-genpop">(${genPopDisplay})</span>
+                        <span class="interest-pct" style="color: ${indexColor};">${profileDisplay}</span>
+                        <span class="interest-genpop" style="color: ${isOverIndex ? '#6b7280' : '#fca5a5'};">(${genPopDisplay})</span>
                     </div>
                 `;
             }).join('');
