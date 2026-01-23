@@ -8406,7 +8406,7 @@
                         </div>
                         <div class="interests-filter">
                             <select id="interestsCategorySelect" onchange="filterInterests()" class="has-tooltip" data-tooltip="Filter by Category: Select a category to filter interests, or 'All' to show all interests." style="padding: 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); margin-right: 0.5rem;">
-                                <option value="all">Category: All</option>
+                                <option value="all">All</option>
                             </select>
                             <input type="text" id="interestsSearchInput" placeholder="🔍 Search interests..." class="has-tooltip" data-tooltip="Search Interests: Type to filter the interests list by name. Results update as you type." oninput="filterInterests()" style="padding: 0.5rem 1rem; font-size: 0.85rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); width: 250px;">
                             <select id="interestsSortSelect" onchange="sortInterests(this.value)" class="has-tooltip" data-tooltip="Sort Interests: Index ↓ = highest index first, % ↓ = highest percentage first, A-Z = alphabetical order." style="padding: 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
@@ -16893,11 +16893,11 @@
             const currentValue = select.value;
             
             // Clear and repopulate
-            select.innerHTML = '<option value="all">Category: All</option>';
+            select.innerHTML = '<option value="all">All</option>';
             categories.forEach(cat => {
                 const option = document.createElement('option');
                 option.value = cat;
-                option.textContent = `Category: ${cat}`;
+                option.textContent = cat;
                 select.appendChild(option);
             });
             
