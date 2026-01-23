@@ -2952,9 +2952,24 @@
         let currentSort = 'date-desc';
         
         async function loadContentFiles() {
+            console.log('🔄 Loading content files...');
+            const container = document.getElementById('contentAccordions');
+            
+            // Show loading state
+            if (container) {
+                container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem; padding: 2rem; text-align: center;">⏳ Loading content files...</p>';
+            }
+            
             try {
                 const response = await fetch('/api/admin/content');
+                console.log('📥 API response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
+                console.log('📦 API data received:', data.success, 'files:', data.files?.length, 'archived:', data.archived?.length);
                 
                 if (data.success) {
                     contentFiles = data.files || [];
@@ -2977,10 +2992,22 @@
                     
                     // Sort and render content
                     sortContentFiles();
+                    
+                    console.log('✅ Content files loaded successfully');
+                    showToast(`Loaded ${contentFiles.length} files`);
+                } else {
+                    console.error('❌ API returned error:', data.error);
+                    showToast(data.error || 'Failed to load content files', true);
+                    if (container) {
+                        container.innerHTML = `<p style="color: var(--accent-red); font-size: 0.85rem; padding: 2rem; text-align: center;">❌ ${data.error || 'Failed to load content files'}</p>`;
+                    }
                 }
             } catch (error) {
-                console.error('Failed to load content:', error);
-                showToast('Failed to load content files', true);
+                console.error('❌ Failed to load content:', error);
+                showToast('Failed to load content files: ' + error.message, true);
+                if (container) {
+                    container.innerHTML = `<p style="color: var(--accent-red); font-size: 0.85rem; padding: 2rem; text-align: center;">❌ Error: ${error.message}</p>`;
+                }
             }
         }
         
