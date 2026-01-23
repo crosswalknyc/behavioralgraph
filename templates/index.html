@@ -1508,17 +1508,15 @@
         .dash-dropdown-menu {
             position: absolute;
             top: 100%;
-            left: 0;
+            right: 0;
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 6px;
             min-width: 220px;
             width: max-content;
-            max-width: none;
-            z-index: 10000;
+            z-index: 1000;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             white-space: nowrap;
-            margin-top: 2px;
         }
 
         .dash-dropdown-menu a {
@@ -2103,7 +2101,6 @@
             max-width: 280px;
             justify-content: flex-start;
             margin-top: 0.75rem;
-            overflow: visible;
         }
         
         .content-action-buttons .dash-action-btn,
@@ -8920,7 +8917,9 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Occupation')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Occupation')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Occupation')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container" style="height: 400px; overflow-y: auto; overflow-x: hidden;"><canvas id="occupationChart"></canvas></div>
+                                <div class="chart-container" style="height: 400px; max-height: 400px; overflow-y: scroll; overflow-x: hidden; position: relative;">
+                                    <canvas id="occupationChart"></canvas>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -18125,8 +18124,12 @@
                 // Set canvas height based on number of categories (for bar chart scrolling)
                 const occCanvas = document.getElementById('occupationChart');
                 if (occChartType === 'bar' && occCanvas) {
-                    const barHeight = 40; // Height per bar
-                    occCanvas.style.height = (occLabels.length * barHeight) + 'px';
+                    const barHeight = 50; // Height per bar (increased for long labels)
+                    const minHeight = 600; // Minimum height to ensure scrolling
+                    const calculatedHeight = occLabels.length * barHeight;
+                    occCanvas.style.height = Math.max(calculatedHeight, minHeight) + 'px';
+                } else if (occCanvas) {
+                    occCanvas.style.height = '400px'; // Default height for circular charts
                 }
                 
                 charts.occupation = new Chart(occCanvas, {
