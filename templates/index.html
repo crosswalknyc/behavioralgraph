@@ -2308,7 +2308,11 @@
             color: var(--text-primary);
         }
 
-        .chart-container { height: 250px; }
+        .chart-container { 
+            height: 250px; 
+            overflow: visible; /* Allow chart to expand beyond container if needed */
+            position: relative;
+        }
         
         /* Module Action Buttons (Add to Deck, CSV, PNG, PDF) */
         .module-action-btns {
@@ -15541,7 +15545,7 @@
                     indexAxis: ageIsCircular || ageChartType === 'line' ? 'x' : 'y', 
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: ageIsCircular ? {} : { right: 30 } },
+                    layout: { padding: ageIsCircular ? {} : { right: 50 } }, // Increased padding to prevent text cutoff
                     plugins: { 
                         legend: { display: ageIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: 11 } } },
                         datalabels: ageIsCircular ? { display: false } : {
@@ -15583,13 +15587,17 @@
             const genderChartType = chartTypePrefs.gender || 'doughnut';
             const genderIsCircular = ['doughnut', 'pie', 'polarArea'].includes(genderChartType);
             
+            // Calculate max for x-axis with padding for labels (horizontal bar)
+            const genderMax = genderChartType === 'bar' ? Math.max(...genderData) * 1.5 : undefined; // 50% padding for horizontal labels
+            
             charts.gender = new Chart(document.getElementById('genderChart'), {
                 type: genderChartType,
                 data: { labels: genderLabels, datasets: [{ data: genderData, backgroundColor: colors, borderRadius: genderChartType === 'bar' ? 4 : 0 }] },
                 options: { 
                     indexAxis: genderChartType === 'bar' ? 'y' : 'x',
                     responsive: true, 
-                    maintainAspectRatio: false, 
+                    maintainAspectRatio: false,
+                    layout: { padding: genderIsCircular ? {} : { right: 50 } }, // Increased padding for bar charts
                     plugins: { 
                         legend: { 
                             display: genderIsCircular,
@@ -15635,8 +15643,16 @@
                         } : { display: false }
                     },
                     scales: genderIsCircular ? {} : {
-                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } },
-                        y: { grid: { display: false }, ticks: { color: '#e6f1ff' } }
+                        x: { 
+                            grid: { color: '#1e3a5f' }, 
+                            ticks: { color: '#8892b0', font: { size: 13 } },
+                            suggestedMax: genderMax // Add suggestedMax to prevent cutoff
+                        },
+                        y: { 
+                            grid: { display: false }, 
+                            ticks: { color: '#e6f1ff', font: { size: 14 } },
+                            afterFit: (scale) => { scale.width = Math.max(scale.width, 140); } // Ensure y-axis has enough width
+                        }
                     }
                 },
                 plugins: [ChartDataLabels]
@@ -15653,13 +15669,17 @@
             const ethnicityChartType = chartTypePrefs.ethnicity || 'doughnut';
             const ethnicityIsCircular = ['doughnut', 'pie', 'polarArea'].includes(ethnicityChartType);
             
+            // Calculate max for x-axis with padding for labels (horizontal bar)
+            const ethMax = ethnicityChartType === 'bar' ? Math.max(...ethData) * 1.5 : undefined; // 50% padding for horizontal labels
+            
             charts.ethnicity = new Chart(document.getElementById('ethnicityChart'), {
                 type: ethnicityChartType,
                 data: { labels: ethLabels, datasets: [{ data: ethData, backgroundColor: colors, borderRadius: ethnicityChartType === 'bar' ? 4 : 0 }] },
                 options: { 
                     indexAxis: ethnicityChartType === 'bar' ? 'y' : 'x',
                     responsive: true, 
-                    maintainAspectRatio: false, 
+                    maintainAspectRatio: false,
+                    layout: { padding: ethnicityIsCircular ? {} : { right: 50 } }, // Increased padding to prevent text cutoff
                     plugins: { 
                         legend: { 
                             display: ethnicityIsCircular,
@@ -15705,8 +15725,16 @@
                         } : { display: false }
                     },
                     scales: ethnicityIsCircular ? {} : {
-                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } },
-                        y: { grid: { display: false }, ticks: { color: '#e6f1ff' } }
+                        x: { 
+                            grid: { color: '#1e3a5f' }, 
+                            ticks: { color: '#8892b0', font: { size: 13 } },
+                            suggestedMax: ethMax // Add suggestedMax to prevent cutoff
+                        },
+                        y: { 
+                            grid: { display: false }, 
+                            ticks: { color: '#e6f1ff', font: { size: 14 } },
+                            afterFit: (scale) => { scale.width = Math.max(scale.width, 140); } // Ensure y-axis has enough width
+                        }
                     }
                 },
                 plugins: [ChartDataLabels]
@@ -15747,7 +15775,7 @@
                     indexAxis: incomeIsCircular || incomeChartType === 'line' ? 'x' : 'y',
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: incomeIsCircular ? {} : { right: 30 } },
+                    layout: { padding: incomeIsCircular ? {} : { right: 50 } }, // Increased padding to prevent text cutoff
                     plugins: { 
                         legend: { display: incomeIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: 10 } } },
                         datalabels: incomeIsCircular ? { display: false } : {
@@ -15798,7 +15826,7 @@
                     data: { labels: eduLabels, datasets: [{ data: eduData, backgroundColor: educationIsCircular ? colors : '#a6e22e', borderRadius: educationIsCircular ? 0 : 4 }] },
                     options: { 
                         indexAxis: educationIsCircular ? 'x' : 'y', responsive: true, maintainAspectRatio: false,
-                        layout: { padding: educationIsCircular ? {} : { right: 30 } },
+                        layout: { padding: educationIsCircular ? {} : { right: 50 } }, // Increased padding to prevent text cutoff
                         plugins: { 
                             legend: { display: educationIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: 10 } } }, 
                             datalabels: educationIsCircular ? { display: false } : { 
@@ -15840,13 +15868,17 @@
                 const relationshipChartType = chartTypePrefs.relationship || 'doughnut';
                 const relationshipIsCircular = ['doughnut', 'pie', 'polarArea'].includes(relationshipChartType);
                 
+                // Calculate max for x-axis with padding for labels (horizontal bar)
+                const relMax = relationshipChartType === 'bar' ? Math.max(...relData) * 1.5 : undefined; // 50% padding for horizontal labels
+                
                 charts.relationship = new Chart(document.getElementById('relationshipChart'), {
                     type: relationshipChartType,
                     data: { labels: relLabels, datasets: [{ data: relData, backgroundColor: colors, borderRadius: relationshipChartType === 'bar' ? 4 : 0 }] },
                     options: { 
                         indexAxis: relationshipChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
-                        maintainAspectRatio: false, 
+                        maintainAspectRatio: false,
+                        layout: { padding: relationshipIsCircular ? {} : { right: 50 } }, // Increased padding to prevent text cutoff 
                         plugins: { 
                             legend: { 
                                 display: relationshipIsCircular,
@@ -15872,8 +15904,16 @@
                             } : { display: false }
                         },
                         scales: relationshipIsCircular ? {} : {
-                            x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } },
-                            y: { grid: { display: false }, ticks: { color: '#e6f1ff' } }
+                            x: { 
+                                grid: { color: '#1e3a5f' }, 
+                                ticks: { color: '#8892b0', font: { size: 13 } },
+                                suggestedMax: relMax // Add suggestedMax to prevent cutoff
+                            },
+                            y: { 
+                                grid: { display: false }, 
+                                ticks: { color: '#e6f1ff', font: { size: 14 } },
+                                afterFit: (scale) => { scale.width = Math.max(scale.width, 140); } // Ensure y-axis has enough width
+                            }
                         }
                     },
                     plugins: [ChartDataLabels]
@@ -15890,13 +15930,17 @@
                 const soChartType = chartTypePrefs.sexualOrientation || 'doughnut';
                 const soIsCircular = ['doughnut', 'pie', 'polarArea'].includes(soChartType);
                 
+                // Calculate max for x-axis with padding for labels (horizontal bar)
+                const soMax = soChartType === 'bar' ? Math.max(...soData) * 1.5 : undefined; // 50% padding for horizontal labels
+                
                 charts.sexualOrientation = new Chart(document.getElementById('sexualOrientationChart'), {
                     type: soChartType,
                     data: { labels: soLabels, datasets: [{ data: soData, backgroundColor: colors, borderRadius: soChartType === 'bar' ? 4 : 0 }] },
                     options: { 
                         indexAxis: soChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
-                        maintainAspectRatio: false, 
+                        maintainAspectRatio: false,
+                        layout: { padding: soIsCircular ? {} : { right: 50 } }, // Increased padding to prevent text cutoff 
                         plugins: { 
                             legend: { 
                                 display: soIsCircular,
@@ -15922,8 +15966,16 @@
                             } : { display: false }
                         },
                         scales: soIsCircular ? {} : {
-                            x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } },
-                            y: { grid: { display: false }, ticks: { color: '#e6f1ff' } }
+                            x: { 
+                                grid: { color: '#1e3a5f' }, 
+                                ticks: { color: '#8892b0', font: { size: 13 } },
+                                suggestedMax: soMax // Add suggestedMax to prevent cutoff
+                            },
+                            y: { 
+                                grid: { display: false }, 
+                                ticks: { color: '#e6f1ff', font: { size: 14 } },
+                                afterFit: (scale) => { scale.width = Math.max(scale.width, 140); } // Ensure y-axis has enough width
+                            }
                         }
                     },
                     plugins: [ChartDataLabels]
@@ -15940,13 +15992,17 @@
                 const psChartType = chartTypePrefs.parentalStatus || 'doughnut';
                 const psIsCircular = ['doughnut', 'pie', 'polarArea'].includes(psChartType);
                 
+                // Calculate max for x-axis with padding for labels (horizontal bar)
+                const psMax = psChartType === 'bar' ? Math.max(...psData) * 1.5 : undefined; // 50% padding for horizontal labels
+                
                 charts.parentalStatus = new Chart(document.getElementById('parentalStatusChart'), {
                     type: psChartType,
                     data: { labels: psLabels, datasets: [{ data: psData, backgroundColor: colors, borderRadius: psChartType === 'bar' ? 4 : 0 }] },
                     options: { 
                         indexAxis: psChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
-                        maintainAspectRatio: false, 
+                        maintainAspectRatio: false,
+                        layout: { padding: psIsCircular ? {} : { right: 50 } }, // Increased padding to prevent text cutoff 
                         plugins: { 
                             legend: { 
                                 display: psIsCircular,
@@ -15972,8 +16028,16 @@
                             } : { display: false }
                         },
                         scales: psIsCircular ? {} : {
-                            x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0' } },
-                            y: { grid: { display: false }, ticks: { color: '#e6f1ff' } }
+                            x: { 
+                                grid: { color: '#1e3a5f' }, 
+                                ticks: { color: '#8892b0', font: { size: 13 } },
+                                suggestedMax: psMax // Add suggestedMax to prevent cutoff
+                            },
+                            y: { 
+                                grid: { display: false }, 
+                                ticks: { color: '#e6f1ff', font: { size: 14 } },
+                                afterFit: (scale) => { scale.width = Math.max(scale.width, 140); } // Ensure y-axis has enough width
+                            }
                         }
                     },
                     plugins: [ChartDataLabels]
