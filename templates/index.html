@@ -16235,7 +16235,7 @@
         // Helper function to capitalize first letter of each word
         // Preserves acronyms like NBA, NFL, NHL, MLB, WNBA, USA, TV, etc.
         function capitalizeWords(str) {
-            const acronyms = ['NBA', 'NFL', 'NHL', 'MLB', 'WNBA', 'MLS', 'UFC', 'WWE', 'PGA', 'NASCAR', 'USA', 'TV', 'HBO', 'ESPN', 'CNN', 'BBC', 'ABC', 'CBS', 'NBC', 'FOX', 'AMC', 'FX', 'TBS', 'TNT', 'DVD', 'CD', 'DJ', 'VIP', 'CEO', 'CFO', 'CTO', 'AI', 'VR', 'AR', 'PC', 'MAC', 'iOS', 'SVOD', 'AVOD', 'OTT', 'DMA', 'CPM', 'ROI', 'KPI'];
+            const acronyms = ['NBA', 'NFL', 'NHL', 'MLB', 'WNBA', 'MLS', 'UFC', 'WWE', 'PGA', 'NASCAR', 'USA', 'TV', 'HBO', 'ESPN', 'CNN', 'BBC', 'ABC', 'CBS', 'NBC', 'FOX', 'AMC', 'FX', 'TBS', 'TNT', 'DVD', 'CD', 'DJ', 'VIP', 'CEO', 'CFO', 'CTO', 'AI', 'VR', 'AR', 'PC', 'MAC', 'iOS', 'SVOD', 'AVOD', 'OTT', 'DMA', 'CPM', 'ROI', 'KPI', 'AFC', 'NFC', 'AL', 'NL', 'NWSL', 'QSR', 'OTC', 'ETF', 'SUV', 'RPG'];
             
             return str.split(/[\s\/&]+/).map(word => {
                 const upperWord = word.toUpperCase();
