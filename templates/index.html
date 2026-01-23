@@ -15504,6 +15504,15 @@
                     // For behavioral items, Category Share is the Gen Pop percentage
                     // Normalize: if < 1, treat as decimal and multiply by 100; if >= 1, use as-is
                     genPopPct = catShare > 0 ? (catShare < 1 ? catShare * 100 : catShare) : 0;
+                    
+                    // If this IS the Gen Pop profile, use profile pct as gen pop pct (they should be the same)
+                    // Check if filename or profile name contains "Gen Pop" or "GEN_POP"
+                    const isGenPopProfile = currentS3Key?.toUpperCase().includes('GEN_POP') || 
+                                           currentS3Key?.toUpperCase().includes('GENPOP') ||
+                                           currentProfileData?.name?.toUpperCase().includes('GEN POP');
+                    if (isGenPopProfile && genPopPct === 0) {
+                        genPopPct = pct; // Use profile percentage as gen pop percentage
+                    }
                 }
                 const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 100;
 
