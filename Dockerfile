@@ -1,39 +1,50 @@
-# Use Python 3.11 slim image
-FROM python:3.11-slim
+# Multi-stage build for faster deployments and smaller images
+FROM python:3.11-slim as builder
 
-# Set working directory
-WORKDIR /app
-
-# Install system dependencies for building Python packages
-RUN apt-get update && apt-get install -y \
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
+# Copy requirements and install dependencies with caching
+COPY requirements.txt .
+RUN pip install --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Final stage - minimal runtime image
+FROM python:3.11-slim
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code (this layer changes most often, so it's last)
 COPY . .
 
 # Copy config example as config
 RUN cp config.example.py config.py
 
+# Make startup script executable
+RUN chmod +x start.sh
+
 # Expose port (Render will set PORT env var)
 EXPOSE 10000
 
-# Set environment variables
+# Set environment variables for optimization
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Run the application
-# Use 1 worker for faster startup, Render will scale if needed
-# --access-logfile - logs to stdout
-# --error-logfile - logs to stderr
-# Removed --preload for faster startup
-# Increased timeout to 120s to allow for initialization
-# Use PORT env var from Render (defaults to 10000 if not set)
-CMD gunicorn app:app --bind 0.0.0.0:${PORT:-10000} --workers 1 --threads 2 --timeout 120 --access-logfile - --error-logfile - --keep-alive 5
+# Run the application using startup script
+# The script ensures proper initialization and handles PORT env var
+# Use exec form to ensure proper signal handling
+CMD ["./start.sh"]

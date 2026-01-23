@@ -66,7 +66,12 @@ def health_check_root():
     # Return immediately - no processing, no imports, no dependencies
     return 'ok', 200, {'Content-Type': 'text/plain'}
 
-print("✅ Health check endpoints registered (/health and /healthz) - ready for Render")
+@app.route('/ready')
+def readiness_check():
+    """Readiness check - indicates app is ready to serve traffic."""
+    return 'ready', 200, {'Content-Type': 'text/plain'}
+
+print("✅ Health check endpoints registered (/health, /healthz, /ready) - ready for Render")
 
 # Global error handler for API routes - ensures JSON responses
 @app.errorhandler(Exception)
@@ -106,17 +111,35 @@ SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
 S3_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
 
-# Initialize S3 client
+# Initialize S3 client (with timeout to prevent hanging during startup)
+# This is after health check registration so it won't block health checks
 try:
+    import botocore.config
+    config = botocore.config.Config(
+        connect_timeout=2,
+        read_timeout=2,
+        retries={'max_attempts': 1}
+    )
     s3_client = boto3.client(
         's3',
         region_name=S3_REGION,
         aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY')
+        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+        config=config
     )
 except Exception as e:
-    print(f"Warning: S3 client initialization failed: {e}")
-    s3_client = None
+    # If config import fails or client creation fails, continue without S3
+    print(f"⚠️ S3 client initialization failed (non-critical): {e}")
+    try:
+        s3_client = boto3.client(
+            's3',
+            region_name=S3_REGION,
+            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY')
+        )
+    except Exception as e2:
+        print(f"⚠️ S3 client fallback initialization failed: {e2}")
+        s3_client = None
 
 # ============================================================================
 # OPENAI INTEGRATION
@@ -789,8 +812,26 @@ def init_users():
     
     return data
 
-# Initialize users on startup
-init_users()
+# Initialize users in background - don't block startup
+def async_init_users():
+    """Initialize users in background thread - doesn't block app startup."""
+    import time
+    # Small delay to ensure app is ready
+    time.sleep(0.5)
+    try:
+        print("👥 Initializing users in background...")
+        init_users()
+        print("✅ Users initialized")
+    except Exception as e:
+        print(f"⚠️ User initialization error (non-critical): {e}")
+        # Fall back to local file if S3 fails
+        try:
+            if os.path.exists(USERS_FILE):
+                with open(USERS_FILE, 'r') as f:
+                    json.load(f)
+                print("✅ Using local users file")
+        except Exception as e2:
+            print(f"⚠️ Local users file error: {e2}")
 
 def get_current_user():
     """Get current logged-in user data."""
@@ -6034,6 +6075,7 @@ def background_cache_checker():
 # Load image cache synchronously on startup (small, fast operation)
 # Start cache loader in background (doesn't block startup!)
 # All cache loading happens in background thread to ensure fast startup
+# Threads are daemon so they won't prevent app shutdown
 print("🚀 App starting - cache will load in background...")
 cache_thread = threading.Thread(target=async_cache_loader, daemon=True)
 cache_thread.start()
@@ -6041,6 +6083,10 @@ cache_thread.start()
 # Start background checker thread
 bg_checker = threading.Thread(target=background_cache_checker, daemon=True)
 bg_checker.start()
+
+# Start user initialization in background (non-blocking)
+users_thread = threading.Thread(target=async_init_users, daemon=True)
+users_thread.start()
 
 
 # ============================================================================
@@ -7599,6 +7645,7 @@ def run_watch_time(job_id):
 print("=" * 60)
 print("✅ Flask app fully initialized and ready to serve requests")
 print("✅ Health check available at /health and /healthz")
+print("✅ Background initialization started (users, cache)")
 print("=" * 60)
 
 if __name__ == '__main__':

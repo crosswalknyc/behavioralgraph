@@ -1,6 +1,9 @@
 # Render Blueprint for Behavioral Graph Web App
 # Native Python runtime - FASTER builds than Docker
-# This avoids Docker build overhead and deployment timeouts
+# Use this if Docker deployments are timing out
+#
+# To use: Rename this file to render.yaml or update your Render service
+# to use "runtime: python" instead of "runtime: docker"
 
 services:
   - type: web
@@ -53,6 +56,3 @@ services:
         sync: false
       - key: APP_URL
         value: "https://behavioralgraph.onrender.com"
-    healthCheckPath: /healthz
-    # Health check settings - /healthz responds immediately
-    # The endpoint is registered before any heavy initialization

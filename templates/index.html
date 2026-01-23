@@ -1546,6 +1546,24 @@
             border-color: var(--accent-blue);
         }
 
+        /* Tool tabs - lighter blue to distinguish from data tabs */
+        .tab-btn.tool-tab {
+            background: rgba(74, 138, 201, 0.15);
+            border-color: rgba(74, 138, 201, 0.4);
+            color: var(--text-primary);
+        }
+
+        .tab-btn.tool-tab:hover {
+            background: rgba(74, 138, 201, 0.25);
+            border-color: rgba(74, 138, 201, 0.6);
+        }
+
+        .tab-btn.tool-tab.active {
+            background: rgba(74, 138, 201, 0.4);
+            border-color: rgba(74, 138, 201, 0.8);
+            color: white;
+        }
+
         .tab-content { 
             display: none; 
             padding: 1.5rem; 
@@ -2840,6 +2858,18 @@
         }
         
         .behavioral-card.drag-over {
+            border: 2px dashed var(--accent-cyan);
+            background: rgba(0, 217, 255, 0.05);
+        }
+        
+        .interests-insights-row.dragging, .interests-heatmap-section.dragging, .interests-categories-section.dragging, .interests-list-section.dragging {
+            opacity: 0.5;
+            transform: scale(1.02);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+        }
+        
+        .interests-insights-row.drag-over, .interests-heatmap-section.drag-over, .interests-categories-section.drag-over, .interests-list-section.drag-over {
             border: 2px dashed var(--accent-cyan);
             background: rgba(0, 217, 255, 0.05);
         }
@@ -4375,6 +4405,34 @@
             font-size: 1rem;
         }
         
+        /* Affinity card drag styles */
+        .affinity-card.dragging {
+            opacity: 0.5;
+            transform: scale(1.02);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        }
+        
+        .affinity-card.drag-over {
+            border: 2px dashed var(--accent-cyan);
+            background: rgba(0, 217, 255, 0.05);
+        }
+        
+        .affinity-card .drag-handle {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            opacity: 0.4;
+            transition: opacity 0.2s, color 0.2s;
+        }
+        
+        .affinity-card:hover .drag-handle {
+            opacity: 1;
+            color: var(--accent-cyan);
+        }
+        
+        .affinity-card .drag-handle:active {
+            cursor: grabbing;
+        }
+        
         /* Media Reach Section - First module */
         .media-reach-section {
             margin-bottom: 1.5rem;
@@ -4548,8 +4606,9 @@
             margin: 0 0 0.5rem 0;
         }
         .affinity-col-header {
-            display: flex;
-            justify-content: space-between;
+            display: grid;
+            grid-template-columns: 2fr 0.8fr 0.8fr 0.8fr;
+            gap: 0.5rem;
             padding: 0 0.75rem;
             margin-bottom: 0.35rem;
             font-size: 0.65rem;
@@ -4559,17 +4618,23 @@
         }
         .affinity-col-header span {
             cursor: default;
+            text-align: right;
+        }
+        .affinity-col-header span:first-child {
+            text-align: left;
         }
         .affinity-col-header span:hover {
             color: var(--accent-lime);
         }
         .affinity-list, .sponsor-list, .talent-list, .media-list {
-            max-height: 300px;
+            min-height: 300px;
+            max-height: 600px;
             overflow-y: auto;
         }
         .affinity-item, .sponsor-item, .talent-item, .media-item {
-            display: flex;
-            justify-content: space-between;
+            display: grid;
+            grid-template-columns: 2fr 0.8fr 0.8fr 0.8fr;
+            gap: 0.5rem;
             align-items: center;
             padding: 0.5rem 0.75rem;
             border-radius: 6px;
@@ -4581,7 +4646,10 @@
             background: rgba(74, 138, 201, 0.15);
         }
         .affinity-item .name, .sponsor-item .name, .media-item .name {
-            flex: 1;
+            text-align: left;
+        }
+        .affinity-item > span:not(.name), .sponsor-item > span:not(.name), .media-item > span:not(.name) {
+            text-align: right;
         }
         .affinity-item .index, .sponsor-item .index, .media-item .index {
             font-weight: 600;
@@ -5516,6 +5584,42 @@
         .location-row.header {
             font-weight: 600;
             color: var(--text-secondary);
+        }
+
+        .location-row.header span {
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            transition: color 0.2s;
+        }
+
+        .location-row.header span:hover {
+            color: var(--accent-blue);
+        }
+
+        .location-row.header span.sortable {
+            position: relative;
+        }
+
+        .location-row.header span.sortable::after {
+            content: '↕';
+            font-size: 0.7rem;
+            opacity: 0.5;
+            margin-left: 0.25rem;
+        }
+
+        .location-row.header span.sort-asc::after {
+            content: '↑';
+            opacity: 1;
+            color: var(--accent-blue);
+        }
+
+        .location-row.header span.sort-desc::after {
+            content: '↓';
+            opacity: 1;
+            color: var(--accent-blue);
         }
 
         .index-high { background: rgba(166, 226, 46, 0.2); color: var(--accent-green); padding: 0.15rem 0.4rem; border-radius: 3px; }
@@ -7774,14 +7878,14 @@
                 <button class="tab-btn has-tooltip" data-tooltip="Behavioral: Analysis of consumer behaviors, brand preferences, purchase patterns, and lifestyle activities." onclick="showTab('behavioral')"><span class="tab-icon">📈</span><span class="tab-label">BEHAVIORAL</span></button>
                 <button class="tab-btn has-tooltip" data-tooltip="Interests: Top interests and passions of this audience, categorized by topic area with index scores." onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
                 <button class="tab-btn has-tooltip" data-tooltip="Location: Geographic distribution showing where this audience is concentrated by state and metro area." onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
-                <button class="tab-btn has-tooltip" data-tooltip="Affinity: Cross-category affinities showing what else this audience engages with across brands and content." onclick="showTab('affinity')"><span class="tab-icon">🔗</span><span class="tab-label">AFFINITY</span></button>
-                <button class="tab-btn has-tooltip" data-tooltip="Sponsorship: Sponsorship valuation and partnership opportunity analysis for brand collaborations." onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span></button>
-                <button class="tab-btn has-tooltip" data-tooltip="Media: Media consumption patterns including TV, streaming, social media, and digital platform preferences." onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">MEDIA</span></button>
-                <button class="tab-btn has-tooltip" data-tooltip="Content: Content consumption preferences including genres, formats, and viewing habits." onclick="showTab('content')"><span class="tab-icon">🎬</span><span class="tab-label">CONTENT</span></button>
-                <button class="tab-btn has-tooltip" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span></button>
-                <button class="tab-btn has-tooltip" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span></button>
-                <button class="tab-btn has-tooltip" data-tooltip="Collaborate: Share insights and collaborate with team members on audience analysis." onclick="showTab('collaboration')"><span class="tab-icon">🤝</span><span class="tab-label">COLLABORATE</span></button>
-                <button class="tab-btn has-tooltip" data-tooltip="Deck Builder: Create and export presentation decks from your saved insights and charts." onclick="openDeckWorkspace()"><span class="tab-icon">📊</span><span class="tab-label">DECK BUILDER</span></button>
+                <button class="tab-btn tool-tab has-tooltip" data-tooltip="Affinity: Cross-category affinities showing what else this audience engages with across brands and content." onclick="showTab('affinity')"><span class="tab-icon">🔗</span><span class="tab-label">AFFINITY</span></button>
+                <button class="tab-btn tool-tab has-tooltip" data-tooltip="Sponsorship: Sponsorship valuation and partnership opportunity analysis for brand collaborations." onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span></button>
+                <button class="tab-btn tool-tab has-tooltip" data-tooltip="Media: Media consumption patterns including TV, streaming, social media, and digital platform preferences." onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">MEDIA</span></button>
+                <button class="tab-btn tool-tab has-tooltip" data-tooltip="Content: Content consumption preferences including genres, formats, and viewing habits." onclick="showTab('content')"><span class="tab-icon">🎬</span><span class="tab-label">CONTENT</span></button>
+                <button class="tab-btn tool-tab has-tooltip" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span></button>
+                <button class="tab-btn tool-tab has-tooltip" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span></button>
+                <button class="tab-btn tool-tab has-tooltip" data-tooltip="Collaborate: Share insights and collaborate with team members on audience analysis." onclick="showTab('collaboration')"><span class="tab-icon">🤝</span><span class="tab-label">COLLABORATE</span></button>
+                <button class="tab-btn tool-tab has-tooltip" data-tooltip="Deck Builder: Create and export presentation decks from your saved insights and charts." onclick="openDeckWorkspace()"><span class="tab-icon">📊</span><span class="tab-label">DECK BUILDER</span></button>
             </div>
             
             <!-- Dashboard Layout: Fixed Sidebar + Tab Content -->
@@ -8077,6 +8181,7 @@
                     <span class="has-tooltip" data-tooltip="The percentage of the general US population that engages with each item."><strong style="color: var(--text-secondary);">(GP: X%)</strong> — Gen Pop penetration</span>
                     <span class="has-tooltip" data-tooltip="Index shows how much more/less likely this audience is to engage vs. Gen Pop. 2.0x = twice as likely, 0.5x = half as likely."><strong style="color: #10b981;">Index (X.Xx)</strong> — Over/under-index multiplier</span>
                     <span class="has-tooltip" data-tooltip="Items with index above 1.5x are considered 'hot' - strong over-indexers."><strong>🔥</strong> — Hot (index > 1.5x)</span>
+                    <span class="has-tooltip" data-tooltip="N/A indicates that data is not available for this metric."><strong style="color: var(--text-secondary);">N/A</strong> — Data not available</span>
                 </div>
                 <!-- Behavioral Insights Row -->
                 <div class="behavioral-insights-row" id="behavioralInsightsRow">
@@ -8151,7 +8256,8 @@
                     <p class="section-description has-tooltip" data-tooltip="Interests Overview: This section shows what your audience is passionate about across different interest categories. Index 1.0x+ means they over-index (more interested than average). Index < 1.0x means they under-index (less interested than average).">What your audience is passionate about. <span style="color: #10b981;">1.0x+ = over-indexes</span> | <span style="color: #ef4444;">&lt;1.0x = under-indexes</span>.</p>
                 </div>
                 <!-- Interests Insights Summary -->
-                <div class="interests-insights-row" id="interestsInsightsRow">
+                <div class="interests-insights-row" id="interestsInsightsRow" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Interests Insights" style="position: relative;">
+                    <span class="drag-handle" title="Drag to reorder" style="position: absolute; top: 0.5rem; right: 0.5rem; cursor: move; opacity: 0.5; z-index: 10;">⋮⋮</span>
                     <div class="insight-card highlight has-tooltip" data-tooltip="Top Over-Indexing Interest: The single interest where this audience most over-indexes compared to Gen Pop. A strong signal for content and campaign themes.">
                         <div class="insight-icon">🔥</div>
                         <div class="insight-content">
@@ -8187,9 +8293,12 @@
                 </div>
                 
                 <!-- Category Heatmap -->
-                <div class="interests-heatmap-section">
+                <div class="interests-heatmap-section" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Interest Category Heatmap" style="position: relative;">
                     <h3 style="display: flex; justify-content: space-between; align-items: center;">
-                        🗺️ Interest Category Heatmap
+                        <span style="display: flex; align-items: center; gap: 0.3rem;">
+                            <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
+                            🗺️ Interest Category Heatmap
+                        </span>
                         <span class="module-action-btns">
                             <button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('interests', 'Category Heatmap')" data-tooltip="Export CSV: Download the interest category heatmap data as a CSV file.">CSV</button>
                             <button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('interests', 'Category Heatmap')" data-tooltip="Add to Deck: Save the interest category heatmap to your presentation deck.">➕</button>
@@ -8212,18 +8321,30 @@
                 </div>
                 
                 <!-- Top Interests by Category -->
-                <div class="interests-categories-section">
-                    <h3>📁 Top Interests by Category</h3>
+                <div class="interests-categories-section" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Top Interests by Category" style="position: relative;">
+                    <h3 style="display: flex; align-items: center; gap: 0.3rem;">
+                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
+                        📁 Top Interests by Category
+                    </h3>
                     <div class="interests-category-cards" id="interestsCategoryCards">
                         <div style="padding: 1rem; text-align: center; color: var(--text-secondary);">Loading...</div>
                     </div>
                 </div>
                 
                 <!-- Full Interests List -->
-                <div class="interests-list-section">
+                <div class="interests-list-section" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="All Interests" style="position: relative;">
                     <div class="interests-header">
-                        <h3>📋 All Interests</h3>
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <h3 style="display: flex; align-items: center; gap: 0.3rem;">
+                                <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
+                                📋 All Interests
+                            </h3>
+                            <span id="interestsCount" style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">0 interests</span>
+                        </div>
                         <div class="interests-filter">
+                            <select id="interestsCategorySelect" onchange="filterInterests()" class="has-tooltip" data-tooltip="Filter by Category: Select a category to filter interests, or 'All' to show all interests." style="padding: 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); margin-right: 0.5rem;">
+                                <option value="all">Category: All</option>
+                            </select>
                             <input type="text" id="interestsSearchInput" placeholder="🔍 Search interests..." class="has-tooltip" data-tooltip="Search Interests: Type to filter the interests list by name. Results update as you type." oninput="filterInterests()" style="padding: 0.5rem 1rem; font-size: 0.85rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); width: 250px;">
                             <select id="interestsSortSelect" onchange="sortInterests(this.value)" class="has-tooltip" data-tooltip="Sort Interests: Index ↓ = highest index first, % ↓ = highest percentage first, A-Z = alphabetical order." style="padding: 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                                 <option value="index">Sort: Index ↓</option>
@@ -8285,7 +8406,12 @@
                             </h3>
                             <input type="text" id="locationSearchTop" placeholder="🔍 Search DMAs..." class="has-tooltip" data-tooltip="Search Over-Indexing DMAs: Type to filter the list of markets where your audience over-indexes. Results update as you type." oninput="filterLocationList('top')" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; width: 150px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                         </div>
-                        <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
+                        <div class="location-row header">
+                            <span>#</span>
+                            <span>Location</span>
+                            <span class="sortable" onclick="sortLocationTable('top', 'target')" title="Sort by Target (Percentage)">Target</span>
+                            <span class="sortable" onclick="sortLocationTable('top', 'index')" title="Sort by Index">Index</span>
+                        </div>
                         <div id="locationList" style="max-height: 500px; overflow-y: auto;"></div>
                         <div id="locationCountTop" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
                     </div>
@@ -8298,7 +8424,12 @@
                             </h3>
                             <input type="text" id="locationSearchBottom" placeholder="🔍 Search DMAs..." class="has-tooltip" data-tooltip="Search Under-Indexing DMAs: Type to filter the list of markets where your audience under-indexes. Results update as you type." oninput="filterLocationList('bottom')" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; width: 150px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                         </div>
-                        <div class="location-row header"><span>#</span><span>Location</span><span>Target</span><span>Index</span></div>
+                        <div class="location-row header">
+                            <span>#</span>
+                            <span>Location</span>
+                            <span class="sortable" onclick="sortLocationTable('bottom', 'target')" title="Sort by Target (Percentage)">Target</span>
+                            <span class="sortable" onclick="sortLocationTable('bottom', 'index')" title="Sort by Index">Index</span>
+                        </div>
                         <div id="locationListBottom" style="max-height: 500px; overflow-y: auto;"></div>
                         <div id="locationCountBottom" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
                     </div>
@@ -8314,7 +8445,12 @@
                         </h3>
                         <input type="text" id="locationSearchAll" placeholder="🔍 Search DMAs..." class="has-tooltip" data-tooltip="Search All Locations: Type to filter the complete list of all DMAs by name. Results update as you type." oninput="filterAllLocations()" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); width: 200px;">
                     </div>
-                    <div class="location-row header"><span>#</span><span>Location</span><span>Percentage</span><span>Index</span></div>
+                    <div class="location-row header">
+                        <span>#</span>
+                        <span>Location</span>
+                        <span class="sortable" onclick="sortLocationTable('all', 'percentage')" title="Sort by Percentage">Percentage</span>
+                        <span class="sortable" onclick="sortLocationTable('all', 'index')" title="Sort by Index">Index</span>
+                    </div>
                     <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
                     <div id="locationCountAll" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
                 </div>
@@ -8365,48 +8501,152 @@
                         </div>
                     </div>
                     
-                    <div class="affinity-grid">
-                        <div class="affinity-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Content & Entertainment: Shows, movies, streaming services, and entertainment content this audience engages with significantly more than the general population. Higher index = stronger affinity.">🎬 Content & Entertainment</span> <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Content & Entertainment')" data-tooltip="Export CSV: Download content & entertainment affinity data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Content & Entertainment')" data-tooltip="Add to Deck: Save content & entertainment affinities to your presentation deck.">➕</button></span></h3>
+                    <div class="affinity-grid" id="affinityGrid">
+                        <div class="affinity-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Content & Entertainment">
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                    <span class="has-tooltip" data-tooltip="Content & Entertainment: Shows, movies, streaming services, and entertainment content this audience engages with significantly more than the general population. Higher index = stronger affinity.">🎬 Content & Entertainment</span>
+                                </span>
+                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Content & Entertainment')" data-tooltip="Export CSV: Download content & entertainment affinity data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Content & Entertainment')" data-tooltip="Add to Deck: Save content & entertainment affinities to your presentation deck.">➕</button></span>
+                            </h3>
                             <p class="affinity-desc">Shows, movies, and streaming platforms this audience loves</p>
                             <div class="affinity-col-header">
                                 <span class="has-tooltip" data-tooltip="Item: The content, show, or platform name.">Item</span>
+                                <span class="has-tooltip" data-tooltip="Profile %: The percentage of this audience that engages with this item.">Profile %</span>
+                                <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that engages with this item.">Gen Pop %</span>
                                 <span class="has-tooltip" data-tooltip="Index: Affinity score vs Gen Pop. Higher = stronger preference. 200 = 2x more likely than average. Green = strong affinity.">Index</span>
                             </div>
                             <div id="affinityContent" class="affinity-list"></div>
                         </div>
                         
-                        <div class="affinity-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Brand Affinities: Consumer brands this audience over-indexes for based on purchase behavior and engagement. Great for identifying sponsorship and partnership opportunities.">🛍️ Brand Affinities</span> <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Brand Affinities')" data-tooltip="Export CSV: Download brand affinity data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Brand Affinities')" data-tooltip="Add to Deck: Save brand affinities to your presentation deck.">➕</button></span></h3>
+                        <div class="affinity-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Content & Entertainment (Under-Indexing)">
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                    <span class="has-tooltip" data-tooltip="Content & Entertainment (Under-Indexing): Shows, movies, and streaming platforms where this audience under-indexes (<100 index). These are content types this audience engages with less than the general population.">❄️ Content & Entertainment (Under-Indexing)</span>
+                                </span>
+                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Content & Entertainment (Under-Indexing)')" data-tooltip="Export CSV: Download under-indexing content & entertainment data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Content & Entertainment (Under-Indexing)')" data-tooltip="Add to Deck: Save under-indexing content & entertainment data to your presentation deck.">➕</button></span>
+                            </h3>
+                            <p class="affinity-desc">Content where this audience under-indexes</p>
+                            <div class="affinity-col-header">
+                                <span class="has-tooltip" data-tooltip="Item: The content, show, or platform name.">Item</span>
+                                <span class="has-tooltip" data-tooltip="Profile %: The percentage of this audience that engages with this item.">Profile %</span>
+                                <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that engages with this item.">Gen Pop %</span>
+                                <span class="has-tooltip" data-tooltip="Index: Affinity score vs Gen Pop. Lower = less likely to engage. Red = under-indexing.">Index</span>
+                            </div>
+                            <div id="affinityContentUnder" class="affinity-list"></div>
+                        </div>
+                        
+                        <div class="affinity-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Brand Affinities">
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                    <span class="has-tooltip" data-tooltip="Brand Affinities: Consumer brands this audience over-indexes for based on purchase behavior and engagement. Great for identifying sponsorship and partnership opportunities.">🛍️ Brand Affinities</span>
+                                </span>
+                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Brand Affinities')" data-tooltip="Export CSV: Download brand affinity data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Brand Affinities')" data-tooltip="Add to Deck: Save brand affinities to your presentation deck.">➕</button></span>
+                            </h3>
                             <p class="affinity-desc">Brands this audience over-indexes for</p>
                             <div class="affinity-col-header">
                                 <span class="has-tooltip" data-tooltip="Brand: The brand or company name.">Brand</span>
+                                <span class="has-tooltip" data-tooltip="Profile %: The percentage of this audience that engages with this brand.">Profile %</span>
+                                <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that engages with this brand.">Gen Pop %</span>
                                 <span class="has-tooltip" data-tooltip="Index: Affinity score vs Gen Pop. Higher = stronger brand preference. 500+ = very strong affinity.">Index</span>
                             </div>
                             <div id="affinityBrands" class="affinity-list"></div>
                         </div>
                         
-                        <div class="affinity-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Digital Platforms: Social media, apps, streaming services, and digital platforms this audience uses more than the general population. Useful for digital media planning and targeting.">📱 Digital Platforms</span> <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Digital Platforms')" data-tooltip="Export CSV: Download digital platform affinity data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Digital Platforms')" data-tooltip="Add to Deck: Save digital platform affinities to your presentation deck.">➕</button></span></h3>
+                        <div class="affinity-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Brand Affinities (Under-Indexing)">
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                    <span class="has-tooltip" data-tooltip="Brand Affinities (Under-Indexing): Brands where this audience under-indexes (<100 index). These are brands this audience engages with less than the general population.">❄️ Brand Affinities (Under-Indexing)</span>
+                                </span>
+                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Brand Affinities (Under-Indexing)')" data-tooltip="Export CSV: Download under-indexing brand data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Brand Affinities (Under-Indexing)')" data-tooltip="Add to Deck: Save under-indexing brand data to your presentation deck.">➕</button></span>
+                            </h3>
+                            <p class="affinity-desc">Brands where this audience under-indexes</p>
+                            <div class="affinity-col-header">
+                                <span class="has-tooltip" data-tooltip="Brand: The brand or company name.">Brand</span>
+                                <span class="has-tooltip" data-tooltip="Profile %: The percentage of this audience that engages with this brand.">Profile %</span>
+                                <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that engages with this brand.">Gen Pop %</span>
+                                <span class="has-tooltip" data-tooltip="Index: Affinity score vs Gen Pop. Lower = less likely to engage. Red = under-indexing.">Index</span>
+                            </div>
+                            <div id="affinityBrandsUnder" class="affinity-list"></div>
+                        </div>
+                        
+                        <div class="affinity-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Digital Platforms">
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                    <span class="has-tooltip" data-tooltip="Digital Platforms: Social media, apps, streaming services, and digital platforms this audience uses more than the general population. Useful for digital media planning and targeting.">📱 Digital Platforms</span>
+                                </span>
+                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Digital Platforms')" data-tooltip="Export CSV: Download digital platform affinity data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Digital Platforms')" data-tooltip="Add to Deck: Save digital platform affinities to your presentation deck.">➕</button></span>
+                            </h3>
                             <p class="affinity-desc">Apps, websites, and social platforms they use</p>
                             <div class="affinity-col-header">
                                 <span class="has-tooltip" data-tooltip="Platform: The app, website, or social platform.">Platform</span>
+                                <span class="has-tooltip" data-tooltip="Profile %: The percentage of this audience that uses this platform.">Profile %</span>
+                                <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that uses this platform.">Gen Pop %</span>
                                 <span class="has-tooltip" data-tooltip="Index: Usage index vs Gen Pop. Higher = more likely to use this platform.">Index</span>
                             </div>
                             <div id="affinityPlatforms" class="affinity-list"></div>
                         </div>
                         
-                        <div class="affinity-card">
-                            <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Music & Audio: Music streaming services, genres, artists, and podcast preferences. Shows audio content affinities for media planning and sponsorship opportunities.">🎵 Music & Audio</span> <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Music & Audio')" data-tooltip="Export CSV: Download music & audio affinity data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Music & Audio')" data-tooltip="Add to Deck: Save music & audio affinities to your presentation deck.">➕</button></span></h3>
+                        <div class="affinity-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Digital Platforms (Under-Indexing)">
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                    <span class="has-tooltip" data-tooltip="Digital Platforms (Under-Indexing): Digital platforms where this audience under-indexes (<100 index). These are platforms this audience uses less than the general population.">❄️ Digital Platforms (Under-Indexing)</span>
+                                </span>
+                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Digital Platforms (Under-Indexing)')" data-tooltip="Export CSV: Download under-indexing platform data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Digital Platforms (Under-Indexing)')" data-tooltip="Add to Deck: Save under-indexing platform data to your presentation deck.">➕</button></span>
+                            </h3>
+                            <p class="affinity-desc">Platforms where this audience under-indexes</p>
+                            <div class="affinity-col-header">
+                                <span class="has-tooltip" data-tooltip="Platform: The app, website, or social platform.">Platform</span>
+                                <span class="has-tooltip" data-tooltip="Profile %: The percentage of this audience that uses this platform.">Profile %</span>
+                                <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that uses this platform.">Gen Pop %</span>
+                                <span class="has-tooltip" data-tooltip="Index: Usage index vs Gen Pop. Lower = less likely to use. Red = under-indexing.">Index</span>
+                            </div>
+                            <div id="affinityPlatformsUnder" class="affinity-list"></div>
+                        </div>
+                        
+                        <div class="affinity-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Music & Audio">
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                    <span class="has-tooltip" data-tooltip="Music & Audio: Music streaming services, genres, artists, and podcast preferences. Shows audio content affinities for media planning and sponsorship opportunities.">🎵 Music & Audio</span>
+                                </span>
+                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Music & Audio')" data-tooltip="Export CSV: Download music & audio affinity data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Music & Audio')" data-tooltip="Add to Deck: Save music & audio affinities to your presentation deck.">➕</button></span>
+                            </h3>
                             <p class="affinity-desc">Music genres, artists, and podcasts</p>
                             <div class="affinity-col-header">
                                 <span class="has-tooltip" data-tooltip="Artist/Service: The artist, genre, or music streaming service.">Artist/Service</span>
+                                <span class="has-tooltip" data-tooltip="Profile %: The percentage of this audience that engages with this music/audio content.">Profile %</span>
+                                <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that engages with this music/audio content.">Gen Pop %</span>
                                 <span class="has-tooltip" data-tooltip="Index: Listening/engagement index vs Gen Pop. Higher = stronger music affinity.">Index</span>
                             </div>
                             <div id="affinityMusic" class="affinity-list"></div>
                         </div>
                         
-                        <div class="affinity-card wide">
+                        <div class="affinity-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Music & Audio (Under-Indexing)">
+                            <h3 style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="display: flex; align-items: center; gap: 0.3rem;">
+                                    <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                    <span class="has-tooltip" data-tooltip="Music & Audio (Under-Indexing): Music and audio content where this audience under-indexes (<100 index). These are music genres, artists, or services this audience engages with less than the general population.">❄️ Music & Audio (Under-Indexing)</span>
+                                </span>
+                                <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('affinity', 'Music & Audio (Under-Indexing)')" data-tooltip="Export CSV: Download under-indexing music & audio data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Music & Audio (Under-Indexing)')" data-tooltip="Add to Deck: Save under-indexing music & audio data to your presentation deck.">➕</button></span>
+                            </h3>
+                            <p class="affinity-desc">Music and audio where this audience under-indexes</p>
+                            <div class="affinity-col-header">
+                                <span class="has-tooltip" data-tooltip="Artist/Service: The artist, genre, or music streaming service.">Artist/Service</span>
+                                <span class="has-tooltip" data-tooltip="Profile %: The percentage of this audience that engages with this music/audio content.">Profile %</span>
+                                <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that engages with this music/audio content.">Gen Pop %</span>
+                                <span class="has-tooltip" data-tooltip="Index: Listening/engagement index vs Gen Pop. Lower = less likely to engage. Red = under-indexing.">Index</span>
+                            </div>
+                            <div id="affinityMusicUnder" class="affinity-list"></div>
+                        </div>
+                        
+                        <div class="affinity-card wide" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Affinity Network">
                             <h3 style="display: flex; justify-content: space-between; align-items: center;"><span class="has-tooltip" data-tooltip="Affinity Network: Interactive visualization showing the strongest connections for this audience. Click nodes to see details. Filter by category. Node size = index strength.">🌐 Affinity Network</span> <span class="module-action-btns"><button class="module-btn png-btn has-tooltip" onclick="exportModulePNG('affinity', 'Affinity Network')" data-tooltip="Export PNG: Download the affinity network visualization as a PNG image.">PNG</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('affinity', 'Affinity Network')" data-tooltip="Add to Deck: Save the affinity network to your presentation deck.">➕</button></span></h3>
                             <div class="affinity-network-container">
                                 <div class="affinity-network-controls" id="networkFilterControls">
@@ -8434,8 +8674,12 @@
                                                 <span class="network-detail-stat-value" id="detailIndex">--</span>
                                             </div>
                                             <div class="network-detail-stat">
-                                                <span class="network-detail-stat-label">Audience %</span>
+                                                <span class="network-detail-stat-label">Profile %</span>
                                                 <span class="network-detail-stat-value" id="detailPct">--</span>
+                                            </div>
+                                            <div class="network-detail-stat">
+                                                <span class="network-detail-stat-label">Gen Pop %</span>
+                                                <span class="network-detail-stat-value" id="detailGenPopPct">--</span>
                                             </div>
                                             <div class="network-detail-stat">
                                                 <span class="network-detail-stat-label">Strength</span>
@@ -13690,7 +13934,56 @@
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('tab-' + tabName).classList.add('active');
-            event.target.classList.add('active');
+            
+            // Find and activate the corresponding tab button
+            // Try to find button by onclick attribute first
+            const tabButtons = document.querySelectorAll('.tab-btn');
+            let buttonFound = false;
+            tabButtons.forEach(btn => {
+                const onclickAttr = btn.getAttribute('onclick');
+                if (onclickAttr && onclickAttr.includes(`showTab('${tabName}')`)) {
+                    btn.classList.add('active');
+                    buttonFound = true;
+                }
+            });
+            
+            // Fallback: if button not found by onclick, try to find by tab label text
+            if (!buttonFound) {
+                const tabLabelMap = {
+                    'insights': 'INSIGHTS',
+                    'demographics': 'DEMOGRAPHICS',
+                    'behavioral': 'BEHAVIORAL',
+                    'interests': 'INTERESTS',
+                    'location': 'LOCATION',
+                    'affinity': 'AFFINITY',
+                    'sponsorship': 'SPONSORSHIP',
+                    'media': 'MEDIA',
+                    'content': 'CONTENT',
+                    'segmentation': 'SEGMENT',
+                    'comparison': 'COMPARE',
+                    'collaboration': 'COLLABORATE'
+                };
+                
+                const labelText = tabLabelMap[tabName];
+                if (labelText) {
+                    tabButtons.forEach(btn => {
+                        const label = btn.querySelector('.tab-label');
+                        if (label && label.textContent.trim() === labelText) {
+                            btn.classList.add('active');
+                        }
+                    });
+                }
+            }
+            
+            // Restore module order for interests tab
+            if (tabName === 'interests') {
+                restoreInterestsModuleOrder();
+            }
+            
+            // Restore module order for affinity tab
+            if (tabName === 'affinity') {
+                restoreAffinityModuleOrder();
+            }
             
             // Scroll to top of the tab content when switching tabs
             const tabContent = document.getElementById('tab-' + tabName);
@@ -14369,7 +14662,8 @@
                     if (genPopPct === 0) genPopPct = 0.2;
                 } else {
                     // For behavioral items, Category Share is the Gen Pop percentage
-                    genPopPct = catShare > 0 ? catShare : 0;
+                    // Normalize: if < 1, treat as decimal and multiply by 100; if >= 1, use as-is
+                    genPopPct = catShare > 0 ? (catShare < 1 ? catShare * 100 : catShare) : 0;
                 }
                 const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 100;
 
@@ -15510,6 +15804,20 @@
             `).join('');
         }
         
+        // Helper function to capitalize first letter of each word
+        function capitalizeWords(str) {
+            return str.split(/[\s\/&]+/).map(word => 
+                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+            ).join(' ');
+        }
+        
+        // Helper function to normalize gen pop percentage (if < 1, multiply by 100)
+        function normalizeGenPopPct(genPopPct) {
+            if (!genPopPct || genPopPct === 0) return 0;
+            // If value is less than 1, it's a decimal (0.4 = 0.4%), multiply by 100 to get percentage (40%)
+            return genPopPct < 1 ? genPopPct * 100 : genPopPct;
+        }
+
         // Helper function to calculate median for demographic data
         function calculateDemographicMedian(data, genPopData, categoryType) {
             if (!data || Object.keys(data).length === 0) return { profile: null, genPop: null };
@@ -15681,9 +15989,10 @@
             // Update median display in chart header
             const ageMedianDisplay = document.getElementById('ageMedianDisplay');
             if (ageMedianDisplay) {
+                const profileName = currentProfileData?.name || 'Profile';
                 const profileVal = ageMedian.profile ? `${ageMedian.profile.value} years` : 'N/A';
                 const genPopVal = ageMedian.genPop ? `${ageMedian.genPop.value} years` : 'N/A';
-                ageMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">Profile: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
+                ageMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
             }
             
             const ageChartType = chartTypePrefs.age || 'bar';
@@ -15757,9 +16066,10 @@
             // Update median display in chart header
             const genderMedianDisplay = document.getElementById('genderMedianDisplay');
             if (genderMedianDisplay) {
+                const profileName = currentProfileData?.name || 'Profile';
                 const profileVal = genderMedian.profile ? `${genderMedian.profile.value} (${genderMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
                 const genPopVal = genderMedian.genPop ? `${genderMedian.genPop.value} (${genderMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                genderMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">Profile: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
+                genderMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
             }
             
             charts.gender = new Chart(document.getElementById('genderChart'), {
@@ -15805,9 +16115,13 @@
                             },
                             formatter: (v, ctx) => {
                                 const pct = genderPcts[ctx.dataIndex] || 0;
-                                const genPop = genderGenPop[ctx.dataIndex] || 0;
+                                let genPop = genderGenPop[ctx.dataIndex] || 0;
+                                // Normalize gen pop: if < 1, multiply by 100 (it's a decimal)
+                                if (genPop > 0 && genPop < 1) {
+                                    genPop = genPop * 100;
+                                }
                                 if (isProjection) {
-                                    const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                    const gpVal = genPop > 0 ? Math.round(US_POPULATION * genPop / 100) : 0;
                                     return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                 }
                                 return pct.toFixed(1) + '%' + (genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '');
@@ -15850,9 +16164,10 @@
             // Update median display in chart header
             const ethMedianDisplay = document.getElementById('ethnicityMedianDisplay');
             if (ethMedianDisplay) {
+                const profileName = currentProfileData?.name || 'Profile';
                 const profileVal = ethMedian.profile ? `${ethMedian.profile.value} (${ethMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
                 const genPopVal = ethMedian.genPop ? `${ethMedian.genPop.value} (${ethMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                ethMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">Profile: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
+                ethMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
             }
             
             charts.ethnicity = new Chart(document.getElementById('ethnicityChart'), {
@@ -15898,9 +16213,13 @@
                             },
                             formatter: (v, ctx) => {
                                 const pct = ethPcts[ctx.dataIndex] || 0;
-                                const genPop = ethGenPop[ctx.dataIndex] || 0;
+                                let genPop = ethGenPop[ctx.dataIndex] || 0;
+                                // Normalize gen pop: if < 1, multiply by 100 (it's a decimal)
+                                if (genPop > 0 && genPop < 1) {
+                                    genPop = genPop * 100;
+                                }
                                 if (isProjection) {
-                                    const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
+                                    const gpVal = genPop > 0 ? Math.round(US_POPULATION * genPop / 100) : 0;
                                     return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                 }
                                 return pct.toFixed(1) + '%' + (genPop > 0 ? ` (GP: ${genPop.toFixed(1)}%)` : '');
@@ -15947,9 +16266,10 @@
             // Update median display in chart header
             const incomeMedianDisplay = document.getElementById('incomeMedianDisplay');
             if (incomeMedianDisplay) {
+                const profileName = currentProfileData?.name || 'Profile';
                 const profileVal = incomeMedian.profile ? `$${incomeMedian.profile.value}` : 'N/A';
                 const genPopVal = incomeMedian.genPop ? `$${incomeMedian.genPop.value}` : 'N/A';
-                incomeMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">Profile: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
+                incomeMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
             }
             
             charts.income = new Chart(document.getElementById('incomeChart'), {
@@ -16021,9 +16341,10 @@
                 // Update median display in chart header
                 const eduMedianDisplay = document.getElementById('educationMedianDisplay');
                 if (eduMedianDisplay) {
+                    const profileName = currentProfileData?.name || 'Profile';
                     const profileVal = eduMedian.profile ? `${eduMedian.profile.value} (${eduMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
                     const genPopVal = eduMedian.genPop ? `${eduMedian.genPop.value} (${eduMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                    eduMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">Profile: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
+                    eduMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
                 }
                 
                 charts.education = new Chart(document.getElementById('educationChart'), {
@@ -16082,9 +16403,10 @@
                 // Update median display in chart header
                 const relMedianDisplay = document.getElementById('relationshipMedianDisplay');
                 if (relMedianDisplay) {
+                    const profileName = currentProfileData?.name || 'Profile';
                     const profileVal = relMedian.profile ? `${relMedian.profile.value} (${relMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
                     const genPopVal = relMedian.genPop ? `${relMedian.genPop.value} (${relMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                    relMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">Profile: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
+                    relMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
                 }
                 
                 charts.relationship = new Chart(document.getElementById('relationshipChart'), {
@@ -16155,9 +16477,10 @@
                 // Update median display in chart header
                 const soMedianDisplay = document.getElementById('sexualOrientationMedianDisplay');
                 if (soMedianDisplay) {
+                    const profileName = currentProfileData?.name || 'Profile';
                     const profileVal = soMedian.profile ? `${soMedian.profile.value} (${soMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
                     const genPopVal = soMedian.genPop ? `${soMedian.genPop.value} (${soMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                    soMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">Profile: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
+                    soMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
                 }
                 
                 charts.sexualOrientation = new Chart(document.getElementById('sexualOrientationChart'), {
@@ -16228,9 +16551,10 @@
                 // Update median display in chart header
                 const psMedianDisplay = document.getElementById('parentalStatusMedianDisplay');
                 if (psMedianDisplay) {
+                    const profileName = currentProfileData?.name || 'Profile';
                     const profileVal = psMedian.profile ? `${psMedian.profile.value} (${psMedian.profile.percentage.toFixed(1)}%)` : 'N/A';
                     const genPopVal = psMedian.genPop ? `${psMedian.genPop.value} (${psMedian.genPop.percentage.toFixed(1)}%)` : 'N/A';
-                    psMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">Profile: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
+                    psMedianDisplay.innerHTML = `<span style="color: var(--accent-lime);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
                 }
                 
                 charts.parentalStatus = new Chart(document.getElementById('parentalStatusChart'), {
@@ -16485,8 +16809,70 @@
             // Render category cards
             renderInterestsCategoryCards(allInterestsData);
             
+            // Populate category filter dropdown
+            populateInterestsCategoryFilter(allInterestsData);
+            
+            // Update count
+            updateInterestsCount(allInterestsData);
+            
             // Render main list
             renderInterestsList(allInterestsData);
+        }
+        
+        function populateInterestsCategoryFilter(items) {
+            const select = document.getElementById('interestsCategorySelect');
+            if (!select) return;
+            
+            // Get unique categories, sorted alphabetically
+            const categories = [...new Set(items.map(item => item.category))].sort();
+            
+            // Get current selection
+            const currentValue = select.value;
+            
+            // Clear and repopulate
+            select.innerHTML = '<option value="all">Category: All</option>';
+            categories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat;
+                option.textContent = `Category: ${cat}`;
+                select.appendChild(option);
+            });
+            
+            // Restore selection if it still exists
+            if (currentValue && categories.includes(currentValue)) {
+                select.value = currentValue;
+            }
+        }
+        
+        function updateInterestsCount(items) {
+            const countEl = document.getElementById('interestsCount');
+            if (!countEl) return;
+            
+            const categorySelect = document.getElementById('interestsCategorySelect');
+            const searchInput = document.getElementById('interestsSearchInput');
+            
+            // Get filtered count
+            let filtered = [...items];
+            
+            // Apply category filter
+            if (categorySelect && categorySelect.value && categorySelect.value !== 'all') {
+                filtered = filtered.filter(item => item.category === categorySelect.value);
+            }
+            
+            // Apply search filter
+            if (searchInput && searchInput.value.trim()) {
+                const searchTerm = searchInput.value.toLowerCase();
+                filtered = filtered.filter(item => item.name.toLowerCase().includes(searchTerm));
+            }
+            
+            const total = items.length;
+            const showing = filtered.length;
+            
+            if (showing === total) {
+                countEl.textContent = `${total} interest${total !== 1 ? 's' : ''}`;
+            } else {
+                countEl.textContent = `${showing} of ${total} interest${total !== 1 ? 's' : ''}`;
+            }
         }
         
         function categorizeInterest(name) {
@@ -16669,6 +17055,8 @@
         
         function renderInterestsCategoryCards(items) {
             const container = document.getElementById('interestsCategoryCards');
+            const isProjection = dashDisplayMode === 'projection';
+            const US_POP = 324700000;
             
             // Group by category
             const categories = {};
@@ -16698,9 +17086,29 @@
                         <div class="interest-category-items">
                             ${cat.items.map(item => {
                                 const idxColor = item.index >= 100 ? '#10b981' : '#ef4444';
+                                
+                                // Normalize gen pop percentage
+                                let genPopPct = item.genPopPct || 0;
+                                if (genPopPct > 0 && genPopPct < 1) {
+                                    genPopPct = genPopPct * 100;
+                                }
+                                
+                                // Format profile and gen pop percentages
+                                const profileDisplay = isProjection 
+                                    ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || (item.pct / 100) * US_POP)))
+                                    : formatValueOrNA(item.pct, true);
+                                
+                                const genPopDisplay = isProjection 
+                                    ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
+                                    : formatValueOrNA(genPopPct, true);
+                                
                                 return `<div class="interest-category-item">
                                     <span>${item.name}</span>
-                                    <span style="color: ${idxColor}; font-weight: 600;">${formatIndex(item.index)}</span>
+                                    <span style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <span style="color: ${idxColor}; font-weight: 600;">${formatIndex(item.index)}</span>
+                                        <span style="color: var(--text-primary); font-size: 0.85rem;">${profileDisplay}</span>
+                                        <span style="color: var(--text-secondary); font-size: 0.85rem;">(${genPopDisplay})</span>
+                                    </span>
                                 </div>`;
                             }).join('')}
                         </div>
@@ -16711,25 +17119,53 @@
         
         function renderInterestsList(items) {
             const container = document.getElementById('interestsGrid');
+            if (!container) return;
+            
             const isProjection = dashDisplayMode === 'projection';
             const US_POP = 324700000;
             
+            // Get filters
+            const categorySelect = document.getElementById('interestsCategorySelect');
+            const searchInput = document.getElementById('interestsSearchInput');
+            
+            // Apply category filter
+            let filtered = [...items];
+            if (categorySelect && categorySelect.value && categorySelect.value !== 'all') {
+                filtered = filtered.filter(item => item.category === categorySelect.value);
+            }
+            
+            // Apply search filter
+            if (searchInput && searchInput.value.trim()) {
+                const searchTerm = searchInput.value.toLowerCase();
+                filtered = filtered.filter(item => item.name.toLowerCase().includes(searchTerm));
+            }
+            
             // Sort based on current selection
-            let sorted = [...items];
+            let sorted = [...filtered];
             if (currentInterestSort === 'index') sorted.sort((a, b) => b.index - a.index);
             else if (currentInterestSort === 'pct') sorted.sort((a, b) => b.pct - a.pct);
             else if (currentInterestSort === 'alpha') sorted.sort((a, b) => a.name.localeCompare(b.name));
+            
+            // Update count
+            updateInterestsCount(items);
             
             const maxPct = Math.max(...sorted.map(i => i.pct), 1);
             
             container.innerHTML = sorted.map((item, idx) => {
                 const indexColor = item.index >= 100 ? '#10b981' : '#ef4444';
+                
+                // Normalize gen pop percentage
+                let genPopPct = item.genPopPct || 0;
+                if (genPopPct > 0 && genPopPct < 1) {
+                    genPopPct = genPopPct * 100;
+                }
+                
                 const profileDisplay = isProjection 
-                    ? formatNumber(Math.round(item.projection || (item.pct / 100) * US_POP))
-                    : item.pct.toFixed(2) + '%';
+                    ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || (item.pct / 100) * US_POP)))
+                    : formatValueOrNA(item.pct, true);
                 const genPopDisplay = isProjection 
-                    ? formatNumber(Math.round((item.genPopPct / 100) * US_POP))
-                    : item.genPopPct.toFixed(1) + '%';
+                    ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
+                    : formatValueOrNA(genPopPct, true);
                 
                 return `
                     <div class="interest-item" data-name="${item.name.toLowerCase()}" data-category="${item.category}">
@@ -16764,10 +17200,114 @@
         }
         
         function filterInterests() {
-            const searchTerm = (document.getElementById('interestsSearchInput')?.value || '').toLowerCase();
-            document.querySelectorAll('.interest-item').forEach(item => {
-                const name = item.dataset.name || '';
-                item.style.display = name.includes(searchTerm) ? 'flex' : 'none';
+            if (allInterestsData.length > 0) {
+                renderInterestsList(allInterestsData);
+            }
+        }
+        
+        function filterInterests() {
+            // Re-render the list with current filters applied
+            if (allInterestsData.length > 0) {
+                renderInterestsList(allInterestsData);
+            }
+        }
+        
+        function restoreInterestsModuleOrder() {
+            const tabContent = document.getElementById('tab-interests');
+            if (!tabContent) return;
+            
+            const savedOrder = loadModuleOrder('interests');
+            if (!savedOrder || savedOrder.length === 0) return;
+            
+            // Get all interest modules
+            const modules = [
+                tabContent.querySelector('.interests-insights-row'),
+                tabContent.querySelector('.interests-heatmap-section'),
+                tabContent.querySelector('.interests-categories-section'),
+                tabContent.querySelector('.interests-list-section')
+            ].filter(Boolean);
+            
+            if (modules.length === 0) return;
+            
+            // Create a map of module elements by their data-module attribute
+            const moduleMap = new Map();
+            modules.forEach(module => {
+                const moduleName = module.dataset.module;
+                if (moduleName) {
+                    moduleMap.set(moduleName, module);
+                }
+            });
+            
+            // Reorder based on saved order
+            const orderedModules = [];
+            const unorderedModules = [];
+            
+            savedOrder.forEach(moduleName => {
+                if (moduleMap.has(moduleName)) {
+                    orderedModules.push(moduleMap.get(moduleName));
+                }
+            });
+            
+            // Add any modules not in saved order
+            modules.forEach(module => {
+                if (!savedOrder.includes(module.dataset.module)) {
+                    unorderedModules.push(module);
+                }
+            });
+            
+            // Reorder in DOM
+            const parent = modules[0].parentNode;
+            orderedModules.forEach(module => {
+                parent.appendChild(module);
+            });
+            unorderedModules.forEach(module => {
+                parent.appendChild(module);
+            });
+        }
+        
+        function restoreAffinityModuleOrder() {
+            const affinityGrid = document.getElementById('affinityGrid');
+            if (!affinityGrid) return;
+            
+            const savedOrder = loadModuleOrder('affinity');
+            if (!savedOrder || savedOrder.length === 0) return;
+            
+            // Get all affinity card modules
+            const modules = Array.from(affinityGrid.querySelectorAll('.affinity-card'));
+            if (modules.length === 0) return;
+            
+            // Create a map of module elements by their data-module attribute
+            const moduleMap = new Map();
+            modules.forEach(module => {
+                const moduleName = module.dataset.module;
+                if (moduleName) {
+                    moduleMap.set(moduleName, module);
+                }
+            });
+            
+            // Reorder based on saved order
+            const orderedModules = [];
+            const unorderedModules = [];
+            
+            savedOrder.forEach(moduleName => {
+                if (moduleMap.has(moduleName)) {
+                    orderedModules.push(moduleMap.get(moduleName));
+                }
+            });
+            
+            // Add any modules not in saved order
+            modules.forEach(module => {
+                if (!savedOrder.includes(module.dataset.module)) {
+                    unorderedModules.push(module);
+                }
+            });
+            
+            // Reorder in DOM
+            orderedModules.forEach(module => {
+                affinityGrid.appendChild(module);
+            });
+            unorderedModules.forEach(module => {
+                affinityGrid.appendChild(module);
             });
         }
         
@@ -16889,6 +17429,12 @@
             
             // Get all categories and sort them
             let sortedCats;
+            // Try to load saved order from localStorage
+            const savedOrder = loadModuleOrder('behavioral');
+            if (savedOrder && savedOrder.length > 0) {
+                currentCategoryOrder = savedOrder;
+            }
+            
             if (currentCategoryOrder.length > 0) {
                 // Use custom order, add any missing categories at the end
                 const allCats = Object.keys(aggregatedBehavioral);
@@ -16909,6 +17455,7 @@
             
             // Save current order
             currentCategoryOrder = [...sortedCats];
+            saveModuleOrder('behavioral', currentCategoryOrder);
             
             // Populate the dropdown
             populateCategoryDropdown(sortedCats);
@@ -17049,19 +17596,39 @@
                 
                 // Check if this is MOST PURCHASED BRANDS for slice dropdown
                 const isMostPurchased = cat.toUpperCase().includes('MOST PURCHASED BRANDS') || cat.toUpperCase() === 'MOST PURCHASED';
-                const sliceOptions = ['all', 'apparel/footwear', 'accessories', 'beauty/wellness', 'health & wellness', 'home/outdoor', 'toys'];
+                const mostPurchasedOptions = ['all', 'accessories', 'apparel/footwear', 'beauty/wellness', 'health & wellness', 'home/outdoor', 'pets', 'technology brand', 'toys'];
+                const sliceOptions = mostPurchasedOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
                 
                 // Check if this is WHERE THEY SHOP for slice dropdown
                 const isWhereTheyShop = cat.toUpperCase() === 'WHERE THEY SHOP';
-                const whereTheyShopSliceOptions = ['all', 'apparel/footwear', 'accessories', 'beauty/wellness', 'health & wellness', 'home/outdoor', 'toys'];
+                const whereTheyShopOptions = ['all', 'accessories', 'apparel/footwear', 'beauty/wellness', 'health & wellness', 'home/outdoor', 'toys'];
+                const whereTheyShopSliceOptions = whereTheyShopOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
                 
                 // Check if this is SPORTS for slice dropdown
                 const isSports = cat.toUpperCase() === 'SPORTS';
-                const sportsSliceOptions = ['all', 'AFC', 'Sports Team', 'la liga', 'metropolitan division', 'MLB', 'MLS', 'eastern conference', 'central division', 'atlantic division', 'AFC EAST', 'NBA', 'NFC east', 'nfc north', 'nfc south', 'nfc west', 'nfl', 'NFC', 'AFC North', 'NWSL', 'premier league', 'rugby', 'serie a', 'soccer', 'pacific division', 'afc south', 'afc west', 'AL', 'wnba', 'al central', 'al east', 'al west', 'sports organizations', 'horse racing'];
+                const sportsOptions = ['all', 'afc', 'afc east', 'afc north', 'afc south', 'afc west', 'al', 'al central', 'al east', 'al west', 'atlantic division', 'central division', 'eastern conference', 'horse racing', 'la liga', 'metropolitan division', 'mlb', 'mls', 'nba', 'nfc', 'nfc east', 'nfc north', 'nfc south', 'nfc west', 'nfl', 'nwsl', 'pacific division', 'premier league', 'rugby', 'serie a', 'soccer', 'sports organizations', 'sports team', 'wnba'];
+                const sportsSliceOptions = sportsOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
                 
                 // Check if this is TALENT for slice dropdown
                 const isTalent = cat.toUpperCase() === 'TALENT';
-                const talentSliceOptions = ['all', 'actor', 'athlete', 'host/personality', 'influencer/creator', 'creator/influencer', 'mlb athlete', 'musician/band', 'nba athlete', 'nfl athlete', 'nhl athlete', 'politics/activist', 'soccer athlete', 'wnba athlete', 'writer/director/author/artist'];
+                const talentOptions = ['all', 'actor', 'athlete', 'creator/influencer', 'host/personality', 'influencer/creator', 'mlb athlete', 'musician/band', 'nba athlete', 'nfl athlete', 'nhl athlete', 'politics/activist', 'soccer athlete', 'wnba athlete', 'writer/director/author/artist'];
+                const talentSliceOptions = talentOptions.sort((a, b) => {
+                    if (a === 'all') return -1;
+                    if (b === 'all') return 1;
+                    return a.localeCompare(b);
+                });
                 
                 return `
                     <div class="behavioral-card ${isHighlighted ? 'highlighted' : ''}" 
@@ -17089,31 +17656,37 @@
                             </span>
                         </h3>
                         <div class="behavioral-filter">
-                            ${isMostPurchased ? `
-                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceMostPurchased('${catId}', '${cat}', this.value)" style="padding: 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); margin-right: 0.5rem;">
-                                    <option value="all">Slice By: All</option>
-                                    ${sliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${opt.charAt(0).toUpperCase() + opt.slice(1)}</option>`).join('')}
-                                </select>
-                            ` : ''}
-                            ${isWhereTheyShop ? `
-                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceWhereTheyShop('${catId}', '${cat}', this.value)" style="padding: 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); margin-right: 0.5rem;">
-                                    <option value="all">Slice By: All</option>
-                                    ${whereTheyShopSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${opt.charAt(0).toUpperCase() + opt.slice(1)}</option>`).join('')}
-                                </select>
-                            ` : ''}
-                            ${isSports ? `
-                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceSports('${catId}', '${cat}', this.value)" style="padding: 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); margin-right: 0.5rem;">
-                                    <option value="all">Slice By: All</option>
-                                    ${sportsSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${opt}</option>`).join('')}
-                                </select>
-                            ` : ''}
-                            ${isTalent ? `
-                                <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceTalent('${catId}', '${cat}', this.value)" style="padding: 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); margin-right: 0.5rem;">
-                                    <option value="all">Slice By: All</option>
-                                    ${talentSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${opt}</option>`).join('')}
-                                </select>
-                            ` : ''}
-                            <input type="text" placeholder="Search..." oninput="searchInCard('${catId}', this.value)">
+                            ${isMostPurchased || isWhereTheyShop || isSports || isTalent ? `
+                                <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                    ${isMostPurchased ? `
+                                        <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceMostPurchased('${catId}', '${cat}', this.value)" style="padding: 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                            <option value="all">Slice By: All</option>
+                                            ${sliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                        </select>
+                                    ` : ''}
+                                    ${isWhereTheyShop ? `
+                                        <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceWhereTheyShop('${catId}', '${cat}', this.value)" style="padding: 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                            <option value="all">Slice By: All</option>
+                                            ${whereTheyShopSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                        </select>
+                                    ` : ''}
+                                    ${isSports ? `
+                                        <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceSports('${catId}', '${cat}', this.value)" style="padding: 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                            <option value="all">Slice By: All</option>
+                                            ${sportsSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                        </select>
+                                    ` : ''}
+                                    ${isTalent ? `
+                                        <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceTalent('${catId}', '${cat}', this.value)" style="padding: 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                            <option value="all">Slice By: All</option>
+                                            ${talentSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                        </select>
+                                    ` : ''}
+                                    <input type="text" placeholder="Search..." oninput="searchInCard('${catId}', this.value)" style="padding: 0.4rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                </div>
+                            ` : `
+                                <input type="text" placeholder="Search..." oninput="searchInCard('${catId}', this.value)">
+                            `}
                             <select class="behavioral-sort-select" onchange="sortBehavioralCard('${catId}', '${cat}', this.value)">
                                 <option value="index">Index ↓</option>
                                 <option value="pct" selected>% ↓</option>
@@ -17175,8 +17748,8 @@
         let draggedCategory = null;
         
         function handleDragStart(e) {
-            // Support both behavioral-card and chart-card
-            draggedCard = e.target.closest('.behavioral-card, .chart-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown');
+            // Support all draggable module types
+            draggedCard = e.target.closest('.behavioral-card, .chart-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown, .interests-insights-row, .interests-heatmap-section, .interests-categories-section, .interests-list-section, .affinity-card');
             if (!draggedCard) return;
             
             draggedCategory = draggedCard.dataset.category || draggedCard.dataset.module || draggedCard.id;
@@ -17191,15 +17764,15 @@
         }
         
         function handleDragEnd(e) {
-            // Support both behavioral-card and chart-card
-            const card = e.target.closest('.behavioral-card, .chart-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown');
+            // Support all draggable module types
+            const card = e.target.closest('.behavioral-card, .chart-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown, .interests-insights-row, .interests-heatmap-section, .interests-categories-section, .interests-list-section, .affinity-card');
             if (card) {
                 card.classList.remove('dragging');
                 card.style.opacity = '1';
             }
             
             // Remove drag-over class from all draggable cards
-            document.querySelectorAll('.behavioral-card.drag-over, .chart-card.drag-over, .location-section.drag-over, .insight-card-v2.drag-over, .media-reach-chart-card.drag-over, .regional-breakdown.drag-over').forEach(el => {
+            document.querySelectorAll('.behavioral-card.drag-over, .chart-card.drag-over, .location-section.drag-over, .insight-card-v2.drag-over, .media-reach-chart-card.drag-over, .regional-breakdown.drag-over, .interests-insights-row.drag-over, .interests-heatmap-section.drag-over, .interests-categories-section.drag-over, .interests-list-section.drag-over, .affinity-card.drag-over').forEach(el => {
                 el.classList.remove('drag-over');
             });
             
@@ -17211,16 +17784,20 @@
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
             
-            // Support both behavioral-card and chart-card
-            const targetCard = e.target.closest('.behavioral-card, .chart-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown');
+            // Support all draggable module types
+            const targetCard = e.target.closest('.behavioral-card, .chart-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown, .interests-insights-row, .interests-heatmap-section, .interests-categories-section, .interests-list-section, .affinity-card');
             if (targetCard && targetCard !== draggedCard) {
+                // Remove drag-over from all
+                document.querySelectorAll('.behavioral-card.drag-over, .chart-card.drag-over, .location-section.drag-over, .insight-card-v2.drag-over, .media-reach-chart-card.drag-over, .regional-breakdown.drag-over, .interests-insights-row.drag-over, .interests-heatmap-section.drag-over, .interests-categories-section.drag-over, .interests-list-section.drag-over, .affinity-card.drag-over').forEach(el => {
+                    el.classList.remove('drag-over');
+                });
                 targetCard.classList.add('drag-over');
             }
         }
         
         function handleDragLeave(e) {
-            // Support both behavioral-card and chart-card
-            const targetCard = e.target.closest('.behavioral-card, .chart-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown');
+            // Support all draggable module types
+            const targetCard = e.target.closest('.behavioral-card, .chart-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown, .interests-insights-row, .interests-heatmap-section, .interests-categories-section, .interests-list-section, .affinity-card');
             if (targetCard) {
                 targetCard.classList.remove('drag-over');
             }
@@ -17229,8 +17806,8 @@
         function handleDrop(e) {
             e.preventDefault();
             
-            // Support both behavioral-card and chart-card
-            const targetCard = e.target.closest('.behavioral-card, .chart-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown');
+            // Support all draggable module types
+            const targetCard = e.target.closest('.behavioral-card, .chart-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown, .interests-insights-row, .interests-heatmap-section, .interests-categories-section, .interests-list-section, .affinity-card');
             if (!targetCard || !draggedCard || targetCard === draggedCard) return;
             
             // Only handle reordering for behavioral cards (they have category order system)
@@ -17249,6 +17826,9 @@
                     currentCategoryOrder.splice(draggedIdx, 1);
                     currentCategoryOrder.splice(targetIdx, 0, draggedCategory);
                     
+                    // Save order to localStorage
+                    saveModuleOrder('behavioral', currentCategoryOrder);
+                    
                     // Re-render the cards
                     renderBehavioralCards(allBehavioralData);
                 }
@@ -17265,10 +17845,68 @@
                     } else {
                         parent.insertBefore(draggedCard, targetCard);
                     }
+                    
+                    // Save module order to localStorage
+                    const moduleType = getModuleTypeFromParent(parent);
+                    if (moduleType) {
+                        const moduleOrder = Array.from(parent.children).map(child => 
+                            child.dataset.module || child.dataset.category || child.id
+                        ).filter(Boolean);
+                        saveModuleOrder(moduleType, moduleOrder);
+                    }
                 }
                 
                 // Remove drag-over styling
                 targetCard.classList.remove('drag-over');
+            }
+        }
+        
+        // Helper function to determine module type from parent container
+        function getModuleTypeFromParent(parent) {
+            const parentId = parent.id || '';
+            const parentClass = parent.className || '';
+            
+            if (parentId.includes('behavioral') || parentClass.includes('behavioral')) return 'behavioral';
+            if (parentId.includes('demographic') || parentClass.includes('demo')) return 'demographic';
+            if (parentId.includes('location') || parentClass.includes('location')) return 'location';
+            if (parentId.includes('insight') || parentClass.includes('insight')) return 'insight';
+            if (parentId.includes('media') || parentClass.includes('media')) return 'media';
+            if (parentId.includes('interest') || parentClass.includes('interest')) return 'interests';
+            if (parentId.includes('affinity') || parentClass.includes('affinity')) return 'affinity';
+            
+            // Try to find the tab content container
+            const tabContent = parent.closest('.tab-content');
+            if (tabContent) {
+                if (tabContent.id === 'tab-demographics') return 'demographic';
+                if (tabContent.id === 'tab-behavioral') return 'behavioral';
+                if (tabContent.id === 'tab-location') return 'location';
+                if (tabContent.id === 'tab-insights') return 'insight';
+                if (tabContent.id === 'tab-interests') return 'interests';
+                if (tabContent.id === 'tab-affinity') return 'affinity';
+            }
+            
+            return null;
+        }
+        
+        // Save module order to localStorage
+        function saveModuleOrder(moduleType, order) {
+            try {
+                const key = `moduleOrder_${moduleType}`;
+                localStorage.setItem(key, JSON.stringify(order));
+            } catch (e) {
+                console.warn('Could not save module order:', e);
+            }
+        }
+        
+        // Load module order from localStorage
+        function loadModuleOrder(moduleType) {
+            try {
+                const key = `moduleOrder_${moduleType}`;
+                const saved = localStorage.getItem(key);
+                return saved ? JSON.parse(saved) : null;
+            } catch (e) {
+                console.warn('Could not load module order:', e);
+                return null;
             }
         }
         
@@ -17348,23 +17986,43 @@
             draggedCategory = null;
         }
 
+        // Helper function to format value as N/A if 0
+        function formatValueOrNA(value, isPercentage = false) {
+            if (value === 0 || value === '0' || value === '0%' || value === null || value === undefined) {
+                return 'N/A';
+            }
+            if (isPercentage && typeof value === 'number') {
+                return value.toFixed(1) + '%';
+            }
+            return value;
+        }
+        
         function renderBehavioralItems(items, maxPct) {
             const isProjection = dashDisplayMode === 'projection';
             const US_POP = 324700000;
             return items.map((item, idx) => {
                 const index = item.index || 0;
-                const genPopPct = item.genPopPct || 0;
+                let genPopPct = item.genPopPct || 0;
+                // Normalize gen pop: if < 1, multiply by 100 (it's a decimal)
+                if (genPopPct > 0 && genPopPct < 1) {
+                    genPopPct = genPopPct * 100;
+                }
                 const profilePct = item.pct || 0;
                 // Green if over-indexing (index >= 100), red if under-indexing (index < 100)
                 const indexColor = index >= 100 ? '#10b981' : '#ef4444';
                 
-                // Show profile % and gen pop % alongside index
+                // Show profile % and gen pop % alongside index - use N/A for 0
                 const profileDisplay = isProjection 
-                    ? formatNumber(Math.round(item.projection || 0))
-                    : profilePct.toFixed(1) + '%';
+                    ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || 0)))
+                    : formatValueOrNA(profilePct, true);
+                // Normalize gen pop: if < 1, multiply by 100 (it's a decimal)
+                let normalizedGenPopPct = genPopPct;
+                if (genPopPct > 0 && genPopPct < 1) {
+                    normalizedGenPopPct = genPopPct * 100;
+                }
                 const genPopDisplay = isProjection 
-                    ? formatNumber(Math.round((genPopPct / 100) * US_POP))
-                    : genPopPct.toFixed(1) + '%';
+                    ? (normalizedGenPopPct === 0 || normalizedGenPopPct === null ? 'N/A' : formatNumber(Math.round((normalizedGenPopPct / 100) * US_POP)))
+                    : formatValueOrNA(normalizedGenPopPct, true);
                 
                 // Bar width should always be based on percentage, not projection numbers
                 const barWidth = (profilePct / maxPct) * 100;
@@ -17397,27 +18055,33 @@
             // Filter items based on slice
             let filtered = items;
             if (sliceValue && sliceValue !== 'all') {
-                // Map slice values to possible category/subcategory matches
+                // Map slice values to possible category/subcategory matches - use exact matching
                 const sliceMap = {
-                    'apparel/footwear': ['APPAREL', 'FOOTWEAR', 'APPAREL/FOOTWEAR', 'CLOTHING', 'SHOES'],
+                    'apparel/footwear': ['APPAREL/FOOTWEAR', 'APPAREL', 'FOOTWEAR', 'CLOTHING', 'SHOES'],
                     'accessories': ['ACCESSORIES', 'ACCESSORY', 'JEWELRY', 'WATCHES', 'BAGS'],
-                    'beauty/wellness': ['BEAUTY', 'WELLNESS', 'BEAUTY/WELLNESS', 'COSMETICS', 'SKINCARE', 'MAKEUP'],
-                    'health & wellness': ['HEALTH', 'WELLNESS', 'HEALTH & WELLNESS', 'HEALTH AND WELLNESS', 'VITAMINS', 'SUPPLEMENTS'],
-                    'home/outdoor': ['HOME', 'OUTDOOR', 'HOME/OUTDOOR', 'FURNITURE', 'GARDEN', 'DECOR'],
-                    'toys': ['TOYS', 'TOY', 'GAMES', 'GAMING']
+                    'beauty/wellness': ['BEAUTY/WELLNESS', 'BEAUTY', 'WELLNESS', 'COSMETICS', 'SKINCARE', 'MAKEUP'],
+                    'health & wellness': ['HEALTH & WELLNESS', 'HEALTH AND WELLNESS', 'HEALTH', 'WELLNESS', 'VITAMINS', 'SUPPLEMENTS'],
+                    'home/outdoor': ['HOME/OUTDOOR', 'HOME', 'OUTDOOR', 'FURNITURE', 'GARDEN', 'DECOR'],
+                    'toys': ['TOYS', 'TOY', 'GAMES', 'GAMING'],
+                    'pets': ['PETS', 'PET'],
+                    'technology brand': ['TECHNOLOGY BRAND', 'TECHNOLOGY/DEVICE', 'TECHNOLOGY', 'DEVICE']
                 };
                 
                 const sliceKeywords = sliceMap[sliceValue.toLowerCase()] || [];
                 
-                // Filter items that match the slice
-                // Check if item has subcategory field, or check item name/category
+                // Filter items that match the slice - check for exact subcategory match first
                 filtered = items.filter(item => {
-                    // Check subcategory if it exists
+                    // Check subcategory if it exists - prioritize exact match
                     if (item.subcategory) {
-                        const subcatUpper = item.subcategory.toUpperCase();
+                        const subcatUpper = item.subcategory.toUpperCase().trim();
+                        // First try exact match
+                        if (sliceKeywords.some(keyword => subcatUpper === keyword || subcatUpper === keyword.replace(/\s+/g, ' '))) {
+                            return true;
+                        }
+                        // Then try contains match for broader categories
                         return sliceKeywords.some(keyword => subcatUpper.includes(keyword));
                     }
-                    // Check item name for keywords
+                    // Check item name for keywords as fallback
                     const nameUpper = (item.name || '').toUpperCase();
                     return sliceKeywords.some(keyword => nameUpper.includes(keyword));
                 });
@@ -17464,17 +18128,24 @@
                 
                 if (catUpper === 'MOST PURCHASED BRANDS' || catUpper === 'MOST PURCHASED' || catUpper === 'WHERE THEY SHOP') {
                     const sliceMap = {
-                        'apparel/footwear': ['APPAREL', 'FOOTWEAR', 'APPAREL/FOOTWEAR', 'CLOTHING', 'SHOES'],
+                        'apparel/footwear': ['APPAREL/FOOTWEAR', 'APPAREL', 'FOOTWEAR', 'CLOTHING', 'SHOES'],
                         'accessories': ['ACCESSORIES', 'ACCESSORY', 'JEWELRY', 'WATCHES', 'BAGS'],
-                        'beauty/wellness': ['BEAUTY', 'WELLNESS', 'BEAUTY/WELLNESS', 'COSMETICS', 'SKINCARE', 'MAKEUP'],
-                        'health & wellness': ['HEALTH', 'WELLNESS', 'HEALTH & WELLNESS', 'HEALTH AND WELLNESS', 'VITAMINS', 'SUPPLEMENTS'],
-                        'home/outdoor': ['HOME', 'OUTDOOR', 'HOME/OUTDOOR', 'FURNITURE', 'GARDEN', 'DECOR'],
-                        'toys': ['TOYS', 'TOY', 'GAMES', 'GAMING']
+                        'beauty/wellness': ['BEAUTY/WELLNESS', 'BEAUTY', 'WELLNESS', 'COSMETICS', 'SKINCARE', 'MAKEUP'],
+                        'health & wellness': ['HEALTH & WELLNESS', 'HEALTH AND WELLNESS', 'HEALTH', 'WELLNESS', 'VITAMINS', 'SUPPLEMENTS'],
+                        'home/outdoor': ['HOME/OUTDOOR', 'HOME', 'OUTDOOR', 'FURNITURE', 'GARDEN', 'DECOR'],
+                        'toys': ['TOYS', 'TOY', 'GAMES', 'GAMING'],
+                        'pets': ['PETS', 'PET'],
+                        'technology brand': ['TECHNOLOGY BRAND', 'TECHNOLOGY/DEVICE', 'TECHNOLOGY', 'DEVICE']
                     };
                     const sliceKeywords = sliceMap[sliceValue.toLowerCase()] || [];
                     filtered = items.filter(item => {
                         if (item.subcategory) {
-                            const subcatUpper = item.subcategory.toUpperCase();
+                            const subcatUpper = item.subcategory.toUpperCase().trim();
+                            // First try exact match
+                            if (sliceKeywords.some(keyword => subcatUpper === keyword || subcatUpper === keyword.replace(/\s+/g, ' '))) {
+                                return true;
+                            }
+                            // Then try contains match
                             return sliceKeywords.some(keyword => subcatUpper.includes(keyword));
                         }
                         const nameUpper = (item.name || '').toUpperCase();
@@ -17783,27 +18454,31 @@
             // Filter items based on slice
             let filtered = items;
             if (sliceValue && sliceValue !== 'all') {
-                // Map slice values to possible category/subcategory matches
+                // Map slice values to possible category/subcategory matches - use exact matching
                 const sliceMap = {
-                    'apparel/footwear': ['APPAREL', 'FOOTWEAR', 'APPAREL/FOOTWEAR', 'CLOTHING', 'SHOES'],
+                    'apparel/footwear': ['APPAREL/FOOTWEAR', 'APPAREL', 'FOOTWEAR', 'CLOTHING', 'SHOES'],
                     'accessories': ['ACCESSORIES', 'ACCESSORY', 'JEWELRY', 'WATCHES', 'BAGS'],
-                    'beauty/wellness': ['BEAUTY', 'WELLNESS', 'BEAUTY/WELLNESS', 'COSMETICS', 'SKINCARE', 'MAKEUP'],
-                    'health & wellness': ['HEALTH', 'WELLNESS', 'HEALTH & WELLNESS', 'HEALTH AND WELLNESS', 'VITAMINS', 'SUPPLEMENTS'],
-                    'home/outdoor': ['HOME', 'OUTDOOR', 'HOME/OUTDOOR', 'FURNITURE', 'GARDEN', 'DECOR'],
+                    'beauty/wellness': ['BEAUTY/WELLNESS', 'BEAUTY', 'WELLNESS', 'COSMETICS', 'SKINCARE', 'MAKEUP'],
+                    'health & wellness': ['HEALTH & WELLNESS', 'HEALTH AND WELLNESS', 'HEALTH', 'WELLNESS', 'VITAMINS', 'SUPPLEMENTS'],
+                    'home/outdoor': ['HOME/OUTDOOR', 'HOME', 'OUTDOOR', 'FURNITURE', 'GARDEN', 'DECOR'],
                     'toys': ['TOYS', 'TOY', 'GAMES', 'GAMING']
                 };
                 
                 const sliceKeywords = sliceMap[sliceValue.toLowerCase()] || [];
                 
-                // Filter items that match the slice
-                // Check if item has subcategory field, or check item name/category
+                // Filter items that match the slice - check for exact subcategory match first
                 filtered = items.filter(item => {
-                    // Check subcategory if it exists
+                    // Check subcategory if it exists - prioritize exact match
                     if (item.subcategory) {
-                        const subcatUpper = item.subcategory.toUpperCase();
+                        const subcatUpper = item.subcategory.toUpperCase().trim();
+                        // First try exact match
+                        if (sliceKeywords.some(keyword => subcatUpper === keyword || subcatUpper === keyword.replace(/\s+/g, ' '))) {
+                            return true;
+                        }
+                        // Then try contains match for broader categories
                         return sliceKeywords.some(keyword => subcatUpper.includes(keyword));
                     }
-                    // Check item name for keywords
+                    // Check item name for keywords as fallback
                     const nameUpper = (item.name || '').toUpperCase();
                     return sliceKeywords.some(keyword => nameUpper.includes(keyword));
                 });
@@ -17838,6 +18513,69 @@
         // Store location data for filtering
         let allLocationData = { overIndexing: [], underIndexing: [] };
         
+        // Sort state for location tables
+        let locationSortState = {
+            top: { column: 'index', direction: 'desc' },      // Over-Indexing DMAs
+            bottom: { column: 'index', direction: 'asc' },    // Under-Indexing DMAs
+            all: { column: 'percentage', direction: 'desc' }  // All Locations
+        };
+        
+        function sortLocationTable(table, column) {
+            const state = locationSortState[table];
+            
+            // Toggle direction if clicking same column, otherwise set to desc
+            if (state.column === column) {
+                state.direction = state.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                state.column = column;
+                state.direction = 'desc';
+            }
+            
+            // Update visual indicators
+            updateSortIndicators(table);
+            
+            // Re-render the table
+            if (table === 'all') {
+                filterAllLocations();
+            } else {
+                filterLocationList(table);
+            }
+        }
+        
+        function updateSortIndicators(table) {
+            const state = locationSortState[table];
+            const headerSelectors = {
+                top: '#tab-location .location-grid .location-section:first-child .location-row.header',
+                bottom: '#tab-location .location-grid .location-section:nth-child(2) .location-row.header',
+                all: '#tab-location .location-table:last-child .location-row.header'
+            };
+            
+            const headerRow = document.querySelector(headerSelectors[table]);
+            if (!headerRow) return;
+            
+            const headers = headerRow.querySelectorAll('span');
+            headers.forEach((span, idx) => {
+                if (idx === 0 || idx === 1) return; // Skip # and Location columns
+                
+                span.classList.remove('sort-asc', 'sort-desc');
+                if (span.classList.contains('sortable')) {
+                    if (table === 'all') {
+                        if (idx === 2 && state.column === 'percentage') {
+                            span.classList.add(state.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+                        } else if (idx === 3 && state.column === 'index') {
+                            span.classList.add(state.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+                        }
+                    } else {
+                        if (idx === 2 && state.column === 'target') {
+                            span.classList.add(state.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+                        } else if (idx === 3 && state.column === 'index') {
+                            span.classList.add(state.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+                        }
+                    }
+                }
+            });
+        }
+        
         function renderLocationTable(locations) {
             const isProjection = dashDisplayMode === 'projection';
             // Sort by index for ranking (higher index = over-indexes more)
@@ -17853,8 +18591,23 @@
             // Render heat map
             renderHeatmap(locations);
 
+            // Sort over-indexing DMAs based on sort state
+            const topState = locationSortState.top;
+            let sortedOverIndexing = [...overIndexing];
+            if (topState.column === 'target') {
+                sortedOverIndexing.sort((a, b) => {
+                    const diff = b.pct - a.pct;
+                    return topState.direction === 'asc' ? -diff : diff;
+                });
+            } else if (topState.column === 'index') {
+                sortedOverIndexing.sort((a, b) => {
+                    const diff = b.index - a.index;
+                    return topState.direction === 'asc' ? -diff : diff;
+                });
+            }
+            
             // Render over-indexing DMAs (all of them)
-            document.getElementById('locationList').innerHTML = overIndexing.map((loc, i) => {
+            document.getElementById('locationList').innerHTML = sortedOverIndexing.map((loc, i) => {
                 const indexColor = '#10b981'; // Green for over-indexing
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
@@ -17872,9 +18625,23 @@
             // Update count
             document.getElementById('locationCountTop').textContent = `Showing ${overIndexing.length} DMAs`;
 
-            // Render under-indexing DMAs (all of them, sorted worst first)
-            const underSorted = [...underIndexing].sort((a, b) => a.index - b.index);
-            document.getElementById('locationListBottom').innerHTML = underSorted.map((loc, i) => {
+            // Sort under-indexing DMAs based on sort state
+            const bottomState = locationSortState.bottom;
+            let sortedUnderIndexing = [...underIndexing];
+            if (bottomState.column === 'target') {
+                sortedUnderIndexing.sort((a, b) => {
+                    const diff = b.pct - a.pct;
+                    return bottomState.direction === 'asc' ? -diff : diff;
+                });
+            } else if (bottomState.column === 'index') {
+                sortedUnderIndexing.sort((a, b) => {
+                    const diff = b.index - a.index;
+                    return bottomState.direction === 'asc' ? -diff : diff;
+                });
+            }
+            
+            // Render under-indexing DMAs (all of them)
+            document.getElementById('locationListBottom').innerHTML = sortedUnderIndexing.map((loc, i) => {
                 const indexColor = '#ef4444'; // Red for under-indexing
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
@@ -17892,9 +18659,23 @@
             // Update count
             document.getElementById('locationCountBottom').textContent = `Showing ${underIndexing.length} DMAs`;
             
-            // Render ALL locations sorted by percentage descending
-            const allByPct = [...locations].sort((a, b) => b.pct - a.pct);
-            document.getElementById('locationListAll').innerHTML = allByPct.map((loc, i) => {
+            // Sort ALL locations based on sort state
+            const allState = locationSortState.all;
+            let sortedAll = [...locations];
+            if (allState.column === 'percentage') {
+                sortedAll.sort((a, b) => {
+                    const diff = b.pct - a.pct;
+                    return allState.direction === 'asc' ? -diff : diff;
+                });
+            } else if (allState.column === 'index') {
+                sortedAll.sort((a, b) => {
+                    const diff = b.index - a.index;
+                    return allState.direction === 'asc' ? -diff : diff;
+                });
+            }
+            
+            // Render ALL locations
+            document.getElementById('locationListAll').innerHTML = sortedAll.map((loc, i) => {
                 const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
@@ -17908,10 +18689,15 @@
                     </div>
                 `;
             }).join('');
-            document.getElementById('locationCountAll').textContent = `Showing ${allByPct.length} DMAs`;
+            document.getElementById('locationCountAll').textContent = `Showing ${sortedAll.length} DMAs`;
             
             // Store all locations for filtering
-            allLocationData.all = allByPct;
+            allLocationData.all = sortedAll;
+            
+            // Update sort indicators
+            updateSortIndicators('top');
+            updateSortIndicators('bottom');
+            updateSortIndicators('all');
             
             // Clear search inputs
             const searchTop = document.getElementById('locationSearchTop');
@@ -17940,10 +18726,24 @@
                 ? data.filter(loc => loc.name.toLowerCase().includes(searchTerm))
                 : data;
             
-            // Sort: over-indexing by highest index, under-indexing by lowest index
-            const sorted = which === 'top' 
-                ? [...filtered].sort((a, b) => b.index - a.index)
-                : [...filtered].sort((a, b) => a.index - b.index);
+            // Sort based on current sort state
+            const state = locationSortState[which];
+            let sorted = [...filtered];
+            
+            if (state.column === 'target' || state.column === 'percentage') {
+                sorted.sort((a, b) => {
+                    const diff = b.pct - a.pct;
+                    return state.direction === 'asc' ? -diff : diff;
+                });
+            } else if (state.column === 'index') {
+                sorted.sort((a, b) => {
+                    const diff = b.index - a.index;
+                    return state.direction === 'asc' ? -diff : diff;
+                });
+            }
+            
+            // Update sort indicators
+            updateSortIndicators(which);
             
             // Render filtered results
             listEl.innerHTML = sorted.map((loc, i) => {
@@ -17982,8 +18782,24 @@
                 ? data.filter(loc => loc.name.toLowerCase().includes(searchTerm))
                 : data;
             
-            // Sort by percentage descending
-            const sorted = [...filtered].sort((a, b) => b.pct - a.pct);
+            // Sort based on current sort state
+            const state = locationSortState.all;
+            let sorted = [...filtered];
+            
+            if (state.column === 'percentage') {
+                sorted.sort((a, b) => {
+                    const diff = b.pct - a.pct;
+                    return state.direction === 'asc' ? -diff : diff;
+                });
+            } else if (state.column === 'index') {
+                sorted.sort((a, b) => {
+                    const diff = b.index - a.index;
+                    return state.direction === 'asc' ? -diff : diff;
+                });
+            }
+            
+            // Update sort indicators
+            updateSortIndicators('all');
             
             // Render filtered results
             listEl.innerHTML = sorted.map((loc, i) => {
@@ -20495,7 +21311,7 @@
                 ...topOverIndexers.slice(0, 3).map(i => i.name),
                 ...demoInsights.slice(0, 2).map(d => d.value),
                 ...topLocations.slice(0, 2).map(l => l.name)
-            ].slice(0, 9);
+            ].slice(0, 10);
             document.getElementById('targetingChecklist').innerHTML = targetingItems.map(item => `
                 <div class="checklist-item">${item}</div>
             `).join('') || '<div class="checklist-item">Build targeting based on insights</div>';
@@ -20574,7 +21390,7 @@
                 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'MOVIES', 'TV SHOWS', 
                 'STREAMING MUSIC', 'PODCAST'
             ];
-            const contentItems = allItems
+            const allContentItems = allItems
                 .filter(i => {
                     const cat = i.category.toUpperCase();
                     // Must match one of the specific content categories exactly or closely
@@ -20582,20 +21398,32 @@
                            !cat.includes('MOST PURCHASED') && 
                            !cat.includes('WHERE THEY SHOP') &&
                            !cat.includes('RETAIL');
-                })
-                .sort((a, b) => b.index - a.index)
-                .slice(0, 15);
+                });
+            
+            const contentItems = allContentItems
+                .filter(i => i.index >= 100)
+                .sort((a, b) => b.index - a.index);
+            const contentItemsUnder = allContentItems
+                .filter(i => i.index < 100)
+                .sort((a, b) => a.index - b.index);
             
             document.getElementById('affinityContent').innerHTML = renderAffinityList(contentItems);
+            document.getElementById('affinityContentUnder').innerHTML = renderAffinityList(contentItemsUnder);
             
             // Brand Affinities
             const brandCategories = ['BRAND', 'WHERE THEY SHOP', 'MOST PURCHASED', 'APPAREL', 'AUTOMOTIVE'];
-            const brandItems = allItems
-                .filter(i => brandCategories.some(c => i.category.toUpperCase().includes(c)))
-                .sort((a, b) => b.index - a.index)
-                .slice(0, 15);
+            const allBrandItems = allItems
+                .filter(i => brandCategories.some(c => i.category.toUpperCase().includes(c)));
+            
+            const brandItems = allBrandItems
+                .filter(i => i.index >= 100)
+                .sort((a, b) => b.index - a.index);
+            const brandItemsUnder = allBrandItems
+                .filter(i => i.index < 100)
+                .sort((a, b) => a.index - b.index);
             
             document.getElementById('affinityBrands').innerHTML = renderAffinityList(brandItems);
+            document.getElementById('affinityBrandsUnder').innerHTML = renderAffinityList(brandItemsUnder);
             
             // Digital Platforms - strict filtering for actual tech platforms
             const knownPlatforms = [
@@ -20614,25 +21442,40 @@
                 'NEXTDOOR', 'YELP', 'GLASSDOOR', 'INDEED', 'ZILLOW', 'REDFIN', 'TRULIA'
             ];
             
-            const platformItems = allItems
+            const allPlatformItems = allItems
                 .filter(i => {
                     const name = i.name.toUpperCase();
                     // Check if it matches a known platform
                     return knownPlatforms.some(p => name.includes(p) || name === p);
-                })
-                .sort((a, b) => b.index - a.index)
-                .slice(0, 15);
+                });
+            
+            const platformItems = allPlatformItems
+                .filter(i => i.index >= 100)
+                .sort((a, b) => b.index - a.index);
+            const platformItemsUnder = allPlatformItems
+                .filter(i => i.index < 100)
+                .sort((a, b) => a.index - b.index);
             
             document.getElementById('affinityPlatforms').innerHTML = renderAffinityList(platformItems);
+            document.getElementById('affinityPlatformsUnder').innerHTML = renderAffinityList(platformItemsUnder);
             
             // Music & Audio
             const musicCategories = ['MUSIC', 'PODCAST', 'AUDIO', 'RADIO', 'LISTENING'];
-            const musicItems = allItems
-                .filter(i => musicCategories.some(c => i.category.toUpperCase().includes(c)))
-                .sort((a, b) => b.index - a.index)
-                .slice(0, 15);
+            const allMusicItems = allItems
+                .filter(i => musicCategories.some(c => i.category.toUpperCase().includes(c)));
+            
+            const musicItems = allMusicItems
+                .filter(i => i.index >= 100)
+                .sort((a, b) => b.index - a.index);
+            const musicItemsUnder = allMusicItems
+                .filter(i => i.index < 100)
+                .sort((a, b) => a.index - b.index);
             
             document.getElementById('affinityMusic').innerHTML = renderAffinityList(musicItems);
+            document.getElementById('affinityMusicUnder').innerHTML = renderAffinityList(musicItemsUnder);
+            
+            // Restore module order after rendering
+            restoreAffinityModuleOrder();
             
             // Render network visualization
             renderAffinityNetwork(allItems.sort((a, b) => b.index - a.index).slice(0, 12));
@@ -20640,12 +21483,44 @@
         
         function renderAffinityList(items) {
             if (!items.length) return '<p style="color: var(--text-secondary); padding: 0.5rem;">No data available</p>';
-            return items.map(item => `
+            
+            const isProjection = dashDisplayMode === 'projection';
+            const US_POP = 324700000;
+            
+            return items.map(item => {
+                const index = item.index || 0;
+                let genPopPct = item.genPopPct || 0;
+                const profilePct = item.pct || 0;
+                
+                // Normalize gen pop: if < 1, multiply by 100 (it's a decimal)
+                if (genPopPct > 0 && genPopPct < 1) {
+                    genPopPct = genPopPct * 100;
+                }
+                
+                // Green if over-indexing (index >= 100), red if under-indexing (index < 100)
+                const indexColor = index >= 100 ? '#10b981' : '#ef4444';
+                
+                // Format displays
+                const profileDisplay = isProjection 
+                    ? (profilePct === 0 || profilePct === null ? 'N/A' : formatNumber(Math.round((profilePct / 100) * US_POP)))
+                    : formatValueOrNA(profilePct, true);
+                
+                const genPopDisplay = isProjection 
+                    ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
+                    : formatValueOrNA(genPopPct, true);
+                
+                // Color profile % based on comparison to gen pop
+                const profileColor = profilePct > genPopPct ? '#10b981' : profilePct < genPopPct ? '#ef4444' : 'var(--text-primary)';
+                
+                return `
                 <div class="affinity-item">
-                    <span class="name">${item.name} <span class="category-tag-small">${item.category}</span></span>
-                    <span class="index" style="background: ${item.index >= 100 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}; color: ${item.index >= 100 ? '#10b981' : '#ef4444'};">${item.index}</span>
+                    <span class="name">${item.name}</span>
+                    <span style="color: ${profileColor}; font-weight: 600; font-size: 0.8rem;">${profileDisplay}</span>
+                    <span style="color: var(--text-secondary); font-size: 0.8rem;">${genPopDisplay}</span>
+                    <span class="index" style="background: ${index >= 100 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}; color: ${indexColor}; font-weight: 600;">${formatIndex(index)}</span>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
         
         // Store network data globally for filtering
@@ -20656,23 +21531,69 @@
             const container = document.getElementById('affinityNetwork');
             const profileName = currentProfileData?.name || 'Profile';
             
-            // Store for filtering
-            networkData = topItems.map(item => ({
-                ...item,
-                catType: getCategoryType(item.category)
-            }));
+            if (!topItems || topItems.length === 0) {
+                container.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-secondary);">No affinity data available</div>';
+                return;
+            }
+            
+            // Store for filtering - ensure catType is set for all items
+            networkData = topItems.map(item => {
+                const catType = getCategoryType(item.category || item.cat || '');
+                return {
+                    ...item,
+                    catType: catType
+                };
+            });
+            
+            // Reset filter to 'all' when new data is loaded
+            currentNetworkFilter = 'all';
+            document.querySelectorAll('.network-filter-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.cat === 'all');
+            });
             
             renderNetworkSVG(networkData, profileName);
         }
         
         function getCategoryType(category) {
-            const cat = (category || '').toUpperCase();
-            if (cat.includes('PURCHASED') || cat.includes('SHOP') || cat.includes('RETAIL') || cat.includes('BRAND') || cat.includes('QSR') || cat.includes('APPAREL')) return 'brand';
-            if (cat.includes('SERIES') || cat.includes('MOVIE') || cat.includes('GAMES') || cat.includes('PODCAST') || cat.includes('CONTENT')) return 'content';
-            if (cat.includes('STREAM') || cat.includes('SOCIAL') || cat.includes('APP') || cat.includes('PLATFORM') || cat.includes('MEDIA') || cat.includes('SEARCH')) return 'platform';
-            if (cat.includes('MUSIC') || cat.includes('AUDIO') || cat.includes('SPOTIFY') || cat.includes('ARTIST')) return 'music';
-            if (cat.includes('SPORT') || cat.includes('MLB') || cat.includes('NBA') || cat.includes('NFL') || cat.includes('NHL')) return 'sports';
-            return 'brand'; // Default
+            if (!category) return 'brand'; // Default
+            
+            const cat = String(category).toUpperCase().trim();
+            
+            // Check for sports first (more specific)
+            if (cat.includes('SPORT') || cat.includes('MLB') || cat.includes('NBA') || cat.includes('NFL') || 
+                cat.includes('NHL') || cat.includes('WNBA') || cat.includes('SOCCER') || cat.includes('NFL') ||
+                cat.includes('NFL ATHLETE') || cat.includes('NBA ATHLETE') || cat.includes('MLB ATHLETE')) {
+                return 'sports';
+            }
+            
+            // Check for music/audio
+            if (cat.includes('MUSIC') || cat.includes('AUDIO') || cat.includes('SPOTIFY') || cat.includes('ARTIST') ||
+                cat.includes('MUSICIAN') || cat.includes('BAND') || cat.includes('LISTENING') || cat.includes('RADIO')) {
+                return 'music';
+            }
+            
+            // Check for content/entertainment
+            if (cat.includes('SERIES') || cat.includes('MOVIE') || cat.includes('GAMES') || cat.includes('PODCAST') || 
+                cat.includes('CONTENT') || cat.includes('STREAMING VIDEO') || cat.includes('STREAMING/PLATFORM') ||
+                cat.includes('BROADCAST/CABLE') || cat.includes('TV') || cat.includes('SHOW')) {
+                return 'content';
+            }
+            
+            // Check for platforms (must come before brand check for 'APP' to avoid false matches)
+            if (cat.includes('STREAM') || cat.includes('SOCIAL') || cat.includes('APP/PLATFORM') || 
+                cat.includes('PLATFORM') || cat.includes('MEDIA') || cat.includes('SEARCH') ||
+                cat.includes('APP/PLATFORM USAGE') || cat.includes('DIGITAL PLATFORM') || cat.includes('VIRTUAL MVPD')) {
+                return 'platform';
+            }
+            
+            // Check for brands (most common, so check last)
+            if (cat.includes('PURCHASED') || cat.includes('SHOP') || cat.includes('RETAIL') || 
+                cat.includes('BRAND') || cat.includes('QSR') || cat.includes('APPAREL') ||
+                cat.includes('WHERE THEY SHOP') || cat.includes('MOST PURCHASED')) {
+                return 'brand';
+            }
+            
+            return 'brand'; // Default fallback
         }
         
         function getCategoryColor(catType) {
@@ -20690,10 +21611,35 @@
             const container = document.getElementById('affinityNetwork');
             const detailPanel = document.getElementById('networkDetailPanel');
             
+            if (!items || items.length === 0) {
+                container.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-secondary);">No affinity data available</div>';
+                return;
+            }
+            
             // Filter items based on current filter
             let filteredItems = items;
             if (currentNetworkFilter !== 'all') {
-                filteredItems = items.filter(i => i.catType === currentNetworkFilter);
+                filteredItems = items.filter(i => {
+                    // Ensure catType exists, if not, calculate it
+                    if (!i.catType) {
+                        i.catType = getCategoryType(i.category);
+                    }
+                    return i.catType === currentNetworkFilter;
+                });
+            }
+            
+            // Show message if no items match filter
+            if (filteredItems.length === 0) {
+                const filterLabels = {
+                    'brand': 'Brands',
+                    'content': 'Content',
+                    'platform': 'Platforms',
+                    'music': 'Music',
+                    'sports': 'Sports'
+                };
+                const label = filterLabels[currentNetworkFilter] || currentNetworkFilter;
+                container.innerHTML = `<div style="padding: 2rem; text-align: center; color: var(--text-secondary);">No ${label} affinities found for this audience</div>`;
+                return;
             }
             
             // Limit to top 20 for readability
@@ -20772,6 +21718,11 @@
         }
         
         function filterNetwork(catType) {
+            if (!networkData || networkData.length === 0) {
+                console.warn('No network data available to filter');
+                return;
+            }
+            
             currentNetworkFilter = catType;
             
             // Update button states
@@ -20779,7 +21730,7 @@
                 btn.classList.toggle('active', btn.dataset.cat === catType);
             });
             
-            // Re-render
+            // Re-render with filtered data
             const profileName = currentProfileData?.name || 'Profile';
             renderNetworkSVG(networkData, profileName);
             closeNetworkDetail();
@@ -20792,10 +21743,35 @@
             
             if (!item) return;
             
+            const isProjection = dashDisplayMode === 'projection';
+            const US_POP = 324700000;
+            
+            let genPopPct = item.genPopPct || 0;
+            const profilePct = item.pct || 0;
+            
+            // Normalize gen pop: if < 1, multiply by 100 (it's a decimal)
+            if (genPopPct > 0 && genPopPct < 1) {
+                genPopPct = genPopPct * 100;
+            }
+            
+            // Format displays
+            const profileDisplay = isProjection 
+                ? (profilePct === 0 || profilePct === null ? 'N/A' : formatNumber(Math.round((profilePct / 100) * US_POP)))
+                : formatValueOrNA(profilePct, true);
+            
+            const genPopDisplay = isProjection 
+                ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
+                : formatValueOrNA(genPopPct, true);
+            
+            // Color profile % based on comparison to gen pop
+            const profileColor = profilePct > genPopPct ? '#10b981' : profilePct < genPopPct ? '#ef4444' : 'var(--text-primary)';
+            const indexColor = item.index >= 100 ? '#10b981' : '#ef4444';
+            
             document.getElementById('detailName').textContent = item.name;
             document.getElementById('detailCategory').textContent = item.category;
-            document.getElementById('detailIndex').textContent = formatIndex(item.index);
-            document.getElementById('detailPct').textContent = (item.pct || 0).toFixed(1) + '%';
+            document.getElementById('detailIndex').innerHTML = `<span style="color: ${indexColor}; font-weight: 600;">${formatIndex(item.index)}</span>`;
+            document.getElementById('detailPct').innerHTML = `<span style="color: ${profileColor}; font-weight: 600;">${profileDisplay}</span>`;
+            document.getElementById('detailGenPopPct').textContent = genPopDisplay;
             document.getElementById('detailStrength').textContent = item.index >= 200 ? '🔥 Very Strong' : item.index >= 150 ? '💪 Strong' : item.index >= 100 ? '✓ Above Avg' : '↓ Below Avg';
             
             document.getElementById('networkDetailPanel').classList.add('visible');
@@ -21396,6 +22372,9 @@
                 window.mediaReachChartInstance.destroy();
             }
             
+            // Store channelScores globally for tooltip access
+            window.mediaReachChartData = channelScores;
+            
             // Calculate total for percentages
             const total = channelScores.reduce((sum, c) => sum + (c.reach || c.avgIndex || 0), 0);
             
@@ -21429,9 +22408,44 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            padding: 12,
+                            titleColor: '#e6f1ff',
+                            bodyColor: '#cbd5e1',
+                            borderColor: 'rgba(59, 130, 246, 0.5)',
+                            borderWidth: 1,
+                            titleFont: { size: 13, weight: 'bold' },
+                            bodyFont: { size: 11 },
+                            displayColors: false,
                             callbacks: {
+                                title: function(context) {
+                                    const dataIndex = context[0].dataIndex;
+                                    const channel = window.mediaReachChartData[dataIndex];
+                                    return channel ? channel.label : '';
+                                },
                                 label: function(context) {
-                                    return context.parsed.x.toFixed(1) + '% of audience';
+                                    const dataIndex = context.dataIndex;
+                                    const channel = window.mediaReachChartData[dataIndex];
+                                    const percentage = context.parsed.x.toFixed(1);
+                                    
+                                    if (!channel || !channel.items || channel.items.length === 0) {
+                                        return percentage + '% of audience';
+                                    }
+                                    
+                                    // Get top items sorted by index
+                                    const topItems = channel.items
+                                        .sort((a, b) => b.index - a.index)
+                                        .slice(0, 5);
+                                    
+                                    const lines = [percentage + '% of audience', ''];
+                                    if (topItems.length > 0) {
+                                        lines.push('Top contributors:');
+                                        topItems.forEach((item, idx) => {
+                                            lines.push(`${idx + 1}. ${item.name} (${formatIndex(item.index)})`);
+                                        });
+                                    }
+                                    
+                                    return lines;
                                 }
                             }
                         },
@@ -22545,9 +23559,15 @@
                 const state = getStateFromLocation(loc.name);
                 if (state) {
                     if (!stateData[state]) {
-                        stateData[state] = { pct: 0, index: 0, count: 0, names: [] };
+                        stateData[state] = { pct: 0, genPopPct: 0, index: 0, count: 0, names: [] };
                     }
                     stateData[state].pct += loc.pct;
+                    // Normalize and aggregate gen pop percentage
+                    let genPopPct = loc.genPopPct || 0;
+                    if (genPopPct > 0 && genPopPct < 1) {
+                        genPopPct = genPopPct * 100;
+                    }
+                    stateData[state].genPopPct += genPopPct;
                     stateData[state].index += loc.index || 100;
                     stateData[state].count++;
                     stateData[state].names.push(loc.name);
@@ -22559,20 +23579,40 @@
                 stateData[state].avgIndex = Math.round(stateData[state].index / stateData[state].count);
             });
             
-            // Get min/max for color scaling
+            // Get min/max for color scaling (keep heat colors for background, but add comparison colors for text)
             const values = Object.values(stateData).map(s => s.pct);
             const minVal = Math.min(...values);
             const maxVal = Math.max(...values);
             
-            // Render state boxes
+            const isProjection = dashDisplayMode === 'projection';
+            const US_POP = 324700000;
+            
+            // Render state boxes with gen pop comparison
             const sortedStates = Object.entries(stateData).sort((a, b) => b[1].pct - a[1].pct);
             
-            document.getElementById('usHeatmap').innerHTML = sortedStates.map(([state, data]) => `
+            document.getElementById('usHeatmap').innerHTML = sortedStates.map(([state, data]) => {
+                // Determine comparison color (green if profile >= gen pop, red if profile < gen pop)
+                const comparisonColor = data.pct >= data.genPopPct ? '#10b981' : '#ef4444';
+                
+                // Format profile and gen pop displays
+                const profileDisplay = isProjection 
+                    ? (data.pct === 0 || data.pct === null ? 'N/A' : formatNumber(Math.round((data.pct / 100) * US_POP)))
+                    : formatValueOrNA(data.pct, true);
+                
+                const genPopDisplay = isProjection 
+                    ? (data.genPopPct === 0 || data.genPopPct === null ? 'N/A' : formatNumber(Math.round((data.genPopPct / 100) * US_POP)))
+                    : formatValueOrNA(data.genPopPct, true);
+                
+                return `
                 <div class="state-box" style="background: ${getHeatColor(data.pct, minVal, maxVal)};" title="${data.names.slice(0, 3).join(', ')}">
                     <div class="state-name">${state}</div>
-                    <div class="state-pct">${data.pct.toFixed(1)}%</div>
+                    <div class="state-pct" style="color: ${comparisonColor}; font-weight: 600;">
+                        ${profileDisplay}
+                        <span style="color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">(${genPopDisplay})</span>
+                    </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
             
             // Location stats
             const totalLocations = locations.length;
@@ -22586,8 +23626,9 @@
             const regionData = {};
             Object.entries(stateData).forEach(([state, data]) => {
                 const region = getRegionForState(state);
-                if (!regionData[region]) regionData[region] = { pct: 0, count: 0 };
+                if (!regionData[region]) regionData[region] = { pct: 0, genPopPct: 0, count: 0 };
                 regionData[region].pct += data.pct;
+                regionData[region].genPopPct += data.genPopPct;
                 regionData[region].count++;
             });
             
@@ -22600,19 +23641,38 @@
                 'Other': '#6b7280'
             };
             
+            const isProjection = dashDisplayMode === 'projection';
+            const US_POP = 324700000;
             const maxRegionPct = Math.max(...Object.values(regionData).map(r => r.pct));
             
             document.getElementById('regionalBreakdown').innerHTML = Object.entries(regionData)
                 .sort((a, b) => b[1].pct - a[1].pct)
-                .map(([region, data]) => `
+                .map(([region, data]) => {
+                    // Determine color based on comparison (green if profile > gen pop, red if profile < gen pop)
+                    const comparisonColor = data.pct >= data.genPopPct ? '#10b981' : '#ef4444';
+                    
+                    // Format profile and gen pop displays
+                    const profileDisplay = isProjection 
+                        ? (data.pct === 0 || data.pct === null ? 'N/A' : formatNumber(Math.round((data.pct / 100) * US_POP)))
+                        : formatValueOrNA(data.pct, true);
+                    
+                    const genPopDisplay = isProjection 
+                        ? (data.genPopPct === 0 || data.genPopPct === null ? 'N/A' : formatNumber(Math.round((data.genPopPct / 100) * US_POP)))
+                        : formatValueOrNA(data.genPopPct, true);
+                    
+                    return `
                     <div class="region-card">
                         <h4>${region}</h4>
                         <div class="region-bar">
                             <div class="region-bar-fill" style="width: ${(data.pct / maxRegionPct * 100)}%; background: ${regionColors[region] || '#6b7280'};"></div>
                         </div>
-                        <span class="region-pct">${data.pct.toFixed(1)}%</span>
+                        <span class="region-pct" style="color: ${comparisonColor}; font-weight: 600;">
+                            ${profileDisplay}
+                            <span style="color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">(${genPopDisplay})</span>
+                        </span>
                     </div>
-                `).join('');
+                `;
+                }).join('');
         }
         
         // ============================================================================
@@ -24063,7 +25123,12 @@
                     if (!result.behavioral[category]) result.behavioral[category] = [];
                     if (!result.behavioralProjection[category]) result.behavioralProjection[category] = [];
                     // Calculate Gen Pop % from US Gen Pop Projection (projection / 324.7M US pop * 100)
-                    const genPopPct = usGenPop > 0 ? (usGenPop / 324700000) * 100 : 0;
+                    // Also check catShare as fallback and normalize if < 1
+                    let genPopPct = usGenPop > 0 ? (usGenPop / 324700000) * 100 : 0;
+                    if (genPopPct === 0 && catShare > 0) {
+                        // Use catShare but normalize: if < 1, multiply by 100
+                        genPopPct = catShare < 1 ? catShare * 100 : catShare;
+                    }
                     // Calculate Index = (brand pct / gen pop pct) * 100
                     const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
                     result.behavioral[category].push({ 
