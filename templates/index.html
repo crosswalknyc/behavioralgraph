@@ -49,6 +49,50 @@
             background: #2a4a6f;
         }
 
+        /* Global Select/Dropdown Styling - Sleek Dark Theme */
+        select {
+            background: linear-gradient(135deg, #0f1f2f 0%, #1a2a3a 100%);
+            border: 1px solid rgba(102, 217, 239, 0.2);
+            border-radius: 6px;
+            color: var(--text-primary);
+            padding: 0.5rem 2rem 0.5rem 0.75rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2366d9ef' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.5rem center;
+            background-size: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            min-width: fit-content;
+            width: auto;
+        }
+
+        select:hover {
+            background: linear-gradient(135deg, #1a2a3a 0%, #0f1f2f 100%);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 4px 12px rgba(102, 217, 239, 0.2);
+            transform: translateY(-1px);
+        }
+
+        select:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 3px rgba(102, 217, 239, 0.15), 0 4px 12px rgba(102, 217, 239, 0.2);
+        }
+
+        select option {
+            background: var(--bg-input);
+            color: var(--text-primary);
+            padding: 0.75rem;
+        }
+
+        select option:checked {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+            color: white;
+        }
+
         body {
             font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--bg-dark);
@@ -3472,16 +3516,10 @@
         }
         
         .behavioral-sort-select {
-            font-size: 0.65rem;
-            padding: 0.25rem 0.4rem;
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            color: var(--text-primary);
-            cursor: pointer;
-            min-width: 90px;
-            max-width: 100px;
-            appearance: auto;
+            font-size: 0.7rem;
+            padding: 0.35rem 2rem 0.35rem 0.75rem;
+            min-width: 100px;
+            width: auto;
         }
         .behavioral-sort-select:focus {
             outline: none;
@@ -9116,7 +9154,7 @@
                                 <select id="interestsCategorySelect" onchange="filterInterests()" class="interests-dropdown has-tooltip" data-tooltip="Filter by Category" style="min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
                                     <option value="all">All</option>
                                 </select>
-                                <select id="interestsSortSelect" onchange="sortInterests(this.value)" class="has-tooltip" data-tooltip="Sort Interests" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                <select id="interestsSortSelect" onchange="sortInterests(this.value)" class="has-tooltip" data-tooltip="Sort Interests" style="width: auto; min-width: 80px; padding: 0.35rem 2rem 0.35rem 0.75rem; font-size: 0.75rem;">
                                     <option value="pct" selected>% ↓</option>
                                     <option value="index">Idx ↓</option>
                                     <option value="alpha">A-Z</option>
