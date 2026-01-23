@@ -2264,7 +2264,7 @@ def get_admin_content():
                 # Try to get category and project_name from cache (which has proper brand categories from CSV)
                 cached = cached_lookup.get(key, {})
                 category = cached.get('category', 'Uncategorized')
-                project_name = cached.get('project_name', filename.replace('.csv', '').replace('_', ' ').title())
+                project_name = cached.get('project_name', smart_title_case(filename.replace('.csv', '').replace('_', ' ')))
                 last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
                 
                 active_files.append({
@@ -2349,7 +2349,7 @@ def get_admin_content():
                     continue
                 
                 filename = key.split('/')[-1]
-                project_name = filename.replace('.csv', '').replace('_', ' ').title()
+                project_name = smart_title_case(filename.replace('.csv', '').replace('_', ' '))
                 last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
                 
                 archived_files.append({
@@ -5608,17 +5608,35 @@ def refresh_s3_cache(incremental=True):
         print(f"Error in full scan: {e}")
         return {'error': str(e)}
 
+def smart_title_case(text):
+    """Convert to title case but preserve all-caps words (like JD, AOC, NFL, etc.)"""
+    words = text.split(' ')
+    result = []
+    for word in words:
+        # If word is all uppercase and 2-4 chars, keep it uppercase (likely an acronym/initials)
+        if word.isupper() and 2 <= len(word) <= 4:
+            result.append(word)
+        # If word has mixed case already, keep it
+        elif not word.islower() and not word.isupper():
+            result.append(word)
+        else:
+            # Otherwise apply title case
+            result.append(word.title())
+    return ' '.join(result)
+
 def process_s3_file_metadata(key, obj):
     """Process a single S3 file and extract metadata."""
     import re
     
-    # Extract project name from filename - use title case for display
+    # Extract project name from filename - use smart title case for display
     name_without_ext = key.replace('.csv', '')
     match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
     if match:
-        project_name = match.group(1).replace('_', ' ').title()
+        raw_name = match.group(1).replace('_', ' ')
     else:
-        project_name = name_without_ext.replace('_', ' ').title()
+        raw_name = name_without_ext.replace('_', ' ')
+    
+    project_name = smart_title_case(raw_name)
     
     # Try to get category from BRAND CATEGORY row in CSV
     category = 'UNCATEGORIZED'
