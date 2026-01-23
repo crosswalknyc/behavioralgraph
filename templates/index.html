@@ -10854,6 +10854,7 @@
         let currentCSVData = null;
         let currentS3Key = null;
         let charts = {};
+        let genPopBaselineData = null; // Cache for Gen Pop CSV data used as baseline for all profiles
         
         // Subscriber IQ state variables (declared early for tooltip system access)
         let subscriberDisplayMode = 'percent'; // 'percent' or 'projection'
@@ -10864,6 +10865,28 @@
         let openSubscriberTabs = []; // Array of { id, name, dateRange, data }
         let activeSubscriberTabId = null;
 
+        // Load Gen Pop baseline data for all profile comparisons
+        async function loadGenPopBaseline() {
+            try {
+                const GEN_POP_FILE = 'Gen_Pop_11_13_2025_07_52.csv';
+                console.log(`📊 Loading Gen Pop baseline from: ${GEN_POP_FILE}`);
+                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(GEN_POP_FILE)}`, { credentials: 'same-origin' });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.data) {
+                        genPopBaselineData = parseAllData(data.data);
+                        console.log('✅ Gen Pop baseline loaded successfully');
+                    } else {
+                        console.warn('⚠️ Gen Pop baseline file not found, using hardcoded values');
+                    }
+                } else {
+                    console.warn('⚠️ Could not load Gen Pop baseline, using hardcoded values');
+                }
+            } catch (error) {
+                console.error('❌ Error loading Gen Pop baseline:', error);
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const today = new Date();
             const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -10871,6 +10894,10 @@
             const endDateInput = document.getElementById('end_date');
             if (startDateInput) startDateInput.value = formatDate(thirtyDaysAgo);
             if (endDateInput) endDateInput.value = formatDate(today);
+            
+            // Load Gen Pop baseline data
+            loadGenPopBaseline();
+            
             loadJobs();
             // Dashboard is default view - load profiles immediately
             loadDashboardProfiles();
@@ -15476,13 +15503,20 @@
                 const rawNumbers = parseInt(row['Original Raw Numbers'] || 0);
                 const usProjection = parseInt(row['US Gen Pop Projection'] || 0);
                 
-                // For DEMOGRAPHICS: Use hardcoded Gen Pop percentages
-                // For LOCATION: Use hardcoded Gen Pop DMA percentages
-                // For BEHAVIORAL: Category Share IS the Gen Pop percentage
+                // For DEMOGRAPHICS: Try to use loaded Gen Pop baseline, fallback to hardcoded
+                // For LOCATION: Use hardcoded Gen Pop DMA percentages  
+                // For BEHAVIORAL: Use loaded Gen Pop baseline
                 let genPopPct = 0;
-                if (demoCategories.includes(category) && GENPOP_DEMOGRAPHICS[category]) {
-                    // Look up hardcoded Gen Pop value for this demographic
-                    genPopPct = GENPOP_DEMOGRAPHICS[category][value] || 0;
+                if (demoCategories.includes(category)) {
+                    // Try to get from loaded Gen Pop baseline first
+                    const demoKey = category.toLowerCase().replace('_', '_');
+                    if (genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics[demoKey]) {
+                        genPopPct = genPopBaselineData.demographics[demoKey][value] || 0;
+                    }
+                    // Fallback to hardcoded values if not found in baseline
+                    if (genPopPct === 0 && GENPOP_DEMOGRAPHICS[category]) {
+                        genPopPct = GENPOP_DEMOGRAPHICS[category][value] || 0;
+                    }
                 } else if (category === 'LOCATION' && value) {
                     // Look up hardcoded Gen Pop value for this DMA
                     const dmaKey = value.toUpperCase();
@@ -15501,12 +15535,20 @@
                     // Default to 0.2% for unlisted DMAs (small markets)
                     if (genPopPct === 0) genPopPct = 0.2;
                 } else {
-                    // For behavioral items, Category Share is the Gen Pop percentage
-                    // Normalize: if < 1, treat as decimal and multiply by 100; if >= 1, use as-is
-                    genPopPct = catShare > 0 ? (catShare < 1 ? catShare * 100 : catShare) : 0;
+                    // For behavioral items, try to get Gen Pop percentage from loaded baseline data
+                    if (genPopBaselineData && genPopBaselineData.behavioral && genPopBaselineData.behavioral[category]) {
+                        const genPopItem = genPopBaselineData.behavioral[category].find(item => item.name === value);
+                        if (genPopItem) {
+                            genPopPct = genPopItem.pct || 0;
+                        }
+                    }
+                    
+                    // Fallback: Use Category Share if Gen Pop baseline not available
+                    if (genPopPct === 0) {
+                        genPopPct = catShare > 0 ? (catShare < 1 ? catShare * 100 : catShare) : 0;
+                    }
                     
                     // If this IS the Gen Pop profile, use profile pct as gen pop pct (they should be the same)
-                    // Check if filename or profile name contains "Gen Pop" or "GEN_POP"
                     const isGenPopProfile = currentS3Key?.toUpperCase().includes('GEN_POP') || 
                                            currentS3Key?.toUpperCase().includes('GENPOP') ||
                                            currentProfileData?.name?.toUpperCase().includes('GEN POP');
