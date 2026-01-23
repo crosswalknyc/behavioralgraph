@@ -18125,8 +18125,8 @@
                 // Set canvas height based on number of categories (for bar chart scrolling)
                 const occCanvas = document.getElementById('occupationChart');
                 if (occChartType === 'bar' && occCanvas) {
-                    const barHeight = 50; // Height per bar (increased for long labels)
-                    const minHeight = 600; // Minimum height to ensure scrolling
+                    const barHeight = 70; // Increased height per bar to prevent overlap
+                    const minHeight = 800; // Minimum height to ensure scrolling
                     const calculatedHeight = occLabels.length * barHeight;
                     occCanvas.style.height = Math.max(calculatedHeight, minHeight) + 'px';
                 } else if (occCanvas) {
@@ -18135,12 +18135,12 @@
                 
                 charts.occupation = new Chart(occCanvas, {
                     type: occChartType,
-                    data: { labels: occLabels, datasets: [{ data: occData, backgroundColor: colors, borderRadius: occChartType === 'bar' ? 4 : 0 }] },
+                    data: { labels: occLabels, datasets: [{ data: occData, backgroundColor: colors, borderRadius: occChartType === 'bar' ? 4 : 0, barPercentage: 0.7, categoryPercentage: 0.8 }] },
                     options: { 
                         indexAxis: occChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
-                        layout: { padding: occIsCircular ? {} : { right: 50 } }, // Increased padding to prevent text cutoff 
+                        layout: { padding: occIsCircular ? {} : { right: 50, top: 10, bottom: 10 } }, // Increased padding to prevent text cutoff 
                         plugins: { 
                             legend: { 
                                 display: occIsCircular,
