@@ -16275,8 +16275,9 @@
             // === PROFILE SUMMARY ===
             const summaryItems = [];
             
-            // Find top over-indexing item
-            const topItem = allItems.sort((a, b) => b.index - a.index)[0];
+            // Find top over-indexing item (exclude items with 100% or near-100% penetration)
+            const validItems = allItems.filter(i => i.pct < 99.5);
+            const topItem = validItems.sort((a, b) => b.index - a.index)[0];
             if (topItem) {
                 summaryItems.push({
                     icon: '🔥',
