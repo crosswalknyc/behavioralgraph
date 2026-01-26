@@ -4357,7 +4357,7 @@ def get_hedge_fund_ticker_data(s3_key):
 
 @app.route('/api/hedge-fund-iq/metadata', methods=['GET', 'POST'])
 @requires_auth
-@admin_required
+@requires_admin
 def manage_ticker_metadata():
     """Get or update ticker metadata (display names, KPIs, parent tickers)."""
     if request.method == 'GET':
