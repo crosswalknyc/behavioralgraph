@@ -2692,6 +2692,8 @@ def index():
     if role == 'admin':
         has_profile_iq = True
         has_subscriber_iq = True
+        has_hedge_fund_iq = True
+        hedge_fund_iq_tickers = ['*']
         has_analysis_iq = True
         analysis_iq_modules = ['profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign', 'cross_show', 'watch_time']
     else:
