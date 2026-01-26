@@ -10814,21 +10814,24 @@
                         </div>
 
                         <!-- Summary Stats -->
+                        <div style="margin-bottom: 0.75rem;">
+                            <h3 id="quarterYTDHeader" style="font-size: 1rem; color: var(--accent-cyan); font-weight: 600; text-align: center; margin: 0;">Quarter YTD Cumulative</h3>
+                        </div>
                         <div class="stats-row" style="margin-bottom: 1.5rem;">
                             <div class="stat-card">
                                 <div class="stat-label">📊 Current Consumers</div>
                                 <div class="stat-value" id="currentConsumers">--</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-label">📈 Total Subs (Period)</div>
+                                <div class="stat-label">📈 Total Subs (Quarter)</div>
                                 <div class="stat-value" id="totalSubs">--</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-label">📉 Total Cancels (Period)</div>
+                                <div class="stat-label">📉 Total Cancels (Quarter)</div>
                                 <div class="stat-value" id="totalCancels">--</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-label">💹 Net Growth (Period)</div>
+                                <div class="stat-label">💹 Net Growth (Quarter)</div>
                                 <div class="stat-value" id="netGrowth">--</div>
                             </div>
                         </div>
@@ -12415,6 +12418,9 @@
             // Show latest data date and quarter in header
             document.getElementById('tickerLatestDataHeader').textContent = `Latest: ${latestDate} (${latestQuarter})`;
             
+            // Update Quarter YTD header
+            document.getElementById('quarterYTDHeader').textContent = `${latestQuarter} YTD Cumulative`;
+            
             // Calculate cumulative stats for the current quarter
             const currentQuarterData = data.data.filter(d => d.Quarter === latestQuarter);
             const quarterSubs = currentQuarterData.reduce((sum, d) => sum + (d['Total Subs'] || 0), 0);
@@ -12425,18 +12431,18 @@
             
             // Update stat cards with quarter info
             document.getElementById('currentConsumers').textContent = (latest['Total Consumers'] || 0).toLocaleString();
-            document.getElementById('totalSubs').textContent = `${quarterSubs.toLocaleString()} (${latestQuarter})`;
-            document.getElementById('totalCancels').textContent = `${quarterCancels.toLocaleString()} (${latestQuarter})`;
-            document.getElementById('netGrowth').textContent = `${netGrowthPct}% (${latestQuarter})`;
+            document.getElementById('totalSubs').textContent = quarterSubs.toLocaleString();
+            document.getElementById('totalCancels').textContent = quarterCancels.toLocaleString();
+            document.getElementById('netGrowth').textContent = `${netGrowthPct}%`;
             
             // Update card titles to show they're quarterly cumulative
             const subsCard = document.querySelector('[id="totalSubs"]').closest('.stat-card');
             const cancelsCard = document.querySelector('[id="totalCancels"]').closest('.stat-card');
             const growthCard = document.querySelector('[id="netGrowth"]').closest('.stat-card');
             
-            if (subsCard) subsCard.querySelector('.stat-label').textContent = `📈 Total Subs (${latestQuarter})`;
-            if (cancelsCard) cancelsCard.querySelector('.stat-label').textContent = `📉 Total Cancels (${latestQuarter})`;
-            if (growthCard) growthCard.querySelector('.stat-label').textContent = `💹 Net Growth (${latestQuarter})`;
+            if (subsCard) subsCard.querySelector('.stat-label').textContent = `📈 Total Subs`;
+            if (cancelsCard) cancelsCard.querySelector('.stat-label').textContent = `📉 Total Cancels`;
+            if (growthCard) growthCard.querySelector('.stat-label').textContent = `💹 Net Growth %`;
             
             // Render daily chart
             renderDailyChurnChart(data.data);
