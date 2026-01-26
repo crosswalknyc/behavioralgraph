@@ -8967,7 +8967,7 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Occupation')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Occupation')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Occupation')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container" style="height: 400px; max-height: 400px; overflow-y: scroll; overflow-x: hidden; position: relative;">
+                                <div class="chart-container" style="height: 500px; max-height: 500px; overflow-y: auto; overflow-x: hidden; position: relative;">
                                     <canvas id="occupationChart"></canvas>
                                 </div>
                             </div>
@@ -18174,8 +18174,8 @@
                 // Set canvas height based on number of categories (for bar chart scrolling)
                 const occCanvas = document.getElementById('occupationChart');
                 if (occChartType === 'bar' && occCanvas) {
-                    const barHeight = 70; // Increased height per bar to prevent overlap
-                    const minHeight = 800; // Minimum height to ensure scrolling
+                    const barHeight = 90; // Increased height per bar for better readability
+                    const minHeight = 1200; // Minimum height to ensure scrolling
                     const calculatedHeight = occLabels.length * barHeight;
                     occCanvas.style.height = Math.max(calculatedHeight, minHeight) + 'px';
                 } else if (occCanvas) {
@@ -18184,12 +18184,12 @@
                 
                 charts.occupation = new Chart(occCanvas, {
                     type: occChartType,
-                    data: { labels: occLabels, datasets: [{ data: occData, backgroundColor: colors, borderRadius: occChartType === 'bar' ? 4 : 0, barPercentage: 0.7, categoryPercentage: 0.8 }] },
+                    data: { labels: occLabels, datasets: [{ data: occData, backgroundColor: colors, borderRadius: occChartType === 'bar' ? 4 : 0, barPercentage: 0.6, categoryPercentage: 0.9 }] },
                     options: { 
                         indexAxis: occChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
-                        layout: { padding: occIsCircular ? {} : { right: 50, top: 10, bottom: 10 } }, // Increased padding to prevent text cutoff 
+                        layout: { padding: occIsCircular ? {} : { right: 50, top: 15, bottom: 15, left: 10 } }, // Increased padding 
                         plugins: { 
                             legend: { 
                                 display: occIsCircular,
@@ -18212,7 +18212,7 @@
                             datalabels: occChartType === 'bar' ? {
                                 anchor: 'end',
                                 align: 'end',
-                                font: { size: 10, weight: 'bold' },
+                                font: { size: 9, weight: 'bold' },
                                 color: (ctx) => {
                                     const pct = occPcts[ctx.dataIndex] || 0;
                                     const genPop = occGenPop[ctx.dataIndex] || 0;
@@ -18225,32 +18225,33 @@
                                         const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
                                         return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                     }
-                                    return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
+                                    return formatPct(pct) + (genPop > 0 ? ` (GP: ${formatPct(genPop)})` : '');
                                 }
                             } : { display: false }
                         },
                         scales: occIsCircular ? {} : {
                             x: { 
                                 grid: { color: '#1e3a5f' }, 
-                                ticks: { color: '#8892b0', font: { size: 10 } },
+                                ticks: { color: '#8892b0', font: { size: 9 } },
                                 suggestedMax: occMax // Add suggestedMax to prevent cutoff
                             },
                             y: { 
                                 grid: { display: false }, 
                                 ticks: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 10 },
+                                    font: { size: 9, weight: '500' },
                                     autoSkip: false,
+                                    padding: 8,
                                     callback: function(value, index, ticks) {
                                         const label = this.getLabelForValue(value);
-                                        // Split long labels into multiple lines at 20 characters
-                                        if (label.length > 20) {
+                                        // Split long labels into multiple lines at 25 characters
+                                        if (label.length > 25) {
                                             const words = label.split(' ');
                                             const lines = [];
                                             let currentLine = '';
                                             
                                             words.forEach(word => {
-                                                if ((currentLine + ' ' + word).trim().length > 20 && currentLine.length > 0) {
+                                                if ((currentLine + ' ' + word).trim().length > 25 && currentLine.length > 0) {
                                                     lines.push(currentLine.trim());
                                                     currentLine = word;
                                                 } else {
