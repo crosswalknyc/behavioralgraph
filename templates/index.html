@@ -17871,9 +17871,14 @@
                                         return data.labels.map((label, i) => {
                                             const pct = relPcts[i] || 0;
                                             const genPop = relGenPop[i] || 0;
-                                            const valStr = isProjection ? formatNumber(Math.round(data.datasets[0].data[i])) : pct.toFixed(2) + '%';
+                                            const valStr = isProjection 
+                                                ? formatNumber(Math.round(data.datasets[0].data[i])) 
+                                                : pct.toFixed(2) + '%';
+                                            const gpStr = isProjection
+                                                ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 324700000))})` : '')
+                                                : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : '');
                                             const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
-                                            return { text: `${label} ${valStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
+                                            return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     } : undefined
                                 } 
@@ -17975,9 +17980,14 @@
                                         return data.labels.map((label, i) => {
                                             const pct = soPcts[i] || 0;
                                             const genPop = soGenPop[i] || 0;
-                                            const valStr = isProjection ? formatNumber(Math.round(data.datasets[0].data[i])) : pct.toFixed(2) + '%';
+                                            const valStr = isProjection 
+                                                ? formatNumber(Math.round(data.datasets[0].data[i])) 
+                                                : pct.toFixed(2) + '%';
+                                            const gpStr = isProjection
+                                                ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 324700000))})` : '')
+                                                : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : '');
                                             const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
-                                            return { text: `${label} ${valStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
+                                            return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     } : undefined
                                 } 
@@ -18089,9 +18099,14 @@
                                         return data.labels.map((label, i) => {
                                             const pct = psPcts[i] || 0;
                                             const genPop = psGenPop[i] || 0;
-                                            const valStr = isProjection ? formatNumber(Math.round(data.datasets[0].data[i])) : pct.toFixed(2) + '%';
+                                            const valStr = isProjection 
+                                                ? formatNumber(Math.round(data.datasets[0].data[i])) 
+                                                : pct.toFixed(2) + '%';
+                                            const gpStr = isProjection
+                                                ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 324700000))})` : '')
+                                                : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : '');
                                             const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
-                                            return { text: `${label} ${valStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
+                                            return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     } : undefined
                                 } 
