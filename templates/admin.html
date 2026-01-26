@@ -1000,14 +1000,14 @@
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Upload Image</label>
-                                <input type="file" id="tickerImageFile" accept="image/*">
+                                <input type="file" id="tickerDetailImageFile" accept="image/*">
                             </div>
                             <div class="form-group">
                                 <label>Or Image URL</label>
-                                <input type="text" id="tickerImageURL" placeholder="https://...">
+                                <input type="text" id="tickerDetailImageURL" placeholder="https://...">
                             </div>
                         </div>
-                        <button class="btn btn-primary" onclick="saveTickerImage()">💾 Save Image</button>
+                        <button class="btn btn-primary" onclick="saveTickerImageFromDetail()">💾 Save Image</button>
                         <button class="btn btn-danger" onclick="removeTickerImageInModal()" id="removeTickerImageBtn" style="display: none;">🗑️ Remove Image</button>
                     </div>
 
@@ -4527,15 +4527,15 @@
             document.getElementById('tickerDetailModal').style.display = 'none';
             currentTickerInModal = null;
             // Clear form
-            document.getElementById('tickerImageFile').value = '';
-            document.getElementById('tickerImageURL').value = '';
+            document.getElementById('tickerDetailImageFile').value = '';
+            document.getElementById('tickerDetailImageURL').value = '';
         }
         
-        async function saveTickerImage() {
+        async function saveTickerImageFromDetail() {
             if (!currentTickerInModal) return;
             
-            const fileInput = document.getElementById('tickerImageFile');
-            const urlInput = document.getElementById('tickerImageURL');
+            const fileInput = document.getElementById('tickerDetailImageFile');
+            const urlInput = document.getElementById('tickerDetailImageURL');
             
             const formData = new FormData();
             formData.append('ticker', currentTickerInModal.ticker);
