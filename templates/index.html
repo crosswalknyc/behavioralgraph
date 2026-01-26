@@ -15800,7 +15800,41 @@
                 // Behavioral (non-demographic categories) - include index and projection
                 if (!demoCategories.includes(category) && !skipCategories.includes(category) && !['LOCATION'].includes(category) && value) {
                     if (!result.behavioral[category]) result.behavioral[category] = [];
-                    result.behavioral[category].push({ name: value, pct: pct, index: index, genPopPct: genPopPct, projection: usProjection });
+                    
+                    // Extract subcategory from the original row's Column field if it contains a slash or underscore
+                    // For example: "MOST_PURCHASED_BRANDS_APPAREL/FOOTWEAR" -> subcategory = "APPAREL/FOOTWEAR"
+                    const originalColumn = row.Column || '';
+                    let subcategory = '';
+                    
+                    // Check if the column contains an underscore followed by a category indicator
+                    const parts = originalColumn.split('_');
+                    if (parts.length > 3) {
+                        // Take everything after the main category name as subcategory
+                        // E.g., "MOST_PURCHASED_BRANDS_APPAREL/FOOTWEAR" -> ["MOST", "PURCHASED", "BRANDS", "APPAREL/FOOTWEAR"]
+                        const mainCategoryParts = category.split('_').length;
+                        if (parts.length > mainCategoryParts) {
+                            subcategory = parts.slice(mainCategoryParts).join('_');
+                        }
+                    }
+                    
+                    // Also check if there's a slash in the remaining part (e.g., "APPAREL/FOOTWEAR")
+                    if (!subcategory && originalColumn.includes('/')) {
+                        const slashParts = originalColumn.split('/');
+                        if (slashParts.length > 1) {
+                            // Extract the part with the slash
+                            const beforeSlash = slashParts[0].split('_').pop(); // Get last part before slash
+                            subcategory = beforeSlash + '/' + slashParts.slice(1).join('/');
+                        }
+                    }
+                    
+                    result.behavioral[category].push({ 
+                        name: value, 
+                        pct: pct, 
+                        index: index, 
+                        genPopPct: genPopPct, 
+                        projection: usProjection,
+                        subcategory: subcategory || '' 
+                    });
                 }
             });
 
