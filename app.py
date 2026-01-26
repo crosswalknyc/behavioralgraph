@@ -4257,30 +4257,42 @@ def list_hedge_fund_tickers():
                 filename = key.replace('.csv', '').replace('_Daily', '')
                 parts = filename.split('_')
                 
-                if len(parts) >= 2:
-                    # Format: TICKER_KPI
-                    ticker_name = parts[0].upper()
-                    kpi_name = ' '.join(parts[1:]).title()  # Join remaining parts as KPI
+                # Get the ticker symbol (first part, uppercase)
+                ticker_symbol = parts[0].upper()
+                
+                # For compound tickers like TMUSphone, keep them together
+                if len(parts) >= 2 and parts[1].lower() in ['phone', 'broadband']:
+                    ticker_symbol = (parts[0] + parts[1]).upper()
+                    kpi_parts = parts[2:] if len(parts) > 2 else []
                 else:
-                    # Format: TICKER only
-                    ticker_name = filename.upper()
-                    kpi_name = 'Customers'  # Default KPI
+                    kpi_parts = parts[1:] if len(parts) > 1 else []
+                
+                # Look up KPI from default mapping, or extract from filename
+                if ticker_symbol in DEFAULT_TICKER_KPIS:
+                    kpi_name = DEFAULT_TICKER_KPIS[ticker_symbol]
+                elif kpi_parts:
+                    kpi_name = ' '.join(kpi_parts).title()
+                else:
+                    kpi_name = 'Customers'
+                
+                # Determine display name
+                display_name = ticker_symbol
                 
                 last_modified = obj['LastModified'].isoformat() if 'LastModified' in obj else None
                 
                 tickers.append({
-                    'ticker': ticker_name,
-                    'display_name': ticker_name,  # Will be overridden by metadata if exists
+                    'ticker': ticker_symbol,
+                    'display_name': display_name,  # Will be overridden by metadata if exists
                     'kpi': kpi_name,  # Will be overridden by metadata if exists
                     's3_key': key,
                     'last_modified': last_modified,
                     'bucket': HEDGE_FUND_S3_BUCKET
                 })
         
-        # Load metadata for display names and KPIs
+        # Load metadata for custom overrides
         metadata = load_ticker_metadata()
         
-        # Enrich tickers with metadata
+        # Enrich tickers with metadata (allows admin overrides)
         for ticker in tickers:
             ticker_key = ticker['s3_key']
             if ticker_key in metadata:
@@ -5228,6 +5240,57 @@ SVOD_METADATA_KEY = 'system/svod_metadata.json'
 
 # Hedge Fund IQ ticker metadata storage key
 TICKER_METADATA_KEY = 'system/ticker_metadata.json'
+
+# Default KPI mappings for known tickers
+DEFAULT_TICKER_KPIS = {
+    'ADT': 'Monitoring & Related Services Revenue Against Churn',
+    'ATUS': 'Residential Customers Broadband',
+    'BADOO': 'Paying Users',
+    'BMBL': 'Paying Users',
+    'CABO': 'Residential Data PSUs',
+    'CHTR': 'Internet Residential Customer Relationships',
+    'CMCSA': 'Domestic Broadband Residential Customers',
+    'DIS': 'Paid subscribers - Disney+ Domestic US & Canada',
+    'ESPN': 'ESPN+ Subs',
+    'DUOL': 'Paid Subscribers',
+    'GDDY': 'Total Customers',
+    'GRND': 'Paying Users',
+    'HINGE': 'Payers',
+    'HUBS': 'Customers',
+    'HULU': 'Paid subscribers - Total Hulu',
+    'LMND': 'Customers',
+    'LUMN': 'Mass Markets Total Broadband Subscribers',
+    'MG_ASIA': 'Payers',
+    'MG_EGAE': 'Payers',
+    'NFLX': 'Paid memberships (UCAN)',
+    'NYT': 'Digital Subscribers',
+    'PARA': 'Subscribers',
+    'PCK': 'Paid subscribers',
+    'PINS': 'Monthly Active Users - US & Canada',
+    'PLNT': 'Members',
+    'PTON': 'Paid Connected Fitness Subscriptions',
+    'RDDT': 'US Daily Active Users',
+    'ROKU': 'Streaming households',
+    'SIRI': 'Ending subscribers',
+    'SPOT': 'Premium subscribers',
+    'T': 'Total Domestic Broadband Connections / DSL Plus Broadband Connections',
+    'TPHONE': 'Subscribers: Postpaid Phone',
+    'TINDER': 'Payers',
+    'TMUS': 'Total Customers',
+    'TMUSPHONE': 'Postpaid Phone Customers',
+    'TRUP': 'Total Subscription Pets Enrolled',
+    'USM': 'Total Retail Connections',
+    'VZ': 'Broadband Connections (Consumer / Residential + Business)',
+    'VZPHONE': 'Consumer Wireless Retail Postpaid Subscribers',
+    'WBD': 'Subscribers - Domestic, incl. Global Max, HBO Max',
+    'SPHR': 'Event-related revenue',
+    'FUN': 'Attendance',
+    'HIMS': 'Subscribers (End of Period)',
+    'AAPL': 'Services',
+    'AMZN': 'Subscription Services',
+    'META': 'WW Daily Active People',
+    'DASH': 'Total Orders'
+}
 
 def load_svod_metadata():
     """Load SVOD file metadata (categories) from S3."""
