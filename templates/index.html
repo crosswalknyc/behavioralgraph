@@ -10834,8 +10834,12 @@
                         <!-- Live Data Tab -->
                         <div id="livedataTab" class="ticker-tab-content" style="display: block;">
                             <!-- Summary Stats -->
-                            <div style="margin-bottom: 0.75rem;">
-                                <h3 id="quarterYTDHeader" style="font-size: 1.25rem; color: var(--accent-cyan); font-weight: 600; text-align: left; margin: 0;">Quarter to Date (QTD) Cumulative</h3>
+                            <div style="margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+                                <h3 id="quarterYTDHeader" style="font-size: 1.25rem; color: var(--accent-cyan); font-weight: 600; margin: 0;">Quarter to Date (QTD) Cumulative</h3>
+                                <div id="liveDataAccuracyBadge" style="display: none; padding: 0.5rem 1rem; background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border-color);">
+                                    <span style="font-size: 0.9rem; color: var(--text-secondary);">Accuracy: </span>
+                                    <span id="liveDataAccuracyValue" style="font-weight: 600; font-size: 1rem;"></span>
+                                </div>
                             </div>
                             
                             <!-- Projected Growth Rate - Full Width -->
@@ -10849,12 +10853,12 @@
                             <!-- 2x2 Grid -->
                             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
                                 <div class="stat-card">
-                                    <div class="stat-label">📊 Current Consumers QTD</div>
-                                    <div class="stat-value" id="currentConsumers">--</div>
-                                </div>
-                                <div class="stat-card">
                                     <div class="stat-label">💹 QTD Net Growth %</div>
                                     <div class="stat-value" id="netGrowth">--</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">📊 Current Consumers QTD</div>
+                                    <div class="stat-value" id="currentConsumers">--</div>
                                 </div>
                                 <div class="stat-card">
                                     <div class="stat-label">📈 Total Subs QTD</div>
@@ -12693,6 +12697,9 @@
             
             // Show accuracy rating if available
             const accuracyHeader = document.getElementById('tickerAccuracyHeader');
+            const liveDataAccuracyBadge = document.getElementById('liveDataAccuracyBadge');
+            const liveDataAccuracyValue = document.getElementById('liveDataAccuracyValue');
+            
             if (stats.accuracy_rating && stats.accuracy_score !== null) {
                 // Color code based on rating
                 let color = 'var(--text-secondary)';
@@ -12702,10 +12709,16 @@
                 else if (stats.accuracy_score >= 65) color = '#f97316'; // Dark Orange - Fair
                 else color = '#ef4444'; // Red - Needs Improvement
                 
+                // Update header accuracy
                 accuracyHeader.innerHTML = `Accuracy: <span style="color: ${color}; font-weight: 600;">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
                 accuracyHeader.style.display = 'block';
+                
+                // Update Live Data tab accuracy badge
+                liveDataAccuracyValue.innerHTML = `<span style="color: ${color};">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
+                liveDataAccuracyBadge.style.display = 'block';
             } else {
                 accuracyHeader.style.display = 'none';
+                liveDataAccuracyBadge.style.display = 'none';
             }
             
             // Update Quarter QTD header
