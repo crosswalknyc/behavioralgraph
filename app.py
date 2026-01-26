@@ -4425,7 +4425,7 @@ def get_hedge_fund_ticker_data(s3_key):
         response_data = {
             'success': True,
             'data': data,
-            'ticker': ticker_name,
+            'ticker': ticker_symbol,  # Fixed: use ticker_symbol instead of undefined ticker_name
             'display_name': display_name,
             'kpi': kpi,
             'parent_ticker': parent_ticker,
