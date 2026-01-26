@@ -20907,39 +20907,84 @@
         function sliceWhereTheyShop(catId, cat, sliceValue) {
             currentSlices[cat] = sliceValue;
             const listEl = document.getElementById('list-' + catId);
-            const items = allBehavioralData[cat] || [];
             
-            // Filter items based on slice
-            let filtered = items;
+            // Map slice values to actual category names in the CSV
+            const sliceToCategoryMap = {
+                'apparel/footwear': 'APPAREL/FOOTWEAR',
+                'accessories': 'ACCESSORIES',
+                'beauty/wellness': 'BEAUTY/WELLNESS',
+                'health & wellness': 'HEALTH & WELLNESS',
+                'home/outdoor': 'HOME/OUTDOOR',
+                'toys': 'TOYS'
+            };
+            
+            // Determine which category to pull from
+            let sourceCategory = cat;
+            let filtered = [];
+            
             if (sliceValue && sliceValue !== 'all') {
-                // Map slice values to possible category/subcategory matches - use exact matching
-                const sliceMap = {
-                    'apparel/footwear': ['APPAREL/FOOTWEAR', 'APPAREL', 'FOOTWEAR', 'CLOTHING', 'SHOES'],
-                    'accessories': ['ACCESSORIES', 'ACCESSORY', 'JEWELRY', 'WATCHES', 'BAGS'],
-                    'beauty/wellness': ['BEAUTY/WELLNESS', 'BEAUTY', 'WELLNESS', 'COSMETICS', 'SKINCARE', 'MAKEUP'],
-                    'health & wellness': ['HEALTH & WELLNESS', 'HEALTH AND WELLNESS', 'HEALTH', 'WELLNESS', 'VITAMINS', 'SUPPLEMENTS'],
-                    'home/outdoor': ['HOME/OUTDOOR', 'HOME', 'OUTDOOR', 'FURNITURE', 'GARDEN', 'DECOR'],
-                    'toys': ['TOYS', 'TOY', 'GAMES', 'GAMING']
-                };
+                // Check if this slice value maps to a different category
+                const mappedCategory = sliceToCategoryMap[sliceValue.toLowerCase()];
                 
-                const sliceKeywords = sliceMap[sliceValue.toLowerCase()] || [];
+                console.log(`🔍 Slicing Where They Shop by: "${sliceValue}"`);
+                console.log(`📋 Original Category: "${cat}"`);
+                console.log(`🎯 Mapped Category: "${mappedCategory}"`);
                 
-                // Filter items that match the slice - check for exact subcategory match first
-                filtered = items.filter(item => {
-                    // Check subcategory if it exists - prioritize exact match
-                    if (item.subcategory) {
-                        const subcatUpper = item.subcategory.toUpperCase().trim();
-                        // First try exact match
-                        if (sliceKeywords.some(keyword => subcatUpper === keyword || subcatUpper === keyword.replace(/\s+/g, ' '))) {
-                            return true;
+                if (mappedCategory) {
+                    // Try to find the mapped category in allBehavioralData
+                    const categoryVariants = [
+                        mappedCategory,
+                        mappedCategory.replace('/', ' '),
+                        mappedCategory.replace('/', '_'),
+                        mappedCategory.replace(/\s+/g, '_')
+                    ];
+                    
+                    let foundCategory = null;
+                    for (const variant of categoryVariants) {
+                        if (allBehavioralData[variant]) {
+                            foundCategory = variant;
+                            break;
                         }
-                        // Then try contains match for broader categories
-                        return sliceKeywords.some(keyword => subcatUpper.includes(keyword));
                     }
-                    // Check item name for keywords as fallback
-                    const nameUpper = (item.name || '').toUpperCase();
-                    return sliceKeywords.some(keyword => nameUpper.includes(keyword));
-                });
+                    
+                    if (foundCategory) {
+                        console.log(`✅ Found category: "${foundCategory}"`);
+                        filtered = allBehavioralData[foundCategory] || [];
+                        sourceCategory = foundCategory;
+                    } else {
+                        console.log(`⚠️ Category "${mappedCategory}" not found in data. Available categories:`, Object.keys(allBehavioralData));
+                        // Fallback: try to filter within current category by subcategory
+                        const items = allBehavioralData[cat] || [];
+                        const sliceKeywords = [mappedCategory, mappedCategory.split('/')[0], mappedCategory.split('/')[1]].filter(Boolean);
+                        
+                        filtered = items.filter(item => {
+                            if (item.subcategory) {
+                                const subcatUpper = item.subcategory.toUpperCase().trim();
+                                return sliceKeywords.some(keyword => subcatUpper.includes(keyword.toUpperCase()));
+                            }
+                            if (item.originalColumn) {
+                                const origColUpper = item.originalColumn.toUpperCase().trim();
+                                return sliceKeywords.some(keyword => origColUpper.includes(keyword.toUpperCase()));
+                            }
+                            return false;
+                        });
+                    }
+                } else {
+                    // No mapping found, use original category
+                    filtered = allBehavioralData[cat] || [];
+                }
+                
+                console.log(`📦 Total items found: ${filtered.length}`);
+                if (filtered.length > 0) {
+                    console.log(`📊 Sample items (first 3):`, filtered.slice(0, 3).map(i => ({ 
+                        name: i.name, 
+                        pct: i.pct,
+                        index: i.index
+                    })));
+                }
+            } else {
+                // Show all from original category
+                filtered = allBehavioralData[cat] || [];
             }
             
             // Apply current search filter if any
