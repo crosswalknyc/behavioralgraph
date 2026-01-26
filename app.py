@@ -4252,13 +4252,26 @@ def list_hedge_fund_tickers():
                 if not key.endswith('.csv'):
                     continue
                 
-                # Extract ticker name from filename (e.g., "DIS.csv" -> "DIS", "HULU.csv" -> "HULU")
-                ticker_name = key.replace('.csv', '').replace('_', ' ').upper()
+                # Extract ticker name and KPI from filename
+                # Format: TICKER_KPI_Daily.csv or TICKER.csv
+                filename = key.replace('.csv', '').replace('_Daily', '')
+                parts = filename.split('_')
+                
+                if len(parts) >= 2:
+                    # Format: TICKER_KPI
+                    ticker_name = parts[0].upper()
+                    kpi_name = ' '.join(parts[1:]).title()  # Join remaining parts as KPI
+                else:
+                    # Format: TICKER only
+                    ticker_name = filename.upper()
+                    kpi_name = 'Customers'  # Default KPI
                 
                 last_modified = obj['LastModified'].isoformat() if 'LastModified' in obj else None
                 
                 tickers.append({
                     'ticker': ticker_name,
+                    'display_name': ticker_name,  # Will be overridden by metadata if exists
+                    'kpi': kpi_name,  # Will be overridden by metadata if exists
                     's3_key': key,
                     'last_modified': last_modified,
                     'bucket': HEDGE_FUND_S3_BUCKET
@@ -4272,11 +4285,9 @@ def list_hedge_fund_tickers():
             ticker_key = ticker['s3_key']
             if ticker_key in metadata:
                 ticker['display_name'] = metadata[ticker_key].get('display_name', ticker['ticker'])
-                ticker['kpi'] = metadata[ticker_key].get('kpi', 'Unknown KPI')
+                ticker['kpi'] = metadata[ticker_key].get('kpi', ticker['kpi'])
                 ticker['parent_ticker'] = metadata[ticker_key].get('parent_ticker', None)
             else:
-                ticker['display_name'] = ticker['ticker']
-                ticker['kpi'] = 'Unknown KPI'
                 ticker['parent_ticker'] = None
         
         print(f"✅ Found {len(tickers)} tickers")
