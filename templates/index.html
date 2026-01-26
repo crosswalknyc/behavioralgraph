@@ -21093,10 +21093,22 @@
                 });
             } else if (type === 'behavioral') {
                 const items = currentDashboardData.behavioral[category] || [];
+                const isProjection = document.getElementById('displayModeToggle')?.checked || false;
+                const US_POP = 324700000;
+                
                 csvContent = `${profileName} - ${category}\n`;
-                csvContent += `Name,Audience %,Index\n`;
+                csvContent += `Name,Audience %,Audience Numbers,Gen Pop %,Gen Pop Numbers,Index\n`;
                 items.forEach(item => {
-                    csvContent += `"${item.name} - ${category}",${item.pct.toFixed(1)}%,${item.index}\n`;
+                    const audiencePct = (item.pct || 0).toFixed(1);
+                    const audienceNumbers = Math.round((item.pct / 100) * US_POP);
+                    let genPopPct = item.genPopPct || 0;
+                    // Normalize gen pop: if < 1, multiply by 100 (it's a decimal)
+                    if (genPopPct > 0 && genPopPct < 1) {
+                        genPopPct = genPopPct * 100;
+                    }
+                    const genPopNumbers = Math.round((genPopPct / 100) * US_POP);
+                    const index = item.index || 0;
+                    csvContent += `"${item.name}",${audiencePct}%,${audienceNumbers},${genPopPct.toFixed(1)}%,${genPopNumbers},${index}\n`;
                 });
             } else if (type === 'location') {
                 const locations = currentDashboardData.locations || [];
