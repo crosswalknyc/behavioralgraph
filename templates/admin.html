@@ -768,6 +768,7 @@
             <button class="admin-tab active" onclick="showAdminTab('users')">👥 Users</button>
             <button class="admin-tab" onclick="showAdminTab('content')">📁 Content Management</button>
             <button class="admin-tab" onclick="showAdminTab('images')">🖼️ Profile Images</button>
+            <button class="admin-tab" onclick="showAdminTab('ticker-images')">📈 Ticker Images</button>
             <button class="admin-tab" onclick="showAdminTab('sec-actuals')">📊 SEC Actuals</button>
             <button class="admin-tab" onclick="showAdminTab('settings')">⚙️ Settings</button>
         </div>
@@ -893,6 +894,54 @@
                     <h2>✅ Profiles With Images</h2>
                 </div>
                 <div id="imageProfilesWithList" class="content-accordion" style="max-height: 300px; overflow-y: auto;">
+                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TICKER IMAGES SECTION -->
+        <div id="section-ticker-images" class="admin-section">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Tickers</h3>
+                    <div class="stat-value blue" id="tickersTotalCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>With Images</h3>
+                    <div class="stat-value green" id="tickersWithCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Missing Images</h3>
+                    <div class="stat-value red" id="tickersMissingCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Coverage</h3>
+                    <div class="stat-value purple" id="tickersCoverage">0%</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h2>📈 Tickers Missing Images</h2>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-small btn-secondary" onclick="loadTickerImages()">↻ Refresh</button>
+                    </div>
+                </div>
+                
+                <div class="content-filters">
+                    <input type="text" id="tickerSearch" class="content-search" placeholder="🔍 Search tickers..." onkeyup="filterTickerImages()">
+                </div>
+                
+                <div id="tickerImagesList" class="content-accordion" style="max-height: 500px; overflow-y: auto;">
+                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
+                </div>
+            </div>
+            
+            <div class="card" style="margin-top: 1rem;">
+                <div class="card-header">
+                    <h2>✅ Tickers With Images</h2>
+                </div>
+                <div id="tickerImagesWithList" class="content-accordion" style="max-height: 300px; overflow-y: auto;">
                     <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
                 </div>
             </div>
@@ -1437,6 +1486,52 @@
             <div style="display: flex; gap: 0.75rem;">
                 <button class="btn btn-secondary" onclick="closeCategoryModal()" style="flex: 1;">Cancel</button>
                 <button class="btn btn-success" onclick="changeCategory()" style="flex: 1;">💾 Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ticker Image Modal -->
+    <div id="tickerImageModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>📸 Upload Ticker Image</h2>
+                <button class="modal-close" onclick="closeTickerImageModal()">&times;</button>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Ticker</label>
+                <div id="tickerImageTickerName" style="padding: 0.75rem; background: var(--bg-input); border-radius: 6px; font-size: 1rem; color: var(--accent-cyan); font-weight: 600;"></div>
+                <input type="hidden" id="tickerImageTicker">
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Upload Method</label>
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                    <button class="btn btn-secondary" onclick="selectUploadMethod('file')" id="uploadMethodFile" style="flex: 1;">📁 Upload File</button>
+                    <button class="btn btn-secondary" onclick="selectUploadMethod('url')" id="uploadMethodUrl" style="flex: 1;">🔗 Image URL</button>
+                </div>
+                
+                <div id="uploadFileSection" style="display: none;">
+                    <input type="file" id="tickerImageFile" accept="image/*" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                    <small style="color: var(--text-secondary); font-size: 0.7rem;">Supported: PNG, JPG, GIF, WebP, SVG</small>
+                </div>
+                
+                <div id="uploadUrlSection" style="display: none;">
+                    <input type="text" id="tickerImageUrl" placeholder="https://example.com/logo.png" style="width: 100%; padding: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                    <small style="color: var(--text-secondary); font-size: 0.7rem;">Enter a direct URL to an image</small>
+                </div>
+            </div>
+            
+            <div id="tickerImagePreview" style="display: none; margin-bottom: 1rem; text-align: center;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Preview</label>
+                <div style="padding: 1rem; background: var(--bg-input); border-radius: 8px;">
+                    <img id="tickerImagePreviewImg" src="" alt="Preview" style="max-width: 200px; max-height: 200px; border-radius: 8px;">
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 0.75rem;">
+                <button class="btn btn-secondary" onclick="closeTickerImageModal()" style="flex: 1;">Cancel</button>
+                <button class="btn btn-success" onclick="saveTickerImage()" style="flex: 1;">💾 Save Image</button>
             </div>
         </div>
     </div>
@@ -3850,9 +3945,232 @@
                 originalShowSection(sectionId);
                 if (sectionId === 'sec-actuals') {
                     loadSecActuals();
+                } else if (sectionId === 'ticker-images') {
+                    loadTickerImages();
                 }
             };
         });
+        
+        // ============================================
+        // TICKER IMAGES MANAGEMENT
+        // ============================================
+        
+        let allTickerImages = { without: [], with: [] };
+        
+        async function loadTickerImages() {
+            try {
+                const response = await fetch('/api/admin/tickers-without-images');
+                const data = await response.json();
+                
+                if (data.success) {
+                    allTickerImages.without = data.without_images;
+                    allTickerImages.with = data.with_images;
+                    
+                    // Update stats
+                    document.getElementById('tickersTotalCount').textContent = data.total_count;
+                    document.getElementById('tickersWithCount').textContent = data.has_image_count;
+                    document.getElementById('tickersMissingCount').textContent = data.missing_count;
+                    const coverage = data.total_count > 0 ? ((data.has_image_count / data.total_count) * 100).toFixed(1) : 0;
+                    document.getElementById('tickersCoverage').textContent = `${coverage}%`;
+                    
+                    // Render lists
+                    renderTickerImagesList();
+                } else {
+                    showToast('Error loading ticker images: ' + data.error, true);
+                }
+            } catch (error) {
+                console.error('Error loading ticker images:', error);
+                showToast('Network error loading ticker images', true);
+            }
+        }
+        
+        function renderTickerImagesList() {
+            // Render tickers without images
+            const withoutList = document.getElementById('tickerImagesList');
+            if (allTickerImages.without.length === 0) {
+                withoutList.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--accent-green);">✅ All tickers have images!</div>';
+            } else {
+                let html = '';
+                allTickerImages.without.forEach(ticker => {
+                    html += `
+                        <div class="content-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                            <div>
+                                <strong style="color: var(--accent-cyan);">${ticker.display_name}</strong>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">${ticker.ticker} • ${ticker.kpi}</div>
+                            </div>
+                            <button class="btn btn-small btn-success" onclick="showTickerImageModal('${ticker.ticker}', '${ticker.display_name}')">📸 Add Image</button>
+                        </div>
+                    `;
+                });
+                withoutList.innerHTML = html;
+            }
+            
+            // Render tickers with images
+            const withList = document.getElementById('tickerImagesWithList');
+            if (allTickerImages.with.length === 0) {
+                withList.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No ticker images uploaded yet.</div>';
+            } else {
+                let html = '';
+                allTickerImages.with.forEach(ticker => {
+                    html += `
+                        <div class="content-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <img src="${ticker.image_url}" alt="${ticker.display_name}" style="width: 40px; height: 40px; object-fit: contain; border-radius: 4px; background: var(--bg-input); padding: 4px;">
+                                <div>
+                                    <strong style="color: var(--accent-cyan);">${ticker.display_name}</strong>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">${ticker.ticker} • ${ticker.kpi}</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-small btn-secondary" onclick="showTickerImageModal('${ticker.ticker}', '${ticker.display_name}')">✏️ Change</button>
+                                <button class="btn btn-small btn-danger" onclick="removeTickerImage('${ticker.ticker}', '${ticker.display_name}')">🗑️ Remove</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                withList.innerHTML = html;
+            }
+        }
+        
+        function filterTickerImages() {
+            const search = document.getElementById('tickerSearch').value.toLowerCase();
+            const items = document.querySelectorAll('#tickerImagesList .content-item');
+            
+            items.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                item.style.display = text.includes(search) ? 'flex' : 'none';
+            });
+        }
+        
+        function showTickerImageModal(ticker, displayName) {
+            document.getElementById('tickerImageTicker').value = ticker;
+            document.getElementById('tickerImageTickerName').textContent = `${displayName} (${ticker})`;
+            document.getElementById('tickerImageFile').value = '';
+            document.getElementById('tickerImageUrl').value = '';
+            document.getElementById('tickerImagePreview').style.display = 'none';
+            
+            // Reset upload method
+            document.getElementById('uploadFileSection').style.display = 'none';
+            document.getElementById('uploadUrlSection').style.display = 'none';
+            document.getElementById('uploadMethodFile').classList.remove('btn-primary');
+            document.getElementById('uploadMethodFile').classList.add('btn-secondary');
+            document.getElementById('uploadMethodUrl').classList.remove('btn-primary');
+            document.getElementById('uploadMethodUrl').classList.add('btn-secondary');
+            
+            document.getElementById('tickerImageModal').classList.add('show');
+        }
+        
+        function closeTickerImageModal() {
+            document.getElementById('tickerImageModal').classList.remove('show');
+        }
+        
+        function selectUploadMethod(method) {
+            if (method === 'file') {
+                document.getElementById('uploadFileSection').style.display = 'block';
+                document.getElementById('uploadUrlSection').style.display = 'none';
+                document.getElementById('uploadMethodFile').classList.remove('btn-secondary');
+                document.getElementById('uploadMethodFile').classList.add('btn-primary');
+                document.getElementById('uploadMethodUrl').classList.remove('btn-primary');
+                document.getElementById('uploadMethodUrl').classList.add('btn-secondary');
+            } else {
+                document.getElementById('uploadFileSection').style.display = 'none';
+                document.getElementById('uploadUrlSection').style.display = 'block';
+                document.getElementById('uploadMethodFile').classList.remove('btn-primary');
+                document.getElementById('uploadMethodFile').classList.add('btn-secondary');
+                document.getElementById('uploadMethodUrl').classList.remove('btn-secondary');
+                document.getElementById('uploadMethodUrl').classList.add('btn-primary');
+            }
+        }
+        
+        // Preview image when file is selected
+        document.addEventListener('DOMContentLoaded', function() {
+            const fileInput = document.getElementById('tickerImageFile');
+            if (fileInput) {
+                fileInput.addEventListener('change', function(e) {
+                    if (e.target.files && e.target.files[0]) {
+                        const reader = new FileReader();
+                        reader.onload = function(event) {
+                            document.getElementById('tickerImagePreviewImg').src = event.target.result;
+                            document.getElementById('tickerImagePreview').style.display = 'block';
+                        };
+                        reader.readAsDataURL(e.target.files[0]);
+                    }
+                });
+            }
+            
+            const urlInput = document.getElementById('tickerImageUrl');
+            if (urlInput) {
+                urlInput.addEventListener('input', function(e) {
+                    const url = e.target.value;
+                    if (url) {
+                        document.getElementById('tickerImagePreviewImg').src = url;
+                        document.getElementById('tickerImagePreview').style.display = 'block';
+                    } else {
+                        document.getElementById('tickerImagePreview').style.display = 'none';
+                    }
+                });
+            }
+        });
+        
+        async function saveTickerImage() {
+            const ticker = document.getElementById('tickerImageTicker').value;
+            const file = document.getElementById('tickerImageFile').files[0];
+            const url = document.getElementById('tickerImageUrl').value;
+            
+            if (!file && !url) {
+                showToast('Please select a file or enter a URL', true);
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('ticker', ticker);
+            
+            if (file) {
+                formData.append('file', file);
+            } else {
+                formData.append('image_url', url);
+            }
+            
+            try {
+                const response = await fetch('/api/admin/ticker-image', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Ticker image saved!');
+                    closeTickerImageModal();
+                    loadTickerImages();
+                } else {
+                    showToast('Error: ' + data.error, true);
+                }
+            } catch (error) {
+                showToast('Network error: ' + error.message, true);
+            }
+        }
+        
+        async function removeTickerImage(ticker, displayName) {
+            if (!confirm(`Remove image for ${displayName}?`)) return;
+            
+            try {
+                const response = await fetch(`/api/admin/ticker-image?ticker=${encodeURIComponent(ticker)}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Ticker image removed!');
+                    loadTickerImages();
+                } else {
+                    showToast('Error: ' + data.error, true);
+                }
+            } catch (error) {
+                showToast('Network error: ' + error.message, true);
+            }
+        }
     </script>
 </body>
 </html>

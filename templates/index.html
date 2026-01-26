@@ -10795,6 +10795,7 @@
                         <!-- Header -->
                         <div class="dash-header-row" style="margin-bottom: 1.5rem;">
                             <div class="dash-profile-info">
+                                <div class="dash-profile-image" id="tickerProfileImage" style="display: none;"><img src="" alt="Ticker Logo" onerror="this.parentElement.style.display='none'"></div>
                                 <div class="dash-brand-container">
                                     <div class="dash-brand-box" id="tickerNameHeader"></div>
                                     <div class="dash-meta-box" id="tickerKPIHeader"></div>
@@ -12501,10 +12502,34 @@
             renderDailyChurnChart(quarterData);
         }
         
+        async function loadTickerImage(ticker, displayName) {
+            const imageContainer = document.getElementById('tickerProfileImage');
+            const img = imageContainer.querySelector('img');
+            
+            try {
+                const response = await fetch(`/api/ticker-image/${encodeURIComponent(ticker)}`);
+                const data = await response.json();
+                
+                if (data.success && data.image_url) {
+                    img.src = data.image_url;
+                    imageContainer.style.display = 'block';
+                    imageContainer.classList.add('loaded');
+                } else {
+                    imageContainer.style.display = 'none';
+                }
+            } catch (error) {
+                console.warn('Could not load ticker image:', error);
+                imageContainer.style.display = 'none';
+            }
+        }
+        
         function renderTickerDashboard(data) {
             // Show dashboard, hide empty state
             document.getElementById('tickerEmptyState').style.display = 'none';
             document.getElementById('tickerDashboard').style.display = 'block';
+            
+            // Load and display ticker image
+            loadTickerImage(data.ticker, data.display_name);
             
             // Update header
             document.getElementById('tickerNameHeader').textContent = data.display_name;

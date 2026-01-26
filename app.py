@@ -4658,6 +4658,212 @@ def update_sec_actuals():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/ticker-image/<ticker>')
+@requires_auth
+def get_ticker_image(ticker):
+    """Get ticker image URL."""
+    try:
+        # Load ticker images from cache file
+        cache_file = 'ticker_images_cache.json'
+        if os.path.exists(cache_file):
+            with open(cache_file, 'r') as f:
+                ticker_images = json.load(f)
+                if ticker in ticker_images:
+                    return jsonify({
+                        'success': True,
+                        'image_url': ticker_images[ticker].get('image_url'),
+                        'is_custom': ticker_images[ticker].get('is_custom', False)
+                    })
+        
+        return jsonify({'success': True, 'image_url': None})
+    except Exception as e:
+        print(f"❌ Error getting ticker image: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/ticker-image', methods=['POST'])
+@requires_admin
+def set_ticker_image():
+    """Set a custom ticker image (upload or URL)."""
+    try:
+        print(f"📸 Ticker image request - files: {list(request.files.keys())}, form: {dict(request.form)}")
+        
+        ticker = request.form.get('ticker')
+        if not ticker:
+            return jsonify({'success': False, 'error': 'Ticker is required'}), 400
+        
+        # Load existing cache
+        cache_file = 'ticker_images_cache.json'
+        ticker_images = {}
+        if os.path.exists(cache_file):
+            with open(cache_file, 'r') as f:
+                ticker_images = json.load(f)
+        
+        # Handle file upload
+        if 'file' in request.files:
+            file = request.files['file']
+            if file and file.filename:
+                # Validate file type
+                allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
+                ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+                
+                if ext not in allowed_extensions:
+                    return jsonify({'success': False, 'error': f'Invalid file type. Allowed: {", ".join(allowed_extensions)}'}), 400
+                
+                # Upload to S3
+                s3_key = f"ticker-images/{uuid.uuid4().hex}.{ext}"
+                
+                try:
+                    s3_client.upload_fileobj(
+                        file,
+                        S3_BUCKET_NAME,
+                        s3_key,
+                        ExtraArgs={'ContentType': file.content_type or 'image/png'}
+                    )
+                    
+                    image_url = f"/api/ticker-image-file/{s3_key}"
+                    print(f"   ✅ Uploaded ticker image to S3: {s3_key}")
+                    
+                except Exception as e:
+                    print(f"   ❌ S3 upload failed: {e}")
+                    return jsonify({'success': False, 'error': f'Upload failed: {str(e)}'}), 500
+        
+        # Handle URL
+        elif 'image_url' in request.form:
+            image_url = request.form.get('image_url')
+            if not image_url:
+                return jsonify({'success': False, 'error': 'Image URL is required'}), 400
+        else:
+            return jsonify({'success': False, 'error': 'Either file or image_url is required'}), 400
+        
+        # Save to cache
+        ticker_images[ticker] = {
+            'image_url': image_url,
+            'is_custom': True,
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        with open(cache_file, 'w') as f:
+            json.dump(ticker_images, f, indent=2)
+        
+        print(f"   ✅ Saved ticker image for {ticker}")
+        
+        return jsonify({
+            'success': True,
+            'image_url': image_url,
+            'message': 'Ticker image saved'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error setting ticker image: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/ticker-image', methods=['DELETE'])
+@requires_admin
+def remove_ticker_image():
+    """Remove custom ticker image."""
+    try:
+        ticker = request.args.get('ticker')
+        if not ticker:
+            return jsonify({'success': False, 'error': 'Ticker is required'}), 400
+        
+        # Load cache
+        cache_file = 'ticker_images_cache.json'
+        if os.path.exists(cache_file):
+            with open(cache_file, 'r') as f:
+                ticker_images = json.load(f)
+            
+            if ticker in ticker_images:
+                del ticker_images[ticker]
+                
+                with open(cache_file, 'w') as f:
+                    json.dump(ticker_images, f, indent=2)
+                
+                print(f"   ✅ Removed ticker image for {ticker}")
+        
+        return jsonify({'success': True, 'message': 'Ticker image removed'})
+        
+    except Exception as e:
+        print(f"❌ Error removing ticker image: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/ticker-image-file/<path:s3_key>')
+@requires_auth
+def serve_ticker_image(s3_key):
+    """Proxy endpoint to serve ticker images from S3."""
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET_NAME, Key=s3_key)
+        image_data = response['Body'].read()
+        content_type = response.get('ContentType', 'image/png')
+        
+        return Response(image_data, mimetype=content_type)
+    except Exception as e:
+        print(f"Error serving ticker image {s3_key}: {e}")
+        return '', 404
+
+
+@app.route('/api/admin/tickers-without-images')
+@requires_admin
+def get_tickers_without_images():
+    """Get list of all tickers that don't have custom images."""
+    try:
+        # Load all tickers
+        tickers_response = list_hedge_fund_tickers()
+        tickers_data = tickers_response.get_json()
+        
+        if not tickers_data.get('success'):
+            return jsonify({'success': False, 'error': 'Could not load tickers'}), 500
+        
+        all_tickers = tickers_data.get('tickers', [])
+        
+        # Load ticker images cache
+        cache_file = 'ticker_images_cache.json'
+        ticker_images = {}
+        if os.path.exists(cache_file):
+            with open(cache_file, 'r') as f:
+                ticker_images = json.load(f)
+        
+        # Separate tickers with and without images
+        tickers_without_images = []
+        tickers_with_images = []
+        
+        for ticker_data in all_tickers:
+            ticker = ticker_data['ticker']
+            
+            if ticker in ticker_images and ticker_images[ticker].get('image_url'):
+                tickers_with_images.append({
+                    'ticker': ticker,
+                    'display_name': ticker_data['display_name'],
+                    'kpi': ticker_data['kpi'],
+                    'image_url': ticker_images[ticker]['image_url']
+                })
+            else:
+                tickers_without_images.append({
+                    'ticker': ticker,
+                    'display_name': ticker_data['display_name'],
+                    'kpi': ticker_data['kpi']
+                })
+        
+        return jsonify({
+            'success': True,
+            'without_images': tickers_without_images,
+            'with_images': tickers_with_images,
+            'total_count': len(all_tickers),
+            'missing_count': len(tickers_without_images),
+            'has_image_count': len(tickers_with_images)
+        })
+        
+    except Exception as e:
+        print(f"Error in get_tickers_without_images: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/job-data/<job_id>')
 @requires_auth
 def get_job_data(job_id):
