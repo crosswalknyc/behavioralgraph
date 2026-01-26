@@ -3115,103 +3115,6 @@
             background: rgba(200, 230, 0, 0.05);
         }
         
-        /* Hover list tooltip for over/under indexing cards */
-        .hover-list-card {
-            cursor: pointer;
-            position: relative;
-            overflow: visible;
-            transition: all 0.2s ease;
-        }
-        
-        .hover-list-card:hover {
-            border-color: var(--accent-cyan);
-            box-shadow: 0 4px 12px rgba(102, 217, 239, 0.3);
-            transform: translateY(-2px);
-        }
-        
-        .hover-list-tooltip {
-            position: absolute;
-            bottom: calc(100% + 12px);
-            left: 50%;
-            transform: translateX(-50%) translateY(5px);
-            background: var(--bg-input);
-            border: 2px solid var(--accent-cyan);
-            border-radius: 8px;
-            padding: 1rem;
-            min-width: 240px;
-            max-width: 300px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
-            z-index: 10000;
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none;
-            transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
-        }
-        
-        .hover-list-card:hover .hover-list-tooltip {
-            opacity: 1;
-            visibility: visible;
-            pointer-events: auto;
-            transform: translateX(-50%) translateY(0);
-        }
-        
-        .hover-list-tooltip::after {
-            content: '';
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            border: 10px solid transparent;
-            border-top-color: var(--accent-cyan);
-        }
-        
-        .hover-list-title {
-            font-size: 0.7rem;
-            font-weight: 600;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            margin-bottom: 0.5rem;
-            padding-bottom: 0.35rem;
-            border-bottom: 1px solid var(--border-color);
-        }
-        
-        .hover-list-items {
-            display: flex;
-            flex-direction: column;
-            gap: 0.35rem;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        
-        .hover-list-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.75rem;
-            padding: 0.25rem 0;
-        }
-        
-        .hover-list-item .item-name {
-            color: var(--text-primary);
-            flex: 1;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            margin-right: 0.5rem;
-        }
-        
-        .hover-list-item .item-index {
-            font-weight: 600;
-            flex-shrink: 0;
-        }
-        
-        .hover-list-item .item-index.over {
-            color: #10b981;
-        }
-        
-        .hover-list-item .item-index.under {
-            color: #ef4444;
-        }
         
         .insight-icon {
             font-size: 1.5rem;
@@ -9079,28 +8982,20 @@
                             <div class="insight-detail" id="interestIndexRange">Range: --</div>
                         </div>
                     </div>
-                    <div class="insight-card hover-list-card" id="overIndexCard" title="Hover to see top 5 over-indexing interests">
+                    <div class="insight-card has-tooltip" id="overIndexCard" data-tooltip="">
                         <div class="insight-icon">⬆️</div>
                         <div class="insight-content">
                             <div class="insight-label">OVER-INDEXING</div>
                             <div class="insight-value" id="overIndexCount">--</div>
                             <div class="insight-detail">above median</div>
                         </div>
-                        <div class="hover-list-tooltip" id="overIndexTooltip">
-                            <div class="hover-list-title">Top 5 Over-Indexing Interests</div>
-                            <div class="hover-list-items" id="overIndexItems">Loading...</div>
-                        </div>
                     </div>
-                    <div class="insight-card hover-list-card" id="underIndexCard" title="Hover to see top 5 under-indexing interests">
+                    <div class="insight-card has-tooltip" id="underIndexCard" data-tooltip="">
                         <div class="insight-icon">⬇️</div>
                         <div class="insight-content">
                             <div class="insight-label">UNDER-INDEXING</div>
                             <div class="insight-value" id="underIndexCount">--</div>
                             <div class="insight-detail">below median</div>
-                        </div>
-                        <div class="hover-list-tooltip" id="underIndexTooltip">
-                            <div class="hover-list-title">Top 5 Under-Indexing Interests</div>
-                            <div class="hover-list-items" id="underIndexItems">Loading...</div>
                         </div>
                     </div>
                 </div>
@@ -18699,27 +18594,21 @@
             document.getElementById('overIndexCount').textContent = overIndexing.length;
             document.getElementById('underIndexCount').textContent = underIndexing.length;
             
-            // Populate hover tooltips with top 5 items
+            // Populate hover tooltips with top 5 items using data-tooltip attribute
             const topOverItems = overIndexing.slice(0, 5);
             const topUnderItems = underIndexing.sort((a, b) => a.index - b.index).slice(0, 5);
             
-            document.getElementById('overIndexItems').innerHTML = topOverItems.length > 0 
-                ? topOverItems.map(item => `
-                    <div class="hover-list-item">
-                        <span class="item-name" title="${item.name}">${item.name}</span>
-                        <span class="item-index over">${formatIndex(item.index)}</span>
-                    </div>
-                `).join('')
-                : '<div style="color: var(--text-secondary); font-size: 0.75rem;">No over-indexing interests</div>';
+            // Build tooltip text for over-indexing
+            const overTooltipText = topOverItems.length > 0 
+                ? 'Top 5 Over-Indexing Interests:\n' + topOverItems.map(item => `• ${item.name}: ${formatIndex(item.index)}`).join('\n')
+                : 'Over-Indexing: Interests above the median index value for this audience.';
+            document.getElementById('overIndexCard').setAttribute('data-tooltip', overTooltipText);
             
-            document.getElementById('underIndexItems').innerHTML = topUnderItems.length > 0 
-                ? topUnderItems.map(item => `
-                    <div class="hover-list-item">
-                        <span class="item-name" title="${item.name}">${item.name}</span>
-                        <span class="item-index under">${formatIndex(item.index)}</span>
-                    </div>
-                `).join('')
-                : '<div style="color: var(--text-secondary); font-size: 0.75rem;">No under-indexing interests</div>';
+            // Build tooltip text for under-indexing
+            const underTooltipText = topUnderItems.length > 0 
+                ? 'Top 5 Under-Indexing Interests:\n' + topUnderItems.map(item => `• ${item.name}: ${formatIndex(item.index)}`).join('\n')
+                : 'Under-Indexing: Interests below the median index value for this audience.';
+            document.getElementById('underIndexCard').setAttribute('data-tooltip', underTooltipText);
         }
         
         function renderInterestsHeatmap(items) {
