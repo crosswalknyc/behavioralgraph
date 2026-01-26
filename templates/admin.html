@@ -2263,27 +2263,42 @@
                     const lastLogin = new Date(user.last_login);
                     const now = new Date();
                     const diffMs = now - lastLogin;
+                    const diffSecs = Math.floor(diffMs / 1000);
                     const diffMins = Math.floor(diffMs / 60000);
                     const diffHours = Math.floor(diffMs / 3600000);
                     const diffDays = Math.floor(diffMs / 86400000);
                     
-                    if (diffMins < 5) {
+                    if (diffSecs < 60) {
                         lastLoginDisplay = 'Just now';
                         lastLoginColor = '#10b981'; // green
-                    } else if (diffMins < 60) {
-                        lastLoginDisplay = `${diffMins}m ago`;
+                    } else if (diffMins === 1) {
+                        lastLoginDisplay = '1 minute ago';
                         lastLoginColor = '#10b981';
+                    } else if (diffMins < 60) {
+                        lastLoginDisplay = `${diffMins} minutes ago`;
+                        lastLoginColor = '#10b981';
+                    } else if (diffHours === 1) {
+                        lastLoginDisplay = '1 hour ago';
+                        lastLoginColor = '#3b82f6'; // blue
                     } else if (diffHours < 24) {
-                        lastLoginDisplay = `${diffHours}h ago`;
+                        lastLoginDisplay = `${diffHours} hours ago`;
+                        lastLoginColor = '#3b82f6';
+                    } else if (diffDays === 1) {
+                        lastLoginDisplay = '1 day ago';
                         lastLoginColor = '#f59e0b'; // yellow
                     } else if (diffDays < 7) {
-                        lastLoginDisplay = `${diffDays}d ago`;
+                        lastLoginDisplay = `${diffDays} days ago`;
                         lastLoginColor = '#f59e0b';
                     } else if (diffDays < 30) {
-                        lastLoginDisplay = `${Math.floor(diffDays / 7)}w ago`;
+                        const weeks = Math.floor(diffDays / 7);
+                        lastLoginDisplay = weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
+                        lastLoginColor = 'var(--text-secondary)';
+                    } else if (diffDays < 365) {
+                        const months = Math.floor(diffDays / 30);
+                        lastLoginDisplay = months === 1 ? '1 month ago' : `${months} months ago`;
                         lastLoginColor = 'var(--text-secondary)';
                     } else {
-                        lastLoginDisplay = lastLogin.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        lastLoginDisplay = lastLogin.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                         lastLoginColor = 'var(--text-secondary)';
                     }
                 }
