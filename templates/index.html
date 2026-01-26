@@ -19246,6 +19246,17 @@
                     return a.localeCompare(b);
                 });
                 
+                // Format slice option display names (preserve slashes)
+                const formatSliceOption = (opt) => {
+                    if (opt === 'all') return 'Show All';
+                    // Split by slash, capitalize each part, rejoin with slash
+                    return opt.split('/').map(part => 
+                        part.split(/[\s&]+/).map(word => 
+                            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                        ).join(' ')
+                    ).join('/');
+                };
+                
                 // Check if this is WHERE THEY SHOP for slice dropdown
                 const isWhereTheyShop = cat.toUpperCase() === 'WHERE THEY SHOP';
                 const whereTheyShopOptions = ['all', 'accessories', 'apparel/footwear', 'beauty/wellness', 'health & wellness', 'home/outdoor', 'toys'];
@@ -19445,13 +19456,13 @@
                             ${isMostPurchased ? `
                                 <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceMostPurchased('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                     <option value="all">Show All</option>
-                                    ${sliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                    ${sliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${formatSliceOption(opt)}</option>`).join('')}
                                 </select>
                             ` : ''}
                             ${isWhereTheyShop ? `
                                 <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceWhereTheyShop('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                     <option value="all">Show All</option>
-                                    ${whereTheyShopSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${capitalizeWords(opt)}</option>`).join('')}
+                                    ${whereTheyShopSliceOptions.filter(opt => opt !== 'all').map(opt => `<option value="${opt}">${formatSliceOption(opt)}</option>`).join('')}
                                 </select>
                             ` : ''}
                             ${isSports ? `
@@ -19949,6 +19960,7 @@
                     'apparel/footwear': ['APPAREL/FOOTWEAR', 'APPAREL', 'FOOTWEAR', 'CLOTHING', 'SHOES'],
                     'accessories': ['ACCESSORIES', 'ACCESSORY', 'JEWELRY', 'WATCHES', 'BAGS'],
                     'beauty/wellness': ['BEAUTY/WELLNESS', 'BEAUTY', 'WELLNESS', 'COSMETICS', 'SKINCARE', 'MAKEUP'],
+                    'cpg': ['CPG', 'CONSUMER PACKAGED GOODS', 'FOOD', 'BEVERAGE', 'SNACKS', 'DRINKS', 'GROCERY'],
                     'health & wellness': ['HEALTH & WELLNESS', 'HEALTH AND WELLNESS', 'HEALTH', 'WELLNESS', 'VITAMINS', 'SUPPLEMENTS'],
                     'home/outdoor': ['HOME/OUTDOOR', 'HOME', 'OUTDOOR', 'FURNITURE', 'GARDEN', 'DECOR'],
                     'toys': ['TOYS', 'TOY', 'GAMES', 'GAMING'],
@@ -19957,6 +19969,11 @@
                 };
                 
                 const sliceKeywords = sliceMap[sliceValue.toLowerCase()] || [];
+                
+                // Debug: Log first few items to see subcategory values
+                console.log(`Slicing Most Purchased Brands by: ${sliceValue}`);
+                console.log(`Looking for keywords:`, sliceKeywords);
+                console.log(`Sample items (first 5):`, items.slice(0, 5).map(i => ({ name: i.name, subcategory: i.subcategory })));
                 
                 // Filter items that match the slice - check for exact subcategory match first
                 filtered = items.filter(item => {
@@ -19974,6 +19991,11 @@
                     const nameUpper = (item.name || '').toUpperCase();
                     return sliceKeywords.some(keyword => nameUpper.includes(keyword));
                 });
+                
+                console.log(`Filtered to ${filtered.length} items`);
+                if (filtered.length > 0) {
+                    console.log(`Sample filtered items (first 3):`, filtered.slice(0, 3).map(i => ({ name: i.name, subcategory: i.subcategory })));
+                }
             }
             
             // Apply current search filter if any
