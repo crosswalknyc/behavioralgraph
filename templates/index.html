@@ -10809,10 +10809,22 @@
                             </div>
                         </div>
 
-                        <!-- Action Buttons -->
-                        <div class="dash-action-row" style="display: flex; flex-direction: row; justify-content: flex-end; align-items: center; gap: 0.75rem; margin-bottom: 1rem; width: 100%;">
-                            <button class="dash-action-btn" onclick="exportTickerCSV()">📥 Export CSV</button>
-                            <button class="dash-action-btn" onclick="refreshTickerData()">🔄 Refresh</button>
+                        <!-- Fixed Action Row: Tabs + Buttons (Non-scrollable) -->
+                        <div style="position: sticky; top: 0; background: var(--bg-dark); z-index: 100; padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                                <!-- Ticker Dashboard Tabs -->
+                                <div class="dashboard-tabs" style="margin: 0;">
+                                    <button class="tab-btn active" onclick="showTickerTab('trends')">📈 Trends</button>
+                                    <button class="tab-btn" onclick="showTickerTab('daily')">📋 Daily Metrics</button>
+                                    <button class="tab-btn" onclick="showTickerTab('historic')">📅 Historic Performance</button>
+                                </div>
+                                
+                                <!-- Action Buttons -->
+                                <div style="display: flex; gap: 0.75rem;">
+                                    <button class="dash-action-btn" onclick="exportTickerCSV()">📥 Export CSV</button>
+                                    <button class="dash-action-btn" onclick="refreshTickerData()">🔄 Refresh</button>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Summary Stats -->
@@ -10840,13 +10852,6 @@
                                 <div class="stat-label">💹 Net Growth (Quarter)</div>
                                 <div class="stat-value" id="netGrowth">--</div>
                             </div>
-                        </div>
-
-                        <!-- Ticker Dashboard Tabs -->
-                        <div class="dashboard-tabs" style="margin-bottom: 1.5rem;">
-                            <button class="tab-btn active" onclick="showTickerTab('trends')">📈 Trends</button>
-                            <button class="tab-btn" onclick="showTickerTab('daily')">📋 Daily Metrics</button>
-                            <button class="tab-btn" onclick="showTickerTab('historic')">📅 Historic Performance</button>
                         </div>
 
                         <!-- Trends Tab -->
