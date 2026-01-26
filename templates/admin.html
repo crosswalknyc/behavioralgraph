@@ -769,6 +769,7 @@
             <button class="admin-tab" onclick="showAdminTab('content')">📁 Content Management</button>
             <button class="admin-tab" onclick="showAdminTab('images')">🖼️ Profile Images</button>
             <button class="admin-tab" onclick="showAdminTab('sec-actuals')">📊 SEC Actuals</button>
+            <button class="admin-tab" onclick="showAdminTab('profile-mappings')">🔗 Ticker Profiles</button>
             <button class="admin-tab" onclick="showAdminTab('settings')">⚙️ Settings</button>
         </div>
 
@@ -954,6 +955,21 @@
                     <div id="tickerImagesWithList" class="content-accordion" style="max-height: 300px; overflow-y: auto;">
                         <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PROFILE MAPPINGS SECTION -->
+        <div id="section-profile-mappings" class="admin-section">
+            <div class="card">
+                <div class="card-header">
+                    <h2>🔗 Ticker Profile Mappings</h2>
+                </div>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">
+                    Link tickers to their customer profile files from the dashboard-inputs S3 bucket. If a ticker name differs from the profile filename, specify the mapping here.
+                </p>
+                <div id="profileMappingsList" style="max-height: 600px; overflow-y: auto;">
+                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading ticker profile mappings...</div>
                 </div>
             </div>
         </div>
@@ -4123,9 +4139,151 @@
                 originalShowSection(sectionId);
                 if (sectionId === 'sec-actuals') {
                     loadSecActuals();
+                } else if (sectionId === 'profile-mappings') {
+                    loadProfileMappings();
                 }
             };
         });
+        
+        // ============================================
+        // TICKER PROFILE MAPPINGS
+        // ============================================
+        
+        async function loadProfileMappings() {
+            try {
+                // Load all tickers
+                const tickersResponse = await fetch('/api/hedge-fund-iq/list');
+                const tickersData = await tickersResponse.json();
+                
+                if (!tickersData.success) {
+                    throw new Error('Failed to load tickers');
+                }
+                
+                const tickers = tickersData.tickers;
+                
+                // Load existing mappings
+                const mappings = {};
+                for (const ticker of tickers) {
+                    try {
+                        const response = await fetch(`/api/hedge-fund-iq/profile-mapping/${ticker.ticker}`);
+                        const data = await response.json();
+                        if (data.success && data.profile_filename !== ticker.ticker) {
+                            mappings[ticker.ticker] = data.profile_filename;
+                        }
+                    } catch (error) {
+                        console.error(`Error loading mapping for ${ticker.ticker}:`, error);
+                    }
+                }
+                
+                // Render table
+                const container = document.getElementById('profileMappingsList');
+                
+                if (tickers.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No tickers found.</div>';
+                    return;
+                }
+                
+                let html = `
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Ticker</th>
+                                <th>Display Name</th>
+                                <th>Profile Filename</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                for (const ticker of tickers) {
+                    const profileFilename = mappings[ticker.ticker] || ticker.ticker;
+                    const isCustom = mappings[ticker.ticker] ? true : false;
+                    
+                    html += `
+                        <tr>
+                            <td><strong>${ticker.ticker}</strong></td>
+                            <td>${ticker.display_name}</td>
+                            <td>
+                                <span style="color: ${isCustom ? 'var(--accent-cyan)' : 'var(--text-secondary)'};">
+                                    ${profileFilename}${isCustom ? ' (custom)' : ' (default)'}
+                                </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-small btn-primary" onclick="editProfileMapping('${ticker.ticker}', '${ticker.display_name}', '${profileFilename}')">
+                                    ${isCustom ? '✏️ Edit' : '➕ Set'}
+                                </button>
+                                ${isCustom ? `
+                                    <button class="btn btn-small btn-danger" onclick="removeProfileMapping('${ticker.ticker}')">
+                                        🗑️ Remove
+                                    </button>
+                                ` : ''}
+                            </td>
+                        </tr>
+                    `;
+                }
+                
+                html += `
+                        </tbody>
+                    </table>
+                `;
+                
+                container.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error loading profile mappings:', error);
+                document.getElementById('profileMappingsList').innerHTML = `
+                    <div style="text-align: center; padding: 2rem; color: var(--accent-red);">
+                        Error loading profile mappings: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        function editProfileMapping(ticker, displayName, currentFilename) {
+            const newFilename = prompt(
+                `Enter the profile filename for ${displayName} (${ticker}):\n\n` +
+                `This should be the filename (without .csv) from the dashboard-inputs S3 bucket.\n` +
+                `Leave empty to use the default (ticker name).`,
+                currentFilename === ticker ? '' : currentFilename
+            );
+            
+            if (newFilename === null) return; // User cancelled
+            
+            updateProfileMapping(ticker, newFilename.trim());
+        }
+        
+        async function updateProfileMapping(ticker, profileFilename) {
+            try {
+                const response = await fetch('/api/hedge-fund-iq/profile-mapping', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticker: ticker,
+                        profile_filename: profileFilename
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('✅ Profile mapping updated!');
+                    loadProfileMappings();
+                } else {
+                    showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showToast('❌ Error updating profile mapping: ' + error.message, true);
+            }
+        }
+        
+        async function removeProfileMapping(ticker) {
+            if (!confirm(`Remove custom profile mapping for ${ticker}? It will revert to using the ticker name.`)) {
+                return;
+            }
+            
+            updateProfileMapping(ticker, '');
+        }
         
         // ============================================
         // IMAGE CATEGORY SWITCHING

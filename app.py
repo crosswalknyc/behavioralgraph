@@ -4757,6 +4757,73 @@ def update_sec_actuals():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/hedge-fund-iq/profile-mapping/<ticker>')
+@requires_auth
+def get_profile_mapping(ticker):
+    """Get the profile filename mapping for a ticker."""
+    try:
+        # Load profile mappings from cache file
+        mapping_file = 'ticker_profile_mappings.json'
+        if os.path.exists(mapping_file):
+            with open(mapping_file, 'r') as f:
+                mappings = json.load(f)
+                if ticker in mappings:
+                    return jsonify({
+                        'success': True,
+                        'profile_filename': mappings[ticker]
+                    })
+        
+        # Default: use ticker name as profile filename
+        return jsonify({
+            'success': True,
+            'profile_filename': ticker
+        })
+        
+    except Exception as e:
+        print(f"❌ Error getting profile mapping: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/hedge-fund-iq/profile-mapping', methods=['POST'])
+@requires_admin
+def update_profile_mapping():
+    """Update the profile filename mapping for a ticker (admin only)."""
+    try:
+        data = request.get_json()
+        ticker = data.get('ticker')
+        profile_filename = data.get('profile_filename', '').strip()
+        
+        if not ticker:
+            return jsonify({'success': False, 'error': 'Ticker required'}), 400
+        
+        # Load existing mappings
+        mapping_file = 'ticker_profile_mappings.json'
+        mappings = {}
+        if os.path.exists(mapping_file):
+            with open(mapping_file, 'r') as f:
+                mappings = json.load(f)
+        
+        if profile_filename:
+            # Update mapping
+            mappings[ticker] = profile_filename
+        else:
+            # Remove mapping (use default)
+            if ticker in mappings:
+                del mappings[ticker]
+        
+        # Save back to file
+        with open(mapping_file, 'w') as f:
+            json.dump(mappings, f, indent=2)
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        print(f"❌ Error updating profile mapping: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/ticker-image/<ticker>')
 @requires_auth
 def get_ticker_image(ticker):

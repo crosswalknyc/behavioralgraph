@@ -10816,9 +10816,11 @@
                             <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
                                 <!-- Ticker Dashboard Tabs -->
                                 <div class="dashboard-tabs" style="margin: 0;">
-                                    <button class="tab-btn active" onclick="showTickerTab('trends')">📈 Trends</button>
+                                    <button class="tab-btn active" onclick="showTickerTab('livedata')">📊 Live Data</button>
+                                    <button class="tab-btn" onclick="showTickerTab('trends')">📈 Trends</button>
                                     <button class="tab-btn" onclick="showTickerTab('daily')">📋 Daily Metrics</button>
                                     <button class="tab-btn" onclick="showTickerTab('historic')">📅 Historic Performance</button>
+                                    <button class="tab-btn" onclick="showTickerTab('profile')">👥 Customer Profile</button>
                                 </div>
                                 
                                 <!-- Action Buttons -->
@@ -10829,41 +10831,44 @@
                             </div>
                         </div>
 
-                        <!-- Summary Stats -->
-                        <div style="margin-bottom: 0.75rem;">
-                            <h3 id="quarterYTDHeader" style="font-size: 1.25rem; color: var(--accent-cyan); font-weight: 600; text-align: left; margin: 0;">Quarter to Date (QTD) Cumulative</h3>
-                        </div>
-                        
-                        <!-- Projected Growth Rate - Full Width -->
-                        <div style="margin-bottom: 1rem;">
-                            <div class="stat-card" style="width: 100%;">
-                                <div class="stat-label" id="projectedGrowthLabel">🔮 Projected Net Growth Rate</div>
-                                <div class="stat-value" id="projectedGrowth" style="font-size: 2.5rem;">--</div>
+                        <!-- Live Data Tab -->
+                        <div id="livedataTab" class="ticker-tab-content" style="display: block;">
+                            <!-- Summary Stats -->
+                            <div style="margin-bottom: 0.75rem;">
+                                <h3 id="quarterYTDHeader" style="font-size: 1.25rem; color: var(--accent-cyan); font-weight: 600; text-align: left; margin: 0;">Quarter to Date (QTD) Cumulative</h3>
                             </div>
-                        </div>
-                        
-                        <!-- 2x2 Grid -->
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
-                            <div class="stat-card">
-                                <div class="stat-label">📊 Current Consumers</div>
-                                <div class="stat-value" id="currentConsumers">--</div>
+                            
+                            <!-- Projected Growth Rate - Full Width -->
+                            <div style="margin-bottom: 1rem;">
+                                <div class="stat-card" style="width: 100%;">
+                                    <div class="stat-label" id="projectedGrowthLabel">🔮 Projected Net Growth Rate</div>
+                                    <div class="stat-value" id="projectedGrowth" style="font-size: 2.5rem;">--</div>
+                                </div>
                             </div>
-                            <div class="stat-card">
-                                <div class="stat-label">💹 QTD Net Growth %</div>
-                                <div class="stat-value" id="netGrowth">--</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-label">📈 Total Subs</div>
-                                <div class="stat-value" id="totalSubs">--</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-label">📉 Total Cancels</div>
-                                <div class="stat-value" id="totalCancels">--</div>
+                            
+                            <!-- 2x2 Grid -->
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
+                                <div class="stat-card">
+                                    <div class="stat-label">📊 Current Consumers</div>
+                                    <div class="stat-value" id="currentConsumers">--</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">💹 QTD Net Growth %</div>
+                                    <div class="stat-value" id="netGrowth">--</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">📈 Total Subs</div>
+                                    <div class="stat-value" id="totalSubs">--</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-label">📉 Total Cancels</div>
+                                    <div class="stat-value" id="totalCancels">--</div>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Trends Tab -->
-                        <div id="trendsTab" class="ticker-tab-content" style="display: block;">
+                        <div id="trendsTab" class="ticker-tab-content" style="display: none;">
                             <!-- Date Range Selector -->
                             <div class="insight-card-v2" style="margin-bottom: 1.5rem;">
                                 <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
@@ -10922,6 +10927,23 @@
                             <div class="chart-card">
                                 <h3>📅 Historic Performance</h3>
                                 <div id="quarterlyTable" style="overflow-x: auto;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Customer Profile Tab -->
+                        <div id="profileTab" class="ticker-tab-content" style="display: none;">
+                            <!-- Profile Sub-Navigation -->
+                            <div class="dashboard-tabs" style="margin-bottom: 1.5rem;">
+                                <button class="tab-btn active" onclick="showProfileSubTab('insights')">💡 Insights</button>
+                                <button class="tab-btn" onclick="showProfileSubTab('demographics')">👥 Demographics</button>
+                                <button class="tab-btn" onclick="showProfileSubTab('behavioral')">🛍️ Behavioral</button>
+                                <button class="tab-btn" onclick="showProfileSubTab('location')">📍 Location</button>
+                                <button class="tab-btn" onclick="showProfileSubTab('interests')">⭐ Interests</button>
+                            </div>
+
+                            <!-- Profile Content Container -->
+                            <div id="tickerProfileContent">
+                                <div class="loading-placeholder">Loading customer profile...</div>
                             </div>
                         </div>
                     </div>
@@ -12444,19 +12466,121 @@
             // Hide all tabs
             document.querySelectorAll('.ticker-tab-content').forEach(tab => tab.style.display = 'none');
             
-            // Remove active class from all tab buttons
-            document.querySelectorAll('.dashboard-tabs .tab-btn').forEach(btn => btn.classList.remove('active'));
+            // Remove active class from all tab buttons in the main ticker tabs
+            const mainTabs = document.querySelector('#hedgeFundIQView .dashboard-tabs');
+            if (mainTabs) {
+                mainTabs.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            }
             
             // Show selected tab
-            if (tabName === 'trends') {
+            if (tabName === 'livedata') {
+                document.getElementById('livedataTab').style.display = 'block';
+                if (event && event.target) event.target.classList.add('active');
+            } else if (tabName === 'trends') {
                 document.getElementById('trendsTab').style.display = 'block';
-                event.target.classList.add('active');
+                if (event && event.target) event.target.classList.add('active');
             } else if (tabName === 'daily') {
                 document.getElementById('dailyTab').style.display = 'block';
-                event.target.classList.add('active');
+                if (event && event.target) event.target.classList.add('active');
             } else if (tabName === 'historic') {
                 document.getElementById('historicTab').style.display = 'block';
-                event.target.classList.add('active');
+                if (event && event.target) event.target.classList.add('active');
+            } else if (tabName === 'profile') {
+                document.getElementById('profileTab').style.display = 'block';
+                if (event && event.target) event.target.classList.add('active');
+                // Load profile data if not already loaded
+                loadTickerProfile();
+            }
+        }
+        
+        let currentTickerForProfile = null;
+        let currentProfileFilename = null;
+        
+        function showProfileSubTab(subTabName) {
+            // This will be handled by the existing profile IQ tab switching logic
+            // We'll reuse the same functions
+            if (window.showTab) {
+                window.showTab(subTabName);
+            }
+        }
+        
+        async function loadTickerProfile() {
+            if (!currentTickerForProfile) return;
+            
+            const container = document.getElementById('tickerProfileContent');
+            container.innerHTML = '<div class="loading-placeholder">Loading customer profile...</div>';
+            
+            try {
+                // First, get the profile filename mapping for this ticker
+                const mappingResponse = await fetch(`/api/hedge-fund-iq/profile-mapping/${currentTickerForProfile}`);
+                const mappingData = await mappingResponse.json();
+                
+                let profileFilename = mappingData.profile_filename || currentTickerForProfile;
+                currentProfileFilename = profileFilename;
+                
+                // Try to load the profile data
+                const profileResponse = await fetch(`/api/profile/${profileFilename}`);
+                
+                if (!profileResponse.ok) {
+                    container.innerHTML = `
+                        <div class="insight-card-v2" style="text-align: center; padding: 3rem;">
+                            <h3 style="color: var(--text-secondary); margin-bottom: 1rem;">📊 No Customer Profile Available</h3>
+                            <p style="color: var(--text-secondary);">No profile data found for this ticker.</p>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
+                                Admin can link a profile file in the admin panel.
+                            </p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                const profileData = await profileResponse.json();
+                
+                // Store the profile data globally so other functions can access it
+                window.currentDashboardData = profileData;
+                window.currentProfileName = profileFilename;
+                
+                // Render the insights tab (default view)
+                renderProfileInsights(profileData);
+                
+            } catch (error) {
+                console.error('Error loading ticker profile:', error);
+                container.innerHTML = `
+                    <div class="insight-card-v2" style="text-align: center; padding: 3rem;">
+                        <h3 style="color: var(--accent-red); margin-bottom: 1rem;">❌ Error Loading Profile</h3>
+                        <p style="color: var(--text-secondary);">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function renderProfileInsights(data) {
+            // Reuse the existing Profile IQ insights rendering logic
+            // This will render the same insights view as in Profile IQ
+            const container = document.getElementById('tickerProfileContent');
+            
+            // Create a temporary container with the same structure as Profile IQ
+            container.innerHTML = `
+                <div id="insightsView" style="display: block;">
+                    <div id="insightsContent"></div>
+                </div>
+                <div id="demographicsView" style="display: none;">
+                    <div id="demographicsContent"></div>
+                </div>
+                <div id="behavioralView" style="display: none;">
+                    <div id="behavioralContent"></div>
+                </div>
+                <div id="locationView" style="display: none;">
+                    <div id="locationContent"></div>
+                </div>
+                <div id="interestsView" style="display: none;">
+                    <div id="interestsContent"></div>
+                </div>
+            `;
+            
+            // Call the existing renderDashboard function if it exists
+            if (window.renderDashboard) {
+                window.renderDashboard(data);
             }
         }
         
@@ -12541,6 +12665,9 @@
             // Show dashboard, hide empty state
             document.getElementById('tickerEmptyState').style.display = 'none';
             document.getElementById('tickerDashboard').style.display = 'block';
+            
+            // Store current ticker for profile loading
+            currentTickerForProfile = data.ticker;
             
             // Load and display ticker image
             loadTickerImage(data.ticker, data.display_name);
