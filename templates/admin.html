@@ -982,6 +982,22 @@
             </div>
         </div>
 
+        <!-- SEC ACTUALS SECTION -->
+        <div id="section-sec-actuals" class="admin-section">
+            <div class="card">
+                <div class="card-header">
+                    <h2>📊 SEC Actuals Management</h2>
+                    <button class="btn btn-small btn-success" onclick="showAddSecActualModal()">+ Add SEC Actual</button>
+                </div>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">
+                    Enter SEC-reported actuals for each ticker and quarter to compare against our measured data.
+                </p>
+                <div id="secActualsList" style="max-height: 600px; overflow-y: auto;">
+                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading SEC actuals...</div>
+                </div>
+            </div>
+        </div>
+
         <!-- CONTENT MANAGEMENT SECTION -->
         <div id="section-content" class="admin-section">
             <!-- Content Stats -->
@@ -1420,6 +1436,40 @@
             <div style="display: flex; gap: 0.75rem;">
                 <button class="btn btn-secondary" onclick="closeCategoryModal()" style="flex: 1;">Cancel</button>
                 <button class="btn btn-success" onclick="changeCategory()" style="flex: 1;">💾 Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEC Actuals Modal -->
+    <div id="secActualModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>📊 Add/Edit SEC Actual</h2>
+                <button class="modal-close" onclick="closeSecActualModal()">&times;</button>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Ticker</label>
+                <select id="secActualTicker" style="width: 100%; padding: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                    <option value="">Select a ticker...</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Quarter</label>
+                <input type="text" id="secActualQuarter" placeholder="e.g., Q1 2026" style="width: 100%; padding: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                <small style="color: var(--text-secondary); font-size: 0.7rem;">Format: Q1 2026, Q2 2025, etc.</small>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">SEC Actual Value</label>
+                <input type="number" id="secActualValue" placeholder="e.g., 1500000" step="any" style="width: 100%; padding: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                <small style="color: var(--text-secondary); font-size: 0.7rem;">Enter the SEC-reported net growth value for this quarter. Leave blank to remove.</small>
+            </div>
+            
+            <div style="display: flex; gap: 0.75rem;">
+                <button class="btn btn-secondary" onclick="closeSecActualModal()" style="flex: 1;">Cancel</button>
+                <button class="btn btn-success" onclick="saveSecActual()" style="flex: 1;">💾 Save</button>
             </div>
         </div>
     </div>

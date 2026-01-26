@@ -4593,6 +4593,71 @@ Respond ONLY with valid JSON, no additional text."""
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/hedge-fund-iq/sec-actuals/<ticker>')
+@requires_auth
+def get_sec_actuals(ticker):
+    """Get SEC actuals for a ticker."""
+    try:
+        # Load SEC actuals from metadata file
+        metadata_file = 'hedge_fund_sec_actuals.json'
+        if os.path.exists(metadata_file):
+            with open(metadata_file, 'r') as f:
+                all_actuals = json.load(f)
+                return jsonify({
+                    'success': True,
+                    'actuals': all_actuals.get(ticker, {})
+                })
+        else:
+            return jsonify({'success': True, 'actuals': {}})
+    except Exception as e:
+        print(f"❌ Error getting SEC actuals: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/hedge-fund-iq/sec-actuals', methods=['POST'])
+@requires_admin
+def update_sec_actuals():
+    """Update SEC actuals for a ticker and quarter (admin only)."""
+    try:
+        data = request.get_json()
+        ticker = data.get('ticker')
+        quarter = data.get('quarter')
+        actual_value = data.get('actual_value')
+        
+        if not ticker or not quarter:
+            return jsonify({'success': False, 'error': 'Ticker and quarter required'}), 400
+        
+        # Load existing actuals
+        metadata_file = 'hedge_fund_sec_actuals.json'
+        all_actuals = {}
+        if os.path.exists(metadata_file):
+            with open(metadata_file, 'r') as f:
+                all_actuals = json.load(f)
+        
+        # Update actuals for this ticker
+        if ticker not in all_actuals:
+            all_actuals[ticker] = {}
+        
+        if actual_value is None or actual_value == '':
+            # Remove the entry if value is empty
+            if quarter in all_actuals[ticker]:
+                del all_actuals[ticker][quarter]
+        else:
+            all_actuals[ticker][quarter] = float(actual_value)
+        
+        # Save back to file
+        with open(metadata_file, 'w') as f:
+            json.dump(all_actuals, f, indent=2)
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        print(f"❌ Error updating SEC actuals: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/job-data/<job_id>')
 @requires_auth
 def get_job_data(job_id):

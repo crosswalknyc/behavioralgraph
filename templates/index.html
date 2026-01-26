@@ -10840,47 +10840,73 @@
                             </div>
                         </div>
 
-                        <!-- AI Earnings Prediction -->
-                        <div class="insight-card-v2 highlight" style="margin-bottom: 1.5rem;">
-                            <h3>🤖 AI Earnings Prediction</h3>
-                            <div id="earningsPrediction" style="padding: 1rem;">
-                                <div style="text-align: center; color: var(--text-secondary);">Loading prediction...</div>
+                        <!-- Ticker Dashboard Tabs -->
+                        <div class="dashboard-tabs" style="margin-bottom: 1.5rem;">
+                            <button class="tab-btn active" onclick="showTickerTab('trends')">📈 Trends</button>
+                            <button class="tab-btn" onclick="showTickerTab('daily')">📋 Daily Metrics</button>
+                            <button class="tab-btn" onclick="showTickerTab('historic')">📅 Historic Performance</button>
+                        </div>
+
+                        <!-- Trends Tab -->
+                        <div id="trendsTab" class="ticker-tab-content" style="display: block;">
+                            <!-- Date Range Selector -->
+                            <div class="insight-card-v2" style="margin-bottom: 1.5rem;">
+                                <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                                    <label style="color: var(--text-primary); font-weight: 600;">📅 Date Range:</label>
+                                    <input type="date" id="trendsStartDate" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
+                                    <span style="color: var(--text-secondary);">to</span>
+                                    <input type="date" id="trendsEndDate" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
+                                    <button class="dash-action-btn" onclick="applyTrendsDateRange()">Apply</button>
+                                    <button class="dash-action-btn" onclick="resetToQuarterToDate()">Reset to QTD</button>
+                                </div>
+                            </div>
+
+                            <!-- Daily Churn Chart -->
+                            <div class="chart-card" style="margin-bottom: 1.5rem;">
+                                <h3>📊 Net Growth Trend</h3>
+                                <div style="height: 400px; position: relative;">
+                                    <canvas id="dailyChurnChart"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- AI Earnings Prediction -->
+                            <div class="insight-card-v2 highlight">
+                                <h3>🤖 AI Earnings Prediction</h3>
+                                <div id="earningsPrediction" style="padding: 1rem;">
+                                    <div style="text-align: center; color: var(--text-secondary);">Loading prediction...</div>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Daily Churn Chart -->
-                        <div class="chart-card" style="margin-bottom: 1.5rem;">
-                            <h3>📊 Daily Net Growth Trend</h3>
-                            <div style="height: 400px; position: relative;">
-                                <canvas id="dailyChurnChart"></canvas>
+                        <!-- Daily Metrics Tab -->
+                        <div id="dailyTab" class="ticker-tab-content" style="display: none;">
+                            <div class="chart-card">
+                                <h3>📋 Daily Metrics</h3>
+                                <div style="overflow-x: auto;">
+                                    <table id="dailyDataTable" class="data-table" style="width: 100%; border-collapse: collapse;">
+                                        <thead>
+                                            <tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);">
+                                                <th style="padding: 0.75rem; text-align: left;">Date</th>
+                                                <th style="padding: 0.75rem; text-align: right;">Quarter</th>
+                                                <th style="padding: 0.75rem; text-align: right;">Total Consumers</th>
+                                                <th style="padding: 0.75rem; text-align: right;">Subs</th>
+                                                <th style="padding: 0.75rem; text-align: right;">Cancels</th>
+                                                <th style="padding: 0.75rem; text-align: right;">Net Growth %</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="dailyDataTableBody">
+                                            <tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">No data loaded</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Quarterly Summary -->
-                        <div class="chart-card" style="margin-bottom: 1.5rem;">
-                            <h3>📅 Quarterly Performance</h3>
-                            <div id="quarterlyTable" style="overflow-x: auto;"></div>
-                        </div>
-
-                        <!-- Daily Data Table -->
-                        <div class="chart-card">
-                            <h3>📋 Daily Metrics</h3>
-                            <div style="overflow-x: auto;">
-                                <table id="dailyDataTable" class="data-table" style="width: 100%; border-collapse: collapse;">
-                                    <thead>
-                                        <tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);">
-                                            <th style="padding: 0.75rem; text-align: left;">Date</th>
-                                            <th style="padding: 0.75rem; text-align: right;">Quarter</th>
-                                            <th style="padding: 0.75rem; text-align: right;">Total Consumers</th>
-                                            <th style="padding: 0.75rem; text-align: right;">Subs</th>
-                                            <th style="padding: 0.75rem; text-align: right;">Cancels</th>
-                                            <th style="padding: 0.75rem; text-align: right;">Net Growth %</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="dailyDataTableBody">
-                                        <tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">No data loaded</td></tr>
-                                    </tbody>
-                                </table>
+                        <!-- Historic Performance Tab -->
+                        <div id="historicTab" class="ticker-tab-content" style="display: none;">
+                            <div class="chart-card">
+                                <h3>📅 Historic Performance</h3>
+                                <div id="quarterlyTable" style="overflow-x: auto;"></div>
                             </div>
                         </div>
                     </div>
@@ -12399,6 +12425,82 @@
             }
         }
         
+        function showTickerTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.ticker-tab-content').forEach(tab => tab.style.display = 'none');
+            
+            // Remove active class from all tab buttons
+            document.querySelectorAll('.dashboard-tabs .tab-btn').forEach(btn => btn.classList.remove('active'));
+            
+            // Show selected tab
+            if (tabName === 'trends') {
+                document.getElementById('trendsTab').style.display = 'block';
+                event.target.classList.add('active');
+            } else if (tabName === 'daily') {
+                document.getElementById('dailyTab').style.display = 'block';
+                event.target.classList.add('active');
+            } else if (tabName === 'historic') {
+                document.getElementById('historicTab').style.display = 'block';
+                event.target.classList.add('active');
+            }
+        }
+        
+        let filteredTickerData = null;
+        
+        function applyTrendsDateRange() {
+            const startDate = document.getElementById('trendsStartDate').value;
+            const endDate = document.getElementById('trendsEndDate').value;
+            
+            if (!startDate || !endDate) {
+                alert('Please select both start and end dates');
+                return;
+            }
+            
+            if (!currentTickerData || !currentTickerData.data) {
+                alert('No ticker data loaded');
+                return;
+            }
+            
+            // Filter data by date range
+            const filtered = currentTickerData.data.filter(d => {
+                const date = d.Date;
+                return date >= startDate && date <= endDate;
+            });
+            
+            if (filtered.length === 0) {
+                alert('No data found in the selected date range');
+                return;
+            }
+            
+            // Update chart with filtered data
+            filteredTickerData = filtered;
+            renderDailyChurnChart(filtered);
+        }
+        
+        function resetToQuarterToDate() {
+            if (!currentTickerData || !currentTickerData.data) {
+                alert('No ticker data loaded');
+                return;
+            }
+            
+            // Get the latest quarter
+            const latest = currentTickerData.data[currentTickerData.data.length - 1];
+            const latestQuarter = latest.Quarter;
+            
+            // Filter to current quarter only
+            const quarterData = currentTickerData.data.filter(d => d.Quarter === latestQuarter);
+            
+            // Set date inputs to quarter range
+            if (quarterData.length > 0) {
+                document.getElementById('trendsStartDate').value = quarterData[0].Date;
+                document.getElementById('trendsEndDate').value = quarterData[quarterData.length - 1].Date;
+            }
+            
+            // Reset chart to quarter data
+            filteredTickerData = null;
+            renderDailyChurnChart(quarterData);
+        }
+        
         function renderTickerDashboard(data) {
             // Show dashboard, hide empty state
             document.getElementById('tickerEmptyState').style.display = 'none';
@@ -12466,8 +12568,14 @@
             if (growthCard) growthCard.querySelector('.stat-label').textContent = `💹 Net Growth %`;
             if (projectedCard) projectedCard.querySelector('.stat-label').textContent = `🔮 ${latestQuarter} Projected Net Growth Rate`;
             
-            // Render daily chart
-            renderDailyChurnChart(data.data);
+            // Set default date range to current quarter
+            if (currentQuarterData.length > 0) {
+                document.getElementById('trendsStartDate').value = currentQuarterData[0].Date;
+                document.getElementById('trendsEndDate').value = currentQuarterData[currentQuarterData.length - 1].Date;
+            }
+            
+            // Render daily chart with QTD data only
+            renderDailyChurnChart(currentQuarterData);
             
             // Render quarterly table
             renderQuarterlyTable(data.data);
@@ -12541,7 +12649,7 @@
             });
         }
         
-        function renderQuarterlyTable(dailyData) {
+        async function renderQuarterlyTable(dailyData) {
             const quarters = {};
             dailyData.forEach(d => {
                 const q = d.Quarter;
@@ -12558,13 +12666,42 @@
                 quarters[q].endConsumers = d['Total Consumers'];
             });
             
-            let html = '<table class="data-table" style="width: 100%; border-collapse: collapse;"><thead><tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);"><th style="padding: 0.75rem; text-align: left;">Quarter</th><th style="padding: 0.75rem; text-align: right;">Total Subs</th><th style="padding: 0.75rem; text-align: right;">Total Cancels</th><th style="padding: 0.75rem; text-align: right;">Net Growth</th><th style="padding: 0.75rem; text-align: right;">Growth %</th></tr></thead><tbody>';
+            // Fetch SEC actuals from backend
+            let secActuals = {};
+            try {
+                const response = await fetch(`/api/hedge-fund-iq/sec-actuals/${encodeURIComponent(currentTickerData.ticker)}`, { credentials: 'same-origin' });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        secActuals = data.actuals || {};
+                    }
+                }
+            } catch (error) {
+                console.warn('Could not fetch SEC actuals:', error);
+            }
+            
+            let html = '<table class="data-table" style="width: 100%; border-collapse: collapse;"><thead><tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);"><th style="padding: 0.75rem; text-align: left;">Quarter</th><th style="padding: 0.75rem; text-align: right;">Total Subs</th><th style="padding: 0.75rem; text-align: right;">Total Cancels</th><th style="padding: 0.75rem; text-align: right;">Net Growth</th><th style="padding: 0.75rem; text-align: right;">Growth %</th><th style="padding: 0.75rem; text-align: right;">SEC Actuals</th><th style="padding: 0.75rem; text-align: right;">Variance</th></tr></thead><tbody>';
             
             Object.keys(quarters).sort().forEach(q => {
                 const data = quarters[q];
                 const netGrowth = data.subs - data.cancels;
                 const growthPct = ((netGrowth / data.startConsumers) * 100).toFixed(2);
-                html += `<tr style="border-bottom: 1px solid var(--border-color);"><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${netGrowth >= 0 ? '#10b981' : '#ef4444'};">${netGrowth.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${growthPct >= 0 ? '#10b981' : '#ef4444'};">${growthPct}%</td></tr>`;
+                
+                // Get SEC actual for this quarter
+                const secActual = secActuals[q];
+                let secActualCell = '<td style="padding: 0.75rem; text-align: right; color: var(--text-secondary);">-</td>';
+                let varianceCell = '<td style="padding: 0.75rem; text-align: right; color: var(--text-secondary);">-</td>';
+                
+                if (secActual !== undefined && secActual !== null) {
+                    const variance = netGrowth - secActual;
+                    const variancePct = secActual !== 0 ? ((variance / secActual) * 100).toFixed(2) : 0;
+                    const varianceColor = variance >= 0 ? '#10b981' : '#ef4444';
+                    
+                    secActualCell = `<td style="padding: 0.75rem; text-align: right;">${secActual.toLocaleString()}</td>`;
+                    varianceCell = `<td style="padding: 0.75rem; text-align: right; color: ${varianceColor};">${variance.toLocaleString()} (${variancePct}%)</td>`;
+                }
+                
+                html += `<tr style="border-bottom: 1px solid var(--border-color);"><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${netGrowth >= 0 ? '#10b981' : '#ef4444'};">${netGrowth.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${growthPct >= 0 ? '#10b981' : '#ef4444'};">${growthPct}%</td>${secActualCell}${varianceCell}</tr>`;
             });
             
             html += '</tbody></table>';
