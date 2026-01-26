@@ -19974,9 +19974,11 @@
                 const sliceKeywords = sliceMap[sliceValue.toLowerCase()] || [];
                 
                 // Debug: Log first few items to see subcategory values
-                console.log(`Slicing Most Purchased Brands by: ${sliceValue}`);
-                console.log(`Looking for keywords:`, sliceKeywords);
-                console.log(`Sample items (first 5):`, items.slice(0, 5).map(i => ({ 
+                console.log(`🔍 Slicing Most Purchased Brands by: "${sliceValue}"`);
+                console.log(`📋 Category: "${cat}"`);
+                console.log(`🔑 Looking for keywords:`, sliceKeywords);
+                console.log(`📦 Total items in category: ${items.length}`);
+                console.log(`📊 Sample items (first 5):`, items.slice(0, 5).map(i => ({ 
                     name: i.name, 
                     subcategory: i.subcategory,
                     originalColumn: i.originalColumn 
@@ -19984,6 +19986,12 @@
                 
                 // Filter items that match the slice - check for exact subcategory match first
                 filtered = items.filter(item => {
+                    // Check if the category itself matches the slice (e.g., cat = "APPAREL/FOOTWEAR")
+                    const catUpper = cat.toUpperCase().trim();
+                    if (sliceKeywords.some(keyword => catUpper === keyword || catUpper.includes(keyword))) {
+                        return true; // If the whole category matches, include all items
+                    }
+                    
                     // Check subcategory if it exists - prioritize exact match
                     if (item.subcategory) {
                         const subcatUpper = item.subcategory.toUpperCase().trim();
@@ -19994,6 +20002,15 @@
                         // Then try contains match for broader categories
                         return sliceKeywords.some(keyword => subcatUpper.includes(keyword));
                     }
+                    
+                    // Check originalColumn if it exists
+                    if (item.originalColumn) {
+                        const origColUpper = item.originalColumn.toUpperCase().trim();
+                        if (sliceKeywords.some(keyword => origColUpper.includes(keyword))) {
+                            return true;
+                        }
+                    }
+                    
                     // Check item name for keywords as fallback
                     const nameUpper = (item.name || '').toUpperCase();
                     return sliceKeywords.some(keyword => nameUpper.includes(keyword));
