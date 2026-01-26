@@ -768,6 +768,7 @@
             <button class="admin-tab active" onclick="showAdminTab('users')">👥 Users</button>
             <button class="admin-tab" onclick="showAdminTab('content')">📁 Content Management</button>
             <button class="admin-tab" onclick="showAdminTab('images')">🖼️ Profile Images</button>
+            <button class="admin-tab" onclick="showAdminTab('sec-actuals')">📊 SEC Actuals</button>
             <button class="admin-tab" onclick="showAdminTab('settings')">⚙️ Settings</button>
         </div>
 
@@ -3675,6 +3676,183 @@
             
             input.click();
         }
+        
+        // ============================================
+        // SEC ACTUALS MANAGEMENT
+        // ============================================
+        
+        let allTickers = [];
+        let allSecActuals = {};
+        
+        async function loadSecActuals() {
+            try {
+                // Load all tickers first
+                const tickersResponse = await fetch('/api/hedge-fund-iq/list');
+                const tickersData = await tickersResponse.json();
+                if (tickersData.success) {
+                    allTickers = tickersData.tickers;
+                    
+                    // Populate ticker dropdown in modal
+                    const tickerSelect = document.getElementById('secActualTicker');
+                    tickerSelect.innerHTML = '<option value="">Select a ticker...</option>';
+                    allTickers.forEach(t => {
+                        const option = document.createElement('option');
+                        option.value = t.ticker;
+                        option.textContent = `${t.display_name} (${t.ticker})`;
+                        tickerSelect.appendChild(option);
+                    });
+                }
+                
+                // Load all SEC actuals
+                const actualsPromises = allTickers.map(t => 
+                    fetch(`/api/hedge-fund-iq/sec-actuals/${encodeURIComponent(t.ticker)}`)
+                        .then(r => r.json())
+                        .then(data => ({ ticker: t.ticker, display_name: t.display_name, actuals: data.actuals || {} }))
+                );
+                
+                const results = await Promise.all(actualsPromises);
+                
+                // Build combined actuals object
+                allSecActuals = {};
+                results.forEach(r => {
+                    if (Object.keys(r.actuals).length > 0) {
+                        allSecActuals[r.ticker] = { display_name: r.display_name, actuals: r.actuals };
+                    }
+                });
+                
+                // Render the list
+                renderSecActualsList();
+                
+            } catch (error) {
+                console.error('Error loading SEC actuals:', error);
+                document.getElementById('secActualsList').innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--accent-red);">Error loading SEC actuals</div>';
+            }
+        }
+        
+        function renderSecActualsList() {
+            const container = document.getElementById('secActualsList');
+            
+            if (Object.keys(allSecActuals).length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No SEC actuals entered yet. Click "+ Add SEC Actual" to get started.</div>';
+                return;
+            }
+            
+            let html = '<table class="user-table"><thead><tr><th>Ticker</th><th>Quarter</th><th>SEC Actual</th><th>Actions</th></tr></thead><tbody>';
+            
+            Object.keys(allSecActuals).sort().forEach(ticker => {
+                const data = allSecActuals[ticker];
+                const quarters = Object.keys(data.actuals).sort();
+                
+                quarters.forEach(quarter => {
+                    const value = data.actuals[quarter];
+                    html += `
+                        <tr>
+                            <td><strong>${data.display_name}</strong><br><small style="color: var(--text-secondary);">${ticker}</small></td>
+                            <td>${quarter}</td>
+                            <td style="font-family: 'Space Mono', monospace; color: var(--accent-cyan);">${value.toLocaleString()}</td>
+                            <td>
+                                <button class="btn btn-small btn-secondary" onclick="editSecActual('${ticker}', '${quarter}', ${value})">✏️ Edit</button>
+                                <button class="btn btn-small btn-danger" onclick="deleteSecActual('${ticker}', '${quarter}')">🗑️ Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            });
+            
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+        
+        function showAddSecActualModal() {
+            document.getElementById('secActualTicker').value = '';
+            document.getElementById('secActualQuarter').value = '';
+            document.getElementById('secActualValue').value = '';
+            document.getElementById('secActualModal').classList.add('show');
+        }
+        
+        function editSecActual(ticker, quarter, value) {
+            document.getElementById('secActualTicker').value = ticker;
+            document.getElementById('secActualQuarter').value = quarter;
+            document.getElementById('secActualValue').value = value;
+            document.getElementById('secActualModal').classList.add('show');
+        }
+        
+        function closeSecActualModal() {
+            document.getElementById('secActualModal').classList.remove('show');
+        }
+        
+        async function saveSecActual() {
+            const ticker = document.getElementById('secActualTicker').value;
+            const quarter = document.getElementById('secActualQuarter').value;
+            const value = document.getElementById('secActualValue').value;
+            
+            if (!ticker || !quarter) {
+                showToast('Please select a ticker and enter a quarter', true);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/hedge-fund-iq/sec-actuals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticker: ticker,
+                        quarter: quarter,
+                        actual_value: value || null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast(value ? 'SEC actual saved!' : 'SEC actual removed!');
+                    closeSecActualModal();
+                    loadSecActuals();
+                } else {
+                    showToast('Error: ' + data.error, true);
+                }
+            } catch (error) {
+                showToast('Network error: ' + error.message, true);
+            }
+        }
+        
+        async function deleteSecActual(ticker, quarter) {
+            if (!confirm(`Delete SEC actual for ${ticker} ${quarter}?`)) return;
+            
+            try {
+                const response = await fetch('/api/hedge-fund-iq/sec-actuals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticker: ticker,
+                        quarter: quarter,
+                        actual_value: null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('SEC actual deleted!');
+                    loadSecActuals();
+                } else {
+                    showToast('Error: ' + data.error, true);
+                }
+            } catch (error) {
+                showToast('Network error: ' + error.message, true);
+            }
+        }
+        
+        // Load SEC actuals when the section is shown
+        document.addEventListener('DOMContentLoaded', function() {
+            const originalShowSection = window.showSection;
+            window.showSection = function(sectionId) {
+                originalShowSection(sectionId);
+                if (sectionId === 'sec-actuals') {
+                    loadSecActuals();
+                }
+            };
+        });
     </script>
 </body>
 </html>
