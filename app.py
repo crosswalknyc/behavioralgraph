@@ -4793,6 +4793,8 @@ def update_profile_mapping():
         ticker = data.get('ticker')
         profile_filename = data.get('profile_filename', '').strip()
         
+        print(f"📝 Updating profile mapping for {ticker}: '{profile_filename}'")
+        
         if not ticker:
             return jsonify({'success': False, 'error': 'Ticker required'}), 400
         
@@ -4802,18 +4804,26 @@ def update_profile_mapping():
         if os.path.exists(mapping_file):
             with open(mapping_file, 'r') as f:
                 mappings = json.load(f)
+            print(f"📂 Loaded existing mappings: {list(mappings.keys())}")
         
         if profile_filename:
             # Update mapping
             mappings[ticker] = profile_filename
+            print(f"✅ Set mapping: {ticker} → {profile_filename}")
         else:
             # Remove mapping (use default)
             if ticker in mappings:
                 del mappings[ticker]
+                print(f"🗑️ Removed mapping for {ticker}")
+            else:
+                print(f"ℹ️ No mapping to remove for {ticker}")
         
         # Save back to file
         with open(mapping_file, 'w') as f:
             json.dump(mappings, f, indent=2)
+        
+        print(f"💾 Saved mappings to {mapping_file}")
+        print(f"📊 Total mappings: {len(mappings)}")
         
         return jsonify({'success': True})
         

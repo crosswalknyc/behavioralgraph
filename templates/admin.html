@@ -4642,27 +4642,37 @@
             if (!currentTickerInModal) return;
             
             const profileFilename = document.getElementById('tickerProfileFilename').value.trim();
+            const tickerSymbol = currentTickerInModal.ticker;
+            
+            console.log('Saving profile mapping:', tickerSymbol, profileFilename);
             
             try {
                 const response = await fetch('/api/hedge-fund-iq/profile-mapping', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        ticker: currentTickerInModal.ticker,
+                        ticker: tickerSymbol,
                         profile_filename: profileFilename
                     })
                 });
                 
+                console.log('Response status:', response.status);
                 const data = await response.json();
+                console.log('Response data:', data);
                 
                 if (data.success) {
                     showToast('✅ Profile mapping saved!');
+                    // Reload tickers to refresh the data
                     await loadTickers();
-                    showTickerDetail(currentTickerInModal.ticker);
+                    // Re-open the modal with updated data
+                    setTimeout(() => {
+                        showTickerDetail(tickerSymbol);
+                    }, 100);
                 } else {
                     showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
                 }
             } catch (error) {
+                console.error('Error saving profile mapping:', error);
                 showToast('❌ Error saving profile mapping: ' + error.message, true);
             }
         }
