@@ -10831,26 +10831,32 @@
                         <div style="margin-bottom: 0.75rem;">
                             <h3 id="quarterYTDHeader" style="font-size: 1.25rem; color: var(--accent-cyan); font-weight: 600; text-align: left; margin: 0;">Quarter to Date (QTD) Cumulative</h3>
                         </div>
-                        <div class="stats-row" style="margin-bottom: 1.5rem;">
+                        
+                        <!-- Projected Growth Rate - Full Width -->
+                        <div style="margin-bottom: 1rem;">
+                            <div class="stat-card" style="width: 100%;">
+                                <div class="stat-label" id="projectedGrowthLabel">🔮 Projected Net Growth Rate</div>
+                                <div class="stat-value" id="projectedGrowth" style="font-size: 2.5rem;">--</div>
+                            </div>
+                        </div>
+                        
+                        <!-- 2x2 Grid -->
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
                             <div class="stat-card">
                                 <div class="stat-label">📊 Current Consumers</div>
                                 <div class="stat-value" id="currentConsumers">--</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-label">📈 Total Subs (Quarter)</div>
+                                <div class="stat-label">💹 QTD Net Growth %</div>
+                                <div class="stat-value" id="netGrowth">--</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">📈 Total Subs</div>
                                 <div class="stat-value" id="totalSubs">--</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-label" id="projectedGrowthLabel">🔮 Projected Net Growth Rate</div>
-                                <div class="stat-value" id="projectedGrowth">--</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-label">📉 Total Cancels (Quarter)</div>
+                                <div class="stat-label">📉 Total Cancels</div>
                                 <div class="stat-value" id="totalCancels">--</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-label">💹 Net Growth (Quarter)</div>
-                                <div class="stat-value" id="netGrowth">--</div>
                             </div>
                         </div>
 
@@ -12586,15 +12592,8 @@
             document.getElementById('netGrowth').textContent = `${stats.net_growth_pct || 0}%`;
             document.getElementById('projectedGrowth').textContent = `${stats.projected_growth_pct || 0}%`;
             
-            // Update card titles to show they're quarterly cumulative
-            const subsCard = document.querySelector('[id="totalSubs"]').closest('.stat-card');
-            const cancelsCard = document.querySelector('[id="totalCancels"]').closest('.stat-card');
-            const growthCard = document.querySelector('[id="netGrowth"]').closest('.stat-card');
+            // Update projected growth label with quarter
             const projectedCard = document.querySelector('[id="projectedGrowth"]').closest('.stat-card');
-            
-            if (subsCard) subsCard.querySelector('.stat-label').textContent = `📈 Total Subs`;
-            if (cancelsCard) cancelsCard.querySelector('.stat-label').textContent = `📉 Total Cancels`;
-            if (growthCard) growthCard.querySelector('.stat-label').textContent = `💹 Net Growth %`;
             if (projectedCard) projectedCard.querySelector('.stat-label').textContent = `🔮 ${latestQuarter} Projected Net Growth Rate`;
             
             // Set default date range to current quarter
