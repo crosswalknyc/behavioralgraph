@@ -4330,21 +4330,60 @@ def get_hedge_fund_ticker_data(s3_key):
         
         # Parse CSV
         df = pd.read_csv(io.StringIO(csv_content))
-        df = df.fillna('')
-        print(f"✅ Parsed CSV: {len(df)} rows")
+        df = df.fillna(0)  # Fill NaN with 0 instead of empty string for numeric columns
+        print(f"✅ Parsed CSV: {len(df)} rows, {len(df.columns)} columns")
+        print(f"📋 Columns: {list(df.columns)}")
+        
+        # Flexible column name mapping - handle variations in column names
+        col_mapping = {}
+        for col in df.columns:
+            col_lower = col.lower().strip()
+            if 'consumer' in col_lower or 'total' in col_lower and 'sub' not in col_lower and 'cancel' not in col_lower:
+                col_mapping['consumers'] = col
+            elif 'sub' in col_lower and 'cancel' not in col_lower:
+                col_mapping['subs'] = col
+            elif 'cancel' in col_lower or 'churn' in col_lower:
+                col_mapping['cancels'] = col
+            elif 'date' in col_lower:
+                col_mapping['date'] = col
+        
+        print(f"🗺️ Column mapping: {col_mapping}")
         
         # Calculate day-over-day net growth (not compounding)
         # Net Growth = (Total Subs - Total Cancels) / Previous Day Total Consumers
         df['Calculated_Net_Growth'] = 0.0
         
-        for i in range(1, len(df)):
-            prev_consumers = df.loc[i-1, 'Total Consumers']
-            current_subs = df.loc[i, 'Total Subs']
-            current_cancels = df.loc[i, 'Total Cancels']
+        if 'consumers' in col_mapping and 'subs' in col_mapping and 'cancels' in col_mapping:
+            consumers_col = col_mapping['consumers']
+            subs_col = col_mapping['subs']
+            cancels_col = col_mapping['cancels']
             
-            if prev_consumers > 0:
-                net_change = current_subs - current_cancels
-                df.loc[i, 'Calculated_Net_Growth'] = net_change / prev_consumers
+            # Ensure numeric types
+            df[consumers_col] = pd.to_numeric(df[consumers_col], errors='coerce').fillna(0)
+            df[subs_col] = pd.to_numeric(df[subs_col], errors='coerce').fillna(0)
+            df[cancels_col] = pd.to_numeric(df[cancels_col], errors='coerce').fillna(0)
+            
+            for i in range(1, len(df)):
+                prev_consumers = df.loc[i-1, consumers_col]
+                current_subs = df.loc[i, subs_col]
+                current_cancels = df.loc[i, cancels_col]
+                
+                if prev_consumers > 0:
+                    net_change = current_subs - current_cancels
+                    df.loc[i, 'Calculated_Net_Growth'] = net_change / prev_consumers
+        else:
+            print(f"⚠️ Warning: Could not find all required columns. Found: {col_mapping}")
+            # Still return data even if we can't calculate net growth
+        
+        # Normalize column names for frontend consistency
+        if 'consumers' in col_mapping:
+            df.rename(columns={col_mapping['consumers']: 'Total Consumers'}, inplace=True)
+        if 'subs' in col_mapping:
+            df.rename(columns={col_mapping['subs']: 'Total Subs'}, inplace=True)
+        if 'cancels' in col_mapping:
+            df.rename(columns={col_mapping['cancels']: 'Total Cancels'}, inplace=True)
+        if 'date' in col_mapping:
+            df.rename(columns={col_mapping['date']: 'Date'}, inplace=True)
         
         # Extract ticker info
         ticker_name = s3_key.replace('.csv', '').replace('_', ' ').upper()
@@ -4373,6 +4412,15 @@ def get_hedge_fund_ticker_data(s3_key):
         
         return jsonify(response_data)
         
+    except KeyError as e:
+        print(f"❌ KeyError in get_hedge_fund_ticker_data: Missing column {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False, 
+            'error': f'Missing required column: {e}. Please check CSV format.',
+            's3_key': s3_key
+        }), 400
     except Exception as e:
         print(f"❌ Error in get_hedge_fund_ticker_data: {e}")
         import traceback
