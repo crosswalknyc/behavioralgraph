@@ -15696,29 +15696,31 @@
                 if (!demoCategories.includes(category) && !skipCategories.includes(category) && !['LOCATION'].includes(category) && value) {
                     if (!result.behavioral[category]) result.behavioral[category] = [];
                     
-                    // Extract subcategory from the original row's Column field if it contains a slash or underscore
+                    // Extract subcategory from the original row's Column field
                     // For example: "MOST_PURCHASED_BRANDS_APPAREL/FOOTWEAR" -> subcategory = "APPAREL/FOOTWEAR"
-                    const originalColumn = row.Column || '';
+                    const originalColumn = (row.Column || '').toString().trim();
                     let subcategory = '';
                     
-                    // Check if the column contains an underscore followed by a category indicator
-                    const parts = originalColumn.split('_');
-                    if (parts.length > 3) {
-                        // Take everything after the main category name as subcategory
-                        // E.g., "MOST_PURCHASED_BRANDS_APPAREL/FOOTWEAR" -> ["MOST", "PURCHASED", "BRANDS", "APPAREL/FOOTWEAR"]
+                    // Strategy 1: If the column has a slash, extract everything from the last underscore before the slash
+                    if (originalColumn.includes('/')) {
+                        // Find the position of the slash
+                        const slashIndex = originalColumn.indexOf('/');
+                        // Get everything before the slash
+                        const beforeSlash = originalColumn.substring(0, slashIndex);
+                        // Get the last underscore-separated part before the slash
+                        const beforeSlashParts = beforeSlash.split('_');
+                        const lastPartBeforeSlash = beforeSlashParts[beforeSlashParts.length - 1];
+                        // Get everything after the slash
+                        const afterSlash = originalColumn.substring(slashIndex + 1);
+                        // Combine to get subcategory
+                        subcategory = lastPartBeforeSlash + '/' + afterSlash;
+                    } else {
+                        // Strategy 2: Check if there are more underscore-separated parts than the category name
+                        const parts = originalColumn.split('_');
                         const mainCategoryParts = category.split('_').length;
                         if (parts.length > mainCategoryParts) {
+                            // Take everything after the main category name as subcategory
                             subcategory = parts.slice(mainCategoryParts).join('_');
-                        }
-                    }
-                    
-                    // Also check if there's a slash in the remaining part (e.g., "APPAREL/FOOTWEAR")
-                    if (!subcategory && originalColumn.includes('/')) {
-                        const slashParts = originalColumn.split('/');
-                        if (slashParts.length > 1) {
-                            // Extract the part with the slash
-                            const beforeSlash = slashParts[0].split('_').pop(); // Get last part before slash
-                            subcategory = beforeSlash + '/' + slashParts.slice(1).join('/');
                         }
                     }
                     
@@ -15728,7 +15730,8 @@
                         index: index, 
                         genPopPct: genPopPct, 
                         projection: usProjection,
-                        subcategory: subcategory || '' 
+                        subcategory: subcategory || '',
+                        originalColumn: originalColumn // Keep for debugging
                     });
                 }
             });
@@ -19973,7 +19976,11 @@
                 // Debug: Log first few items to see subcategory values
                 console.log(`Slicing Most Purchased Brands by: ${sliceValue}`);
                 console.log(`Looking for keywords:`, sliceKeywords);
-                console.log(`Sample items (first 5):`, items.slice(0, 5).map(i => ({ name: i.name, subcategory: i.subcategory })));
+                console.log(`Sample items (first 5):`, items.slice(0, 5).map(i => ({ 
+                    name: i.name, 
+                    subcategory: i.subcategory,
+                    originalColumn: i.originalColumn 
+                })));
                 
                 // Filter items that match the slice - check for exact subcategory match first
                 filtered = items.filter(item => {
@@ -19994,7 +20001,13 @@
                 
                 console.log(`Filtered to ${filtered.length} items`);
                 if (filtered.length > 0) {
-                    console.log(`Sample filtered items (first 3):`, filtered.slice(0, 3).map(i => ({ name: i.name, subcategory: i.subcategory })));
+                    console.log(`Sample filtered items (first 3):`, filtered.slice(0, 3).map(i => ({ 
+                        name: i.name, 
+                        subcategory: i.subcategory,
+                        originalColumn: i.originalColumn 
+                    })));
+                } else {
+                    console.log(`⚠️ No items matched! Check if subcategory parsing is correct.`);
                 }
             }
             
