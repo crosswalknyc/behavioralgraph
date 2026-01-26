@@ -2415,23 +2415,48 @@
         }
 
         .sidebar-item {
-            padding: 0.35rem 0.5rem;
+            padding: 0.5rem;
             cursor: pointer;
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             color: var(--text-secondary);
-            border-radius: 4px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            border-radius: 6px;
             transition: all 0.15s;
             display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            flex-direction: column;
+            gap: 0.25rem;
+            border: 1px solid transparent;
+        }
+        
+        .sidebar-item-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+        }
+        
+        .sidebar-item-meta {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            line-height: 1.3;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
 
         .sidebar-item:hover {
-            background: var(--bg-dark);
-            color: var(--text-primary);
+            background: rgba(0, 217, 255, 0.08);
+            border-color: rgba(0, 217, 255, 0.3);
+        }
+        
+        .sidebar-item:hover .sidebar-item-name {
+            color: var(--accent-cyan);
+        }
+        
+        .sidebar-item.active {
+            background: rgba(0, 217, 255, 0.15);
+            border-color: var(--accent-cyan);
+        }
+        
+        .sidebar-item.active .sidebar-item-name {
+            color: var(--accent-cyan);
         }
 
         .sidebar-item-name {
@@ -12326,17 +12351,39 @@
         }
         
         async function selectTicker(s3Key) {
+            console.log('🎯 Ticker clicked:', s3Key);
+            
+            // Remove active class from all ticker items
+            document.querySelectorAll('.sidebar-item').forEach(item => item.classList.remove('active'));
+            
+            // Add active class to clicked item
+            event.target.closest('.sidebar-item')?.classList.add('active');
+            
             try {
+                console.log('📡 Fetching ticker data from API...');
                 const response = await fetch(`/api/hedge-fund-iq/data/${encodeURIComponent(s3Key)}`, { credentials: 'same-origin' });
-                if (response.status === 401) { window.location.href = '/login'; return; }
+                console.log('📥 Response status:', response.status);
+                
+                if (response.status === 401) { 
+                    console.warn('🔒 Unauthorized - redirecting to login');
+                    window.location.href = '/login'; 
+                    return; 
+                }
+                
                 const data = await response.json();
+                console.log('📊 Ticker data received:', data);
                 
                 if (data.success) {
                     currentTickerData = data;
+                    console.log('✅ Rendering ticker dashboard...');
                     renderTickerDashboard(data);
+                } else {
+                    console.error('❌ API returned error:', data.error);
+                    alert(`Error loading ticker: ${data.error}`);
                 }
             } catch (error) {
-                console.error('Error loading ticker data:', error);
+                console.error('❌ Error loading ticker data:', error);
+                alert(`Failed to load ticker: ${error.message}`);
             }
         }
         
