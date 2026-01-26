@@ -3120,13 +3120,20 @@
             cursor: pointer;
             position: relative;
             overflow: visible;
+            transition: all 0.2s ease;
+        }
+        
+        .hover-list-card:hover {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 4px 12px rgba(102, 217, 239, 0.3);
+            transform: translateY(-2px);
         }
         
         .hover-list-tooltip {
             position: absolute;
             bottom: calc(100% + 12px);
             left: 50%;
-            transform: translateX(-50%);
+            transform: translateX(-50%) translateY(5px);
             background: var(--bg-input);
             border: 2px solid var(--accent-cyan);
             border-radius: 8px;
@@ -3139,7 +3146,6 @@
             visibility: hidden;
             pointer-events: none;
             transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
-            transform: translateX(-50%) translateY(5px);
         }
         
         .hover-list-card:hover .hover-list-tooltip {
