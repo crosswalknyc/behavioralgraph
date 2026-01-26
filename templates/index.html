@@ -10798,6 +10798,7 @@
                                 <div class="dash-meta-grid">
                                     <div class="dash-meta-box" id="tickerDateRangeHeader"></div>
                                     <div class="dash-meta-box" id="tickerDataPointsHeader"></div>
+                                    <div class="dash-meta-box" id="tickerLatestDataHeader"></div>
                                 </div>
                             </div>
                         </div>
@@ -12396,20 +12397,42 @@
             document.getElementById('tickerNameHeader').textContent = data.display_name;
             document.getElementById('tickerKPIHeader').textContent = `KPI: ${data.kpi}`;
             
-            const dates = data.data.map(d => d.Date);
-            document.getElementById('tickerDateRangeHeader').textContent = `${dates[0]} - ${dates[dates.length - 1]}`;
-            document.getElementById('tickerDataPointsHeader').textContent = `${data.data.length} days`;
+            const dates = data.data.map(d => d.Date).filter(d => d);
+            const startDate = dates[0] || 'N/A';
+            const endDate = dates[dates.length - 1] || 'N/A';
+            document.getElementById('tickerDateRangeHeader').textContent = `Data Range: ${startDate} - ${endDate}`;
+            document.getElementById('tickerDataPointsHeader').textContent = `${data.data.length} days of data`;
             
             // Calculate summary stats
             const latest = data.data[data.data.length - 1];
-            const totalSubs = data.data.reduce((sum, d) => sum + (d['Total Subs'] || 0), 0);
-            const totalCancels = data.data.reduce((sum, d) => sum + (d['Total Cancels'] || 0), 0);
-            const netGrowthPct = ((totalSubs - totalCancels) / data.data[0]['Total Consumers'] * 100).toFixed(2);
+            const latestDate = latest.Date || 'N/A';
+            const latestQuarter = latest.Quarter || 'N/A';
             
+            // Show latest data date and quarter in header
+            document.getElementById('tickerLatestDataHeader').textContent = `Latest: ${latestDate} (${latestQuarter})`;
+            
+            // Calculate cumulative stats for the current quarter
+            const currentQuarterData = data.data.filter(d => d.Quarter === latestQuarter);
+            const quarterSubs = currentQuarterData.reduce((sum, d) => sum + (d['Total Subs'] || 0), 0);
+            const quarterCancels = currentQuarterData.reduce((sum, d) => sum + (d['Total Cancels'] || 0), 0);
+            const quarterNetGrowth = quarterSubs - quarterCancels;
+            const quarterStartConsumers = currentQuarterData[0] ? currentQuarterData[0]['Total Consumers'] : 1;
+            const netGrowthPct = ((quarterNetGrowth / quarterStartConsumers) * 100).toFixed(2);
+            
+            // Update stat cards with quarter info
             document.getElementById('currentConsumers').textContent = (latest['Total Consumers'] || 0).toLocaleString();
-            document.getElementById('totalSubs').textContent = totalSubs.toLocaleString();
-            document.getElementById('totalCancels').textContent = totalCancels.toLocaleString();
-            document.getElementById('netGrowth').textContent = `${netGrowthPct}%`;
+            document.getElementById('totalSubs').textContent = `${quarterSubs.toLocaleString()} (${latestQuarter})`;
+            document.getElementById('totalCancels').textContent = `${quarterCancels.toLocaleString()} (${latestQuarter})`;
+            document.getElementById('netGrowth').textContent = `${netGrowthPct}% (${latestQuarter})`;
+            
+            // Update card titles to show they're quarterly cumulative
+            const subsCard = document.querySelector('[id="totalSubs"]').closest('.stat-card');
+            const cancelsCard = document.querySelector('[id="totalCancels"]').closest('.stat-card');
+            const growthCard = document.querySelector('[id="netGrowth"]').closest('.stat-card');
+            
+            if (subsCard) subsCard.querySelector('.stat-label').textContent = `📈 Total Subs (${latestQuarter})`;
+            if (cancelsCard) cancelsCard.querySelector('.stat-label').textContent = `📉 Total Cancels (${latestQuarter})`;
+            if (growthCard) growthCard.querySelector('.stat-label').textContent = `💹 Net Growth (${latestQuarter})`;
             
             // Render daily chart
             renderDailyChurnChart(data.data);

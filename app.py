@@ -4346,6 +4346,8 @@ def get_hedge_fund_ticker_data(s3_key):
                 col_mapping['cancels'] = col
             elif 'date' in col_lower:
                 col_mapping['date'] = col
+            elif 'quarter' in col_lower:
+                col_mapping['quarter'] = col
         
         print(f"🗺️ Column mapping: {col_mapping}")
         
@@ -4384,16 +4386,37 @@ def get_hedge_fund_ticker_data(s3_key):
             df.rename(columns={col_mapping['cancels']: 'Total Cancels'}, inplace=True)
         if 'date' in col_mapping:
             df.rename(columns={col_mapping['date']: 'Date'}, inplace=True)
+        if 'quarter' in col_mapping:
+            df.rename(columns={col_mapping['quarter']: 'Quarter'}, inplace=True)
         
-        # Extract ticker info
-        ticker_name = s3_key.replace('.csv', '').replace('_', ' ').upper()
+        # Extract ticker info from filename
+        filename = s3_key.replace('.csv', '').replace('_Daily', '')
+        parts = filename.split('_')
         
-        # Get metadata
+        # Get the ticker symbol (first part, uppercase)
+        ticker_symbol = parts[0].upper()
+        
+        # For compound tickers like TMUSphone, keep them together
+        if len(parts) >= 2 and parts[1].lower() in ['phone', 'broadband']:
+            ticker_symbol = (parts[0] + parts[1]).upper()
+            kpi_parts = parts[2:] if len(parts) > 2 else []
+        else:
+            kpi_parts = parts[1:] if len(parts) > 1 else []
+        
+        # Look up KPI from default mapping, or extract from filename
+        if ticker_symbol in DEFAULT_TICKER_KPIS:
+            default_kpi = DEFAULT_TICKER_KPIS[ticker_symbol]
+        elif kpi_parts:
+            default_kpi = ' '.join(kpi_parts).title()
+        else:
+            default_kpi = 'Customers'
+        
+        # Get metadata (allows admin overrides)
         metadata = load_ticker_metadata()
         ticker_metadata = metadata.get(s3_key, {})
         
-        display_name = ticker_metadata.get('display_name', ticker_name)
-        kpi = ticker_metadata.get('kpi', 'Unknown KPI')
+        display_name = ticker_metadata.get('display_name', ticker_symbol)
+        kpi = ticker_metadata.get('kpi', default_kpi)  # Use default_kpi instead of 'Unknown KPI'
         parent_ticker = ticker_metadata.get('parent_ticker', None)
         
         # Convert to records
