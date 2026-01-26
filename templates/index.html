@@ -10834,6 +10834,10 @@
                                 <div class="stat-label">💹 Net Growth (Quarter)</div>
                                 <div class="stat-value" id="netGrowth">--</div>
                             </div>
+                            <div class="stat-card">
+                                <div class="stat-label" id="projectedGrowthLabel">🔮 Projected Net Growth Rate</div>
+                                <div class="stat-value" id="projectedGrowth">--</div>
+                            </div>
                         </div>
 
                         <!-- AI Earnings Prediction -->
@@ -12429,20 +12433,38 @@
             const quarterStartConsumers = currentQuarterData[0] ? currentQuarterData[0]['Total Consumers'] : 1;
             const netGrowthPct = ((quarterNetGrowth / quarterStartConsumers) * 100).toFixed(2);
             
+            // Calculate projected net growth rate for the full quarter
+            // Average daily net growth = (Total Subs - Total Cancels) / Days so far
+            const daysInQuarter = currentQuarterData.length;
+            const avgDailyNetGrowth = quarterNetGrowth / daysInQuarter;
+            
+            // Determine total days in the quarter (Q1/Q2/Q3 = 90 days, Q4 = 92 days typically)
+            let totalDaysInQuarter = 90;
+            if (latestQuarter.includes('Q4')) {
+                totalDaysInQuarter = 92;
+            }
+            
+            // Projected net growth = average daily net growth * total days in quarter
+            const projectedNetGrowth = avgDailyNetGrowth * totalDaysInQuarter;
+            const projectedNetGrowthPct = ((projectedNetGrowth / quarterStartConsumers) * 100).toFixed(2);
+            
             // Update stat cards with quarter info
             document.getElementById('currentConsumers').textContent = (latest['Total Consumers'] || 0).toLocaleString();
             document.getElementById('totalSubs').textContent = quarterSubs.toLocaleString();
             document.getElementById('totalCancels').textContent = quarterCancels.toLocaleString();
             document.getElementById('netGrowth').textContent = `${netGrowthPct}%`;
+            document.getElementById('projectedGrowth').textContent = `${projectedNetGrowthPct}%`;
             
             // Update card titles to show they're quarterly cumulative
             const subsCard = document.querySelector('[id="totalSubs"]').closest('.stat-card');
             const cancelsCard = document.querySelector('[id="totalCancels"]').closest('.stat-card');
             const growthCard = document.querySelector('[id="netGrowth"]').closest('.stat-card');
+            const projectedCard = document.querySelector('[id="projectedGrowth"]').closest('.stat-card');
             
             if (subsCard) subsCard.querySelector('.stat-label').textContent = `📈 Total Subs`;
             if (cancelsCard) cancelsCard.querySelector('.stat-label').textContent = `📉 Total Cancels`;
             if (growthCard) growthCard.querySelector('.stat-label').textContent = `💹 Net Growth %`;
+            if (projectedCard) projectedCard.querySelector('.stat-label').textContent = `🔮 ${latestQuarter} Projected Net Growth Rate`;
             
             // Render daily chart
             renderDailyChurnChart(data.data);
