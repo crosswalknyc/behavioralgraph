@@ -1156,6 +1156,10 @@
                             <span>Subscriber IQ</span>
                         </label>
                         <label class="checkbox-group">
+                            <input type="checkbox" id="hasHedgeFundIQAccess">
+                            <span>Hedge Fund IQ</span>
+                        </label>
+                        <label class="checkbox-group">
                             <input type="checkbox" id="hasAnalysisIQAccess" onchange="toggleAnalysisIQModules()">
                             <span>Analysis IQ</span>
                         </label>
@@ -2051,6 +2055,7 @@
             document.getElementById('allRuns').checked = true;
             document.getElementById('hasProfileIQAccess').checked = true;
             document.getElementById('hasSubscriberIQAccess').checked = false;
+            document.getElementById('hasHedgeFundIQAccess').checked = false;
             document.getElementById('hasAnalysisIQAccess').checked = false;
             document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
             document.getElementById('analysisIQModulesSection').style.display = 'none';
@@ -2088,6 +2093,7 @@
             document.getElementById('allRuns').checked = user.allowed_runs?.includes('*');
             document.getElementById('hasProfileIQAccess').checked = user.has_profile_iq_access !== false; // Default true
             document.getElementById('hasSubscriberIQAccess').checked = user.has_subscriber_iq_access === true; // Default false
+            document.getElementById('hasHedgeFundIQAccess').checked = user.has_hedge_fund_iq_access === true; // Default false
             document.getElementById('hasAnalysisIQAccess').checked = user.has_analysis_iq_access === true; // Default false
             
             // Set Analysis IQ modules and show/hide section
@@ -2567,6 +2573,8 @@
                     Array.from(document.querySelectorAll('#runCheckboxes input:checked')).map(cb => cb.value),
                 has_profile_iq_access: document.getElementById('hasProfileIQAccess').checked,
                 has_subscriber_iq_access: document.getElementById('hasSubscriberIQAccess').checked,
+                has_hedge_fund_iq_access: document.getElementById('hasHedgeFundIQAccess').checked,
+                hedge_fund_iq_tickers: ['*'], // Default to all tickers
                 has_analysis_iq_access: document.getElementById('hasAnalysisIQAccess').checked,
                 analysis_iq_modules: getAnalysisIQModules(),
                 send_welcome_email: document.getElementById('sendWelcomeEmail').checked
