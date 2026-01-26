@@ -988,72 +988,94 @@
                     <button class="close-btn" onclick="closeTickerDetailModal()">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <!-- Ticker Image Section -->
-                    <div class="form-section">
-                        <div class="form-section-title">📸 Ticker Image</div>
-                        <div id="tickerImagePreview" style="margin-bottom: 1rem; text-align: center;">
-                            <img id="tickerImagePreviewImg" src="" alt="Ticker Image" style="max-width: 200px; max-height: 200px; border-radius: 8px; display: none;">
-                            <div id="tickerImagePlaceholder" style="width: 200px; height: 200px; background: var(--bg-input); border: 2px dashed var(--border-color); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto; color: var(--text-secondary);">
-                                No image
+                    <!-- Two Column Layout -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                        
+                        <!-- Left Column -->
+                        <div>
+                            <!-- Ticker Image Section -->
+                            <div class="form-section">
+                                <div class="form-section-title">📸 Ticker Image</div>
+                                <div id="tickerImagePreview" style="margin-bottom: 1rem; text-align: center;">
+                                    <img id="tickerImagePreviewImg" src="" alt="Ticker Image" style="max-width: 150px; max-height: 150px; border-radius: 8px; display: none;">
+                                    <div id="tickerImagePlaceholder" style="width: 150px; height: 150px; background: var(--bg-input); border: 2px dashed var(--border-color); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto; color: var(--text-secondary); font-size: 0.85rem;">
+                                        No image
+                                    </div>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0.75rem;">
+                                    <label style="font-size: 0.85rem;">Upload Image</label>
+                                    <input type="file" id="tickerDetailImageFile" accept="image/*" style="font-size: 0.85rem;">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0.75rem;">
+                                    <label style="font-size: 0.85rem;">Or Image URL</label>
+                                    <input type="text" id="tickerDetailImageURL" placeholder="https://..." style="font-size: 0.85rem;">
+                                </div>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button class="btn btn-small btn-primary" onclick="saveTickerImageFromDetail()">💾 Save</button>
+                                    <button class="btn btn-small btn-danger" onclick="removeTickerImageInModal()" id="removeTickerImageBtn" style="display: none;">🗑️ Remove</button>
+                                </div>
                             </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Upload Image</label>
-                                <input type="file" id="tickerDetailImageFile" accept="image/*">
-                            </div>
-                            <div class="form-group">
-                                <label>Or Image URL</label>
-                                <input type="text" id="tickerDetailImageURL" placeholder="https://...">
-                            </div>
-                        </div>
-                        <button class="btn btn-primary" onclick="saveTickerImageFromDetail()">💾 Save Image</button>
-                        <button class="btn btn-danger" onclick="removeTickerImageInModal()" id="removeTickerImageBtn" style="display: none;">🗑️ Remove Image</button>
-                    </div>
 
-                    <!-- Profile Mapping Section -->
-                    <div class="form-section">
-                        <div class="form-section-title">🔗 Customer Profile Mapping</div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Profile Filename</label>
-                                <input type="text" id="tickerProfileFilename" placeholder="Enter profile filename (without .csv)">
-                                <small>Leave empty to use ticker symbol as default</small>
+                            <!-- Profile Mapping Section -->
+                            <div class="form-section" style="margin-top: 1.5rem;">
+                                <div class="form-section-title">🔗 Customer Profile</div>
+                                <div class="form-group" style="margin-bottom: 0.75rem;">
+                                    <label style="font-size: 0.85rem;">Profile Filename</label>
+                                    <input type="text" id="tickerProfileFilename" placeholder="Enter filename (without .csv)" style="font-size: 0.85rem;">
+                                    <small style="font-size: 0.75rem;">Leave empty to use ticker symbol</small>
+                                </div>
+                                <button class="btn btn-small btn-primary" onclick="saveTickerProfileMapping()">💾 Save</button>
                             </div>
                         </div>
-                        <button class="btn btn-primary" onclick="saveTickerProfileMapping()">💾 Save Profile Mapping</button>
-                    </div>
 
-                    <!-- SEC Actuals Section -->
-                    <div class="form-section">
-                        <div class="form-section-title">📊 SEC Actuals</div>
-                        <div id="tickerSecActualsList">
-                            <div style="text-align: center; padding: 1rem; color: var(--text-secondary);">No SEC actuals recorded</div>
-                        </div>
-                        <button class="btn btn-success" onclick="addSecActualForTicker()">+ Add SEC Actual</button>
-                    </div>
+                        <!-- Right Column -->
+                        <div>
+                            <!-- SEC Actuals Section -->
+                            <div class="form-section">
+                                <div class="form-section-title">📊 SEC Actuals</div>
+                                <div id="tickerSecActualsList" style="margin-bottom: 0.75rem; max-height: 300px; overflow-y: auto;">
+                                    <div style="text-align: center; padding: 1rem; color: var(--text-secondary); font-size: 0.85rem;">No SEC actuals recorded</div>
+                                </div>
+                                <button class="btn btn-small btn-success" onclick="showAddSecActualForm()">+ Add SEC Actual</button>
+                                
+                                <!-- Add SEC Actual Form (hidden by default) -->
+                                <div id="addSecActualForm" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border-color);">
+                                    <div class="form-group" style="margin-bottom: 0.75rem;">
+                                        <label style="font-size: 0.85rem;">Quarter</label>
+                                        <input type="text" id="secActualQuarter" placeholder="Q1 2026" style="font-size: 0.85rem;">
+                                        <small style="font-size: 0.75rem;">Format: Q# YYYY (e.g., Q1 2026)</small>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0.75rem;">
+                                        <label style="font-size: 0.85rem;">SEC Net Growth Rate %</label>
+                                        <input type="number" id="secActualValue" placeholder="0.00" step="0.01" style="font-size: 0.85rem;">
+                                        <small style="font-size: 0.75rem;">Enter as percentage (e.g., 2.5 for 2.5%)</small>
+                                    </div>
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <button class="btn btn-small btn-success" onclick="saveSecActualFromForm()">💾 Save</button>
+                                        <button class="btn btn-small btn-secondary" onclick="hideAddSecActualForm()">Cancel</button>
+                                    </div>
+                                </div>
+                            </div>
 
-                    <!-- Metadata Section -->
-                    <div class="form-section">
-                        <div class="form-section-title">ℹ️ Ticker Information</div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Ticker Symbol</label>
-                                <input type="text" id="tickerSymbol" readonly style="background: var(--bg-dark); cursor: not-allowed;">
-                            </div>
-                            <div class="form-group">
-                                <label>Display Name</label>
-                                <input type="text" id="tickerDisplayName" readonly style="background: var(--bg-dark); cursor: not-allowed;">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>KPI Measurement</label>
-                                <input type="text" id="tickerKPI" readonly style="background: var(--bg-dark); cursor: not-allowed;">
-                            </div>
-                            <div class="form-group">
-                                <label>S3 File</label>
-                                <input type="text" id="tickerS3Key" readonly style="background: var(--bg-dark); cursor: not-allowed;">
+                            <!-- Ticker Information Section -->
+                            <div class="form-section" style="margin-top: 1.5rem;">
+                                <div class="form-section-title">ℹ️ Ticker Information</div>
+                                <div class="form-group" style="margin-bottom: 0.5rem;">
+                                    <label style="font-size: 0.85rem;">Ticker Symbol</label>
+                                    <input type="text" id="tickerSymbol" readonly style="background: var(--bg-dark); cursor: not-allowed; font-size: 0.85rem;">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0.5rem;">
+                                    <label style="font-size: 0.85rem;">Display Name</label>
+                                    <input type="text" id="tickerDisplayName" readonly style="background: var(--bg-dark); cursor: not-allowed; font-size: 0.85rem;">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0.5rem;">
+                                    <label style="font-size: 0.85rem;">KPI Measurement</label>
+                                    <input type="text" id="tickerKPI" readonly style="background: var(--bg-dark); cursor: not-allowed; font-size: 0.85rem;">
+                                </div>
+                                <div class="form-group">
+                                    <label style="font-size: 0.85rem;">S3 File</label>
+                                    <input type="text" id="tickerS3Key" readonly style="background: var(--bg-dark); cursor: not-allowed; font-size: 0.85rem;">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -4638,16 +4660,22 @@
                 const container = document.getElementById('tickerSecActualsList');
                 
                 if (data.success && data.actuals && Object.keys(data.actuals).length > 0) {
-                    let html = '<table class="data-table"><thead><tr><th>Quarter</th><th>SEC Actual</th><th>Actions</th></tr></thead><tbody>';
+                    let html = '<table class="data-table" style="font-size: 0.85rem;"><thead><tr><th>Quarter</th><th>Net Growth %</th><th>Actions</th></tr></thead><tbody>';
                     
-                    for (const [quarter, value] of Object.entries(data.actuals)) {
+                    // Sort quarters by year and quarter number
+                    const sortedEntries = Object.entries(data.actuals).sort((a, b) => {
+                        const [qA, qB] = [a[0], b[0]];
+                        return qB.localeCompare(qA); // Descending order (newest first)
+                    });
+                    
+                    for (const [quarter, value] of sortedEntries) {
                         html += `
                             <tr>
                                 <td><strong>${quarter}</strong></td>
-                                <td>${value.toLocaleString()}</td>
-                                <td>
-                                    <button class="btn btn-small btn-primary" onclick="editSecActualInModal('${quarter}', ${value})">✏️ Edit</button>
-                                    <button class="btn btn-small btn-danger" onclick="deleteSecActualInModal('${quarter}')">🗑️ Delete</button>
+                                <td>${value.toFixed(2)}%</td>
+                                <td style="white-space: nowrap;">
+                                    <button class="btn btn-small btn-primary" onclick="editSecActualInModal('${quarter}', ${value})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">✏️</button>
+                                    <button class="btn btn-small btn-danger" onclick="deleteSecActualInModal('${quarter}')" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">🗑️</button>
                                 </td>
                             </tr>
                         `;
@@ -4656,30 +4684,49 @@
                     html += '</tbody></table>';
                     container.innerHTML = html;
                 } else {
-                    container.innerHTML = '<div style="text-align: center; padding: 1rem; color: var(--text-secondary);">No SEC actuals recorded</div>';
+                    container.innerHTML = '<div style="text-align: center; padding: 1rem; color: var(--text-secondary); font-size: 0.85rem;">No SEC actuals recorded</div>';
                 }
             } catch (error) {
                 console.error('Error loading SEC actuals:', error);
             }
         }
         
-        function addSecActualForTicker() {
+        function showAddSecActualForm() {
+            document.getElementById('addSecActualForm').style.display = 'block';
+            document.getElementById('secActualQuarter').value = '';
+            document.getElementById('secActualValue').value = '';
+            document.getElementById('secActualQuarter').focus();
+        }
+        
+        function hideAddSecActualForm() {
+            document.getElementById('addSecActualForm').style.display = 'none';
+        }
+        
+        function saveSecActualFromForm() {
             if (!currentTickerInModal) return;
             
-            const quarter = prompt('Enter quarter (e.g., Q1 2026):');
-            if (!quarter) return;
+            const quarter = document.getElementById('secActualQuarter').value.trim();
+            const value = document.getElementById('secActualValue').value.trim();
             
-            const value = prompt('Enter SEC actual value:');
-            if (!value) return;
+            if (!quarter) {
+                showToast('Please enter a quarter (e.g., Q1 2026)', true);
+                return;
+            }
+            
+            if (!value) {
+                showToast('Please enter SEC Net Growth Rate %', true);
+                return;
+            }
             
             saveSecActualInModal(quarter, parseFloat(value));
+            hideAddSecActualForm();
         }
         
         function editSecActualInModal(quarter, currentValue) {
-            const value = prompt(`Edit SEC actual for ${quarter}:`, currentValue);
-            if (value === null) return;
-            
-            saveSecActualInModal(quarter, parseFloat(value));
+            // Show the form with pre-filled values
+            document.getElementById('addSecActualForm').style.display = 'block';
+            document.getElementById('secActualQuarter').value = quarter;
+            document.getElementById('secActualValue').value = currentValue;
         }
         
         async function saveSecActualInModal(quarter, value) {
