@@ -108,6 +108,7 @@ def server_error(e):
 
 S3_BUCKET = 'dashboard-inputs'
 SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
+HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Hedge Fund IQ ticker data
 S3_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
 
@@ -1694,6 +1695,8 @@ def create_user():
             'allowed_runs': req_data.get('allowed_runs', ['*']),
             'has_profile_iq_access': req_data.get('has_profile_iq_access', True),
             'has_subscriber_iq_access': req_data.get('has_subscriber_iq_access', False),
+            'has_hedge_fund_iq_access': req_data.get('has_hedge_fund_iq_access', False),
+            'hedge_fund_iq_tickers': req_data.get('hedge_fund_iq_tickers', ['*']),
             'has_analysis_iq_access': req_data.get('has_analysis_iq_access', False),
             'analysis_iq_modules': req_data.get('analysis_iq_modules', [])
         }
@@ -1765,6 +1768,10 @@ def update_user(username):
             user['has_profile_iq_access'] = req_data['has_profile_iq_access']
         if 'has_subscriber_iq_access' in req_data:
             user['has_subscriber_iq_access'] = req_data['has_subscriber_iq_access']
+        if 'has_hedge_fund_iq_access' in req_data:
+            user['has_hedge_fund_iq_access'] = req_data['has_hedge_fund_iq_access']
+        if 'hedge_fund_iq_tickers' in req_data:
+            user['hedge_fund_iq_tickers'] = req_data['hedge_fund_iq_tickers']
         if 'has_analysis_iq_access' in req_data:
             user['has_analysis_iq_access'] = req_data['has_analysis_iq_access']
         if 'analysis_iq_modules' in req_data:
@@ -2690,6 +2697,8 @@ def index():
     else:
         has_profile_iq = user.get('has_profile_iq_access', True) if user else True  # Default True for backward compat
         has_subscriber_iq = user.get('has_subscriber_iq_access', False) if user else False
+        has_hedge_fund_iq = user.get('has_hedge_fund_iq_access', False) if user else False
+        hedge_fund_iq_tickers = user.get('hedge_fund_iq_tickers', ['*']) if user else ['*']
         has_analysis_iq = user.get('has_analysis_iq_access', False) if user else False
         analysis_iq_modules = user.get('analysis_iq_modules', []) if user else []
     
@@ -2706,6 +2715,8 @@ def index():
                            profile_picture=user.get('profile_picture', '') if user else '',
                            has_profile_iq_access=has_profile_iq,
                            has_subscriber_iq_access=has_subscriber_iq,
+                           has_hedge_fund_iq_access=has_hedge_fund_iq,
+                           hedge_fund_iq_tickers=hedge_fund_iq_tickers,
                            has_analysis_iq_access=has_analysis_iq,
                            analysis_iq_modules=analysis_iq_modules,
                            first_name=first_name,
@@ -4214,6 +4225,198 @@ def get_subscriber_iq_data(s3_key):
         return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
 
 
+# ============================================================================
+# HEDGE FUND IQ API ENDPOINTS
+# ============================================================================
+
+@app.route('/api/hedge-fund-iq/list')
+@requires_auth
+def list_hedge_fund_tickers():
+    """List all ticker CSV files from S3 aggregated-tickers bucket."""
+    if not s3_client:
+        return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    
+    try:
+        print(f"📊 Listing Hedge Fund IQ tickers from bucket: {HEDGE_FUND_S3_BUCKET}")
+        
+        tickers = []
+        paginator = s3_client.get_paginator('list_objects_v2')
+        
+        for page in paginator.paginate(Bucket=HEDGE_FUND_S3_BUCKET):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                
+                # Only process CSV files
+                if not key.endswith('.csv'):
+                    continue
+                
+                # Extract ticker name from filename (e.g., "DIS.csv" -> "DIS", "HULU.csv" -> "HULU")
+                ticker_name = key.replace('.csv', '').replace('_', ' ').upper()
+                
+                last_modified = obj['LastModified'].isoformat() if 'LastModified' in obj else None
+                
+                tickers.append({
+                    'ticker': ticker_name,
+                    's3_key': key,
+                    'last_modified': last_modified,
+                    'bucket': HEDGE_FUND_S3_BUCKET
+                })
+        
+        # Load metadata for display names and KPIs
+        metadata = load_ticker_metadata()
+        
+        # Enrich tickers with metadata
+        for ticker in tickers:
+            ticker_key = ticker['s3_key']
+            if ticker_key in metadata:
+                ticker['display_name'] = metadata[ticker_key].get('display_name', ticker['ticker'])
+                ticker['kpi'] = metadata[ticker_key].get('kpi', 'Unknown KPI')
+                ticker['parent_ticker'] = metadata[ticker_key].get('parent_ticker', None)
+            else:
+                ticker['display_name'] = ticker['ticker']
+                ticker['kpi'] = 'Unknown KPI'
+                ticker['parent_ticker'] = None
+        
+        print(f"✅ Found {len(tickers)} tickers")
+        return jsonify({'success': True, 'tickers': tickers})
+        
+    except Exception as e:
+        print(f"❌ Error listing hedge fund tickers: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/hedge-fund-iq/data/<path:s3_key>')
+@requires_auth
+def get_hedge_fund_ticker_data(s3_key):
+    """Get ticker CSV data and calculate day-over-day metrics."""
+    print(f"📥 get_hedge_fund_ticker_data called for: {s3_key}")
+    
+    if not s3_client:
+        print("❌ S3 client not configured")
+        return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    
+    try:
+        print(f"📂 Fetching from S3: {HEDGE_FUND_S3_BUCKET}/{s3_key}")
+        response = s3_client.get_object(Bucket=HEDGE_FUND_S3_BUCKET, Key=s3_key)
+        csv_content = response['Body'].read().decode('utf-8')
+        print(f"✅ Got CSV content: {len(csv_content)} bytes")
+        
+        # Parse CSV
+        df = pd.read_csv(io.StringIO(csv_content))
+        df = df.fillna('')
+        print(f"✅ Parsed CSV: {len(df)} rows")
+        
+        # Calculate day-over-day net growth (not compounding)
+        # Net Growth = (Total Subs - Total Cancels) / Previous Day Total Consumers
+        df['Calculated_Net_Growth'] = 0.0
+        
+        for i in range(1, len(df)):
+            prev_consumers = df.loc[i-1, 'Total Consumers']
+            current_subs = df.loc[i, 'Total Subs']
+            current_cancels = df.loc[i, 'Total Cancels']
+            
+            if prev_consumers > 0:
+                net_change = current_subs - current_cancels
+                df.loc[i, 'Calculated_Net_Growth'] = net_change / prev_consumers
+        
+        # Extract ticker info
+        ticker_name = s3_key.replace('.csv', '').replace('_', ' ').upper()
+        
+        # Get metadata
+        metadata = load_ticker_metadata()
+        ticker_metadata = metadata.get(s3_key, {})
+        
+        display_name = ticker_metadata.get('display_name', ticker_name)
+        kpi = ticker_metadata.get('kpi', 'Unknown KPI')
+        parent_ticker = ticker_metadata.get('parent_ticker', None)
+        
+        # Convert to records
+        data = df.to_dict('records')
+        
+        response_data = {
+            'success': True,
+            'data': data,
+            'ticker': ticker_name,
+            'display_name': display_name,
+            'kpi': kpi,
+            'parent_ticker': parent_ticker,
+            's3_key': s3_key,
+            'bucket': HEDGE_FUND_S3_BUCKET
+        }
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"❌ Error in get_hedge_fund_ticker_data: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e), 's3_key': s3_key}), 500
+
+
+@app.route('/api/hedge-fund-iq/metadata', methods=['GET', 'POST'])
+@requires_auth
+@admin_required
+def manage_ticker_metadata():
+    """Get or update ticker metadata (display names, KPIs, parent tickers)."""
+    if request.method == 'GET':
+        metadata = load_ticker_metadata()
+        return jsonify({'success': True, 'metadata': metadata})
+    
+    elif request.method == 'POST':
+        data = request.get_json()
+        s3_key = data.get('s3_key')
+        display_name = data.get('display_name')
+        kpi = data.get('kpi')
+        parent_ticker = data.get('parent_ticker')
+        
+        if not s3_key:
+            return jsonify({'success': False, 'error': 's3_key is required'}), 400
+        
+        metadata = load_ticker_metadata()
+        
+        if s3_key not in metadata:
+            metadata[s3_key] = {}
+        
+        if display_name:
+            metadata[s3_key]['display_name'] = display_name
+        if kpi:
+            metadata[s3_key]['kpi'] = kpi
+        if parent_ticker is not None:  # Allow empty string to clear
+            metadata[s3_key]['parent_ticker'] = parent_ticker
+        
+        save_ticker_metadata(metadata)
+        
+        return jsonify({'success': True, 'message': 'Metadata updated', 'metadata': metadata[s3_key]})
+
+
+def load_ticker_metadata():
+    """Load ticker metadata from S3."""
+    if not s3_client:
+        return {}
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=TICKER_METADATA_KEY)
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except:
+        return {}
+
+
+def save_ticker_metadata(metadata):
+    """Save ticker metadata to S3."""
+    if not s3_client:
+        return
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=TICKER_METADATA_KEY,
+            Body=json.dumps(metadata, indent=2),
+            ContentType='application/json'
+        )
+    except Exception as e:
+        print(f"❌ Error saving ticker metadata: {e}")
+
+
 @app.route('/api/job-data/<job_id>')
 @requires_auth
 def get_job_data(job_id):
@@ -4929,6 +5132,9 @@ def rename_file():
 
 # SVOD file metadata storage key
 SVOD_METADATA_KEY = 'system/svod_metadata.json'
+
+# Hedge Fund IQ ticker metadata storage key
+TICKER_METADATA_KEY = 'system/ticker_metadata.json'
 
 def load_svod_metadata():
     """Load SVOD file metadata (categories) from S3."""
