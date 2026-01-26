@@ -768,8 +768,7 @@
             <button class="admin-tab active" onclick="showAdminTab('users')">👥 Users</button>
             <button class="admin-tab" onclick="showAdminTab('content')">📁 Content Management</button>
             <button class="admin-tab" onclick="showAdminTab('images')">🖼️ Profile Images</button>
-            <button class="admin-tab" onclick="showAdminTab('sec-actuals')">📊 SEC Actuals</button>
-            <button class="admin-tab" onclick="showAdminTab('profile-mappings')">🔗 Ticker Profiles</button>
+            <button class="admin-tab" onclick="showAdminTab('tickers')">📈 Tickers</button>
             <button class="admin-tab" onclick="showAdminTab('settings')">⚙️ Settings</button>
         </div>
 
@@ -959,17 +958,105 @@
             </div>
         </div>
 
-        <!-- PROFILE MAPPINGS SECTION -->
-        <div id="section-profile-mappings" class="admin-section">
+        <!-- TICKERS SECTION -->
+        <div id="section-tickers" class="admin-section">
             <div class="card">
-                <div class="card-header">
-                    <h2>🔗 Ticker Profile Mappings</h2>
-                </div>
+                <h2>📈 Ticker Management</h2>
                 <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">
-                    Link tickers to their customer profile files from the dashboard-inputs S3 bucket. If a ticker name differs from the profile filename, specify the mapping here.
+                    Manage all ticker information in one place: images, profile mappings, SEC actuals, display names, and KPIs.
                 </p>
-                <div id="profileMappingsList" style="max-height: 600px; overflow-y: auto;">
-                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading ticker profile mappings...</div>
+                
+                <!-- Search and Filter -->
+                <div style="margin-bottom: 1.5rem;">
+                    <input type="text" id="tickerSearchInput" placeholder="🔍 Search tickers..." 
+                           style="width: 100%; padding: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);"
+                           oninput="filterTickers()">
+                </div>
+                
+                <!-- Tickers List -->
+                <div id="tickersList" style="max-height: 700px; overflow-y: auto;">
+                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading tickers...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ticker Detail Modal -->
+        <div id="tickerDetailModal" class="modal">
+            <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+                <div class="modal-header">
+                    <h2 id="tickerDetailTitle">Ticker Details</h2>
+                    <button class="close-btn" onclick="closeTickerDetailModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <!-- Ticker Image Section -->
+                    <div class="form-section">
+                        <div class="form-section-title">📸 Ticker Image</div>
+                        <div id="tickerImagePreview" style="margin-bottom: 1rem; text-align: center;">
+                            <img id="tickerImagePreviewImg" src="" alt="Ticker Image" style="max-width: 200px; max-height: 200px; border-radius: 8px; display: none;">
+                            <div id="tickerImagePlaceholder" style="width: 200px; height: 200px; background: var(--bg-input); border: 2px dashed var(--border-color); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto; color: var(--text-secondary);">
+                                No image
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Upload Image</label>
+                                <input type="file" id="tickerImageFile" accept="image/*">
+                            </div>
+                            <div class="form-group">
+                                <label>Or Image URL</label>
+                                <input type="text" id="tickerImageURL" placeholder="https://...">
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" onclick="saveTickerImage()">💾 Save Image</button>
+                        <button class="btn btn-danger" onclick="removeTickerImageInModal()" id="removeTickerImageBtn" style="display: none;">🗑️ Remove Image</button>
+                    </div>
+
+                    <!-- Profile Mapping Section -->
+                    <div class="form-section">
+                        <div class="form-section-title">🔗 Customer Profile Mapping</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Profile Filename</label>
+                                <input type="text" id="tickerProfileFilename" placeholder="Enter profile filename (without .csv)">
+                                <small>Leave empty to use ticker symbol as default</small>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" onclick="saveTickerProfileMapping()">💾 Save Profile Mapping</button>
+                    </div>
+
+                    <!-- SEC Actuals Section -->
+                    <div class="form-section">
+                        <div class="form-section-title">📊 SEC Actuals</div>
+                        <div id="tickerSecActualsList">
+                            <div style="text-align: center; padding: 1rem; color: var(--text-secondary);">No SEC actuals recorded</div>
+                        </div>
+                        <button class="btn btn-success" onclick="addSecActualForTicker()">+ Add SEC Actual</button>
+                    </div>
+
+                    <!-- Metadata Section -->
+                    <div class="form-section">
+                        <div class="form-section-title">ℹ️ Ticker Information</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Ticker Symbol</label>
+                                <input type="text" id="tickerSymbol" readonly style="background: var(--bg-dark); cursor: not-allowed;">
+                            </div>
+                            <div class="form-group">
+                                <label>Display Name</label>
+                                <input type="text" id="tickerDisplayName" readonly style="background: var(--bg-dark); cursor: not-allowed;">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>KPI Measurement</label>
+                                <input type="text" id="tickerKPI" readonly style="background: var(--bg-dark); cursor: not-allowed;">
+                            </div>
+                            <div class="form-group">
+                                <label>S3 File</label>
+                                <input type="text" id="tickerS3Key" readonly style="background: var(--bg-dark); cursor: not-allowed;">
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1692,6 +1779,9 @@
             }
             if (tabName === 'images') {
                 loadProfileImages();
+            }
+            if (tabName === 'tickers') {
+                loadTickers();
             }
             if (tabName === 'settings') {
                 checkGmailStatus();
@@ -4283,6 +4373,371 @@
             }
             
             updateProfileMapping(ticker, '');
+        }
+        
+        // ============================================
+        // TICKER MANAGEMENT (CONSOLIDATED)
+        // ============================================
+        
+        let allTickersData = [];
+        let currentTickerInModal = null;
+        
+        async function loadTickers() {
+            try {
+                // Load all tickers
+                const tickersResponse = await fetch('/api/hedge-fund-iq/list');
+                const tickersData = await tickersResponse.json();
+                
+                if (!tickersData.success) {
+                    throw new Error('Failed to load tickers');
+                }
+                
+                allTickersData = tickersData.tickers;
+                
+                // Load additional data for each ticker (images, profile mappings)
+                for (const ticker of allTickersData) {
+                    // Load image info
+                    try {
+                        const imgResponse = await fetch(`/api/ticker-image/${ticker.ticker}`);
+                        const imgData = await imgResponse.json();
+                        ticker.hasImage = imgData.success && imgData.image_url;
+                        ticker.imageUrl = imgData.image_url;
+                    } catch (error) {
+                        ticker.hasImage = false;
+                    }
+                    
+                    // Load profile mapping
+                    try {
+                        const profileResponse = await fetch(`/api/hedge-fund-iq/profile-mapping/${ticker.ticker}`);
+                        const profileData = await profileResponse.json();
+                        ticker.profileFilename = profileData.profile_filename || ticker.ticker;
+                        ticker.hasCustomProfile = profileData.profile_filename && profileData.profile_filename !== ticker.ticker;
+                    } catch (error) {
+                        ticker.profileFilename = ticker.ticker;
+                        ticker.hasCustomProfile = false;
+                    }
+                }
+                
+                renderTickers();
+                
+            } catch (error) {
+                console.error('Error loading tickers:', error);
+                document.getElementById('tickersList').innerHTML = `
+                    <div style="text-align: center; padding: 2rem; color: var(--accent-red);">
+                        Error loading tickers: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        function renderTickers() {
+            const container = document.getElementById('tickersList');
+            const searchTerm = document.getElementById('tickerSearchInput')?.value.toLowerCase() || '';
+            
+            let filteredTickers = allTickersData;
+            if (searchTerm) {
+                filteredTickers = allTickersData.filter(t => 
+                    t.ticker.toLowerCase().includes(searchTerm) ||
+                    t.display_name.toLowerCase().includes(searchTerm) ||
+                    t.kpi.toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            if (filteredTickers.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No tickers found.</div>';
+                return;
+            }
+            
+            let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">';
+            
+            for (const ticker of filteredTickers) {
+                const statusIcons = [];
+                if (ticker.hasImage) statusIcons.push('📸');
+                if (ticker.hasCustomProfile) statusIcons.push('🔗');
+                
+                html += `
+                    <div class="card" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
+                         onclick="showTickerDetail('${ticker.ticker}')"
+                         onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)';"
+                         onmouseleave="this.style.transform=''; this.style.boxShadow='';">
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+                            ${ticker.hasImage ? 
+                                `<img src="${ticker.imageUrl}" alt="${ticker.ticker}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;">` :
+                                `<div style="width: 50px; height: 50px; background: var(--bg-input); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">📈</div>`
+                            }
+                            <div style="flex: 1;">
+                                <h3 style="margin: 0; font-size: 1.1rem;">${ticker.ticker}</h3>
+                                <div style="color: var(--text-secondary); font-size: 0.85rem;">${ticker.display_name}</div>
+                            </div>
+                            ${statusIcons.length > 0 ? `<div style="font-size: 1.2rem;">${statusIcons.join(' ')}</div>` : ''}
+                        </div>
+                        <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">
+                            <strong>KPI:</strong> ${ticker.kpi}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
+        
+        function filterTickers() {
+            renderTickers();
+        }
+        
+        async function showTickerDetail(tickerSymbol) {
+            const ticker = allTickersData.find(t => t.ticker === tickerSymbol);
+            if (!ticker) return;
+            
+            currentTickerInModal = ticker;
+            
+            // Set modal title
+            document.getElementById('tickerDetailTitle').textContent = `${ticker.ticker} - ${ticker.display_name}`;
+            
+            // Set ticker info (readonly fields)
+            document.getElementById('tickerSymbol').value = ticker.ticker;
+            document.getElementById('tickerDisplayName').value = ticker.display_name;
+            document.getElementById('tickerKPI').value = ticker.kpi;
+            document.getElementById('tickerS3Key').value = ticker.s3_key;
+            
+            // Set image
+            if (ticker.hasImage) {
+                document.getElementById('tickerImagePreviewImg').src = ticker.imageUrl;
+                document.getElementById('tickerImagePreviewImg').style.display = 'block';
+                document.getElementById('tickerImagePlaceholder').style.display = 'none';
+                document.getElementById('removeTickerImageBtn').style.display = 'inline-block';
+            } else {
+                document.getElementById('tickerImagePreviewImg').style.display = 'none';
+                document.getElementById('tickerImagePlaceholder').style.display = 'flex';
+                document.getElementById('removeTickerImageBtn').style.display = 'none';
+            }
+            
+            // Set profile filename
+            document.getElementById('tickerProfileFilename').value = ticker.hasCustomProfile ? ticker.profileFilename : '';
+            
+            // Load SEC actuals for this ticker
+            await loadSecActualsForTicker(ticker.ticker);
+            
+            // Show modal
+            document.getElementById('tickerDetailModal').style.display = 'flex';
+        }
+        
+        function closeTickerDetailModal() {
+            document.getElementById('tickerDetailModal').style.display = 'none';
+            currentTickerInModal = null;
+            // Clear form
+            document.getElementById('tickerImageFile').value = '';
+            document.getElementById('tickerImageURL').value = '';
+        }
+        
+        async function saveTickerImage() {
+            if (!currentTickerInModal) return;
+            
+            const fileInput = document.getElementById('tickerImageFile');
+            const urlInput = document.getElementById('tickerImageURL');
+            
+            const formData = new FormData();
+            formData.append('ticker', currentTickerInModal.ticker);
+            formData.append('display_name', currentTickerInModal.display_name);
+            
+            if (fileInput.files.length > 0) {
+                formData.append('image', fileInput.files[0]);
+            } else if (urlInput.value.trim()) {
+                formData.append('image_url', urlInput.value.trim());
+            } else {
+                showToast('Please select an image file or enter a URL', true);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/ticker-image', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('✅ Ticker image saved!');
+                    // Reload tickers and refresh modal
+                    await loadTickers();
+                    showTickerDetail(currentTickerInModal.ticker);
+                } else {
+                    showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showToast('❌ Error saving image: ' + error.message, true);
+            }
+        }
+        
+        async function removeTickerImageInModal() {
+            if (!currentTickerInModal) return;
+            
+            if (!confirm(`Remove image for ${currentTickerInModal.ticker}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/ticker-image', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticker: currentTickerInModal.ticker
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('✅ Ticker image removed!');
+                    await loadTickers();
+                    showTickerDetail(currentTickerInModal.ticker);
+                } else {
+                    showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showToast('❌ Error removing image: ' + error.message, true);
+            }
+        }
+        
+        async function saveTickerProfileMapping() {
+            if (!currentTickerInModal) return;
+            
+            const profileFilename = document.getElementById('tickerProfileFilename').value.trim();
+            
+            try {
+                const response = await fetch('/api/hedge-fund-iq/profile-mapping', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticker: currentTickerInModal.ticker,
+                        profile_filename: profileFilename
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('✅ Profile mapping saved!');
+                    await loadTickers();
+                    showTickerDetail(currentTickerInModal.ticker);
+                } else {
+                    showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showToast('❌ Error saving profile mapping: ' + error.message, true);
+            }
+        }
+        
+        async function loadSecActualsForTicker(tickerSymbol) {
+            try {
+                const response = await fetch(`/api/hedge-fund-iq/sec-actuals/${tickerSymbol}`);
+                const data = await response.json();
+                
+                const container = document.getElementById('tickerSecActualsList');
+                
+                if (data.success && data.actuals && Object.keys(data.actuals).length > 0) {
+                    let html = '<table class="data-table"><thead><tr><th>Quarter</th><th>SEC Actual</th><th>Actions</th></tr></thead><tbody>';
+                    
+                    for (const [quarter, value] of Object.entries(data.actuals)) {
+                        html += `
+                            <tr>
+                                <td><strong>${quarter}</strong></td>
+                                <td>${value.toLocaleString()}</td>
+                                <td>
+                                    <button class="btn btn-small btn-primary" onclick="editSecActualInModal('${quarter}', ${value})">✏️ Edit</button>
+                                    <button class="btn btn-small btn-danger" onclick="deleteSecActualInModal('${quarter}')">🗑️ Delete</button>
+                                </td>
+                            </tr>
+                        `;
+                    }
+                    
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div style="text-align: center; padding: 1rem; color: var(--text-secondary);">No SEC actuals recorded</div>';
+                }
+            } catch (error) {
+                console.error('Error loading SEC actuals:', error);
+            }
+        }
+        
+        function addSecActualForTicker() {
+            if (!currentTickerInModal) return;
+            
+            const quarter = prompt('Enter quarter (e.g., Q1 2026):');
+            if (!quarter) return;
+            
+            const value = prompt('Enter SEC actual value:');
+            if (!value) return;
+            
+            saveSecActualInModal(quarter, parseFloat(value));
+        }
+        
+        function editSecActualInModal(quarter, currentValue) {
+            const value = prompt(`Edit SEC actual for ${quarter}:`, currentValue);
+            if (value === null) return;
+            
+            saveSecActualInModal(quarter, parseFloat(value));
+        }
+        
+        async function saveSecActualInModal(quarter, value) {
+            if (!currentTickerInModal) return;
+            
+            try {
+                const response = await fetch('/api/hedge-fund-iq/sec-actuals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticker: currentTickerInModal.ticker,
+                        quarter: quarter,
+                        actual_value: value
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('✅ SEC actual saved!');
+                    loadSecActualsForTicker(currentTickerInModal.ticker);
+                } else {
+                    showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showToast('❌ Error saving SEC actual: ' + error.message, true);
+            }
+        }
+        
+        async function deleteSecActualInModal(quarter) {
+            if (!currentTickerInModal) return;
+            
+            if (!confirm(`Delete SEC actual for ${quarter}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/hedge-fund-iq/sec-actuals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticker: currentTickerInModal.ticker,
+                        quarter: quarter,
+                        actual_value: null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('✅ SEC actual deleted!');
+                    loadSecActualsForTicker(currentTickerInModal.ticker);
+                } else {
+                    showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showToast('❌ Error deleting SEC actual: ' + error.message, true);
+            }
         }
         
         // ============================================
