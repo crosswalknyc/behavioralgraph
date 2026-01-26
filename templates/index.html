@@ -10828,16 +10828,16 @@
                                 <div class="stat-value" id="totalSubs">--</div>
                             </div>
                             <div class="stat-card">
+                                <div class="stat-label" id="projectedGrowthLabel">🔮 Projected Net Growth Rate</div>
+                                <div class="stat-value" id="projectedGrowth">--</div>
+                            </div>
+                            <div class="stat-card">
                                 <div class="stat-label">📉 Total Cancels (Quarter)</div>
                                 <div class="stat-value" id="totalCancels">--</div>
                             </div>
                             <div class="stat-card">
                                 <div class="stat-label">💹 Net Growth (Quarter)</div>
                                 <div class="stat-value" id="netGrowth">--</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-label" id="projectedGrowthLabel">🔮 Projected Net Growth Rate</div>
-                                <div class="stat-value" id="projectedGrowth">--</div>
                             </div>
                         </div>
 
@@ -12541,10 +12541,11 @@
             document.getElementById('tickerDateRangeHeader').textContent = `Data Range: ${startDate} - ${endDate}`;
             document.getElementById('tickerDataPointsHeader').textContent = `${data.data.length} days of data`;
             
-            // Calculate summary stats
+            // Use pre-calculated stats from backend (instant display, no waiting)
+            const stats = data.calculated_stats || {};
             const latest = data.data[data.data.length - 1];
-            const latestDate = latest.Date || 'N/A';
-            const latestQuarter = latest.Quarter || 'N/A';
+            const latestDate = stats.latest_date || (latest ? latest.Date : 'N/A');
+            const latestQuarter = stats.latest_quarter || (latest ? latest.Quarter : 'N/A');
             
             // Show latest data date and quarter in header
             document.getElementById('tickerLatestDataHeader').textContent = `Latest: ${latestDate} (${latestQuarter})`;
@@ -12552,35 +12553,15 @@
             // Update Quarter QTD header
             document.getElementById('quarterYTDHeader').textContent = `${latestQuarter} Quarter to Date (QTD) Cumulative`;
             
-            // Calculate cumulative stats for the current quarter
+            // Get current quarter data for charts/tables
             const currentQuarterData = data.data.filter(d => d.Quarter === latestQuarter);
-            const quarterSubs = currentQuarterData.reduce((sum, d) => sum + (d['Total Subs'] || 0), 0);
-            const quarterCancels = currentQuarterData.reduce((sum, d) => sum + (d['Total Cancels'] || 0), 0);
-            const quarterNetGrowth = quarterSubs - quarterCancels;
-            const quarterStartConsumers = currentQuarterData[0] ? currentQuarterData[0]['Total Consumers'] : 1;
-            const netGrowthPct = ((quarterNetGrowth / quarterStartConsumers) * 100).toFixed(2);
             
-            // Calculate projected net growth rate for the full quarter
-            // Average daily net growth = (Total Subs - Total Cancels) / Days so far
-            const daysInQuarter = currentQuarterData.length;
-            const avgDailyNetGrowth = quarterNetGrowth / daysInQuarter;
-            
-            // Determine total days in the quarter (Q1/Q2/Q3 = 90 days, Q4 = 92 days typically)
-            let totalDaysInQuarter = 90;
-            if (latestQuarter.includes('Q4')) {
-                totalDaysInQuarter = 92;
-            }
-            
-            // Projected net growth = average daily net growth * total days in quarter
-            const projectedNetGrowth = avgDailyNetGrowth * totalDaysInQuarter;
-            const projectedNetGrowthPct = ((projectedNetGrowth / quarterStartConsumers) * 100).toFixed(2);
-            
-            // Update stat cards with quarter info
-            document.getElementById('currentConsumers').textContent = (latest['Total Consumers'] || 0).toLocaleString();
-            document.getElementById('totalSubs').textContent = quarterSubs.toLocaleString();
-            document.getElementById('totalCancels').textContent = quarterCancels.toLocaleString();
-            document.getElementById('netGrowth').textContent = `${netGrowthPct}%`;
-            document.getElementById('projectedGrowth').textContent = `${projectedNetGrowthPct}%`;
+            // Update stat cards with pre-calculated values (instant, no calculation delay)
+            document.getElementById('currentConsumers').textContent = (stats.current_consumers || 0).toLocaleString();
+            document.getElementById('totalSubs').textContent = (stats.total_subs || 0).toLocaleString();
+            document.getElementById('totalCancels').textContent = (stats.total_cancels || 0).toLocaleString();
+            document.getElementById('netGrowth').textContent = `${stats.net_growth_pct || 0}%`;
+            document.getElementById('projectedGrowth').textContent = `${stats.projected_growth_pct || 0}%`;
             
             // Update card titles to show they're quarterly cumulative
             const subsCard = document.querySelector('[id="totalSubs"]').closest('.stat-card');

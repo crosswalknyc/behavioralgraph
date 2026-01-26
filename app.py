@@ -4422,6 +4422,46 @@ def get_hedge_fund_ticker_data(s3_key):
         # Convert to records
         data = df.to_dict('records')
         
+        # Pre-calculate all stats for immediate display (no waiting on frontend)
+        calculated_stats = {}
+        if len(data) > 0:
+            latest = data[-1]
+            latest_quarter = latest.get('Quarter', 'N/A')
+            
+            # Filter to current quarter
+            current_quarter_data = [d for d in data if d.get('Quarter') == latest_quarter]
+            
+            if len(current_quarter_data) > 0:
+                # Calculate cumulative stats for current quarter
+                quarter_subs = sum(d.get('Total Subs', 0) for d in current_quarter_data)
+                quarter_cancels = sum(d.get('Total Cancels', 0) for d in current_quarter_data)
+                quarter_net_growth = quarter_subs - quarter_cancels
+                quarter_start_consumers = current_quarter_data[0].get('Total Consumers', 1)
+                net_growth_pct = (quarter_net_growth / quarter_start_consumers * 100) if quarter_start_consumers > 0 else 0
+                
+                # Calculate projected net growth rate
+                days_in_quarter = len(current_quarter_data)
+                avg_daily_net_growth = quarter_net_growth / days_in_quarter if days_in_quarter > 0 else 0
+                
+                # Determine total days in quarter
+                total_days_in_quarter = 92 if 'Q4' in latest_quarter else 90
+                
+                # Projected net growth
+                projected_net_growth = avg_daily_net_growth * total_days_in_quarter
+                projected_net_growth_pct = (projected_net_growth / quarter_start_consumers * 100) if quarter_start_consumers > 0 else 0
+                
+                calculated_stats = {
+                    'current_consumers': latest.get('Total Consumers', 0),
+                    'total_subs': quarter_subs,
+                    'total_cancels': quarter_cancels,
+                    'net_growth_pct': round(net_growth_pct, 2),
+                    'projected_growth_pct': round(projected_net_growth_pct, 2),
+                    'latest_date': latest.get('Date', 'N/A'),
+                    'latest_quarter': latest_quarter,
+                    'days_in_quarter': days_in_quarter,
+                    'total_days_in_quarter': total_days_in_quarter
+                }
+        
         response_data = {
             'success': True,
             'data': data,
@@ -4430,7 +4470,8 @@ def get_hedge_fund_ticker_data(s3_key):
             'kpi': kpi,
             'parent_ticker': parent_ticker,
             's3_key': s3_key,
-            'bucket': HEDGE_FUND_S3_BUCKET
+            'bucket': HEDGE_FUND_S3_BUCKET,
+            'calculated_stats': calculated_stats  # Pre-calculated stats for instant display
         }
         
         return jsonify(response_data)
