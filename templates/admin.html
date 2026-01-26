@@ -1048,10 +1048,13 @@
             <div class="card">
                 <div class="card-header">
                     <h2>📊 SEC Actuals Management</h2>
-                    <button class="btn btn-small btn-success" onclick="showAddSecActualModal()">+ Add SEC Actual</button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-small btn-success" onclick="showAddSecActualModal()">+ Add SEC Actual</button>
+                        <button class="btn btn-small btn-primary" onclick="showUploadSecActualsCSV()">📤 Upload CSV</button>
+                    </div>
                 </div>
                 <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">
-                    Enter SEC-reported actuals for each ticker and quarter to compare against our measured data.
+                    Enter SEC-reported actuals for each ticker and quarter to compare against our measured data. You can add them individually or upload a CSV file.
                 </p>
                 <div id="secActualsList" style="max-height: 600px; overflow-y: auto;">
                     <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading SEC actuals...</div>
@@ -1577,6 +1580,47 @@
             <div style="display: flex; gap: 0.75rem;">
                 <button class="btn btn-secondary" onclick="closeSecActualModal()" style="flex: 1;">Cancel</button>
                 <button class="btn btn-success" onclick="saveSecActual()" style="flex: 1;">💾 Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload SEC Actuals CSV Modal -->
+    <div id="uploadSecActualsCSVModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>📤 Upload SEC Actuals CSV</h2>
+                <button class="modal-close" onclick="closeUploadSecActualsCSV()">&times;</button>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem; padding: 1rem; background: rgba(102, 217, 239, 0.1); border: 1px solid rgba(102, 217, 239, 0.3); border-radius: 8px;">
+                <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">📋 CSV Format Requirements</h4>
+                <p style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--text-secondary);">
+                    Your CSV file should have the following columns:
+                </p>
+                <ul style="margin: 0; padding-left: 1.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                    <li><strong>Ticker</strong>: Ticker symbol (e.g., AAPL, TMUS)</li>
+                    <li><strong>Quarter</strong>: Quarter format (e.g., Q1 2026, Q2 2025)</li>
+                    <li><strong>SEC_Actual</strong>: Net growth value reported by SEC</li>
+                </ul>
+                <p style="margin: 0.5rem 0 0 0; font-size: 0.75rem; color: var(--text-secondary); font-style: italic;">
+                    Example: AAPL,Q1 2026,1500000
+                </p>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Select CSV File</label>
+                <input type="file" id="secActualsCSVFile" accept=".csv" style="width: 100%; padding: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                <small style="color: var(--text-secondary); font-size: 0.7rem;">Upload a CSV file with Ticker, Quarter, and SEC_Actual columns</small>
+            </div>
+            
+            <div id="csvUploadPreview" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-input); border-radius: 8px; max-height: 200px; overflow-y: auto;">
+                <h4 style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: var(--accent-cyan);">Preview:</h4>
+                <div id="csvPreviewContent" style="font-size: 0.8rem; font-family: 'Space Mono', monospace;"></div>
+            </div>
+            
+            <div style="display: flex; gap: 0.75rem;">
+                <button class="btn btn-secondary" onclick="closeUploadSecActualsCSV()" style="flex: 1;">Cancel</button>
+                <button class="btn btn-success" onclick="uploadSecActualsCSV()" style="flex: 1;">📤 Upload & Import</button>
             </div>
         </div>
     </div>
@@ -3946,6 +3990,129 @@
                 }
             } catch (error) {
                 showToast('Network error: ' + error.message, true);
+            }
+        }
+        
+        // ============================================
+        // CSV UPLOAD FOR SEC ACTUALS
+        // ============================================
+        
+        function showUploadSecActualsCSV() {
+            document.getElementById('secActualsCSVFile').value = '';
+            document.getElementById('csvUploadPreview').style.display = 'none';
+            document.getElementById('uploadSecActualsCSVModal').classList.add('show');
+        }
+        
+        function closeUploadSecActualsCSV() {
+            document.getElementById('uploadSecActualsCSVModal').classList.remove('show');
+        }
+        
+        // Preview CSV when file is selected
+        document.addEventListener('DOMContentLoaded', function() {
+            const csvFileInput = document.getElementById('secActualsCSVFile');
+            if (csvFileInput) {
+                csvFileInput.addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = function(event) {
+                            const csvContent = event.target.result;
+                            const lines = csvContent.split('\n').slice(0, 6); // Show first 5 rows + header
+                            const preview = lines.join('\n');
+                            
+                            document.getElementById('csvPreviewContent').textContent = preview;
+                            document.getElementById('csvUploadPreview').style.display = 'block';
+                        };
+                        reader.readAsText(file);
+                    }
+                });
+            }
+        });
+        
+        async function uploadSecActualsCSV() {
+            const fileInput = document.getElementById('secActualsCSVFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showToast('Please select a CSV file', true);
+                return;
+            }
+            
+            try {
+                // Read and parse CSV
+                const reader = new FileReader();
+                reader.onload = async function(event) {
+                    const csvContent = event.target.result;
+                    const lines = csvContent.split('\n').filter(line => line.trim());
+                    
+                    if (lines.length < 2) {
+                        showToast('CSV file is empty or invalid', true);
+                        return;
+                    }
+                    
+                    // Parse header
+                    const header = lines[0].split(',').map(h => h.trim());
+                    const tickerIdx = header.findIndex(h => h.toLowerCase() === 'ticker');
+                    const quarterIdx = header.findIndex(h => h.toLowerCase() === 'quarter');
+                    const actualIdx = header.findIndex(h => h.toLowerCase().includes('sec') || h.toLowerCase().includes('actual'));
+                    
+                    if (tickerIdx === -1 || quarterIdx === -1 || actualIdx === -1) {
+                        showToast('CSV must have Ticker, Quarter, and SEC_Actual columns', true);
+                        return;
+                    }
+                    
+                    // Parse data rows
+                    const actualsToUpload = [];
+                    for (let i = 1; i < lines.length; i++) {
+                        const values = lines[i].split(',').map(v => v.trim());
+                        if (values.length >= 3) {
+                            actualsToUpload.push({
+                                ticker: values[tickerIdx],
+                                quarter: values[quarterIdx],
+                                actual_value: parseFloat(values[actualIdx])
+                            });
+                        }
+                    }
+                    
+                    if (actualsToUpload.length === 0) {
+                        showToast('No valid data found in CSV', true);
+                        return;
+                    }
+                    
+                    // Upload to backend
+                    showToast(`Uploading ${actualsToUpload.length} SEC actuals...`);
+                    
+                    let successCount = 0;
+                    let errorCount = 0;
+                    
+                    for (const actual of actualsToUpload) {
+                        try {
+                            const response = await fetch('/api/hedge-fund-iq/sec-actuals', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(actual)
+                            });
+                            
+                            const data = await response.json();
+                            if (data.success) {
+                                successCount++;
+                            } else {
+                                errorCount++;
+                            }
+                        } catch (error) {
+                            errorCount++;
+                        }
+                    }
+                    
+                    closeUploadSecActualsCSV();
+                    showToast(`✅ Uploaded ${successCount} SEC actuals${errorCount > 0 ? `, ${errorCount} failed` : ''}!`);
+                    loadSecActuals();
+                };
+                
+                reader.readAsText(file);
+                
+            } catch (error) {
+                showToast('Error uploading CSV: ' + error.message, true);
             }
         }
         
