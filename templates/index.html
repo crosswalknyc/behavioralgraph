@@ -10804,6 +10804,7 @@
                                     <div class="dash-meta-box" id="tickerDateRangeHeader"></div>
                                     <div class="dash-meta-box" id="tickerDataPointsHeader"></div>
                                     <div class="dash-meta-box" id="tickerLatestDataHeader"></div>
+                                    <div class="dash-meta-box" id="tickerAccuracyHeader" style="display: none;"></div>
                                 </div>
                             </div>
                         </div>
@@ -12549,6 +12550,23 @@
             
             // Show latest data date and quarter in header
             document.getElementById('tickerLatestDataHeader').textContent = `Latest: ${latestDate} (${latestQuarter})`;
+            
+            // Show accuracy rating if available
+            const accuracyHeader = document.getElementById('tickerAccuracyHeader');
+            if (stats.accuracy_rating && stats.accuracy_score !== null) {
+                // Color code based on rating
+                let color = 'var(--text-secondary)';
+                if (stats.accuracy_score >= 95) color = '#10b981'; // Green - Excellent
+                else if (stats.accuracy_score >= 85) color = '#3b82f6'; // Blue - Very Good
+                else if (stats.accuracy_score >= 75) color = '#f59e0b'; // Orange - Good
+                else if (stats.accuracy_score >= 65) color = '#f97316'; // Dark Orange - Fair
+                else color = '#ef4444'; // Red - Needs Improvement
+                
+                accuracyHeader.innerHTML = `Accuracy: <span style="color: ${color}; font-weight: 600;">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
+                accuracyHeader.style.display = 'block';
+            } else {
+                accuracyHeader.style.display = 'none';
+            }
             
             // Update Quarter QTD header
             document.getElementById('quarterYTDHeader').textContent = `${latestQuarter} Quarter to Date (QTD) Cumulative`;
