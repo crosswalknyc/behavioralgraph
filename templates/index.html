@@ -19284,7 +19284,7 @@
                 const items = aggregatedBehavioral[cat];
                 // Default sort by percentage descending
                 const sortedItems = items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
-                const displayItems = sortedItems.slice(0, 10); // Show first 10 items initially
+                const displayItems = sortedItems; // Show all items
                 const maxPct = Math.max(...sortedItems.map(i => i.pct), 1); // Calculate max from all items
                 const isHighlighted = cat === highlightCategory;
                 const positionBadge = idx === 0 ? '<span style="background: var(--accent-lime); color: #000; padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.55rem;">1ST</span>' : '';
