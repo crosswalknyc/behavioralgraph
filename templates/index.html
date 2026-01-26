@@ -11447,6 +11447,8 @@
             // Update tab active states
             document.getElementById('profileIQTab').classList.add('active');
             document.getElementById('subscriberIQTab').classList.remove('active');
+            const hedgeFundTab = document.getElementById('hedgeFundIQTab');
+            if (hedgeFundTab) hedgeFundTab.classList.remove('active');
             const talentSearchTab = document.getElementById('talentSearchIQTab');
             if (talentSearchTab) talentSearchTab.classList.remove('active');
             const talentTheaterTab = document.getElementById('talentTheaterIQTab');
@@ -11459,6 +11461,8 @@
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'flex';
             document.getElementById('subscriberIQView').style.display = 'none';
+            const hedgeFundView = document.getElementById('hedgeFundIQView');
+            if (hedgeFundView) hedgeFundView.style.display = 'none';
             const talentSearchView = document.getElementById('talentSearchIQView');
             if (talentSearchView) talentSearchView.style.display = 'none';
             const talentTheaterView = document.getElementById('talentTheaterIQView');
@@ -11479,6 +11483,8 @@
             // Update tab active states
             document.getElementById('profileIQTab').classList.remove('active');
             document.getElementById('subscriberIQTab').classList.add('active');
+            const hedgeFundTab = document.getElementById('hedgeFundIQTab');
+            if (hedgeFundTab) hedgeFundTab.classList.remove('active');
             const talentSearchTab = document.getElementById('talentSearchIQTab');
             if (talentSearchTab) talentSearchTab.classList.remove('active');
             const talentTheaterTab = document.getElementById('talentTheaterIQTab');
@@ -11491,6 +11497,8 @@
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'flex';
+            const hedgeFundView = document.getElementById('hedgeFundIQView');
+            if (hedgeFundView) hedgeFundView.style.display = 'none';
             const talentSearchView = document.getElementById('talentSearchIQView');
             if (talentSearchView) talentSearchView.style.display = 'none';
             const talentTheaterView = document.getElementById('talentTheaterIQView');
@@ -11507,6 +11515,41 @@
             if (openSubscriberTabs.length === 0) {
                 restoreSavedSubscriberTabs();
             }
+        }
+        
+        window.showHedgeFundIQ = function() {
+            const hedgeFundTab = document.getElementById('hedgeFundIQTab');
+            if (hedgeFundTab.classList.contains('disabled')) return;
+            
+            // Update tab active states
+            document.getElementById('profileIQTab').classList.remove('active');
+            document.getElementById('subscriberIQTab').classList.remove('active');
+            if (hedgeFundTab) hedgeFundTab.classList.add('active');
+            const talentSearchTab = document.getElementById('talentSearchIQTab');
+            if (talentSearchTab) talentSearchTab.classList.remove('active');
+            const talentTheaterTab = document.getElementById('talentTheaterIQTab');
+            if (talentTheaterTab) talentTheaterTab.classList.remove('active');
+            const formBtn = document.getElementById('formViewBtn');
+            if (formBtn) formBtn.classList.remove('active');
+            const customAnalysisBtn = document.getElementById('customAnalysisBtn');
+            if (customAnalysisBtn) customAnalysisBtn.classList.remove('active');
+            
+            // Show/hide views
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('subscriberIQView').style.display = 'none';
+            const hedgeFundView = document.getElementById('hedgeFundIQView');
+            if (hedgeFundView) hedgeFundView.style.display = 'flex';
+            const talentSearchView = document.getElementById('talentSearchIQView');
+            if (talentSearchView) talentSearchView.style.display = 'none';
+            const talentTheaterView = document.getElementById('talentTheaterIQView');
+            if (talentTheaterView) talentTheaterView.style.display = 'none';
+            const formView = document.getElementById('formView');
+            if (formView) formView.style.display = 'none';
+            const customAnalysisView = document.getElementById('customAnalysisView');
+            if (customAnalysisView) customAnalysisView.style.display = 'none';
+            
+            // Load tickers
+            loadHedgeFundTickers();
         }
         
         window.showTalentSearchIQ = function() {
@@ -12191,6 +12234,354 @@
                 row.style.display = this.checked ? 'block' : 'none';
             }
         });
+        
+        // ============================================================================
+        // HEDGE FUND IQ FUNCTIONS
+        // ============================================================================
+        
+        let hedgeFundTickers = [];
+        let currentTickerData = null;
+        let dailyChurnChart = null;
+        
+        async function loadHedgeFundTickers() {
+            try {
+                const response = await fetch('/api/hedge-fund-iq/list', { credentials: 'same-origin' });
+                if (response.status === 401) { window.location.href = '/login'; return; }
+                const data = await response.json();
+                
+                if (data.success) {
+                    hedgeFundTickers = data.tickers;
+                    renderTickerTree();
+                }
+            } catch (error) {
+                console.error('Error loading tickers:', error);
+            }
+        }
+        
+        function renderTickerTree() {
+            const container = document.getElementById('tickerTree');
+            const searchTerm = (document.getElementById('tickerSearchInput')?.value || '').toLowerCase();
+            
+            let filteredTickers = hedgeFundTickers;
+            if (searchTerm) {
+                filteredTickers = hedgeFundTickers.filter(t => 
+                    t.display_name.toLowerCase().includes(searchTerm) ||
+                    t.ticker.toLowerCase().includes(searchTerm) ||
+                    t.kpi.toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            if (filteredTickers.length === 0) {
+                container.innerHTML = '<div class="sidebar-item">No tickers found</div>';
+                return;
+            }
+            
+            // Group by parent ticker or show all
+            const grouped = {};
+            filteredTickers.forEach(ticker => {
+                const parent = ticker.parent_ticker || ticker.ticker;
+                if (!grouped[parent]) grouped[parent] = [];
+                grouped[parent].push(ticker);
+            });
+            
+            let html = '';
+            Object.keys(grouped).sort().forEach(parent => {
+                const tickers = grouped[parent];
+                if (tickers.length === 1) {
+                    const t = tickers[0];
+                    html += `
+                        <div class="sidebar-item" onclick="selectTicker('${t.s3_key}')">
+                            <span class="sidebar-item-name">${t.display_name}</span>
+                            <span class="sidebar-item-meta" style="font-size: 0.7rem; color: var(--text-secondary);">${t.kpi}</span>
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div class="sidebar-category" onclick="toggleTickerCategory(this)">
+                            <span>${parent}</span>
+                            <span class="sidebar-category-arrow">▼</span>
+                        </div>
+                        <div class="sidebar-category-items">
+                            ${tickers.map(t => `
+                                <div class="sidebar-item" onclick="selectTicker('${t.s3_key}')">
+                                    <span class="sidebar-item-name">${t.display_name}</span>
+                                    <span class="sidebar-item-meta" style="font-size: 0.7rem; color: var(--text-secondary);">${t.kpi}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function filterTickers() {
+            renderTickerTree();
+        }
+        
+        function toggleTickerCategory(el) {
+            el.classList.toggle('open');
+            el.nextElementSibling.classList.toggle('open');
+        }
+        
+        async function selectTicker(s3Key) {
+            try {
+                const response = await fetch(`/api/hedge-fund-iq/data/${encodeURIComponent(s3Key)}`, { credentials: 'same-origin' });
+                if (response.status === 401) { window.location.href = '/login'; return; }
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentTickerData = data;
+                    renderTickerDashboard(data);
+                }
+            } catch (error) {
+                console.error('Error loading ticker data:', error);
+            }
+        }
+        
+        function renderTickerDashboard(data) {
+            // Show dashboard, hide empty state
+            document.getElementById('tickerEmptyState').style.display = 'none';
+            document.getElementById('tickerDashboard').style.display = 'block';
+            
+            // Update header
+            document.getElementById('tickerNameHeader').textContent = data.display_name;
+            document.getElementById('tickerKPIHeader').textContent = `KPI: ${data.kpi}`;
+            
+            const dates = data.data.map(d => d.Date);
+            document.getElementById('tickerDateRangeHeader').textContent = `${dates[0]} - ${dates[dates.length - 1]}`;
+            document.getElementById('tickerDataPointsHeader').textContent = `${data.data.length} days`;
+            
+            // Calculate summary stats
+            const latest = data.data[data.data.length - 1];
+            const totalSubs = data.data.reduce((sum, d) => sum + (d['Total Subs'] || 0), 0);
+            const totalCancels = data.data.reduce((sum, d) => sum + (d['Total Cancels'] || 0), 0);
+            const netGrowthPct = ((totalSubs - totalCancels) / data.data[0]['Total Consumers'] * 100).toFixed(2);
+            
+            document.getElementById('currentConsumers').textContent = (latest['Total Consumers'] || 0).toLocaleString();
+            document.getElementById('totalSubs').textContent = totalSubs.toLocaleString();
+            document.getElementById('totalCancels').textContent = totalCancels.toLocaleString();
+            document.getElementById('netGrowth').textContent = `${netGrowthPct}%`;
+            
+            // Render daily chart
+            renderDailyChurnChart(data.data);
+            
+            // Render quarterly table
+            renderQuarterlyTable(data.data);
+            
+            // Render daily table
+            renderDailyTable(data.data);
+            
+            // Generate AI prediction
+            generateEarningsPrediction(data);
+        }
+        
+        function renderDailyChurnChart(dailyData) {
+            const canvas = document.getElementById('dailyChurnChart');
+            const ctx = canvas.getContext('2d');
+            
+            // Destroy existing chart
+            if (dailyChurnChart) {
+                dailyChurnChart.destroy();
+            }
+            
+            const dates = dailyData.map(d => d.Date);
+            const netGrowth = dailyData.map(d => (d.Calculated_Net_Growth || 0) * 100); // Convert to percentage
+            
+            dailyChurnChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Net Growth %',
+                        data: netGrowth,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: { color: '#e6f1ff' }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { 
+                                color: '#e6f1ff',
+                                maxRotation: 45,
+                                minRotation: 45
+                            },
+                            grid: { color: 'rgba(230, 241, 255, 0.1)' }
+                        },
+                        y: {
+                            ticks: { 
+                                color: '#e6f1ff',
+                                callback: function(value) {
+                                    return value.toFixed(2) + '%';
+                                }
+                            },
+                            grid: { color: 'rgba(230, 241, 255, 0.1)' }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderQuarterlyTable(dailyData) {
+            const quarters = {};
+            dailyData.forEach(d => {
+                const q = d.Quarter;
+                if (!quarters[q]) {
+                    quarters[q] = {
+                        subs: 0,
+                        cancels: 0,
+                        startConsumers: d['Total Consumers'],
+                        endConsumers: d['Total Consumers']
+                    };
+                }
+                quarters[q].subs += d['Total Subs'] || 0;
+                quarters[q].cancels += d['Total Cancels'] || 0;
+                quarters[q].endConsumers = d['Total Consumers'];
+            });
+            
+            let html = '<table class="data-table" style="width: 100%; border-collapse: collapse;"><thead><tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);"><th style="padding: 0.75rem; text-align: left;">Quarter</th><th style="padding: 0.75rem; text-align: right;">Total Subs</th><th style="padding: 0.75rem; text-align: right;">Total Cancels</th><th style="padding: 0.75rem; text-align: right;">Net Growth</th><th style="padding: 0.75rem; text-align: right;">Growth %</th></tr></thead><tbody>';
+            
+            Object.keys(quarters).sort().forEach(q => {
+                const data = quarters[q];
+                const netGrowth = data.subs - data.cancels;
+                const growthPct = ((netGrowth / data.startConsumers) * 100).toFixed(2);
+                html += `<tr style="border-bottom: 1px solid var(--border-color);"><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${netGrowth >= 0 ? '#10b981' : '#ef4444'};">${netGrowth.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${growthPct >= 0 ? '#10b981' : '#ef4444'};">${growthPct}%</td></tr>`;
+            });
+            
+            html += '</tbody></table>';
+            document.getElementById('quarterlyTable').innerHTML = html;
+        }
+        
+        function renderDailyTable(dailyData) {
+            const tbody = document.getElementById('dailyDataTableBody');
+            let html = '';
+            
+            dailyData.slice().reverse().forEach(d => {
+                const netGrowthPct = ((d.Calculated_Net_Growth || 0) * 100).toFixed(4);
+                const color = netGrowthPct >= 0 ? '#10b981' : '#ef4444';
+                html += `<tr style="border-bottom: 1px solid var(--border-color);"><td style="padding: 0.75rem;">${d.Date}</td><td style="padding: 0.75rem; text-align: right;">${d.Quarter}</td><td style="padding: 0.75rem; text-align: right;">${(d['Total Consumers'] || 0).toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${(d['Total Subs'] || 0).toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${(d['Total Cancels'] || 0).toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${color};">${netGrowthPct}%</td></tr>`;
+            });
+            
+            tbody.innerHTML = html;
+        }
+        
+        async function generateEarningsPrediction(data) {
+            const predictionDiv = document.getElementById('earningsPrediction');
+            predictionDiv.innerHTML = '<div style="text-align: center; color: var(--text-secondary);">Generating AI prediction...</div>';
+            
+            try {
+                // Prepare data summary for AI
+                const latest = data.data[data.data.length - 1];
+                const quarterData = {};
+                data.data.forEach(d => {
+                    const q = d.Quarter;
+                    if (!quarterData[q]) quarterData[q] = { subs: 0, cancels: 0, days: 0 };
+                    quarterData[q].subs += d['Total Subs'] || 0;
+                    quarterData[q].cancels += d['Total Cancels'] || 0;
+                    quarterData[q].days++;
+                });
+                
+                const currentQuarter = latest.Quarter;
+                const qData = quarterData[currentQuarter];
+                const avgDailyNetGrowth = ((qData.subs - qData.cancels) / qData.days).toFixed(2);
+                
+                // Call backend AI endpoint (to be implemented)
+                const response = await fetch('/api/hedge-fund-iq/predict-earnings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        ticker: data.ticker,
+                        display_name: data.display_name,
+                        kpi: data.kpi,
+                        current_consumers: latest['Total Consumers'],
+                        quarter: currentQuarter,
+                        avg_daily_net_growth: avgDailyNetGrowth,
+                        total_subs: qData.subs,
+                        total_cancels: qData.cancels,
+                        days_in_quarter: qData.days
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success) {
+                        predictionDiv.innerHTML = `
+                            <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                                <div style="font-size: 3rem;">${result.prediction === 'BEAT' ? '📈' : '📉'}</div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 1.5rem; font-weight: 600; color: ${result.prediction === 'BEAT' ? '#10b981' : '#ef4444'};">${result.prediction} EARNINGS</div>
+                                    <div style="color: var(--text-secondary); margin-top: 0.25rem;">Confidence: ${result.confidence}%</div>
+                                </div>
+                            </div>
+                            <div style="padding: 1rem; background: var(--bg-input); border-radius: 8px; border-left: 4px solid ${result.prediction === 'BEAT' ? '#10b981' : '#ef4444'};">
+                                <div style="font-weight: 600; margin-bottom: 0.5rem;">Analysis:</div>
+                                <div style="color: var(--text-secondary); line-height: 1.6;">${result.analysis}</div>
+                            </div>
+                        `;
+                    } else {
+                        throw new Error(result.error || 'Prediction failed');
+                    }
+                } else {
+                    throw new Error('API request failed');
+                }
+            } catch (error) {
+                console.error('Error generating prediction:', error);
+                predictionDiv.innerHTML = `<div style="text-align: center; color: #ef4444;">Unable to generate prediction. ${error.message}</div>`;
+            }
+        }
+        
+        function exportTickerCSV() {
+            if (!currentTickerData) return;
+            
+            const data = currentTickerData.data;
+            const csv = [
+                ['Date', 'Quarter', 'Total Consumers', 'Total Subs', 'Total Cancels', 'Net Growth %'].join(','),
+                ...data.map(d => [
+                    d.Date,
+                    d.Quarter,
+                    d['Total Consumers'],
+                    d['Total Subs'],
+                    d['Total Cancels'],
+                    ((d.Calculated_Net_Growth || 0) * 100).toFixed(4)
+                ].join(','))
+            ].join('\n');
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentTickerData.display_name}_${currentTickerData.kpi}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+        
+        function refreshTickerData() {
+            if (currentTickerData) {
+                selectTicker(currentTickerData.s3_key);
+            }
+        }
+        
+        // ============================================================================
+        // END HEDGE FUND IQ FUNCTIONS
+        // ============================================================================
         
         // Talent Search Form Handler (for standalone Talent Search IQ view)
         document.getElementById('talentSearchForm')?.addEventListener('submit', async function(e) {

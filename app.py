@@ -4417,6 +4417,86 @@ def save_ticker_metadata(metadata):
         print(f"❌ Error saving ticker metadata: {e}")
 
 
+@app.route('/api/hedge-fund-iq/predict-earnings', methods=['POST'])
+@requires_auth
+def predict_earnings():
+    """Use AI to predict earnings beat/miss based on KPI data."""
+    client = get_openai_client()
+    if not client:
+        return jsonify({'success': False, 'error': 'OpenAI not configured'}), 500
+    
+    try:
+        data = request.get_json()
+        ticker = data.get('ticker')
+        display_name = data.get('display_name')
+        kpi = data.get('kpi')
+        current_consumers = data.get('current_consumers')
+        quarter = data.get('quarter')
+        avg_daily_net_growth = data.get('avg_daily_net_growth')
+        total_subs = data.get('total_subs')
+        total_cancels = data.get('total_cancels')
+        days_in_quarter = data.get('days_in_quarter')
+        
+        # Create prompt for AI
+        prompt = f"""You are a financial analyst specializing in earnings predictions based on operational KPIs.
+
+Analyze the following data for {display_name} ({ticker}):
+
+KPI Being Measured: {kpi}
+Current Quarter: {quarter}
+Days of Data Available: {days_in_quarter}
+Current Total Consumers: {current_consumers:,}
+Total Subscriptions (Quarter): {total_subs:,}
+Total Cancellations (Quarter): {total_cancels:,}
+Average Daily Net Growth: {avg_daily_net_growth}
+
+Based on this KPI data, predict whether this company will BEAT or MISS their publicly stated earnings expectations for {quarter}.
+
+Consider:
+1. The trend in net growth (positive or negative)
+2. The magnitude of subscriber additions vs. cancellations
+3. Historical correlation between this KPI and earnings performance
+4. Industry benchmarks for similar metrics
+
+Provide your prediction in the following JSON format:
+{{
+  "prediction": "BEAT" or "MISS",
+  "confidence": <number 0-100>,
+  "analysis": "<2-3 sentence explanation of your reasoning>"
+}}
+
+Respond ONLY with valid JSON, no additional text."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a financial analyst. Respond only with valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=500
+        )
+        
+        result_text = response.choices[0].message.content.strip()
+        
+        # Parse JSON response
+        import json
+        result = json.loads(result_text)
+        
+        return jsonify({
+            'success': True,
+            'prediction': result.get('prediction', 'UNKNOWN'),
+            'confidence': result.get('confidence', 50),
+            'analysis': result.get('analysis', 'Analysis unavailable')
+        })
+        
+    except Exception as e:
+        print(f"❌ Error in predict_earnings: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/job-data/<job_id>')
 @requires_auth
 def get_job_data(job_id):
