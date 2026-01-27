@@ -7459,7 +7459,7 @@
                 <div class="view-toggle" id="iqTabsContainer">
                     <button class="view-btn active {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" onclick="showProfileIQ()" {% if not has_profile_iq_access %}disabled{% endif %}>🎯 Profile IQ</button>
                     <button class="view-btn {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" onclick="showSubscriberIQ()" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</button>
-                    <button class="view-btn {% if not has_hedge_fund_iq_access %}disabled{% endif %}" id="hedgeFundIQTab" onclick="showHedgeFundIQ()" {% if not has_hedge_fund_iq_access %}disabled{% endif %}>📈 Hedge Fund IQ</button>
+                    <button class="view-btn {% if not has_hedge_fund_iq_access %}disabled{% endif %}" id="hedgeFundIQTab" {% if not has_hedge_fund_iq_access %}disabled{% endif %}>📈 Hedge Fund IQ</button>
                     <button class="view-btn" id="dashboardViewBtn" onclick="showDashboardView()" style="display: none;">📊 Dashboard</button>
                     {% if role == 'admin' or role == 'enterprise' or has_analysis_iq_access %}
                     <button class="view-btn" id="customAnalysisBtn" onclick="showCustomAnalysis()">🔧 Analysis IQ</button>
@@ -11277,6 +11277,16 @@
             
             // Initialize global tooltip system
             initGlobalTooltip();
+            
+            // Attach event listeners to navigation buttons
+            const hedgeFundIQTab = document.getElementById('hedgeFundIQTab');
+            if (hedgeFundIQTab) {
+                hedgeFundIQTab.addEventListener('click', function() {
+                    if (!this.classList.contains('disabled')) {
+                        showHedgeFundIQ();
+                    }
+                });
+            }
         });
         
         // Global tooltip system
