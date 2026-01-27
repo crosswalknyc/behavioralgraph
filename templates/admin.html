@@ -1199,6 +1199,10 @@
                             <input type="checkbox" id="hasAnalysisIQAccess" onchange="toggleAnalysisIQModules()">
                             <span>Analysis IQ</span>
                         </label>
+                        <label class="checkbox-group">
+                            <input type="checkbox" id="hasHedgeFundIQAccess" onchange="toggleHedgeFundIQModules()">
+                            <span>Hedge Fund IQ</span>
+                        </label>
                     </div>
                     <small style="color: var(--text-secondary); font-size: 0.7rem; display: block; margin-top: 0.5rem;">Select which dashboards this user can access</small>
                     
@@ -1236,6 +1240,54 @@
                             </label>
                         </div>
                         <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">Credits can be used on any selected module</small>
+                    </div>
+                    
+                    <!-- Hedge Fund IQ Access -->
+                    <div id="hedgeFundIQModulesSection" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-dark); border-radius: 8px; border: 1px solid var(--border-color);">
+                        <h5 style="margin: 0 0 0.75rem 0; font-size: 0.85rem; color: var(--accent-cyan);">📈 Hedge Fund IQ Access</h5>
+                        
+                        <!-- Tabs Access -->
+                        <div style="margin-bottom: 1rem;">
+                            <h6 style="margin: 0 0 0.5rem 0; font-size: 0.8rem; color: var(--text-secondary);">Dashboard Tabs:</h6>
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                                <label class="checkbox-group">
+                                    <input type="checkbox" id="hedgeFundTabLiveData" class="hedgefund-tab-checkbox">
+                                    <span>📊 Live Data</span>
+                                </label>
+                                <label class="checkbox-group">
+                                    <input type="checkbox" id="hedgeFundTabTrends" class="hedgefund-tab-checkbox">
+                                    <span>📈 Trends</span>
+                                </label>
+                                <label class="checkbox-group">
+                                    <input type="checkbox" id="hedgeFundTabDailyMetrics" class="hedgefund-tab-checkbox">
+                                    <span>📋 Daily Metrics</span>
+                                </label>
+                                <label class="checkbox-group">
+                                    <input type="checkbox" id="hedgeFundTabHistoric" class="hedgefund-tab-checkbox">
+                                    <span>📅 Historic Performance</span>
+                                </label>
+                                <label class="checkbox-group">
+                                    <input type="checkbox" id="hedgeFundTabProfile" class="hedgefund-tab-checkbox">
+                                    <span>👥 Customer Profile</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Tickers Access -->
+                        <div>
+                            <h6 style="margin: 0 0 0.5rem 0; font-size: 0.8rem; color: var(--text-secondary);">Ticker Access:</h6>
+                            <div style="margin-bottom: 0.5rem;">
+                                <label class="checkbox-group">
+                                    <input type="checkbox" id="hedgeFundAllTickers" onchange="toggleAllHedgeFundTickers()">
+                                    <span style="font-weight: 600;">All Tickers</span>
+                                </label>
+                            </div>
+                            <div id="hedgeFundTickersList" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; max-height: 200px; overflow-y: auto; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 4px;">
+                                <div style="grid-column: span 3; text-align: center; color: var(--text-secondary); font-size: 0.75rem; padding: 1rem;">Loading tickers...</div>
+                            </div>
+                        </div>
+                        
+                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">Select which tabs and tickers this user can access</small>
                     </div>
                 </div>
 
@@ -2252,6 +2304,10 @@
             document.getElementById('hasAnalysisIQAccess').checked = false;
             document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
             document.getElementById('analysisIQModulesSection').style.display = 'none';
+            document.getElementById('hasHedgeFundIQAccess').checked = false;
+            document.querySelectorAll('.hedgefund-tab-checkbox').forEach(cb => cb.checked = false);
+            document.querySelectorAll('.hedgefund-ticker-checkbox').forEach(cb => cb.checked = false);
+            document.getElementById('hedgeFundIQModulesSection').style.display = 'none';
             document.getElementById('originalUsername').value = '';
             
             populateCategoryCheckboxes();
@@ -2287,10 +2343,15 @@
             document.getElementById('hasProfileIQAccess').checked = user.has_profile_iq_access !== false; // Default true
             document.getElementById('hasSubscriberIQAccess').checked = user.has_subscriber_iq_access === true; // Default false
             document.getElementById('hasAnalysisIQAccess').checked = user.has_analysis_iq_access === true; // Default false
+            document.getElementById('hasHedgeFundIQAccess').checked = user.has_hedge_fund_iq_access === true; // Default false
             
             // Set Analysis IQ modules and show/hide section
             setAnalysisIQModules(user.analysis_iq_modules || []);
             toggleAnalysisIQModules();
+            
+            // Set Hedge Fund IQ tabs and tickers
+            setHedgeFundIQAccess(user.hedge_fund_iq_tabs || [], user.hedge_fund_iq_tickers || []);
+            toggleHedgeFundIQModules();
             
             document.getElementById('originalUsername').value = username;
             document.getElementById('newUsername').disabled = false; // Allow editing username
@@ -2552,6 +2613,60 @@
                 document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
             }
         }
+        
+        function toggleHedgeFundIQModules() {
+            const checkbox = document.getElementById('hasHedgeFundIQAccess');
+            const modulesSection = document.getElementById('hedgeFundIQModulesSection');
+            if (checkbox.checked) {
+                modulesSection.style.display = 'block';
+                // Load tickers list if not already loaded
+                loadHedgeFundTickersForAccess();
+            } else {
+                modulesSection.style.display = 'none';
+                // Uncheck all tab and ticker checkboxes
+                document.querySelectorAll('.hedgefund-tab-checkbox').forEach(cb => cb.checked = false);
+                document.querySelectorAll('.hedgefund-ticker-checkbox').forEach(cb => cb.checked = false);
+                document.getElementById('hedgeFundAllTickers').checked = false;
+            }
+        }
+        
+        async function loadHedgeFundTickersForAccess() {
+            const tickersList = document.getElementById('hedgeFundTickersList');
+            
+            try {
+                const response = await fetch('/api/hedge-fund-iq/tickers', { credentials: 'same-origin' });
+                const data = await response.json();
+                
+                if (data.success && data.tickers) {
+                    const tickers = data.tickers;
+                    
+                    if (tickers.length === 0) {
+                        tickersList.innerHTML = '<div style="grid-column: span 3; text-align: center; color: var(--text-secondary); font-size: 0.75rem; padding: 1rem;">No tickers found</div>';
+                    } else {
+                        tickersList.innerHTML = tickers.map(t => `
+                            <label class="checkbox-group" style="font-size: 0.75rem;">
+                                <input type="checkbox" class="hedgefund-ticker-checkbox" data-ticker="${t.ticker}">
+                                <span>${t.display_name || t.ticker}</span>
+                            </label>
+                        `).join('');
+                    }
+                } else {
+                    tickersList.innerHTML = '<div style="grid-column: span 3; text-align: center; color: var(--accent-red); font-size: 0.75rem; padding: 1rem;">Error loading tickers</div>';
+                }
+            } catch (error) {
+                console.error('Error loading hedge fund tickers:', error);
+                tickersList.innerHTML = '<div style="grid-column: span 3; text-align: center; color: var(--accent-red); font-size: 0.75rem; padding: 1rem;">Error loading tickers</div>';
+            }
+        }
+        
+        function toggleAllHedgeFundTickers() {
+            const allTickersCheckbox = document.getElementById('hedgeFundAllTickers');
+            const tickerCheckboxes = document.querySelectorAll('.hedgefund-ticker-checkbox');
+            
+            tickerCheckboxes.forEach(cb => {
+                cb.checked = allTickersCheckbox.checked;
+            });
+        }
 
         function getAnalysisIQModules() {
             const modules = [];
@@ -2563,6 +2678,34 @@
             if (document.getElementById('moduleCrossShow').checked) modules.push('cross_show');
             if (document.getElementById('moduleWatchTime').checked) modules.push('watch_time');
             return modules;
+        }
+        
+        function getHedgeFundIQTabs() {
+            // If "All Tickers" is checked, return ['*']
+            if (document.getElementById('hedgeFundAllTickers')?.checked) {
+                return ['*'];
+            }
+            
+            const tabs = [];
+            if (document.getElementById('hedgeFundTabLiveData')?.checked) tabs.push('livedata');
+            if (document.getElementById('hedgeFundTabTrends')?.checked) tabs.push('trends');
+            if (document.getElementById('hedgeFundTabDailyMetrics')?.checked) tabs.push('daily');
+            if (document.getElementById('hedgeFundTabHistoric')?.checked) tabs.push('historic');
+            if (document.getElementById('hedgeFundTabProfile')?.checked) tabs.push('profile');
+            return tabs;
+        }
+        
+        function getHedgeFundIQTickers() {
+            // If "All Tickers" is checked, return ['*']
+            if (document.getElementById('hedgeFundAllTickers')?.checked) {
+                return ['*'];
+            }
+            
+            const tickers = [];
+            document.querySelectorAll('.hedgefund-ticker-checkbox:checked').forEach(cb => {
+                tickers.push(cb.dataset.ticker);
+            });
+            return tickers;
         }
 
         function setAnalysisIQModules(modules) {
@@ -2582,6 +2725,39 @@
                     case 'watch_time': document.getElementById('moduleWatchTime').checked = true; break;
                 }
             });
+        }
+        
+        function setHedgeFundIQAccess(tabs, tickers) {
+            // Reset all checkboxes first
+            document.querySelectorAll('.hedgefund-tab-checkbox').forEach(cb => cb.checked = false);
+            document.querySelectorAll('.hedgefund-ticker-checkbox').forEach(cb => cb.checked = false);
+            document.getElementById('hedgeFundAllTickers').checked = false;
+            
+            // Check if user has access to all tickers
+            if (tickers && tickers.includes('*')) {
+                document.getElementById('hedgeFundAllTickers').checked = true;
+                // Check all ticker checkboxes
+                document.querySelectorAll('.hedgefund-ticker-checkbox').forEach(cb => cb.checked = true);
+            } else if (tickers && tickers.length > 0) {
+                // Check specific tickers
+                tickers.forEach(ticker => {
+                    const checkbox = document.querySelector(`.hedgefund-ticker-checkbox[data-ticker="${ticker}"]`);
+                    if (checkbox) checkbox.checked = true;
+                });
+            }
+            
+            // Set tabs
+            if (tabs && tabs.length > 0) {
+                tabs.forEach(tab => {
+                    switch(tab) {
+                        case 'livedata': document.getElementById('hedgeFundTabLiveData').checked = true; break;
+                        case 'trends': document.getElementById('hedgeFundTabTrends').checked = true; break;
+                        case 'daily': document.getElementById('hedgeFundTabDailyMetrics').checked = true; break;
+                        case 'historic': document.getElementById('hedgeFundTabHistoric').checked = true; break;
+                        case 'profile': document.getElementById('hedgeFundTabProfile').checked = true; break;
+                    }
+                });
+            }
         }
 
         function toggleAccessExpires() {
@@ -2767,6 +2943,9 @@
                 has_subscriber_iq_access: document.getElementById('hasSubscriberIQAccess').checked,
                 has_analysis_iq_access: document.getElementById('hasAnalysisIQAccess').checked,
                 analysis_iq_modules: getAnalysisIQModules(),
+                has_hedge_fund_iq_access: document.getElementById('hasHedgeFundIQAccess').checked,
+                hedge_fund_iq_tabs: getHedgeFundIQTabs(),
+                hedge_fund_iq_tickers: getHedgeFundIQTickers(),
                 send_welcome_email: document.getElementById('sendWelcomeEmail').checked
             };
             
