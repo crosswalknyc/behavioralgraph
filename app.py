@@ -4584,49 +4584,49 @@ def get_hedge_fund_ticker_data(s3_key):
                     # Load SEC actuals from S3
                     all_sec_actuals = load_json_from_s3(SEC_ACTUALS_FILE)
                     ticker_actuals = all_sec_actuals.get(ticker_symbol, {})
+                    
+                    if ticker_actuals:
+                        # Calculate quarterly net growth for all quarters
+                        quarters = {}
+                        for d in data:
+                            q = d.get('Quarter')
+                            if q and q != 'N/A':
+                                if q not in quarters:
+                                    quarters[q] = {'subs': 0, 'cancels': 0, 'start_consumers': None}
+                                quarters[q]['subs'] += d.get('Total Subs', 0)
+                                quarters[q]['cancels'] += d.get('Total Cancels', 0)
+                                if quarters[q]['start_consumers'] is None:
+                                    quarters[q]['start_consumers'] = d.get('Total Consumers', 0)
+                        
+                        # Calculate MAPE for quarters with SEC actuals
+                        errors = []
+                        for quarter, q_data in quarters.items():
+                            if quarter in ticker_actuals:
+                                our_net_growth = q_data['subs'] - q_data['cancels']
+                                sec_actual = ticker_actuals[quarter]
+                                
+                                if sec_actual != 0:
+                                    # MAPE = |Actual - Predicted| / |Actual| * 100
+                                    ape = abs(sec_actual - our_net_growth) / abs(sec_actual) * 100
+                                    errors.append(ape)
+                        
+                        if errors:
+                            # Calculate mean absolute percentage error
+                            mape = sum(errors) / len(errors)
+                            # Convert MAPE to accuracy score (100% - MAPE)
+                            accuracy_score = max(0, 100 - mape)
                             
-                            if ticker_actuals:
-                                # Calculate quarterly net growth for all quarters
-                                quarters = {}
-                                for d in data:
-                                    q = d.get('Quarter')
-                                    if q and q != 'N/A':
-                                        if q not in quarters:
-                                            quarters[q] = {'subs': 0, 'cancels': 0, 'start_consumers': None}
-                                        quarters[q]['subs'] += d.get('Total Subs', 0)
-                                        quarters[q]['cancels'] += d.get('Total Cancels', 0)
-                                        if quarters[q]['start_consumers'] is None:
-                                            quarters[q]['start_consumers'] = d.get('Total Consumers', 0)
-                                
-                                # Calculate MAPE for quarters with SEC actuals
-                                errors = []
-                                for quarter, q_data in quarters.items():
-                                    if quarter in ticker_actuals:
-                                        our_net_growth = q_data['subs'] - q_data['cancels']
-                                        sec_actual = ticker_actuals[quarter]
-                                        
-                                        if sec_actual != 0:
-                                            # MAPE = |Actual - Predicted| / |Actual| * 100
-                                            ape = abs(sec_actual - our_net_growth) / abs(sec_actual) * 100
-                                            errors.append(ape)
-                                
-                                if errors:
-                                    # Calculate mean absolute percentage error
-                                    mape = sum(errors) / len(errors)
-                                    # Convert MAPE to accuracy score (100% - MAPE)
-                                    accuracy_score = max(0, 100 - mape)
-                                    
-                                    # Determine rating
-                                    if accuracy_score >= 95:
-                                        accuracy_rating = 'Excellent'
-                                    elif accuracy_score >= 85:
-                                        accuracy_rating = 'Very Good'
-                                    elif accuracy_score >= 75:
-                                        accuracy_rating = 'Good'
-                                    elif accuracy_score >= 65:
-                                        accuracy_rating = 'Fair'
-                                    else:
-                                        accuracy_rating = 'Needs Improvement'
+                            # Determine rating
+                            if accuracy_score >= 95:
+                                accuracy_rating = 'Excellent'
+                            elif accuracy_score >= 85:
+                                accuracy_rating = 'Very Good'
+                            elif accuracy_score >= 75:
+                                accuracy_rating = 'Good'
+                            elif accuracy_score >= 65:
+                                accuracy_rating = 'Fair'
+                            else:
+                                accuracy_rating = 'Needs Improvement'
                 except Exception as e:
                     print(f"⚠️ Could not calculate accuracy rating: {e}")
                 
