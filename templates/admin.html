@@ -849,51 +849,111 @@
 
         <!-- PROFILE IMAGES SECTION -->
         <div id="section-images" class="admin-section">
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <h3>Total Profiles</h3>
-                    <div class="stat-value blue" id="imagesTotalProfiles">0</div>
-                </div>
-                <div class="stat-card">
-                    <h3>With Images</h3>
-                    <div class="stat-value green" id="imagesWithCount">0</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Missing Images</h3>
-                    <div class="stat-value red" id="imagesMissingCount">0</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Coverage</h3>
-                    <div class="stat-value purple" id="imagesCoverage">0%</div>
+            <!-- Category Selector -->
+            <div style="margin-bottom: 1.5rem;">
+                <h2 style="margin-bottom: 1rem; color: var(--accent-cyan);">📂 Content by Category</h2>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="showImageCategory('profiles')" id="btnProfileImages">🖼️ Profile Images</button>
+                    <button class="btn btn-secondary" onclick="showImageCategory('tickers')" id="btnTickerImages">📈 Ticker Images</button>
                 </div>
             </div>
             
-            <div class="card">
-                <div class="card-header">
-                    <h2>🖼️ Profiles Missing Images</h2>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-small btn-secondary" onclick="loadProfileImages()">↻ Refresh</button>
+            <!-- Profile Images Content -->
+            <div id="profileImagesContent">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Total Profiles</h3>
+                        <div class="stat-value blue" id="imagesTotalProfiles">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>With Images</h3>
+                        <div class="stat-value green" id="imagesWithCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Missing Images</h3>
+                        <div class="stat-value red" id="imagesMissingCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Coverage</h3>
+                        <div class="stat-value purple" id="imagesCoverage">0%</div>
                     </div>
                 </div>
                 
-                <div class="content-filters">
-                    <input type="text" id="imageSearch" class="content-search" placeholder="🔍 Search profiles..." onkeyup="filterImageProfiles()">
-                    <select id="imageCategoryFilter" class="category-filter" onchange="filterImageProfiles()">
-                        <option value="">All Categories</option>
-                    </select>
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🖼️ Profiles Missing Images</h2>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-small btn-secondary" onclick="loadProfileImages()">↻ Refresh</button>
+                        </div>
+                    </div>
+                    
+                    <div class="content-filters">
+                        <input type="text" id="imageSearch" class="content-search" placeholder="🔍 Search profiles..." onkeyup="filterImageProfiles()">
+                        <select id="imageCategoryFilter" class="category-filter" onchange="filterImageProfiles()">
+                            <option value="">All Categories</option>
+                        </select>
+                    </div>
+                    
+                    <div id="imageProfilesList" class="content-accordion" style="max-height: 500px; overflow-y: auto;">
+                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
+                    </div>
                 </div>
                 
-                <div id="imageProfilesList" class="content-accordion" style="max-height: 500px; overflow-y: auto;">
-                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
+                <div class="card" style="margin-top: 1rem;">
+                    <div class="card-header">
+                        <h2>✅ Profiles With Images</h2>
+                    </div>
+                    <div id="imageProfilesWithList" class="content-accordion" style="max-height: 300px; overflow-y: auto;">
+                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
+                    </div>
                 </div>
             </div>
             
-            <div class="card" style="margin-top: 1rem;">
-                <div class="card-header">
-                    <h2>✅ Profiles With Images</h2>
+            <!-- Ticker Images Content -->
+            <div id="tickerImagesContent" style="display: none;">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Total Tickers</h3>
+                        <div class="stat-value blue" id="tickersTotalCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>With Images</h3>
+                        <div class="stat-value green" id="tickersWithCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Missing Images</h3>
+                        <div class="stat-value red" id="tickersMissingCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Coverage</h3>
+                        <div class="stat-value purple" id="tickersCoverage">0%</div>
+                    </div>
                 </div>
-                <div id="imageProfilesWithList" class="content-accordion" style="max-height: 300px; overflow-y: auto;">
-                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📈 Tickers Missing Images</h2>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-small btn-secondary" onclick="loadTickerImages()">↻ Refresh</button>
+                        </div>
+                    </div>
+                    
+                    <div class="content-filters">
+                        <input type="text" id="tickerSearch" class="content-search" placeholder="🔍 Search tickers..." onkeyup="filterTickerImages()">
+                    </div>
+                    
+                    <div id="tickerImagesList" class="content-accordion" style="max-height: 500px; overflow-y: auto;">
+                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
+                    </div>
+                </div>
+                
+                <div class="card" style="margin-top: 1rem;">
+                    <div class="card-header">
+                        <h2>✅ Tickers With Images</h2>
+                    </div>
+                    <div id="tickerImagesWithList" class="content-accordion" style="max-height: 300px; overflow-y: auto;">
+                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -903,7 +963,7 @@
             <div class="card">
                 <h2>📈 Ticker Management</h2>
                 <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">
-                    Manage all ticker information in one place: images, profile mappings, SEC actuals, display names, KPIs, and stock impact relevance.
+                    Manage all ticker information in one place: images, profile mappings, SEC actuals, display names, and KPIs.
                 </p>
                 
                 <!-- Search and Filter -->
@@ -970,8 +1030,35 @@
 
                         <!-- Right Column -->
                         <div>
-                            <!-- Ticker Information Section -->
+                            <!-- SEC Actuals Section -->
                             <div class="form-section">
+                                <div class="form-section-title">📊 SEC Actuals</div>
+                                <div id="tickerSecActualsList" style="margin-bottom: 0.75rem; max-height: 300px; overflow-y: auto;">
+                                    <div style="text-align: center; padding: 1rem; color: var(--text-secondary); font-size: 0.85rem;">No SEC actuals recorded</div>
+                                </div>
+                                <button class="btn btn-small btn-success" onclick="showAddSecActualForm()">+ Add SEC Actual</button>
+                                
+                                <!-- Add SEC Actual Form (hidden by default) -->
+                                <div id="addSecActualForm" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border-color);">
+                                    <div class="form-group" style="margin-bottom: 0.75rem;">
+                                        <label style="font-size: 0.85rem;">Quarter</label>
+                                        <input type="text" id="secActualQuarter" placeholder="Q1 2026" style="font-size: 0.85rem;">
+                                        <small style="font-size: 0.75rem;">Format: Q# YYYY (e.g., Q1 2026)</small>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0.75rem;">
+                                        <label style="font-size: 0.85rem;">SEC Net Growth Rate %</label>
+                                        <input type="number" id="secActualValue" placeholder="0.00" step="0.01" style="font-size: 0.85rem;">
+                                        <small style="font-size: 0.75rem;">Enter as percentage (e.g., 2.5 for 2.5%)</small>
+                                    </div>
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <button class="btn btn-small btn-success" onclick="saveSecActualFromForm()">💾 Save</button>
+                                        <button class="btn btn-small btn-secondary" onclick="hideAddSecActualForm()">Cancel</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Ticker Information Section -->
+                            <div class="form-section" style="margin-top: 1.5rem;">
                                 <div class="form-section-title">ℹ️ Ticker Information</div>
                                 <div class="form-group" style="margin-bottom: 0.75rem;">
                                     <label style="font-size: 0.85rem;">Ticker Symbol</label>
@@ -995,33 +1082,6 @@
                                     <input type="text" id="tickerS3Key" readonly style="background: var(--bg-dark); cursor: not-allowed; font-size: 0.85rem;">
                                 </div>
                                 <button class="btn btn-small btn-success" onclick="saveTickerMetadataFromModal()">💾 Save Metadata</button>
-                            </div>
-
-                            <!-- SEC Actuals Section -->
-                            <div class="form-section" style="margin-top: 1.5rem;">
-                                <div class="form-section-title">📊 SEC Actuals</div>
-                                <div id="tickerSecActualsList" style="margin-bottom: 0.75rem; max-height: 200px; overflow-y: auto;">
-                                    <div style="text-align: center; padding: 1rem; color: var(--text-secondary); font-size: 0.85rem;">No SEC actuals recorded</div>
-                                </div>
-                                <button class="btn btn-small btn-success" onclick="showAddSecActualForm()">+ Add SEC Actual</button>
-                                
-                                <!-- Add SEC Actual Form (hidden by default) -->
-                                <div id="addSecActualForm" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border-color);">
-                                    <div class="form-group" style="margin-bottom: 0.75rem;">
-                                        <label style="font-size: 0.85rem;">Quarter</label>
-                                        <input type="text" id="secActualQuarter" placeholder="Q1 2026" style="font-size: 0.85rem;">
-                                        <small style="font-size: 0.75rem;">Format: Q# YYYY (e.g., Q1 2026)</small>
-                                    </div>
-                                    <div class="form-group" style="margin-bottom: 0.75rem;">
-                                        <label style="font-size: 0.85rem;">SEC Net Growth Rate %</label>
-                                        <input type="number" id="secActualValue" placeholder="0.00" step="0.01" style="font-size: 0.85rem;">
-                                        <small style="font-size: 0.75rem;">Enter as percentage (e.g., 2.5 for 2.5%)</small>
-                                    </div>
-                                    <div style="display: flex; gap: 0.5rem;">
-                                        <button class="btn btn-small btn-success" onclick="saveSecActualFromForm()">💾 Save</button>
-                                        <button class="btn btn-small btn-secondary" onclick="hideAddSecActualForm()">Cancel</button>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -1110,6 +1170,25 @@
                         ⚠️ Gmail OAuth is not configured. Add <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> 
                         to your environment variables on Render.
                     </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- SEC ACTUALS SECTION -->
+        <div id="section-sec-actuals" class="admin-section">
+            <div class="card">
+                <div class="card-header">
+                    <h2>📊 SEC Actuals Management</h2>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-small btn-success" onclick="showAddSecActualModal()">+ Add SEC Actual</button>
+                        <button class="btn btn-small btn-primary" onclick="showUploadSecActualsCSV()">📤 Upload CSV</button>
+                    </div>
+                </div>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">
+                    Enter SEC-reported actuals for each ticker and quarter to compare against our measured data. You can add them individually or upload a CSV file.
+                </p>
+                <div id="secActualsList" style="max-height: 600px; overflow-y: auto;">
+                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading SEC actuals...</div>
                 </div>
             </div>
         </div>
@@ -1288,12 +1367,12 @@
                             <span>Subscriber IQ</span>
                         </label>
                         <label class="checkbox-group">
-                            <input type="checkbox" id="hasAnalysisIQAccess" onchange="toggleAnalysisIQModules()">
-                            <span>Analysis IQ</span>
+                            <input type="checkbox" id="hasHedgeFundIQAccess">
+                            <span>Hedge Fund IQ</span>
                         </label>
                         <label class="checkbox-group">
-                            <input type="checkbox" id="hasHedgeFundIQAccess" onchange="toggleHedgeFundIQModules()">
-                            <span>Hedge Fund IQ</span>
+                            <input type="checkbox" id="hasAnalysisIQAccess" onchange="toggleAnalysisIQModules()">
+                            <span>Analysis IQ</span>
                         </label>
                     </div>
                     <small style="color: var(--text-secondary); font-size: 0.7rem; display: block; margin-top: 0.5rem;">Select which dashboards this user can access</small>
@@ -1332,54 +1411,6 @@
                             </label>
                         </div>
                         <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">Credits can be used on any selected module</small>
-                    </div>
-                    
-                    <!-- Hedge Fund IQ Access -->
-                    <div id="hedgeFundIQModulesSection" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-dark); border-radius: 8px; border: 1px solid var(--border-color);">
-                        <h5 style="margin: 0 0 0.75rem 0; font-size: 0.85rem; color: var(--accent-cyan);">📈 Hedge Fund IQ Access</h5>
-                        
-                        <!-- Tabs Access -->
-                        <div style="margin-bottom: 1rem;">
-                            <h6 style="margin: 0 0 0.5rem 0; font-size: 0.8rem; color: var(--text-secondary);">Dashboard Tabs:</h6>
-                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
-                                <label class="checkbox-group">
-                                    <input type="checkbox" id="hedgeFundTabLiveData" class="hedgefund-tab-checkbox">
-                                    <span>📊 Live Data</span>
-                                </label>
-                                <label class="checkbox-group">
-                                    <input type="checkbox" id="hedgeFundTabTrends" class="hedgefund-tab-checkbox">
-                                    <span>📈 Trends</span>
-                                </label>
-                                <label class="checkbox-group">
-                                    <input type="checkbox" id="hedgeFundTabDailyMetrics" class="hedgefund-tab-checkbox">
-                                    <span>📋 Daily Metrics</span>
-                                </label>
-                                <label class="checkbox-group">
-                                    <input type="checkbox" id="hedgeFundTabHistoric" class="hedgefund-tab-checkbox">
-                                    <span>📅 Historic Performance</span>
-                                </label>
-                                <label class="checkbox-group">
-                                    <input type="checkbox" id="hedgeFundTabProfile" class="hedgefund-tab-checkbox">
-                                    <span>👥 Customer Profile</span>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <!-- Tickers Access -->
-                        <div>
-                            <h6 style="margin: 0 0 0.5rem 0; font-size: 0.8rem; color: var(--text-secondary);">Ticker Access:</h6>
-                            <div style="margin-bottom: 0.5rem;">
-                                <label class="checkbox-group">
-                                    <input type="checkbox" id="hedgeFundAllTickers" onchange="toggleAllHedgeFundTickers()">
-                                    <span style="font-weight: 600;">All Tickers</span>
-                                </label>
-                            </div>
-                            <div id="hedgeFundTickersList" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; max-height: 200px; overflow-y: auto; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 4px;">
-                                <div style="grid-column: span 3; text-align: center; color: var(--text-secondary); font-size: 0.75rem; padding: 1rem;">Loading tickers...</div>
-                            </div>
-                        </div>
-                        
-                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">Select which tabs and tickers this user can access</small>
                     </div>
                 </div>
 
@@ -1465,7 +1496,7 @@
     <div class="modal" id="renameModal">
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
-                <h2>✏️ Rename File</h2>
+                <h2>✏️ Rename File & Display Name</h2>
                 <button class="modal-close" onclick="closeRenameModal()">&times;</button>
             </div>
             <input type="hidden" id="renameFileKey">
@@ -1475,10 +1506,16 @@
                 <div id="currentFileName" style="padding: 0.5rem; background: var(--bg-input); border-radius: 6px; font-size: 0.8rem; color: var(--text-secondary); word-break: break-all;"></div>
             </div>
             
-            <div style="margin-bottom: 1.5rem;">
+            <div style="margin-bottom: 1rem;">
                 <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">New File Name</label>
                 <input type="text" id="newFileName" placeholder="Enter new file name" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
                 <small style="color: var(--text-secondary); font-size: 0.7rem;">The file extension (.csv) will be preserved automatically.</small>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Display Name (shown in dashboard)</label>
+                <input type="text" id="displayName" placeholder="Enter display name (e.g., Cleveland Browns)" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                <small style="color: var(--text-secondary); font-size: 0.7rem;">This is the name that will appear in the PROJECT column and on the frontend dashboard.</small>
             </div>
             
             <div style="display: flex; gap: 0.75rem;">
@@ -1598,6 +1635,127 @@
         </div>
     </div>
 
+    <!-- Ticker Image Modal -->
+    <div id="tickerImageModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>📸 Upload Ticker Image</h2>
+                <button class="modal-close" onclick="closeTickerImageModal()">&times;</button>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Ticker</label>
+                <div id="tickerImageTickerName" style="padding: 0.75rem; background: var(--bg-input); border-radius: 6px; font-size: 1rem; color: var(--accent-cyan); font-weight: 600;"></div>
+                <input type="hidden" id="tickerImageTicker">
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Upload Method</label>
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                    <button class="btn btn-secondary" onclick="selectUploadMethod('file')" id="uploadMethodFile" style="flex: 1;">📁 Upload File</button>
+                    <button class="btn btn-secondary" onclick="selectUploadMethod('url')" id="uploadMethodUrl" style="flex: 1;">🔗 Image URL</button>
+                </div>
+                
+                <div id="uploadFileSection" style="display: none;">
+                    <input type="file" id="tickerImageFile" accept="image/*" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                    <small style="color: var(--text-secondary); font-size: 0.7rem;">Supported: PNG, JPG, GIF, WebP, SVG</small>
+                </div>
+                
+                <div id="uploadUrlSection" style="display: none;">
+                    <input type="text" id="tickerImageUrl" placeholder="https://example.com/logo.png" style="width: 100%; padding: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                    <small style="color: var(--text-secondary); font-size: 0.7rem;">Enter a direct URL to an image</small>
+                </div>
+            </div>
+            
+            <div id="tickerImagePreview" style="display: none; margin-bottom: 1rem; text-align: center;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Preview</label>
+                <div style="padding: 1rem; background: var(--bg-input); border-radius: 8px;">
+                    <img id="tickerImagePreviewImg" src="" alt="Preview" style="max-width: 200px; max-height: 200px; border-radius: 8px;">
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 0.75rem;">
+                <button class="btn btn-secondary" onclick="closeTickerImageModal()" style="flex: 1;">Cancel</button>
+                <button class="btn btn-success" onclick="saveTickerImage()" style="flex: 1;">💾 Save Image</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEC Actuals Modal -->
+    <div id="secActualModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>📊 Add/Edit SEC Actual</h2>
+                <button class="modal-close" onclick="closeSecActualModal()">&times;</button>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Ticker</label>
+                <select id="secActualTicker" style="width: 100%; padding: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                    <option value="">Select a ticker...</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Quarter</label>
+                <input type="text" id="secActualQuarter" placeholder="e.g., Q1 2026" style="width: 100%; padding: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                <small style="color: var(--text-secondary); font-size: 0.7rem;">Format: Q1 2026, Q2 2025, etc.</small>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">SEC Actual Value</label>
+                <input type="number" id="secActualValue" placeholder="e.g., 1500000" step="any" style="width: 100%; padding: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                <small style="color: var(--text-secondary); font-size: 0.7rem;">Enter the SEC-reported net growth value for this quarter. Leave blank to remove.</small>
+            </div>
+            
+            <div style="display: flex; gap: 0.75rem;">
+                <button class="btn btn-secondary" onclick="closeSecActualModal()" style="flex: 1;">Cancel</button>
+                <button class="btn btn-success" onclick="saveSecActual()" style="flex: 1;">💾 Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload SEC Actuals CSV Modal -->
+    <div id="uploadSecActualsCSVModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>📤 Upload SEC Actuals CSV</h2>
+                <button class="modal-close" onclick="closeUploadSecActualsCSV()">&times;</button>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem; padding: 1rem; background: rgba(102, 217, 239, 0.1); border: 1px solid rgba(102, 217, 239, 0.3); border-radius: 8px;">
+                <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">📋 CSV Format Requirements</h4>
+                <p style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--text-secondary);">
+                    Your CSV file should have the following columns:
+                </p>
+                <ul style="margin: 0; padding-left: 1.5rem; font-size: 0.85rem; color: var(--text-secondary);">
+                    <li><strong>Ticker</strong>: Ticker symbol (e.g., AAPL, TMUS)</li>
+                    <li><strong>Quarter</strong>: Quarter format (e.g., Q1 2026, Q2 2025)</li>
+                    <li><strong>SEC_Actual</strong>: Net growth value reported by SEC</li>
+                </ul>
+                <p style="margin: 0.5rem 0 0 0; font-size: 0.75rem; color: var(--text-secondary); font-style: italic;">
+                    Example: AAPL,Q1 2026,1500000
+                </p>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Select CSV File</label>
+                <input type="file" id="secActualsCSVFile" accept=".csv" style="width: 100%; padding: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                <small style="color: var(--text-secondary); font-size: 0.7rem;">Upload a CSV file with Ticker, Quarter, and SEC_Actual columns</small>
+            </div>
+            
+            <div id="csvUploadPreview" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--bg-input); border-radius: 8px; max-height: 200px; overflow-y: auto;">
+                <h4 style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: var(--accent-cyan);">Preview:</h4>
+                <div id="csvPreviewContent" style="font-size: 0.8rem; font-family: 'Space Mono', monospace;"></div>
+            </div>
+            
+            <div style="display: flex; gap: 0.75rem;">
+                <button class="btn btn-secondary" onclick="closeUploadSecActualsCSV()" style="flex: 1;">Cancel</button>
+                <button class="btn btn-success" onclick="uploadSecActualsCSV()" style="flex: 1;">📤 Upload & Import</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div class="toast" id="toast"></div>
 
@@ -1651,7 +1809,7 @@
                 loadProfileImages();
             }
             if (tabName === 'tickers') {
-                loadTickersManagement();
+                loadTickers();
             }
             if (tabName === 'settings') {
                 checkGmailStatus();
@@ -1792,230 +1950,6 @@
                 }
             } catch (error) {
                 alert('Error: ' + error.message);
-            }
-        }
-        
-        // ============ TICKERS MANAGEMENT ============
-        
-        let tickersManagementData = { tickers: [], metadata: {}, images: {}, profiles: {} };
-        
-        async function loadTickersManagement() {
-            try {
-                // Load tickers list
-                const tickersResponse = await fetch('/api/hedge-fund-iq/tickers', { credentials: 'same-origin' });
-                const tickersData = await tickersResponse.json();
-                
-                // Load metadata
-                const metadataResponse = await fetch('/api/hedge-fund-iq/metadata', { credentials: 'same-origin' });
-                const metadataData = await metadataResponse.json();
-                
-                // Load ticker images
-                const imagesResponse = await fetch('/api/all-ticker-images', { credentials: 'same-origin' });
-                const imagesData = await imagesResponse.json();
-                
-                // Load profile mappings
-                const profilesResponse = await fetch('/api/hedge-fund-iq/profile-mappings', { credentials: 'same-origin' });
-                const profilesData = await profilesResponse.json();
-                
-                if (tickersData.success && metadataData.success) {
-                    tickersManagementData.tickers = tickersData.tickers || [];
-                    tickersManagementData.metadata = metadataData.metadata || {};
-                    tickersManagementData.images = imagesData.success ? (imagesData.images || {}) : {};
-                    tickersManagementData.profiles = profilesData.success ? (profilesData.mappings || {}) : {};
-                    
-                    // Update stats
-                    document.getElementById('tickersTotalCount').textContent = tickersManagementData.tickers.length;
-                    const withMetadata = tickersManagementData.tickers.filter(t => tickersManagementData.metadata[t.s3_key]).length;
-                    document.getElementById('tickersWithMetadata').textContent = withMetadata;
-                    const withImages = tickersManagementData.tickers.filter(t => tickersManagementData.images[t.ticker_symbol]).length;
-                    document.getElementById('tickersWithImages').textContent = withImages;
-                    const withProfiles = tickersManagementData.tickers.filter(t => tickersManagementData.profiles[t.ticker_symbol]?.length > 0).length;
-                    document.getElementById('tickersWithProfiles').textContent = withProfiles;
-                    
-                    renderTickersManagementList();
-                } else {
-                    throw new Error('Failed to load tickers data');
-                }
-            } catch (error) {
-                console.error('Failed to load tickers:', error);
-                document.getElementById('tickersManagementList').innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--accent-red);">❌ Error: ${error.message}</div>`;
-            }
-        }
-        
-        function filterTickersManagement() {
-            renderTickersManagementList();
-        }
-        
-        function renderTickersManagementList() {
-            const searchTerm = (document.getElementById('tickerSearch')?.value || '').toLowerCase();
-            
-            let filtered = tickersManagementData.tickers.filter(t => {
-                const displayName = tickersManagementData.metadata[t.s3_key]?.display_name || t.ticker_symbol;
-                return !searchTerm || displayName.toLowerCase().includes(searchTerm) || t.ticker_symbol.toLowerCase().includes(searchTerm);
-            });
-            
-            const container = document.getElementById('tickersManagementList');
-            
-            if (filtered.length === 0) {
-                container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No tickers found</div>';
-            } else {
-                container.innerHTML = `
-                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 1rem;">
-                        ${filtered.map(t => {
-                            const metadata = tickersManagementData.metadata[t.s3_key] || {};
-                            const displayName = metadata.display_name || t.ticker_symbol;
-                            const kpi = metadata.kpi || t.kpi || 'Not set';
-                            const relevance = metadata.relevance_percentage !== null && metadata.relevance_percentage !== undefined ? metadata.relevance_percentage : null;
-                            const imageUrl = tickersManagementData.images[t.ticker_symbol]?.url;
-                            const profiles = tickersManagementData.profiles[t.ticker_symbol] || [];
-                            const profileCount = profiles.length;
-                            
-                            return `
-                                <div class="insight-card-v2" style="padding: 1.5rem; position: relative; transition: all 0.2s ease;" 
-                                     onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 16px rgba(0,0,0,0.3)';"
-                                     onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='';">
-                                    
-                                    <!-- Ticker Symbol Badge -->
-                                    <div style="position: absolute; top: 1rem; right: 1rem; background: var(--accent-cyan); color: var(--bg-dark); padding: 0.25rem 0.75rem; border-radius: 12px; font-weight: 700; font-size: 0.75rem;">
-                                        ${t.ticker_symbol}
-                                    </div>
-                                    
-                                    <!-- Ticker Image and Name -->
-                                    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding-right: 4rem;">
-                                        ${imageUrl ? `
-                                            <div style="width: 60px; height: 60px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: var(--bg-dark); display: flex; align-items: center; justify-content: center;">
-                                                <img src="${imageUrl}" alt="${displayName}" style="width: 100%; height: 100%; object-fit: contain;" onerror="this.parentElement.innerHTML='<div style=\\'font-size: 1.5rem;\\'>📈</div>'">
-                                            </div>
-                                        ` : `
-                                            <div style="width: 60px; height: 60px; border-radius: 8px; background: var(--bg-dark); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0;">
-                                                📈
-                                            </div>
-                                        `}
-                                        <div style="flex: 1; min-width: 0;">
-                                            <div style="font-weight: 600; color: var(--text-primary); font-size: 1.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                                ${displayName}
-                                            </div>
-                                            ${profileCount > 0 ? `
-                                                <div style="font-size: 0.75rem; color: var(--accent-cyan); margin-top: 0.25rem;">
-                                                    🔗 ${profileCount} Profile${profileCount > 1 ? 's' : ''}
-                                                </div>
-                                            ` : ''}
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- KPI Info -->
-                                    <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-dark); border-radius: 8px; border-left: 3px solid var(--accent-cyan);">
-                                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.5px;">KPI Measured</div>
-                                        <div style="color: var(--text-primary); font-size: 0.9rem;">${kpi}</div>
-                                    </div>
-                                    
-                                    <!-- Stock Impact -->
-                                    ${relevance !== null ? `
-                                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; padding: 0.5rem; background: linear-gradient(135deg, rgba(0, 255, 255, 0.1), rgba(0, 255, 255, 0.05)); border-radius: 8px;">
-                                            <div style="font-size: 1.5rem;">📊</div>
-                                            <div style="flex: 1;">
-                                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Stock Impact</div>
-                                                <div style="color: var(--accent-cyan); font-weight: 700; font-size: 1.1rem;">${relevance}%</div>
-                                            </div>
-                                        </div>
-                                    ` : `
-                                        <div style="padding: 0.5rem; background: rgba(255, 255, 255, 0.05); border-radius: 8px; margin-bottom: 1rem;">
-                                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-align: center;">
-                                                📊 Stock Impact: <span style="color: var(--accent-yellow);">Not set</span>
-                                            </div>
-                                        </div>
-                                    `}
-                                    
-                                    <!-- Edit Button -->
-                                    <button onclick="event.stopPropagation(); openTickerMetadataModal('${encodeURIComponent(t.s3_key)}', '${encodeURIComponent(t.ticker_symbol)}');" 
-                                            class="btn btn-primary" 
-                                            style="width: 100%; padding: 0.75rem; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-                                        <span>✏️</span>
-                                        <span>Edit Ticker</span>
-                                    </button>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                `;
-            }
-        }
-        
-        function openTickerMetadataModal(encodedS3Key, encodedSymbol) {
-            const s3Key = decodeURIComponent(encodedS3Key);
-            const symbol = decodeURIComponent(encodedSymbol);
-            const metadata = tickersManagementData.metadata[s3Key] || {};
-            
-            const displayName = metadata.display_name || symbol;
-            const kpi = metadata.kpi || '';
-            const relevance = metadata.relevance_percentage !== null && metadata.relevance_percentage !== undefined ? metadata.relevance_percentage : '';
-            
-            const modal = document.createElement('div');
-            modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000;';
-            modal.innerHTML = `
-                <div style="background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem; max-width: 500px; width: 90%;">
-                    <h2 style="margin: 0 0 1.5rem 0; color: var(--text-primary);">📈 Edit Ticker Metadata</h2>
-                    
-                    <div style="margin-bottom: 1rem;">
-                        <label style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Ticker Symbol</label>
-                        <input type="text" value="${symbol}" disabled style="width: 100%; padding: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-secondary); cursor: not-allowed;">
-                    </div>
-                    
-                    <div style="margin-bottom: 1rem;">
-                        <label style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Display Name</label>
-                        <input type="text" id="tickerDisplayName" value="${displayName}" placeholder="e.g., Disney" style="width: 100%; padding: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                    </div>
-                    
-                    <div style="margin-bottom: 1rem;">
-                        <label style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">KPI Description</label>
-                        <input type="text" id="tickerKPI" value="${kpi}" placeholder="e.g., Disney+ Subscribers" style="width: 100%; padding: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                    </div>
-                    
-                    <div style="margin-bottom: 1.5rem;">
-                        <label style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Stock Impact Relevance (%)</label>
-                        <input type="number" id="tickerRelevance" value="${relevance}" placeholder="0-100" min="0" max="100" step="0.1" style="width: 100%; padding: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
-                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">What percentage does this KPI represent of the stock price movement? (0-100)</div>
-                    </div>
-                    
-                    <div style="display: flex; gap: 0.75rem;">
-                        <button onclick="saveTickerMetadata('${encodeURIComponent(s3Key)}')" class="btn btn-success" style="flex: 1;">💾 Save</button>
-                        <button onclick="this.closest('[style*=\\'position: fixed\\']').remove()" class="btn btn-secondary" style="flex: 1;">Cancel</button>
-                    </div>
-                </div>
-            `;
-            
-            document.body.appendChild(modal);
-        }
-        
-        async function saveTickerMetadata(encodedS3Key) {
-            const s3Key = decodeURIComponent(encodedS3Key);
-            const displayName = document.getElementById('tickerDisplayName').value.trim();
-            const kpi = document.getElementById('tickerKPI').value.trim();
-            const relevance = document.getElementById('tickerRelevance').value.trim();
-            
-            try {
-                const response = await fetch('/api/hedge-fund-iq/metadata', {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        s3_key: s3Key,
-                        display_name: displayName,
-                        kpi: kpi,
-                        relevance_percentage: relevance !== '' ? parseFloat(relevance) : null
-                    })
-                });
-                
-                const data = await response.json();
-                if (data.success) {
-                    showToast('Ticker metadata saved successfully');
-                    document.querySelector('[style*="position: fixed"]')?.remove();
-                    loadTickersManagement();
-                } else {
-                    showToast(data.error || 'Failed to save metadata', true);
-                }
-            } catch (error) {
-                showToast('Error: ' + error.message, true);
             }
         }
         
@@ -2456,13 +2390,10 @@
             document.getElementById('allRuns').checked = true;
             document.getElementById('hasProfileIQAccess').checked = true;
             document.getElementById('hasSubscriberIQAccess').checked = false;
+            document.getElementById('hasHedgeFundIQAccess').checked = false;
             document.getElementById('hasAnalysisIQAccess').checked = false;
             document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
             document.getElementById('analysisIQModulesSection').style.display = 'none';
-            document.getElementById('hasHedgeFundIQAccess').checked = false;
-            document.querySelectorAll('.hedgefund-tab-checkbox').forEach(cb => cb.checked = false);
-            document.querySelectorAll('.hedgefund-ticker-checkbox').forEach(cb => cb.checked = false);
-            document.getElementById('hedgeFundIQModulesSection').style.display = 'none';
             document.getElementById('originalUsername').value = '';
             
             populateCategoryCheckboxes();
@@ -2497,16 +2428,12 @@
             document.getElementById('allRuns').checked = user.allowed_runs?.includes('*');
             document.getElementById('hasProfileIQAccess').checked = user.has_profile_iq_access !== false; // Default true
             document.getElementById('hasSubscriberIQAccess').checked = user.has_subscriber_iq_access === true; // Default false
-            document.getElementById('hasAnalysisIQAccess').checked = user.has_analysis_iq_access === true; // Default false
             document.getElementById('hasHedgeFundIQAccess').checked = user.has_hedge_fund_iq_access === true; // Default false
+            document.getElementById('hasAnalysisIQAccess').checked = user.has_analysis_iq_access === true; // Default false
             
             // Set Analysis IQ modules and show/hide section
             setAnalysisIQModules(user.analysis_iq_modules || []);
             toggleAnalysisIQModules();
-            
-            // Set Hedge Fund IQ tabs and tickers
-            setHedgeFundIQAccess(user.hedge_fund_iq_tabs || [], user.hedge_fund_iq_tickers || []);
-            toggleHedgeFundIQModules();
             
             document.getElementById('originalUsername').value = username;
             document.getElementById('newUsername').disabled = false; // Allow editing username
@@ -2768,60 +2695,6 @@
                 document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
             }
         }
-        
-        function toggleHedgeFundIQModules() {
-            const checkbox = document.getElementById('hasHedgeFundIQAccess');
-            const modulesSection = document.getElementById('hedgeFundIQModulesSection');
-            if (checkbox.checked) {
-                modulesSection.style.display = 'block';
-                // Load tickers list if not already loaded
-                loadHedgeFundTickersForAccess();
-            } else {
-                modulesSection.style.display = 'none';
-                // Uncheck all tab and ticker checkboxes
-                document.querySelectorAll('.hedgefund-tab-checkbox').forEach(cb => cb.checked = false);
-                document.querySelectorAll('.hedgefund-ticker-checkbox').forEach(cb => cb.checked = false);
-                document.getElementById('hedgeFundAllTickers').checked = false;
-            }
-        }
-        
-        async function loadHedgeFundTickersForAccess() {
-            const tickersList = document.getElementById('hedgeFundTickersList');
-            
-            try {
-                const response = await fetch('/api/hedge-fund-iq/tickers', { credentials: 'same-origin' });
-                const data = await response.json();
-                
-                if (data.success && data.tickers) {
-                    const tickers = data.tickers;
-                    
-                    if (tickers.length === 0) {
-                        tickersList.innerHTML = '<div style="grid-column: span 3; text-align: center; color: var(--text-secondary); font-size: 0.75rem; padding: 1rem;">No tickers found</div>';
-                    } else {
-                        tickersList.innerHTML = tickers.map(t => `
-                            <label class="checkbox-group" style="font-size: 0.75rem;">
-                                <input type="checkbox" class="hedgefund-ticker-checkbox" data-ticker="${t.ticker}">
-                                <span>${t.display_name || t.ticker}</span>
-                            </label>
-                        `).join('');
-                    }
-                } else {
-                    tickersList.innerHTML = '<div style="grid-column: span 3; text-align: center; color: var(--accent-red); font-size: 0.75rem; padding: 1rem;">Error loading tickers</div>';
-                }
-            } catch (error) {
-                console.error('Error loading hedge fund tickers:', error);
-                tickersList.innerHTML = '<div style="grid-column: span 3; text-align: center; color: var(--accent-red); font-size: 0.75rem; padding: 1rem;">Error loading tickers</div>';
-            }
-        }
-        
-        function toggleAllHedgeFundTickers() {
-            const allTickersCheckbox = document.getElementById('hedgeFundAllTickers');
-            const tickerCheckboxes = document.querySelectorAll('.hedgefund-ticker-checkbox');
-            
-            tickerCheckboxes.forEach(cb => {
-                cb.checked = allTickersCheckbox.checked;
-            });
-        }
 
         function getAnalysisIQModules() {
             const modules = [];
@@ -2833,34 +2706,6 @@
             if (document.getElementById('moduleCrossShow').checked) modules.push('cross_show');
             if (document.getElementById('moduleWatchTime').checked) modules.push('watch_time');
             return modules;
-        }
-        
-        function getHedgeFundIQTabs() {
-            // If "All Tickers" is checked, return ['*']
-            if (document.getElementById('hedgeFundAllTickers')?.checked) {
-                return ['*'];
-            }
-            
-            const tabs = [];
-            if (document.getElementById('hedgeFundTabLiveData')?.checked) tabs.push('livedata');
-            if (document.getElementById('hedgeFundTabTrends')?.checked) tabs.push('trends');
-            if (document.getElementById('hedgeFundTabDailyMetrics')?.checked) tabs.push('daily');
-            if (document.getElementById('hedgeFundTabHistoric')?.checked) tabs.push('historic');
-            if (document.getElementById('hedgeFundTabProfile')?.checked) tabs.push('profile');
-            return tabs;
-        }
-        
-        function getHedgeFundIQTickers() {
-            // If "All Tickers" is checked, return ['*']
-            if (document.getElementById('hedgeFundAllTickers')?.checked) {
-                return ['*'];
-            }
-            
-            const tickers = [];
-            document.querySelectorAll('.hedgefund-ticker-checkbox:checked').forEach(cb => {
-                tickers.push(cb.dataset.ticker);
-            });
-            return tickers;
         }
 
         function setAnalysisIQModules(modules) {
@@ -2880,39 +2725,6 @@
                     case 'watch_time': document.getElementById('moduleWatchTime').checked = true; break;
                 }
             });
-        }
-        
-        function setHedgeFundIQAccess(tabs, tickers) {
-            // Reset all checkboxes first
-            document.querySelectorAll('.hedgefund-tab-checkbox').forEach(cb => cb.checked = false);
-            document.querySelectorAll('.hedgefund-ticker-checkbox').forEach(cb => cb.checked = false);
-            document.getElementById('hedgeFundAllTickers').checked = false;
-            
-            // Check if user has access to all tickers
-            if (tickers && tickers.includes('*')) {
-                document.getElementById('hedgeFundAllTickers').checked = true;
-                // Check all ticker checkboxes
-                document.querySelectorAll('.hedgefund-ticker-checkbox').forEach(cb => cb.checked = true);
-            } else if (tickers && tickers.length > 0) {
-                // Check specific tickers
-                tickers.forEach(ticker => {
-                    const checkbox = document.querySelector(`.hedgefund-ticker-checkbox[data-ticker="${ticker}"]`);
-                    if (checkbox) checkbox.checked = true;
-                });
-            }
-            
-            // Set tabs
-            if (tabs && tabs.length > 0) {
-                tabs.forEach(tab => {
-                    switch(tab) {
-                        case 'livedata': document.getElementById('hedgeFundTabLiveData').checked = true; break;
-                        case 'trends': document.getElementById('hedgeFundTabTrends').checked = true; break;
-                        case 'daily': document.getElementById('hedgeFundTabDailyMetrics').checked = true; break;
-                        case 'historic': document.getElementById('hedgeFundTabHistoric').checked = true; break;
-                        case 'profile': document.getElementById('hedgeFundTabProfile').checked = true; break;
-                    }
-                });
-            }
         }
 
         function toggleAccessExpires() {
@@ -3096,11 +2908,10 @@
                     Array.from(document.querySelectorAll('#runCheckboxes input:checked')).map(cb => cb.value),
                 has_profile_iq_access: document.getElementById('hasProfileIQAccess').checked,
                 has_subscriber_iq_access: document.getElementById('hasSubscriberIQAccess').checked,
+                has_hedge_fund_iq_access: document.getElementById('hasHedgeFundIQAccess').checked,
+                hedge_fund_iq_tickers: ['*'], // Default to all tickers
                 has_analysis_iq_access: document.getElementById('hasAnalysisIQAccess').checked,
                 analysis_iq_modules: getAnalysisIQModules(),
-                has_hedge_fund_iq_access: document.getElementById('hasHedgeFundIQAccess').checked,
-                hedge_fund_iq_tabs: getHedgeFundIQTabs(),
-                hedge_fund_iq_tickers: getHedgeFundIQTickers(),
                 send_welcome_email: document.getElementById('sendWelcomeEmail').checked
             };
             
@@ -3237,6 +3048,9 @@
             const nameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
             document.getElementById('newFileName').value = nameWithoutExt;
             
+            // Pre-fill display name with current project name
+            document.getElementById('displayName').value = currentName || '';
+            
             document.getElementById('renameModal').classList.add('show');
             document.getElementById('newFileName').focus();
             document.getElementById('newFileName').select();
@@ -3249,6 +3063,7 @@
         async function renameFile() {
             const fileKey = document.getElementById('renameFileKey').value;
             const newName = document.getElementById('newFileName').value.trim();
+            const displayName = document.getElementById('displayName').value.trim();
             
             if (!fileKey || !newName) {
                 showToast('Please enter a new file name', true);
@@ -3262,14 +3077,15 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         old_key: fileKey,
-                        new_name: newName
+                        new_name: newName,
+                        display_name: displayName || null
                     })
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
-                    showToast('File renamed successfully!');
+                    showToast('File and display name updated successfully!');
                     closeRenameModal();
                     loadContentFiles(); // Refresh the file list
                 } else {
@@ -4143,6 +3959,1121 @@
             };
             
             input.click();
+        }
+        
+        // ============================================
+        // SEC ACTUALS MANAGEMENT
+        // ============================================
+        
+        let allTickers = [];
+        let allSecActuals = {};
+        
+        async function loadSecActuals() {
+            try {
+                // Load all tickers first
+                const tickersResponse = await fetch('/api/hedge-fund-iq/list');
+                const tickersData = await tickersResponse.json();
+                if (tickersData.success) {
+                    allTickers = tickersData.tickers;
+                    
+                    // Populate ticker dropdown in modal
+                    const tickerSelect = document.getElementById('secActualTicker');
+                    tickerSelect.innerHTML = '<option value="">Select a ticker...</option>';
+                    allTickers.forEach(t => {
+                        const option = document.createElement('option');
+                        option.value = t.ticker;
+                        option.textContent = `${t.display_name} (${t.ticker})`;
+                        tickerSelect.appendChild(option);
+                    });
+                }
+                
+                // Load all SEC actuals
+                const actualsPromises = allTickers.map(t => 
+                    fetch(`/api/hedge-fund-iq/sec-actuals/${encodeURIComponent(t.ticker)}`)
+                        .then(r => r.json())
+                        .then(data => ({ ticker: t.ticker, display_name: t.display_name, actuals: data.actuals || {} }))
+                );
+                
+                const results = await Promise.all(actualsPromises);
+                
+                // Build combined actuals object
+                allSecActuals = {};
+                results.forEach(r => {
+                    if (Object.keys(r.actuals).length > 0) {
+                        allSecActuals[r.ticker] = { display_name: r.display_name, actuals: r.actuals };
+                    }
+                });
+                
+                // Render the list
+                renderSecActualsList();
+                
+            } catch (error) {
+                console.error('Error loading SEC actuals:', error);
+                document.getElementById('secActualsList').innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--accent-red);">Error loading SEC actuals</div>';
+            }
+        }
+        
+        function renderSecActualsList() {
+            const container = document.getElementById('secActualsList');
+            
+            if (Object.keys(allSecActuals).length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No SEC actuals entered yet. Click "+ Add SEC Actual" to get started.</div>';
+                return;
+            }
+            
+            let html = '<table class="user-table"><thead><tr><th>Ticker</th><th>Quarter</th><th>SEC Actual</th><th>Actions</th></tr></thead><tbody>';
+            
+            Object.keys(allSecActuals).sort().forEach(ticker => {
+                const data = allSecActuals[ticker];
+                const quarters = Object.keys(data.actuals).sort();
+                
+                quarters.forEach(quarter => {
+                    const value = data.actuals[quarter];
+                    html += `
+                        <tr>
+                            <td><strong>${data.display_name}</strong><br><small style="color: var(--text-secondary);">${ticker}</small></td>
+                            <td>${quarter}</td>
+                            <td style="font-family: 'Space Mono', monospace; color: var(--accent-cyan);">${value.toLocaleString()}</td>
+                            <td>
+                                <button class="btn btn-small btn-secondary" onclick="editSecActual('${ticker}', '${quarter}', ${value})">✏️ Edit</button>
+                                <button class="btn btn-small btn-danger" onclick="deleteSecActual('${ticker}', '${quarter}')">🗑️ Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            });
+            
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+        
+        function showAddSecActualModal() {
+            document.getElementById('secActualTicker').value = '';
+            document.getElementById('secActualQuarter').value = '';
+            document.getElementById('secActualValue').value = '';
+            document.getElementById('secActualModal').classList.add('show');
+        }
+        
+        function editSecActual(ticker, quarter, value) {
+            document.getElementById('secActualTicker').value = ticker;
+            document.getElementById('secActualQuarter').value = quarter;
+            document.getElementById('secActualValue').value = value;
+            document.getElementById('secActualModal').classList.add('show');
+        }
+        
+        function closeSecActualModal() {
+            document.getElementById('secActualModal').classList.remove('show');
+        }
+        
+        async function saveSecActual() {
+            const ticker = document.getElementById('secActualTicker').value;
+            const quarter = document.getElementById('secActualQuarter').value;
+            const value = document.getElementById('secActualValue').value;
+            
+            if (!ticker || !quarter) {
+                showToast('Please select a ticker and enter a quarter', true);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/hedge-fund-iq/sec-actuals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticker: ticker,
+                        quarter: quarter,
+                        actual_value: value || null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast(value ? 'SEC actual saved!' : 'SEC actual removed!');
+                    closeSecActualModal();
+                    loadSecActuals();
+                } else {
+                    showToast('Error: ' + data.error, true);
+                }
+            } catch (error) {
+                showToast('Network error: ' + error.message, true);
+            }
+        }
+        
+        async function deleteSecActual(ticker, quarter) {
+            if (!confirm(`Delete SEC actual for ${ticker} ${quarter}?`)) return;
+            
+            try {
+                const response = await fetch('/api/hedge-fund-iq/sec-actuals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticker: ticker,
+                        quarter: quarter,
+                        actual_value: null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('SEC actual deleted!');
+                    loadSecActuals();
+                } else {
+                    showToast('Error: ' + data.error, true);
+                }
+            } catch (error) {
+                showToast('Network error: ' + error.message, true);
+            }
+        }
+        
+        // ============================================
+        // CSV UPLOAD FOR SEC ACTUALS
+        // ============================================
+        
+        function showUploadSecActualsCSV() {
+            document.getElementById('secActualsCSVFile').value = '';
+            document.getElementById('csvUploadPreview').style.display = 'none';
+            document.getElementById('uploadSecActualsCSVModal').classList.add('show');
+        }
+        
+        function closeUploadSecActualsCSV() {
+            document.getElementById('uploadSecActualsCSVModal').classList.remove('show');
+        }
+        
+        // Preview CSV when file is selected
+        document.addEventListener('DOMContentLoaded', function() {
+            const csvFileInput = document.getElementById('secActualsCSVFile');
+            if (csvFileInput) {
+                csvFileInput.addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = function(event) {
+                            const csvContent = event.target.result;
+                            const lines = csvContent.split('\n').slice(0, 6); // Show first 5 rows + header
+                            const preview = lines.join('\n');
+                            
+                            document.getElementById('csvPreviewContent').textContent = preview;
+                            document.getElementById('csvUploadPreview').style.display = 'block';
+                        };
+                        reader.readAsText(file);
+                    }
+                });
+            }
+        });
+        
+        async function uploadSecActualsCSV() {
+            const fileInput = document.getElementById('secActualsCSVFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showToast('Please select a CSV file', true);
+                return;
+            }
+            
+            try {
+                // Read and parse CSV
+                const reader = new FileReader();
+                reader.onload = async function(event) {
+                    const csvContent = event.target.result;
+                    const lines = csvContent.split('\n').filter(line => line.trim());
+                    
+                    if (lines.length < 2) {
+                        showToast('CSV file is empty or invalid', true);
+                        return;
+                    }
+                    
+                    // Parse header
+                    const header = lines[0].split(',').map(h => h.trim());
+                    const tickerIdx = header.findIndex(h => h.toLowerCase() === 'ticker');
+                    const quarterIdx = header.findIndex(h => h.toLowerCase() === 'quarter');
+                    const actualIdx = header.findIndex(h => h.toLowerCase().includes('sec') || h.toLowerCase().includes('actual'));
+                    
+                    if (tickerIdx === -1 || quarterIdx === -1 || actualIdx === -1) {
+                        showToast('CSV must have Ticker, Quarter, and SEC_Actual columns', true);
+                        return;
+                    }
+                    
+                    // Parse data rows
+                    const actualsToUpload = [];
+                    for (let i = 1; i < lines.length; i++) {
+                        const values = lines[i].split(',').map(v => v.trim());
+                        if (values.length >= 3) {
+                            actualsToUpload.push({
+                                ticker: values[tickerIdx],
+                                quarter: values[quarterIdx],
+                                actual_value: parseFloat(values[actualIdx])
+                            });
+                        }
+                    }
+                    
+                    if (actualsToUpload.length === 0) {
+                        showToast('No valid data found in CSV', true);
+                        return;
+                    }
+                    
+                    // Upload to backend
+                    showToast(`Uploading ${actualsToUpload.length} SEC actuals...`);
+                    
+                    let successCount = 0;
+                    let errorCount = 0;
+                    
+                    for (const actual of actualsToUpload) {
+                        try {
+                            const response = await fetch('/api/hedge-fund-iq/sec-actuals', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(actual)
+                            });
+                            
+                            const data = await response.json();
+                            if (data.success) {
+                                successCount++;
+                            } else {
+                                errorCount++;
+                            }
+                        } catch (error) {
+                            errorCount++;
+                        }
+                    }
+                    
+                    closeUploadSecActualsCSV();
+                    showToast(`✅ Uploaded ${successCount} SEC actuals${errorCount > 0 ? `, ${errorCount} failed` : ''}!`);
+                    loadSecActuals();
+                };
+                
+                reader.readAsText(file);
+                
+            } catch (error) {
+                showToast('Error uploading CSV: ' + error.message, true);
+            }
+        }
+        
+        // Load SEC actuals when the section is shown
+        document.addEventListener('DOMContentLoaded', function() {
+            const originalShowSection = window.showSection;
+            window.showSection = function(sectionId) {
+                originalShowSection(sectionId);
+                if (sectionId === 'sec-actuals') {
+                    loadSecActuals();
+                } else if (sectionId === 'profile-mappings') {
+                    loadProfileMappings();
+                }
+            };
+        });
+        
+        // ============================================
+        // TICKER PROFILE MAPPINGS
+        // ============================================
+        
+        async function loadProfileMappings() {
+            try {
+                // Load all tickers
+                const tickersResponse = await fetch('/api/hedge-fund-iq/list');
+                const tickersData = await tickersResponse.json();
+                
+                if (!tickersData.success) {
+                    throw new Error('Failed to load tickers');
+                }
+                
+                const tickers = tickersData.tickers;
+                
+                // Load existing mappings
+                const mappings = {};
+                for (const ticker of tickers) {
+                    try {
+                        const response = await fetch(`/api/hedge-fund-iq/profile-mapping/${ticker.ticker}`);
+                        const data = await response.json();
+                        if (data.success && data.profile_filename !== ticker.ticker) {
+                            mappings[ticker.ticker] = data.profile_filename;
+                        }
+                    } catch (error) {
+                        console.error(`Error loading mapping for ${ticker.ticker}:`, error);
+                    }
+                }
+                
+                // Render table
+                const container = document.getElementById('profileMappingsList');
+                
+                if (tickers.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No tickers found.</div>';
+                    return;
+                }
+                
+                let html = `
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Ticker</th>
+                                <th>Display Name</th>
+                                <th>Profile Filename</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                for (const ticker of tickers) {
+                    const profileFilename = mappings[ticker.ticker] || ticker.ticker;
+                    const isCustom = mappings[ticker.ticker] ? true : false;
+                    
+                    html += `
+                        <tr>
+                            <td><strong>${ticker.ticker}</strong></td>
+                            <td>${ticker.display_name}</td>
+                            <td>
+                                <span style="color: ${isCustom ? 'var(--accent-cyan)' : 'var(--text-secondary)'};">
+                                    ${profileFilename}${isCustom ? ' (custom)' : ' (default)'}
+                                </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-small btn-primary" onclick="editProfileMapping('${ticker.ticker}', '${ticker.display_name}', '${profileFilename}')">
+                                    ${isCustom ? '✏️ Edit' : '➕ Set'}
+                                </button>
+                                ${isCustom ? `
+                                    <button class="btn btn-small btn-danger" onclick="removeProfileMapping('${ticker.ticker}')">
+                                        🗑️ Remove
+                                    </button>
+                                ` : ''}
+                            </td>
+                        </tr>
+                    `;
+                }
+                
+                html += `
+                        </tbody>
+                    </table>
+                `;
+                
+                container.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error loading profile mappings:', error);
+                document.getElementById('profileMappingsList').innerHTML = `
+                    <div style="text-align: center; padding: 2rem; color: var(--accent-red);">
+                        Error loading profile mappings: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        function editProfileMapping(ticker, displayName, currentFilename) {
+            const newFilename = prompt(
+                `Enter the profile filename for ${displayName} (${ticker}):\n\n` +
+                `This should be the filename (without .csv) from the dashboard-inputs S3 bucket.\n` +
+                `Leave empty to use the default (ticker name).`,
+                currentFilename === ticker ? '' : currentFilename
+            );
+            
+            if (newFilename === null) return; // User cancelled
+            
+            updateProfileMapping(ticker, newFilename.trim());
+        }
+        
+        async function updateProfileMapping(ticker, profileFilename) {
+            try {
+                const response = await fetch('/api/hedge-fund-iq/profile-mapping', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticker: ticker,
+                        profile_filename: profileFilename
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('✅ Profile mapping updated!');
+                    loadProfileMappings();
+                } else {
+                    showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showToast('❌ Error updating profile mapping: ' + error.message, true);
+            }
+        }
+        
+        async function removeProfileMapping(ticker) {
+            if (!confirm(`Remove custom profile mapping for ${ticker}? It will revert to using the ticker name.`)) {
+                return;
+            }
+            
+            updateProfileMapping(ticker, '');
+        }
+        
+        // ============================================
+        // TICKER MANAGEMENT (CONSOLIDATED)
+        // ============================================
+        
+        let allTickersData = [];
+        let currentTickerInModal = null;
+        
+        async function loadTickers() {
+            try {
+                // Load all tickers
+                const tickersResponse = await fetch('/api/hedge-fund-iq/list');
+                const tickersData = await tickersResponse.json();
+                
+                if (!tickersData.success) {
+                    throw new Error('Failed to load tickers');
+                }
+                
+                allTickersData = tickersData.tickers;
+                
+                // Load additional data for each ticker (images, profile mappings)
+                for (const ticker of allTickersData) {
+                    // Load image info
+                    try {
+                        const imgResponse = await fetch(`/api/ticker-image/${ticker.ticker}`);
+                        const imgData = await imgResponse.json();
+                        ticker.hasImage = imgData.success && imgData.image_url;
+                        ticker.imageUrl = imgData.image_url;
+                    } catch (error) {
+                        ticker.hasImage = false;
+                    }
+                    
+                    // Load profile mapping
+                    try {
+                        const profileResponse = await fetch(`/api/hedge-fund-iq/profile-mapping/${ticker.ticker}`);
+                        const profileData = await profileResponse.json();
+                        ticker.profileFilename = profileData.profile_filename || ticker.ticker;
+                        ticker.hasCustomProfile = profileData.profile_filename && profileData.profile_filename !== ticker.ticker;
+                    } catch (error) {
+                        ticker.profileFilename = ticker.ticker;
+                        ticker.hasCustomProfile = false;
+                    }
+                }
+                
+                renderTickers();
+                
+            } catch (error) {
+                console.error('Error loading tickers:', error);
+                document.getElementById('tickersList').innerHTML = `
+                    <div style="text-align: center; padding: 2rem; color: var(--accent-red);">
+                        Error loading tickers: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        function renderTickers() {
+            const container = document.getElementById('tickersList');
+            const searchTerm = document.getElementById('tickerSearchInput')?.value.toLowerCase() || '';
+            
+            let filteredTickers = allTickersData;
+            if (searchTerm) {
+                filteredTickers = allTickersData.filter(t => 
+                    t.ticker.toLowerCase().includes(searchTerm) ||
+                    t.display_name.toLowerCase().includes(searchTerm) ||
+                    t.kpi.toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            if (filteredTickers.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No tickers found.</div>';
+                return;
+            }
+            
+            let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">';
+            
+            for (const ticker of filteredTickers) {
+                const statusIcons = [];
+                if (ticker.hasImage) statusIcons.push('📸');
+                if (ticker.hasCustomProfile) statusIcons.push('🔗');
+                
+                html += `
+                    <div class="card" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
+                         onclick="showTickerDetail('${ticker.ticker}')"
+                         onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)';"
+                         onmouseleave="this.style.transform=''; this.style.boxShadow='';">
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+                            ${ticker.hasImage ? 
+                                `<img src="${ticker.imageUrl}" alt="${ticker.ticker}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;">` :
+                                `<div style="width: 50px; height: 50px; background: var(--bg-input); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">📈</div>`
+                            }
+                            <div style="flex: 1;">
+                                <h3 style="margin: 0; font-size: 1.1rem;">${ticker.ticker}</h3>
+                                <div style="color: var(--text-secondary); font-size: 0.85rem;">${ticker.display_name}</div>
+                            </div>
+                            ${statusIcons.length > 0 ? `<div style="font-size: 1.2rem;">${statusIcons.join(' ')}</div>` : ''}
+                        </div>
+                        <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">
+                            <strong>KPI:</strong> ${ticker.kpi}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
+        
+        function filterTickers() {
+            renderTickers();
+        }
+        
+        async function showTickerDetail(tickerSymbol) {
+            const ticker = allTickersData.find(t => t.ticker === tickerSymbol);
+            if (!ticker) return;
+            
+            currentTickerInModal = ticker;
+            
+            // Set modal title
+            document.getElementById('tickerDetailTitle').textContent = `${ticker.ticker} - ${ticker.display_name}`;
+            
+            // Set ticker info
+            document.getElementById('tickerSymbol').value = ticker.ticker;
+            document.getElementById('tickerDisplayName').value = ticker.display_name;
+            document.getElementById('tickerKPI').value = ticker.kpi;
+            document.getElementById('tickerRelevance').value = ticker.relevance_percentage || '';
+            document.getElementById('tickerS3Key').value = ticker.s3_key;
+            
+            // Set image
+            if (ticker.hasImage) {
+                document.getElementById('tickerImagePreviewImg').src = ticker.imageUrl;
+                document.getElementById('tickerImagePreviewImg').style.display = 'block';
+                document.getElementById('tickerImagePlaceholder').style.display = 'none';
+                document.getElementById('removeTickerImageBtn').style.display = 'inline-block';
+            } else {
+                document.getElementById('tickerImagePreviewImg').style.display = 'none';
+                document.getElementById('tickerImagePlaceholder').style.display = 'flex';
+                document.getElementById('removeTickerImageBtn').style.display = 'none';
+            }
+            
+            // Set profile filename
+            document.getElementById('tickerProfileFilename').value = ticker.hasCustomProfile ? ticker.profileFilename : '';
+            
+            // Load SEC actuals for this ticker
+            await loadSecActualsForTicker(ticker.ticker);
+            
+            // Show modal
+            document.getElementById('tickerDetailModal').style.display = 'flex';
+        }
+        
+        function closeTickerDetailModal() {
+            document.getElementById('tickerDetailModal').style.display = 'none';
+            currentTickerInModal = null;
+            // Clear form
+            document.getElementById('tickerDetailImageFile').value = '';
+            document.getElementById('tickerDetailImageURL').value = '';
+        }
+        
+        async function saveTickerMetadataFromModal() {
+            if (!currentTickerInModal) return;
+            
+            const displayName = document.getElementById('tickerDisplayName').value.trim();
+            const kpi = document.getElementById('tickerKPI').value.trim();
+            const relevance = document.getElementById('tickerRelevance').value.trim();
+            
+            try {
+                const response = await fetch('/api/hedge-fund-iq/metadata', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        s3_key: currentTickerInModal.s3_key,
+                        display_name: displayName,
+                        kpi: kpi,
+                        relevance_percentage: relevance !== '' ? parseFloat(relevance) : null
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showToast('✅ Ticker metadata saved!');
+                    await loadTickers();
+                    showTickerDetail(currentTickerInModal.ticker);
+                } else {
+                    showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showToast('❌ Error saving metadata: ' + error.message, true);
+            }
+        }
+        
+        async function saveTickerImageFromDetail() {
+            if (!currentTickerInModal) return;
+            
+            const fileInput = document.getElementById('tickerDetailImageFile');
+            const urlInput = document.getElementById('tickerDetailImageURL');
+            
+            const formData = new FormData();
+            formData.append('ticker', currentTickerInModal.ticker);
+            formData.append('display_name', currentTickerInModal.display_name);
+            
+            if (fileInput.files.length > 0) {
+                formData.append('image', fileInput.files[0]);
+            } else if (urlInput.value.trim()) {
+                formData.append('image_url', urlInput.value.trim());
+            } else {
+                showToast('Please select an image file or enter a URL', true);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/ticker-image', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('✅ Ticker image saved!');
+                    // Reload tickers and refresh modal
+                    await loadTickers();
+                    showTickerDetail(currentTickerInModal.ticker);
+                } else {
+                    showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showToast('❌ Error saving image: ' + error.message, true);
+            }
+        }
+        
+        async function removeTickerImageInModal() {
+            if (!currentTickerInModal) return;
+            
+            if (!confirm(`Remove image for ${currentTickerInModal.ticker}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/ticker-image', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticker: currentTickerInModal.ticker
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('✅ Ticker image removed!');
+                    await loadTickers();
+                    showTickerDetail(currentTickerInModal.ticker);
+                } else {
+                    showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showToast('❌ Error removing image: ' + error.message, true);
+            }
+        }
+        
+        async function saveTickerProfileMapping() {
+            if (!currentTickerInModal) return;
+            
+            const profileFilename = document.getElementById('tickerProfileFilename').value.trim();
+            
+            try {
+                const response = await fetch('/api/hedge-fund-iq/profile-mapping', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticker: currentTickerInModal.ticker,
+                        profile_filename: profileFilename
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('✅ Profile mapping saved!');
+                    await loadTickers();
+                    showTickerDetail(currentTickerInModal.ticker);
+                } else {
+                    showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showToast('❌ Error saving profile mapping: ' + error.message, true);
+            }
+        }
+        
+        async function loadSecActualsForTicker(tickerSymbol) {
+            try {
+                const response = await fetch(`/api/hedge-fund-iq/sec-actuals/${tickerSymbol}`);
+                const data = await response.json();
+                
+                const container = document.getElementById('tickerSecActualsList');
+                
+                if (data.success && data.actuals && Object.keys(data.actuals).length > 0) {
+                    let html = '<table class="data-table" style="font-size: 0.85rem;"><thead><tr><th>Quarter</th><th>Net Growth %</th><th>Actions</th></tr></thead><tbody>';
+                    
+                    // Sort quarters by year and quarter number
+                    const sortedEntries = Object.entries(data.actuals).sort((a, b) => {
+                        const [qA, qB] = [a[0], b[0]];
+                        return qB.localeCompare(qA); // Descending order (newest first)
+                    });
+                    
+                    for (const [quarter, value] of sortedEntries) {
+                        html += `
+                            <tr>
+                                <td><strong>${quarter}</strong></td>
+                                <td>${value.toFixed(2)}%</td>
+                                <td style="white-space: nowrap;">
+                                    <button class="btn btn-small btn-primary" onclick="editSecActualInModal('${quarter}', ${value})" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">✏️</button>
+                                    <button class="btn btn-small btn-danger" onclick="deleteSecActualInModal('${quarter}')" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">🗑️</button>
+                                </td>
+                            </tr>
+                        `;
+                    }
+                    
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div style="text-align: center; padding: 1rem; color: var(--text-secondary); font-size: 0.85rem;">No SEC actuals recorded</div>';
+                }
+            } catch (error) {
+                console.error('Error loading SEC actuals:', error);
+            }
+        }
+        
+        function showAddSecActualForm() {
+            document.getElementById('addSecActualForm').style.display = 'block';
+            document.getElementById('secActualQuarter').value = '';
+            document.getElementById('secActualValue').value = '';
+            document.getElementById('secActualQuarter').focus();
+        }
+        
+        function hideAddSecActualForm() {
+            document.getElementById('addSecActualForm').style.display = 'none';
+        }
+        
+        function saveSecActualFromForm() {
+            if (!currentTickerInModal) return;
+            
+            const quarter = document.getElementById('secActualQuarter').value.trim();
+            const value = document.getElementById('secActualValue').value.trim();
+            
+            if (!quarter) {
+                showToast('Please enter a quarter (e.g., Q1 2026)', true);
+                return;
+            }
+            
+            if (!value) {
+                showToast('Please enter SEC Net Growth Rate %', true);
+                return;
+            }
+            
+            saveSecActualInModal(quarter, parseFloat(value));
+            hideAddSecActualForm();
+        }
+        
+        function editSecActualInModal(quarter, currentValue) {
+            // Show the form with pre-filled values
+            document.getElementById('addSecActualForm').style.display = 'block';
+            document.getElementById('secActualQuarter').value = quarter;
+            document.getElementById('secActualValue').value = currentValue;
+        }
+        
+        async function saveSecActualInModal(quarter, value) {
+            if (!currentTickerInModal) return;
+            
+            try {
+                const response = await fetch('/api/hedge-fund-iq/sec-actuals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticker: currentTickerInModal.ticker,
+                        quarter: quarter,
+                        actual_value: value
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('✅ SEC actual saved!');
+                    loadSecActualsForTicker(currentTickerInModal.ticker);
+                } else {
+                    showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showToast('❌ Error saving SEC actual: ' + error.message, true);
+            }
+        }
+        
+        async function deleteSecActualInModal(quarter) {
+            if (!currentTickerInModal) return;
+            
+            if (!confirm(`Delete SEC actual for ${quarter}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/hedge-fund-iq/sec-actuals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticker: currentTickerInModal.ticker,
+                        quarter: quarter,
+                        actual_value: null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('✅ SEC actual deleted!');
+                    loadSecActualsForTicker(currentTickerInModal.ticker);
+                } else {
+                    showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showToast('❌ Error deleting SEC actual: ' + error.message, true);
+            }
+        }
+        
+        // ============================================
+        // IMAGE CATEGORY SWITCHING
+        // ============================================
+        
+        function showImageCategory(category) {
+            // Update button states
+            document.getElementById('btnProfileImages').classList.remove('btn-primary');
+            document.getElementById('btnProfileImages').classList.add('btn-secondary');
+            document.getElementById('btnTickerImages').classList.remove('btn-primary');
+            document.getElementById('btnTickerImages').classList.add('btn-secondary');
+            
+            // Hide all content
+            document.getElementById('profileImagesContent').style.display = 'none';
+            document.getElementById('tickerImagesContent').style.display = 'none';
+            
+            // Show selected category
+            if (category === 'profiles') {
+                document.getElementById('btnProfileImages').classList.remove('btn-secondary');
+                document.getElementById('btnProfileImages').classList.add('btn-primary');
+                document.getElementById('profileImagesContent').style.display = 'block';
+                loadProfileImages();
+            } else if (category === 'tickers') {
+                document.getElementById('btnTickerImages').classList.remove('btn-secondary');
+                document.getElementById('btnTickerImages').classList.add('btn-primary');
+                document.getElementById('tickerImagesContent').style.display = 'block';
+                loadTickerImages();
+            }
+        }
+        
+        // ============================================
+        // TICKER IMAGES MANAGEMENT
+        // ============================================
+        
+        let allTickerImages = { without: [], with: [] };
+        
+        async function loadTickerImages() {
+            try {
+                const response = await fetch('/api/admin/tickers-without-images');
+                const data = await response.json();
+                
+                if (data.success) {
+                    allTickerImages.without = data.without_images;
+                    allTickerImages.with = data.with_images;
+                    
+                    // Update stats
+                    document.getElementById('tickersTotalCount').textContent = data.total_count;
+                    document.getElementById('tickersWithCount').textContent = data.has_image_count;
+                    document.getElementById('tickersMissingCount').textContent = data.missing_count;
+                    const coverage = data.total_count > 0 ? ((data.has_image_count / data.total_count) * 100).toFixed(1) : 0;
+                    document.getElementById('tickersCoverage').textContent = `${coverage}%`;
+                    
+                    // Render lists
+                    renderTickerImagesList();
+                } else {
+                    showToast('Error loading ticker images: ' + data.error, true);
+                }
+            } catch (error) {
+                console.error('Error loading ticker images:', error);
+                showToast('Network error loading ticker images', true);
+            }
+        }
+        
+        function renderTickerImagesList() {
+            // Render tickers without images
+            const withoutList = document.getElementById('tickerImagesList');
+            if (allTickerImages.without.length === 0) {
+                withoutList.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--accent-green);">✅ All tickers have images!</div>';
+            } else {
+                let html = '';
+                allTickerImages.without.forEach(ticker => {
+                    html += `
+                        <div class="content-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                            <div>
+                                <strong style="color: var(--accent-cyan);">${ticker.display_name}</strong>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">${ticker.ticker} • ${ticker.kpi}</div>
+                            </div>
+                            <button class="btn btn-small btn-success" onclick="showTickerImageModal('${ticker.ticker}', '${ticker.display_name}')">📸 Add Image</button>
+                        </div>
+                    `;
+                });
+                withoutList.innerHTML = html;
+            }
+            
+            // Render tickers with images
+            const withList = document.getElementById('tickerImagesWithList');
+            if (allTickerImages.with.length === 0) {
+                withList.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No ticker images uploaded yet.</div>';
+            } else {
+                let html = '';
+                allTickerImages.with.forEach(ticker => {
+                    html += `
+                        <div class="content-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                <img src="${ticker.image_url}" alt="${ticker.display_name}" style="width: 40px; height: 40px; object-fit: contain; border-radius: 4px; background: var(--bg-input); padding: 4px;">
+                                <div>
+                                    <strong style="color: var(--accent-cyan);">${ticker.display_name}</strong>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">${ticker.ticker} • ${ticker.kpi}</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-small btn-secondary" onclick="showTickerImageModal('${ticker.ticker}', '${ticker.display_name}')">✏️ Change</button>
+                                <button class="btn btn-small btn-danger" onclick="removeTickerImage('${ticker.ticker}', '${ticker.display_name}')">🗑️ Remove</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                withList.innerHTML = html;
+            }
+        }
+        
+        function filterTickerImages() {
+            const search = document.getElementById('tickerSearch').value.toLowerCase();
+            const items = document.querySelectorAll('#tickerImagesList .content-item');
+            
+            items.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                item.style.display = text.includes(search) ? 'flex' : 'none';
+            });
+        }
+        
+        function showTickerImageModal(ticker, displayName) {
+            document.getElementById('tickerImageTicker').value = ticker;
+            document.getElementById('tickerImageTickerName').textContent = `${displayName} (${ticker})`;
+            document.getElementById('tickerImageFile').value = '';
+            document.getElementById('tickerImageUrl').value = '';
+            document.getElementById('tickerImagePreview').style.display = 'none';
+            
+            // Reset upload method
+            document.getElementById('uploadFileSection').style.display = 'none';
+            document.getElementById('uploadUrlSection').style.display = 'none';
+            document.getElementById('uploadMethodFile').classList.remove('btn-primary');
+            document.getElementById('uploadMethodFile').classList.add('btn-secondary');
+            document.getElementById('uploadMethodUrl').classList.remove('btn-primary');
+            document.getElementById('uploadMethodUrl').classList.add('btn-secondary');
+            
+            document.getElementById('tickerImageModal').classList.add('show');
+        }
+        
+        function closeTickerImageModal() {
+            document.getElementById('tickerImageModal').classList.remove('show');
+        }
+        
+        function selectUploadMethod(method) {
+            if (method === 'file') {
+                document.getElementById('uploadFileSection').style.display = 'block';
+                document.getElementById('uploadUrlSection').style.display = 'none';
+                document.getElementById('uploadMethodFile').classList.remove('btn-secondary');
+                document.getElementById('uploadMethodFile').classList.add('btn-primary');
+                document.getElementById('uploadMethodUrl').classList.remove('btn-primary');
+                document.getElementById('uploadMethodUrl').classList.add('btn-secondary');
+            } else {
+                document.getElementById('uploadFileSection').style.display = 'none';
+                document.getElementById('uploadUrlSection').style.display = 'block';
+                document.getElementById('uploadMethodFile').classList.remove('btn-primary');
+                document.getElementById('uploadMethodFile').classList.add('btn-secondary');
+                document.getElementById('uploadMethodUrl').classList.remove('btn-secondary');
+                document.getElementById('uploadMethodUrl').classList.add('btn-primary');
+            }
+        }
+        
+        // Preview image when file is selected
+        document.addEventListener('DOMContentLoaded', function() {
+            const fileInput = document.getElementById('tickerImageFile');
+            if (fileInput) {
+                fileInput.addEventListener('change', function(e) {
+                    if (e.target.files && e.target.files[0]) {
+                        const reader = new FileReader();
+                        reader.onload = function(event) {
+                            document.getElementById('tickerImagePreviewImg').src = event.target.result;
+                            document.getElementById('tickerImagePreview').style.display = 'block';
+                        };
+                        reader.readAsDataURL(e.target.files[0]);
+                    }
+                });
+            }
+            
+            const urlInput = document.getElementById('tickerImageUrl');
+            if (urlInput) {
+                urlInput.addEventListener('input', function(e) {
+                    const url = e.target.value;
+                    if (url) {
+                        document.getElementById('tickerImagePreviewImg').src = url;
+                        document.getElementById('tickerImagePreview').style.display = 'block';
+                    } else {
+                        document.getElementById('tickerImagePreview').style.display = 'none';
+                    }
+                });
+            }
+        });
+        
+        async function saveTickerImage() {
+            const ticker = document.getElementById('tickerImageTicker').value;
+            const file = document.getElementById('tickerImageFile').files[0];
+            const url = document.getElementById('tickerImageUrl').value;
+            
+            if (!file && !url) {
+                showToast('Please select a file or enter a URL', true);
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('ticker', ticker);
+            
+            if (file) {
+                formData.append('file', file);
+            } else {
+                formData.append('image_url', url);
+            }
+            
+            try {
+                const response = await fetch('/api/admin/ticker-image', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Ticker image saved!');
+                    closeTickerImageModal();
+                    loadTickerImages();
+                } else {
+                    showToast('Error: ' + data.error, true);
+                }
+            } catch (error) {
+                showToast('Network error: ' + error.message, true);
+            }
+        }
+        
+        async function removeTickerImage(ticker, displayName) {
+            if (!confirm(`Remove image for ${displayName}?`)) return;
+            
+            try {
+                const response = await fetch(`/api/admin/ticker-image?ticker=${encodeURIComponent(ticker)}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('Ticker image removed!');
+                    loadTickerImages();
+                } else {
+                    showToast('Error: ' + data.error, true);
+                }
+            } catch (error) {
+                showToast('Network error: ' + error.message, true);
+            }
         }
     </script>
 </body>
