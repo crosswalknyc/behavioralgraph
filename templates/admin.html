@@ -331,11 +331,17 @@
             gap: 0.5rem;
             padding: 0.3rem 0;
         }
+        
+        /* Hover effect for checkbox groups with background */
+        .checkbox-group:has(input[type="checkbox"]):hover {
+            background: var(--bg-input) !important;
+            border-color: var(--accent-cyan) !important;
+        }
 
         .checkbox-group input[type="checkbox"] {
             width: 18px;
             height: 18px;
-            accent-color: var(--accent-blue);
+            accent-color: var(--accent-cyan);
         }
 
         .checkbox-group span {
@@ -1373,42 +1379,60 @@
                     <small style="color: var(--text-secondary); font-size: 0.7rem; display: block; margin-top: 0.5rem;">Select which dashboards this user can access</small>
                     
                     <!-- Hedge Fund IQ Module and Ticker Access -->
-                    <div id="hedgeFundIQModulesSection" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-dark); border-radius: 8px; border: 1px solid var(--border-color);">
-                        <h5 style="margin: 0 0 0.75rem 0; font-size: 0.85rem; color: var(--accent-cyan);">📊 Hedge Fund IQ Tabs</h5>
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-bottom: 1rem;">
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="hedgeFundTabLiveData" class="hedgefund-tab-checkbox" checked>
-                                <span>📊 Live Data</span>
-                            </label>
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="hedgeFundTabTrends" class="hedgefund-tab-checkbox" checked>
-                                <span>📈 Trends</span>
-                            </label>
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="hedgeFundTabDailyMetrics" class="hedgefund-tab-checkbox" checked>
-                                <span>📅 Daily Metrics</span>
-                            </label>
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="hedgeFundTabHistoric" class="hedgefund-tab-checkbox" checked>
-                                <span>📜 Historic Performance</span>
-                            </label>
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="hedgeFundTabProfile" class="hedgefund-tab-checkbox" checked>
-                                <span>👥 Customer Profile</span>
-                            </label>
+                    <div id="hedgeFundIQModulesSection" style="display: none; margin-top: 1rem; padding: 1.25rem; background: linear-gradient(135deg, rgba(0, 255, 255, 0.05) 0%, rgba(138, 43, 226, 0.05) 100%); border-radius: 12px; border: 1px solid rgba(0, 255, 255, 0.2);">
+                        <!-- Tabs Section -->
+                        <div style="margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                                <span style="font-size: 1.25rem;">📊</span>
+                                <h5 style="margin: 0; font-size: 0.95rem; color: var(--accent-cyan); font-weight: 600;">Dashboard Tabs</h5>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem;">
+                                <label class="checkbox-group" style="padding: 0.5rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); transition: all 0.2s;">
+                                    <input type="checkbox" id="hedgeFundTabLiveData" class="hedgefund-tab-checkbox" checked>
+                                    <span style="font-size: 0.85rem;">📊 Live Data</span>
+                                </label>
+                                <label class="checkbox-group" style="padding: 0.5rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); transition: all 0.2s;">
+                                    <input type="checkbox" id="hedgeFundTabTrends" class="hedgefund-tab-checkbox" checked>
+                                    <span style="font-size: 0.85rem;">📈 Trends</span>
+                                </label>
+                                <label class="checkbox-group" style="padding: 0.5rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); transition: all 0.2s;">
+                                    <input type="checkbox" id="hedgeFundTabDailyMetrics" class="hedgefund-tab-checkbox" checked>
+                                    <span style="font-size: 0.85rem;">📅 Daily Metrics</span>
+                                </label>
+                                <label class="checkbox-group" style="padding: 0.5rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); transition: all 0.2s;">
+                                    <input type="checkbox" id="hedgeFundTabHistoric" class="hedgefund-tab-checkbox" checked>
+                                    <span style="font-size: 0.85rem;">📜 Historic</span>
+                                </label>
+                                <label class="checkbox-group" style="padding: 0.5rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); transition: all 0.2s;">
+                                    <input type="checkbox" id="hedgeFundTabProfile" class="hedgefund-tab-checkbox" checked>
+                                    <span style="font-size: 0.85rem;">👥 Profile</span>
+                                </label>
+                            </div>
+                            <small style="color: var(--text-secondary); font-size: 0.7rem; display: block; margin-top: 0.75rem; opacity: 0.8;">Select which tabs this user can access</small>
                         </div>
                         
-                        <h5 style="margin: 1rem 0 0.75rem 0; font-size: 0.85rem; color: var(--accent-cyan);">📈 Ticker Access</h5>
-                        <div style="margin-bottom: 0.75rem;">
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="allHedgeFundTickers" checked onchange="toggleAllHedgeFundTickers()">
-                                <span style="font-weight: 600;">All Tickers</span>
-                            </label>
+                        <!-- Tickers Section -->
+                        <div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="font-size: 1.25rem;">📈</span>
+                                    <h5 style="margin: 0; font-size: 0.95rem; color: var(--accent-cyan); font-weight: 600;">Ticker Access</h5>
+                                </div>
+                                <label class="checkbox-group" style="margin: 0; padding: 0.4rem 0.75rem; background: var(--accent-cyan); color: var(--bg-dark); border-radius: 6px; font-weight: 600; cursor: pointer;">
+                                    <input type="checkbox" id="allHedgeFundTickers" checked onchange="toggleAllHedgeFundTickers()" style="margin-right: 0.5rem;">
+                                    <span style="font-size: 0.8rem;">✓ All Tickers</span>
+                                </label>
+                            </div>
+                            <div id="hedgeFundTickerCheckboxes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.5rem; max-height: 250px; overflow-y: auto; padding: 1rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color);">
+                                <div style="grid-column: 1 / -1; text-align: center; padding: 2rem; color: var(--text-secondary);">
+                                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">⏳</div>
+                                    <div style="font-size: 0.85rem;">Loading tickers...</div>
+                                </div>
+                            </div>
+                            <small style="color: var(--text-secondary); font-size: 0.7rem; display: block; margin-top: 0.75rem; opacity: 0.8;">
+                                <span style="color: var(--accent-cyan);">💡 Tip:</span> Uncheck "All Tickers" to select specific tickers
+                            </small>
                         </div>
-                        <div id="hedgeFundTickerCheckboxes" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; max-height: 300px; overflow-y: auto; padding: 0.5rem; background: var(--bg-card); border-radius: 6px;">
-                            <div style="grid-column: span 3; text-align: center; padding: 1rem; color: var(--text-secondary);">Loading tickers...</div>
-                        </div>
-                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">Select which tickers this user can view</small>
                     </div>
                     
                     <!-- Analysis IQ Module Access -->
@@ -2775,16 +2799,16 @@
                 if (data.success && data.tickers) {
                     const container = document.getElementById('hedgeFundTickerCheckboxes');
                     container.innerHTML = data.tickers.map(ticker => `
-                        <label class="checkbox-group" style="font-size: 0.8rem;">
+                        <label class="checkbox-group" style="font-size: 0.8rem; padding: 0.5rem; background: var(--bg-dark); border-radius: 6px; border: 1px solid var(--border-color); cursor: pointer; transition: all 0.2s;" title="${ticker.display_name} - ${ticker.kpi}">
                             <input type="checkbox" class="hedgefund-ticker-checkbox" value="${ticker.ticker}" checked>
-                            <span title="${ticker.display_name} - ${ticker.kpi}">${ticker.ticker}</span>
+                            <span style="font-weight: 500; color: var(--accent-cyan);">${ticker.ticker}</span>
                         </label>
                     `).join('');
                 }
             } catch (error) {
                 console.error('Error loading tickers:', error);
                 document.getElementById('hedgeFundTickerCheckboxes').innerHTML = 
-                    '<div style="grid-column: span 3; text-align: center; padding: 1rem; color: var(--accent-red);">Error loading tickers</div>';
+                    '<div style="grid-column: 1 / -1; text-align: center; padding: 2rem; color: var(--accent-red);"><div style="font-size: 2rem; margin-bottom: 0.5rem;">⚠️</div><div style="font-size: 0.85rem;">Error loading tickers</div></div>';
             }
         }
         
