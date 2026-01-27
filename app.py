@@ -188,7 +188,7 @@ else:
 # S3 JSON PERSISTENCE HELPERS
 # ============================================================================
 
-METADATA_BUCKET = 'dashboard-metadata'  # Dedicated bucket for app metadata
+METADATA_BUCKET = 'dashboard-inputs'  # Use existing bucket for metadata (in metadata/ folder)
 
 def load_json_from_s3(filename):
     """Load JSON data from S3 metadata bucket."""
@@ -228,43 +228,45 @@ def save_json_to_s3(filename, data):
         print(f"❌ Error saving {filename} to S3: {e}")
         return False
 
-# Cache filenames
-TICKER_IMAGES_FILE = 'ticker_images_cache.json'
-TICKER_PROFILES_FILE = 'ticker_profile_mappings.json'
-SEC_ACTUALS_FILE = 'hedge_fund_sec_actuals.json'
+# Cache filenames (stored in metadata/ folder in S3)
+TICKER_IMAGES_FILE = 'metadata/ticker_images_cache.json'
+TICKER_PROFILES_FILE = 'metadata/ticker_profile_mappings.json'
+SEC_ACTUALS_FILE = 'metadata/hedge_fund_sec_actuals.json'
 
-def ensure_metadata_bucket():
-    """Ensure the metadata bucket exists, create if it doesn't."""
+def ensure_metadata_folder():
+    """Ensure the metadata folder exists in S3 by creating empty files if needed."""
     try:
         if not s3_client:
-            print("⚠️ S3 client not available, skipping bucket creation")
+            print("⚠️ S3 client not available, skipping metadata initialization")
             return False
         
-        # Check if bucket exists
-        try:
-            s3_client.head_bucket(Bucket=METADATA_BUCKET)
-            print(f"✅ Metadata bucket '{METADATA_BUCKET}' exists")
-            return True
-        except ClientError as e:
-            error_code = e.response['Error']['Code']
-            if error_code == '404':
-                # Bucket doesn't exist, create it
-                print(f"📦 Creating metadata bucket '{METADATA_BUCKET}'...")
-                s3_client.create_bucket(
-                    Bucket=METADATA_BUCKET,
-                    CreateBucketConfiguration={'LocationConstraint': S3_REGION}
-                )
-                print(f"✅ Created metadata bucket '{METADATA_BUCKET}'")
-                return True
-            else:
-                print(f"❌ Error checking bucket: {e}")
-                return False
+        print(f"✅ Using bucket '{METADATA_BUCKET}' for metadata storage")
+        
+        # Initialize empty metadata files if they don't exist
+        for filename in [TICKER_IMAGES_FILE, TICKER_PROFILES_FILE, SEC_ACTUALS_FILE]:
+            try:
+                # Try to read the file
+                s3_client.head_object(Bucket=METADATA_BUCKET, Key=filename)
+                print(f"✅ {filename} exists")
+            except ClientError as e:
+                if e.response['Error']['Code'] == '404':
+                    # File doesn't exist, create it with empty JSON
+                    print(f"📝 Creating {filename}...")
+                    s3_client.put_object(
+                        Bucket=METADATA_BUCKET,
+                        Key=filename,
+                        Body=json.dumps({}).encode('utf-8'),
+                        ContentType='application/json'
+                    )
+                    print(f"✅ Created {filename}")
+        
+        return True
     except Exception as e:
-        print(f"❌ Error ensuring metadata bucket: {e}")
+        print(f"❌ Error ensuring metadata folder: {e}")
         return False
 
-# Ensure metadata bucket exists at startup
-ensure_metadata_bucket()
+# Ensure metadata folder exists at startup
+ensure_metadata_folder()
 
 def generate_ai_insights(profile_data):
     """Generate AI-powered insights from profile data."""
