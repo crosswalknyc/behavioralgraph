@@ -900,39 +900,131 @@
 
         <!-- TICKERS SECTION -->
         <div id="section-tickers" class="admin-section">
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <h3>Total Tickers</h3>
-                    <div class="stat-value blue" id="tickersTotalCount">0</div>
+            <div class="card">
+                <h2>📈 Ticker Management</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">
+                    Manage all ticker information in one place: images, profile mappings, SEC actuals, display names, KPIs, and stock impact relevance.
+                </p>
+                
+                <!-- Search and Filter -->
+                <div style="margin-bottom: 1.5rem;">
+                    <input type="text" id="tickerSearchInput" placeholder="🔍 Search tickers..." 
+                           style="width: 100%; padding: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);"
+                           oninput="filterTickers()">
                 </div>
-                <div class="stat-card">
-                    <h3>With Metadata</h3>
-                    <div class="stat-value green" id="tickersWithMetadata">0</div>
-                </div>
-                <div class="stat-card">
-                    <h3>With Images</h3>
-                    <div class="stat-value purple" id="tickersWithImages">0</div>
-                </div>
-                <div class="stat-card">
-                    <h3>With Profiles</h3>
-                    <div class="stat-value orange" id="tickersWithProfiles">0</div>
+                
+                <!-- Tickers List -->
+                <div id="tickersList" style="max-height: 700px; overflow-y: auto;">
+                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading tickers...</div>
                 </div>
             </div>
-            
-            <div class="card">
-                <div class="card-header">
-                    <h2>📈 Hedge Fund IQ Tickers</h2>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-small btn-secondary" onclick="loadTickersManagement()">↻ Refresh</button>
+        </div>
+
+        <!-- Ticker Detail Modal -->
+        <div id="tickerDetailModal" class="modal">
+            <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+                <div class="modal-header">
+                    <h2 id="tickerDetailTitle">Ticker Details</h2>
+                    <button class="close-btn" onclick="closeTickerDetailModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <!-- Two Column Layout -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                        
+                        <!-- Left Column -->
+                        <div>
+                            <!-- Ticker Image Section -->
+                            <div class="form-section">
+                                <div class="form-section-title">📸 Ticker Image</div>
+                                <div id="tickerImagePreview" style="margin-bottom: 1rem; text-align: center;">
+                                    <img id="tickerImagePreviewImg" src="" alt="Ticker Image" style="max-width: 150px; max-height: 150px; border-radius: 8px; display: none;">
+                                    <div id="tickerImagePlaceholder" style="width: 150px; height: 150px; background: var(--bg-input); border: 2px dashed var(--border-color); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin: 0 auto; color: var(--text-secondary); font-size: 0.85rem;">
+                                        No image
+                                    </div>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0.75rem;">
+                                    <label style="font-size: 0.85rem;">Upload Image</label>
+                                    <input type="file" id="tickerDetailImageFile" accept="image/*" style="font-size: 0.85rem;">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0.75rem;">
+                                    <label style="font-size: 0.85rem;">Or Image URL</label>
+                                    <input type="text" id="tickerDetailImageURL" placeholder="https://..." style="font-size: 0.85rem;">
+                                </div>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button class="btn btn-small btn-primary" onclick="saveTickerImageFromDetail()">💾 Save</button>
+                                    <button class="btn btn-small btn-danger" onclick="removeTickerImageInModal()" id="removeTickerImageBtn" style="display: none;">🗑️ Remove</button>
+                                </div>
+                            </div>
+
+                            <!-- Profile Mapping Section -->
+                            <div class="form-section" style="margin-top: 1.5rem;">
+                                <div class="form-section-title">🔗 Customer Profile</div>
+                                <div class="form-group" style="margin-bottom: 0.75rem;">
+                                    <label style="font-size: 0.85rem;">Profile Filename</label>
+                                    <input type="text" id="tickerProfileFilename" placeholder="Enter filename (without .csv)" style="font-size: 0.85rem;">
+                                    <small style="font-size: 0.75rem;">Leave empty to use ticker symbol</small>
+                                </div>
+                                <button class="btn btn-small btn-primary" onclick="saveTickerProfileMapping()">💾 Save</button>
+                            </div>
+                        </div>
+
+                        <!-- Right Column -->
+                        <div>
+                            <!-- Ticker Information Section -->
+                            <div class="form-section">
+                                <div class="form-section-title">ℹ️ Ticker Information</div>
+                                <div class="form-group" style="margin-bottom: 0.75rem;">
+                                    <label style="font-size: 0.85rem;">Ticker Symbol</label>
+                                    <input type="text" id="tickerSymbol" readonly style="background: var(--bg-dark); cursor: not-allowed; font-size: 0.85rem;">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0.75rem;">
+                                    <label style="font-size: 0.85rem;">Display Name</label>
+                                    <input type="text" id="tickerDisplayName" placeholder="e.g., Disney" style="font-size: 0.85rem;">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0.75rem;">
+                                    <label style="font-size: 0.85rem;">KPI Measurement</label>
+                                    <input type="text" id="tickerKPI" placeholder="e.g., Disney+ Subscribers" style="font-size: 0.85rem;">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0.75rem;">
+                                    <label style="font-size: 0.85rem;">Stock Impact Relevance (%)</label>
+                                    <input type="number" id="tickerRelevance" placeholder="0-100" min="0" max="100" step="0.1" style="font-size: 0.85rem;">
+                                    <small style="font-size: 0.75rem;">What percentage does this KPI represent of the stock price movement?</small>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0.75rem;">
+                                    <label style="font-size: 0.85rem;">S3 File</label>
+                                    <input type="text" id="tickerS3Key" readonly style="background: var(--bg-dark); cursor: not-allowed; font-size: 0.85rem;">
+                                </div>
+                                <button class="btn btn-small btn-success" onclick="saveTickerMetadataFromModal()">💾 Save Metadata</button>
+                            </div>
+
+                            <!-- SEC Actuals Section -->
+                            <div class="form-section" style="margin-top: 1.5rem;">
+                                <div class="form-section-title">📊 SEC Actuals</div>
+                                <div id="tickerSecActualsList" style="margin-bottom: 0.75rem; max-height: 200px; overflow-y: auto;">
+                                    <div style="text-align: center; padding: 1rem; color: var(--text-secondary); font-size: 0.85rem;">No SEC actuals recorded</div>
+                                </div>
+                                <button class="btn btn-small btn-success" onclick="showAddSecActualForm()">+ Add SEC Actual</button>
+                                
+                                <!-- Add SEC Actual Form (hidden by default) -->
+                                <div id="addSecActualForm" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border-color);">
+                                    <div class="form-group" style="margin-bottom: 0.75rem;">
+                                        <label style="font-size: 0.85rem;">Quarter</label>
+                                        <input type="text" id="secActualQuarter" placeholder="Q1 2026" style="font-size: 0.85rem;">
+                                        <small style="font-size: 0.75rem;">Format: Q# YYYY (e.g., Q1 2026)</small>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0.75rem;">
+                                        <label style="font-size: 0.85rem;">SEC Net Growth Rate %</label>
+                                        <input type="number" id="secActualValue" placeholder="0.00" step="0.01" style="font-size: 0.85rem;">
+                                        <small style="font-size: 0.75rem;">Enter as percentage (e.g., 2.5 for 2.5%)</small>
+                                    </div>
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <button class="btn btn-small btn-success" onclick="saveSecActualFromForm()">💾 Save</button>
+                                        <button class="btn btn-small btn-secondary" onclick="hideAddSecActualForm()">Cancel</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                
-                <div class="content-filters">
-                    <input type="text" id="tickerSearch" class="content-search" placeholder="🔍 Search tickers..." onkeyup="filterTickersManagement()">
-                </div>
-                
-                <div id="tickersManagementList" class="content-accordion" style="max-height: 600px; overflow-y: auto;">
-                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
                 </div>
             </div>
         </div>
