@@ -7457,12 +7457,12 @@
                     </div>
                 </div>
                 <div class="view-toggle" id="iqTabsContainer">
-                    <button class="view-btn active {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" onclick="showProfileIQ()" {% if not has_profile_iq_access %}disabled{% endif %}>🎯 Profile IQ</button>
-                    <button class="view-btn {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" onclick="showSubscriberIQ()" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</button>
+                    <button class="view-btn active {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" {% if not has_profile_iq_access %}disabled{% endif %}>🎯 Profile IQ</button>
+                    <button class="view-btn {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</button>
                     <button class="view-btn {% if not has_hedge_fund_iq_access %}disabled{% endif %}" id="hedgeFundIQTab" {% if not has_hedge_fund_iq_access %}disabled{% endif %}>📈 Hedge Fund IQ</button>
-                    <button class="view-btn" id="dashboardViewBtn" onclick="showDashboardView()" style="display: none;">📊 Dashboard</button>
+                    <button class="view-btn" id="dashboardViewBtn" style="display: none;">📊 Dashboard</button>
                     {% if role == 'admin' or role == 'enterprise' or has_analysis_iq_access %}
-                    <button class="view-btn" id="customAnalysisBtn" onclick="showCustomAnalysis()">🔧 Analysis IQ</button>
+                    <button class="view-btn" id="customAnalysisBtn">🔧 Analysis IQ</button>
                     {% endif %}
                     {% if role == 'admin' %}
                     <a href="/admin" class="view-btn" id="adminViewBtn">🔐 Admin</a>
@@ -11278,15 +11278,26 @@
             // Initialize global tooltip system
             initGlobalTooltip();
             
-            // Attach event listeners to navigation buttons
-            const hedgeFundIQTab = document.getElementById('hedgeFundIQTab');
-            if (hedgeFundIQTab) {
-                hedgeFundIQTab.addEventListener('click', function() {
-                    if (!this.classList.contains('disabled')) {
-                        showHedgeFundIQ();
-                    }
-                });
-            }
+            // Attach event listeners to ALL navigation buttons
+            const navButtons = [
+                { id: 'profileIQTab', handler: showProfileIQ },
+                { id: 'subscriberIQTab', handler: showSubscriberIQ },
+                { id: 'hedgeFundIQTab', handler: showHedgeFundIQ },
+                { id: 'dashboardViewBtn', handler: showDashboardView },
+                { id: 'customAnalysisBtn', handler: showCustomAnalysis }
+            ];
+            
+            navButtons.forEach(({ id, handler }) => {
+                const button = document.getElementById(id);
+                if (button && handler) {
+                    button.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        if (!this.classList.contains('disabled')) {
+                            handler();
+                        }
+                    });
+                }
+            });
         });
         
         // Global tooltip system

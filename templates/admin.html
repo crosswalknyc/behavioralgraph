@@ -2533,6 +2533,9 @@
             populateCategoryCheckboxes();
             populateRunCheckboxes();
             
+            // Preload Hedge Fund tickers so they're ready when user expands section
+            loadHedgeFundTickersForAccess();
+            
             document.getElementById('userModal').classList.add('show');
         }
 
@@ -2901,14 +2904,18 @@
         
         // Load Hedge Fund Tickers for Access Control
         async function loadHedgeFundTickersForAccess() {
+            console.log('🔄 Loading Hedge Fund tickers for access control...');
             try {
                 const response = await fetch('/api/hedge-fund-iq/tickers');
+                console.log('📡 Response status:', response.status);
                 const data = await response.json();
+                console.log('📊 Ticker data:', data);
                 
-                if (data.success && data.tickers) {
+                if (data.success && data.tickers && data.tickers.length > 0) {
                     const container = document.getElementById('hedgeFundTickersList');
                     container.innerHTML = '';
                     
+                    console.log(`✅ Loading ${data.tickers.length} tickers...`);
                     data.tickers.forEach(ticker => {
                         const label = document.createElement('label');
                         label.className = 'checkbox-group';
@@ -2918,14 +2925,16 @@
                         `;
                         container.appendChild(label);
                     });
+                    console.log('✅ Tickers loaded successfully');
                 } else {
+                    console.warn('⚠️ No tickers in response:', data);
                     document.getElementById('hedgeFundTickersList').innerHTML = 
                         '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">No tickers available</div>';
                 }
             } catch (error) {
-                console.error('Error loading hedge fund tickers:', error);
+                console.error('❌ Error loading hedge fund tickers:', error);
                 document.getElementById('hedgeFundTickersList').innerHTML = 
-                    '<div style="padding: 0.5rem; color: var(--accent-red); font-size: 0.85rem;">Error loading tickers</div>';
+                    '<div style="padding: 0.5rem; color: var(--accent-red); font-size: 0.85rem;">Error loading tickers: ' + error.message + '</div>';
             }
         }
         
