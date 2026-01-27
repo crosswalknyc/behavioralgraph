@@ -120,7 +120,8 @@ try:
         connect_timeout=2,
         read_timeout=2,
         retries={'max_attempts': 1},
-        signature_version='s3v4'  # Force signature version 4 for presigned URLs
+        signature_version='s3v4',  # Force signature version 4 for presigned URLs
+        s3={'addressing_style': 'virtual'}  # Use virtual-hosted-style URLs
     )
     s3_client = boto3.client(
         's3',
@@ -129,7 +130,8 @@ try:
         aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
         config=config
     )
-    print(f"✅ S3 client initialized for {S3_REGION} with signature version 4")
+    print(f"✅ S3 client initialized for region: {S3_REGION} with signature version 4")
+    print(f"🔍 S3 client region: {s3_client.meta.region_name}")
     # Use same client for all buckets (all in us-east-2)
     hedge_fund_s3_client = s3_client
 except Exception as e:
@@ -138,7 +140,10 @@ except Exception as e:
     try:
         # Fallback with signature version 4
         from botocore.client import Config
-        config = Config(signature_version='s3v4')
+        config = Config(
+            signature_version='s3v4',
+            s3={'addressing_style': 'virtual'}
+        )
         s3_client = boto3.client(
             's3',
             region_name=S3_REGION,
@@ -146,7 +151,8 @@ except Exception as e:
             aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
             config=config
         )
-        print(f"✅ S3 client initialized with fallback config (signature v4)")
+        print(f"✅ S3 client initialized with fallback config for region: {S3_REGION}")
+        print(f"🔍 S3 client region: {s3_client.meta.region_name}")
         # Use same client for all buckets
         hedge_fund_s3_client = s3_client
     except Exception as e2:
@@ -5039,8 +5045,7 @@ def get_profile_data(filename):
                     'Key': filename,
                     'ResponseContentType': 'text/csv'
                 },
-                ExpiresIn=3600,  # 1 hour
-                HttpMethod='GET'
+                ExpiresIn=3600  # 1 hour
             )
             
             print(f"✅ Generated presigned URL for {filename}")
