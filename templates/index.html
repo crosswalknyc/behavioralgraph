@@ -2521,47 +2521,33 @@
             text-align: left;
         }
 
-        /* Pulsing Card Animation - Enhanced */
+        /* Pulsing Card - Static (no animation on card itself) */
         .pulsing-card {
-            animation: pulse-glow 1.5s ease-in-out infinite;
-            border: 2px solid transparent;
+            border: 2px solid var(--accent-cyan);
             position: relative;
-        }
-        
-        @keyframes pulse-glow {
-            0%, 100% {
-                border-color: var(--accent-cyan);
-                box-shadow: 0 0 20px rgba(0, 255, 255, 0.5), 0 0 40px rgba(0, 255, 255, 0.2);
-                transform: scale(1);
-            }
-            50% {
-                border-color: var(--accent-purple);
-                box-shadow: 0 0 30px rgba(138, 43, 226, 0.7), 0 0 60px rgba(138, 43, 226, 0.3);
-                transform: scale(1.02);
-            }
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
         
         .pulsing-card:hover {
-            transform: translateY(-2px) scale(1.02) !important;
-            box-shadow: 0 4px 30px rgba(0, 255, 255, 0.6) !important;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 255, 255, 0.4);
         }
         
-        /* Pulsing Number Animation */
+        /* Pulsing Number Animation - Subtle */
         .pulsing-number {
-            animation: pulse-number 1.5s ease-in-out infinite;
+            animation: pulse-number 2s ease-in-out infinite;
             display: inline-block;
         }
         
         @keyframes pulse-number {
             0%, 100% {
                 transform: scale(1);
-                color: var(--text-primary);
-                text-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+                opacity: 1;
             }
             50% {
-                transform: scale(1.05);
-                color: var(--accent-cyan);
-                text-shadow: 0 0 20px rgba(0, 255, 255, 0.6), 0 0 30px rgba(138, 43, 226, 0.4);
+                transform: scale(1.02);
+                opacity: 0.85;
             }
         }
         
