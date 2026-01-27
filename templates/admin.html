@@ -363,6 +363,57 @@
             margin-bottom: 0.75rem;
             text-transform: uppercase;
         }
+        
+        .dashboard-access-item {
+            background: var(--bg-input);
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+        
+        .dashboard-access-item:hover {
+            border-color: var(--accent-cyan);
+        }
+        
+        .dashboard-access-header {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        
+        .dashboard-access-header:hover {
+            background: rgba(0, 255, 255, 0.05);
+        }
+        
+        .dashboard-access-content {
+            padding: 0 1rem 1rem 1rem;
+            animation: slideDown 0.2s ease;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .collapse-icon {
+            color: var(--accent-cyan);
+            font-size: 0.8rem;
+            transition: transform 0.2s ease;
+        }
+        
+        .collapse-icon.rotated {
+            transform: rotate(-90deg);
+        }
 
         .category-group {
             margin-bottom: 0.75rem;
@@ -1358,83 +1409,152 @@
                 </div>
 
                 <div class="access-section">
-                    <h4>🎯 Dashboard Access</h4>
-                    <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
-                        <label class="checkbox-group">
-                            <input type="checkbox" id="hasProfileIQAccess" checked>
-                            <span>Profile IQ</span>
-                        </label>
-                        <label class="checkbox-group">
-                            <input type="checkbox" id="hasSubscriberIQAccess">
-                            <span>Subscriber IQ</span>
-                        </label>
-                        <label class="checkbox-group">
-                            <input type="checkbox" id="hasHedgeFundIQAccess">
-                            <span>Hedge Fund IQ</span>
-                        </label>
-                        <label class="checkbox-group">
-                            <input type="checkbox" id="hasAnalysisIQAccess" onchange="toggleAnalysisIQModules()">
-                            <span>Analysis IQ</span>
-                        </label>
-                    </div>
-                    <small style="color: var(--text-secondary); font-size: 0.7rem; display: block; margin-top: 0.5rem;">Select which dashboards this user can access</small>
+                    <h4 style="margin-bottom: 1rem;">🎯 Dashboard Access</h4>
                     
-                    <!-- Analysis IQ Module Access -->
-                    <div id="analysisIQModulesSection" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-dark); border-radius: 8px; border: 1px solid var(--border-color);">
-                        <h5 style="margin: 0 0 0.75rem 0; font-size: 0.85rem; color: var(--accent-lime);">📊 Analysis IQ Modules</h5>
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="moduleProfileAnalysis" class="analysis-module-checkbox">
-                                <span>🎯 Profile Analysis</span>
+                    <!-- Profile IQ Access -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header" onclick="toggleDashboardSection('profileIQ')">
+                            <label class="checkbox-group" onclick="event.stopPropagation()">
+                                <input type="checkbox" id="hasProfileIQAccess" checked onchange="toggleProfileIQSection()">
+                                <span style="font-weight: 600;">✅ PROFILE IQ</span>
                             </label>
+                            <span class="collapse-icon" id="profileIQIcon">▼</span>
+                        </div>
+                        <div id="profileIQSection" class="dashboard-access-content" style="display: none;">
+                            <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
+                                <div style="margin-bottom: 1rem;">
+                                    <h5 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--accent-cyan);">📁 Category Access</h5>
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="allCategories" checked onchange="toggleAllCategories()">
+                                        <span>All Categories</span>
+                                    </label>
+                                    <div id="categoryCheckboxes" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;">
+                                        <!-- Populated by JS -->
+                                    </div>
+                                </div>
+                                <div>
+                                    <h5 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--accent-cyan);">📊 Run Access</h5>
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="allRuns" checked onchange="toggleAllRuns()">
+                                        <span>All Runs</span>
+                                    </label>
+                                    <div id="runCheckboxes" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;">
+                                        <!-- Populated by JS -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Subscriber IQ Access -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header">
                             <label class="checkbox-group">
-                                <input type="checkbox" id="moduleTalentSearch" class="analysis-module-checkbox">
-                                <span>🔍 Talent Search</span>
-                            </label>
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="moduleTalentTheater" class="analysis-module-checkbox">
-                                <span>🎭 Ticket Sales</span>
-                            </label>
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="moduleSVOD" class="analysis-module-checkbox">
-                                <span>📺 SVOD</span>
-                            </label>
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="moduleCampaign" class="analysis-module-checkbox">
-                                <span>📈 Campaign</span>
-                            </label>
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="moduleCrossShow" class="analysis-module-checkbox">
-                                <span>🔄 Cross Show</span>
-                            </label>
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="moduleWatchTime" class="analysis-module-checkbox">
-                                <span>⏱️ Watch Time</span>
+                                <input type="checkbox" id="hasSubscriberIQAccess">
+                                <span style="font-weight: 600;">📊 SUBSCRIBER IQ</span>
                             </label>
                         </div>
-                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">Credits can be used on any selected module</small>
                     </div>
-                </div>
-
-                <div class="access-section">
-                    <h4>📁 Category Access</h4>
-                    <label class="checkbox-group">
-                        <input type="checkbox" id="allCategories" checked onchange="toggleAllCategories()">
-                        <span>All Categories</span>
-                    </label>
-                    <div id="categoryCheckboxes">
-                        <!-- Populated by JS -->
+                    
+                    <!-- Hedge Fund IQ Access -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header" onclick="toggleDashboardSection('hedgeFundIQ')">
+                            <label class="checkbox-group" onclick="event.stopPropagation()">
+                                <input type="checkbox" id="hasHedgeFundIQAccess" onchange="toggleHedgeFundIQSection()">
+                                <span style="font-weight: 600;">📈 HEDGE FUND IQ</span>
+                            </label>
+                            <span class="collapse-icon" id="hedgeFundIQIcon">▼</span>
+                        </div>
+                        <div id="hedgeFundIQSection" class="dashboard-access-content" style="display: none;">
+                            <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
+                                <div style="margin-bottom: 1rem;">
+                                    <h5 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--accent-cyan);">📑 Tab Access</h5>
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="allHedgeFundTabs" onchange="toggleAllHedgeFundTabs()">
+                                        <span>All Tabs</span>
+                                    </label>
+                                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; margin-top: 0.5rem;">
+                                        <label class="checkbox-group">
+                                            <input type="checkbox" class="hedge-fund-tab-checkbox" value="Live Data">
+                                            <span>📊 Live Data</span>
+                                        </label>
+                                        <label class="checkbox-group">
+                                            <input type="checkbox" class="hedge-fund-tab-checkbox" value="Trends">
+                                            <span>📈 Trends</span>
+                                        </label>
+                                        <label class="checkbox-group">
+                                            <input type="checkbox" class="hedge-fund-tab-checkbox" value="Daily Metrics">
+                                            <span>📅 Daily Metrics</span>
+                                        </label>
+                                        <label class="checkbox-group">
+                                            <input type="checkbox" class="hedge-fund-tab-checkbox" value="Historic Performance">
+                                            <span>📜 Historic Performance</span>
+                                        </label>
+                                        <label class="checkbox-group">
+                                            <input type="checkbox" class="hedge-fund-tab-checkbox" value="Customer Profile">
+                                            <span>👥 Customer Profile</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h5 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--accent-cyan);">📊 Ticker Access</h5>
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="allHedgeFundTickers" onchange="toggleAllHedgeFundTickers()">
+                                        <span>All Tickers</span>
+                                    </label>
+                                    <div id="hedgeFundTickersList" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                                        <!-- Populated by JS -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-
-                <div class="access-section">
-                    <h4>📊 Run Access</h4>
-                    <label class="checkbox-group">
-                        <input type="checkbox" id="allRuns" checked onchange="toggleAllRuns()">
-                        <span>All Runs</span>
-                    </label>
-                    <div id="runCheckboxes">
-                        <!-- Populated by JS -->
+                    
+                    <!-- Analysis IQ Access -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header" onclick="toggleDashboardSection('analysisIQ')">
+                            <label class="checkbox-group" onclick="event.stopPropagation()">
+                                <input type="checkbox" id="hasAnalysisIQAccess" onchange="toggleAnalysisIQSection()">
+                                <span style="font-weight: 600;">📊 ANALYSIS IQ</span>
+                            </label>
+                            <span class="collapse-icon" id="analysisIQIcon">▼</span>
+                        </div>
+                        <div id="analysisIQSection" class="dashboard-access-content" style="display: none;">
+                            <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
+                                <h5 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--accent-cyan);">📑 Module Access</h5>
+                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="moduleProfileAnalysis" class="analysis-module-checkbox">
+                                        <span>🎯 Profile Analysis</span>
+                                    </label>
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="moduleTalentSearch" class="analysis-module-checkbox">
+                                        <span>🔍 Talent Search</span>
+                                    </label>
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="moduleTalentTheater" class="analysis-module-checkbox">
+                                        <span>🎭 Ticket Sales</span>
+                                    </label>
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="moduleSVOD" class="analysis-module-checkbox">
+                                        <span>📺 SVOD</span>
+                                    </label>
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="moduleCampaign" class="analysis-module-checkbox">
+                                        <span>📈 Campaign</span>
+                                    </label>
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="moduleCrossShow" class="analysis-module-checkbox">
+                                        <span>🔄 Cross Show</span>
+                                    </label>
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="moduleWatchTime" class="analysis-module-checkbox">
+                                        <span>⏱️ Watch Time</span>
+                                    </label>
+                                </div>
+                                <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">Credits can be used on any selected module</small>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -2394,8 +2514,20 @@
             document.getElementById('hasSubscriberIQAccess').checked = false;
             document.getElementById('hasHedgeFundIQAccess').checked = false;
             document.getElementById('hasAnalysisIQAccess').checked = false;
+            
+            // Reset Hedge Fund IQ section
+            document.getElementById('hedgeFundIQSection').style.display = 'none';
+            document.getElementById('hedgeFundIQIcon').classList.add('rotated');
+            document.querySelectorAll('.hedge-fund-tab-checkbox').forEach(cb => cb.checked = false);
+            document.querySelectorAll('.hedge-fund-ticker-checkbox').forEach(cb => cb.checked = false);
+            document.getElementById('allHedgeFundTabs').checked = false;
+            document.getElementById('allHedgeFundTickers').checked = false;
+            
+            // Reset Analysis IQ section
             document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
-            document.getElementById('analysisIQModulesSection').style.display = 'none';
+            document.getElementById('analysisIQSection').style.display = 'none';
+            document.getElementById('analysisIQIcon').classList.add('rotated');
+            
             document.getElementById('originalUsername').value = '';
             
             populateCategoryCheckboxes();
@@ -2433,9 +2565,12 @@
             document.getElementById('hasHedgeFundIQAccess').checked = user.has_hedge_fund_iq_access === true; // Default false
             document.getElementById('hasAnalysisIQAccess').checked = user.has_analysis_iq_access === true; // Default false
             
+            // Set Hedge Fund IQ access (tabs and tickers)
+            setHedgeFundIQAccess(user);
+            
             // Set Analysis IQ modules and show/hide section
             setAnalysisIQModules(user.analysis_iq_modules || []);
-            toggleAnalysisIQModules();
+            toggleAnalysisIQSection();
             
             document.getElementById('originalUsername').value = username;
             document.getElementById('newUsername').disabled = false; // Allow editing username
@@ -2686,15 +2821,166 @@
             }
         }
 
-        function toggleAnalysisIQModules() {
-            const checkbox = document.getElementById('hasAnalysisIQAccess');
-            const modulesSection = document.getElementById('analysisIQModulesSection');
-            if (checkbox.checked) {
-                modulesSection.style.display = 'block';
+        // Collapsible Dashboard Section Toggle
+        function toggleDashboardSection(sectionName) {
+            const section = document.getElementById(`${sectionName}Section`);
+            const icon = document.getElementById(`${sectionName}Icon`);
+            
+            if (section.style.display === 'none' || section.style.display === '') {
+                section.style.display = 'block';
+                icon.classList.remove('rotated');
             } else {
-                modulesSection.style.display = 'none';
-                // Uncheck all module checkboxes when Analysis IQ is unchecked
+                section.style.display = 'none';
+                icon.classList.add('rotated');
+            }
+        }
+        
+        function toggleProfileIQSection() {
+            const checkbox = document.getElementById('hasProfileIQAccess');
+            if (!checkbox.checked) {
+                document.getElementById('profileIQSection').style.display = 'none';
+                document.getElementById('profileIQIcon').classList.add('rotated');
+            }
+        }
+        
+        function toggleHedgeFundIQSection() {
+            const checkbox = document.getElementById('hasHedgeFundIQAccess');
+            const section = document.getElementById('hedgeFundIQSection');
+            const icon = document.getElementById('hedgeFundIQIcon');
+            
+            if (checkbox.checked) {
+                section.style.display = 'block';
+                icon.classList.remove('rotated');
+                // Load tickers if not already loaded
+                if (document.getElementById('hedgeFundTickersList').children.length === 0) {
+                    loadHedgeFundTickersForAccess();
+                }
+            } else {
+                section.style.display = 'none';
+                icon.classList.add('rotated');
+                // Uncheck all tabs and tickers
+                document.querySelectorAll('.hedge-fund-tab-checkbox').forEach(cb => cb.checked = false);
+                document.querySelectorAll('.hedge-fund-ticker-checkbox').forEach(cb => cb.checked = false);
+            }
+        }
+        
+        function toggleAnalysisIQSection() {
+            const checkbox = document.getElementById('hasAnalysisIQAccess');
+            const section = document.getElementById('analysisIQSection');
+            const icon = document.getElementById('analysisIQIcon');
+            
+            if (checkbox.checked) {
+                section.style.display = 'block';
+                icon.classList.remove('rotated');
+            } else {
+                section.style.display = 'none';
+                icon.classList.add('rotated');
+                // Uncheck all module checkboxes
                 document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
+            }
+        }
+        
+        // Keep old function for backward compatibility
+        function toggleAnalysisIQModules() {
+            toggleAnalysisIQSection();
+        }
+        
+        // Hedge Fund IQ Tab Toggle
+        function toggleAllHedgeFundTabs() {
+            const allTabsCheckbox = document.getElementById('allHedgeFundTabs');
+            const tabCheckboxes = document.querySelectorAll('.hedge-fund-tab-checkbox');
+            tabCheckboxes.forEach(cb => cb.checked = allTabsCheckbox.checked);
+        }
+        
+        // Hedge Fund IQ Ticker Toggle
+        function toggleAllHedgeFundTickers() {
+            const allTickersCheckbox = document.getElementById('allHedgeFundTickers');
+            const tickerCheckboxes = document.querySelectorAll('.hedge-fund-ticker-checkbox');
+            tickerCheckboxes.forEach(cb => cb.checked = allTickersCheckbox.checked);
+        }
+        
+        // Load Hedge Fund Tickers for Access Control
+        async function loadHedgeFundTickersForAccess() {
+            try {
+                const response = await fetch('/api/hedge-fund-iq/tickers');
+                const data = await response.json();
+                
+                if (data.success && data.tickers) {
+                    const container = document.getElementById('hedgeFundTickersList');
+                    container.innerHTML = '';
+                    
+                    data.tickers.forEach(ticker => {
+                        const label = document.createElement('label');
+                        label.className = 'checkbox-group';
+                        label.innerHTML = `
+                            <input type="checkbox" class="hedge-fund-ticker-checkbox" value="${ticker.ticker}">
+                            <span>${ticker.ticker}</span>
+                        `;
+                        container.appendChild(label);
+                    });
+                } else {
+                    document.getElementById('hedgeFundTickersList').innerHTML = 
+                        '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">No tickers available</div>';
+                }
+            } catch (error) {
+                console.error('Error loading hedge fund tickers:', error);
+                document.getElementById('hedgeFundTickersList').innerHTML = 
+                    '<div style="padding: 0.5rem; color: var(--accent-red); font-size: 0.85rem;">Error loading tickers</div>';
+            }
+        }
+        
+        // Get Hedge Fund IQ Tabs
+        function getHedgeFundIQTabs() {
+            const tabs = [];
+            document.querySelectorAll('.hedge-fund-tab-checkbox:checked').forEach(cb => {
+                tabs.push(cb.value);
+            });
+            return tabs;
+        }
+        
+        // Get Hedge Fund IQ Tickers
+        function getHedgeFundIQTickers() {
+            const tickers = [];
+            document.querySelectorAll('.hedge-fund-ticker-checkbox:checked').forEach(cb => {
+                tickers.push(cb.value);
+            });
+            return tickers;
+        }
+        
+        // Set Hedge Fund IQ Access (for editing users)
+        function setHedgeFundIQAccess(user) {
+            // Set main checkbox
+            const hasAccess = user.has_hedge_fund_iq_access === true;
+            document.getElementById('hasHedgeFundIQAccess').checked = hasAccess;
+            
+            if (hasAccess) {
+                // Show section
+                document.getElementById('hedgeFundIQSection').style.display = 'block';
+                document.getElementById('hedgeFundIQIcon').classList.remove('rotated');
+                
+                // Load tickers first, then set selected ones
+                loadHedgeFundTickersForAccess().then(() => {
+                    // Set tabs
+                    const tabs = user.hedge_fund_iq_tabs || [];
+                    document.querySelectorAll('.hedge-fund-tab-checkbox').forEach(cb => {
+                        cb.checked = tabs.includes(cb.value);
+                    });
+                    
+                    // Set tickers
+                    const tickers = user.hedge_fund_iq_tickers || [];
+                    document.querySelectorAll('.hedge-fund-ticker-checkbox').forEach(cb => {
+                        cb.checked = tickers.includes(cb.value);
+                    });
+                    
+                    // Update "All" checkboxes
+                    const allTabsChecked = document.querySelectorAll('.hedge-fund-tab-checkbox:checked').length === 
+                                          document.querySelectorAll('.hedge-fund-tab-checkbox').length;
+                    document.getElementById('allHedgeFundTabs').checked = allTabsChecked;
+                    
+                    const allTickersChecked = document.querySelectorAll('.hedge-fund-ticker-checkbox:checked').length === 
+                                             document.querySelectorAll('.hedge-fund-ticker-checkbox').length;
+                    document.getElementById('allHedgeFundTickers').checked = allTickersChecked;
+                });
             }
         }
 
@@ -2911,7 +3197,8 @@
                 has_profile_iq_access: document.getElementById('hasProfileIQAccess').checked,
                 has_subscriber_iq_access: document.getElementById('hasSubscriberIQAccess').checked,
                 has_hedge_fund_iq_access: document.getElementById('hasHedgeFundIQAccess').checked,
-                hedge_fund_iq_tickers: ['*'], // Default to all tickers
+                hedge_fund_iq_tabs: getHedgeFundIQTabs(),
+                hedge_fund_iq_tickers: document.getElementById('allHedgeFundTickers').checked ? ['*'] : getHedgeFundIQTickers(),
                 has_analysis_iq_access: document.getElementById('hasAnalysisIQAccess').checked,
                 analysis_iq_modules: getAnalysisIQModules(),
                 send_welcome_email: document.getElementById('sendWelcomeEmail').checked
