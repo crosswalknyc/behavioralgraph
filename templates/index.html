@@ -12923,48 +12923,6 @@
                 }
             }, 500);
         }
-            `;
-            
-            // Extract brand name from current profile filename
-            const brandName = extractDisplayName(currentProfileFilename);
-            console.log('📝 Brand name extracted:', brandName);
-            
-            // Call the existing renderDashboard function
-            console.log('🔍 Checking for renderDashboard function...');
-            console.log('renderDashboard exists:', typeof window.renderDashboard);
-            
-            if (window.renderDashboard) {
-                console.log('✅ Calling renderDashboard with:', {
-                    rows: csvData.length,
-                    brandName: brandName,
-                    dateRange: null
-                });
-                
-                try {
-                    window.renderDashboard(csvData, brandName, null);
-                    console.log('✅ renderDashboard completed');
-                } catch (error) {
-                    console.error('❌ Error in renderDashboard:', error);
-                    console.error('Stack:', error.stack);
-                    container.innerHTML = `
-                        <div class="insight-card-v2" style="text-align: center; padding: 3rem;">
-                            <h3 style="color: var(--accent-red); margin-bottom: 1rem;">❌ Error Rendering Dashboard</h3>
-                            <p style="color: var(--text-secondary);">${error.message}</p>
-                            <p style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 1rem;">Check console for details</p>
-                        </div>
-                    `;
-                }
-            } else {
-                console.error('❌ renderDashboard function not available');
-                container.innerHTML = `
-                    <div class="insight-card-v2" style="text-align: center; padding: 3rem;">
-                        <h3 style="color: var(--text-secondary); margin-bottom: 1rem;">⚠️ Dashboard Not Ready</h3>
-                        <p style="color: var(--text-secondary);">The dashboard rendering function is not available.</p>
-                        <p style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 1rem;">Please refresh the page</p>
-                    </div>
-                `;
-            }
-        }
         
         let filteredTickerData = null;
         
