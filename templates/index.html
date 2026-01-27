@@ -10953,15 +10953,26 @@
 
                         <!-- Trends Tab -->
                         <div id="trendsTab" class="ticker-tab-content" style="display: none;">
-                            <!-- Date Range Selector -->
+                            <!-- Date Range Selector (Collapsible) -->
                             <div class="insight-card-v2" style="margin-bottom: 1.5rem;">
-                                <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                                    <label style="color: var(--text-primary); font-weight: 600;">📅 Date Range:</label>
-                                    <input type="date" id="trendsStartDate" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
-                                    <span style="color: var(--text-secondary);">to</span>
-                                    <input type="date" id="trendsEndDate" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
-                                    <button class="dash-action-btn" onclick="applyTrendsDateRange()">Apply</button>
-                                    <button class="dash-action-btn" onclick="resetToQuarterToDate()">Reset to QTD</button>
+                                <!-- Collapsed View (Default) -->
+                                <div id="dateRangeCollapsed" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleDateRangeExpanded()">
+                                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                        <span style="color: var(--text-primary); font-weight: 600;">📅 DATE RANGE:</span>
+                                        <span id="dateRangeDisplay" style="color: var(--accent-cyan); font-weight: 600;">Loading...</span>
+                                    </div>
+                                    <span id="dateRangeToggleIcon" style="color: var(--text-secondary); font-size: 1.2rem; transition: transform 0.2s;">▼</span>
+                                </div>
+                                
+                                <!-- Expanded View (Hidden by default) -->
+                                <div id="dateRangeExpanded" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                                    <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                                        <input type="date" id="trendsStartDate" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
+                                        <span style="color: var(--text-secondary);">to</span>
+                                        <input type="date" id="trendsEndDate" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
+                                        <button class="dash-action-btn" onclick="applyTrendsDateRange()">Apply</button>
+                                        <button class="dash-action-btn" onclick="resetToQuarterToDate()">Reset to QTD</button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -12864,6 +12875,34 @@
         
         let filteredTickerData = null;
         
+        function toggleDateRangeExpanded() {
+            const collapsed = document.getElementById('dateRangeCollapsed');
+            const expanded = document.getElementById('dateRangeExpanded');
+            const icon = document.getElementById('dateRangeToggleIcon');
+            
+            if (expanded.style.display === 'none') {
+                expanded.style.display = 'block';
+                icon.textContent = '▲';
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                expanded.style.display = 'none';
+                icon.textContent = '▼';
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+        
+        function updateDateRangeDisplay() {
+            const startDate = document.getElementById('trendsStartDate').value;
+            const endDate = document.getElementById('trendsEndDate').value;
+            const display = document.getElementById('dateRangeDisplay');
+            
+            if (startDate && endDate) {
+                display.textContent = `${startDate} to ${endDate}`;
+            } else {
+                display.textContent = 'Not set';
+            }
+        }
+        
         function applyTrendsDateRange() {
             const startDate = document.getElementById('trendsStartDate').value;
             const endDate = document.getElementById('trendsEndDate').value;
@@ -12892,6 +12931,12 @@
             // Update chart with filtered data
             filteredTickerData = filtered;
             renderDailyChurnChart(filtered);
+            
+            // Update display and collapse
+            updateDateRangeDisplay();
+            document.getElementById('dateRangeExpanded').style.display = 'none';
+            document.getElementById('dateRangeToggleIcon').textContent = '▼';
+            document.getElementById('dateRangeToggleIcon').style.transform = 'rotate(0deg)';
         }
         
         function resetToQuarterToDate() {
@@ -12916,6 +12961,12 @@
             // Reset chart to quarter data
             filteredTickerData = null;
             renderDailyChurnChart(quarterData);
+            
+            // Update display and collapse
+            updateDateRangeDisplay();
+            document.getElementById('dateRangeExpanded').style.display = 'none';
+            document.getElementById('dateRangeToggleIcon').textContent = '▼';
+            document.getElementById('dateRangeToggleIcon').style.transform = 'rotate(0deg)';
         }
         
         async function loadTickerImage(ticker, displayName) {
@@ -13026,6 +13077,8 @@
             if (currentQuarterData.length > 0) {
                 document.getElementById('trendsStartDate').value = currentQuarterData[0].Date;
                 document.getElementById('trendsEndDate').value = currentQuarterData[currentQuarterData.length - 1].Date;
+                // Update the collapsed display
+                updateDateRangeDisplay();
             }
             
             // Render daily chart with QTD data only
