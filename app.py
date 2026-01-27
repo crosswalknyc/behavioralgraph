@@ -4601,17 +4601,18 @@ def get_hedge_fund_ticker_data(s3_key):
                 projected_net_growth = avg_daily_net_growth * total_days_in_quarter
                 projected_net_growth_pct = (projected_net_growth / quarter_start_consumers * 100) if quarter_start_consumers > 0 else 0
                 
-                # Calculate accuracy rating based on SEC actuals (MAPE)
-                # Using Mean Absolute Percentage Error to measure accuracy
+                # Calculate accuracy rating based on SEC actuals (comparing Growth % vs SEC %)
                 accuracy_rating = None
                 accuracy_score = None
+                overall_variance = None
+                quarter_variance = None
                 try:
                     # Load SEC actuals from S3
                     all_sec_actuals = load_json_from_s3(SEC_ACTUALS_FILE)
                     ticker_actuals = all_sec_actuals.get(ticker_symbol, {})
                     
                     if ticker_actuals:
-                        # Calculate quarterly net growth for all quarters
+                        # Calculate quarterly net growth % for all quarters
                         quarters = {}
                         for d in data:
                             q = d.get('Quarter')
@@ -4623,35 +4624,56 @@ def get_hedge_fund_ticker_data(s3_key):
                                 if quarters[q]['start_consumers'] is None:
                                     quarters[q]['start_consumers'] = d.get('Total Consumers', 0)
                         
-                        # Calculate MAPE for quarters with SEC actuals
-                        errors = []
+                        # Calculate variance for all quarters with SEC actuals
+                        all_variances = []
+                        quarter_specific_variances = []
+                        
+                        # Extract current quarter number (e.g., "Q1" from "Q1 2026")
+                        current_quarter_num = latest_quarter.split()[0] if latest_quarter else None
+                        
                         for quarter, q_data in quarters.items():
                             if quarter in ticker_actuals:
-                                our_net_growth = q_data['subs'] - q_data['cancels']
-                                sec_actual = ticker_actuals[quarter]
+                                # Calculate our growth %
+                                net_growth = q_data['subs'] - q_data['cancels']
+                                start_consumers = q_data['start_consumers']
+                                our_growth_pct = (net_growth / start_consumers * 100) if start_consumers > 0 else 0
                                 
-                                if sec_actual != 0:
-                                    # MAPE = |Actual - Predicted| / |Actual| * 100
-                                    ape = abs(sec_actual - our_net_growth) / abs(sec_actual) * 100
-                                    errors.append(ape)
+                                # Get SEC actual % (already a percentage)
+                                sec_actual_pct = float(ticker_actuals[quarter])
+                                
+                                # Variance = difference in percentage points
+                                variance = abs(our_growth_pct - sec_actual_pct)
+                                all_variances.append(variance)
+                                
+                                # Check if this quarter matches current quarter (e.g., all Q1s)
+                                quarter_num = quarter.split()[0]  # Extract "Q1" from "Q1 2024"
+                                if quarter_num == current_quarter_num:
+                                    quarter_specific_variances.append(variance)
                         
-                        if errors:
-                            # Calculate mean absolute percentage error
-                            mape = sum(errors) / len(errors)
-                            # Convert MAPE to accuracy score (100% - MAPE)
-                            accuracy_score = max(0, 100 - mape)
+                        # Calculate overall variance (average across all quarters)
+                        if all_variances:
+                            overall_variance = sum(all_variances) / len(all_variances)
+                            # Accuracy score based on overall variance
+                            # Lower variance = higher accuracy
+                            # Variance of 0% = 100% accuracy, Variance of 5% = 50% accuracy, etc.
+                            accuracy_score = max(0, 100 - (overall_variance * 10))
                             
-                            # Determine rating
-                            if accuracy_score >= 95:
+                            # Determine rating based on overall variance
+                            if overall_variance < 0.5:
                                 accuracy_rating = 'Excellent'
-                            elif accuracy_score >= 85:
+                            elif overall_variance < 1.0:
                                 accuracy_rating = 'Very Good'
-                            elif accuracy_score >= 75:
+                            elif overall_variance < 2.0:
                                 accuracy_rating = 'Good'
-                            elif accuracy_score >= 65:
+                            elif overall_variance < 3.0:
                                 accuracy_rating = 'Fair'
                             else:
                                 accuracy_rating = 'Needs Improvement'
+                        
+                        # Calculate quarter-specific variance (e.g., all Q1s)
+                        if quarter_specific_variances:
+                            quarter_variance = sum(quarter_specific_variances) / len(quarter_specific_variances)
+                        
                 except Exception as e:
                     print(f"⚠️ Could not calculate accuracy rating: {e}")
                 
@@ -4666,7 +4688,9 @@ def get_hedge_fund_ticker_data(s3_key):
                     'days_in_quarter': days_in_quarter,
                     'total_days_in_quarter': total_days_in_quarter,
                     'accuracy_rating': accuracy_rating,
-                    'accuracy_score': round(accuracy_score, 1) if accuracy_score is not None else None
+                    'accuracy_score': round(accuracy_score, 1) if accuracy_score is not None else None,
+                    'overall_variance': round(overall_variance, 2) if overall_variance is not None else None,
+                    'quarter_variance': round(quarter_variance, 2) if quarter_variance is not None else None
                 }
         
         response_data = {

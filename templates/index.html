@@ -13075,12 +13075,32 @@
                 else if (stats.accuracy_score >= 65) color = '#f97316'; // Dark Orange - Fair
                 else color = '#ef4444'; // Red - Needs Improvement
                 
-                // Update header accuracy
-                accuracyHeader.innerHTML = `Accuracy: <span style="color: ${color}; font-weight: 600;">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
-                accuracyHeader.style.display = 'block';
+                // Build variance tooltip
+                const currentQuarter = latestQuarter.split(' ')[0]; // Extract "Q1" from "Q1 2026"
+                let varianceTooltip = '';
+                if (stats.overall_variance !== null || stats.quarter_variance !== null) {
+                    varianceTooltip = `Overall Variance: ${stats.overall_variance !== null ? stats.overall_variance + '% avg' : 'N/A'}`;
+                    if (stats.quarter_variance !== null) {
+                        varianceTooltip += `\n${currentQuarter} Variance: ${stats.quarter_variance}% avg`;
+                    }
+                }
                 
-                // Update Live Data tab accuracy badge
-                liveDataAccuracyValue.innerHTML = `<span style="color: ${color};">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
+                // Update header accuracy with tooltip
+                accuracyHeader.innerHTML = `Accuracy: <span style="color: ${color}; font-weight: 600;" title="${varianceTooltip}">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
+                accuracyHeader.style.display = 'block';
+                accuracyHeader.style.cursor = 'help';
+                
+                // Update Live Data tab accuracy badge with detailed breakdown
+                let accuracyDetails = `<span style="color: ${color};">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
+                if (stats.overall_variance !== null) {
+                    accuracyDetails += `<div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                        <div>📊 Overall Variance: <span style="color: ${color};">${stats.overall_variance}%</span></div>`;
+                    if (stats.quarter_variance !== null) {
+                        accuracyDetails += `<div>${currentQuarter} Variance: <span style="color: ${color};">${stats.quarter_variance}%</span></div>`;
+                    }
+                    accuracyDetails += `</div>`;
+                }
+                liveDataAccuracyValue.innerHTML = accuracyDetails;
                 liveDataAccuracyBadge.style.display = 'block';
             } else {
                 accuracyHeader.style.display = 'none';
