@@ -5003,18 +5003,31 @@ def get_profile_data(filename):
             return jsonify({'success': False, 'error': f'Profile file not found: {filename}'}), 404
         
         # Generate a pre-signed URL for the file (valid for 1 hour)
-        presigned_url = s3_client.generate_presigned_url(
-            'get_object',
-            Params={'Bucket': 'dashboard-inputs', 'Key': filename},
-            ExpiresIn=3600  # 1 hour
-        )
-        
-        print(f"✅ Generated presigned URL for {filename}")
-        return jsonify({
-            'success': True,
-            'filename': filename,
-            'url': presigned_url
-        })
+        try:
+            presigned_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': 'dashboard-inputs',
+                    'Key': filename,
+                    'ResponseContentType': 'text/csv'
+                },
+                ExpiresIn=3600,  # 1 hour
+                HttpMethod='GET'
+            )
+            
+            print(f"✅ Generated presigned URL for {filename}")
+            print(f"🔗 URL: {presigned_url[:100]}...")
+            
+            return jsonify({
+                'success': True,
+                'filename': filename,
+                'url': presigned_url
+            })
+        except Exception as e:
+            print(f"❌ Error generating presigned URL: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'success': False, 'error': f'Failed to generate URL: {str(e)}'}), 500
         
     except Exception as e:
         print(f"❌ Error loading profile: {e}")

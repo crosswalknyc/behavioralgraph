@@ -12728,11 +12728,20 @@
                 
                 // Fetch the CSV from the presigned URL
                 console.log('📥 Fetching CSV from S3...');
-                const csvResponse = await fetch(profileData.url);
+                console.log('🔗 Presigned URL:', profileData.url);
+                
+                const csvResponse = await fetch(profileData.url, {
+                    method: 'GET',
+                    mode: 'cors',
+                    cache: 'no-cache'
+                });
                 console.log('📊 CSV response status:', csvResponse.status);
+                console.log('📊 CSV response headers:', [...csvResponse.headers.entries()]);
                 
                 if (!csvResponse.ok) {
-                    throw new Error(`Failed to fetch CSV: ${csvResponse.status} ${csvResponse.statusText}`);
+                    const errorText = await csvResponse.text();
+                    console.error('❌ CSV fetch error body:', errorText);
+                    throw new Error(`Failed to fetch CSV: ${csvResponse.status} ${csvResponse.statusText} - ${errorText}`);
                 }
                 
                 const csvText = await csvResponse.text();
