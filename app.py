@@ -109,7 +109,7 @@ def server_error(e):
 S3_BUCKET = 'dashboard-inputs'
 SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
 HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Hedge Fund IQ ticker data
-S3_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+S3_REGION = os.environ.get('AWS_REGION', 'us-east-2')  # Changed to us-east-2 for dashboard-inputs bucket
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
 
 # Initialize S3 client (with timeout to prevent hanging during startup)
@@ -2374,7 +2374,7 @@ def get_admin_content():
         s3 = boto3.client('s3',
                           aws_access_key_id=aws_key,
                           aws_secret_access_key=aws_secret,
-                          region_name='us-east-1')
+                          region_name=S3_REGION)
         
         bucket_name = 'dashboard-inputs'
         print(f"📂 Scanning S3 bucket: {bucket_name}")
@@ -2539,7 +2539,7 @@ def archive_content():
         s3 = boto3.client('s3',
                           aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
                           aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-                          region_name='us-east-1')
+                          region_name=S3_REGION)
         
         bucket_name = 'dashboard-inputs'
         archived_count = 0
@@ -2598,7 +2598,7 @@ def restore_content():
         s3 = boto3.client('s3',
                           aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
                           aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-                          region_name='us-east-1')
+                          region_name=S3_REGION)
         
         bucket_name = 'dashboard-inputs'
         restored_count = 0
@@ -2654,7 +2654,7 @@ def delete_content():
         s3 = boto3.client('s3',
                           aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
                           aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-                          region_name='us-east-1')
+                          region_name=S3_REGION)
         
         bucket_name = 'dashboard-inputs'
         deleted_count = 0
