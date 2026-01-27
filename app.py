@@ -119,7 +119,8 @@ try:
     config = botocore.config.Config(
         connect_timeout=2,
         read_timeout=2,
-        retries={'max_attempts': 1}
+        retries={'max_attempts': 1},
+        signature_version='s3v4'  # Force signature version 4 for presigned URLs
     )
     s3_client = boto3.client(
         's3',
@@ -128,16 +129,22 @@ try:
         aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
         config=config
     )
+    print(f"✅ S3 client initialized with signature version 4")
 except Exception as e:
     # If config import fails or client creation fails, continue without S3
     print(f"⚠️ S3 client initialization failed (non-critical): {e}")
     try:
+        # Fallback with signature version 4
+        from botocore.client import Config
+        config = Config(signature_version='s3v4')
         s3_client = boto3.client(
             's3',
             region_name=S3_REGION,
             aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY')
+            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+            config=config
         )
+        print(f"✅ S3 client initialized with fallback config (signature v4)")
     except Exception as e2:
         print(f"⚠️ S3 client fallback initialization failed: {e2}")
         s3_client = None
