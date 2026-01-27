@@ -109,7 +109,8 @@ def server_error(e):
 S3_BUCKET = 'dashboard-inputs'
 SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
 HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Hedge Fund IQ ticker data
-S3_REGION = os.environ.get('AWS_REGION', 'us-east-2')  # All buckets are in us-east-2
+# FORCE us-east-2 - all buckets are in this region, ignore AWS_REGION env var if set
+S3_REGION = 'us-east-2'
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
 
 # Initialize S3 client (with timeout to prevent hanging during startup)

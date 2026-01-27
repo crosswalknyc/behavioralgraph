@@ -1705,7 +1705,7 @@
         
         // ============ TICKERS MANAGEMENT ============
         
-        let tickersManagementData = { tickers: [], metadata: {} };
+        let tickersManagementData = { tickers: [], metadata: {}, images: {}, profiles: {} };
         
         async function loadTickersManagement() {
             try {
@@ -1717,14 +1717,28 @@
                 const metadataResponse = await fetch('/api/hedge-fund-iq/metadata', { credentials: 'same-origin' });
                 const metadataData = await metadataResponse.json();
                 
+                // Load ticker images
+                const imagesResponse = await fetch('/api/all-ticker-images', { credentials: 'same-origin' });
+                const imagesData = await imagesResponse.json();
+                
+                // Load profile mappings
+                const profilesResponse = await fetch('/api/hedge-fund-iq/profile-mappings', { credentials: 'same-origin' });
+                const profilesData = await profilesResponse.json();
+                
                 if (tickersData.success && metadataData.success) {
                     tickersManagementData.tickers = tickersData.tickers || [];
                     tickersManagementData.metadata = metadataData.metadata || {};
+                    tickersManagementData.images = imagesData.success ? (imagesData.images || {}) : {};
+                    tickersManagementData.profiles = profilesData.success ? (profilesData.mappings || {}) : {};
                     
                     // Update stats
                     document.getElementById('tickersTotalCount').textContent = tickersManagementData.tickers.length;
                     const withMetadata = tickersManagementData.tickers.filter(t => tickersManagementData.metadata[t.s3_key]).length;
                     document.getElementById('tickersWithMetadata').textContent = withMetadata;
+                    const withImages = tickersManagementData.tickers.filter(t => tickersManagementData.images[t.ticker_symbol]).length;
+                    document.getElementById('tickersWithImages').textContent = withImages;
+                    const withProfiles = tickersManagementData.tickers.filter(t => tickersManagementData.profiles[t.ticker_symbol]?.length > 0).length;
+                    document.getElementById('tickersWithProfiles').textContent = withProfiles;
                     
                     renderTickersManagementList();
                 } else {
@@ -1754,15 +1768,18 @@
                 container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No tickers found</div>';
             } else {
                 container.innerHTML = `
-                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 1rem;">
                         ${filtered.map(t => {
                             const metadata = tickersManagementData.metadata[t.s3_key] || {};
                             const displayName = metadata.display_name || t.ticker_symbol;
                             const kpi = metadata.kpi || t.kpi || 'Not set';
                             const relevance = metadata.relevance_percentage !== null && metadata.relevance_percentage !== undefined ? metadata.relevance_percentage : null;
+                            const imageUrl = tickersManagementData.images[t.ticker_symbol]?.url;
+                            const profiles = tickersManagementData.profiles[t.ticker_symbol] || [];
+                            const profileCount = profiles.length;
                             
                             return `
-                                <div class="insight-card-v2" style="padding: 1.5rem; position: relative; cursor: pointer; transition: all 0.2s ease;" 
+                                <div class="insight-card-v2" style="padding: 1.5rem; position: relative; transition: all 0.2s ease;" 
                                      onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 16px rgba(0,0,0,0.3)';"
                                      onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='';">
                                     
@@ -1771,9 +1788,27 @@
                                         ${t.ticker_symbol}
                                     </div>
                                     
-                                    <!-- Display Name -->
-                                    <div style="font-weight: 600; color: var(--text-primary); font-size: 1.25rem; margin-bottom: 1rem; padding-right: 4rem;">
-                                        ${displayName}
+                                    <!-- Ticker Image and Name -->
+                                    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding-right: 4rem;">
+                                        ${imageUrl ? `
+                                            <div style="width: 60px; height: 60px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: var(--bg-dark); display: flex; align-items: center; justify-content: center;">
+                                                <img src="${imageUrl}" alt="${displayName}" style="width: 100%; height: 100%; object-fit: contain;" onerror="this.parentElement.innerHTML='<div style=\\'font-size: 1.5rem;\\'>📈</div>'">
+                                            </div>
+                                        ` : `
+                                            <div style="width: 60px; height: 60px; border-radius: 8px; background: var(--bg-dark); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0;">
+                                                📈
+                                            </div>
+                                        `}
+                                        <div style="flex: 1; min-width: 0;">
+                                            <div style="font-weight: 600; color: var(--text-primary); font-size: 1.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                                ${displayName}
+                                            </div>
+                                            ${profileCount > 0 ? `
+                                                <div style="font-size: 0.75rem; color: var(--accent-cyan); margin-top: 0.25rem;">
+                                                    🔗 ${profileCount} Profile${profileCount > 1 ? 's' : ''}
+                                                </div>
+                                            ` : ''}
+                                        </div>
                                     </div>
                                     
                                     <!-- KPI Info -->
@@ -1798,11 +1833,6 @@
                                             </div>
                                         </div>
                                     `}
-                                    
-                                    <!-- S3 Key -->
-                                    <div style="font-size: 0.7rem; color: var(--text-secondary); font-family: monospace; margin-bottom: 1rem; padding: 0.5rem; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${t.s3_key}">
-                                        📁 ${t.s3_key}
-                                    </div>
                                     
                                     <!-- Edit Button -->
                                     <button onclick="event.stopPropagation(); openTickerMetadataModal('${encodeURIComponent(t.s3_key)}', '${encodeURIComponent(t.ticker_symbol)}');" 
