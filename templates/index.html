@@ -10936,6 +10936,14 @@
 
                         <!-- Customer Profile Tab -->
                         <div id="profileTab" class="ticker-tab-content" style="display: none;">
+                            <!-- Profile Selector (shown when multiple profiles available) -->
+                            <div id="profileSelectorContainer" style="display: none; margin-bottom: 1rem;">
+                                <label style="font-weight: 600; margin-right: 0.5rem; color: var(--text-primary);">Select Profile:</label>
+                                <select id="profileSelector" onchange="switchProfile()" style="padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; min-width: 250px;">
+                                    <!-- Options will be populated dynamically -->
+                                </select>
+                            </div>
+                            
                             <!-- Profile Sub-Navigation -->
                             <div class="dashboard-tabs" style="margin-bottom: 1.5rem;">
                                 <button class="tab-btn active" onclick="showProfileSubTab('insights')">💡 Insights</button>
@@ -12508,19 +12516,51 @@
             }
         }
         
-        async function loadTickerProfile() {
+        let availableProfiles = [];
+        
+        function updateProfileSelector() {
+            const selectorContainer = document.getElementById('profileSelectorContainer');
+            const selector = document.getElementById('profileSelector');
+            
+            if (availableProfiles.length > 1) {
+                // Show dropdown with multiple profiles
+                selector.innerHTML = availableProfiles.map((profile, index) => 
+                    `<option value="${profile}" ${profile === currentProfileFilename ? 'selected' : ''}>
+                        Profile ${index + 1}: ${profile}
+                    </option>`
+                ).join('');
+                selectorContainer.style.display = 'block';
+            } else {
+                // Hide dropdown if only one profile
+                selectorContainer.style.display = 'none';
+            }
+        }
+        
+        function switchProfile() {
+            const selector = document.getElementById('profileSelector');
+            const selectedProfile = selector.value;
+            loadTickerProfile(selectedProfile);
+        }
+        
+        async function loadTickerProfile(selectedProfile = null) {
             if (!currentTickerForProfile) return;
             
             const container = document.getElementById('tickerProfileContent');
             container.innerHTML = '<div class="loading-placeholder">Loading customer profile...</div>';
             
             try {
-                // First, get the profile filename mapping for this ticker
+                // First, get the profile filename mappings for this ticker
                 const mappingResponse = await fetch(`/api/hedge-fund-iq/profile-mapping/${currentTickerForProfile}`);
                 const mappingData = await mappingResponse.json();
                 
-                let profileFilename = mappingData.profile_filename || currentTickerForProfile;
+                availableProfiles = mappingData.profiles || [currentTickerForProfile];
+                
+                // Use selected profile or default to first one
+                let profileFilename = selectedProfile || availableProfiles[0];
                 currentProfileFilename = profileFilename;
+                
+                // Update the profile selector dropdown
+                updateProfileSelector();
                 
                 // Try to load the profile data
                 const profileResponse = await fetch(`/api/profile/${profileFilename}`);
@@ -12541,7 +12581,7 @@
                 window.currentDashboardData = profileData;
                 window.currentProfileName = profileFilename;
                 
-                // Render the insights tab (default view)
+                // Render the profile with dropdown if multiple profiles
                 renderProfileInsights(profileData);
                 
             } catch (error) {

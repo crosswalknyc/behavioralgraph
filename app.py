@@ -4760,7 +4760,7 @@ def update_sec_actuals():
 @app.route('/api/hedge-fund-iq/profile-mapping/<ticker>')
 @requires_auth
 def get_profile_mapping(ticker):
-    """Get the profile filename mapping for a ticker."""
+    """Get the profile filename mappings for a ticker (supports up to 5 profiles)."""
     try:
         # Load profile mappings from cache file
         mapping_file = 'ticker_profile_mappings.json'
@@ -4768,15 +4768,21 @@ def get_profile_mapping(ticker):
             with open(mapping_file, 'r') as f:
                 mappings = json.load(f)
                 if ticker in mappings:
+                    # Support both old format (string) and new format (array)
+                    profiles = mappings[ticker]
+                    if isinstance(profiles, str):
+                        # Convert old format to new format
+                        profiles = [profiles]
+                    
                     return jsonify({
                         'success': True,
-                        'profile_filename': mappings[ticker]
+                        'profiles': profiles
                     })
         
         # Default: use ticker name as profile filename
         return jsonify({
             'success': True,
-            'profile_filename': ticker
+            'profiles': [ticker]
         })
         
     except Exception as e:
@@ -4787,16 +4793,22 @@ def get_profile_mapping(ticker):
 @app.route('/api/hedge-fund-iq/profile-mapping', methods=['POST'])
 @requires_admin
 def update_profile_mapping():
-    """Update the profile filename mapping for a ticker (admin only)."""
+    """Update the profile filename mappings for a ticker (admin only, supports up to 5 profiles)."""
     try:
         data = request.get_json()
         ticker = data.get('ticker')
-        profile_filename = data.get('profile_filename', '').strip()
+        profiles = data.get('profiles', [])
         
-        print(f"📝 Updating profile mapping for {ticker}: '{profile_filename}'")
+        print(f"📝 Updating profile mappings for {ticker}: {profiles}")
         
         if not ticker:
             return jsonify({'success': False, 'error': 'Ticker required'}), 400
+        
+        # Validate profiles (max 5, non-empty strings)
+        if profiles:
+            profiles = [p.strip() for p in profiles if p and p.strip()]
+            if len(profiles) > 5:
+                return jsonify({'success': False, 'error': 'Maximum 5 profiles allowed'}), 400
         
         # Load existing mappings
         mapping_file = 'ticker_profile_mappings.json'
@@ -4806,24 +4818,24 @@ def update_profile_mapping():
                 mappings = json.load(f)
             print(f"📂 Loaded existing mappings: {list(mappings.keys())}")
         
-        if profile_filename:
-            # Update mapping
-            mappings[ticker] = profile_filename
-            print(f"✅ Set mapping: {ticker} → {profile_filename}")
+        if profiles:
+            # Update mapping with array of profiles
+            mappings[ticker] = profiles
+            print(f"✅ Set mappings: {ticker} → {profiles}")
         else:
             # Remove mapping (use default)
             if ticker in mappings:
                 del mappings[ticker]
-                print(f"🗑️ Removed mapping for {ticker}")
+                print(f"🗑️ Removed mappings for {ticker}")
             else:
-                print(f"ℹ️ No mapping to remove for {ticker}")
+                print(f"ℹ️ No mappings to remove for {ticker}")
         
         # Save back to file
         with open(mapping_file, 'w') as f:
             json.dump(mappings, f, indent=2)
         
         print(f"💾 Saved mappings to {mapping_file}")
-        print(f"📊 Total mappings: {len(mappings)}")
+        print(f"📊 Total tickers with mappings: {len(mappings)}")
         
         return jsonify({'success': True})
         
