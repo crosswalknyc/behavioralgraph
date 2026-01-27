@@ -11011,11 +11011,20 @@
                         <!-- Historic Performance Tab -->
                         <div id="historicTab" class="ticker-tab-content" style="display: none;">
                             <div class="chart-card">
-                                <h3>📅 Historic Performance</h3>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                    <h3 style="margin: 0;">📅 Historic Performance</h3>
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <button id="sortChronological" class="sort-btn active" onclick="sortQuarterlyTable('chronological')" style="padding: 0.5rem 1rem; background: var(--accent-cyan); color: var(--bg-dark); border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                                            📅 Chronological
+                                        </button>
+                                        <button id="sortAggregated" class="sort-btn" onclick="sortQuarterlyTable('aggregated')" style="padding: 0.5rem 1rem; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                                            📊 By Quarter
+                                        </button>
+                                    </div>
+                                </div>
                                 <div id="quarterlyTable" style="overflow-x: auto;"></div>
                             </div>
                         </div>
-
                         <!-- Customer Profile Tab -->
                         <div id="profileTab" class="ticker-tab-content" style="display: none;">
                             <!-- Profile Selector (shown when multiple profiles available) -->
@@ -13322,7 +13331,12 @@
             }
         }
         
-        async function renderQuarterlyTable(dailyData) {
+        // Store quarterly data globally for sorting
+        let quarterlyDataCache = null;
+        let secActualsCache = null;
+        let currentQuarterlySortMode = 'chronological';
+        
+        async function renderQuarterlyTable(dailyData, sortMode = 'chronological') {
             const quarters = {};
             dailyData.forEach(d => {
                 const q = d.Quarter;
@@ -13339,23 +13353,65 @@
                 quarters[q].endConsumers = d['Total Consumers'];
             });
             
+            // Cache the data for sorting
+            quarterlyDataCache = quarters;
+            currentQuarterlySortMode = sortMode;
+            
             // Fetch SEC actuals from backend
-            let secActuals = {};
-            try {
-                const response = await fetch(`/api/hedge-fund-iq/sec-actuals/${encodeURIComponent(currentTickerData.ticker)}`, { credentials: 'same-origin' });
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.success) {
-                        secActuals = data.actuals || {};
+            if (!secActualsCache) {
+                try {
+                    const response = await fetch(`/api/hedge-fund-iq/sec-actuals/${encodeURIComponent(currentTickerData.ticker)}`, { credentials: 'same-origin' });
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success) {
+                            secActualsCache = data.actuals || {};
+                        }
                     }
+                } catch (error) {
+                    console.warn('Could not fetch SEC actuals:', error);
+                    secActualsCache = {};
                 }
-            } catch (error) {
-                console.warn('Could not fetch SEC actuals:', error);
             }
+            
+            const secActuals = secActualsCache;
             
             let html = '<table class="data-table" style="width: 100%; border-collapse: collapse;"><thead><tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);"><th style="padding: 0.75rem; text-align: left;">Quarter</th><th style="padding: 0.75rem; text-align: right;">Total Subs</th><th style="padding: 0.75rem; text-align: right;">Total Cancels</th><th style="padding: 0.75rem; text-align: right;">Net Growth</th><th style="padding: 0.75rem; text-align: right;">Growth %</th><th style="padding: 0.75rem; text-align: right;">SEC Actuals</th><th style="padding: 0.75rem; text-align: right;">Variance</th></tr></thead><tbody>';
             
-            Object.keys(quarters).sort().forEach(q => {
+            // Sort quarters based on mode
+            let sortedQuarters;
+            if (sortMode === 'chronological') {
+                // Sort by year descending, then by quarter descending (Q4 2025, Q3 2025, Q2 2025, Q1 2025, Q4 2024...)
+                sortedQuarters = Object.keys(quarters).sort((a, b) => {
+                    const [qA, yearA] = a.split(' ');
+                    const [qB, yearB] = b.split(' ');
+                    const qNumA = parseInt(qA.replace('Q', ''));
+                    const qNumB = parseInt(qB.replace('Q', ''));
+                    
+                    // Sort by year descending first
+                    if (yearB !== yearA) {
+                        return parseInt(yearB) - parseInt(yearA);
+                    }
+                    // Then by quarter descending
+                    return qNumB - qNumA;
+                });
+            } else {
+                // Sort by quarter number, then by year descending (all Q1s, all Q2s, all Q3s, all Q4s)
+                sortedQuarters = Object.keys(quarters).sort((a, b) => {
+                    const [qA, yearA] = a.split(' ');
+                    const [qB, yearB] = b.split(' ');
+                    const qNumA = parseInt(qA.replace('Q', ''));
+                    const qNumB = parseInt(qB.replace('Q', ''));
+                    
+                    // Sort by quarter number first
+                    if (qNumA !== qNumB) {
+                        return qNumA - qNumB;
+                    }
+                    // Then by year descending within each quarter
+                    return parseInt(yearB) - parseInt(yearA);
+                });
+            }
+            
+            sortedQuarters.forEach(q => {
                 const data = quarters[q];
                 const netGrowth = data.subs - data.cancels;
                 const growthPct = ((netGrowth / data.startConsumers) * 100).toFixed(2);
@@ -13379,6 +13435,33 @@
             
             html += '</tbody></table>';
             document.getElementById('quarterlyTable').innerHTML = html;
+        }
+        
+        function sortQuarterlyTable(mode) {
+            // Update button states
+            const chronoBtn = document.getElementById('sortChronological');
+            const aggBtn = document.getElementById('sortAggregated');
+            
+            if (mode === 'chronological') {
+                chronoBtn.style.background = 'var(--accent-cyan)';
+                chronoBtn.style.color = 'var(--bg-dark)';
+                chronoBtn.style.border = 'none';
+                aggBtn.style.background = 'var(--bg-input)';
+                aggBtn.style.color = 'var(--text-primary)';
+                aggBtn.style.border = '1px solid var(--border-color)';
+            } else {
+                aggBtn.style.background = 'var(--accent-cyan)';
+                aggBtn.style.color = 'var(--bg-dark)';
+                aggBtn.style.border = 'none';
+                chronoBtn.style.background = 'var(--bg-input)';
+                chronoBtn.style.color = 'var(--text-primary)';
+                chronoBtn.style.border = '1px solid var(--border-color)';
+            }
+            
+            // Re-render table with cached data
+            if (quarterlyDataCache && currentTickerData) {
+                renderQuarterlyTable(currentTickerData.data, mode);
+            }
         }
         
         function renderDailyTable(dailyData) {
