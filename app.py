@@ -185,31 +185,57 @@ else:
     print("⚠️ OPENAI_API_KEY not set at startup - will check at runtime")
 
 # ============================================================================
-# S3 JSON PERSISTENCE HELPERS
+# S3 JSON PERSISTENCE HELPERS WITH IN-MEMORY CACHE
 # ============================================================================
 
 METADATA_BUCKET = 'dashboard-inputs'  # Use existing bucket for metadata (in metadata/ folder)
 
-def load_json_from_s3(filename):
-    """Load JSON data from S3 metadata bucket."""
+# In-memory cache for metadata (shared across all requests)
+_metadata_cache = {}
+_cache_timestamps = {}
+CACHE_TTL = 60  # Cache for 60 seconds
+
+def load_json_from_s3(filename, use_cache=True):
+    """Load JSON data from S3 metadata bucket with in-memory caching."""
     try:
+        # Check cache first
+        if use_cache and filename in _metadata_cache:
+            cache_age = datetime.now().timestamp() - _cache_timestamps.get(filename, 0)
+            if cache_age < CACHE_TTL:
+                print(f"📦 Using cached {filename} (age: {cache_age:.1f}s)")
+                return _metadata_cache[filename].copy()
+        
         if not s3_client:
             print(f"⚠️ S3 client not available, using empty data for {filename}")
             return {}
         
+        # Load from S3
         response = s3_client.get_object(Bucket=METADATA_BUCKET, Key=filename)
         data = json.loads(response['Body'].read().decode('utf-8'))
-        print(f"✅ Loaded {filename} from S3")
-        return data
+        
+        # Update cache
+        _metadata_cache[filename] = data
+        _cache_timestamps[filename] = datetime.now().timestamp()
+        
+        print(f"✅ Loaded {filename} from S3 and cached")
+        return data.copy()
     except s3_client.exceptions.NoSuchKey:
         print(f"ℹ️ {filename} not found in S3, returning empty data")
-        return {}
+        empty_data = {}
+        # Cache empty data too
+        _metadata_cache[filename] = empty_data
+        _cache_timestamps[filename] = datetime.now().timestamp()
+        return empty_data
     except Exception as e:
         print(f"⚠️ Error loading {filename} from S3: {e}")
+        # Return cached data if available, even if expired
+        if filename in _metadata_cache:
+            print(f"📦 Using stale cache for {filename}")
+            return _metadata_cache[filename].copy()
         return {}
 
 def save_json_to_s3(filename, data):
-    """Save JSON data to S3 metadata bucket."""
+    """Save JSON data to S3 metadata bucket and update cache."""
     try:
         if not s3_client:
             print(f"⚠️ S3 client not available, cannot save {filename}")
@@ -222,11 +248,28 @@ def save_json_to_s3(filename, data):
             Body=json_data.encode('utf-8'),
             ContentType='application/json'
         )
-        print(f"✅ Saved {filename} to S3")
+        
+        # Update cache immediately after save
+        _metadata_cache[filename] = data.copy()
+        _cache_timestamps[filename] = datetime.now().timestamp()
+        
+        print(f"✅ Saved {filename} to S3 and updated cache")
         return True
     except Exception as e:
         print(f"❌ Error saving {filename} to S3: {e}")
         return False
+
+def invalidate_cache(filename=None):
+    """Invalidate cache for a specific file or all files."""
+    if filename:
+        if filename in _metadata_cache:
+            del _metadata_cache[filename]
+            del _cache_timestamps[filename]
+            print(f"🗑️ Invalidated cache for {filename}")
+    else:
+        _metadata_cache.clear()
+        _cache_timestamps.clear()
+        print(f"🗑️ Invalidated all cache")
 
 # Cache filenames (stored in metadata/ folder in S3)
 TICKER_IMAGES_FILE = 'metadata/ticker_images_cache.json'
@@ -4825,6 +4868,38 @@ def update_sec_actuals():
         print(f"❌ Error updating SEC actuals: {e}")
         import traceback
         traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/refresh-cache', methods=['POST'])
+@requires_admin
+def refresh_metadata_cache():
+    """Refresh the in-memory metadata cache from S3 (admin only)."""
+    try:
+        data = request.get_json() or {}
+        filename = data.get('filename')  # Optional: refresh specific file
+        
+        if filename:
+            # Invalidate specific file and reload
+            invalidate_cache(filename)
+            load_json_from_s3(filename, use_cache=False)
+            return jsonify({
+                'success': True,
+                'message': f'Cache refreshed for {filename}'
+            })
+        else:
+            # Invalidate all and reload all metadata files
+            invalidate_cache()
+            load_json_from_s3(TICKER_IMAGES_FILE, use_cache=False)
+            load_json_from_s3(TICKER_PROFILES_FILE, use_cache=False)
+            load_json_from_s3(SEC_ACTUALS_FILE, use_cache=False)
+            return jsonify({
+                'success': True,
+                'message': 'All metadata cache refreshed'
+            })
+        
+    except Exception as e:
+        print(f"❌ Error refreshing cache: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
