@@ -4448,10 +4448,13 @@
                     try {
                         const profileResponse = await fetch(`/api/hedge-fund-iq/profile-mapping/${ticker.ticker}`);
                         const profileData = await profileResponse.json();
-                        ticker.profileFilename = profileData.profile_filename || ticker.ticker;
-                        ticker.hasCustomProfile = profileData.profile_filename && profileData.profile_filename !== ticker.ticker;
+                        ticker.profiles = profileData.profiles || [ticker.ticker];
+                        ticker.profileCount = ticker.profiles.length;
+                        // Check if any profile is different from ticker name (custom mapping)
+                        ticker.hasCustomProfile = ticker.profiles.some(p => p !== ticker.ticker);
                     } catch (error) {
-                        ticker.profileFilename = ticker.ticker;
+                        ticker.profiles = [ticker.ticker];
+                        ticker.profileCount = 1;
                         ticker.hasCustomProfile = false;
                     }
                 }
@@ -4491,7 +4494,17 @@
             for (const ticker of filteredTickers) {
                 const statusIcons = [];
                 if (ticker.hasImage) statusIcons.push('📸');
-                if (ticker.hasCustomProfile) statusIcons.push('🔗');
+                
+                // Show profile link indicator
+                if (ticker.hasCustomProfile) {
+                    if (ticker.profileCount > 1) {
+                        // Multiple profiles: show count + link icon
+                        statusIcons.push(`${ticker.profileCount} 🔗`);
+                    } else {
+                        // Single profile: just show link icon
+                        statusIcons.push('🔗');
+                    }
+                }
                 
                 html += `
                     <div class="card" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
