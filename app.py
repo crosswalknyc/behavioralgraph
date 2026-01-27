@@ -109,7 +109,8 @@ def server_error(e):
 S3_BUCKET = 'dashboard-inputs'
 SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
 HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Hedge Fund IQ ticker data
-S3_REGION = os.environ.get('AWS_REGION', 'us-east-2')  # Changed to us-east-2 for dashboard-inputs bucket
+S3_REGION = os.environ.get('AWS_REGION', 'us-east-2')  # dashboard-inputs bucket region
+HEDGE_FUND_S3_REGION = 'us-east-1'  # aggregated-tickers bucket is in us-east-1
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
 
 # Initialize S3 client (with timeout to prevent hanging during startup)
@@ -129,7 +130,17 @@ try:
         aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
         config=config
     )
-    print(f"✅ S3 client initialized with signature version 4")
+    print(f"✅ S3 client initialized for {S3_REGION} with signature version 4")
+    
+    # Initialize separate S3 client for Hedge Fund IQ bucket (different region)
+    hedge_fund_s3_client = boto3.client(
+        's3',
+        region_name=HEDGE_FUND_S3_REGION,
+        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+        config=config
+    )
+    print(f"✅ Hedge Fund S3 client initialized for {HEDGE_FUND_S3_REGION}")
 except Exception as e:
     # If config import fails or client creation fails, continue without S3
     print(f"⚠️ S3 client initialization failed (non-critical): {e}")
@@ -145,9 +156,20 @@ except Exception as e:
             config=config
         )
         print(f"✅ S3 client initialized with fallback config (signature v4)")
+        
+        # Try to initialize hedge fund client too
+        hedge_fund_s3_client = boto3.client(
+            's3',
+            region_name=HEDGE_FUND_S3_REGION,
+            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+            config=config
+        )
+        print(f"✅ Hedge Fund S3 client initialized (fallback)")
     except Exception as e2:
         print(f"⚠️ S3 client fallback initialization failed: {e2}")
         s3_client = None
+        hedge_fund_s3_client = None
 
 # ============================================================================
 # OPENAI INTEGRATION
@@ -4366,17 +4388,18 @@ def get_subscriber_iq_data(s3_key):
 # ============================================================================
 
 @app.route('/api/hedge-fund-iq/list')
+@app.route('/api/hedge-fund-iq/tickers')  # Alias for admin panel
 @requires_auth
 def list_hedge_fund_tickers():
     """List all ticker CSV files from S3 aggregated-tickers bucket."""
-    if not s3_client:
-        return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    if not hedge_fund_s3_client:
+        return jsonify({'success': False, 'error': 'Hedge Fund S3 not configured'}), 500
     
     try:
-        print(f"📊 Listing Hedge Fund IQ tickers from bucket: {HEDGE_FUND_S3_BUCKET}")
+        print(f"📊 Listing Hedge Fund IQ tickers from bucket: {HEDGE_FUND_S3_BUCKET} (region: {HEDGE_FUND_S3_REGION})")
         
         tickers = []
-        paginator = s3_client.get_paginator('list_objects_v2')
+        paginator = hedge_fund_s3_client.get_paginator('list_objects_v2')
         
         for page in paginator.paginate(Bucket=HEDGE_FUND_S3_BUCKET):
             for obj in page.get('Contents', []):
@@ -4452,13 +4475,13 @@ def get_hedge_fund_ticker_data(s3_key):
     """Get ticker CSV data and calculate day-over-day metrics."""
     print(f"📥 get_hedge_fund_ticker_data called for: {s3_key}")
     
-    if not s3_client:
-        print("❌ S3 client not configured")
-        return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    if not hedge_fund_s3_client:
+        print("❌ Hedge Fund S3 client not configured")
+        return jsonify({'success': False, 'error': 'Hedge Fund S3 not configured'}), 500
     
     try:
-        print(f"📂 Fetching from S3: {HEDGE_FUND_S3_BUCKET}/{s3_key}")
-        response = s3_client.get_object(Bucket=HEDGE_FUND_S3_BUCKET, Key=s3_key)
+        print(f"📂 Fetching from S3: {HEDGE_FUND_S3_BUCKET}/{s3_key} (region: {HEDGE_FUND_S3_REGION})")
+        response = hedge_fund_s3_client.get_object(Bucket=HEDGE_FUND_S3_BUCKET, Key=s3_key)
         csv_content = response['Body'].read().decode('utf-8')
         print(f"✅ Got CSV content: {len(csv_content)} bytes")
         
