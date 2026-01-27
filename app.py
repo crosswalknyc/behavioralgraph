@@ -184,6 +184,88 @@ if os.environ.get('OPENAI_API_KEY'):
 else:
     print("⚠️ OPENAI_API_KEY not set at startup - will check at runtime")
 
+# ============================================================================
+# S3 JSON PERSISTENCE HELPERS
+# ============================================================================
+
+METADATA_BUCKET = 'dashboard-metadata'  # Dedicated bucket for app metadata
+
+def load_json_from_s3(filename):
+    """Load JSON data from S3 metadata bucket."""
+    try:
+        if not s3_client:
+            print(f"⚠️ S3 client not available, using empty data for {filename}")
+            return {}
+        
+        response = s3_client.get_object(Bucket=METADATA_BUCKET, Key=filename)
+        data = json.loads(response['Body'].read().decode('utf-8'))
+        print(f"✅ Loaded {filename} from S3")
+        return data
+    except s3_client.exceptions.NoSuchKey:
+        print(f"ℹ️ {filename} not found in S3, returning empty data")
+        return {}
+    except Exception as e:
+        print(f"⚠️ Error loading {filename} from S3: {e}")
+        return {}
+
+def save_json_to_s3(filename, data):
+    """Save JSON data to S3 metadata bucket."""
+    try:
+        if not s3_client:
+            print(f"⚠️ S3 client not available, cannot save {filename}")
+            return False
+        
+        json_data = json.dumps(data, indent=2)
+        s3_client.put_object(
+            Bucket=METADATA_BUCKET,
+            Key=filename,
+            Body=json_data.encode('utf-8'),
+            ContentType='application/json'
+        )
+        print(f"✅ Saved {filename} to S3")
+        return True
+    except Exception as e:
+        print(f"❌ Error saving {filename} to S3: {e}")
+        return False
+
+# Cache filenames
+TICKER_IMAGES_FILE = 'ticker_images_cache.json'
+TICKER_PROFILES_FILE = 'ticker_profile_mappings.json'
+SEC_ACTUALS_FILE = 'hedge_fund_sec_actuals.json'
+
+def ensure_metadata_bucket():
+    """Ensure the metadata bucket exists, create if it doesn't."""
+    try:
+        if not s3_client:
+            print("⚠️ S3 client not available, skipping bucket creation")
+            return False
+        
+        # Check if bucket exists
+        try:
+            s3_client.head_bucket(Bucket=METADATA_BUCKET)
+            print(f"✅ Metadata bucket '{METADATA_BUCKET}' exists")
+            return True
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == '404':
+                # Bucket doesn't exist, create it
+                print(f"📦 Creating metadata bucket '{METADATA_BUCKET}'...")
+                s3_client.create_bucket(
+                    Bucket=METADATA_BUCKET,
+                    CreateBucketConfiguration={'LocationConstraint': S3_REGION}
+                )
+                print(f"✅ Created metadata bucket '{METADATA_BUCKET}'")
+                return True
+            else:
+                print(f"❌ Error checking bucket: {e}")
+                return False
+    except Exception as e:
+        print(f"❌ Error ensuring metadata bucket: {e}")
+        return False
+
+# Ensure metadata bucket exists at startup
+ensure_metadata_bucket()
+
 def generate_ai_insights(profile_data):
     """Generate AI-powered insights from profile data."""
     client = get_openai_client()
@@ -4454,12 +4536,9 @@ def get_hedge_fund_ticker_data(s3_key):
                 accuracy_rating = None
                 accuracy_score = None
                 try:
-                    # Load SEC actuals
-                    sec_actuals_file = 'hedge_fund_sec_actuals.json'
-                    if os.path.exists(sec_actuals_file):
-                        with open(sec_actuals_file, 'r') as f:
-                            all_sec_actuals = json.load(f)
-                            ticker_actuals = all_sec_actuals.get(ticker_symbol, {})
+                    # Load SEC actuals from S3
+                    all_sec_actuals = load_json_from_s3(SEC_ACTUALS_FILE)
+                    ticker_actuals = all_sec_actuals.get(ticker_symbol, {})
                             
                             if ticker_actuals:
                                 # Calculate quarterly net growth for all quarters
@@ -4697,17 +4776,12 @@ Respond ONLY with valid JSON, no additional text."""
 def get_sec_actuals(ticker):
     """Get SEC actuals for a ticker."""
     try:
-        # Load SEC actuals from metadata file
-        metadata_file = 'hedge_fund_sec_actuals.json'
-        if os.path.exists(metadata_file):
-            with open(metadata_file, 'r') as f:
-                all_actuals = json.load(f)
-                return jsonify({
-                    'success': True,
-                    'actuals': all_actuals.get(ticker, {})
-                })
-        else:
-            return jsonify({'success': True, 'actuals': {}})
+        # Load SEC actuals from S3
+        all_actuals = load_json_from_s3(SEC_ACTUALS_FILE)
+        return jsonify({
+            'success': True,
+            'actuals': all_actuals.get(ticker, {})
+        })
     except Exception as e:
         print(f"❌ Error getting SEC actuals: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -4726,12 +4800,8 @@ def update_sec_actuals():
         if not ticker or not quarter:
             return jsonify({'success': False, 'error': 'Ticker and quarter required'}), 400
         
-        # Load existing actuals
-        metadata_file = 'hedge_fund_sec_actuals.json'
-        all_actuals = {}
-        if os.path.exists(metadata_file):
-            with open(metadata_file, 'r') as f:
-                all_actuals = json.load(f)
+        # Load existing actuals from S3
+        all_actuals = load_json_from_s3(SEC_ACTUALS_FILE)
         
         # Update actuals for this ticker
         if ticker not in all_actuals:
@@ -4744,9 +4814,8 @@ def update_sec_actuals():
         else:
             all_actuals[ticker][quarter] = float(actual_value)
         
-        # Save back to file
-        with open(metadata_file, 'w') as f:
-            json.dump(all_actuals, f, indent=2)
+        # Save back to S3
+        save_json_to_s3(SEC_ACTUALS_FILE, all_actuals)
         
         return jsonify({'success': True})
         
@@ -4762,22 +4831,19 @@ def update_sec_actuals():
 def get_profile_mapping(ticker):
     """Get the profile filename mappings for a ticker (supports up to 5 profiles)."""
     try:
-        # Load profile mappings from cache file
-        mapping_file = 'ticker_profile_mappings.json'
-        if os.path.exists(mapping_file):
-            with open(mapping_file, 'r') as f:
-                mappings = json.load(f)
-                if ticker in mappings:
-                    # Support both old format (string) and new format (array)
-                    profiles = mappings[ticker]
-                    if isinstance(profiles, str):
-                        # Convert old format to new format
-                        profiles = [profiles]
-                    
-                    return jsonify({
-                        'success': True,
-                        'profiles': profiles
-                    })
+        # Load profile mappings from S3
+        mappings = load_json_from_s3(TICKER_PROFILES_FILE)
+        if ticker in mappings:
+            # Support both old format (string) and new format (array)
+            profiles = mappings[ticker]
+            if isinstance(profiles, str):
+                # Convert old format to new format
+                profiles = [profiles]
+            
+            return jsonify({
+                'success': True,
+                'profiles': profiles
+            })
         
         # Default: use ticker name as profile filename
         return jsonify({
@@ -4810,13 +4876,9 @@ def update_profile_mapping():
             if len(profiles) > 5:
                 return jsonify({'success': False, 'error': 'Maximum 5 profiles allowed'}), 400
         
-        # Load existing mappings
-        mapping_file = 'ticker_profile_mappings.json'
-        mappings = {}
-        if os.path.exists(mapping_file):
-            with open(mapping_file, 'r') as f:
-                mappings = json.load(f)
-            print(f"📂 Loaded existing mappings: {list(mappings.keys())}")
+        # Load existing mappings from S3
+        mappings = load_json_from_s3(TICKER_PROFILES_FILE)
+        print(f"📂 Loaded existing mappings: {list(mappings.keys())}")
         
         if profiles:
             # Update mapping with array of profiles
@@ -4830,11 +4892,9 @@ def update_profile_mapping():
             else:
                 print(f"ℹ️ No mappings to remove for {ticker}")
         
-        # Save back to file
-        with open(mapping_file, 'w') as f:
-            json.dump(mappings, f, indent=2)
-        
-        print(f"💾 Saved mappings to {mapping_file}")
+        # Save back to S3
+        save_json_to_s3(TICKER_PROFILES_FILE, mappings)
+        print(f"💾 Saved mappings to S3")
         print(f"📊 Total tickers with mappings: {len(mappings)}")
         
         return jsonify({'success': True})
@@ -4851,17 +4911,14 @@ def update_profile_mapping():
 def get_ticker_image(ticker):
     """Get ticker image URL."""
     try:
-        # Load ticker images from cache file
-        cache_file = 'ticker_images_cache.json'
-        if os.path.exists(cache_file):
-            with open(cache_file, 'r') as f:
-                ticker_images = json.load(f)
-                if ticker in ticker_images:
-                    return jsonify({
-                        'success': True,
-                        'image_url': ticker_images[ticker].get('image_url'),
-                        'is_custom': ticker_images[ticker].get('is_custom', False)
-                    })
+        # Load ticker images from S3
+        ticker_images = load_json_from_s3(TICKER_IMAGES_FILE)
+        if ticker in ticker_images:
+            return jsonify({
+                'success': True,
+                'image_url': ticker_images[ticker].get('image_url'),
+                'is_custom': ticker_images[ticker].get('is_custom', False)
+            })
         
         return jsonify({'success': True, 'image_url': None})
     except Exception as e:
@@ -4880,12 +4937,8 @@ def set_ticker_image():
         if not ticker:
             return jsonify({'success': False, 'error': 'Ticker is required'}), 400
         
-        # Load existing cache
-        cache_file = 'ticker_images_cache.json'
-        ticker_images = {}
-        if os.path.exists(cache_file):
-            with open(cache_file, 'r') as f:
-                ticker_images = json.load(f)
+        # Load existing cache from S3
+        ticker_images = load_json_from_s3(TICKER_IMAGES_FILE)
         
         # Handle file upload
         if 'file' in request.files:
@@ -4924,16 +4977,14 @@ def set_ticker_image():
         else:
             return jsonify({'success': False, 'error': 'Either file or image_url is required'}), 400
         
-        # Save to cache
+        # Save to cache in S3
         ticker_images[ticker] = {
             'image_url': image_url,
             'is_custom': True,
             'updated_at': datetime.now().isoformat()
         }
         
-        with open(cache_file, 'w') as f:
-            json.dump(ticker_images, f, indent=2)
-        
+        save_json_to_s3(TICKER_IMAGES_FILE, ticker_images)
         print(f"   ✅ Saved ticker image for {ticker}")
         
         return jsonify({
@@ -4958,19 +5009,13 @@ def remove_ticker_image():
         if not ticker:
             return jsonify({'success': False, 'error': 'Ticker is required'}), 400
         
-        # Load cache
-        cache_file = 'ticker_images_cache.json'
-        if os.path.exists(cache_file):
-            with open(cache_file, 'r') as f:
-                ticker_images = json.load(f)
-            
-            if ticker in ticker_images:
-                del ticker_images[ticker]
-                
-                with open(cache_file, 'w') as f:
-                    json.dump(ticker_images, f, indent=2)
-                
-                print(f"   ✅ Removed ticker image for {ticker}")
+        # Load cache from S3
+        ticker_images = load_json_from_s3(TICKER_IMAGES_FILE)
+        
+        if ticker in ticker_images:
+            del ticker_images[ticker]
+            save_json_to_s3(TICKER_IMAGES_FILE, ticker_images)
+            print(f"   ✅ Removed ticker image for {ticker}")
         
         return jsonify({'success': True, 'message': 'Ticker image removed'})
         
@@ -5008,12 +5053,8 @@ def get_tickers_without_images():
         
         all_tickers = tickers_data.get('tickers', [])
         
-        # Load ticker images cache
-        cache_file = 'ticker_images_cache.json'
-        ticker_images = {}
-        if os.path.exists(cache_file):
-            with open(cache_file, 'r') as f:
-                ticker_images = json.load(f)
+        # Load ticker images cache from S3
+        ticker_images = load_json_from_s3(TICKER_IMAGES_FILE)
         
         # Separate tickers with and without images
         tickers_without_images = []
