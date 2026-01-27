@@ -10999,7 +10999,17 @@
                         <!-- Daily Metrics Tab -->
                         <div id="dailyTab" class="ticker-tab-content" style="display: none;">
                             <div class="chart-card">
-                                <h3>📋 Daily Metrics</h3>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                    <h3 style="margin: 0;">📋 Daily Metrics</h3>
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <button id="sortNewest" class="sort-btn active" onclick="sortDailyTable('newest')" style="padding: 0.5rem 1rem; background: var(--accent-cyan); color: var(--bg-dark); border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                                            📅 Newest First
+                                        </button>
+                                        <button id="sortOldest" class="sort-btn" onclick="sortDailyTable('oldest')" style="padding: 0.5rem 1rem; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
+                                            📆 Oldest First
+                                        </button>
+                                    </div>
+                                </div>
                                 <div style="overflow-x: auto;">
                                     <table id="dailyDataTable" class="data-table" style="width: 100%; border-collapse: collapse;">
                                         <thead>
@@ -13528,17 +13538,62 @@
             }
         }
         
-        function renderDailyTable(dailyData) {
+        // Store daily table data and sort mode
+        let dailyTableDataCache = null;
+        let currentDailySortMode = 'newest';
+        
+        function renderDailyTable(dailyData, sortMode = 'newest') {
             const tbody = document.getElementById('dailyDataTableBody');
             let html = '';
             
-            dailyData.slice().reverse().forEach(d => {
+            // Cache the data for sorting
+            dailyTableDataCache = dailyData;
+            currentDailySortMode = sortMode;
+            
+            // Sort data based on mode
+            let sortedData;
+            if (sortMode === 'newest') {
+                // Newest first (reverse chronological)
+                sortedData = dailyData.slice().reverse();
+            } else {
+                // Oldest first (chronological)
+                sortedData = dailyData.slice();
+            }
+            
+            sortedData.forEach(d => {
                 const netGrowthPct = ((d.Calculated_Net_Growth || 0) * 100).toFixed(4);
                 const color = netGrowthPct >= 0 ? '#10b981' : '#ef4444';
                 html += `<tr style="border-bottom: 1px solid var(--border-color);"><td style="padding: 0.75rem;">${d.Date}</td><td style="padding: 0.75rem; text-align: right;">${d.Quarter}</td><td style="padding: 0.75rem; text-align: right;">${(d['Total Consumers'] || 0).toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${(d['Total Subs'] || 0).toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${(d['Total Cancels'] || 0).toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${color};">${netGrowthPct}%</td></tr>`;
             });
             
             tbody.innerHTML = html;
+        }
+        
+        function sortDailyTable(mode) {
+            // Update button states
+            const newestBtn = document.getElementById('sortNewest');
+            const oldestBtn = document.getElementById('sortOldest');
+            
+            if (mode === 'newest') {
+                newestBtn.style.background = 'var(--accent-cyan)';
+                newestBtn.style.color = 'var(--bg-dark)';
+                newestBtn.style.border = 'none';
+                oldestBtn.style.background = 'var(--bg-input)';
+                oldestBtn.style.color = 'var(--text-primary)';
+                oldestBtn.style.border = '1px solid var(--border-color)';
+            } else {
+                oldestBtn.style.background = 'var(--accent-cyan)';
+                oldestBtn.style.color = 'var(--bg-dark)';
+                oldestBtn.style.border = 'none';
+                newestBtn.style.background = 'var(--bg-input)';
+                newestBtn.style.color = 'var(--text-primary)';
+                newestBtn.style.border = '1px solid var(--border-color)';
+            }
+            
+            // Re-render table with cached data
+            if (dailyTableDataCache) {
+                renderDailyTable(dailyTableDataCache, mode);
+            }
         }
         
         async function generateEarningsPrediction(data) {
