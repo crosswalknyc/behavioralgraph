@@ -12845,68 +12845,48 @@
                 return;
             }
             
-            // Extract profile name and basic stats
-            const profileName = currentProfileFilename ? currentProfileFilename.replace(/_/g, ' ').replace(/\.csv$/, '').replace(/\d{2}_\d{2}_\d{4}_\d{2}_\d{2}/, '').trim() : 'Profile';
+            // Extract brand name from current profile filename
+            const brandName = currentProfileFilename ? currentProfileFilename.replace(/_/g, ' ').replace(/\.csv$/, '').replace(/\d{2}_\d{2}_\d{4}_\d{2}_\d{2}/, '').trim() : 'Profile';
+            console.log('📝 Brand name extracted:', brandName);
             
-            // Get sample size
-            let sampleSize = 0;
-            const sampleRow = csvData.find(row => (row.Column || '').toUpperCase() === 'SAMPLE SIZE');
-            if (sampleRow) {
-                sampleSize = parseInt(sampleRow['Original Raw Numbers'] || sampleRow['Category Share'] || 0);
-            }
+            // Store the CSV data globally so Profile IQ functions can access it
+            currentCSVData = csvData;
+            currentProfileData = {
+                name: brandName,
+                data: csvData
+            };
             
-            // Get top insights (high penetration items)
-            const insights = csvData
-                .filter(row => {
-                    const penetration = parseFloat(row['Brand Penetration (Row)'] || 0);
-                    return penetration > 50 && row.Column && row.Value;
-                })
-                .sort((a, b) => parseFloat(b['Brand Penetration (Row)'] || 0) - parseFloat(a['Brand Penetration (Row)'] || 0))
-                .slice(0, 10);
+            // Switch to Profile IQ tab and load this profile
+            console.log('🔄 Switching to Profile IQ to render full dashboard...');
+            showProfileIQ();
             
-            // Render simplified profile view
-            container.innerHTML = `
-                <div class="insight-card-v2" style="padding: 2rem;">
-                    <h3 style="margin: 0 0 1rem 0; color: var(--text-primary);">📊 Customer Profile: ${profileName}</h3>
+            // Find and click the profile to load it
+            setTimeout(() => {
+                const profileItems = document.querySelectorAll('.tree-item.file-item');
+                let found = false;
+                
+                for (const item of profileItems) {
+                    const itemText = item.textContent.toLowerCase();
+                    const searchName = brandName.toLowerCase().replace(/\s+/g, ' ');
                     
-                    ${sampleSize > 0 ? `
-                        <div style="margin-bottom: 1.5rem; padding: 1rem; background: var(--bg-dark); border-radius: 8px;">
-                            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Sample Size</div>
-                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);">${sampleSize.toLocaleString()}</div>
-                        </div>
-                    ` : ''}
-                    
-                    ${insights.length > 0 ? `
-                        <div>
-                            <h4 style="margin: 0 0 1rem 0; font-size: 1rem; color: var(--text-primary);">Top Insights</h4>
-                            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                                ${insights.map(insight => `
-                                    <div style="padding: 0.75rem; background: var(--bg-dark); border-radius: 6px; border-left: 3px solid var(--accent-cyan);">
-                                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                                            <div>
-                                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">${insight.Column}</div>
-                                                <div style="font-size: 0.9rem; color: var(--text-primary); font-weight: 600;">${insight.Value}</div>
-                                            </div>
-                                            <div style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">${parseFloat(insight['Brand Penetration (Row)'] || 0).toFixed(1)}%</div>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : '<p style="color: var(--text-secondary);">No high-penetration insights found in this profile.</p>'}
-                    
-                    <div style="margin-top: 2rem; padding: 1rem; background: rgba(0, 255, 255, 0.1); border-radius: 8px; text-align: center;">
-                        <p style="margin: 0 0 1rem 0; color: var(--text-secondary); font-size: 0.9rem;">
-                            For full demographic, behavioral, and location insights, view this profile in Profile IQ.
-                        </p>
-                        <button onclick="viewInProfileIQ('${currentProfileFilename}')" class="btn btn-primary">
-                            📊 View Full Profile in Profile IQ
-                        </button>
-                    </div>
-                </div>
-            `;
+                    if (itemText.includes(searchName)) {
+                        console.log('✅ Found matching profile, clicking:', item.textContent);
+                        item.click();
+                        found = true;
+                        break;
+                    }
+                }
+                
+                if (!found) {
+                    console.warn('⚠️ Could not find profile in sidebar, attempting direct render...');
+                    // If profile not found in sidebar, try to render it directly
+                    if (window.renderDashboard) {
+                        window.renderDashboard(csvData, brandName, null);
+                    }
+                }
+            }, 500);
             
-            console.log('✅ Profile insights rendered successfully');
+            console.log('✅ Profile insights render initiated');
         }
         
         function viewInProfileIQ(filename) {
