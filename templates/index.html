@@ -13537,12 +13537,15 @@
                 let varianceCell = '<td style="padding: 0.75rem; text-align: right; color: var(--text-secondary);">-</td>';
                 
                 if (secActual !== undefined && secActual !== null) {
-                    const variance = netGrowth - secActual;
-                    const variancePct = secActual !== 0 ? ((variance / secActual) * 100).toFixed(2) : 0;
-                    const varianceColor = variance >= 0 ? '#10b981' : '#ef4444';
+                    // Compare Growth % (our calculation) vs SEC Actuals (percentage)
+                    // Both are percentages, so variance is the difference in percentage points
+                    const ourGrowthPct = parseFloat(growthPct);
+                    const secActualPct = parseFloat(secActual);
+                    const variancePct = ourGrowthPct - secActualPct;
+                    const varianceColor = Math.abs(variancePct) < 0.5 ? '#10b981' : (Math.abs(variancePct) < 2 ? '#eab308' : '#ef4444');
                     
-                    secActualCell = `<td style="padding: 0.75rem; text-align: right;">${secActual.toLocaleString()}</td>`;
-                    varianceCell = `<td style="padding: 0.75rem; text-align: right; color: ${varianceColor};">${variance.toLocaleString()} (${variancePct}%)</td>`;
+                    secActualCell = `<td style="padding: 0.75rem; text-align: right;">${secActualPct.toFixed(2)}%</td>`;
+                    varianceCell = `<td style="padding: 0.75rem; text-align: right; color: ${varianceColor};">${variancePct >= 0 ? '+' : ''}${variancePct.toFixed(2)}%</td>`;
                 }
                 
                 html += `<tr style="border-bottom: 1px solid var(--border-color);"><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${netGrowth >= 0 ? '#10b981' : '#ef4444'};">${netGrowth.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${growthPct >= 0 ? '#10b981' : '#ef4444'};">${growthPct}%</td>${secActualCell}${varianceCell}</tr>`;
