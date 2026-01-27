@@ -1018,13 +1018,15 @@
 
                             <!-- Profile Mapping Section -->
                             <div class="form-section" style="margin-top: 1.5rem;">
-                                <div class="form-section-title">🔗 Customer Profile</div>
-                                <div class="form-group" style="margin-bottom: 0.75rem;">
-                                    <label style="font-size: 0.85rem;">Profile Filename</label>
-                                    <input type="text" id="tickerProfileFilename" placeholder="Enter filename (without .csv)" style="font-size: 0.85rem;">
-                                    <small style="font-size: 0.75rem;">Leave empty to use ticker symbol</small>
+                                <div class="form-section-title">🔗 Customer Profiles (Max 5)</div>
+                                <div id="tickerProfilesList" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                    <!-- Profile inputs will be dynamically added here -->
                                 </div>
-                                <button class="btn btn-small btn-primary" onclick="saveTickerProfileMapping()">💾 Save</button>
+                                <button class="btn btn-small btn-success" onclick="addProfileInput()" style="margin-bottom: 0.5rem;">+ Add Profile</button>
+                                <button class="btn btn-small btn-primary" onclick="saveTickerProfileMapping()">💾 Save Profiles</button>
+                                <small style="display: block; margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-secondary);">
+                                    Enter filenames without .csv extension. Leave empty to use ticker symbol.
+                                </small>
                             </div>
                         </div>
 
@@ -4438,9 +4440,17 @@
                     try {
                         const profileResponse = await fetch(`/api/hedge-fund-iq/profile-mapping/${ticker.ticker}`);
                         const profileData = await profileResponse.json();
-                        ticker.profileFilename = profileData.profile_filename || ticker.ticker;
-                        ticker.hasCustomProfile = profileData.profile_filename && profileData.profile_filename !== ticker.ticker;
+                        if (profileData.success && profileData.profiles && profileData.profiles.length > 0) {
+                            ticker.profiles = profileData.profiles;
+                            ticker.profileFilename = profileData.profiles[0]; // First profile for display
+                            ticker.hasCustomProfile = profileData.profiles.length > 0 && profileData.profiles[0] !== ticker.ticker;
+                        } else {
+                            ticker.profiles = [ticker.ticker];
+                            ticker.profileFilename = ticker.ticker;
+                            ticker.hasCustomProfile = false;
+                        }
                     } catch (error) {
+                        ticker.profiles = [ticker.ticker];
                         ticker.profileFilename = ticker.ticker;
                         ticker.hasCustomProfile = false;
                     }
@@ -4481,7 +4491,14 @@
             for (const ticker of filteredTickers) {
                 const statusIcons = [];
                 if (ticker.hasImage) statusIcons.push('📸');
-                if (ticker.hasCustomProfile) statusIcons.push('🔗');
+                if (ticker.hasCustomProfile) {
+                    const profileCount = ticker.profiles ? ticker.profiles.length : 1;
+                    if (profileCount > 1) {
+                        statusIcons.push(`🔗${profileCount}`);
+                    } else {
+                        statusIcons.push('🔗');
+                    }
+                }
                 
                 html += `
                     <div class="card" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
@@ -4542,8 +4559,17 @@
                 document.getElementById('removeTickerImageBtn').style.display = 'none';
             }
             
-            // Set profile filename
-            document.getElementById('tickerProfileFilename').value = ticker.hasCustomProfile ? ticker.profileFilename : '';
+            // Set profile filenames (support up to 5)
+            const profilesList = document.getElementById('tickerProfilesList');
+            profilesList.innerHTML = '';
+            const profiles = ticker.profiles || [ticker.ticker];
+            profiles.forEach((profile, index) => {
+                addProfileInputElement(profile, index);
+            });
+            // If no profiles, add one empty input
+            if (profiles.length === 0) {
+                addProfileInputElement('', 0);
+            }
             
             // Load SEC actuals for this ticker
             await loadSecActualsForTicker(ticker.ticker);
@@ -4662,10 +4688,47 @@
             }
         }
         
+        function addProfileInputElement(value = '', index = 0) {
+            const profilesList = document.getElementById('tickerProfilesList');
+            const currentCount = profilesList.children.length;
+            
+            if (currentCount >= 5) {
+                showToast('❌ Maximum 5 profiles allowed', true);
+                return;
+            }
+            
+            const inputGroup = document.createElement('div');
+            inputGroup.style.cssText = 'display: flex; gap: 0.5rem; align-items: center;';
+            inputGroup.innerHTML = `
+                <input type="text" class="profile-filename-input" value="${value}" 
+                       placeholder="Profile filename ${currentCount + 1}" 
+                       style="flex: 1; font-size: 0.85rem; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                <button class="btn btn-small btn-danger" onclick="removeProfileInput(this)" style="padding: 0.4rem 0.6rem;">🗑️</button>
+            `;
+            profilesList.appendChild(inputGroup);
+        }
+        
+        function addProfileInput() {
+            addProfileInputElement('', document.getElementById('tickerProfilesList').children.length);
+        }
+        
+        function removeProfileInput(button) {
+            const profilesList = document.getElementById('tickerProfilesList');
+            if (profilesList.children.length <= 1) {
+                showToast('❌ At least one profile input required', true);
+                return;
+            }
+            button.parentElement.remove();
+        }
+        
         async function saveTickerProfileMapping() {
             if (!currentTickerInModal) return;
             
-            const profileFilename = document.getElementById('tickerProfileFilename').value.trim();
+            // Collect all profile filenames from inputs
+            const profileInputs = document.querySelectorAll('.profile-filename-input');
+            const profiles = Array.from(profileInputs)
+                .map(input => input.value.trim())
+                .filter(val => val !== ''); // Remove empty values
             
             try {
                 const response = await fetch('/api/hedge-fund-iq/profile-mapping', {
@@ -4673,14 +4736,14 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         ticker: currentTickerInModal.ticker,
-                        profile_filename: profileFilename
+                        profiles: profiles
                     })
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
-                    showToast('✅ Profile mapping saved!');
+                    showToast(`✅ ${profiles.length} profile(s) saved!`);
                     await loadTickers();
                     showTickerDetail(currentTickerInModal.ticker);
                 } else {
