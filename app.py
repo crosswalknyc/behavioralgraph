@@ -4578,6 +4578,7 @@ def get_hedge_fund_ticker_data(s3_key):
                 projected_net_growth_pct = (projected_net_growth / quarter_start_consumers * 100) if quarter_start_consumers > 0 else 0
                 
                 # Calculate accuracy rating based on SEC actuals (MAPE)
+                # Using Mean Absolute Percentage Error to measure accuracy
                 accuracy_rating = None
                 accuracy_score = None
                 try:
