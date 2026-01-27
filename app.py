@@ -4984,6 +4984,45 @@ def update_profile_mapping():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/profile/<path:filename>')
+@requires_auth
+def get_profile_data(filename):
+    """Get profile data from S3 dashboard-inputs bucket and return pre-signed URL for direct access."""
+    try:
+        print(f"📊 Loading profile: {filename}")
+        
+        # Ensure filename has .csv extension
+        if not filename.endswith('.csv'):
+            filename = f"{filename}.csv"
+        
+        # Check if file exists
+        try:
+            s3_client.head_object(Bucket='dashboard-inputs', Key=filename)
+        except s3_client.exceptions.NoSuchKey:
+            print(f"❌ Profile not found: {filename}")
+            return jsonify({'success': False, 'error': f'Profile file not found: {filename}'}), 404
+        
+        # Generate a pre-signed URL for the file (valid for 1 hour)
+        presigned_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': 'dashboard-inputs', 'Key': filename},
+            ExpiresIn=3600  # 1 hour
+        )
+        
+        print(f"✅ Generated presigned URL for {filename}")
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'url': presigned_url
+        })
+        
+    except Exception as e:
+        print(f"❌ Error loading profile: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/ticker-image/<ticker>')
 @requires_auth
 def get_ticker_image(ticker):

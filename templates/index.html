@@ -12659,8 +12659,8 @@
                 // Update the profile selector dropdown
                 updateProfileSelector();
                 
-                // Try to load the profile data
-                const profileResponse = await fetch(`/api/profile/${profileFilename}`);
+                // Get the presigned URL for the CSV file
+                const profileResponse = await fetch(`/api/profile/${encodeURIComponent(profileFilename)}`);
                 
                 if (!profileResponse.ok) {
                     container.innerHTML = `
@@ -12674,12 +12674,38 @@
                 
                 const profileData = await profileResponse.json();
                 
+                if (!profileData.success || !profileData.url) {
+                    throw new Error('Failed to get profile URL');
+                }
+                
+                // Fetch the CSV from the presigned URL
+                const csvResponse = await fetch(profileData.url);
+                const csvText = await csvResponse.text();
+                
+                // Parse CSV manually (simple parser)
+                const lines = csvText.split('\n').filter(line => line.trim());
+                if (lines.length < 2) {
+                    throw new Error('Empty or invalid CSV file');
+                }
+                
+                const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+                const rows = [];
+                
+                for (let i = 1; i < lines.length; i++) {
+                    const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        row[header] = values[index] || '';
+                    });
+                    rows.push(row);
+                }
+                
                 // Store the profile data globally so other functions can access it
-                window.currentDashboardData = profileData;
+                window.currentDashboardData = rows;
                 window.currentProfileName = profileFilename;
                 
                 // Render the profile with dropdown if multiple profiles
-                renderProfileInsights(profileData);
+                renderProfileInsights(rows);
                 
             } catch (error) {
                 console.error('Error loading ticker profile:', error);
@@ -12692,7 +12718,7 @@
             }
         }
         
-        function renderProfileInsights(data) {
+        function renderProfileInsights(csvData) {
             // Reuse the existing Profile IQ insights rendering logic
             // This will render the same insights view as in Profile IQ
             const container = document.getElementById('tickerProfileContent');
@@ -12716,9 +12742,19 @@
                 </div>
             `;
             
-            // Call the existing renderDashboard function if it exists
+            // Extract brand name from current profile filename
+            const brandName = extractDisplayName(currentProfileFilename);
+            
+            // Call the existing renderDashboard function
             if (window.renderDashboard) {
-                window.renderDashboard(data);
+                window.renderDashboard(csvData, brandName, null);
+            } else {
+                container.innerHTML = `
+                    <div class="insight-card-v2" style="text-align: center; padding: 3rem;">
+                        <h3 style="color: var(--text-secondary); margin-bottom: 1rem;">⚠️ Dashboard Not Ready</h3>
+                        <p style="color: var(--text-secondary);">The dashboard rendering function is not available.</p>
+                    </div>
+                `;
             }
         }
         
