@@ -4552,6 +4552,7 @@ def get_hedge_fund_ticker_data(s3_key):
         display_name = ticker_metadata.get('display_name', ticker_symbol)
         kpi = ticker_metadata.get('kpi', default_kpi)  # Use default_kpi instead of 'Unknown KPI'
         parent_ticker = ticker_metadata.get('parent_ticker', None)
+        relevance_percentage = ticker_metadata.get('relevance_percentage', None)
         
         # Convert to records
         data = df.to_dict('records')
@@ -4659,6 +4660,7 @@ def get_hedge_fund_ticker_data(s3_key):
             'display_name': display_name,
             'kpi': kpi,
             'parent_ticker': parent_ticker,
+            'relevance_percentage': relevance_percentage,
             's3_key': s3_key,
             'bucket': HEDGE_FUND_S3_BUCKET,
             'calculated_stats': calculated_stats  # Pre-calculated stats for instant display
@@ -4697,6 +4699,7 @@ def manage_ticker_metadata():
         display_name = data.get('display_name')
         kpi = data.get('kpi')
         parent_ticker = data.get('parent_ticker')
+        relevance_percentage = data.get('relevance_percentage')
         
         if not s3_key:
             return jsonify({'success': False, 'error': 's3_key is required'}), 400
@@ -4712,6 +4715,15 @@ def manage_ticker_metadata():
             metadata[s3_key]['kpi'] = kpi
         if parent_ticker is not None:  # Allow empty string to clear
             metadata[s3_key]['parent_ticker'] = parent_ticker
+        if relevance_percentage is not None:  # Allow 0 or empty string to clear
+            # Validate it's a number between 0-100
+            try:
+                rel_pct = float(relevance_percentage) if relevance_percentage != '' else None
+                if rel_pct is not None and (rel_pct < 0 or rel_pct > 100):
+                    return jsonify({'success': False, 'error': 'Relevance percentage must be between 0-100'}), 400
+                metadata[s3_key]['relevance_percentage'] = rel_pct
+            except (ValueError, TypeError):
+                return jsonify({'success': False, 'error': 'Invalid relevance percentage format'}), 400
         
         save_ticker_metadata(metadata)
         

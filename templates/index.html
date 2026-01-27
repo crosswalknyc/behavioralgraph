@@ -10886,6 +10886,7 @@
                                     <div class="dash-meta-box" id="tickerDataPointsHeader"></div>
                                     <div class="dash-meta-box" id="tickerLatestDataHeader"></div>
                                     <div class="dash-meta-box" id="tickerAccuracyHeader" style="display: none;"></div>
+                                    <div class="dash-meta-box" id="tickerRelevanceHeader" style="display: none;"></div>
                                 </div>
                             </div>
                         </div>
@@ -12958,6 +12959,16 @@
             const endDate = dates[dates.length - 1] || 'N/A';
             document.getElementById('tickerDateRangeHeader').textContent = `Data Range: ${startDate} - ${endDate}`;
             document.getElementById('tickerDataPointsHeader').textContent = `${data.data.length} days of data`;
+            
+            // Display relevance percentage if available
+            const relevanceHeader = document.getElementById('tickerRelevanceHeader');
+            if (data.relevance_percentage !== null && data.relevance_percentage !== undefined) {
+                relevanceHeader.textContent = `📊 Stock Impact: ${data.relevance_percentage}%`;
+                relevanceHeader.style.display = 'block';
+                relevanceHeader.title = `This KPI represents approximately ${data.relevance_percentage}% of the stock price movement`;
+            } else {
+                relevanceHeader.style.display = 'none';
+            }
             
             // Use pre-calculated stats from backend (instant display, no waiting)
             const stats = data.calculated_stats || {};
