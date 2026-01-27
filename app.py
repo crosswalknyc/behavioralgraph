@@ -1835,7 +1835,8 @@ def create_user():
             'has_profile_iq_access': req_data.get('has_profile_iq_access', True),
             'has_subscriber_iq_access': req_data.get('has_subscriber_iq_access', False),
             'has_hedge_fund_iq_access': req_data.get('has_hedge_fund_iq_access', False),
-            'hedge_fund_iq_tickers': req_data.get('hedge_fund_iq_tickers', ['*']),
+            'hedge_fund_iq_tabs': req_data.get('hedge_fund_iq_tabs', []),
+            'hedge_fund_iq_tickers': req_data.get('hedge_fund_iq_tickers', []),
             'has_analysis_iq_access': req_data.get('has_analysis_iq_access', False),
             'analysis_iq_modules': req_data.get('analysis_iq_modules', [])
         }
@@ -1909,6 +1910,8 @@ def update_user(username):
             user['has_subscriber_iq_access'] = req_data['has_subscriber_iq_access']
         if 'has_hedge_fund_iq_access' in req_data:
             user['has_hedge_fund_iq_access'] = req_data['has_hedge_fund_iq_access']
+        if 'hedge_fund_iq_tabs' in req_data:
+            user['hedge_fund_iq_tabs'] = req_data['hedge_fund_iq_tabs']
         if 'hedge_fund_iq_tickers' in req_data:
             user['hedge_fund_iq_tickers'] = req_data['hedge_fund_iq_tickers']
         if 'has_analysis_iq_access' in req_data:
