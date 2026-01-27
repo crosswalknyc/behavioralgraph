@@ -2587,6 +2587,17 @@
             }
         }
         
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
         /* Pulsing Chart Container */
         .pulsing-chart-container {
             animation: chart-pulse 3s ease-in-out infinite;
@@ -12961,6 +12972,13 @@
             const dates = dailyData.map(d => d.Date);
             const netGrowth = dailyData.map(d => (d.Calculated_Net_Growth || 0) * 100); // Convert to percentage
             
+            // Store daily data globally for click handler
+            window.chartDailyData = dailyData;
+            
+            // Create array of point radii - make last point larger
+            const pointRadii = dates.map((_, index) => index === dates.length - 1 ? 8 : 4);
+            const pointHoverRadii = dates.map((_, index) => index === dates.length - 1 ? 12 : 6);
+            
             dailyChurnChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -12973,8 +12991,8 @@
                         borderWidth: 2,
                         fill: true,
                         tension: 0.4,
-                        pointRadius: 4,
-                        pointHoverRadius: 6,
+                        pointRadius: pointRadii,
+                        pointHoverRadius: pointHoverRadii,
                         pointBackgroundColor: '#10b981',
                         pointBorderColor: '#fff',
                         pointBorderWidth: 2
@@ -12986,6 +13004,13 @@
                     animation: {
                         duration: 1000,
                         easing: 'easeInOutQuart'
+                    },
+                    onClick: (event, activeElements) => {
+                        if (activeElements.length > 0) {
+                            const index = activeElements[0].index;
+                            const dayData = dailyData[index];
+                            showDayDetails(dayData);
+                        }
                     },
                     plugins: {
                         legend: {
@@ -12999,7 +13024,21 @@
                             titleColor: '#00ffff',
                             bodyColor: '#e6f1ff',
                             borderColor: '#00ffff',
-                            borderWidth: 1
+                            borderWidth: 1,
+                            callbacks: {
+                                afterBody: function(context) {
+                                    const index = context[0].dataIndex;
+                                    const dayData = dailyData[index];
+                                    return [
+                                        '',
+                                        `Total Consumers: ${(dayData['Total Consumers'] || 0).toLocaleString()}`,
+                                        `Total Subs: ${(dayData['Total Subs'] || 0).toLocaleString()}`,
+                                        `Total Cancels: ${(dayData['Total Cancels'] || 0).toLocaleString()}`,
+                                        '',
+                                        '💡 Click to see full details'
+                                    ];
+                                }
+                            }
                         }
                     },
                     scales: {
@@ -13025,6 +13064,126 @@
             });
         }
         
+        function showDayDetails(dayData) {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                animation: fadeIn 0.2s ease-in-out;
+            `;
+            
+            const netGrowthPct = ((dayData.Calculated_Net_Growth || 0) * 100).toFixed(2);
+            const netGrowthNum = (dayData['Total Subs'] || 0) - (dayData['Total Cancels'] || 0);
+            
+            modal.innerHTML = `
+                <div style="
+                    background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-card) 100%);
+                    border-radius: 16px;
+                    padding: 2rem;
+                    max-width: 500px;
+                    width: 90%;
+                    border: 2px solid var(--accent-cyan);
+                    box-shadow: 0 0 40px rgba(0, 255, 255, 0.3);
+                    position: relative;
+                ">
+                    <button onclick="this.closest('[style*=fixed]').remove()" style="
+                        position: absolute;
+                        top: 1rem;
+                        right: 1rem;
+                        background: transparent;
+                        border: none;
+                        color: var(--text-secondary);
+                        font-size: 1.5rem;
+                        cursor: pointer;
+                        padding: 0.5rem;
+                        line-height: 1;
+                    ">×</button>
+                    
+                    <h2 style="
+                        color: var(--accent-cyan);
+                        margin: 0 0 0.5rem 0;
+                        font-size: 1.5rem;
+                    ">📊 Daily Metrics</h2>
+                    
+                    <div style="
+                        color: var(--text-secondary);
+                        font-size: 0.9rem;
+                        margin-bottom: 1.5rem;
+                    ">${dayData.Date} (${dayData.Quarter})</div>
+                    
+                    <div style="
+                        display: grid;
+                        gap: 1rem;
+                    ">
+                        <div style="
+                            background: var(--bg-input);
+                            padding: 1rem;
+                            border-radius: 8px;
+                            border-left: 4px solid #3b82f6;
+                        ">
+                            <div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.25rem;">👥 Total Consumers</div>
+                            <div style="color: var(--text-primary); font-size: 1.5rem; font-weight: 600;">
+                                ${(dayData['Total Consumers'] || 0).toLocaleString()}
+                            </div>
+                        </div>
+                        
+                        <div style="
+                            background: var(--bg-input);
+                            padding: 1rem;
+                            border-radius: 8px;
+                            border-left: 4px solid #10b981;
+                        ">
+                            <div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.25rem;">📈 Total Subs</div>
+                            <div style="color: #10b981; font-size: 1.5rem; font-weight: 600;">
+                                +${(dayData['Total Subs'] || 0).toLocaleString()}
+                            </div>
+                        </div>
+                        
+                        <div style="
+                            background: var(--bg-input);
+                            padding: 1rem;
+                            border-radius: 8px;
+                            border-left: 4px solid #ef4444;
+                        ">
+                            <div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.25rem;">📉 Total Cancels</div>
+                            <div style="color: #ef4444; font-size: 1.5rem; font-weight: 600;">
+                                -${(dayData['Total Cancels'] || 0).toLocaleString()}
+                            </div>
+                        </div>
+                        
+                        <div style="
+                            background: var(--bg-input);
+                            padding: 1rem;
+                            border-radius: 8px;
+                            border-left: 4px solid var(--accent-cyan);
+                        ">
+                            <div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.25rem;">💹 Net Growth</div>
+                            <div style="color: var(--accent-cyan); font-size: 1.5rem; font-weight: 600;">
+                                ${netGrowthNum >= 0 ? '+' : ''}${netGrowthNum.toLocaleString()} (${netGrowthPct}%)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Close on background click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+        }
+        
         // Live chart animation - makes chart pulse and appear to be charting in real-time
         function startLiveChartAnimation() {
             // Stop any existing animation
@@ -13035,6 +13194,8 @@
             let pulseDirection = 1;
             let pulseValue = 0;
             
+            const dataLength = dailyChurnChart.data.labels.length;
+            
             liveChartAnimation = setInterval(() => {
                 // Pulse the border width
                 pulseValue += 0.05 * pulseDirection;
@@ -13043,12 +13204,34 @@
                 
                 // Update chart styling to create pulsing effect
                 dailyChurnChart.data.datasets[0].borderWidth = 2 + (pulseValue * 2);
-                dailyChurnChart.data.datasets[0].pointRadius = 4 + (pulseValue * 2);
+                
+                // Create array of point radii with last point pulsing much more
+                const pointRadii = dailyChurnChart.data.labels.map((_, index) => {
+                    if (index === dataLength - 1) {
+                        // Last point pulses from 8 to 16 (double the pulse range)
+                        return 8 + (pulseValue * 8);
+                    } else {
+                        // Other points pulse normally
+                        return 4 + (pulseValue * 2);
+                    }
+                });
+                dailyChurnChart.data.datasets[0].pointRadius = pointRadii;
                 
                 // Subtle color pulse
                 const greenIntensity = Math.floor(185 + (pulseValue * 40));
                 dailyChurnChart.data.datasets[0].borderColor = `rgb(16, ${greenIntensity}, 129)`;
-                dailyChurnChart.data.datasets[0].pointBackgroundColor = `rgb(16, ${greenIntensity}, 129)`;
+                
+                // Create array of point colors with last point glowing more
+                const pointColors = dailyChurnChart.data.labels.map((_, index) => {
+                    if (index === dataLength - 1) {
+                        // Last point glows brighter with cyan
+                        const cyanIntensity = Math.floor(255 * pulseValue);
+                        return `rgb(${cyanIntensity}, ${greenIntensity}, 129)`;
+                    } else {
+                        return `rgb(16, ${greenIntensity}, 129)`;
+                    }
+                });
+                dailyChurnChart.data.datasets[0].pointBackgroundColor = pointColors;
                 
                 // Update chart
                 dailyChurnChart.update('none'); // 'none' mode = no animation, just update
@@ -13062,8 +13245,15 @@
                 
                 // Reset chart to default styling
                 if (dailyChurnChart) {
+                    const dataLength = dailyChurnChart.data.labels.length;
                     dailyChurnChart.data.datasets[0].borderWidth = 2;
-                    dailyChurnChart.data.datasets[0].pointRadius = 4;
+                    
+                    // Reset point radii with last point larger
+                    const pointRadii = dailyChurnChart.data.labels.map((_, index) => 
+                        index === dataLength - 1 ? 8 : 4
+                    );
+                    dailyChurnChart.data.datasets[0].pointRadius = pointRadii;
+                    
                     dailyChurnChart.data.datasets[0].borderColor = '#10b981';
                     dailyChurnChart.data.datasets[0].pointBackgroundColor = '#10b981';
                     dailyChurnChart.update('none');
