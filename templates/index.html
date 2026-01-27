@@ -10917,19 +10917,19 @@
                         <!-- Live Data Tab -->
                         <div id="livedataTab" class="ticker-tab-content" style="display: block;">
                             <!-- Summary Stats -->
-                            <div style="margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+                            <div style="margin-bottom: 0.75rem;">
                                 <h3 id="quarterYTDHeader" style="font-size: 1.25rem; color: var(--accent-cyan); font-weight: 600; margin: 0;">Quarter to Date (QTD) Cumulative</h3>
-                                <div id="liveDataAccuracyBadge" style="display: none; padding: 0.5rem 1rem; background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border-color);">
-                                    <span style="font-size: 0.9rem; color: var(--text-secondary);">Accuracy: </span>
-                                    <span id="liveDataAccuracyValue" style="font-weight: 600; font-size: 1rem;"></span>
-                                </div>
                             </div>
                             
-                            <!-- Projected Growth Rate - Full Width (Pulsing, Clickable) -->
-                            <div style="margin-bottom: 1rem;">
-                                <div class="stat-card pulsing-card" id="projectedGrowthCard" style="width: 100%; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" onclick="navigateToTrends()">
+                            <!-- Projected Growth Rate + Accuracy - Side by Side -->
+                            <div style="margin-bottom: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                <div class="stat-card" id="projectedGrowthCard" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" onclick="navigateToTrends()">
                                     <div class="stat-label" id="projectedGrowthLabel">🔮 Q1 2026 Projected Net Growth Rate</div>
                                     <div class="stat-value pulsing-number" id="projectedGrowth" style="font-size: 2.5rem;">--</div>
+                                </div>
+                                <div id="liveDataAccuracyBadge" class="stat-card" style="display: none;">
+                                    <div class="stat-label">🎯 Accuracy</div>
+                                    <div id="liveDataAccuracyValue" style="font-weight: 600; font-size: 1rem;"></div>
                                 </div>
                             </div>
                             
@@ -12849,59 +12849,182 @@
             const brandName = currentProfileFilename ? currentProfileFilename.replace(/_/g, ' ').replace(/\.csv$/, '').replace(/\d{2}_\d{2}_\d{4}_\d{2}_\d{2}/, '').trim() : 'Profile';
             console.log('📝 Brand name extracted:', brandName);
             
-            // Store the CSV data globally so Profile IQ functions can access it
-            currentCSVData = csvData;
-            currentProfileData = {
-                name: brandName,
-                data: csvData
-            };
+            // Parse the CSV data
+            const parsed = parseAllData(csvData);
             
-            // Switch to Profile IQ tab and load this profile
-            console.log('🔄 Switching to Profile IQ to render full dashboard...');
-            showProfileIQ();
-            
-            // Find and click the profile to load it
-            setTimeout(() => {
-                const profileItems = document.querySelectorAll('.tree-item.file-item');
-                let found = false;
-                
-                for (const item of profileItems) {
-                    const itemText = item.textContent.toLowerCase();
-                    const searchName = brandName.toLowerCase().replace(/\s+/g, ' ');
+            // Create inline Profile IQ dashboard
+            container.innerHTML = `
+                <div style="padding: 1rem;">
+                    <!-- Profile Header -->
+                    <div style="background: var(--bg-input); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                        <h3 style="margin: 0 0 0.5rem 0; color: var(--text-primary); font-size: 1.2rem;">📊 ${brandName}</h3>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                            <div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Sample Size</div>
+                                <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);">${formatNumber(parsed.sampleSize)}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Projected US</div>
+                                <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);">${formatNumber(parsed.projectedUS)}</div>
+                            </div>
+                        </div>
+                    </div>
                     
-                    if (itemText.includes(searchName)) {
-                        console.log('✅ Found matching profile, clicking:', item.textContent);
-                        item.click();
-                        found = true;
-                        break;
-                    }
-                }
-                
-                if (!found) {
-                    console.warn('⚠️ Could not find profile in sidebar, attempting direct render...');
-                    // If profile not found in sidebar, try to render it directly
-                    if (window.renderDashboard) {
-                        window.renderDashboard(csvData, brandName, null);
-                    }
-                }
-            }, 500);
+                    <!-- Profile Tabs -->
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 2px solid var(--border-color);">
+                        <button class="ticker-profile-tab active" data-tab="insights" onclick="showTickerProfileTab('insights')" style="padding: 0.75rem 1rem; background: none; border: none; color: var(--text-primary); cursor: pointer; border-bottom: 2px solid var(--accent-cyan); margin-bottom: -2px; font-weight: 600;">💡 Insights</button>
+                        <button class="ticker-profile-tab" data-tab="demographics" onclick="showTickerProfileTab('demographics')" style="padding: 0.75rem 1rem; background: none; border: none; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">👥 Demographics</button>
+                        <button class="ticker-profile-tab" data-tab="behavioral" onclick="showTickerProfileTab('behavioral')" style="padding: 0.75rem 1rem; background: none; border: none; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">📈 Behavioral</button>
+                        <button class="ticker-profile-tab" data-tab="location" onclick="showTickerProfileTab('location')" style="padding: 0.75rem 1rem; background: none; border: none; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;">📍 Location</button>
+                    </div>
+                    
+                    <!-- Tab Content -->
+                    <div id="tickerProfileTabContent" style="min-height: 400px;">
+                        <!-- Content will be rendered here -->
+                    </div>
+                </div>
+            `;
             
-            console.log('✅ Profile insights render initiated');
+            // Store parsed data for tab switching
+            window.currentTickerProfileData = parsed;
+            window.currentTickerProfileCSV = csvData;
+            window.currentTickerProfileName = brandName;
+            
+            // Render initial tab (insights)
+            showTickerProfileTab('insights');
+            
+            console.log('✅ Profile insights rendered successfully');
         }
         
-        function viewInProfileIQ(filename) {
-            // Switch to Profile IQ tab and load this profile
-            showProfileIQ();
-            // Find and select the profile
-            setTimeout(() => {
-                const profileItems = document.querySelectorAll('.tree-item.file-item');
-                for (const item of profileItems) {
-                    if (item.textContent.includes(filename.replace(/_/g, ' ').replace(/\.csv$/, ''))) {
-                        item.click();
-                        break;
-                    }
+        function showTickerProfileTab(tabName) {
+            console.log('🔄 Switching to ticker profile tab:', tabName);
+            
+            // Update tab buttons
+            document.querySelectorAll('.ticker-profile-tab').forEach(btn => {
+                if (btn.dataset.tab === tabName) {
+                    btn.classList.add('active');
+                    btn.style.color = 'var(--text-primary)';
+                    btn.style.borderBottomColor = 'var(--accent-cyan)';
+                    btn.style.fontWeight = '600';
+                } else {
+                    btn.classList.remove('active');
+                    btn.style.color = 'var(--text-secondary)';
+                    btn.style.borderBottomColor = 'transparent';
+                    btn.style.fontWeight = '400';
                 }
-            }, 500);
+            });
+            
+            const contentContainer = document.getElementById('tickerProfileTabContent');
+            if (!contentContainer) return;
+            
+            const parsed = window.currentTickerProfileData;
+            const csvData = window.currentTickerProfileCSV;
+            const brandName = window.currentTickerProfileName;
+            
+            if (!parsed || !csvData) {
+                contentContainer.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No data available</p>';
+                return;
+            }
+            
+            // Render content based on tab
+            switch(tabName) {
+                case 'insights':
+                    renderTickerInsightsTab(parsed, csvData, brandName);
+                    break;
+                case 'demographics':
+                    renderTickerDemographicsTab(parsed, csvData);
+                    break;
+                case 'behavioral':
+                    renderTickerBehavioralTab(parsed, csvData);
+                    break;
+                case 'location':
+                    renderTickerLocationTab(parsed, csvData);
+                    break;
+            }
+        }
+        
+        function renderTickerInsightsTab(parsed, csvData, brandName) {
+            const container = document.getElementById('tickerProfileTabContent');
+            
+            // Get top insights (high penetration items)
+            const insights = csvData
+                .filter(row => {
+                    const penetration = parseFloat(row['Brand Penetration (Row)'] || 0);
+                    return penetration > 50 && row.Column && row.Value && row.Column.toUpperCase() !== 'SAMPLE SIZE';
+                })
+                .sort((a, b) => parseFloat(b['Brand Penetration (Row)'] || 0) - parseFloat(a['Brand Penetration (Row)'] || 0))
+                .slice(0, 20);
+            
+            container.innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
+                    ${insights.map(insight => `
+                        <div style="padding: 1rem; background: var(--bg-input); border-radius: 8px; border-left: 3px solid var(--accent-cyan);">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">${insight.Column}</div>
+                            <div style="font-size: 1rem; color: var(--text-primary); font-weight: 600; margin-bottom: 0.5rem;">${insight.Value}</div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-size: 0.85rem; color: var(--text-secondary);">Penetration:</span>
+                                <span style="font-size: 1.2rem; font-weight: 700; color: var(--accent-cyan);">${parseFloat(insight['Brand Penetration (Row)'] || 0).toFixed(1)}%</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                ${insights.length === 0 ? '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No high-penetration insights found.</p>' : ''}
+            `;
+        }
+        
+        function renderTickerDemographicsTab(parsed, csvData) {
+            const container = document.getElementById('tickerProfileTabContent');
+            
+            // Create the demographics structure that renderDemographics expects
+            container.innerHTML = `
+                <div id="tab-demographics" class="tab-content" style="display: block;">
+                    <div class="demo-main">
+                        <div class="demo-insights-row" id="demoInsightsRow"></div>
+                        <div id="demographicsContent"></div>
+                    </div>
+                </div>
+            `;
+            
+            // Now call renderDemographics with the parsed data
+            if (window.renderDemographics) {
+                window.renderDemographics(parsed);
+            } else {
+                container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Demographics rendering not available</p>';
+            }
+        }
+        
+        function renderTickerBehavioralTab(parsed, csvData) {
+            const container = document.getElementById('tickerProfileTabContent');
+            
+            // Create the behavioral structure that renderBehavioral expects
+            container.innerHTML = `
+                <div id="tab-behavioral" class="tab-content" style="display: block;">
+                    <div id="behavioralContent"></div>
+                </div>
+            `;
+            
+            if (window.renderBehavioral) {
+                window.renderBehavioral(parsed);
+            } else {
+                container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Behavioral rendering not available</p>';
+            }
+        }
+        
+        function renderTickerLocationTab(parsed, csvData) {
+            const container = document.getElementById('tickerProfileTabContent');
+            
+            // Create the location structure that renderLocation expects
+            container.innerHTML = `
+                <div id="tab-location" class="tab-content" style="display: block;">
+                    <div id="locationContent"></div>
+                </div>
+            `;
+            
+            if (window.renderLocation) {
+                window.renderLocation(parsed);
+            } else {
+                container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Location rendering not available</p>';
+            }
         }
         
         let filteredTickerData = null;
