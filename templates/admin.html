@@ -1753,36 +1753,69 @@
             if (filtered.length === 0) {
                 container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No tickers found</div>';
             } else {
-                container.innerHTML = filtered.map(t => {
-                    const metadata = tickersManagementData.metadata[t.s3_key] || {};
-                    const displayName = metadata.display_name || t.ticker_symbol;
-                    const kpi = metadata.kpi || t.kpi || 'Not set';
-                    const relevance = metadata.relevance_percentage !== null && metadata.relevance_percentage !== undefined ? `${metadata.relevance_percentage}%` : 'Not set';
-                    
-                    return `
-                        <div class="content-file-row" style="padding: 1rem; border-bottom: 1px solid var(--border-color);">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
-                                <div style="flex: 1;">
-                                    <div style="font-weight: 600; color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0.5rem;">${displayName}</div>
-                                    <div style="display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 1rem; font-size: 0.85rem;">
-                                        <span style="color: var(--text-secondary);">Symbol:</span>
-                                        <span style="color: var(--text-primary);">${t.ticker_symbol}</span>
-                                        
-                                        <span style="color: var(--text-secondary);">KPI:</span>
-                                        <span style="color: var(--text-primary);">${kpi}</span>
-                                        
-                                        <span style="color: var(--text-secondary);">Stock Impact:</span>
-                                        <span style="color: ${metadata.relevance_percentage ? 'var(--accent-cyan)' : 'var(--text-secondary)'}; font-weight: ${metadata.relevance_percentage ? '600' : 'normal'};">${relevance}</span>
-                                        
-                                        <span style="color: var(--text-secondary);">S3 Key:</span>
-                                        <span style="color: var(--text-secondary); font-size: 0.75rem; font-family: monospace;">${t.s3_key}</span>
+                container.innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem;">
+                        ${filtered.map(t => {
+                            const metadata = tickersManagementData.metadata[t.s3_key] || {};
+                            const displayName = metadata.display_name || t.ticker_symbol;
+                            const kpi = metadata.kpi || t.kpi || 'Not set';
+                            const relevance = metadata.relevance_percentage !== null && metadata.relevance_percentage !== undefined ? metadata.relevance_percentage : null;
+                            
+                            return `
+                                <div class="insight-card-v2" style="padding: 1.5rem; position: relative; cursor: pointer; transition: all 0.2s ease;" 
+                                     onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 16px rgba(0,0,0,0.3)';"
+                                     onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='';">
+                                    
+                                    <!-- Ticker Symbol Badge -->
+                                    <div style="position: absolute; top: 1rem; right: 1rem; background: var(--accent-cyan); color: var(--bg-dark); padding: 0.25rem 0.75rem; border-radius: 12px; font-weight: 700; font-size: 0.75rem;">
+                                        ${t.ticker_symbol}
                                     </div>
+                                    
+                                    <!-- Display Name -->
+                                    <div style="font-weight: 600; color: var(--text-primary); font-size: 1.25rem; margin-bottom: 1rem; padding-right: 4rem;">
+                                        ${displayName}
+                                    </div>
+                                    
+                                    <!-- KPI Info -->
+                                    <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-dark); border-radius: 8px; border-left: 3px solid var(--accent-cyan);">
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.5px;">KPI Measured</div>
+                                        <div style="color: var(--text-primary); font-size: 0.9rem;">${kpi}</div>
+                                    </div>
+                                    
+                                    <!-- Stock Impact -->
+                                    ${relevance !== null ? `
+                                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; padding: 0.5rem; background: linear-gradient(135deg, rgba(0, 255, 255, 0.1), rgba(0, 255, 255, 0.05)); border-radius: 8px;">
+                                            <div style="font-size: 1.5rem;">📊</div>
+                                            <div style="flex: 1;">
+                                                <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Stock Impact</div>
+                                                <div style="color: var(--accent-cyan); font-weight: 700; font-size: 1.1rem;">${relevance}%</div>
+                                            </div>
+                                        </div>
+                                    ` : `
+                                        <div style="padding: 0.5rem; background: rgba(255, 255, 255, 0.05); border-radius: 8px; margin-bottom: 1rem;">
+                                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-align: center;">
+                                                📊 Stock Impact: <span style="color: var(--accent-yellow);">Not set</span>
+                                            </div>
+                                        </div>
+                                    `}
+                                    
+                                    <!-- S3 Key -->
+                                    <div style="font-size: 0.7rem; color: var(--text-secondary); font-family: monospace; margin-bottom: 1rem; padding: 0.5rem; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${t.s3_key}">
+                                        📁 ${t.s3_key}
+                                    </div>
+                                    
+                                    <!-- Edit Button -->
+                                    <button onclick="event.stopPropagation(); openTickerMetadataModal('${encodeURIComponent(t.s3_key)}', '${encodeURIComponent(t.ticker_symbol)}');" 
+                                            class="btn btn-primary" 
+                                            style="width: 100%; padding: 0.75rem; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                                        <span>✏️</span>
+                                        <span>Edit Ticker</span>
+                                    </button>
                                 </div>
-                                <button class="btn btn-small btn-primary" onclick="openTickerMetadataModal('${encodeURIComponent(t.s3_key)}', '${encodeURIComponent(t.ticker_symbol)}')">✏️ Edit</button>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
+                            `;
+                        }).join('')}
+                    </div>
+                `;
             }
         }
         
