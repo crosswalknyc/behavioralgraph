@@ -2521,6 +2521,66 @@
             text-align: left;
         }
 
+        /* Pulsing Card Animation */
+        .pulsing-card {
+            animation: pulse-glow 2s ease-in-out infinite;
+            border: 2px solid transparent;
+        }
+        
+        @keyframes pulse-glow {
+            0%, 100% {
+                border-color: var(--accent-cyan);
+                box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+            }
+            50% {
+                border-color: var(--accent-purple);
+                box-shadow: 0 0 20px rgba(138, 43, 226, 0.5);
+            }
+        }
+        
+        .pulsing-card:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 20px rgba(0, 255, 255, 0.4) !important;
+        }
+        
+        /* Live Indicator */
+        .live-indicator {
+            display: inline-block;
+            font-size: 0.75rem;
+            color: #ff4444;
+            animation: pulse-live 1.5s ease-in-out infinite;
+            margin-left: 0.5rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        
+        @keyframes pulse-live {
+            0%, 100% {
+                opacity: 1;
+                text-shadow: 0 0 5px rgba(255, 68, 68, 0.5);
+            }
+            50% {
+                opacity: 0.6;
+                text-shadow: 0 0 10px rgba(255, 68, 68, 0.8);
+            }
+        }
+        
+        /* Pulsing Chart Container */
+        .pulsing-chart-container {
+            animation: chart-pulse 3s ease-in-out infinite;
+        }
+        
+        @keyframes chart-pulse {
+            0%, 100% {
+                border-color: var(--border-color);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            }
+            50% {
+                border-color: rgba(16, 185, 129, 0.5);
+                box-shadow: 0 4px 16px rgba(16, 185, 129, 0.2);
+            }
+        }
+
         .stat-label { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem; }
         .stat-value { font-family: 'Space Mono', monospace; font-size: 2rem; font-weight: 700; }
         .stat-prefix { font-size: 1.25rem; color: var(--text-secondary); }
@@ -10842,10 +10902,10 @@
                                 </div>
                             </div>
                             
-                            <!-- Projected Growth Rate - Full Width -->
+                            <!-- Projected Growth Rate - Full Width (Pulsing, Clickable) -->
                             <div style="margin-bottom: 1rem;">
-                                <div class="stat-card" style="width: 100%;">
-                                    <div class="stat-label" id="projectedGrowthLabel">🔮 Projected Net Growth Rate</div>
+                                <div class="stat-card pulsing-card" id="projectedGrowthCard" style="width: 100%; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" onclick="navigateToTrends()">
+                                    <div class="stat-label" id="projectedGrowthLabel">🔮 Q1 2026 Projected Net Growth Rate</div>
                                     <div class="stat-value" id="projectedGrowth" style="font-size: 2.5rem;">--</div>
                                 </div>
                             </div>
@@ -10886,8 +10946,11 @@
                             </div>
 
                             <!-- Daily Churn Chart -->
-                            <div class="chart-card" style="margin-bottom: 1.5rem;">
-                                <h3>📊 Net Growth Trend</h3>
+                            <div class="chart-card pulsing-chart-container" style="margin-bottom: 1.5rem;">
+                                <h3>
+                                    📊 Net Growth Trend 
+                                    <span class="live-indicator">🔴 LIVE</span>
+                                </h3>
                                 <div style="height: 400px; position: relative;">
                                     <canvas id="dailyChurnChart"></canvas>
                                 </div>
@@ -12354,6 +12417,16 @@
         let hedgeFundTickers = [];
         let currentTickerData = null;
         let dailyChurnChart = null;
+        let liveChartAnimation = null;
+        
+        // Navigate to Trends tab from Live Data
+        function navigateToTrends() {
+            showTickerTab('trends');
+            // Start live chart animation
+            if (dailyChurnChart) {
+                startLiveChartAnimation();
+            }
+        }
         
         async function loadHedgeFundTickers() {
             try {
@@ -12475,6 +12548,11 @@
         }
         
         function showTickerTab(tabName) {
+            // Stop live chart animation when leaving trends tab
+            if (tabName !== 'trends') {
+                stopLiveChartAnimation();
+            }
+            
             // Hide all tabs
             document.querySelectorAll('.ticker-tab-content').forEach(tab => tab.style.display = 'none');
             
@@ -12491,6 +12569,8 @@
             } else if (tabName === 'trends') {
                 document.getElementById('trendsTab').style.display = 'block';
                 if (event && event.target) event.target.classList.add('active');
+                // Start live chart animation
+                setTimeout(() => startLiveChartAnimation(), 300);
             } else if (tabName === 'daily') {
                 document.getElementById('dailyTab').style.display = 'block';
                 if (event && event.target) event.target.classList.add('active');
@@ -12834,12 +12914,21 @@
                         backgroundColor: 'rgba(16, 185, 129, 0.1)',
                         borderWidth: 2,
                         fill: true,
-                        tension: 0.4
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: '#10b981',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeInOutQuart'
+                    },
                     plugins: {
                         legend: {
                             display: true,
@@ -12847,7 +12936,12 @@
                         },
                         tooltip: {
                             mode: 'index',
-                            intersect: false
+                            intersect: false,
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#00ffff',
+                            bodyColor: '#e6f1ff',
+                            borderColor: '#00ffff',
+                            borderWidth: 1
                         }
                     },
                     scales: {
@@ -12871,6 +12965,52 @@
                     }
                 }
             });
+        }
+        
+        // Live chart animation - makes chart pulse and appear to be charting in real-time
+        function startLiveChartAnimation() {
+            // Stop any existing animation
+            stopLiveChartAnimation();
+            
+            if (!dailyChurnChart) return;
+            
+            let pulseDirection = 1;
+            let pulseValue = 0;
+            
+            liveChartAnimation = setInterval(() => {
+                // Pulse the border width
+                pulseValue += 0.05 * pulseDirection;
+                if (pulseValue >= 1) pulseDirection = -1;
+                if (pulseValue <= 0) pulseDirection = 1;
+                
+                // Update chart styling to create pulsing effect
+                dailyChurnChart.data.datasets[0].borderWidth = 2 + (pulseValue * 2);
+                dailyChurnChart.data.datasets[0].pointRadius = 4 + (pulseValue * 2);
+                
+                // Subtle color pulse
+                const greenIntensity = Math.floor(185 + (pulseValue * 40));
+                dailyChurnChart.data.datasets[0].borderColor = `rgb(16, ${greenIntensity}, 129)`;
+                dailyChurnChart.data.datasets[0].pointBackgroundColor = `rgb(16, ${greenIntensity}, 129)`;
+                
+                // Update chart
+                dailyChurnChart.update('none'); // 'none' mode = no animation, just update
+            }, 50); // 50ms = smooth 20fps animation
+        }
+        
+        function stopLiveChartAnimation() {
+            if (liveChartAnimation) {
+                clearInterval(liveChartAnimation);
+                liveChartAnimation = null;
+                
+                // Reset chart to default styling
+                if (dailyChurnChart) {
+                    dailyChurnChart.data.datasets[0].borderWidth = 2;
+                    dailyChurnChart.data.datasets[0].pointRadius = 4;
+                    dailyChurnChart.data.datasets[0].borderColor = '#10b981';
+                    dailyChurnChart.data.datasets[0].pointBackgroundColor = '#10b981';
+                    dailyChurnChart.update('none');
+                }
+            }
         }
         
         async function renderQuarterlyTable(dailyData) {
