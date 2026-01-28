@@ -5338,6 +5338,19 @@
                     }
                 }
                 
+                // Stock Relevance indicator
+                const hasRelevance = ticker.relevance_percentage !== null && ticker.relevance_percentage !== undefined;
+                const relevanceValue = hasRelevance ? parseFloat(ticker.relevance_percentage) : null;
+                const relevanceBadge = hasRelevance 
+                    ? `<div style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.5rem; background: linear-gradient(135deg, rgba(102, 217, 239, 0.15) 0%, rgba(90, 154, 217, 0.1) 100%); border: 1px solid rgba(102, 217, 239, 0.3); border-radius: 6px; font-size: 0.75rem; color: var(--accent-cyan); font-weight: 500;">
+                           <span style="font-size: 0.7rem;">📊</span>
+                           <span>Stock Impact: ${relevanceValue}%</span>
+                       </div>`
+                    : `<div style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.5rem; background: rgba(136, 146, 176, 0.1); border: 1px dashed rgba(136, 146, 176, 0.3); border-radius: 6px; font-size: 0.75rem; color: var(--text-secondary);">
+                           <span style="font-size: 0.7rem;">⚠️</span>
+                           <span>No Stock Impact</span>
+                       </div>`;
+                
                 html += `
                     <div class="card" style="cursor: pointer; transition: all 0.3s ease; border: 1px solid rgba(90, 154, 217, 0.2); background: linear-gradient(135deg, var(--bg-card) 0%, rgba(13, 33, 55, 0.95) 100%);" 
                          onclick="showTickerDetail('${ticker.ticker}')"
@@ -5357,7 +5370,12 @@
                             </div>
                         </div>
                         <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(90, 154, 217, 0.1);">
-                            <strong style="color: var(--accent-cyan); font-weight: 500;">KPI:</strong> <span style="color: var(--text-primary);">${ticker.kpi}</span>
+                            <div style="margin-bottom: 0.5rem;">
+                                <strong style="color: var(--accent-cyan); font-weight: 500;">KPI:</strong> <span style="color: var(--text-primary);">${ticker.kpi}</span>
+                            </div>
+                            <div style="margin-top: 0.5rem;">
+                                ${relevanceBadge}
+                            </div>
                         </div>
                     </div>
                 `;
