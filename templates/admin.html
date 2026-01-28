@@ -5346,7 +5346,19 @@
             
             const displayName = document.getElementById('tickerDisplayName').value.trim();
             const kpi = document.getElementById('tickerKPI').value.trim();
-            const relevance = document.getElementById('tickerRelevance').value.trim();
+            const relevanceInput = document.getElementById('tickerRelevance').value.trim();
+            
+            // Parse relevance - handle empty string, valid numbers, and invalid input
+            let relevance_percentage = null;
+            if (relevanceInput !== '') {
+                const parsed = parseFloat(relevanceInput);
+                if (!isNaN(parsed) && isFinite(parsed)) {
+                    relevance_percentage = parsed;
+                } else {
+                    showToast('❌ Invalid relevance percentage. Please enter a number between 0-100.', true);
+                    return;
+                }
+            }
             
             try {
                 const response = await fetch('/api/hedge-fund-iq/metadata', {
@@ -5356,7 +5368,7 @@
                         s3_key: currentTickerInModal.s3_key,
                         display_name: displayName,
                         kpi: kpi,
-                        relevance_percentage: relevance !== '' ? parseFloat(relevance) : null
+                        relevance_percentage: relevance_percentage
                     })
                 });
                 
