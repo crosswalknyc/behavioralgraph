@@ -13729,12 +13729,52 @@
         function renderTickerDemographicsTab(parsed, csvData) {
             const container = document.getElementById('tickerProfileTabContent');
             
-            // Create the demographics structure
+            // Create the demographics structure with all required chart containers
             container.innerHTML = `
                 <div id="tab-demographics" class="tab-content" style="display: block;">
                     <div class="demo-main">
                         <div class="demo-insights-row" id="demoInsightsRow"></div>
-                        <div id="demographicsContent"></div>
+                        <div id="demographicsContent">
+                            <div class="chart-card">
+                                <h3>👤 AGE</h3>
+                                <span id="ageMedianDisplay" class="median-display" style="display: block; margin-top: 0.25rem; margin-bottom: 0.5rem; padding: 0 1rem;"></span>
+                                <div class="chart-container"><canvas id="ageChart"></canvas></div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>👫 GENDER</h3>
+                                <div class="chart-container"><canvas id="genderChart"></canvas></div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>🌍 ETHNICITY</h3>
+                                <div class="chart-container"><canvas id="ethnicityChart"></canvas></div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>💰 INCOME</h3>
+                                <span id="incomeMedianDisplay" class="median-display" style="display: block; margin-top: 0.25rem; margin-bottom: 0.5rem; padding: 0 1rem;"></span>
+                                <div class="chart-container"><canvas id="incomeChart"></canvas></div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>🎓 EDUCATION</h3>
+                                <div class="chart-container"><canvas id="educationChart"></canvas></div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>💑 RELATIONSHIP STATUS</h3>
+                                <div class="chart-container"><canvas id="relationshipChart"></canvas></div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>🏳️‍🌈 SEXUAL ORIENTATION</h3>
+                                <div class="chart-container"><canvas id="sexualOrientationChart"></canvas></div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>👶 PARENTAL STATUS</h3>
+                                <span id="parentalStatusMedianDisplay" class="median-display"></span>
+                                <div class="chart-container"><canvas id="parentalStatusChart"></canvas></div>
+                            </div>
+                            <div class="chart-card">
+                                <h3>💼 OCCUPATION</h3>
+                                <div class="chart-container"><canvas id="occupationChart"></canvas></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -13742,11 +13782,6 @@
             // Render demographics using the existing renderCharts and renderDemoInsights functions
             try {
                 if (typeof renderCharts === 'function' && typeof renderDemoInsights === 'function') {
-                    // Temporarily store the original container references
-                    const originalDemographicsContent = document.getElementById('demographicsContent');
-                    const originalDemoInsightsRow = document.getElementById('demoInsightsRow');
-                    
-                    // Render charts and insights
                     renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
                     renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop);
                 } else {
@@ -13761,31 +13796,19 @@
         function renderTickerBehavioralTab(parsed, csvData) {
             const container = document.getElementById('tickerProfileTabContent');
             
-            // Create the behavioral structure
+            // Create the behavioral structure with the container that renderBehavioralCards expects
             container.innerHTML = `
                 <div id="tab-behavioral" class="tab-content" style="display: block;">
-                    <div id="behavioralContent"></div>
+                    <div id="behavioralContent">
+                        <div id="behavioralGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;"></div>
+                    </div>
                 </div>
             `;
             
             // Render behavioral using the existing renderBehavioralCards function
             try {
                 if (typeof renderBehavioralCards === 'function') {
-                    // Store reference to behavioralContent
-                    const behavioralContent = document.getElementById('behavioralContent');
-                    
-                    // Temporarily redirect behavioralCards container to our ticker profile container
-                    const originalBehavioralContainer = document.getElementById('behavioralCards');
-                    if (behavioralContent) {
-                        // Create a temporary container structure that renderBehavioralCards expects
-                        behavioralContent.innerHTML = '<div id="behavioralCards"></div>';
-                        renderBehavioralCards(parsed.behavioral);
-                        // Move the rendered content to our container
-                        const renderedContent = document.getElementById('behavioralCards');
-                        if (renderedContent && renderedContent.parentElement !== behavioralContent) {
-                            behavioralContent.innerHTML = renderedContent.innerHTML;
-                        }
-                    }
+                    renderBehavioralCards(parsed.behavioral);
                 } else {
                     container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Behavioral rendering function not available</p>';
                 }
