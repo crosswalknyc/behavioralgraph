@@ -11465,11 +11465,11 @@
                                     <div class="dash-meta-box" id="tickerKPIHeader"></div>
                                 </div>
                                 <div class="dash-meta-grid">
-                                    <div class="dash-meta-box" id="tickerDateRangeHeader"></div>
-                                    <div class="dash-meta-box" id="tickerDataPointsHeader"></div>
-                                    <div class="dash-meta-box" id="tickerRelevanceHeader" style="display: none;"></div>
-                                    <div class="dash-meta-box" id="tickerLatestDataHeader"></div>
-                                    <div class="dash-meta-box" id="tickerAccuracyHeader" style="display: none;"></div>
+                                    <div class="dash-meta-box has-tooltip" id="tickerDateRangeHeader" data-tooltip=""></div>
+                                    <div class="dash-meta-box has-tooltip" id="tickerLatestDataHeader" data-tooltip=""></div>
+                                    <div class="dash-meta-box has-tooltip" id="tickerDataPointsHeader" data-tooltip=""></div>
+                                    <div class="dash-meta-box has-tooltip" id="tickerAccuracyHeader" style="display: none;" data-tooltip=""></div>
+                                    <div class="dash-meta-box has-tooltip" id="tickerRelevanceHeader" style="display: none;" data-tooltip=""></div>
                                 </div>
                             </div>
                         </div>
@@ -11490,6 +11490,9 @@
                                 <div style="display: flex; gap: 0.75rem;">
                                     <button class="dash-action-btn" onclick="exportTickerCSV()">📥 Export CSV</button>
                                     <button class="dash-action-btn" onclick="refreshTickerData()">🔄 Refresh</button>
+                                    <div class="display-mode-toggle has-tooltip" id="tickerHoverToggle" onclick="toggleTickerHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements.">
+                                        <span id="tickerHoverToggleLabel">HOVER ON</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -11506,12 +11509,12 @@
                             
                             <!-- Projected Growth Rate + Accuracy - Side by Side -->
                             <div class="ticker-cards-grid two-columns" style="margin-bottom: 1rem;">
-                                <div class="stat-card" id="projectedGrowthCard" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px;" onclick="navigateToTrends()">
+                                <div class="stat-card has-tooltip" id="projectedGrowthCard" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px;" onclick="navigateToTrends()" data-tooltip="">
                                     <div class="stat-label" id="projectedGrowthLabel" style="font-size: 0.75rem;">🔮 Q1 2026 Projected Net Growth Rate</div>
                                     <div class="stat-value pulsing-number" id="projectedGrowth" style="display: block; margin: 0.5rem 0;">--</div>
                                     <div class="stat-label" id="projectedGrowthKPI" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">--</div>
                                 </div>
-                                <div id="liveDataAccuracyBadge" class="stat-card" style="display: none;">
+                                <div id="liveDataAccuracyBadge" class="stat-card has-tooltip" style="display: none;" data-tooltip="">
                                     <div class="stat-label" style="font-size: 0.75rem;">🎯 Accuracy</div>
                                     <div id="liveDataAccuracyValue" style="font-weight: 600; font-size: 0.9rem;"></div>
                                 </div>
@@ -11519,19 +11522,19 @@
                             
                             <!-- 2x2 Grid -->
                             <div class="ticker-cards-grid four-columns" style="margin-bottom: 1.5rem;">
-                                <div class="stat-card" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;">
+                                <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;" data-tooltip="">
                                     <div class="stat-label" style="font-size: 0.7rem;">💹 QTD Net Growth %</div>
                                     <div class="stat-value" id="netGrowth" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
-                                <div class="stat-card" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;">
+                                <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;" data-tooltip="">
                                     <div class="stat-label" style="font-size: 0.7rem;">📊 Current Consumers QTD</div>
                                     <div class="stat-value" id="currentConsumers" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
-                                <div class="stat-card" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;">
+                                <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;" data-tooltip="">
                                     <div class="stat-label" style="font-size: 0.7rem;">📈 Total Subs QTD</div>
                                     <div class="stat-value" id="totalSubs" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
-                                <div class="stat-card" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;">
+                                <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;" data-tooltip="">
                                     <div class="stat-label" style="font-size: 0.7rem;">📉 Total Cancels QTD</div>
                                     <div class="stat-value" id="totalCancels" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
@@ -11576,7 +11579,7 @@
 
                             <!-- AI Earnings Prediction -->
                             <div class="insight-card-v2 highlight">
-                                <h3>🤖 AI Earnings Prediction</h3>
+                                <h3>🤖 Earnings Prediction</h3>
                                 <div id="earningsPrediction" style="padding: 1rem;">
                                     <div style="text-align: center; color: var(--text-secondary);">Loading prediction...</div>
                                 </div>
@@ -13087,17 +13090,80 @@
         }
         
         async function loadHedgeFundTickers() {
+            const container = document.getElementById('tickerTree');
+            if (!container) {
+                console.error('tickerTree container not found');
+                return;
+            }
+            
+            // Show loading indicator with progress
+            container.innerHTML = `
+                <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                    <div style="font-size: 1.1rem; margin-bottom: 1rem; color: var(--accent-cyan); font-weight: 600;">Loading Tickers...</div>
+                    <div style="width: 100%; max-width: 400px; margin: 0 auto; height: 8px; background: var(--bg-input); border-radius: 4px; overflow: hidden; position: relative;">
+                        <div id="hedgeFundTickersLoadingProgress" style="height: 100%; background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan)); border-radius: 4px; width: 0%; transition: width 0.3s ease; animation: progressPulse 1.5s ease-in-out infinite;"></div>
+                    </div>
+                    <div id="hedgeFundTickersLoadingStatus" style="margin-top: 1rem; font-size: 0.9rem; color: var(--text-secondary);">Connecting to ticker database...</div>
+                </div>
+            `;
+            
+            const progressBar = document.getElementById('hedgeFundTickersLoadingProgress');
+            const statusText = document.getElementById('hedgeFundTickersLoadingStatus');
+            let progress = 0;
+            
+            // Animate progress
+            const progressInterval = setInterval(() => {
+                progress += Math.random() * 10;
+                if (progress > 85) progress = 85; // Don't go to 100% until done
+                if (progressBar) progressBar.style.width = progress + '%';
+                if (statusText) {
+                    if (progress < 25) {
+                        statusText.textContent = 'Connecting to ticker database...';
+                    } else if (progress < 50) {
+                        statusText.textContent = 'Fetching ticker list from S3...';
+                    } else if (progress < 75) {
+                        statusText.textContent = 'Loading ticker metadata...';
+                    } else {
+                        statusText.textContent = 'Finalizing ticker list...';
+                    }
+                }
+            }, 300);
+            
             try {
                 const response = await fetch('/api/hedge-fund-iq/list', { credentials: 'same-origin' });
-                if (response.status === 401) { window.location.href = '/login'; return; }
+                
+                // Update progress to 90% when response received
+                if (progressBar) progressBar.style.width = '90%';
+                if (statusText) statusText.textContent = 'Processing ticker data...';
+                
+                if (response.status === 401) { 
+                    clearInterval(progressInterval);
+                    container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--accent-red);">Unauthorized. Redirecting to login...</div>';
+                    window.location.href = '/login'; 
+                    return; 
+                }
+                
                 const data = await response.json();
                 
-                if (data.success) {
-                    hedgeFundTickers = data.tickers;
-                    renderTickerTree();
-                }
+                // Complete progress
+                clearInterval(progressInterval);
+                if (progressBar) progressBar.style.width = '100%';
+                if (statusText) statusText.textContent = 'Tickers loaded successfully!';
+                
+                // Small delay to show completion
+                setTimeout(() => {
+                    if (data.success) {
+                        hedgeFundTickers = data.tickers;
+                        renderTickerTree();
+                    } else {
+                        container.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--accent-red);">Error loading tickers: ${data.error || 'Unknown error'}</div>`;
+                    }
+                }, 300);
+                
             } catch (error) {
+                clearInterval(progressInterval);
                 console.error('Error loading tickers:', error);
+                container.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--accent-red);">Error loading tickers: ${error.message}</div>`;
             }
         }
         
@@ -13746,15 +13812,20 @@
             const dates = data.data.map(d => d.Date).filter(d => d);
             const startDate = dates[0] || 'N/A';
             const endDate = dates[dates.length - 1] || 'N/A';
-            document.getElementById('tickerDateRangeHeader').textContent = `Data Range: ${startDate} - ${endDate}`;
-            document.getElementById('tickerDataPointsHeader').textContent = `${data.data.length} days of data`;
+            const dateRangeHeader = document.getElementById('tickerDateRangeHeader');
+            dateRangeHeader.textContent = `Data Range: ${startDate} - ${endDate}`;
+            dateRangeHeader.setAttribute('data-tooltip', 'The date range of the data being analyzed, from the earliest to the latest data point available.');
+            
+            const dataPointsHeader = document.getElementById('tickerDataPointsHeader');
+            dataPointsHeader.textContent = `${data.data.length} days of data`;
+            dataPointsHeader.setAttribute('data-tooltip', `Total number of days of data included in this analysis. This represents the complete dataset spanning ${data.data.length} days.`);
             
             // Display relevance percentage if available - next to "days of data"
             const relevanceHeader = document.getElementById('tickerRelevanceHeader');
             if (data.relevance_percentage !== null && data.relevance_percentage !== undefined) {
                 relevanceHeader.textContent = `Stock Impact: ${data.relevance_percentage}%`;
                 relevanceHeader.style.display = 'block';
-                relevanceHeader.title = `This KPI represents approximately ${data.relevance_percentage}% of the stock price movement`;
+                relevanceHeader.setAttribute('data-tooltip', `This KPI represents approximately ${data.relevance_percentage}% of the stock price movement. This is a force-ranked metric (0-100 scale) based on historical significance of the KPI to the company's share price behavior, determined by examining relative surprise from reporting and subsequent share price behavior over the 5-day period following earnings.`);
             } else {
                 relevanceHeader.style.display = 'none';
             }
@@ -13766,7 +13837,9 @@
             const latestQuarter = stats.latest_quarter || (latest ? latest.Quarter : 'N/A');
             
             // Show latest data date and quarter in header
-            document.getElementById('tickerLatestDataHeader').textContent = `Latest: ${latestDate} (${latestQuarter})`;
+            const latestDataHeader = document.getElementById('tickerLatestDataHeader');
+            latestDataHeader.textContent = `Latest: ${latestDate} (${latestQuarter})`;
+            latestDataHeader.setAttribute('data-tooltip', `The most recent date in the dataset and its corresponding fiscal quarter. This indicates how current the data is and which quarter is being tracked.`);
             
             // Show accuracy rating if available
             const accuracyHeader = document.getElementById('tickerAccuracyHeader');
@@ -13796,6 +13869,7 @@
                 accuracyHeader.innerHTML = `Accuracy: <span style="color: ${color}; font-weight: 600;" title="${varianceTooltip}">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
                 accuracyHeader.style.display = 'block';
                 accuracyHeader.style.cursor = 'help';
+                accuracyHeader.setAttribute('data-tooltip', `Data accuracy rating: ${stats.accuracy_score}% (${stats.accuracy_rating}). This measures how reliable and consistent the data is. ${varianceTooltip ? 'Variance metrics: ' + varianceTooltip.replace(/\n/g, ' ') : ''}`);
                 
                 // Update Live Data tab accuracy badge with detailed breakdown
                 let accuracyDetails = `<span style="color: ${color};">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
@@ -13846,6 +13920,34 @@
             const projectedCard = document.querySelector('[id="projectedGrowth"]').closest('.stat-card');
             if (projectedCard) {
                 projectedCard.querySelector('#projectedGrowthLabel').textContent = `🔮 ${latestQuarter} Projected Net Growth Rate`;
+                projectedCard.setAttribute('data-tooltip', `Projected net growth rate for ${latestQuarter}. This is calculated by taking the average daily net growth rate for the quarter-to-date and multiplying it by the total number of days in the current tracked quarter using arithmetic (not compounding). This represents the expected growth if current trends continue through the end of the quarter.`);
+            }
+            
+            // Set tooltips for QTD metric cards
+            const netGrowthCard = document.getElementById('netGrowth').closest('.stat-card');
+            if (netGrowthCard) {
+                netGrowthCard.setAttribute('data-tooltip', `Quarter-to-date (QTD) net growth percentage. This is the actual growth rate from the start of the current quarter through the latest data point. It represents the cumulative net growth achieved so far in the quarter.`);
+            }
+            
+            const currentConsumersCard = document.getElementById('currentConsumers').closest('.stat-card');
+            if (currentConsumersCard) {
+                currentConsumersCard.setAttribute('data-tooltip', `Current number of consumers quarter-to-date. This represents the total active consumers as of the latest data point in the current quarter.`);
+            }
+            
+            const totalSubsCard = document.getElementById('totalSubs').closest('.stat-card');
+            if (totalSubsCard) {
+                totalSubsCard.setAttribute('data-tooltip', `Total subscriptions quarter-to-date. This is the cumulative number of new subscriptions added from the start of the current quarter through the latest data point.`);
+            }
+            
+            const totalCancelsCard = document.getElementById('totalCancels').closest('.stat-card');
+            if (totalCancelsCard) {
+                totalCancelsCard.setAttribute('data-tooltip', `Total cancellations quarter-to-date. This is the cumulative number of cancellations from the start of the current quarter through the latest data point.`);
+            }
+            
+            // Set tooltip for accuracy badge
+            const accuracyBadge = document.getElementById('liveDataAccuracyBadge');
+            if (accuracyBadge && stats.accuracy_rating && stats.accuracy_score !== null) {
+                accuracyBadge.setAttribute('data-tooltip', `Data accuracy: ${stats.accuracy_score}% (${stats.accuracy_rating}). This measures the reliability and consistency of the data. Higher accuracy indicates more reliable metrics for decision-making.`);
             }
             
             // Analyze beat/miss and display indicator
@@ -14539,6 +14641,37 @@
                 selectTicker(currentTickerData.s3_key);
             }
         }
+        
+        // Ticker hover tooltip toggle
+        let tickerHoverEnabled = true;
+        
+        function toggleTickerHoverDescriptors() {
+            tickerHoverEnabled = !tickerHoverEnabled;
+            const toggle = document.getElementById('tickerHoverToggle');
+            const label = document.getElementById('tickerHoverToggleLabel');
+            const tooltip = document.getElementById('globalTooltip');
+            
+            if (tickerHoverEnabled) {
+                if (toggle) toggle.classList.remove('active');
+                if (label) label.textContent = 'HOVER ON';
+                document.body.classList.remove('hover-disabled');
+            } else {
+                if (toggle) toggle.classList.add('active');
+                if (label) label.textContent = 'HOVER OFF';
+                document.body.classList.add('hover-disabled');
+                
+                // Hide any currently visible tooltip using inline styles
+                if (tooltip) {
+                    tooltip.style.opacity = '0';
+                    tooltip.style.visibility = 'hidden';
+                    tooltip.style.left = '-9999px';
+                    tooltip.style.top = '-9999px';
+                }
+            }
+        }
+        
+        // Expose to window for onclick handlers
+        window.toggleTickerHoverDescriptors = toggleTickerHoverDescriptors;
         
         // ============================================================================
         // END HEDGE FUND IQ FUNCTIONS
