@@ -11514,7 +11514,7 @@
                                     <div class="stat-value pulsing-number" id="projectedGrowth" style="display: block; margin: 0.5rem 0;">--</div>
                                     <div class="stat-label" id="projectedGrowthKPI" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">--</div>
                                 </div>
-                                <div id="liveDataAccuracyBadge" class="stat-card has-tooltip" style="display: none;" data-tooltip="">
+                                <div id="liveDataAccuracyBadge" class="stat-card" style="display: none;">
                                     <div class="stat-label" style="font-size: 0.75rem;">🎯 Accuracy</div>
                                     <div id="liveDataAccuracyValue" style="font-weight: 600; font-size: 0.9rem;"></div>
                                 </div>
@@ -14076,26 +14076,44 @@
                 accuracyHeader.setAttribute('data-tooltip', `Data accuracy rating: ${stats.accuracy_score}% (${stats.accuracy_rating}). This measures how reliable and consistent the data is. ${varianceTooltip ? 'Variance metrics: ' + varianceTooltip.replace(/\n/g, ' ') : ''}`);
                 
                 // Update Live Data tab accuracy badge with detailed breakdown
-                let accuracyDetails = `<span style="color: ${color};">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
+                // Each metric will have its own tooltip
+                const accuracyTooltip = `Data accuracy: ${stats.accuracy_score}% (${stats.accuracy_rating}). This measures the reliability and consistency of the data. Higher accuracy indicates more reliable metrics for decision-making.`;
+                let accuracyDetails = `<span class="has-tooltip" data-tooltip="${accuracyTooltip}" style="color: ${color}; cursor: help;">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
+                
                 if (stats.overall_variance !== null) {
+                    const overallVarianceTooltip = `Overall Variance: ${stats.overall_variance}%. This represents the average variance across all quarters in the dataset. Lower variance indicates more consistent and reliable data.`;
                     accuracyDetails += `<div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
-                        <div>Overall Variance: <span style="color: ${color};">${stats.overall_variance}%</span></div>`;
+                        <div>Overall Variance: <span class="has-tooltip" data-tooltip="${overallVarianceTooltip}" style="color: ${color}; cursor: help;">${stats.overall_variance}%</span></div>`;
                     if (stats.quarter_variance !== null) {
-                        accuracyDetails += `<div>${currentQuarter} Variance: <span style="color: ${color};">${stats.quarter_variance}%</span></div>`;
+                        const quarterVarianceTooltip = `${currentQuarter} Variance: ${stats.quarter_variance}%. This represents the variance for the current quarter (${currentQuarter}). Lower variance indicates more consistent data within this specific quarter.`;
+                        accuracyDetails += `<div>${currentQuarter} Variance: <span class="has-tooltip" data-tooltip="${quarterVarianceTooltip}" style="color: ${color}; cursor: help;">${stats.quarter_variance}%</span></div>`;
                     }
                     // Add Stock Impact if available
                     if (data.relevance_percentage !== null && data.relevance_percentage !== undefined) {
-                        accuracyDetails += `<div>Stock Impact: <span style="color: var(--accent-cyan);">${data.relevance_percentage}%</span></div>`;
+                        const stockImpactTooltip = `Stock Impact: ${data.relevance_percentage}%. This KPI represents approximately ${data.relevance_percentage}% of the stock price movement. This is a force-ranked metric (0-100 scale) based on historical significance of the KPI to the company's share price behavior, determined by examining relative surprise from reporting and subsequent share price behavior over the 5-day period following earnings.`;
+                        accuracyDetails += `<div>Stock Impact: <span class="has-tooltip" data-tooltip="${stockImpactTooltip}" style="color: var(--accent-cyan); cursor: help;">${data.relevance_percentage}%</span></div>`;
                     }
                     accuracyDetails += `</div>`;
                 } else if (data.relevance_percentage !== null && data.relevance_percentage !== undefined) {
                     // Show Stock Impact even if no variance data
+                    const stockImpactTooltip = `Stock Impact: ${data.relevance_percentage}%. This KPI represents approximately ${data.relevance_percentage}% of the stock price movement. This is a force-ranked metric (0-100 scale) based on historical significance of the KPI to the company's share price behavior, determined by examining relative surprise from reporting and subsequent share price behavior over the 5-day period following earnings.`;
                     accuracyDetails += `<div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
-                        <div>Stock Impact: <span style="color: var(--accent-cyan);">${data.relevance_percentage}%</span></div>
+                        <div>Stock Impact: <span class="has-tooltip" data-tooltip="${stockImpactTooltip}" style="color: var(--accent-cyan); cursor: help;">${data.relevance_percentage}%</span></div>
                     </div>`;
                 }
                 liveDataAccuracyValue.innerHTML = accuracyDetails;
                 liveDataAccuracyBadge.style.display = 'block';
+                
+                // Remove tooltip from the badge itself since individual metrics have their own
+                liveDataAccuracyBadge.removeAttribute('data-tooltip');
+                liveDataAccuracyBadge.classList.remove('has-tooltip');
+                
+                // Clear tooltipAttached flag for newly created elements so MutationObserver can attach them
+                setTimeout(() => {
+                    liveDataAccuracyValue.querySelectorAll('.has-tooltip').forEach(el => {
+                        delete el.dataset.tooltipAttached;
+                    });
+                }, 0);
             } else {
                 accuracyHeader.style.display = 'none';
                 liveDataAccuracyBadge.style.display = 'none';
@@ -14148,11 +14166,8 @@
                 totalCancelsCard.setAttribute('data-tooltip', `Total cancellations quarter-to-date. This is the cumulative number of cancellations from the start of the current quarter through the latest data point.`);
             }
             
-            // Set tooltip for accuracy badge
-            const accuracyBadge = document.getElementById('liveDataAccuracyBadge');
-            if (accuracyBadge && stats.accuracy_rating && stats.accuracy_score !== null) {
-                accuracyBadge.setAttribute('data-tooltip', `Data accuracy: ${stats.accuracy_score}% (${stats.accuracy_rating}). This measures the reliability and consistency of the data. Higher accuracy indicates more reliable metrics for decision-making.`);
-            }
+            // Tooltips are now set individually on each metric within the accuracy badge
+            // No need to set a tooltip on the badge itself
             
             // Analyze beat/miss and display indicator
             analyzeBeatMiss(data, stats);
