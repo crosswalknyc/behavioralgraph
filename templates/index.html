@@ -32600,7 +32600,7 @@
         // KEY INSIGHT BUILDER - SWOT Analysis for Primary Brand
         // ============================================================================
         
-        function generateKeyInsightBuilder() {
+        async function generateKeyInsightBuilder() {
             if (!window.comparisonProfilesData || window.comparisonProfilesData.length === 0) {
                 alert('Please run a comparison first. The leftmost (first) profile will be analyzed as the primary brand.');
                 return;
@@ -32615,100 +32615,167 @@
                 return;
             }
             
-            // Show modal
+            // Find Gen Pop profile
+            const genPopProfile = profiles.find(p => {
+                const name = (p.name || '').toUpperCase();
+                return name.includes('GEN POP') || name.includes('GENPOP') || name.includes('GENERAL POPULATION');
+            });
+            
+            const competitors = otherProfiles.filter(p => p !== genPopProfile);
+            
+            // Show modal with loading state
             document.getElementById('keyInsightBuilderModal').style.display = 'flex';
-            document.getElementById('keyInsightBuilderContent').innerHTML = '<div class="loading-placeholder">Generating SWOT analysis and insights...</div>';
-            
-            // Generate SWOT analysis
-            const swot = generateSWOTAnalysis(primaryBrand, otherProfiles);
-            
-            // Generate demographics overview with comparisons
-            const demographics = generateDemographicsOverview(primaryBrand, otherProfiles);
-            
-            // Find where primary brand shines
-            const shines = findWhereBrandShines(primaryBrand, otherProfiles);
-            
-            // Build HTML
-            const html = `
-                <div style="display: flex; flex-direction: column; gap: 2rem;">
-                    <!-- Primary Brand Header -->
-                    <div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, ${primaryBrand.color}20, transparent); border-radius: 10px; border: 2px solid ${primaryBrand.color}40;">
-                        <h2 style="margin: 0; color: ${primaryBrand.color}; font-size: 1.75rem;">${primaryBrand.name}</h2>
-                        <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);">Primary Brand Analysis</p>
-                        <div style="display: flex; justify-content: center; gap: 2rem; margin-top: 1rem; font-size: 0.9rem;">
-                            <span><strong>Sample Size:</strong> ${formatNumber(primaryBrand.sampleSize || 0)}</span>
-                            <span><strong>Projected US:</strong> ${formatNumber(primaryBrand.projectedUS || 0)}</span>
-                        </div>
+            document.getElementById('keyInsightBuilderContent').innerHTML = `
+                <div style="text-align: center; padding: 3rem;">
+                    <div style="font-size: 1.1rem; color: var(--text-primary); margin-bottom: 1rem; font-weight: 600;">Generating Strategic SWOT Analysis...</div>
+                    <div style="width: 100%; height: 8px; background: var(--bg-input); border-radius: 4px; overflow: hidden; position: relative; margin-bottom: 1rem;">
+                        <div id="keyInsightsProgressBar" style="height: 100%; background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan)); border-radius: 4px; width: 0%; transition: width 0.3s ease; animation: progressPulse 1.5s ease-in-out infinite;"></div>
                     </div>
-                    
-                    <!-- Demographics Overview -->
-                    <div class="demographics-overview">
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1.2rem;">👥 Demographics Overview</h3>
-                        <div class="demo-grid">
-                            ${demographics.map(demo => `
-                                <div class="demo-item">
-                                    <div class="demo-item-label">${demo.label}</div>
-                                    <div class="demo-item-value">${demo.value}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                    
-                    <!-- SWOT Analysis -->
-                    <div>
-                        <h3 style="margin: 0 0 1rem 0; font-size: 1.2rem;">📊 SWOT Analysis (Marketing Perspective)</h3>
-                        <div class="swot-grid">
-                            <div class="swot-card strengths">
-                                <h4>💪 Strengths</h4>
-                                <ul>
-                                    ${swot.strengths.map(s => `<li>${s}</li>`).join('')}
-                                </ul>
-                            </div>
-                            <div class="swot-card weaknesses">
-                                <h4>⚠️ Weaknesses</h4>
-                                <ul>
-                                    ${swot.weaknesses.map(w => `<li>${w}</li>`).join('')}
-                                </ul>
-                            </div>
-                            <div class="swot-card opportunities">
-                                <h4>🚀 Opportunities</h4>
-                                <ul>
-                                    ${swot.opportunities.map(o => `<li>${o}</li>`).join('')}
-                                </ul>
-                            </div>
-                            <div class="swot-card threats">
-                                <h4>⚠️ Threats</h4>
-                                <ul>
-                                    ${swot.threats.map(t => `<li>${t}</li>`).join('')}
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Where Brand Shines -->
-                    <div class="shines-section">
-                        <h3>✨ Where ${primaryBrand.name} Shines</h3>
-                        <div class="shines-grid">
-                            ${shines.map(shine => `
-                                <div class="shine-item">
-                                    <h4>${shine.category}</h4>
-                                    <p>${shine.description}</p>
-                                    ${shine.metrics ? `<p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">${shine.metrics}</p>` : ''}
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                    
-                    <!-- Action Buttons -->
-                    <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
-                        <button class="btn btn-small" onclick="copyKeyInsightsToClipboard()" style="background: var(--bg-input);">📋 Copy</button>
-                        <button class="btn btn-small" onclick="printKeyInsights()" style="background: var(--bg-input);">🖨️ Print</button>
-                        <button class="btn btn-small" onclick="addKeyInsightsToDeck()" style="background: linear-gradient(135deg, var(--accent-lime), var(--accent-cyan)); border: none; color: var(--bg-primary); font-weight: 600;">📊 Add to Deck</button>
-                    </div>
+                    <div id="keyInsightsStatusText" style="font-size: 0.9rem; color: var(--text-secondary);">Analyzing profile data...</div>
                 </div>
             `;
             
-            document.getElementById('keyInsightBuilderContent').innerHTML = html;
+            // Animate progress bar
+            const progressBar = document.getElementById('keyInsightsProgressBar');
+            const statusText = document.getElementById('keyInsightsStatusText');
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += Math.random() * 15;
+                if (progress > 90) progress = 90;
+                if (progressBar) progressBar.style.width = progress + '%';
+                if (statusText) {
+                    if (progress < 30) {
+                        statusText.textContent = 'Collecting profile data...';
+                    } else if (progress < 60) {
+                        statusText.textContent = 'Analyzing demographics and interests...';
+                    } else if (progress < 90) {
+                        statusText.textContent = 'Generating SWOT analysis...';
+                    }
+                }
+            }, 500);
+            
+            try {
+                // Call AI endpoint
+                const response = await fetch('/api/key-insight-builder/ai-analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        primaryProfile: primaryBrand,
+                        competitors: competitors,
+                        genPopProfile: genPopProfile
+                    })
+                });
+                
+                const result = await response.json();
+                
+                // Clear progress interval
+                clearInterval(progressInterval);
+                if (progressBar) {
+                    progressBar.style.width = '100%';
+                    progressBar.style.animation = 'none';
+                }
+                if (statusText) {
+                    statusText.textContent = 'Complete!';
+                }
+                
+                // Small delay to show completion
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                if (!result.success) {
+                    throw new Error(result.error || 'Failed to generate SWOT analysis');
+                }
+                
+                const aiInsights = result.insights;
+                
+                // Build HTML with AI-generated insights
+                const html = `
+                    <div style="display: flex; flex-direction: column; gap: 2rem;">
+                        <!-- Primary Brand Header -->
+                        <div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, ${primaryBrand.color}20, transparent); border-radius: 10px; border: 2px solid ${primaryBrand.color}40;">
+                            <h2 style="margin: 0; color: ${primaryBrand.color}; font-size: 1.75rem;">${primaryBrand.name}</h2>
+                            <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);">Primary Brand Analysis</p>
+                            <div style="display: flex; justify-content: center; gap: 2rem; margin-top: 1rem; font-size: 0.9rem;">
+                                <span><strong>Sample Size:</strong> ${formatNumber(primaryBrand.sampleSize || 0)}</span>
+                                <span><strong>Projected US:</strong> ${formatNumber(primaryBrand.projectedUS || 0)}</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Demographics Overview -->
+                        ${aiInsights.demographicsOverview ? `
+                            <div class="demographics-overview">
+                                <h3 style="margin: 0 0 1rem 0; font-size: 1.2rem;">👥 Demographics Overview</h3>
+                                <p style="line-height: 1.8; color: var(--text-primary);">${aiInsights.demographicsOverview}</p>
+                            </div>
+                        ` : ''}
+                        
+                        <!-- SWOT Analysis -->
+                        <div>
+                            <h3 style="margin: 0 0 1rem 0; font-size: 1.2rem;">📊 SWOT Analysis (Marketing Perspective)</h3>
+                            <div class="swot-grid">
+                                <div class="swot-card strengths">
+                                    <h4>💪 Strengths</h4>
+                                    <ul>
+                                        ${(aiInsights.strengths || []).map(s => `<li>${s}</li>`).join('')}
+                                    </ul>
+                                </div>
+                                <div class="swot-card weaknesses">
+                                    <h4>⚠️ Weaknesses</h4>
+                                    <ul>
+                                        ${(aiInsights.weaknesses || []).map(w => `<li>${w}</li>`).join('')}
+                                    </ul>
+                                </div>
+                                <div class="swot-card opportunities">
+                                    <h4>🚀 Opportunities</h4>
+                                    <ul>
+                                        ${(aiInsights.opportunities || []).map(o => `<li>${o}</li>`).join('')}
+                                    </ul>
+                                </div>
+                                <div class="swot-card threats">
+                                    <h4>⚠️ Threats</h4>
+                                    <ul>
+                                        ${(aiInsights.threats || []).map(t => `<li>${t}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Where Brand Shines -->
+                        ${aiInsights.whereBrandShines && aiInsights.whereBrandShines.length > 0 ? `
+                            <div class="shines-section">
+                                <h3>✨ Where ${primaryBrand.name} Shines</h3>
+                                <div class="shines-grid">
+                                    ${aiInsights.whereBrandShines.map(shine => `
+                                        <div class="shine-item">
+                                            <p>${shine}</p>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        <!-- Action Buttons -->
+                        <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+                            <button class="btn btn-small" onclick="copyKeyInsightsToClipboard()" style="background: var(--bg-input);">📋 Copy</button>
+                            <button class="btn btn-small" onclick="printKeyInsights()" style="background: var(--bg-input);">🖨️ Print</button>
+                            <button class="btn btn-small" onclick="addKeyInsightsToDeck()" style="background: linear-gradient(135deg, var(--accent-lime), var(--accent-cyan)); border: none; color: var(--bg-primary); font-weight: 600;">📊 Add to Deck</button>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('keyInsightBuilderContent').innerHTML = html;
+            } catch (error) {
+                console.error('Error generating key insights:', error);
+                clearInterval(progressInterval);
+                document.getElementById('keyInsightBuilderContent').innerHTML = `
+                    <div style="color: #ef4444; text-align: center; padding: 2rem;">
+                        <p><strong>Error generating SWOT analysis:</strong></p>
+                        <p>${error.message}</p>
+                        <p style="margin-top: 1rem; font-size: 0.9rem; color: var(--text-secondary);">Please try again or contact support if the issue persists.</p>
+                    </div>
+                `;
+            }
         }
         
         function generateSWOTAnalysis(primaryBrand, otherProfiles) {

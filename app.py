@@ -5305,6 +5305,246 @@ Be strategic, not descriptive. Think like a CMO presenting to the board. Use per
         }), 500
 
 
+@app.route('/api/key-insight-builder/ai-analyze', methods=['POST'])
+@requires_auth
+def analyze_key_insights_with_ai():
+    """Generate AI-powered SWOT analysis for Key Insight Builder using ChatGPT."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        primary_profile = data.get('primaryProfile')
+        competitors = data.get('competitors', [])
+        gen_pop_profile = data.get('genPopProfile')
+        
+        if not primary_profile:
+            return jsonify({'success': False, 'error': 'No primary profile provided'}), 400
+        
+        # Get OpenAI client
+        client = get_openai_client()
+        if not client:
+            return jsonify({
+                'success': False, 
+                'error': 'OpenAI API not available',
+                'fallback': True
+            }), 503
+        
+        # Extract focused data: interests, demographics, social media, streaming/platforms, streaming/music, categories (NOT brands)
+        def extract_focused_data(profile):
+            focused = {
+                'name': profile.get('name', 'Unknown'),
+                'sampleSize': profile.get('sampleSize', 0),
+                'projectedUS': profile.get('projectedUS', 0),
+                'medianAge': profile.get('medianAge', 'N/A'),
+                'demographics': profile.get('demographics', {}),
+                'demographicsProjection': profile.get('demographicsProjection', {}),
+                'interests': [],
+                'socialMedia': [],
+                'streamingPlatforms': [],
+                'streamingMusic': [],
+                'categories': []
+            }
+            
+            # Extract interests and behavioral items, filtering by category
+            behavioral = profile.get('behavioral', {})
+            if behavioral:
+                for category, items in behavioral.items():
+                    if not isinstance(items, list):
+                        continue
+                    
+                    cat_upper = str(category).upper()
+                    
+                    # Interests
+                    if 'INTEREST' in cat_upper:
+                        for item in items:
+                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
+                                focused['interests'].append({
+                                    'name': item.get('name'),
+                                    'pct': item.get('pct', 0),
+                                    'index': item.get('index', 0)
+                                })
+                    
+                    # Social Media
+                    elif 'SOCIAL' in cat_upper and ('MEDIA' in cat_upper or 'PLATFORM' in cat_upper):
+                        for item in items:
+                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
+                                focused['socialMedia'].append({
+                                    'name': item.get('name'),
+                                    'pct': item.get('pct', 0),
+                                    'index': item.get('index', 0)
+                                })
+                    
+                    # Streaming Platforms
+                    elif 'STREAMING' in cat_upper and 'PLATFORM' in cat_upper:
+                        for item in items:
+                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
+                                focused['streamingPlatforms'].append({
+                                    'name': item.get('name'),
+                                    'pct': item.get('pct', 0),
+                                    'index': item.get('index', 0)
+                                })
+                    
+                    # Streaming Music
+                    elif 'STREAMING' in cat_upper and 'MUSIC' in cat_upper:
+                        for item in items:
+                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
+                                focused['streamingMusic'].append({
+                                    'name': item.get('name'),
+                                    'pct': item.get('pct', 0),
+                                    'index': item.get('index', 0)
+                                })
+                    
+                    # Categories (NOT brands) - exclude brand-related categories
+                    elif 'PURCHASED' in cat_upper or 'CATEGORY' in cat_upper:
+                        # Only include if it's a category, not a brand
+                        if 'BRAND' not in cat_upper and 'SHOP' not in cat_upper:
+                            for item in items:
+                                item_name = str(item.get('name', '')).upper()
+                                # Exclude if it looks like a brand name (has common brand indicators)
+                                if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
+                                    # Check if it's likely a category vs brand
+                                    is_likely_category = any(indicator in item_name for indicator in ['CATEGORY', 'TYPE', 'CLASS', 'GROUP'])
+                                    if is_likely_category or len(item_name.split()) <= 2:  # Short names might be categories
+                                        focused['categories'].append({
+                                            'name': item.get('name'),
+                                            'pct': item.get('pct', 0),
+                                            'index': item.get('index', 0)
+                                        })
+            
+            # Sort by index (descending) and take top items
+            for key in ['interests', 'socialMedia', 'streamingPlatforms', 'streamingMusic', 'categories']:
+                focused[key] = sorted(focused[key], key=lambda x: x.get('index', 0), reverse=True)[:20]
+            
+            return focused
+        
+        # Prepare focused data for all profiles
+        primary_data = extract_focused_data(primary_profile)
+        competitor_data = [extract_focused_data(comp) for comp in competitors]
+        gen_pop_data = extract_focused_data(gen_pop_profile) if gen_pop_profile else None
+        
+        # Build comprehensive prompt for SWOT analysis
+        prompt = f"""You are a world-class marketing strategist performing a SWOT analysis. Analyze the primary brand compared to competitors and General Population.
+
+PRIMARY BRAND: {primary_data['name']}
+- Sample Size: {primary_data['sampleSize']:,}
+- Projected US: {primary_data['projectedUS']:,}
+- Median Age: {primary_data['medianAge']}
+
+COMPETITORS: {', '.join([c['name'] for c in competitor_data]) if competitor_data else 'None'}
+
+FOCUS HEAVILY ON:
+1. **Interests** - What interests does the primary brand audience have vs. competitors and Gen Pop?
+2. **Demographics** - Age, gender, income, ethnicity differences
+3. **Social Media** - Which platforms does the audience use vs. competitors?
+4. **Streaming Platforms** - Video streaming preferences
+5. **Streaming Music** - Music streaming preferences  
+6. **Most Purchased Categories** - Category-level purchases (NOT individual brands)
+
+DO NOT focus on:
+- Individual brand names (focus on categories instead)
+- Generic behavioral items
+- "Other" category (represents missing data)
+
+PRIMARY BRAND DATA:
+{json.dumps(primary_data, indent=2)}
+
+COMPETITOR DATA:
+{json.dumps(competitor_data, indent=2)}
+
+GEN POP DATA:
+{json.dumps(gen_pop_data, indent=2) if gen_pop_data else 'Not provided'}
+
+Generate a comprehensive SWOT analysis in JSON format:
+{{
+    "demographicsOverview": "Detailed demographic overview comparing primary to competitors and Gen Pop. Include specific percentages and numbers.",
+    "strengths": [
+        "Strength 1 - specific, data-backed, comparing to competitors and Gen Pop",
+        "Strength 2 - with actual numbers/percentages",
+        "Strength 3 - etc."
+    ],
+    "weaknesses": [
+        "Weakness 1 - specific, data-backed, comparing to competitors and Gen Pop",
+        "Weakness 2 - with actual numbers/percentages",
+        "Weakness 3 - etc."
+    ],
+    "opportunities": [
+        "Opportunity 1 - specific, actionable, data-backed",
+        "Opportunity 2 - with actual numbers/percentages",
+        "Opportunity 3 - etc."
+    ],
+    "threats": [
+        "Threat 1 - specific, data-backed, comparing to competitors",
+        "Threat 2 - with actual numbers/percentages",
+        "Threat 3 - etc."
+    ],
+    "whereBrandShines": [
+        "Specific area where brand excels - with data",
+        "Another area - with percentages/numbers",
+        "etc."
+    ]
+}}
+
+CRITICAL REQUIREMENTS:
+- Every insight MUST reference specific data (percentages, numbers, categories, platforms)
+- Compare primary brand to BOTH competitors AND Gen Pop
+- Focus on interests, demographics, social media, streaming platforms, streaming music, and categories
+- Do NOT mention individual brand names - focus on categories
+- Do NOT mention "Other" category
+- Be strategic and actionable, not just descriptive
+- Think like a CMO presenting to the board"""
+        
+        # Call ChatGPT
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a world-class marketing strategist and C-suite advisor. You perform SWOT analyses that transform consumer data into high-level strategic insights for executive decision-making."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=3000
+        )
+        
+        # Parse response
+        ai_response = response.choices[0].message.content
+        
+        # Try to parse as JSON
+        try:
+            # Try to extract JSON from markdown code blocks if present
+            if '```json' in ai_response:
+                ai_response = ai_response.split('```json')[1].split('```')[0].strip()
+            elif '```' in ai_response:
+                ai_response = ai_response.split('```')[1].split('```')[0].strip()
+            
+            insights = json.loads(ai_response)
+        except Exception as e:
+            print(f"⚠️ Could not parse AI response as JSON: {e}")
+            # Fallback: wrap in structure
+            insights = {
+                "demographicsOverview": ai_response[:500] if len(ai_response) > 500 else ai_response,
+                "strengths": ["AI analysis available but could not be parsed"],
+                "weaknesses": [],
+                "opportunities": [],
+                "threats": [],
+                "whereBrandShines": []
+            }
+        
+        return jsonify({
+            'success': True,
+            'insights': insights
+        })
+        
+    except Exception as e:
+        print(f"❌ Error analyzing key insights with AI: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'fallback': True
+        }), 500
+
+
 @app.route('/api/admin/refresh-cache', methods=['POST'])
 @requires_admin
 def refresh_metadata_cache():
