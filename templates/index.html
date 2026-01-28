@@ -14870,9 +14870,9 @@
             // Store daily data globally for click handler
             window.chartDailyData = dailyData;
             
-            // Create array of point radii - make last point larger
-            const pointRadii = dates.map((_, index) => index === dates.length - 1 ? 8 : 4);
-            const pointHoverRadii = dates.map((_, index) => index === dates.length - 1 ? 12 : 6);
+            // Create array of point radii - make last point slightly larger for pulsing
+            const pointRadii = dates.map((_, index) => index === dates.length - 1 ? 5 : 4);
+            const pointHoverRadii = dates.map((_, index) => index === dates.length - 1 ? 8 : 6);
             
             dailyChurnChart = new Chart(ctx, {
                 type: 'line',
@@ -14890,7 +14890,8 @@
                         pointHoverRadius: pointHoverRadii,
                         pointBackgroundColor: '#10b981',
                         pointBorderColor: '#fff',
-                        pointBorderWidth: 2
+                        pointBorderWidth: 2,
+                        order: 0 // Ensure points render above the line
                     }]
                 },
                 options: {
@@ -14905,6 +14906,11 @@
                             const index = activeElements[0].index;
                             const dayData = dailyData[index];
                             showDayDetails(dayData);
+                        }
+                    },
+                    elements: {
+                        point: {
+                            z: 10 // Ensure points render above the line
                         }
                     },
                     plugins: {
@@ -15109,14 +15115,17 @@
                 // Create array of point radii - ONLY last point pulses, rest are static
                 const pointRadii = dailyChurnChart.data.labels.map((_, index) => {
                     if (index === dataLength - 1) {
-                        // Last point pulses from 8 to 16
-                        return 8 + (pulseValue * 8);
+                        // Last point pulses from 5 to 8 (smaller, more subtle)
+                        return 5 + (pulseValue * 3);
                     } else {
                         // Other points remain static at size 4
                         return 4;
                     }
                 });
                 dailyChurnChart.data.datasets[0].pointRadius = pointRadii;
+                
+                // Ensure the pulsing point appears above other elements by setting order
+                dailyChurnChart.data.datasets[0].order = 0;
                 
                 // Keep border color static (don't pulse the line)
                 dailyChurnChart.data.datasets[0].borderColor = '#10b981';
@@ -15150,9 +15159,9 @@
                     const dataLength = dailyChurnChart.data.labels.length;
                     dailyChurnChart.data.datasets[0].borderWidth = 2;
                     
-                    // Reset point radii with last point larger
+                    // Reset point radii with last point slightly larger
                     const pointRadii = dailyChurnChart.data.labels.map((_, index) => 
-                        index === dataLength - 1 ? 8 : 4
+                        index === dataLength - 1 ? 5 : 4
                     );
                     dailyChurnChart.data.datasets[0].pointRadius = pointRadii;
                     
