@@ -32438,22 +32438,38 @@
             }
         }
         
-        function closeSummaryModal() {
+        // Make functions globally accessible for onclick handlers
+        window.closeSummaryModal = function() {
             const modal = document.querySelector('.summary-modal');
             if (modal) modal.remove();
-        }
+        };
         
-        function copySummaryToClipboard() {
+        window.copySummaryToClipboard = function() {
             const content = document.querySelector('.summary-modal-content');
+            if (!content) {
+                alert('No summary content found');
+                return;
+            }
             const text = content.innerText;
             navigator.clipboard.writeText(text).then(() => {
                 alert('Summary copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard. Please try again.');
             });
-        }
+        };
         
-        function printSummary() {
-            const content = document.querySelector('.summary-modal-content').innerHTML;
+        window.printSummary = function() {
+            const content = document.querySelector('.summary-modal-content');
+            if (!content) {
+                alert('No summary content found');
+                return;
+            }
             const printWindow = window.open('', '_blank');
+            if (!printWindow) {
+                alert('Please allow popups to print the summary');
+                return;
+            }
             printWindow.document.write(`
                 <html>
                 <head>
@@ -32467,13 +32483,17 @@
                         .summary-bullets li { margin-bottom: 0.3rem; }
                     </style>
                 </head>
-                <body>${content}</body>
+                <body>${content.innerHTML}</body>
                 </html>
             `);
             printWindow.document.close();
-        }
+            printWindow.focus();
+            setTimeout(() => {
+                printWindow.print();
+            }, 250);
+        };
         
-        function sendSummaryToDeck() {
+        window.sendSummaryToDeck = function() {
             const content = document.querySelector('.summary-modal-content');
             if (!content) {
                 alert('No summary content found');
@@ -32502,14 +32522,16 @@
             window.deckItems.push(deckItem);
             
             // Update deck count badge if it exists
-            updateDeckBadge();
+            if (typeof updateDeckBadge === 'function') {
+                updateDeckBadge();
+            }
             
             // Show confirmation
             alert('Executive Summary added to Deck Builder!');
             
             // Close the modal
-            closeSummaryModal();
-        }
+            window.closeSummaryModal();
+        };
         
         // ============================================================================
         // KEY INSIGHT BUILDER - SWOT Analysis for Primary Brand
