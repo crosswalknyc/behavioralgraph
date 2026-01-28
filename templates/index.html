@@ -11467,9 +11467,9 @@
                                 <div class="dash-meta-grid">
                                     <div class="dash-meta-box" id="tickerDateRangeHeader"></div>
                                     <div class="dash-meta-box" id="tickerDataPointsHeader"></div>
+                                    <div class="dash-meta-box" id="tickerRelevanceHeader" style="display: none;"></div>
                                     <div class="dash-meta-box" id="tickerLatestDataHeader"></div>
                                     <div class="dash-meta-box" id="tickerAccuracyHeader" style="display: none;"></div>
-                                    <div class="dash-meta-box" id="tickerRelevanceHeader" style="display: none;"></div>
                                 </div>
                             </div>
                         </div>
@@ -13751,10 +13751,10 @@
             document.getElementById('tickerDateRangeHeader').textContent = `Data Range: ${startDate} - ${endDate}`;
             document.getElementById('tickerDataPointsHeader').textContent = `${data.data.length} days of data`;
             
-            // Display relevance percentage if available
+            // Display relevance percentage if available - next to "days of data"
             const relevanceHeader = document.getElementById('tickerRelevanceHeader');
             if (data.relevance_percentage !== null && data.relevance_percentage !== undefined) {
-                relevanceHeader.textContent = `📊 Stock Impact: ${data.relevance_percentage}%`;
+                relevanceHeader.textContent = `Stock Impact: ${data.relevance_percentage}%`;
                 relevanceHeader.style.display = 'block';
                 relevanceHeader.title = `This KPI represents approximately ${data.relevance_percentage}% of the stock price movement`;
             } else {
@@ -13803,11 +13803,20 @@
                 let accuracyDetails = `<span style="color: ${color};">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
                 if (stats.overall_variance !== null) {
                     accuracyDetails += `<div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
-                        <div>📊 Overall Variance: <span style="color: ${color};">${stats.overall_variance}%</span></div>`;
+                        <div>Overall Variance: <span style="color: ${color};">${stats.overall_variance}%</span></div>`;
                     if (stats.quarter_variance !== null) {
                         accuracyDetails += `<div>${currentQuarter} Variance: <span style="color: ${color};">${stats.quarter_variance}%</span></div>`;
                     }
+                    // Add Stock Impact if available
+                    if (data.relevance_percentage !== null && data.relevance_percentage !== undefined) {
+                        accuracyDetails += `<div>Stock Impact: <span style="color: var(--accent-cyan);">${data.relevance_percentage}%</span></div>`;
+                    }
                     accuracyDetails += `</div>`;
+                } else if (data.relevance_percentage !== null && data.relevance_percentage !== undefined) {
+                    // Show Stock Impact even if no variance data
+                    accuracyDetails += `<div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                        <div>Stock Impact: <span style="color: var(--accent-cyan);">${data.relevance_percentage}%</span></div>
+                    </div>`;
                 }
                 liveDataAccuracyValue.innerHTML = accuracyDetails;
                 liveDataAccuracyBadge.style.display = 'block';
