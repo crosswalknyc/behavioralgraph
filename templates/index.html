@@ -14035,33 +14035,34 @@
                 if (pulseValue >= 1) pulseDirection = -1;
                 if (pulseValue <= 0) pulseDirection = 1;
                 
-                // Update chart styling to create pulsing effect
-                dailyChurnChart.data.datasets[0].borderWidth = 2 + (pulseValue * 2);
+                // Keep border width static (don't pulse the line)
+                dailyChurnChart.data.datasets[0].borderWidth = 2;
                 
-                // Create array of point radii with last point pulsing much more
+                // Create array of point radii - ONLY last point pulses, rest are static
                 const pointRadii = dailyChurnChart.data.labels.map((_, index) => {
                     if (index === dataLength - 1) {
-                        // Last point pulses from 8 to 16 (double the pulse range)
+                        // Last point pulses from 8 to 16
                         return 8 + (pulseValue * 8);
                     } else {
-                        // Other points pulse normally
-                        return 4 + (pulseValue * 2);
+                        // Other points remain static at size 4
+                        return 4;
                     }
                 });
                 dailyChurnChart.data.datasets[0].pointRadius = pointRadii;
                 
-                // Subtle color pulse
-                const greenIntensity = Math.floor(185 + (pulseValue * 40));
-                dailyChurnChart.data.datasets[0].borderColor = `rgb(16, ${greenIntensity}, 129)`;
+                // Keep border color static (don't pulse the line)
+                dailyChurnChart.data.datasets[0].borderColor = '#10b981';
                 
-                // Create array of point colors with last point glowing more
+                // Create array of point colors - ONLY last point glows, rest are static
                 const pointColors = dailyChurnChart.data.labels.map((_, index) => {
                     if (index === dataLength - 1) {
-                        // Last point glows brighter with cyan
+                        // Last point glows brighter with cyan pulse
+                        const greenIntensity = Math.floor(185 + (pulseValue * 40));
                         const cyanIntensity = Math.floor(255 * pulseValue);
                         return `rgb(${cyanIntensity}, ${greenIntensity}, 129)`;
                     } else {
-                        return `rgb(16, ${greenIntensity}, 129)`;
+                        // Other points remain static green color
+                        return '#10b981';
                     }
                 });
                 dailyChurnChart.data.datasets[0].pointBackgroundColor = pointColors;
