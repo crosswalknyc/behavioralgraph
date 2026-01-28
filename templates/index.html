@@ -7036,6 +7036,19 @@
             opacity: 1;
         }
 
+        /* Median age badge in table headers */
+        .header-median-age {
+            display: inline-block;
+            font-size: 0.7rem;
+            font-weight: 400;
+            opacity: 0.85;
+            padding: 0.1rem 0.35rem;
+            background: rgba(255,255,255,0.15);
+            border-radius: 8px;
+            margin-left: 0.25rem;
+            vertical-align: middle;
+        }
+
         .sidebar-section h3 {
             font-size: 0.9rem;
             margin-bottom: 0.5rem;
@@ -33258,12 +33271,6 @@
                 Object.keys(p.behavioral || {}).forEach(cat => allBehavioralCats.add(cat));
             });
 
-            // Helper to create sortable header
-            const sortableHeader = (section, idx, name, color) => {
-                const isSorted = sortSection === section && sortProfileIdx === idx;
-                return `<th class="sortable ${isSorted ? 'sorted' : ''}" style="border-bottom: 3px solid ${color}" onclick="sortComparisonTable('${section}', ${idx})">${name}</th>`;
-            };
-
             // Calculate median age from age distribution if not available
             profiles.forEach(p => {
                 if (!p.medianAge || p.medianAge <= 0) {
@@ -33271,13 +33278,18 @@
                 }
             });
 
-            // Build profile tabs bar for comparison
+            // Helper to create sortable header with median age
+            const sortableHeader = (section, idx, name, color, medianAge) => {
+                const isSorted = sortSection === section && sortProfileIdx === idx;
+                const ageDisplay = medianAge > 0 ? `<span class="header-median-age">${Math.round(medianAge)}</span>` : '';
+                return `<th class="sortable ${isSorted ? 'sorted' : ''}" style="border-bottom: 3px solid ${color}" onclick="sortComparisonTable('${section}', ${idx})">${name} ${ageDisplay}</th>`;
+            };
+
+            // Build profile tabs bar for comparison (no median age in tabs)
             const profileTabsHtml = profiles.map((p, idx) => {
-                const medianAgeDisplay = p.medianAge > 0 ? Math.round(p.medianAge) : '-';
                 return `
                     <div class="comp-profile-tab" style="background: linear-gradient(135deg, ${p.color}dd, ${p.color}99); border-bottom: 3px solid ${p.color};">
                         <span class="comp-profile-tab-name">${p.name}</span>
-                        <span class="comp-profile-tab-age" title="Median Age">${medianAgeDisplay}</span>
                         <button class="comp-profile-tab-close" onclick="event.stopPropagation(); removeProfileFromComparison('${p.id}', ${p.isSegment || false})" title="Remove from comparison">×</button>
                     </div>
                 `;
@@ -33334,7 +33346,7 @@
                         <thead>
                             <tr>
                                 <th>Gender ↓</th>
-                                ${profiles.map((p, i) => sortableHeader('gender', i, p.name, p.color)).join('')}
+                                ${profiles.map((p, i) => sortableHeader('gender', i, p.name, p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -33353,7 +33365,7 @@
                         <thead>
                             <tr>
                                 <th>Age</th>
-                                ${profiles.map((p, i) => sortableHeader('age', i, p.name, p.color)).join('')}
+                                ${profiles.map((p, i) => sortableHeader('age', i, p.name, p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -33372,7 +33384,7 @@
                         <thead>
                             <tr>
                                 <th>Ethnicity</th>
-                                ${profiles.map((p, i) => sortableHeader('ethnicity', i, p.name, p.color)).join('')}
+                                ${profiles.map((p, i) => sortableHeader('ethnicity', i, p.name, p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -33391,7 +33403,7 @@
                         <thead>
                             <tr>
                                 <th>Income</th>
-                                ${profiles.map((p, i) => sortableHeader('income', i, p.name, p.color)).join('')}
+                                ${profiles.map((p, i) => sortableHeader('income', i, p.name, p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -33418,7 +33430,7 @@
                             <thead>
                                 <tr>
                                     <th>${cat}</th>
-                                    ${profiles.map((p, i) => sortableHeader(catKey, i, p.name + ' (% / Idx)', p.color)).join('')}
+                                    ${profiles.map((p, i) => sortableHeader(catKey, i, p.name + ' (% / Idx)', p.color, p.medianAge)).join('')}
                                 </tr>
                             </thead>
                             <tbody>
@@ -33439,7 +33451,7 @@
                             <thead>
                                 <tr>
                                     <th>Location</th>
-                                    ${profiles.map((p, i) => sortableHeader('location', i, p.name, p.color)).join('')}
+                                    ${profiles.map((p, i) => sortableHeader('location', i, p.name, p.color, p.medianAge)).join('')}
                                 </tr>
                             </thead>
                             <tbody>
