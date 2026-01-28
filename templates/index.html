@@ -14142,7 +14142,7 @@
             const projectedCard = document.querySelector('[id="projectedGrowth"]').closest('.stat-card');
             if (projectedCard) {
                 projectedCard.querySelector('#projectedGrowthLabel').textContent = `🔮 ${latestQuarter} Projected Net Growth Rate`;
-                projectedCard.setAttribute('data-tooltip', `Projected net growth rate for ${latestQuarter}. This is calculated by taking the average daily net growth rate for the quarter-to-date and multiplying it by the total number of days in the current tracked quarter using arithmetic (not compounding). This represents the expected growth if current trends continue through the end of the quarter.`);
+                projectedCard.setAttribute('data-tooltip', `Projected net growth rate for ${latestQuarter}`);
             }
             
             // Set tooltips for QTD metric cards
