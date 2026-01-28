@@ -4977,6 +4977,100 @@ def save_quick_selects():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/ecosystem/ai-enhance', methods=['POST'])
+@requires_auth
+def enhance_ecosystem_insights():
+    """Enhance ecosystem insights using ChatGPT AI."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        profile_name = data.get('profileName', 'PROFILE')
+        profile_category = data.get('profileCategory', 'OTHER')
+        insights_data = data.get('insights', {})
+        
+        # Get OpenAI client
+        client = get_openai_client()
+        if not client:
+            return jsonify({
+                'success': False, 
+                'error': 'OpenAI API not available',
+                'fallback': True
+            }), 503
+        
+        # Build prompt for ChatGPT
+        prompt = f"""You are a marketing insights analyst. Analyze the following behavioral data for {profile_name} (category: {profile_category}) and provide smart, actionable insights.
+
+ECOSYSTEM INSIGHTS DATA:
+- Before Engagement: {insights_data.get('beforeEngagement', [])}
+- After Engagement: {insights_data.get('afterEngagement', [])}
+- Competitive Behaviors: {insights_data.get('competitiveBehaviors', [])}
+- Category Exit Signals: {insights_data.get('categoryExitSignals', [])}
+- Replacements: {insights_data.get('replacements', [])}
+- Functional Shifts: {insights_data.get('functionalShifts', [])}
+- Temporal Shifts: {insights_data.get('temporalShifts', [])}
+- Social Context Changes: {insights_data.get('socialContextChanges', [])}
+- Emerging Patterns: {insights_data.get('emergingPatterns', [])}
+
+Provide enhanced insights in the following format (JSON):
+{{
+    "summary": "A 2-3 sentence executive summary of the key ecosystem insights",
+    "beforeEngagement": "Enhanced insight about what happens before engagement with {profile_name}",
+    "afterEngagement": "Enhanced insight about what happens after engagement",
+    "competitiveBehaviors": "Enhanced insight about competitive behaviors",
+    "categoryExitSignals": "Enhanced insight about category exit signals",
+    "replacements": "Enhanced insight about replacement categories",
+    "functionalShifts": "Enhanced insight about functional shifts",
+    "temporalShifts": "Enhanced insight about temporal patterns",
+    "socialContextChanges": "Enhanced insight about social context changes",
+    "emergingPatterns": "Enhanced insight about emerging patterns",
+    "keyRecommendations": ["Recommendation 1", "Recommendation 2", "Recommendation 3"]
+}}
+
+Be specific, data-driven, and actionable. Reference specific items/brands when relevant. Focus on marketing and business implications."""
+
+        # Call ChatGPT
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # Using cost-effective model
+            messages=[
+                {"role": "system", "content": "You are an expert marketing insights analyst specializing in consumer behavior and brand ecosystem analysis."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2000
+        )
+        
+        # Parse response
+        ai_response = response.choices[0].message.content
+        
+        # Try to parse as JSON, fallback to text
+        try:
+            import json
+            enhanced_insights = json.loads(ai_response)
+        except:
+            # If not JSON, wrap in a structure
+            enhanced_insights = {
+                "summary": ai_response,
+                "raw_response": ai_response
+            }
+        
+        return jsonify({
+            'success': True,
+            'enhanced': enhanced_insights
+        })
+        
+    except Exception as e:
+        print(f"❌ Error enhancing ecosystem insights: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'fallback': True
+        }), 500
+
+
 @app.route('/api/admin/refresh-cache', methods=['POST'])
 @requires_admin
 def refresh_metadata_cache():
