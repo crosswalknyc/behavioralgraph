@@ -32331,22 +32331,57 @@
                 return generateExecutiveSummary();
             }
             
-            // Otherwise, use current single profile
-            if (!window.currentProfileData) {
+            // Try to get active profile from tabs first
+            let activeProfile = null;
+            if (typeof activeProfileTabId !== 'undefined' && activeProfileTabId && typeof openProfileTabs !== 'undefined') {
+                const activeTab = openProfileTabs.find(t => t.id === activeProfileTabId);
+                if (activeTab && activeTab.parsed) {
+                    activeProfile = {
+                        name: activeTab.name || 'Profile',
+                        sampleSize: activeTab.parsed.sampleSize || 0,
+                        projectedUS: activeTab.parsed.projectedUS || 0,
+                        medianAge: calculateMedianAgeFromDistribution(activeTab.parsed.demographics?.age || {}),
+                        demographics: activeTab.parsed.demographics || {},
+                        demographicsProjection: activeTab.parsed.demographicsProjection || {},
+                        behavioral: activeTab.parsed.behavioral || {}
+                    };
+                }
+            }
+            
+            // Fall back to currentProfileData if no active tab
+            if (!activeProfile && window.currentProfileData) {
+                activeProfile = {
+                    name: window.currentProfileData.name || 'Profile',
+                    sampleSize: window.currentProfileData.sampleSize || 0,
+                    projectedUS: window.currentProfileData.projectedUS || 0,
+                    medianAge: calculateMedianAgeFromDistribution(window.currentProfileData.demographics?.age || {}),
+                    demographics: window.currentProfileData.demographics || {},
+                    demographicsProjection: window.currentProfileData.demographicsProjection || {},
+                    behavioral: window.currentProfileData.behavioral || {}
+                };
+            }
+            
+            // Fall back to currentDashboardData if available
+            if (!activeProfile && window.currentDashboardData) {
+                const brandName = document.getElementById('dashBrandNameHeader')?.textContent || 'Profile';
+                activeProfile = {
+                    name: brandName,
+                    sampleSize: window.currentDashboardData.sampleSize || 0,
+                    projectedUS: window.currentDashboardData.projectedUS || 0,
+                    medianAge: calculateMedianAgeFromDistribution(window.currentDashboardData.demographics?.age || {}),
+                    demographics: window.currentDashboardData.demographics || {},
+                    demographicsProjection: window.currentDashboardData.demographicsProjection || {},
+                    behavioral: window.currentDashboardData.behavioral || {}
+                };
+            }
+            
+            if (!activeProfile) {
                 alert('Please select a profile first to generate an executive summary.');
                 return;
             }
             
-            // Create a single-profile comparison structure
-            const primaryProfile = {
-                name: window.currentProfileData.name || 'Profile',
-                sampleSize: window.currentProfileData.sampleSize || 0,
-                projectedUS: window.currentProfileData.projectedUS || 0,
-                medianAge: calculateMedianAgeFromDistribution(window.currentProfileData.demographics?.age || {}),
-                demographics: window.currentProfileData.demographics || {},
-                demographicsProjection: window.currentProfileData.demographicsProjection || {},
-                behavioral: window.currentProfileData.behavioral || {}
-            };
+            // Use the active profile as primary
+            const primaryProfile = activeProfile;
             
             // Try to find Gen Pop profile
             let genPopProfile = null;
