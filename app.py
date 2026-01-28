@@ -4590,21 +4590,24 @@ def get_hedge_fund_ticker_data(s3_key):
             current_quarter_data = [d for d in data if d.get('Quarter') == latest_quarter]
             
             if len(current_quarter_data) > 0:
-                # Calculate cumulative stats for current quarter
+                # Calculate cumulative stats for current quarter (QTD - Quarter to Date)
                 quarter_subs = sum(d.get('Total Subs', 0) for d in current_quarter_data)
                 quarter_cancels = sum(d.get('Total Cancels', 0) for d in current_quarter_data)
                 quarter_net_growth = quarter_subs - quarter_cancels
                 quarter_start_consumers = current_quarter_data[0].get('Total Consumers', 1)
+                
+                # QTD Net Growth % = actual growth so far in the quarter
                 net_growth_pct = (quarter_net_growth / quarter_start_consumers * 100) if quarter_start_consumers > 0 else 0
                 
-                # Calculate projected net growth rate
+                # Calculate projected net growth rate using arithmetic (not compounding)
+                # Formula: average daily net growth rate * total days in quarter
                 days_in_quarter = len(current_quarter_data)
                 avg_daily_net_growth = quarter_net_growth / days_in_quarter if days_in_quarter > 0 else 0
                 
-                # Determine total days in quarter
+                # Determine total days in quarter (Q4 = 92, others = 90)
                 total_days_in_quarter = 92 if 'Q4' in latest_quarter else 90
                 
-                # Projected net growth
+                # Projected net growth = average daily growth * total days (arithmetic, not compounding)
                 projected_net_growth = avg_daily_net_growth * total_days_in_quarter
                 projected_net_growth_pct = (projected_net_growth / quarter_start_consumers * 100) if quarter_start_consumers > 0 else 0
                 

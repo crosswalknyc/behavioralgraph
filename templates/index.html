@@ -2562,11 +2562,23 @@
         .stat-value {
             word-break: break-word;
             overflow-wrap: break-word;
-            font-size: clamp(1.5rem, 4vw, 2.5rem);
+            font-size: clamp(1rem, 2.5vw, 1.5rem);
+        }
+        
+        /* Large font for projected growth only */
+        .stat-value.pulsing-number {
+            font-size: clamp(1.8rem, 5vw, 2.5rem);
         }
         
         .stat-label {
-            font-size: clamp(0.75rem, 2vw, 0.9rem);
+            font-size: clamp(0.7rem, 1.8vw, 0.85rem);
+        }
+        
+        /* Ensure stat cards fit within viewport */
+        .stat-card {
+            min-height: fit-content;
+            max-height: 100%;
+            overflow: hidden;
         }
 
         /* Pulsing Card - Static (no animation on card itself) */
@@ -11495,35 +11507,35 @@
                             </div>
                             
                             <!-- Projected Growth Rate + Accuracy - Side by Side -->
-                            <div class="ticker-cards-grid two-columns">
-                                <div class="stat-card" id="projectedGrowthCard" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column;" onclick="navigateToTrends()">
-                                    <div class="stat-label" id="projectedGrowthLabel">🔮 Q1 2026 Projected Net Growth Rate</div>
-                                    <div class="stat-value pulsing-number" id="projectedGrowth" style="display: block;">--</div>
-                                    <div class="stat-label" id="projectedGrowthKPI" style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">--</div>
+                            <div class="ticker-cards-grid two-columns" style="margin-bottom: 1rem;">
+                                <div class="stat-card" id="projectedGrowthCard" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px;" onclick="navigateToTrends()">
+                                    <div class="stat-label" id="projectedGrowthLabel" style="font-size: 0.75rem;">🔮 Q1 2026 Projected Net Growth Rate</div>
+                                    <div class="stat-value pulsing-number" id="projectedGrowth" style="display: block; margin: 0.5rem 0;">--</div>
+                                    <div class="stat-label" id="projectedGrowthKPI" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">--</div>
                                 </div>
                                 <div id="liveDataAccuracyBadge" class="stat-card" style="display: none;">
-                                    <div class="stat-label">🎯 Accuracy</div>
-                                    <div id="liveDataAccuracyValue" style="font-weight: 600; font-size: 1rem;"></div>
+                                    <div class="stat-label" style="font-size: 0.75rem;">🎯 Accuracy</div>
+                                    <div id="liveDataAccuracyValue" style="font-weight: 600; font-size: 0.9rem;"></div>
                                 </div>
                             </div>
                             
                             <!-- 2x2 Grid -->
                             <div class="ticker-cards-grid four-columns" style="margin-bottom: 1.5rem;">
-                                <div class="stat-card">
-                                    <div class="stat-label">💹 QTD Net Growth %</div>
-                                    <div class="stat-value" id="netGrowth">--</div>
+                                <div class="stat-card" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;">
+                                    <div class="stat-label" style="font-size: 0.7rem;">💹 QTD Net Growth %</div>
+                                    <div class="stat-value" id="netGrowth" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
-                                <div class="stat-card">
-                                    <div class="stat-label">📊 Current Consumers QTD</div>
-                                    <div class="stat-value" id="currentConsumers">--</div>
+                                <div class="stat-card" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;">
+                                    <div class="stat-label" style="font-size: 0.7rem;">📊 Current Consumers QTD</div>
+                                    <div class="stat-value" id="currentConsumers" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
-                                <div class="stat-card">
-                                    <div class="stat-label">📈 Total Subs QTD</div>
-                                    <div class="stat-value" id="totalSubs">--</div>
+                                <div class="stat-card" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;">
+                                    <div class="stat-label" style="font-size: 0.7rem;">📈 Total Subs QTD</div>
+                                    <div class="stat-value" id="totalSubs" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
-                                <div class="stat-card">
-                                    <div class="stat-label">📉 Total Cancels QTD</div>
-                                    <div class="stat-value" id="totalCancels">--</div>
+                                <div class="stat-card" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;">
+                                    <div class="stat-label" style="font-size: 0.7rem;">📉 Total Cancels QTD</div>
+                                    <div class="stat-value" id="totalCancels" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
                             </div>
                         </div>
