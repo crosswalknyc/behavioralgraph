@@ -25992,11 +25992,11 @@
                         itemCat.includes(bc) || itemName.includes(bc)
                     );
                     
-                    // Include items with moderate to high index (80-200) that aren't in profile category
-                    return isBeforeCategory && i.index >= 80 && i.index <= 200;
+                    // Include items with percentage > 0 (not comparing to Gen Pop, just showing profile data)
+                    return isBeforeCategory && (i.pct || 0) > 0;
                 })
                 .sort((a, b) => {
-                    // Prioritize items from "before" categories, then by index
+                    // Prioritize items from "before" categories, then by percentage
                     const aIsBefore = beforeCategories.some(bc => 
                         a.category.toUpperCase().includes(bc) || a.name.toUpperCase().includes(bc)
                     );
@@ -26006,7 +26006,7 @@
                     
                     if (aIsBefore && !bIsBefore) return -1;
                     if (!aIsBefore && bIsBefore) return 1;
-                    return b.index - a.index;
+                    return (b.pct || 0) - (a.pct || 0);
                 })
                 .slice(0, 5);
             
@@ -26024,11 +26024,11 @@
                         itemCat.includes(ac) || itemName.includes(ac)
                     );
                     
-                    // Include high-index items that are complementary (not in same category)
-                    return !isProfileCategory && (isAfterCategory || i.index >= 100);
+                    // Include items with percentage > 0 (not comparing to Gen Pop, just showing profile data)
+                    return !isProfileCategory && (isAfterCategory || (i.pct || 0) > 0);
                 })
                 .sort((a, b) => {
-                    // Prioritize items from "after" categories, then by index
+                    // Prioritize items from "after" categories, then by percentage
                     const aIsAfter = afterCategories.some(ac => 
                         a.category.toUpperCase().includes(ac) || a.name.toUpperCase().includes(ac)
                     );
@@ -26038,7 +26038,7 @@
                     
                     if (aIsAfter && !bIsAfter) return -1;
                     if (!aIsAfter && bIsAfter) return 1;
-                    return b.index - a.index;
+                    return (b.pct || 0) - (a.pct || 0);
                 })
                 .slice(0, 5);
             
@@ -26110,30 +26110,32 @@
                     baseCat.includes(rel) || itemName.includes(rel) || itemCat.includes(rel)
                 );
                 
-                if (isRelevant && i.index >= 100) {
+                // Filter by percentage (not index) since this is about the profile, not comparisons
+                if (isRelevant && (i.pct || 0) > 0) {
                     if (!competingCategories[baseCat]) {
-                        competingCategories[baseCat] = { items: [], totalIndex: 0 };
+                        competingCategories[baseCat] = { items: [], totalPct: 0 };
                     }
                     competingCategories[baseCat].items.push(i);
-                    competingCategories[baseCat].totalIndex += i.index;
+                    competingCategories[baseCat].totalPct += (i.pct || 0);
                 }
             });
             
-            // Find top competing categories
+            // Find top competing categories (using percentages)
             const topCompeting = Object.entries(competingCategories)
                 .map(([cat, stats]) => ({
                     cat,
-                    avgIndex: stats.totalIndex / stats.items.length,
-                    count: stats.items.length
+                    avgPct: stats.totalPct / stats.items.length,
+                    count: stats.items.length,
+                    items: stats.items
                 }))
-                .filter(c => c.count >= 2 && c.avgIndex >= 100)
-                .sort((a, b) => b.avgIndex - a.avgIndex)
+                .filter(c => c.count >= 2 && c.avgPct > 0)
+                .sort((a, b) => b.avgPct - a.avgPct)
                 .slice(0, 3);
             
             topCompeting.forEach(comp => {
                 const categoryName = comp.cat.toLowerCase().replace(/_/g, ' ');
                 competitiveBehaviors.push(
-                    `<span class="insight-label">${comp.cat}</span> <span class="insight-value">competes with ${profileCategory.toLowerCase()} moments - consumers choosing ${categoryName} alternatives (avg index: ${Math.round(comp.avgIndex)})</span>`
+                    `<span class="insight-label">${comp.cat}</span> <span class="insight-value">competes with ${profileCategory.toLowerCase()} moments - consumers choosing ${categoryName} alternatives (avg: ${comp.avgPct.toFixed(2)}% of audience)</span>`
                 );
             });
             
@@ -26165,12 +26167,12 @@
                     i.name.toUpperCase().includes('MYFITNESSPAL')
                 );
                 if (fitnessItems.length > 0) {
-                    const avgFitnessIndex = fitnessItems.reduce((s, i) => s + i.index, 0) / fitnessItems.length;
-                    if (avgFitnessIndex > 100) {
+                    const avgFitnessPct = fitnessItems.reduce((s, i) => s + (i.pct || 0), 0) / fitnessItems.length;
+                    if (avgFitnessPct > 0) {
                         const topFitnessApps = fitnessItems
-                            .sort((a, b) => b.index - a.index)
+                            .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                             .slice(0, 5)
-                            .map(i => `${i.name} (${i.index})`)
+                            .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                             .join(', ');
                         competitiveBehaviors.push(`<span class="insight-label">Fitness apps</span> <span class="insight-value">compete with beverage moments - when consumers use fitness apps 3x/week, beverage consumption patterns shift. Top apps: ${topFitnessApps}</span>`);
                     }
@@ -26188,9 +26190,9 @@
                 });
                 if (otherFashionItems.length > 0) {
                     const topCompetitors = otherFashionItems
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 5)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     competitiveBehaviors.push(`<span class="insight-label">Fashion/Accessory competitors</span> <span class="insight-value">compete for consumer attention. Top competing brands: ${topCompetitors}</span>`);
                 }
@@ -26199,13 +26201,13 @@
                 const replacementCategories = allItems.filter(i => {
                     const cat = i.category.toUpperCase();
                     return (cat.includes('EXPERIENCE') || cat.includes('TRAVEL') || cat.includes('ENTERTAINMENT') ||
-                           cat.includes('TECHNOLOGY') || cat.includes('GAMING')) && i.index >= 100;
+                           cat.includes('TECHNOLOGY') || cat.includes('GAMING')) && (i.pct || 0) > 0;
                 });
                 if (replacementCategories.length > 0) {
                     const topReplacements = replacementCategories
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 5)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     competitiveBehaviors.push(`<span class="insight-label">Experience spending</span> <span class="insight-value">competes with accessory purchases - consumers choosing experiences over products. Top items: ${topReplacements}</span>`);
                 }
@@ -26222,12 +26224,12 @@
                     i.name.toUpperCase().includes('STEAM')
                 );
                 if (gamingItems.length > 0) {
-                    const avgGamingIndex = gamingItems.reduce((s, i) => s + i.index, 0) / gamingItems.length;
-                    if (avgGamingIndex > 100) {
+                    const avgGamingPct = gamingItems.reduce((s, i) => s + (i.pct || 0), 0) / gamingItems.length;
+                    if (avgGamingPct > 0) {
                         const topGaming = gamingItems
-                            .sort((a, b) => b.index - a.index)
+                            .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                             .slice(0, 5)
-                            .map(i => `${i.name} (${i.index})`)
+                            .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                             .join(', ');
                         competitiveBehaviors.push(`<span class="insight-label">Gaming</span> <span class="insight-value">competes with streaming content - consumers choosing interactive entertainment over passive viewing. Top platforms: ${topGaming}</span>`);
                     }
@@ -26235,11 +26237,11 @@
             }
             
             document.getElementById('ecosystemBeforeEngagement').innerHTML = beforeEngagement.length > 0
-                ? beforeEngagement.map(i => `<div class="insight-item"><span class="insight-label">${i.name}</span> <span class="insight-value">(${i.category}) - Index ${i.index}</span></div>`).join('')
+                ? beforeEngagement.map(i => `<div class="insight-item"><span class="insight-label">${i.name}</span> <span class="insight-value">(${i.category}) - ${(i.pct || 0).toFixed(2)}%</span></div>`).join('')
                 : '<p style="color: var(--text-secondary);">Analyzing pre-engagement patterns...</p>';
             
             document.getElementById('ecosystemAfterEngagement').innerHTML = afterEngagement.length > 0
-                ? afterEngagement.map(i => `<div class="insight-item"><span class="insight-label">${i.name}</span> <span class="insight-value">(${i.category}) - Index ${i.index}</span></div>`).join('')
+                ? afterEngagement.map(i => `<div class="insight-item"><span class="insight-label">${i.name}</span> <span class="insight-value">(${i.category}) - ${(i.pct || 0).toFixed(2)}%</span></div>`).join('')
                 : '<p style="color: var(--text-secondary);">Analyzing post-engagement patterns...</p>';
             
             document.getElementById('ecosystemCompetitiveBehaviors').innerHTML = competitiveBehaviors.length > 0
@@ -26307,17 +26309,17 @@
             if (isBeverageProfile) {
                 if (fitnessItems.length > 2) {
                     const topFitnessApps = fitnessItems
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 5)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     categoryExitSignals.push(`<span class="insight-label">Fitness engagement spike:</span> <span class="insight-value">When consumers start using fitness apps 3x/week, beverage consumption drops before they consciously choose alternatives. Top fitness apps: ${topFitnessApps}</span>`);
                 }
                 if (functionalBeverages.length > 0) {
                     const topFunctional = functionalBeverages
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 5)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     categoryExitSignals.push(`<span class="insight-label">Functional beverage adoption:</span> <span class="insight-value">Consumers leaving category for functional alternatives. Top items: ${topFunctional}</span>`);
                 }
@@ -26326,13 +26328,13 @@
                 const experienceItems = allItems.filter(i => {
                     const cat = i.category.toUpperCase();
                     return (cat.includes('TRAVEL') || cat.includes('ENTERTAINMENT') || cat.includes('EXPERIENCE') ||
-                           cat.includes('EVENT') || cat.includes('DINING')) && i.index >= 100;
+                           cat.includes('EVENT') || cat.includes('DINING')) && (i.pct || 0) > 0;
                 });
                 if (experienceItems.length > 0) {
                     const topExperiences = experienceItems
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 5)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     categoryExitSignals.push(`<span class="insight-label">Experience spending shift:</span> <span class="insight-value">Consumers prioritizing experiences over accessory purchases. Top experiences: ${topExperiences}</span>`);
                 }
@@ -26343,13 +26345,13 @@
                     const name = i.name.toUpperCase();
                     return (cat.includes('APPAREL') || cat.includes('ACCESSOR') || cat.includes('FASHION') ||
                            cat.includes('LUXURY') || cat.includes('JEWELRY')) &&
-                           !profileCategoryItems.some(pi => pi.name === i.name) && i.index >= 100;
+                           !profileCategoryItems.some(pi => pi.name === i.name) && (i.pct || 0) > 0;
                 });
                 if (competingFashion.length > 0) {
                     const topCompetitors = competingFashion
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 5)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     categoryExitSignals.push(`<span class="insight-label">Competing brands:</span> <span class="insight-value">Other fashion/accessory brands gaining share. Top competitors: ${topCompetitors}</span>`);
                 }
@@ -26363,9 +26365,9 @@
                 );
                 if (gamingItems.length > 0) {
                     const topGaming = gamingItems
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 5)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     categoryExitSignals.push(`<span class="insight-label">Gaming competition:</span> <span class="insight-value">Interactive entertainment competing with streaming content. Top gaming: ${topGaming}</span>`);
                 }
@@ -26376,37 +26378,37 @@
             // Category-specific replacements
             if (isBeverageProfile) {
                 if (coffeeItems.length > 0) {
-                    const avgCoffeeIndex = coffeeItems.reduce((s, i) => s + i.index, 0) / coffeeItems.length;
-                    if (avgCoffeeIndex > 100) {
+                    const avgCoffeePct = coffeeItems.reduce((s, i) => s + (i.pct || 0), 0) / coffeeItems.length;
+                    if (avgCoffeePct > 0) {
                         const topCoffee = coffeeItems
-                            .sort((a, b) => b.index - a.index)
+                            .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                             .slice(0, 3)
-                            .map(i => `${i.name} (${i.index})`)
+                            .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                             .join(', ');
                         replacements.push(`<span class="insight-label">Coffee rituals</span> <span class="insight-value">replacing beverage moments - morning/afternoon routines shifting. Top coffee: ${topCoffee}</span>`);
                     }
                 }
                 if (waterItems.length > 0) {
                     const topWater = waterItems
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 3)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     replacements.push(`<span class="insight-label">Water consumption</span> <span class="insight-value">increasing as health-conscious pivot. Top water brands: ${topWater}</span>`);
                 }
                 if (functionalBeverages.length > 0) {
                     const topFunctional = functionalBeverages
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 5)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     replacements.push(`<span class="insight-label">Functional beverages</span> <span class="insight-value">replacing traditional beverage occasions. Top items: ${topFunctional}</span>`);
                 }
                 if (alcoholItems.length > 0 && beverageItems.length > 0) {
                     const topAlcohol = alcoholItems
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 3)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     replacements.push(`<span class="insight-label">Alcohol-lite moments</span> <span class="insight-value">- low/no-alcohol options competing with traditional beverages. Top items: ${topAlcohol}</span>`);
                 }
@@ -26415,13 +26417,13 @@
                 const luxuryItems = allItems.filter(i => {
                     const cat = i.category.toUpperCase();
                     return (cat.includes('LUXURY') || cat.includes('JEWELRY') || cat.includes('WATCH')) && 
-                           i.index >= 100 && !profileCategoryItems.some(pi => pi.name === i.name);
+                           (i.pct || 0) > 0 && !profileCategoryItems.some(pi => pi.name === i.name);
                 });
                 if (luxuryItems.length > 0) {
                     const topLuxury = luxuryItems
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 5)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     replacements.push(`<span class="insight-label">Luxury alternatives</span> <span class="insight-value">replacing ${profileCategory.toLowerCase()} purchases. Top items: ${topLuxury}</span>`);
                 }
@@ -26429,13 +26431,13 @@
                 const techItems = allItems.filter(i => {
                     const cat = i.category.toUpperCase();
                     return (cat.includes('TECHNOLOGY') || cat.includes('ELECTRONICS') || cat.includes('APP')) && 
-                           i.index >= 100;
+                           (i.pct || 0) > 0;
                 });
                 if (techItems.length > 0) {
                     const topTech = techItems
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 5)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     replacements.push(`<span class="insight-label">Technology spending</span> <span class="insight-value">competing with accessory purchases. Top items: ${topTech}</span>`);
                 }
@@ -26444,13 +26446,13 @@
                 const otherEntertainment = allItems.filter(i => {
                     const cat = i.category.toUpperCase();
                     return (cat.includes('GAMING') || cat.includes('MUSIC') || cat.includes('PODCAST') ||
-                           cat.includes('SOCIAL MEDIA')) && i.index >= 100;
+                           cat.includes('SOCIAL MEDIA')) && (i.pct || 0) > 0;
                 });
                 if (otherEntertainment.length > 0) {
                     const topEntertainment = otherEntertainment
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 5)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     replacements.push(`<span class="insight-label">Alternative entertainment</span> <span class="insight-value">replacing streaming content consumption. Top items: ${topEntertainment}</span>`);
                 }
@@ -26462,25 +26464,25 @@
             if (isBeverageProfile) {
                 if (fitnessItems.length > 0 && sleepItems.length > 0) {
                     const topSleep = sleepItems
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 3)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     functionalShifts.push(`<span class="insight-label">Energy vs. Sleep:</span> <span class="insight-value">Consumers choosing rest over energy drinks. Top sleep/meditation apps: ${topSleep}</span>`);
                 }
                 if (waterItems.length > 0 && beverageItems.length > 0) {
                     const topWater = waterItems
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 3)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     functionalShifts.push(`<span class="insight-label">Water vs. Soda:</span> <span class="insight-value">Health pivots replacing indulgence moments. Top water brands: ${topWater}</span>`);
                 }
                 if (coffeeItems.length > 0 && beverageItems.length > 0) {
                     const topCoffee = coffeeItems
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 3)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     functionalShifts.push(`<span class="insight-label">Coffee vs. Soda:</span> <span class="insight-value">Functional morning rituals vs. treat moments. Top coffee: ${topCoffee}</span>`);
                 }
@@ -26489,13 +26491,13 @@
                 const experienceVsProduct = allItems.filter(i => {
                     const cat = i.category.toUpperCase();
                     return (cat.includes('TRAVEL') || cat.includes('DINING') || cat.includes('ENTERTAINMENT')) && 
-                           i.index >= 100;
+                           (i.pct || 0) > 0;
                 });
                 if (experienceVsProduct.length > 0) {
                     const topExperiences = experienceVsProduct
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 5)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     functionalShifts.push(`<span class="insight-label">Experiences vs. Products:</span> <span class="insight-value">Consumers prioritizing experiences over accessory purchases. Top experiences: ${topExperiences}</span>`);
                 }
@@ -26503,13 +26505,13 @@
                 const fastFashionVsLuxury = allItems.filter(i => {
                     const cat = i.category.toUpperCase();
                     return (cat.includes('APPAREL') || cat.includes('FASHION')) && 
-                           i.index >= 100 && !profileCategoryItems.some(pi => pi.name === i.name);
+                           (i.pct || 0) > 0 && !profileCategoryItems.some(pi => pi.name === i.name);
                 });
                 if (fastFashionVsLuxury.length > 0) {
                     const topFashion = fastFashionVsLuxury
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 5)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     functionalShifts.push(`<span class="insight-label">Fashion alternatives:</span> <span class="insight-value">Other fashion brands competing for share. Top competitors: ${topFashion}</span>`);
                 }
@@ -26517,13 +26519,13 @@
                 // For streaming, find shifts in entertainment consumption
                 const interactiveVsPassive = allItems.filter(i => {
                     const cat = i.category.toUpperCase();
-                    return (cat.includes('GAMING') || cat.includes('SOCIAL MEDIA')) && i.index >= 100;
+                    return (cat.includes('GAMING') || cat.includes('SOCIAL MEDIA')) && (i.pct || 0) > 0;
                 });
                 if (interactiveVsPassive.length > 0) {
                     const topInteractive = interactiveVsPassive
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 5)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     functionalShifts.push(`<span class="insight-label">Interactive vs. Passive:</span> <span class="insight-value">Consumers choosing interactive entertainment over passive streaming. Top items: ${topInteractive}</span>`);
                 }
@@ -26558,17 +26560,17 @@
             const temporalShifts = [];
             if (streamingItems.length > 0) {
                 const topStreaming = streamingItems
-                    .sort((a, b) => b.index - a.index)
+                    .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                     .slice(0, 5)
-                    .map(i => `${i.name} (${i.index})`)
+                    .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                     .join(', ');
                 temporalShifts.push(`<span class="insight-label">Nighttime consumption:</span> <span class="insight-value">Moving earlier as streaming habits shift viewing times. Top platforms: ${topStreaming}</span>`);
             }
             if (gamingItems.length > 0) {
                 const topGaming = gamingItems
-                    .sort((a, b) => b.index - a.index)
+                    .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                     .slice(0, 5)
-                    .map(i => `${i.name} (${i.index})`)
+                    .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                     .join(', ');
                 temporalShifts.push(`<span class="insight-label">Evening routines:</span> <span class="insight-value">Gaming sessions replacing traditional beverage occasions. Top gaming platforms: ${topGaming}</span>`);
             }
@@ -26588,9 +26590,9 @@
                 );
                 if (soloItems.length > socialItems.length) {
                     const topSolo = soloItems
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 3)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     socialContextChanges.push(`<span class="insight-label">Solo consumption:</span> <span class="insight-value">Replacing social occasions - individual moments vs. shared experiences. Top solo activities: ${topSolo}</span>`);
                 }
@@ -26615,9 +26617,9 @@
             );
             if (nostalgiaItems.length > 0) {
                 const topNostalgia = nostalgiaItems
-                    .sort((a, b) => b.index - a.index)
+                    .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                     .slice(0, 5)
-                    .map(i => `${i.name} (${i.index})`)
+                    .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                     .join(', ');
                 emergingPatterns.push(`<span class="insight-label">Nostalgia usage spike:</span> <span class="insight-value">Retro/classic preferences emerging before cultural campaigns launch. Top items: ${topNostalgia}</span>`);
             }
@@ -26625,9 +26627,9 @@
             // Category-specific emerging patterns
             if (isBeverageProfile && fitnessItems.length > 0 && beverageItems.length > 0) {
                 const topFitness = fitnessItems
-                    .sort((a, b) => b.index - a.index)
+                    .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                     .slice(0, 5)
-                    .map(i => `${i.name} (${i.index})`)
+                    .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                     .join(', ');
                 emergingPatterns.push(`<span class="insight-label">Wellness integration:</span> <span class="insight-value">Fitness and beverage consumption patterns converging. Top fitness apps: ${topFitness}</span>`);
             } else if (isAccessoryProfile || isFashionProfile) {
@@ -26635,13 +26637,13 @@
                 const sustainableItems = allItems.filter(i => {
                     const name = i.name.toUpperCase();
                     return (name.includes('SUSTAINABLE') || name.includes('ECO') || name.includes('MINIMAL') ||
-                           name.includes('VINTAGE') || name.includes('THRIFT')) && i.index >= 100;
+                           name.includes('VINTAGE') || name.includes('THRIFT')) && (i.pct || 0) > 0;
                 });
                 if (sustainableItems.length > 0) {
                     const topSustainable = sustainableItems
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 5)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     emergingPatterns.push(`<span class="insight-label">Sustainability trend:</span> <span class="insight-value">Consumers shifting toward sustainable and minimal fashion choices. Top items: ${topSustainable}</span>`);
                 }
@@ -26651,13 +26653,13 @@
                     const name = i.name.toUpperCase();
                     const cat = i.category.toUpperCase();
                     return (name.includes('TIKTOK') || name.includes('SHORTS') || name.includes('REELS') ||
-                           cat.includes('SHORT') || cat.includes('CLIP')) && i.index >= 100;
+                           cat.includes('SHORT') || cat.includes('CLIP')) && (i.pct || 0) > 0;
                 });
                 if (shortFormItems.length > 0) {
                     const topShortForm = shortFormItems
-                        .sort((a, b) => b.index - a.index)
+                        .sort((a, b) => (b.pct || 0) - (a.pct || 0))
                         .slice(0, 5)
-                        .map(i => `${i.name} (${i.index})`)
+                        .map(i => `${i.name} (${(i.pct || 0).toFixed(2)}%)`)
                         .join(', ');
                     emergingPatterns.push(`<span class="insight-label">Short-form content:</span> <span class="insight-value">Consumers preferring shorter content formats over long-form streaming. Top platforms: ${topShortForm}</span>`);
                 }
@@ -26680,8 +26682,8 @@
                 profileName: profileName,
                 profileCategory: profileCategory,
                 insights: {
-                    beforeEngagement: beforeEngagement.map(i => `${i.name} (${i.category}) - Index ${i.index}`),
-                    afterEngagement: afterEngagement.map(i => `${i.name} (${i.category}) - Index ${i.index}`),
+                    beforeEngagement: beforeEngagement.map(i => `${i.name} (${i.category}) - ${(i.pct || 0).toFixed(2)}%`),
+                    afterEngagement: afterEngagement.map(i => `${i.name} (${i.category}) - ${(i.pct || 0).toFixed(2)}%`),
                     competitiveBehaviors: competitiveBehaviors.map(b => b.replace(/<[^>]*>/g, '')), // Strip HTML
                     categoryExitSignals: categoryExitSignals.map(s => s.replace(/<[^>]*>/g, '')),
                     replacements: replacements.map(r => r.replace(/<[^>]*>/g, '')),
