@@ -4259,6 +4259,58 @@
             background: rgba(255,255,255,0.03);
             border-radius: 8px;
         }
+        
+        /* Audience Takeaways */
+        .audience-takeaways {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+        .audience-takeaways-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .audience-takeaways ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .audience-takeaways li {
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            padding: 0.5rem 0;
+            padding-left: 1.25rem;
+            position: relative;
+            line-height: 1.4;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .audience-takeaways li:last-child {
+            border-bottom: none;
+        }
+        .audience-takeaways li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: var(--accent-cyan);
+            font-weight: bold;
+        }
+        .audience-takeaways .takeaway-highlight {
+            color: var(--accent-lime);
+            font-weight: 600;
+        }
+        .audience-takeaways .takeaway-over {
+            color: #10b981;
+        }
+        .audience-takeaways .takeaway-under {
+            color: #ef4444;
+        }
         .snapshot-label {
             font-size: 0.7rem;
             color: var(--text-secondary);
@@ -10908,6 +10960,9 @@
                                 </div>
                                 <div id="audienceSnapshot" class="audience-snapshot">
                                     <div class="snapshot-loading">Loading audience profile...</div>
+                                </div>
+                                <!-- Audience vs Gen Pop Takeaways -->
+                                <div id="audienceTakeaways" class="audience-takeaways" style="display: none;">
                                 </div>
                             </div>
                             
@@ -22430,6 +22485,93 @@
             return AGE_DISPLAY_LABELS[lower] || AGE_DISPLAY_LABELS[originalLabel] || originalLabel;
         }
         
+        // Generate audience vs Gen Pop takeaways
+        function generateAudienceTakeaways(demoInsights, data) {
+            const takeawaysContainer = document.getElementById('audienceTakeaways');
+            if (!takeawaysContainer) return;
+            
+            const takeaways = [];
+            const brandName = currentDashboardData?.brandName || 'This audience';
+            
+            // Analyze each demographic insight
+            demoInsights.forEach(d => {
+                const idx = d.index;
+                const idxMultiplier = (idx / 100).toFixed(2);
+                const pct = parseFloat(d.sub);
+                
+                if (d.label === 'Dominant Gender') {
+                    if (idx >= 120) {
+                        takeaways.push(`<span class="takeaway-over">Skews ${d.value.toLowerCase()}</span> — ${idxMultiplier}x more likely to be ${d.value.toLowerCase()} than Gen Pop`);
+                    } else if (idx <= 80) {
+                        takeaways.push(`<span class="takeaway-under">Under-indexes on ${d.value.toLowerCase()}</span> — only ${idxMultiplier}x vs Gen Pop`);
+                    } else {
+                        takeaways.push(`Gender distribution is <span class="takeaway-highlight">similar to Gen Pop</span> (${d.value} at ${d.sub})`);
+                    }
+                }
+                
+                if (d.label === 'Largest Age Group') {
+                    if (idx >= 150) {
+                        takeaways.push(`<span class="takeaway-over">Significantly younger/older skew</span> — ${d.value} age group is ${idxMultiplier}x over-indexed`);
+                    } else if (idx >= 120) {
+                        takeaways.push(`<span class="takeaway-over">Age skews toward ${d.value}</span> — ${idxMultiplier}x more concentrated than Gen Pop`);
+                    } else if (idx <= 80) {
+                        takeaways.push(`Age distribution <span class="takeaway-under">under-indexes</span> in ${d.value} bracket (${idxMultiplier}x)`);
+                    } else {
+                        takeaways.push(`Age profile is <span class="takeaway-highlight">balanced</span> with ${d.value} as the largest group`);
+                    }
+                }
+                
+                if (d.label === 'Top Ethnicity') {
+                    if (idx >= 130) {
+                        takeaways.push(`<span class="takeaway-over">Strong ${d.value} representation</span> — ${idxMultiplier}x higher than Gen Pop`);
+                    } else if (idx <= 70) {
+                        takeaways.push(`<span class="takeaway-under">Lower ${d.value} representation</span> than Gen Pop (${idxMultiplier}x)`);
+                    } else {
+                        takeaways.push(`Ethnicity mix is <span class="takeaway-highlight">representative</span> of Gen Pop`);
+                    }
+                }
+                
+                if (d.label === 'Top Income') {
+                    const isHighIncome = d.value.includes('150') || d.value.includes('250') || d.value.includes('100');
+                    const isLowIncome = d.value.includes('40') || d.value.includes('60');
+                    
+                    if (idx >= 130 && isHighIncome) {
+                        takeaways.push(`<span class="takeaway-over">Affluent audience</span> — ${d.value} bracket is ${idxMultiplier}x over Gen Pop`);
+                    } else if (idx >= 120) {
+                        takeaways.push(`<span class="takeaway-over">Income skews toward ${d.value}</span> — ${idxMultiplier}x concentration`);
+                    } else if (idx <= 80) {
+                        takeaways.push(`Income <span class="takeaway-under">under-indexes</span> in ${d.value} range (${idxMultiplier}x)`);
+                    } else {
+                        takeaways.push(`Income distribution is <span class="takeaway-highlight">aligned with Gen Pop</span>`);
+                    }
+                }
+            });
+            
+            // Add overall summary based on average index
+            const avgIdx = demoInsights.reduce((sum, d) => sum + d.index, 0) / demoInsights.length;
+            if (avgIdx >= 115) {
+                takeaways.push(`<strong>Overall:</strong> This audience has <span class="takeaway-over">distinct demographic characteristics</span> compared to the general population`);
+            } else if (avgIdx <= 90) {
+                takeaways.push(`<strong>Overall:</strong> This audience <span class="takeaway-under">differs from Gen Pop</span> in key demographics`);
+            } else {
+                takeaways.push(`<strong>Overall:</strong> Demographics are <span class="takeaway-highlight">broadly representative</span> of the US population`);
+            }
+            
+            if (takeaways.length > 0) {
+                takeawaysContainer.innerHTML = `
+                    <div class="audience-takeaways-title">
+                        <span>📊</span> Key Takeaways vs Gen Pop
+                    </div>
+                    <ul>
+                        ${takeaways.map(t => `<li>${t}</li>`).join('')}
+                    </ul>
+                `;
+                takeawaysContainer.style.display = 'block';
+            } else {
+                takeawaysContainer.style.display = 'none';
+            }
+        }
+        
         // Map original income labels to display labels
         const INCOME_DISPLAY_LABELS = {
             '$40k-$60k': '$40K - $59,999',
@@ -26888,6 +27030,9 @@
                     <div class="snapshot-index" style="font-size: 0.75rem; font-weight: 600; color: ${idxColor}; margin-top: 0.25rem;">${idxValue}x</div>
                 </div>
             `}).join('') || '<div class="snapshot-loading">No demographic data</div>';
+            
+            // Generate audience vs Gen Pop takeaways
+            generateAudienceTakeaways(demoInsights, data);
             
             // Metrics row
             document.getElementById('insightsSampleSize').textContent = formatNumber(data.sampleSize || 0);
