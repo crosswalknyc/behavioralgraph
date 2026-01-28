@@ -32290,28 +32290,196 @@
                 threats: []
             };
             
-            // Collect all behavioral items for primary brand
-            const primaryItems = [];
-            if (primaryBrand.behavioral) {
-                Object.values(primaryBrand.behavioral).forEach(arr => {
-                    if (Array.isArray(arr)) {
-                        arr.forEach(item => {
-                            if (item.index && item.index > 0) {
-                                primaryItems.push({
-                                    ...item,
-                                    name: item.name || item.value || 'Unknown',
-                                    category: item.category || 'Other'
-                                });
-                            }
-                        });
-                    }
-                });
+            if (!otherProfiles || otherProfiles.length === 0) {
+                swot.strengths.push('No competitors selected for comparison. Add more profiles to see competitive insights.');
+                return swot;
             }
             
-            // Calculate average index
-            const avgIndex = primaryItems.length > 0 
-                ? Math.round(primaryItems.reduce((sum, i) => sum + (i.index || 0), 0) / primaryItems.length)
+            // Collect all behavioral items for primary brand and competitors
+            const collectItems = (profile) => {
+                const items = [];
+                if (profile.behavioral) {
+                    Object.values(profile.behavioral).forEach(arr => {
+                        if (Array.isArray(arr)) {
+                            arr.forEach(item => {
+                                if (item.index && item.index > 0) {
+                                    items.push({
+                                        ...item,
+                                        name: (item.name || item.value || 'Unknown').toLowerCase().trim(),
+                                        category: (item.category || 'Other').split('/')[0]
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+                return items;
+            };
+            
+            const primaryItems = collectItems(primaryBrand);
+            const competitorData = otherProfiles.map(p => ({
+                name: p.name,
+                items: collectItems(p),
+                demographics: p.demographics || {},
+                medianAge: p.medianAge || 0,
+                sampleSize: p.sampleSize || 0
+            }));
+            
+            // Calculate metrics for primary brand
+            const primaryAvgIndex = primaryItems.length > 0 
+                ? primaryItems.reduce((sum, i) => sum + (i.index || 0), 0) / primaryItems.length
                 : 0;
+            const primaryDemographics = primaryBrand.demographics || {};
+            
+            // Calculate top categories for primary brand
+            const getTopCategories = (items, topN = 5) => {
+                const catStats = {};
+                items.forEach(item => {
+                    const cat = item.category || 'Other';
+                    if (!catStats[cat]) catStats[cat] = { items: [], totalIndex: 0, count: 0 };
+                    catStats[cat].items.push(item);
+                    catStats[cat].totalIndex += item.index || 0;
+                    catStats[cat].count++;
+                });
+                return Object.entries(catStats)
+                    .map(([cat, stats]) => ({
+                        category: cat,
+                        avgIndex: Math.round(stats.totalIndex / stats.count),
+                        count: stats.count,
+                        topItems: stats.items.sort((a, b) => b.index - a.index).slice(0, 3)
+                    }))
+                    .filter(c => c.count >= 2)
+                    .sort((a, b) => b.avgIndex - a.avgIndex)
+                    .slice(0, topN);
+            };
+            
+            const primaryTopCategories = getTopCategories(primaryItems);
+            
+            // === STRENGTHS: Competitive Advantages ===
+            
+            // 1. Higher engagement vs competitors
+            const competitorAvgIndices = competitorData.map(c => ({
+                name: c.name,
+                avgIndex: c.items.length > 0 
+                    ? c.items.reduce((sum, i) => sum + (i.index || 0), 0) / c.items.length
+                    : 0
+            }));
+            const strongerThan = competitorAvgIndices.filter(c => primaryAvgIndex > c.avgIndex * 1.1);
+            if (strongerThan.length > 0) {
+                const names = strongerThan.map(c => `${c.name} (${Math.round(c.avgIndex)})`).join(', ');
+                swot.strengths.push(`Higher overall engagement (${Math.round(primaryAvgIndex)}) vs. ${names} - stronger brand affinity`);
+            }
+            
+            // 2. Demographic advantages
+            const primaryAge = primaryDemographics.age || {};
+            const primaryGender = primaryDemographics.gender || {};
+            const primaryIncome = primaryDemographics.income || {};
+            const primaryEducation = primaryDemographics.education || {};
+            
+            // Age group concentration advantage
+            const topPrimaryAge = Object.entries(primaryAge).sort((a, b) => b[1] - a[1])[0];
+            if (topPrimaryAge) {
+                const competitorsWithLower = competitorData.filter(c => {
+                    const compAge = c.demographics.age || {};
+                    const compTopAge = Object.entries(compAge).sort((a, b) => b[1] - a[1])[0];
+                    return compTopAge && compTopAge[1] < topPrimaryAge[1] * 0.8;
+                });
+                if (competitorsWithLower.length > 0) {
+                    const names = competitorsWithLower.map(c => c.name).join(', ');
+                    swot.strengths.push(`Stronger ${topPrimaryAge[0]} concentration (${topPrimaryAge[1].toFixed(1)}%) vs. ${names} - better age targeting`);
+                }
+            }
+            
+            // 3. Category dominance vs competitors
+            competitorData.forEach(comp => {
+                const compTopCategories = getTopCategories(comp.items);
+                primaryTopCategories.forEach(primaryCat => {
+                    const compMatch = compTopCategories.find(c => c.category === primaryCat.category);
+                    if (compMatch && primaryCat.avgIndex > compMatch.avgIndex * 1.15) {
+                        const topItems = primaryCat.topItems.map(i => `${i.name} (${i.index})`).join(', ');
+                        swot.strengths.push(`Dominates ${primaryCat.category} vs. ${comp.name}: ${topItems} (${primaryCat.avgIndex} vs. ${compMatch.avgIndex} avg index)`);
+                    }
+                });
+            });
+            
+            // 4. Sample size advantage
+            const largerThan = competitorData.filter(c => primaryBrand.sampleSize > c.sampleSize * 1.2);
+            if (largerThan.length > 0) {
+                const names = largerThan.map(c => `${c.name} (${formatNumber(c.sampleSize)})`).join(', ');
+                swot.strengths.push(`Larger sample size (${formatNumber(primaryBrand.sampleSize)}) vs. ${names} - more reliable insights`);
+            }
+            
+            // === WEAKNESSES: Competitive Disadvantages ===
+            
+            // 1. Lower engagement vs competitors
+            const weakerThan = competitorAvgIndices.filter(c => c.avgIndex > primaryAvgIndex * 1.1);
+            if (weakerThan.length > 0) {
+                const names = weakerThan.map(c => `${c.name} (${Math.round(c.avgIndex)})`).join(', ');
+                swot.weaknesses.push(`Lower overall engagement (${Math.round(primaryAvgIndex)}) vs. ${names} - competitive disadvantage in brand affinity`);
+            }
+            
+            // 2. Demographic weaknesses - where competitors are stronger
+            competitorData.forEach(comp => {
+                const compAge = comp.demographics.age || {};
+                const compGender = comp.demographics.gender || {};
+                const compIncome = comp.demographics.income || {};
+                const compEducation = comp.demographics.education || {};
+                
+                // Age group weaknesses
+                Object.entries(compAge).forEach(([ageGroup, compPct]) => {
+                    const primaryPct = primaryAge[ageGroup] || 0;
+                    if (compPct > primaryPct * 1.3 && compPct > 15) {
+                        swot.weaknesses.push(`${comp.name} has stronger ${ageGroup} concentration (${compPct.toFixed(1)}% vs. ${primaryPct.toFixed(1)}%) - competitive gap in this demographic`);
+                    }
+                });
+                
+                // Income weaknesses
+                const compTopIncome = Object.entries(compIncome).sort((a, b) => b[1] - a[1])[0];
+                const primaryTopIncome = Object.entries(primaryIncome).sort((a, b) => b[1] - a[1])[0];
+                if (compTopIncome && primaryTopIncome && compTopIncome[1] > primaryTopIncome[1] * 1.2) {
+                    swot.weaknesses.push(`${comp.name} has higher ${compTopIncome[0]} concentration (${compTopIncome[1].toFixed(1)}% vs. ${primaryTopIncome[1].toFixed(1)}%) - premium market advantage`);
+                }
+            });
+            
+            // 3. Category weaknesses - where competitors dominate
+            competitorData.forEach(comp => {
+                const compTopCategories = getTopCategories(comp.items);
+                compTopCategories.forEach(compCat => {
+                    const primaryMatch = primaryTopCategories.find(p => p.category === compCat.category);
+                    if (!primaryMatch || compCat.avgIndex > primaryMatch.avgIndex * 1.2) {
+                        const topItems = compCat.topItems.map(i => `${i.name} (${i.index})`).join(', ');
+                        if (primaryMatch) {
+                            swot.weaknesses.push(`${comp.name} dominates ${compCat.category}: ${topItems} (${compCat.avgIndex} vs. ${primaryMatch.avgIndex} avg index) - competitive disadvantage`);
+                        } else {
+                            swot.weaknesses.push(`${comp.name} owns ${compCat.category} category: ${topItems} (${compCat.avgIndex} avg) - category gap for ${primaryBrand.name}`);
+                        }
+                    }
+                });
+            });
+            
+            // 4. Median age disadvantage
+            const primaryMedianAge = primaryBrand.medianAge || 0;
+            if (primaryMedianAge > 0) {
+                const youngerCompetitors = competitorData.filter(c => c.medianAge > 0 && c.medianAge < primaryMedianAge - 3);
+                const olderCompetitors = competitorData.filter(c => c.medianAge > primaryMedianAge + 3);
+                
+                if (youngerCompetitors.length > 0) {
+                    const names = youngerCompetitors.map(c => `${c.name} (${c.medianAge})`).join(', ');
+                    swot.weaknesses.push(`Older audience (${primaryMedianAge}) vs. ${names} - may indicate aging brand risk`);
+                }
+                
+                if (olderCompetitors.length > 0) {
+                    const names = olderCompetitors.map(c => `${c.name} (${c.medianAge})`).join(', ');
+                    swot.weaknesses.push(`Younger audience (${primaryMedianAge}) vs. ${names} - less established market position`);
+                }
+            }
+            
+            // 5. Sample size weakness
+            const smallerThan = competitorData.filter(c => c.sampleSize > primaryBrand.sampleSize * 1.5);
+            if (smallerThan.length > 0) {
+                const names = smallerThan.map(c => `${c.name} (${formatNumber(c.sampleSize)})`).join(', ');
+                swot.weaknesses.push(`Smaller sample (${formatNumber(primaryBrand.sampleSize)}) vs. ${names} - limits insight reliability`);
+            }
             
             // High index items (150+)
             const highIndexItems = primaryItems.filter(i => i.index >= 150).sort((a, b) => b.index - a.index);
@@ -32430,130 +32598,160 @@
                 }
             }
             
-            // OPPORTUNITIES - List actual items with growth potential
+            // === OPPORTUNITIES: Growth & Market Expansion ===
+            
+            // 1. Demographic expansion opportunities
+            competitorData.forEach(comp => {
+                const compAge = comp.demographics.age || {};
+                const compGender = comp.demographics.gender || {};
+                
+                // Age groups where competitor is strong but primary is weak
+                Object.entries(compAge).forEach(([ageGroup, compPct]) => {
+                    const primaryPct = primaryAge[ageGroup] || 0;
+                    if (compPct > 20 && primaryPct < compPct * 0.7) {
+                        swot.opportunities.push(`Expand ${ageGroup} reach: ${comp.name} has ${compPct.toFixed(1)}% vs. ${primaryPct.toFixed(1)}% - untapped demographic opportunity`);
+                    }
+                });
+                
+                // Gender opportunities
+                Object.entries(compGender).forEach(([gender, compPct]) => {
+                    const primaryPct = primaryGender[gender] || 0;
+                    if (compPct > 30 && primaryPct < compPct * 0.8) {
+                        swot.opportunities.push(`Expand ${gender} market: ${comp.name} has ${compPct.toFixed(1)}% vs. ${primaryPct.toFixed(1)}% - gender targeting opportunity`);
+                    }
+                });
+            });
+            
+            // 2. Category expansion - categories where competitors excel but primary doesn't
+            competitorData.forEach(comp => {
+                const compTopCategories = getTopCategories(comp.items);
+                compTopCategories.forEach(compCat => {
+                    const primaryMatch = primaryTopCategories.find(p => p.category === compCat.category);
+                    if (!primaryMatch && compCat.avgIndex >= 120) {
+                        const topItems = compCat.topItems.map(i => `${i.name} (${i.index})`).join(', ');
+                        swot.opportunities.push(`Enter ${compCat.category} category: ${comp.name} excels here (${compCat.avgIndex} avg, ${topItems}) - white space opportunity`);
+                    }
+                });
+            });
+            
+            // 3. Medium-index items with growth potential
             const mediumIndexItems = primaryItems.filter(i => i.index >= 100 && i.index < 150).sort((a, b) => b.index - a.index);
-            if (mediumIndexItems.length > 0) {
-                const growthItems = mediumIndexItems.slice(0, 8).map(i => `${i.name} (${i.index})`).join(', ');
-                swot.opportunities.push(`Growth potential items (100-150 index): ${growthItems}${mediumIndexItems.length > 8 ? ` +${mediumIndexItems.length - 8} more` : ''} - targeted campaigns could boost engagement`);
+            if (mediumIndexItems.length > 5) {
+                const growthItems = mediumIndexItems.slice(0, 5).map(i => `${i.name} (${i.index})`).join(', ');
+                swot.opportunities.push(`Growth potential items (100-150 index): ${growthItems} - targeted campaigns could boost to 150+ index`);
             }
             
-            // Demographic opportunities with context
-            const demographics = primaryBrand.demographics || {};
-            const ageGroups = Object.entries(demographics.age || {})
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 3);
-            if (ageGroups.length > 0) {
-                const ageList = ageGroups.map(([age, pct]) => `${age} (${pct.toFixed(1)}%)`).join(', ');
-                swot.opportunities.push(`Age concentration: ${ageList} - prime targets for age-specific messaging and campaigns`);
-            }
-            
-            // Geographic opportunities
+            // 4. Geographic opportunities
             if (primaryBrand.locations && primaryBrand.locations.length > 0) {
                 const topLocations = primaryBrand.locations
-                    .filter(l => l.index > 100)
+                    .filter(l => l.index > 120)
                     .sort((a, b) => b.index - a.index)
-                    .slice(0, 5);
+                    .slice(0, 3);
                 if (topLocations.length > 0) {
                     const locList = topLocations.map(l => `${l.name} (${l.index})`).join(', ');
                     swot.opportunities.push(`Geographic strength: ${locList} - regional expansion and local marketing opportunities`);
                 }
             }
             
-            // Cross-category opportunities - list actual brands/items
-            if (highIndexItems.length > 0) {
-                const topPartners = highIndexItems
-                    .slice(0, 8)
-                    .map(i => `${i.name} (${i.index})`)
-                    .join(', ');
-                swot.opportunities.push(`Partnership opportunities: ${topPartners}${highIndexItems.length > 8 ? ` +${highIndexItems.length - 8} more` : ''} - co-marketing potential`);
+            // 5. Income/Education opportunities
+            const primaryTopIncome = Object.entries(primaryIncome).sort((a, b) => b[1] - a[1])[0];
+            if (primaryTopIncome && primaryTopIncome[1] > 25) {
+                swot.opportunities.push(`Strong ${primaryTopIncome[0]} concentration (${primaryTopIncome[1].toFixed(1)}%) - premium positioning opportunity`);
             }
             
-            // THREATS - List actual competitors and overlapping items
-            if (otherProfiles.length > 0) {
-                // Find specific items where competitors outperform
-                const competitorData = otherProfiles.map(p => {
-                    const items = [];
-                    if (p.behavioral) {
-                        Object.values(p.behavioral).forEach(arr => {
-                            if (Array.isArray(arr)) {
-                                arr.forEach(item => {
-                                    if (item.index && item.index >= 150) {
-                                        items.push({
-                                            name: item.name || item.value || 'Unknown',
-                                            index: item.index
-                                        });
-                                    }
-                                });
-                            }
-                        });
-                    }
-                    return {
-                        name: p.name,
-                        highIndexItems: items.sort((a, b) => b.index - a.index)
-                    };
-                });
-                
-                // Find overlapping high-value items
-                competitorData.forEach(comp => {
-                    const overlap = comp.highIndexItems.filter(compItem => 
-                        highIndexItems.some(primaryItem => 
-                            primaryItem.name.toLowerCase() === compItem.name.toLowerCase()
-                        )
-                    );
-                    if (overlap.length > 0) {
-                        const overlapList = overlap.slice(0, 5).map(i => `${i.name} (${i.index})`).join(', ');
-                        swot.threats.push(`Competitive overlap with ${comp.name}: ${overlapList}${overlap.length > 5 ? ` +${overlap.length - 5} more` : ''} - differentiation needed`);
-                    }
-                    
-                    // Find where competitor outperforms
-                    const competitorWins = comp.highIndexItems.filter(compItem => {
-                        const primaryMatch = primaryItems.find(p => 
-                            p.name.toLowerCase() === compItem.name.toLowerCase()
-                        );
-                        return primaryMatch && compItem.index > primaryMatch.index * 1.2;
-                    });
-                    if (competitorWins.length > 0) {
-                        const winsList = competitorWins.slice(0, 5).map(i => `${i.name} (${i.index})`).join(', ');
-                        swot.threats.push(`${comp.name} outperforms in: ${winsList}${competitorWins.length > 5 ? ` +${competitorWins.length - 5} more` : ''} - competitive pressure`);
-                    }
-                });
+            const primaryTopEducation = Object.entries(primaryEducation).sort((a, b) => b[1] - a[1])[0];
+            if (primaryTopEducation && primaryTopEducation[1] > 30) {
+                swot.opportunities.push(`High ${primaryTopEducation[0]} concentration (${primaryTopEducation[1].toFixed(1)}%) - sophisticated messaging opportunity`);
             }
             
-            // Under-indexing threats - list actual categories
-            if (lowIndexItems.length > 10) {
-                const categoryGroups = {};
-                lowIndexItems.forEach(item => {
-                    const cat = item.category?.split('/')[0] || 'Other';
-                    if (!categoryGroups[cat]) categoryGroups[cat] = [];
-                    categoryGroups[cat].push(item);
+            // === THREATS: Competitive Risks & Market Challenges ===
+            
+            // 1. Direct competitive overlap - shared high-value items
+            const primaryHighIndex = primaryItems.filter(i => i.index >= 150);
+            competitorData.forEach(comp => {
+                const compHighIndex = comp.items.filter(i => i.index >= 150);
+                const overlap = compHighIndex.filter(compItem => 
+                    primaryHighIndex.some(primaryItem => 
+                        primaryItem.name === compItem.name
+                    )
+                );
+                if (overlap.length >= 3) {
+                    const overlapList = overlap.slice(0, 5).map(i => `${i.name} (${i.index})`).join(', ');
+                    swot.threats.push(`High overlap with ${comp.name}: ${overlapList}${overlap.length > 5 ? ` +${overlap.length - 5} more` : ''} - differentiation risk`);
+                }
+            });
+            
+            // 2. Where competitors significantly outperform in same items
+            competitorData.forEach(comp => {
+                const outperforms = [];
+                comp.items.forEach(compItem => {
+                    if (compItem.index >= 150) {
+                        const primaryMatch = primaryItems.find(p => p.name === compItem.name);
+                        if (primaryMatch && compItem.index > primaryMatch.index * 1.3) {
+                            outperforms.push({ name: compItem.name, compIndex: compItem.index, primaryIndex: primaryMatch.index });
+                        }
+                    }
                 });
-                const worstCategories = Object.entries(categoryGroups)
-                    .map(([cat, items]) => ({ cat, count: items.length, avgIndex: Math.round(items.reduce((s, i) => s + i.index, 0) / items.length) }))
-                    .sort((a, b) => a.avgIndex - b.avgIndex)
-                    .slice(0, 3);
-                
-                if (worstCategories.length > 0) {
-                    const catList = worstCategories.map(c => `${c.cat} (${c.count} items, avg ${c.avgIndex})`).join(', ');
-                    swot.threats.push(`Weak categories: ${catList} - risk of audience erosion in these areas`);
+                if (outperforms.length >= 3) {
+                    const list = outperforms.slice(0, 5).map(o => `${o.name} (${o.compIndex} vs. ${o.primaryIndex})`).join(', ');
+                    swot.threats.push(`${comp.name} significantly outperforms: ${list}${outperforms.length > 5 ? ` +${outperforms.length - 5} more` : ''} - competitive pressure`);
+                }
+            });
+            
+            // 3. Demographic threats - where competitors are gaining share
+            competitorData.forEach(comp => {
+                const compAge = comp.demographics.age || {};
+                Object.entries(compAge).forEach(([ageGroup, compPct]) => {
+                    const primaryPct = primaryAge[ageGroup] || 0;
+                    if (compPct > primaryPct * 1.4 && compPct > 20) {
+                        swot.threats.push(`${comp.name} has stronger ${ageGroup} share (${compPct.toFixed(1)}% vs. ${primaryPct.toFixed(1)}%) - demographic share loss risk`);
+                    }
+                });
+            });
+            
+            // 4. Category threats - categories where competitors dominate
+            competitorData.forEach(comp => {
+                const compTopCategories = getTopCategories(comp.items);
+                compTopCategories.forEach(compCat => {
+                    const primaryMatch = primaryTopCategories.find(p => p.category === compCat.category);
+                    if (primaryMatch && compCat.avgIndex > primaryMatch.avgIndex * 1.25) {
+                        const topItems = compCat.topItems.map(i => `${i.name} (${i.index})`).join(', ');
+                        swot.threats.push(`${comp.name} dominates ${compCat.category}: ${topItems} (${compCat.avgIndex} vs. ${primaryMatch.avgIndex}) - category leadership threat`);
+                    }
+                });
+            });
+            
+            // 5. Audience aging threat
+            if (primaryMedianAge > 0) {
+                const muchYoungerCompetitors = competitorData.filter(c => 
+                    c.medianAge > 0 && c.medianAge < primaryMedianAge - 5
+                );
+                if (muchYoungerCompetitors.length > 0) {
+                    const names = muchYoungerCompetitors.map(c => `${c.name} (${c.medianAge})`).join(', ');
+                    swot.threats.push(`Older audience (${primaryMedianAge}) vs. ${names} - brand aging risk, need to attract younger consumers`);
                 }
             }
             
-            // Sample size threat with competitor names
-            if (primaryBrand.sampleSize < 3000) {
-                const largerCompetitors = otherProfiles
-                    .filter(p => p.sampleSize > primaryBrand.sampleSize * 2)
-                    .map(p => `${p.name} (${formatNumber(p.sampleSize)})`)
-                    .join(', ');
-                if (largerCompetitors) {
-                    swot.threats.push(`Smaller sample (${formatNumber(primaryBrand.sampleSize)}) vs. ${largerCompetitors} - may limit market insights and campaign effectiveness`);
-                }
+            // 6. Sample size threat
+            const muchLargerCompetitors = competitorData.filter(c => c.sampleSize > primaryBrand.sampleSize * 2);
+            if (muchLargerCompetitors.length > 0) {
+                const names = muchLargerCompetitors.map(c => `${c.name} (${formatNumber(c.sampleSize)})`).join(', ');
+                swot.threats.push(`Smaller sample (${formatNumber(primaryBrand.sampleSize)}) vs. ${names} - competitive disadvantage in data quality and insights`);
             }
             
             // Ensure we have at least something in each category
-            if (swot.strengths.length === 0) swot.strengths.push('Analyzing strengths...');
-            if (swot.weaknesses.length === 0) swot.weaknesses.push('No significant weaknesses identified');
-            if (swot.opportunities.length === 0) swot.opportunities.push('Analyzing opportunities...');
-            if (swot.threats.length === 0) swot.threats.push('No significant threats identified');
+            if (swot.strengths.length === 0) {
+                swot.strengths.push('No significant competitive strengths identified vs. selected competitors');
+            }
+            if (swot.weaknesses.length === 0) {
+                swot.weaknesses.push('No significant competitive weaknesses identified vs. selected competitors');
+            }
+            if (swot.opportunities.length === 0) {
+                swot.opportunities.push('No significant growth opportunities identified from competitive analysis');
+            }
+            if (swot.threats.length === 0) {
+                swot.threats.push('No significant competitive threats identified from selected competitors');
+            }
             
             return swot;
         }
