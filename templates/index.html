@@ -32239,11 +32239,13 @@
                 return items;
             };
             
-            // Get top categories for a profile
+            // Get top categories for a profile (exclude "Other" as it represents absence of data)
             const getTopCategories = (items, topN = 5) => {
                 const catStats = {};
                 items.forEach(item => {
                     const cat = item.category || 'Other';
+                    // Skip "Other" category as it represents absence of data
+                    if (cat.toUpperCase() === 'OTHER') return;
                     if (!catStats[cat]) catStats[cat] = { items: [], totalIndex: 0, count: 0, totalPct: 0, totalProjection: 0 };
                     catStats[cat].items.push(item);
                     catStats[cat].totalIndex += item.index || 0;
@@ -32260,7 +32262,7 @@
                         count: stats.count,
                         topItems: stats.items.sort((a, b) => b.index - a.index).slice(0, 3)
                     }))
-                    .filter(c => c.count >= 2)
+                    .filter(c => c.count >= 2 && c.category.toUpperCase() !== 'OTHER')
                     .sort((a, b) => b.avgIndex - a.avgIndex)
                     .slice(0, topN);
             };
@@ -32748,11 +32750,13 @@
                 : 0;
             const primaryDemographics = primaryBrand.demographics || {};
             
-            // Calculate top categories for primary brand (using filtered items)
+            // Calculate top categories for primary brand (using filtered items, exclude "Other" as it represents absence of data)
             const getTopCategories = (items, topN = 5) => {
                 const catStats = {};
                 items.forEach(item => {
                     const cat = item.category || 'Other';
+                    // Skip "Other" category as it represents absence of data
+                    if (cat.toUpperCase() === 'OTHER') return;
                     if (!catStats[cat]) catStats[cat] = { items: [], totalIndex: 0, count: 0 };
                     catStats[cat].items.push(item);
                     catStats[cat].totalIndex += item.index || 0;
@@ -32765,7 +32769,7 @@
                         count: stats.count,
                         topItems: stats.items.sort((a, b) => b.index - a.index).slice(0, 3)
                     }))
-                    .filter(c => c.count >= 2)
+                    .filter(c => c.count >= 2 && c.category.toUpperCase() !== 'OTHER')
                     .sort((a, b) => b.avgIndex - a.avgIndex)
                     .slice(0, topN);
             };

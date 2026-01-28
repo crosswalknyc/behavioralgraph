@@ -5222,11 +5222,13 @@ COMPETITORS: {', '.join([c['name'] for c in summary_data['competitors']]) if sum
 FULL DATA:
 {json.dumps(summary_data, indent=2)}
 
+IMPORTANT: The "Other" category represents the absence of data and should NEVER be used in analysis, comparisons, or callouts. Ignore any "Other" category entries completely.
+
 Your task: Generate a strategic executive summary that:
 1. **Identifies the most critical business insights** - not just data points, but what they mean for strategy
 2. **Highlights competitive advantages and vulnerabilities** - where does the primary brand win vs. competitors and Gen Pop?
 3. **Reveals demographic shifts and implications** - is the audience aging? shifting gender? income changes?
-4. **Explains category and interest patterns** - what does this tell us about positioning and messaging?
+4. **Explains category and interest patterns** - what does this tell us about positioning and messaging? (EXCLUDE "Other" category - it represents missing data)
 5. **Provides strategic recommendations** - what should leadership focus on?
 
 Format your response as JSON:
@@ -5234,7 +5236,7 @@ Format your response as JSON:
     "executiveOverview": "2-3 sentence high-level strategic overview",
     "demographicsInsights": "Strategic insights about demographics - what they mean, not just numbers. Compare to competitors and Gen Pop. Are they aging? Shifting? What are the implications?",
     "competitivePositioning": "How the primary brand positions vs. competitors - strengths, weaknesses, opportunities",
-    "categoryAnalysis": "Strategic insights about purchased categories - what this reveals about brand positioning and consumer behavior",
+    "categoryAnalysis": "Strategic insights about purchased categories - what this reveals about brand positioning and consumer behavior. DO NOT mention or analyze the 'Other' category as it represents missing data.",
     "interestBehaviorInsights": "What the top interests/behaviors reveal about the consumer mindset and brand fit",
     "keyStrategicRecommendations": ["Recommendation 1", "Recommendation 2", "Recommendation 3"],
     "criticalWarnings": ["Any red flags or risks to highlight"],
