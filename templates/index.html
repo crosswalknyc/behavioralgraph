@@ -11624,8 +11624,16 @@
                                     </div>
                                 </div>
                                 <!-- Right: Beat/Miss Earnings -->
-                                <div id="beatMissCard" class="stat-card" style="display: none; min-height: 0; padding: 0.75rem 1rem;">
-                                    <!-- Content will be populated by analyzeBeatMiss function -->
+                                <div id="beatMissCard" class="stat-card" style="min-height: 0; padding: 0.75rem 1rem;">
+                                    <!-- Loading state shown by default, content will be populated by analyzeBeatMiss function -->
+                                    <div id="beatMissLoading" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 120px;">
+                                        <div style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Beat/Miss Earnings</div>
+                                        <div class="loading-spinner" style="width: 24px; height: 24px; border: 3px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 0.5rem;"></div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary);">Analyzing...</div>
+                                    </div>
+                                    <div id="beatMissContent" style="display: none;">
+                                        <!-- Content populated by analyzeBeatMiss -->
+                                    </div>
                                 </div>
                             </div>
                             
@@ -11650,7 +11658,7 @@
                             </div>
                             
                             <!-- Net Growth Trend Card (Full Width) -->
-                            <div class="stat-card has-tooltip" id="netGrowthTrendCard" style="display: none; margin-bottom: 0.75rem; padding: 0.75rem 1rem; cursor: pointer; transition: all 0.2s ease;" onclick="switchTickerTab(event, 'trends')" data-tooltip="Click to view detailed trends analysis">
+                            <div class="stat-card has-tooltip" id="netGrowthTrendCard" style="display: none; margin-bottom: 0.75rem; padding: 0.75rem 1rem; cursor: pointer; transition: all 0.2s ease;" onclick="showTickerTab('trends')" data-tooltip="Click to view detailed trends analysis">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                                     <div class="stat-label" style="font-size: 0.75rem;">📊 Net Growth Trend (Last 7 Days)</div>
                                     <span style="font-size: 0.65rem; color: var(--accent-cyan);">Click for details →</span>
@@ -14831,6 +14839,9 @@
             // Render daily chart with QTD data only
             renderDailyChurnChart(currentQuarterData);
             
+            // Render mini trend chart with last 7 days of data
+            renderMiniTrendChart(currentQuarterData);
+            
             // Render quarterly table
             renderQuarterlyTable(data.data);
             
@@ -14842,6 +14853,15 @@
         }
         
         async function analyzeBeatMiss(data, stats) {
+            const beatMissCard = document.getElementById('beatMissCard');
+            const beatMissLoading = document.getElementById('beatMissLoading');
+            const beatMissContent = document.getElementById('beatMissContent');
+            
+            // Show loading state
+            if (beatMissCard) beatMissCard.style.display = 'block';
+            if (beatMissLoading) beatMissLoading.style.display = 'flex';
+            if (beatMissContent) beatMissContent.style.display = 'none';
+            
             try {
                 const latest = data.data[data.data.length - 1];
                 const latestQuarter = stats.latest_quarter || (latest ? latest.Quarter : 'N/A');
@@ -14881,9 +14901,6 @@
                             existingSection.remove();
                         }
                         
-                        // Get the beat/miss card
-                        const beatMissCard = document.getElementById('beatMissCard');
-                        
                         if (result.prediction === 'BEAT' || result.prediction === 'MISS') {
                             const isBeat = result.prediction === 'BEAT';
                             const color = isBeat ? '#10b981' : '#ef4444';
@@ -14900,9 +14917,9 @@
                             const ourMetricPct = result.our_projection != null ? Number(result.our_projection) : projectedGrowthPct;
                             const ourMetricDisplay = typeof ourMetricPct === 'number' ? ourMetricPct.toFixed(1) + '%' : (ourMetricPct + '%');
                             
-                            // Populate beat/miss card: always show Company, Consensus, Our metric, then Analysis
-                            if (beatMissCard) {
-                                beatMissCard.innerHTML = `
+                            // Populate beat/miss content
+                            if (beatMissContent) {
+                                beatMissContent.innerHTML = `
                                     <div style="display: flex; flex-direction: column; height: 100%;">
                                         <div style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Beat/Miss Earnings</div>
                                         <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
@@ -14927,20 +14944,28 @@
                                         </div>
                                     </div>
                                 `;
-                                beatMissCard.style.display = 'block';
+                                // Hide loading, show content
+                                if (beatMissLoading) beatMissLoading.style.display = 'none';
+                                beatMissContent.style.display = 'block';
                             }
                         } else {
-                            // UNDECIDED - hide the card
+                            // UNDECIDED - hide the card entirely
                             if (beatMissCard) {
                                 beatMissCard.style.display = 'none';
-                                beatMissCard.innerHTML = '';
                             }
                         }
+                    } else {
+                        // API returned success: false - hide the card
+                        if (beatMissCard) beatMissCard.style.display = 'none';
                     }
+                } else {
+                    // API error - hide the card
+                    if (beatMissCard) beatMissCard.style.display = 'none';
                 }
             } catch (error) {
                 console.error('Error analyzing beat/miss:', error);
-                // Silently fail - don't show indicator if analysis fails
+                // Hide the card on error
+                if (beatMissCard) beatMissCard.style.display = 'none';
             }
         }
         
@@ -15058,6 +15083,119 @@
             if (trendsTab && trendsTab.style.display !== 'none') {
                 setTimeout(() => startLiveChartAnimation(), 300);
             }
+        }
+        
+        // Mini trend chart instance
+        let miniTrendChartInstance = null;
+        
+        function renderMiniTrendChart(dailyData) {
+            const canvas = document.getElementById('miniTrendChart');
+            const trendCard = document.getElementById('netGrowthTrendCard');
+            
+            if (!canvas || !trendCard) return;
+            
+            // Get last 7 days of data
+            const last7Days = dailyData.slice(-7);
+            
+            if (last7Days.length < 2) {
+                // Not enough data to show trend
+                trendCard.style.display = 'none';
+                return;
+            }
+            
+            // Show the card
+            trendCard.style.display = 'block';
+            
+            const ctx = canvas.getContext('2d');
+            
+            // Destroy existing chart
+            if (miniTrendChartInstance) {
+                miniTrendChartInstance.destroy();
+            }
+            
+            const dates = last7Days.map(d => d.Date);
+            const netGrowth = last7Days.map(d => (d.Calculated_Net_Growth || 0) * 100);
+            
+            // Determine line color based on trend (last value vs first value)
+            const firstValue = netGrowth[0];
+            const lastValue = netGrowth[netGrowth.length - 1];
+            const trendColor = lastValue >= firstValue ? '#10b981' : '#ef4444';
+            
+            miniTrendChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Net Growth %',
+                        data: netGrowth,
+                        borderColor: trendColor,
+                        backgroundColor: trendColor === '#10b981' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: trendColor,
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        duration: 500,
+                        easing: 'easeInOutQuart'
+                    },
+                    onClick: () => {
+                        // Navigate to trends tab when clicking the chart
+                        showTickerTab('trends');
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            enabled: true,
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#00ffff',
+                            bodyColor: '#e6f1ff',
+                            borderColor: '#00ffff',
+                            borderWidth: 1,
+                            padding: 10,
+                            displayColors: false,
+                            callbacks: {
+                                title: function(context) {
+                                    return context[0].label;
+                                },
+                                label: function(context) {
+                                    return `Net Growth: ${context.raw.toFixed(2)}%`;
+                                },
+                                afterBody: function(context) {
+                                    const index = context[0].dataIndex;
+                                    const dayData = last7Days[index];
+                                    return [
+                                        '',
+                                        `Total Consumers: ${(dayData['Total Consumers'] || 0).toLocaleString()}`,
+                                        `Total Subs: ${(dayData['Total Subs'] || 0).toLocaleString()}`,
+                                        `Total Cancels: ${(dayData['Total Cancels'] || 0).toLocaleString()}`
+                                    ];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: false
+                        },
+                        y: {
+                            display: false
+                        }
+                    }
+                }
+            });
         }
         
         function showDayDetails(dayData) {
