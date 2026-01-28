@@ -26039,13 +26039,72 @@
             // Competitive behaviors - find categories that compete with profile category
             const competitiveBehaviors = [];
             
-            // Find items from different categories that might compete
+            // Define relevant competitive categories for each brand type
+            const relevantCompetitiveCategories = {
+                'BEVERAGE': ['BEVERAGE', 'DRINK', 'COFFEE', 'TEA', 'WATER', 'ALCOHOL', 'ENERGY', 'SODA', 'SNACK', 'FOOD', 'RESTAURANT', 'QSR', 'FITNESS', 'WORKOUT', 'HEALTH', 'WELLNESS'],
+                'FOOD': ['FOOD', 'RESTAURANT', 'QSR', 'GROCERY', 'SNACK', 'BEVERAGE', 'MEAL', 'DINING'],
+                'STREAMING': ['STREAMING', 'CONTENT', 'SERIES', 'MOVIE', 'GAMING', 'GAME', 'SOCIAL MEDIA', 'MUSIC', 'PODCAST', 'ENTERTAINMENT'],
+                'ACCESSORY': ['APPAREL', 'FASHION', 'ACCESSOR', 'FOOTWEAR', 'JEWELRY', 'LUXURY', 'RETAIL', 'SHOPPING'],
+                'FASHION': ['APPAREL', 'FASHION', 'CLOTHING', 'ACCESSOR', 'FOOTWEAR', 'JEWELRY', 'LUXURY', 'RETAIL'],
+                'OTHER': [] // No filtering for unknown categories
+            };
+            
+            // Find which competitive categories are relevant
+            let relevantCategories = [];
+            for (const [key, categories] of Object.entries(relevantCompetitiveCategories)) {
+                if (profileCategory.includes(key) || key.includes(profileCategory)) {
+                    relevantCategories = categories;
+                    break;
+                }
+            }
+            
+            // If no specific match, use general relevant categories
+            if (relevantCategories.length === 0) {
+                relevantCategories = ['BEVERAGE', 'FOOD', 'ENTERTAINMENT', 'SOCIAL', 'FITNESS', 'TRAVEL', 'SHOPPING', 'TECHNOLOGY'];
+            }
+            
+            // Define irrelevant categories to filter out
+            const irrelevantCategories = {
+                'BEVERAGE': ['TOYS', 'TOY', 'AMUSEMENT', 'PARK', 'THEME PARK', 'HEALTHCARE', 'MEDICAL', 'HOSPITAL', 'CLINIC', 'PHARMACY', 'INSURANCE', 'EDUCATION', 'SCHOOL', 'UNIVERSITY'],
+                'FOOD': ['TOYS', 'TOY', 'AMUSEMENT', 'PARK', 'HEALTHCARE', 'MEDICAL', 'HOSPITAL', 'CLINIC', 'PHARMACY'],
+                'STREAMING': ['TOYS', 'TOY', 'AMUSEMENT', 'PARK', 'HEALTHCARE', 'MEDICAL', 'HOSPITAL', 'CLINIC'],
+                'ACCESSORY': ['TOYS', 'TOY', 'AMUSEMENT', 'PARK', 'BEVERAGE', 'FOOD', 'RESTAURANT', 'HEALTHCARE', 'MEDICAL'],
+                'FASHION': ['TOYS', 'TOY', 'AMUSEMENT', 'PARK', 'BEVERAGE', 'FOOD', 'HEALTHCARE', 'MEDICAL'],
+                'OTHER': []
+            };
+            
+            // Find which irrelevant categories to filter
+            let categoriesToFilter = [];
+            for (const [key, irrelevant] of Object.entries(irrelevantCategories)) {
+                if (profileCategory.includes(key) || key.includes(profileCategory)) {
+                    categoriesToFilter = irrelevant;
+                    break;
+                }
+            }
+            
+            // Find items from different categories that might compete (filtered)
             const competingCategories = {};
             allItems.forEach(i => {
                 const itemCat = i.category.toUpperCase();
+                const itemName = i.name.toUpperCase();
+                const baseCat = itemCat.split('/')[0];
+                
                 // Skip items from profile's own category
-                if (!itemCat.includes(profileCategory) && i.index >= 100) {
-                    const baseCat = itemCat.split('/')[0];
+                if (itemCat.includes(profileCategory)) {
+                    return;
+                }
+                
+                // Skip irrelevant categories
+                if (categoriesToFilter.some(irr => baseCat.includes(irr) || itemName.includes(irr))) {
+                    return;
+                }
+                
+                // Only include relevant competitive categories
+                const isRelevant = relevantCategories.some(rel => 
+                    baseCat.includes(rel) || itemName.includes(rel) || itemCat.includes(rel)
+                );
+                
+                if (isRelevant && i.index >= 100) {
                     if (!competingCategories[baseCat]) {
                         competingCategories[baseCat] = { items: [], totalIndex: 0 };
                     }
