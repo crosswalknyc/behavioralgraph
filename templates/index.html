@@ -6921,6 +6921,18 @@
             transform: scale(1.1);
         }
 
+        /* Primary profile indicator */
+        .comp-profile-tab.is-primary {
+            box-shadow: 0 0 0 2px #ffd700, 0 4px 12px rgba(255, 215, 0, 0.3);
+        }
+
+        .comp-profile-tab-primary {
+            color: #ffd700;
+            font-size: 0.9rem;
+            text-shadow: 0 0 4px rgba(255, 215, 0, 0.5);
+            margin-right: 0.25rem;
+        }
+
         /* Table header close button - white X */
         .comp-table-close-btn {
             background: rgba(255,255,255,0.2);
@@ -32217,6 +32229,12 @@
         }
         
         function removeProfileFromComparison(profileId, isSegment) {
+            // Find the index of the profile being removed in the current comparison data
+            let removedIdx = -1;
+            if (window.comparisonProfilesData) {
+                removedIdx = window.comparisonProfilesData.findIndex(p => p.id === profileId);
+            }
+            
             if (isSegment) {
                 // For segments, remove by name from comparisonProfiles array
                 const idx = comparisonProfiles.findIndex(p => p.name === profileId && p.isSegment);
@@ -32229,6 +32247,11 @@
                 selectedForComparison.delete(profileId);
             }
             
+            // Adjust primary profile index if needed
+            if (removedIdx >= 0 && removedIdx <= primaryProfileIndex) {
+                primaryProfileIndex = Math.max(0, primaryProfileIndex - 1);
+            }
+            
             // Re-render sidebar
             renderComparisonProfiles(comparisonProfiles);
             updateSelectedCount();
@@ -32237,7 +32260,8 @@
             if (selectedForComparison.size > 0) {
                 runComparison();
             } else {
-                // Clear the comparison results
+                // Clear the comparison results and reset primary
+                primaryProfileIndex = 0;
                 document.getElementById('comparisonResults').innerHTML = `
                     <div class="comparison-empty">
                         <p>All profiles removed. Select profiles from the sidebar to compare.</p>
@@ -32352,6 +32376,7 @@
             selectedForComparison.clear();
             loadedComparisonData = {};
             window.comparisonProfilesData = null;
+            primaryProfileIndex = 0;
             availableCategories.behavioral = [];
             availableCategories.location = false;
             selectedCategories.clear();
@@ -33098,6 +33123,16 @@
         // Sorting state
         let currentSortColumn = null;
         let currentSortSection = null;
+        
+        // Primary profile state (index of the primary profile in comparison)
+        let primaryProfileIndex = 0;
+        
+        function setPrimaryProfile(idx) {
+            if (!window.comparisonProfilesData || idx >= window.comparisonProfilesData.length) return;
+            primaryProfileIndex = idx;
+            // Re-render comparison to update primary indicator
+            renderComparison(window.comparisonProfilesData, currentSortSection, currentSortColumn);
+        }
 
         // Category filter state
         let availableCategories = {
@@ -33286,8 +33321,12 @@
 
             // Build profile tabs bar for comparison (no median age in tabs)
             const profileTabsHtml = profiles.map((p, idx) => {
+                const isPrimary = idx === primaryProfileIndex;
+                const primaryIndicator = isPrimary ? '<span class="comp-profile-tab-primary" title="Primary Profile">★</span>' : '';
+                const primaryClass = isPrimary ? 'is-primary' : '';
                 return `
-                    <div class="comp-profile-tab" style="background: linear-gradient(135deg, ${p.color}dd, ${p.color}99); border-bottom: 3px solid ${p.color};">
+                    <div class="comp-profile-tab ${primaryClass}" style="background: linear-gradient(135deg, ${p.color}dd, ${p.color}99); border-bottom: 3px solid ${p.color};" onclick="setPrimaryProfile(${idx})" title="${isPrimary ? 'Primary Profile' : 'Click to set as primary'}">
+                        ${primaryIndicator}
                         <span class="comp-profile-tab-name">${p.name}</span>
                         <button class="comp-profile-tab-close" onclick="event.stopPropagation(); removeProfileFromComparison('${p.id}', ${p.isSegment || false})" title="Remove from comparison">×</button>
                     </div>
