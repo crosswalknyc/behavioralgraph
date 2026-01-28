@@ -4560,6 +4560,88 @@
             color: #ef4444;
         }
         
+        /* Grouped Differentiators */
+        .differentiator-list-grouped {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .differentiator-category-group {
+            background: var(--bg-input);
+            border-radius: 8px;
+            padding: 0.75rem;
+            border-left: 3px solid var(--accent-cyan);
+        }
+        .differentiator-category-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .differentiator-category-name {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .differentiator-category-count {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            background: var(--bg-card);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+        }
+        .differentiator-category-items {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+        .differentiator-grouped-item {
+            display: grid;
+            grid-template-columns: 1fr auto auto auto;
+            gap: 0.75rem;
+            align-items: center;
+            padding: 0.4rem 0;
+            font-size: 0.8rem;
+        }
+        .differentiator-grouped-item:not(:last-child) {
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .differentiator-grouped-name {
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .differentiator-grouped-pct {
+            color: var(--accent-blue);
+            min-width: 55px;
+            text-align: right;
+        }
+        .differentiator-grouped-gp {
+            color: var(--text-secondary);
+            min-width: 55px;
+            text-align: right;
+        }
+        .differentiator-grouped-index {
+            font-weight: 600;
+            min-width: 55px;
+            text-align: right;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+        }
+        .differentiator-grouped-index.high {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+        .differentiator-grouped-index.low {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        
         /* Key Stats Grid */
         .insights-tab-summary {
             display: flex;
@@ -10693,19 +10775,12 @@
                             
                             <!-- Top Differentiators -->
                             <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Top Differentiators">
-                                <h3 class="has-tooltip" data-tooltip="Top Differentiators: The highest-indexing item from each behavioral category. Shows what truly sets this audience apart from the general population across diverse interests.">
+                                <h3 class="has-tooltip" data-tooltip="Top Differentiators: The highest-indexing items grouped by category. Shows what truly sets this audience apart from the general population across diverse interests.">
                                     <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
                                     <span>🔥 Top Differentiators</span>
                                 </h3>
                                 <p class="card-desc">What makes this audience unique</p>
-                                <div class="differentiator-header">
-                                    <span class="diff-col-rank">#</span>
-                                    <span class="diff-col-name">Item</span>
-                                    <span class="diff-col-pct has-tooltip" data-tooltip="Profile %: The percentage of THIS audience that engages with this item.">Profile %</span>
-                                    <span class="diff-col-gp has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population that engages with this item.">Gen Pop %</span>
-                                    <span class="diff-col-index has-tooltip" data-tooltip="Index: How much more/less likely this audience is to engage vs Gen Pop. 2.0x = twice as likely. Green = over-indexes, Red = under-indexes.">Index</span>
-                                </div>
-                                <div id="topDifferentiators" class="differentiator-list"></div>
+                                <div id="topDifferentiators" class="differentiator-list-grouped"></div>
                             </div>
                             
                             <!-- Key Statistics (At-a-Glance) - LAST -->
@@ -26471,37 +26546,59 @@
                 `;
                 }).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No significant demographic differences</p>';
             
-            // Top differentiators - get top item from EACH category for diverse mix
-            const topByCategory = {};
-            allItems.forEach(item => {
-                if (!topByCategory[item.category] || item.index > topByCategory[item.category].index) {
-                    topByCategory[item.category] = item;
+            // Top differentiators - group by category, show top 3 items per category
+            const itemsByCategory = {};
+            allItems.filter(i => i.index > 100).forEach(item => {
+                if (!itemsByCategory[item.category]) {
+                    itemsByCategory[item.category] = [];
                 }
+                itemsByCategory[item.category].push(item);
             });
-            const diverseDifferentiators = Object.values(topByCategory)
-                .filter(i => i.index > 100)
-                .sort((a, b) => b.index - a.index)
-                .slice(0, 10);
+            
+            // Sort categories by their top item's index, then sort items within each category
+            const sortedCategories = Object.entries(itemsByCategory)
+                .map(([cat, items]) => ({
+                    category: cat,
+                    items: items.sort((a, b) => b.index - a.index).slice(0, 3), // Top 3 per category
+                    topIndex: Math.max(...items.map(i => i.index))
+                }))
+                .sort((a, b) => b.topIndex - a.topIndex)
+                .slice(0, 8); // Top 8 categories
+            
             const US_POP_DIFF = 324700000;
             const isProjectionDiff = dashDisplayMode === 'projection';
-            document.getElementById('topDifferentiators').innerHTML = diverseDifferentiators.map((item, i) => {
-                const profilePct = item.pct || 0;
-                const genPopPct = item.genPopPct || 0;
-                const profileDisplay = isProjectionDiff 
-                    ? formatNumber(Math.round((profilePct / 100) * US_POP_DIFF))
-                    : profilePct.toFixed(2) + '%';
-                const genPopDisplay = isProjectionDiff 
-                    ? formatNumber(Math.round((genPopPct / 100) * US_POP_DIFF))
-                    : genPopPct.toFixed(2) + '%';
-                const indexClass = item.index >= 100 ? 'high' : 'low';
+            
+            document.getElementById('topDifferentiators').innerHTML = sortedCategories.map(catGroup => {
+                const itemsHtml = catGroup.items.map(item => {
+                    const profilePct = item.pct || 0;
+                    const genPopPct = item.genPopPct || 0;
+                    const profileDisplay = isProjectionDiff 
+                        ? formatNumber(Math.round((profilePct / 100) * US_POP_DIFF))
+                        : profilePct.toFixed(2) + '%';
+                    const genPopDisplay = isProjectionDiff 
+                        ? formatNumber(Math.round((genPopPct / 100) * US_POP_DIFF))
+                        : genPopPct.toFixed(2) + '%';
+                    const indexClass = item.index >= 100 ? 'high' : 'low';
+                    return `
+                        <div class="differentiator-grouped-item">
+                            <span class="differentiator-grouped-name">${item.name}</span>
+                            <span class="differentiator-grouped-pct">${profileDisplay}</span>
+                            <span class="differentiator-grouped-gp">${genPopDisplay}</span>
+                            <span class="differentiator-grouped-index ${indexClass}">${formatIndex(item.index)}</span>
+                        </div>
+                    `;
+                }).join('');
+                
                 return `
-                <div class="differentiator-item">
-                    <span class="differentiator-rank">#${i + 1}</span>
-                    <span class="differentiator-name">${item.name} <span class="category-tag">${item.category}</span></span>
-                    <span class="differentiator-pct">${profileDisplay}</span>
-                    <span class="differentiator-gp">${genPopDisplay}</span>
-                    <span class="differentiator-index ${indexClass}">${formatIndex(item.index)}</span>
-                </div>
+                    <div class="differentiator-category-group">
+                        <div class="differentiator-category-header">
+                            <span class="differentiator-category-name">${catGroup.category}</span>
+                            <span class="differentiator-category-count">${catGroup.items.length} items</span>
+                        </div>
+                        <div class="differentiator-category-items">
+                            ${itemsHtml}
+                        </div>
+                    </div>
                 `;
             }).join('');
             
