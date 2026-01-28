@@ -2532,6 +2532,7 @@
         
         .ticker-cards-grid.two-columns {
             grid-template-columns: repeat(2, 1fr);
+            align-items: start;
         }
         
         .ticker-cards-grid.four-columns {
@@ -11516,9 +11517,9 @@
                             </div>
                             
                             <!-- Projected Growth Rate + Accuracy (Left) + Beat/Miss (Right) -->
-                            <div class="ticker-cards-grid two-columns" style="margin-bottom: 1rem;">
+                            <div class="ticker-cards-grid two-columns" style="margin-bottom: 0.5rem;">
                                 <!-- Left: Projected Growth with Accuracy on right side -->
-                                <div class="stat-card has-tooltip" id="projectedGrowthCard" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; justify-content: flex-start; position: relative; padding: 1rem;" onclick="navigateToTrends()" data-tooltip="">
+                                <div class="stat-card has-tooltip" id="projectedGrowthCard" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; justify-content: flex-start; position: relative; padding: 0.75rem 1rem; min-height: 0;" onclick="navigateToTrends()" data-tooltip="">
                                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
                                         <div style="flex: 1; display: flex; flex-direction: column;">
                                             <div class="stat-label" id="projectedGrowthLabel" style="font-size: 0.75rem; margin-bottom: 0.5rem;">🔮 Q1 2026 Projected Net Growth Rate</div>
@@ -11532,26 +11533,26 @@
                                     </div>
                                 </div>
                                 <!-- Right: Beat/Miss Earnings -->
-                                <div id="beatMissCard" class="stat-card" style="display: none; min-height: 120px;">
+                                <div id="beatMissCard" class="stat-card" style="display: none; min-height: 0; padding: 0.75rem 1rem;">
                                     <!-- Content will be populated by analyzeBeatMiss function -->
                                 </div>
                             </div>
                             
                             <!-- 2x2 Grid -->
-                            <div class="ticker-cards-grid four-columns" style="margin-bottom: 1.5rem;">
-                                <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;" data-tooltip="">
+                            <div class="ticker-cards-grid four-columns" style="margin-bottom: 0.75rem;">
+                                <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 80px; padding: 0.6rem 1rem;" data-tooltip="">
                                     <div class="stat-label" style="font-size: 0.7rem;">💹 QTD Net Growth %</div>
                                     <div class="stat-value" id="netGrowth" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
-                                <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;" data-tooltip="">
+                                <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 80px; padding: 0.6rem 1rem;" data-tooltip="">
                                     <div class="stat-label" style="font-size: 0.7rem;">📊 Current Consumers QTD</div>
                                     <div class="stat-value" id="currentConsumers" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
-                                <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;" data-tooltip="">
+                                <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 80px; padding: 0.6rem 1rem;" data-tooltip="">
                                     <div class="stat-label" style="font-size: 0.7rem;">📈 Total Subs QTD</div>
                                     <div class="stat-value" id="totalSubs" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
-                                <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 100px;" data-tooltip="">
+                                <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 80px; padding: 0.6rem 1rem;" data-tooltip="">
                                     <div class="stat-label" style="font-size: 0.7rem;">📉 Total Cancels QTD</div>
                                     <div class="stat-value" id="totalCancels" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
@@ -13221,48 +13222,13 @@
                 return;
             }
             
-            // Show loading indicator with progress
-            container.innerHTML = `
-                <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
-                    <div style="font-size: 1.1rem; margin-bottom: 1rem; color: var(--accent-cyan); font-weight: 600;">Loading Tickers...</div>
-                    <div style="width: 100%; max-width: 400px; margin: 0 auto; height: 8px; background: var(--bg-input); border-radius: 4px; overflow: hidden; position: relative;">
-                        <div id="hedgeFundTickersLoadingProgress" style="height: 100%; background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan)); border-radius: 4px; width: 0%; transition: width 0.3s ease; animation: progressPulse 1.5s ease-in-out infinite;"></div>
-                    </div>
-                    <div id="hedgeFundTickersLoadingStatus" style="margin-top: 1rem; font-size: 0.9rem; color: var(--text-secondary);">Connecting to ticker database...</div>
-                </div>
-            `;
-            
-            const progressBar = document.getElementById('hedgeFundTickersLoadingProgress');
-            const statusText = document.getElementById('hedgeFundTickersLoadingStatus');
-            let progress = 0;
-            
-            // Animate progress
-            const progressInterval = setInterval(() => {
-                progress += Math.random() * 10;
-                if (progress > 85) progress = 85; // Don't go to 100% until done
-                if (progressBar) progressBar.style.width = progress + '%';
-                if (statusText) {
-                    if (progress < 25) {
-                        statusText.textContent = 'Connecting to ticker database...';
-                    } else if (progress < 50) {
-                        statusText.textContent = 'Fetching ticker list from S3...';
-                    } else if (progress < 75) {
-                        statusText.textContent = 'Loading ticker metadata...';
-                    } else {
-                        statusText.textContent = 'Finalizing ticker list...';
-                    }
-                }
-            }, 300);
+            // Clear container while loading (no loading indicator)
+            container.innerHTML = '';
             
             try {
                 const response = await fetch('/api/hedge-fund-iq/list', { credentials: 'same-origin' });
                 
-                // Update progress to 90% when response received
-                if (progressBar) progressBar.style.width = '90%';
-                if (statusText) statusText.textContent = 'Processing ticker data...';
-                
                 if (response.status === 401) { 
-                    clearInterval(progressInterval);
                     container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--accent-red);">Unauthorized. Redirecting to login...</div>';
                     window.location.href = '/login'; 
                     return; 
@@ -13270,23 +13236,14 @@
                 
                 const data = await response.json();
                 
-                // Complete progress
-                clearInterval(progressInterval);
-                if (progressBar) progressBar.style.width = '100%';
-                if (statusText) statusText.textContent = 'Tickers loaded successfully!';
-                
-                // Small delay to show completion
-                setTimeout(() => {
-                    if (data.success) {
-                        hedgeFundTickers = data.tickers;
-                        renderTickerTree();
-                    } else {
-                        container.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--accent-red);">Error loading tickers: ${data.error || 'Unknown error'}</div>`;
-                    }
-                }, 300);
+                if (data.success) {
+                    hedgeFundTickers = data.tickers;
+                    renderTickerTree();
+                } else {
+                    container.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--accent-red);">Error loading tickers: ${data.error || 'Unknown error'}</div>`;
+                }
                 
             } catch (error) {
-                clearInterval(progressInterval);
                 console.error('Error loading tickers:', error);
                 container.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--accent-red);">Error loading tickers: ${error.message}</div>`;
             }
@@ -14851,7 +14808,7 @@
                                             <div>${consensusProjection}</div>
                                         </div>
                                         <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-                                            <div style="font-weight: 600; margin-bottom: 0.2rem;">Our metric (this KPI):</div>
+                                            <div style="font-weight: 600; margin-bottom: 0.2rem;">Our metric (${(data.kpi || 'this KPI').replace(/</g, '&lt;')}):</div>
                                             <div>${ourMetricDisplay}</div>
                                         </div>
                                         <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5; flex: 1;">
