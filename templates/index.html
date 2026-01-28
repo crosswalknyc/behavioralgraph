@@ -20428,6 +20428,9 @@
                 toggle.classList.remove('active');
                 label.textContent = 'US %';
             }
+            
+            // Update sort dropdown labels to reflect current mode
+            updateSortDropdownLabels();
 
             // Re-render all dashboard data with new display mode
             if (currentDashboardData) {
@@ -20448,6 +20451,27 @@
                 renderSponsorshipFinder(currentDashboardData);
                 renderMediaOptimizer(currentDashboardData);
             }
+        }
+        
+        // Update all sort dropdown labels based on display mode
+        function updateSortDropdownLabels() {
+            const newLabel = dashDisplayMode === 'projection' ? '# ↓' : '% ↓';
+            
+            // Update behavioral sort dropdowns
+            document.querySelectorAll('.behavioral-sort-select').forEach(select => {
+                const pctOption = select.querySelector('option[value="pct"]');
+                if (pctOption) {
+                    pctOption.textContent = newLabel;
+                }
+            });
+            
+            // Update other sort dropdowns (affinity, interests, etc.)
+            document.querySelectorAll('.affinity-sort-select, #interestsSortSelect').forEach(select => {
+                const pctOption = select.querySelector('option[value="pct"]');
+                if (pctOption) {
+                    pctOption.textContent = newLabel;
+                }
+            });
         }
         
         // Hover tooltip toggle
@@ -23891,7 +23915,7 @@
                             ` : ''}
                             <span style="font-size: 0.65rem; color: var(--text-secondary);">Sort:</span>
                             <select class="behavioral-sort-select" onchange="sortBehavioralCard('${catId}', '${cat}', this.value)" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
-                                <option value="pct" selected>% ↓</option>
+                                <option value="pct" selected>${dashDisplayMode === 'projection' ? '# ↓' : '% ↓'}</option>
                                 <option value="index">Idx ↓</option>
                                 <option value="alpha">A-Z</option>
                             </select>
@@ -23901,8 +23925,8 @@
                             <span style="width: 22px; text-align: right; flex-shrink: 0;">#</span>
                             <span style="flex: 1; min-width: 0;">Item</span>
                             <span style="min-width: 45px; text-align: center; flex-shrink: 0;">Index</span>
-                            <span style="min-width: 55px; text-align: right; flex-shrink: 0;">Profile</span>
-                            <span style="min-width: 55px; text-align: right; flex-shrink: 0;">Gen Pop</span>
+                            <span style="min-width: 55px; text-align: right; flex-shrink: 0;">${dashDisplayMode === 'projection' ? 'US #' : 'Profile'}</span>
+                            <span style="min-width: 55px; text-align: right; flex-shrink: 0;">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
                         </div>
                         <div class="behavioral-list" id="list-${catId}" data-cat="${cat}">
                             ${renderBehavioralItems(displayItems, maxPct)}
