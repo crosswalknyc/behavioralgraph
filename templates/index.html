@@ -9871,7 +9871,7 @@
                     <div class="ecosystem-section">
                         <div class="ecosystem-section-header">
                             <h3>🔄 Cross-Category Substitution & Occasion Leakage</h3>
-                            <p class="section-description">Early-warning signal data showing when people leave the category entirely, what replaces it, and functional shifts (e.g., fitness apps leading to soda drops, coffee rituals replacing soda moments).</p>
+                            <p class="section-description">Early-warning signal data showing when people leave the category entirely, what replaces it, and functional shifts. Insights are tailored to your profile's category.</p>
                         </div>
                         <div class="ecosystem-insights-grid">
                             <div class="ecosystem-insight-card highlight">
@@ -9887,7 +9887,7 @@
                                 </div>
                             </div>
                             <div class="ecosystem-insight-card">
-                                <h4 class="has-tooltip" data-tooltip="Functional Shifts: How functional needs are being met by alternative categories (e.g., energy drinks vs sleep, functional beverages vs soda).">⚡ Functional Shifts</h4>
+                                <h4 class="has-tooltip" data-tooltip="Functional Shifts: How functional needs are being met by alternative categories relevant to your profile's category.">⚡ Functional Shifts</h4>
                                 <div id="ecosystemFunctionalShifts" class="insight-content">
                                     <div class="loading-placeholder">Analyzing functional shifts...</div>
                                 </div>
@@ -26003,7 +26003,19 @@
             });
             
             // Add specific competitive insights based on profile category
-            if (profileCategory.includes('BEVERAGE') || profileCategory.includes('DRINK')) {
+            const isBeverageProfile = profileCategory.includes('BEVERAGE') || profileCategory.includes('DRINK');
+            const isAccessoryProfile = profileCategory.includes('ACCESSOR') || profileCategory.includes('APPAREL') || 
+                                      profileCategoryItems.some(i => 
+                                          i.category.toUpperCase().includes('ACCESSOR') || 
+                                          i.category.toUpperCase().includes('APPAREL')
+                                      );
+            const isStreamingProfile = profileCategory.includes('SERIES') || profileCategory.includes('STREAMING') ||
+                                      profileCategory.includes('CONTENT');
+            const isFashionProfile = profileCategory.includes('APPAREL') || profileCategory.includes('FASHION') ||
+                                    profileCategory.includes('CLOTHING');
+            
+            // Category-specific competitive insights
+            if (isBeverageProfile) {
                 const fitnessItems = allItems.filter(i => 
                     i.category.toUpperCase().includes('FITNESS') || 
                     i.category.toUpperCase().includes('WORKOUT') ||
@@ -26022,6 +26034,40 @@
                             .join(', ');
                         competitiveBehaviors.push(`<span class="insight-label">Fitness apps</span> <span class="insight-value">compete with beverage moments - when consumers use fitness apps 3x/week, beverage consumption patterns shift. Top apps: ${topFitnessApps}</span>`);
                     }
+                }
+            }
+            
+            if (isAccessoryProfile || isFashionProfile) {
+                // For accessories/fashion, find what competes (other fashion brands, luxury items, etc.)
+                const otherFashionItems = allItems.filter(i => {
+                    const cat = i.category.toUpperCase();
+                    const name = i.name.toUpperCase();
+                    return (cat.includes('APPAREL') || cat.includes('FASHION') || cat.includes('ACCESSOR') ||
+                           cat.includes('LUXURY') || cat.includes('JEWELRY') || cat.includes('FOOTWEAR')) &&
+                           !profileCategoryItems.some(pi => pi.name === i.name);
+                });
+                if (otherFashionItems.length > 0) {
+                    const topCompetitors = otherFashionItems
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    competitiveBehaviors.push(`<span class="insight-label">Fashion/Accessory competitors</span> <span class="insight-value">compete for consumer attention. Top competing brands: ${topCompetitors}</span>`);
+                }
+                
+                // Find categories that might replace fashion/accessory purchases
+                const replacementCategories = allItems.filter(i => {
+                    const cat = i.category.toUpperCase();
+                    return (cat.includes('EXPERIENCE') || cat.includes('TRAVEL') || cat.includes('ENTERTAINMENT') ||
+                           cat.includes('TECHNOLOGY') || cat.includes('GAMING')) && i.index >= 100;
+                });
+                if (replacementCategories.length > 0) {
+                    const topReplacements = replacementCategories
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    competitiveBehaviors.push(`<span class="insight-label">Experience spending</span> <span class="insight-value">competes with accessory purchases - consumers choosing experiences over products. Top items: ${topReplacements}</span>`);
                 }
             }
             
@@ -26061,12 +26107,20 @@
                 : '<p style="color: var(--text-secondary);">Identifying competitive moments...</p>';
             
             // === SECTION 2: Cross-Category Substitution ===
-            // Define items for analysis (need to check if profile category is beverage-related)
+            // Determine profile category type for relevant insights
             const isBeverageProfile = profileCategory.includes('BEVERAGE') || profileCategory.includes('DRINK') || 
                                      profileCategoryItems.some(i => 
                                          i.category.toUpperCase().includes('BEVERAGE') || 
                                          i.category.toUpperCase().includes('DRINK')
                                      );
+            const isAccessoryProfile = profileCategory.includes('ACCESSOR') || profileCategory.includes('APPAREL') ||
+                                      profileCategoryItems.some(i => 
+                                          i.category.toUpperCase().includes('ACCESSOR') || 
+                                          i.category.toUpperCase().includes('APPAREL')
+                                      );
+            const isStreamingProfile = profileCategory.includes('SERIES') || profileCategory.includes('STREAMING') ||
+                                      profileCategory.includes('CONTENT');
+            const isFashionProfile = profileCategory.includes('APPAREL') || profileCategory.includes('FASHION');
             
             const fitnessItems = allItems.filter(i => 
                 i.category.toUpperCase().includes('FITNESS') || 
@@ -26121,84 +26175,231 @@
             );
             
             const categoryExitSignals = [];
-            if (fitnessItems.length > 2 && isBeverageProfile) {
-                const topFitnessApps = fitnessItems
-                    .sort((a, b) => b.index - a.index)
-                    .slice(0, 5)
-                    .map(i => `${i.name} (${i.index})`)
-                    .join(', ');
-                categoryExitSignals.push(`<span class="insight-label">Fitness engagement spike:</span> <span class="insight-value">When consumers start using fitness apps 3x/week, beverage consumption drops before they consciously choose alternatives. Top fitness apps: ${topFitnessApps}</span>`);
-            }
-            if (functionalBeverages.length > 0 && isBeverageProfile) {
-                const topFunctional = functionalBeverages
-                    .sort((a, b) => b.index - a.index)
-                    .slice(0, 5)
-                    .map(i => `${i.name} (${i.index})`)
-                    .join(', ');
-                categoryExitSignals.push(`<span class="insight-label">Functional beverage adoption:</span> <span class="insight-value">Consumers leaving category for functional alternatives. Top items: ${topFunctional}</span>`);
+            
+            // Category-specific exit signals
+            if (isBeverageProfile) {
+                if (fitnessItems.length > 2) {
+                    const topFitnessApps = fitnessItems
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    categoryExitSignals.push(`<span class="insight-label">Fitness engagement spike:</span> <span class="insight-value">When consumers start using fitness apps 3x/week, beverage consumption drops before they consciously choose alternatives. Top fitness apps: ${topFitnessApps}</span>`);
+                }
+                if (functionalBeverages.length > 0) {
+                    const topFunctional = functionalBeverages
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    categoryExitSignals.push(`<span class="insight-label">Functional beverage adoption:</span> <span class="insight-value">Consumers leaving category for functional alternatives. Top items: ${topFunctional}</span>`);
+                }
+            } else if (isAccessoryProfile || isFashionProfile) {
+                // For accessories/fashion, look for experience spending replacing product purchases
+                const experienceItems = allItems.filter(i => {
+                    const cat = i.category.toUpperCase();
+                    return (cat.includes('TRAVEL') || cat.includes('ENTERTAINMENT') || cat.includes('EXPERIENCE') ||
+                           cat.includes('EVENT') || cat.includes('DINING')) && i.index >= 100;
+                });
+                if (experienceItems.length > 0) {
+                    const topExperiences = experienceItems
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    categoryExitSignals.push(`<span class="insight-label">Experience spending shift:</span> <span class="insight-value">Consumers prioritizing experiences over accessory purchases. Top experiences: ${topExperiences}</span>`);
+                }
+                
+                // Look for other fashion/accessory brands taking share
+                const competingFashion = allItems.filter(i => {
+                    const cat = i.category.toUpperCase();
+                    const name = i.name.toUpperCase();
+                    return (cat.includes('APPAREL') || cat.includes('ACCESSOR') || cat.includes('FASHION') ||
+                           cat.includes('LUXURY') || cat.includes('JEWELRY')) &&
+                           !profileCategoryItems.some(pi => pi.name === i.name) && i.index >= 100;
+                });
+                if (competingFashion.length > 0) {
+                    const topCompetitors = competingFashion
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    categoryExitSignals.push(`<span class="insight-label">Competing brands:</span> <span class="insight-value">Other fashion/accessory brands gaining share. Top competitors: ${topCompetitors}</span>`);
+                }
+            } else if (isStreamingProfile) {
+                // For streaming, look for gaming, social media, or other entertainment competing
+                const gamingItems = allItems.filter(i => 
+                    i.category.toUpperCase().includes('GAMING') || 
+                    i.name.toUpperCase().includes('GAMING') ||
+                    i.name.toUpperCase().includes('XBOX') ||
+                    i.name.toUpperCase().includes('PLAYSTATION')
+                );
+                if (gamingItems.length > 0) {
+                    const topGaming = gamingItems
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    categoryExitSignals.push(`<span class="insight-label">Gaming competition:</span> <span class="insight-value">Interactive entertainment competing with streaming content. Top gaming: ${topGaming}</span>`);
+                }
             }
             
             const replacements = [];
-            if (coffeeItems.length > 0 && isBeverageProfile) {
-                const avgCoffeeIndex = coffeeItems.reduce((s, i) => s + i.index, 0) / coffeeItems.length;
-                if (avgCoffeeIndex > 100) {
+            
+            // Category-specific replacements
+            if (isBeverageProfile) {
+                if (coffeeItems.length > 0) {
+                    const avgCoffeeIndex = coffeeItems.reduce((s, i) => s + i.index, 0) / coffeeItems.length;
+                    if (avgCoffeeIndex > 100) {
+                        const topCoffee = coffeeItems
+                            .sort((a, b) => b.index - a.index)
+                            .slice(0, 3)
+                            .map(i => `${i.name} (${i.index})`)
+                            .join(', ');
+                        replacements.push(`<span class="insight-label">Coffee rituals</span> <span class="insight-value">replacing beverage moments - morning/afternoon routines shifting. Top coffee: ${topCoffee}</span>`);
+                    }
+                }
+                if (waterItems.length > 0) {
+                    const topWater = waterItems
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 3)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    replacements.push(`<span class="insight-label">Water consumption</span> <span class="insight-value">increasing as health-conscious pivot. Top water brands: ${topWater}</span>`);
+                }
+                if (functionalBeverages.length > 0) {
+                    const topFunctional = functionalBeverages
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    replacements.push(`<span class="insight-label">Functional beverages</span> <span class="insight-value">replacing traditional beverage occasions. Top items: ${topFunctional}</span>`);
+                }
+                if (alcoholItems.length > 0 && beverageItems.length > 0) {
+                    const topAlcohol = alcoholItems
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 3)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    replacements.push(`<span class="insight-label">Alcohol-lite moments</span> <span class="insight-value">- low/no-alcohol options competing with traditional beverages. Top items: ${topAlcohol}</span>`);
+                }
+            } else if (isAccessoryProfile || isFashionProfile) {
+                // For accessories, find what's replacing accessory purchases
+                const luxuryItems = allItems.filter(i => {
+                    const cat = i.category.toUpperCase();
+                    return (cat.includes('LUXURY') || cat.includes('JEWELRY') || cat.includes('WATCH')) && 
+                           i.index >= 100 && !profileCategoryItems.some(pi => pi.name === i.name);
+                });
+                if (luxuryItems.length > 0) {
+                    const topLuxury = luxuryItems
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    replacements.push(`<span class="insight-label">Luxury alternatives</span> <span class="insight-value">replacing ${profileCategory.toLowerCase()} purchases. Top items: ${topLuxury}</span>`);
+                }
+                
+                const techItems = allItems.filter(i => {
+                    const cat = i.category.toUpperCase();
+                    return (cat.includes('TECHNOLOGY') || cat.includes('ELECTRONICS') || cat.includes('APP')) && 
+                           i.index >= 100;
+                });
+                if (techItems.length > 0) {
+                    const topTech = techItems
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    replacements.push(`<span class="insight-label">Technology spending</span> <span class="insight-value">competing with accessory purchases. Top items: ${topTech}</span>`);
+                }
+            } else if (isStreamingProfile) {
+                // For streaming, find other entertainment replacing it
+                const otherEntertainment = allItems.filter(i => {
+                    const cat = i.category.toUpperCase();
+                    return (cat.includes('GAMING') || cat.includes('MUSIC') || cat.includes('PODCAST') ||
+                           cat.includes('SOCIAL MEDIA')) && i.index >= 100;
+                });
+                if (otherEntertainment.length > 0) {
+                    const topEntertainment = otherEntertainment
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    replacements.push(`<span class="insight-label">Alternative entertainment</span> <span class="insight-value">replacing streaming content consumption. Top items: ${topEntertainment}</span>`);
+                }
+            }
+            
+            const functionalShifts = [];
+            
+            // Category-specific functional shifts
+            if (isBeverageProfile) {
+                if (fitnessItems.length > 0 && sleepItems.length > 0) {
+                    const topSleep = sleepItems
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 3)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    functionalShifts.push(`<span class="insight-label">Energy vs. Sleep:</span> <span class="insight-value">Consumers choosing rest over energy drinks. Top sleep/meditation apps: ${topSleep}</span>`);
+                }
+                if (waterItems.length > 0 && beverageItems.length > 0) {
+                    const topWater = waterItems
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 3)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    functionalShifts.push(`<span class="insight-label">Water vs. Soda:</span> <span class="insight-value">Health pivots replacing indulgence moments. Top water brands: ${topWater}</span>`);
+                }
+                if (coffeeItems.length > 0 && beverageItems.length > 0) {
                     const topCoffee = coffeeItems
                         .sort((a, b) => b.index - a.index)
                         .slice(0, 3)
                         .map(i => `${i.name} (${i.index})`)
                         .join(', ');
-                    replacements.push(`<span class="insight-label">Coffee rituals</span> <span class="insight-value">replacing beverage moments - morning/afternoon routines shifting. Top coffee: ${topCoffee}</span>`);
+                    functionalShifts.push(`<span class="insight-label">Coffee vs. Soda:</span> <span class="insight-value">Functional morning rituals vs. treat moments. Top coffee: ${topCoffee}</span>`);
                 }
-            }
-            if (waterItems.length > 0 && isBeverageProfile) {
-                const topWater = waterItems
-                    .sort((a, b) => b.index - a.index)
-                    .slice(0, 3)
-                    .map(i => `${i.name} (${i.index})`)
-                    .join(', ');
-                replacements.push(`<span class="insight-label">Water consumption</span> <span class="insight-value">increasing as health-conscious pivot. Top water brands: ${topWater}</span>`);
-            }
-            if (functionalBeverages.length > 0 && isBeverageProfile) {
-                const topFunctional = functionalBeverages
-                    .sort((a, b) => b.index - a.index)
-                    .slice(0, 5)
-                    .map(i => `${i.name} (${i.index})`)
-                    .join(', ');
-                replacements.push(`<span class="insight-label">Functional beverages</span> <span class="insight-value">replacing traditional beverage occasions. Top items: ${topFunctional}</span>`);
-            }
-            if (alcoholItems.length > 0 && beverageItems.length > 0 && isBeverageProfile) {
-                const topAlcohol = alcoholItems
-                    .sort((a, b) => b.index - a.index)
-                    .slice(0, 3)
-                    .map(i => `${i.name} (${i.index})`)
-                    .join(', ');
-                replacements.push(`<span class="insight-label">Alcohol-lite moments</span> <span class="insight-value">- low/no-alcohol options competing with traditional beverages. Top items: ${topAlcohol}</span>`);
-            }
-            
-            const functionalShifts = [];
-            if (fitnessItems.length > 0 && sleepItems.length > 0 && isBeverageProfile) {
-                const topSleep = sleepItems
-                    .sort((a, b) => b.index - a.index)
-                    .slice(0, 3)
-                    .map(i => `${i.name} (${i.index})`)
-                    .join(', ');
-                functionalShifts.push(`<span class="insight-label">Energy vs. Sleep:</span> <span class="insight-value">Consumers choosing rest over energy drinks. Top sleep/meditation apps: ${topSleep}</span>`);
-            }
-            if (waterItems.length > 0 && beverageItems.length > 0 && isBeverageProfile) {
-                const topWater = waterItems
-                    .sort((a, b) => b.index - a.index)
-                    .slice(0, 3)
-                    .map(i => `${i.name} (${i.index})`)
-                    .join(', ');
-                functionalShifts.push(`<span class="insight-label">Water vs. Soda:</span> <span class="insight-value">Health pivots replacing indulgence moments. Top water brands: ${topWater}</span>`);
-            }
-            if (coffeeItems.length > 0 && beverageItems.length > 0 && isBeverageProfile) {
-                const topCoffee = coffeeItems
-                    .sort((a, b) => b.index - a.index)
-                    .slice(0, 3)
-                    .map(i => `${i.name} (${i.index})`)
-                    .join(', ');
-                functionalShifts.push(`<span class="insight-label">Coffee vs. Soda:</span> <span class="insight-value">Functional morning rituals vs. treat moments. Top coffee: ${topCoffee}</span>`);
+            } else if (isAccessoryProfile || isFashionProfile) {
+                // For accessories, find shifts in spending priorities
+                const experienceVsProduct = allItems.filter(i => {
+                    const cat = i.category.toUpperCase();
+                    return (cat.includes('TRAVEL') || cat.includes('DINING') || cat.includes('ENTERTAINMENT')) && 
+                           i.index >= 100;
+                });
+                if (experienceVsProduct.length > 0) {
+                    const topExperiences = experienceVsProduct
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    functionalShifts.push(`<span class="insight-label">Experiences vs. Products:</span> <span class="insight-value">Consumers prioritizing experiences over accessory purchases. Top experiences: ${topExperiences}</span>`);
+                }
+                
+                const fastFashionVsLuxury = allItems.filter(i => {
+                    const cat = i.category.toUpperCase();
+                    return (cat.includes('APPAREL') || cat.includes('FASHION')) && 
+                           i.index >= 100 && !profileCategoryItems.some(pi => pi.name === i.name);
+                });
+                if (fastFashionVsLuxury.length > 0) {
+                    const topFashion = fastFashionVsLuxury
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    functionalShifts.push(`<span class="insight-label">Fashion alternatives:</span> <span class="insight-value">Other fashion brands competing for share. Top competitors: ${topFashion}</span>`);
+                }
+            } else if (isStreamingProfile) {
+                // For streaming, find shifts in entertainment consumption
+                const interactiveVsPassive = allItems.filter(i => {
+                    const cat = i.category.toUpperCase();
+                    return (cat.includes('GAMING') || cat.includes('SOCIAL MEDIA')) && i.index >= 100;
+                });
+                if (interactiveVsPassive.length > 0) {
+                    const topInteractive = interactiveVsPassive
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    functionalShifts.push(`<span class="insight-label">Interactive vs. Passive:</span> <span class="insight-value">Consumers choosing interactive entertainment over passive streaming. Top items: ${topInteractive}</span>`);
+                }
             }
             
             document.getElementById('ecosystemCategoryExit').innerHTML = categoryExitSignals.length > 0
@@ -26267,7 +26468,16 @@
                     socialContextChanges.push(`<span class="insight-label">Solo consumption:</span> <span class="insight-value">Replacing social occasions - individual moments vs. shared experiences. Top solo activities: ${topSolo}</span>`);
                 }
             }
-            socialContextChanges.push(`<span class="insight-label">"Treat" reframing:</span> <span class="insight-value">Beverage consumption as mental health reward, not just indulgence</span>`);
+            // Category-specific social context changes
+            if (isBeverageProfile) {
+                socialContextChanges.push(`<span class="insight-label">"Treat" reframing:</span> <span class="insight-value">Beverage consumption as mental health reward, not just indulgence</span>`);
+            } else if (isAccessoryProfile || isFashionProfile) {
+                socialContextChanges.push(`<span class="insight-label">"Treat" reframing:</span> <span class="insight-value">Accessory purchases as self-expression and identity markers, not just fashion</span>`);
+            } else if (isStreamingProfile) {
+                socialContextChanges.push(`<span class="insight-label">"Treat" reframing:</span> <span class="insight-value">Streaming content as mental health escape and relaxation, not just entertainment</span>`);
+            } else {
+                socialContextChanges.push(`<span class="insight-label">"Treat" reframing:</span> <span class="insight-value">Brand consumption as personal reward and identity expression</span>`);
+            }
             
             const emergingPatterns = [];
             const nostalgiaItems = allItems.filter(i => 
@@ -26284,13 +26494,46 @@
                     .join(', ');
                 emergingPatterns.push(`<span class="insight-label">Nostalgia usage spike:</span> <span class="insight-value">Retro/classic preferences emerging before cultural campaigns launch. Top items: ${topNostalgia}</span>`);
             }
-            if (fitnessItems.length > 0 && beverageItems.length > 0 && isBeverageProfile) {
+            
+            // Category-specific emerging patterns
+            if (isBeverageProfile && fitnessItems.length > 0 && beverageItems.length > 0) {
                 const topFitness = fitnessItems
                     .sort((a, b) => b.index - a.index)
                     .slice(0, 5)
                     .map(i => `${i.name} (${i.index})`)
                     .join(', ');
                 emergingPatterns.push(`<span class="insight-label">Wellness integration:</span> <span class="insight-value">Fitness and beverage consumption patterns converging. Top fitness apps: ${topFitness}</span>`);
+            } else if (isAccessoryProfile || isFashionProfile) {
+                // For accessories, look for sustainability or minimalism trends
+                const sustainableItems = allItems.filter(i => {
+                    const name = i.name.toUpperCase();
+                    return (name.includes('SUSTAINABLE') || name.includes('ECO') || name.includes('MINIMAL') ||
+                           name.includes('VINTAGE') || name.includes('THRIFT')) && i.index >= 100;
+                });
+                if (sustainableItems.length > 0) {
+                    const topSustainable = sustainableItems
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    emergingPatterns.push(`<span class="insight-label">Sustainability trend:</span> <span class="insight-value">Consumers shifting toward sustainable and minimal fashion choices. Top items: ${topSustainable}</span>`);
+                }
+            } else if (isStreamingProfile) {
+                // For streaming, look for short-form content trends
+                const shortFormItems = allItems.filter(i => {
+                    const name = i.name.toUpperCase();
+                    const cat = i.category.toUpperCase();
+                    return (name.includes('TIKTOK') || name.includes('SHORTS') || name.includes('REELS') ||
+                           cat.includes('SHORT') || cat.includes('CLIP')) && i.index >= 100;
+                });
+                if (shortFormItems.length > 0) {
+                    const topShortForm = shortFormItems
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 5)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    emergingPatterns.push(`<span class="insight-label">Short-form content:</span> <span class="insight-value">Consumers preferring shorter content formats over long-form streaming. Top platforms: ${topShortForm}</span>`);
+                }
             }
             
             document.getElementById('ecosystemTemporalShifts').innerHTML = temporalShifts.length > 0
