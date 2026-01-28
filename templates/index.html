@@ -26741,9 +26741,14 @@
             if (!aiContainer) return;
             
             // Get the current profile's S3 key or ID
-            const profileId = currentProfileData?.s3_key || currentProfileData?.job_id || currentProfileData?.id;
+            const profileId = currentProfileData?.s3Key || currentProfileData?.s3_key || currentProfileData?.job_id || currentProfileData?.id;
             if (!profileId) {
-                console.warn('No profile ID available for AI analysis');
+                console.warn('No profile ID available for AI analysis', currentProfileData);
+                aiContainer.innerHTML = `
+                    <div style="color: var(--text-secondary); padding: 1rem;">
+                        <span style="font-size: 0.85rem;">⚠️ Profile ID not available for AI analysis. Showing standard insights below.</span>
+                    </div>
+                `;
                 return;
             }
             
