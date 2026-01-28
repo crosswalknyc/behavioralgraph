@@ -11646,15 +11646,6 @@
                                     <!-- Options will be populated dynamically -->
                                 </select>
                             </div>
-                            
-                            <!-- Profile Sub-Navigation -->
-                            <div class="dashboard-tabs" style="margin-bottom: 1.5rem;">
-                                <button class="tab-btn active" onclick="showProfileSubTab('insights')">💡 Insights</button>
-                                <button class="tab-btn" onclick="showProfileSubTab('demographics')">👥 Demographics</button>
-                                <button class="tab-btn" onclick="showProfileSubTab('behavioral')">🛍️ Behavioral</button>
-                                <button class="tab-btn" onclick="showProfileSubTab('location')">📍 Location</button>
-                                <button class="tab-btn" onclick="showProfileSubTab('interests')">⭐ Interests</button>
-                            </div>
 
                             <!-- Profile Content Container -->
                             <div id="tickerProfileContent">
@@ -13312,13 +13303,6 @@
         let currentTickerForProfile = null;
         let currentProfileFilename = null;
         
-        function showProfileSubTab(subTabName) {
-            // This will be handled by the existing profile IQ tab switching logic
-            // We'll reuse the same functions
-            if (window.showTab) {
-                window.showTab(subTabName);
-            }
-        }
         
         let availableProfiles = [];
         
