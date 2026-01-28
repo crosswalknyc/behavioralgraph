@@ -5395,39 +5395,22 @@ def analyze_key_insights_with_ai():
                                     'index': item.get('index', 0)
                                 })
                     
-                    # Categories (NOT brands) - look for purchased categories
-                    # Categories are typically things like "Food & Beverage", "Apparel", "Electronics", etc.
-                    # NOT individual brand names like "Nike", "Coca-Cola", etc.
-                    elif 'PURCHASED' in cat_upper:
-                        # Check if this category contains category-level items (not brands)
-                        # Category names are usually broader (e.g., "Food & Beverage", "Apparel & Accessories")
-                        # Brand names are usually specific company/product names
+                    # Most Purchased Categories (NOT brands)
+                    # "MOST PURCHASED CATEGORIES" contains category-level purchases like "Food & Beverage", "Apparel", etc.
+                    # "MOST PURCHASED BRANDS" contains brand names - we want to EXCLUDE this
+                    elif 'MOST PURCHASED CATEGORIES' in cat_upper or ('PURCHASED' in cat_upper and 'CATEGOR' in cat_upper and 'BRAND' not in cat_upper):
                         for item in items:
                             if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
                                 item_name = str(item.get('name', '')).upper()
-                                item_category = str(item.get('category', '')).upper()
                                 
-                                # Exclude if it's clearly a brand (common brand indicators)
-                                is_brand = any(indicator in item_name for indicator in [
-                                    'INC', 'LLC', 'CORP', 'CO.', 'COMPANY', 'BRAND'
-                                ]) or item_name in [
-                                    'NIKE', 'COCA-COLA', 'COKE', 'PEPSI', 'APPLE', 'SAMSUNG', 
-                                    'AMAZON', 'WALMART', 'TARGET', 'STARBUCKS', 'MCDONALDS'
-                                ]
-                                
-                                # Include if it's a category name (usually longer, descriptive)
-                                # Categories often have words like "&", "and", or are multi-word descriptive terms
-                                is_category = (
-                                    '&' in item_name or 
-                                    ' AND ' in item_name or
-                                    len(item_name.split()) >= 3 or
-                                    any(cat_word in item_name for cat_word in [
-                                        'CATEGORY', 'TYPE', 'CLASS', 'GROUP', 'SECTOR', 'INDUSTRY'
-                                    ])
+                                # Exclude if it's clearly a brand name (common brand indicators or known brands)
+                                is_brand = (
+                                    any(indicator in item_name for indicator in ['INC', 'LLC', 'CORP', 'CO.', 'COMPANY']) or
+                                    item_name in ['NIKE', 'COCA-COLA', 'COKE', 'PEPSI', 'APPLE', 'SAMSUNG', 'AMAZON', 'WALMART', 'TARGET', 'STARBUCKS', 'MCDONALDS', 'ADIDAS', 'UNDER ARMOUR']
                                 )
                                 
-                                # Also check the category field - if it contains category-level info
-                                if not is_brand and (is_category or 'PURCHASED' in item_category):
+                                # Include category-level items (usually descriptive, multi-word, or contain "&")
+                                if not is_brand:
                                     focused['categories'].append({
                                         'name': item.get('name'),
                                         'pct': item.get('pct', 0),
