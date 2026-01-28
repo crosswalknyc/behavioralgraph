@@ -14951,6 +14951,12 @@
                     }
                 }
             });
+            
+            // Start pulsing animation for the most recent date circle if trends tab is visible
+            const trendsTab = document.getElementById('trendsTab');
+            if (trendsTab && trendsTab.style.display !== 'none') {
+                setTimeout(() => startLiveChartAnimation(), 300);
+            }
         }
         
         function showDayDetails(dayData) {
