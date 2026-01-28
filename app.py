@@ -4431,6 +4431,10 @@ def list_hedge_fund_tickers():
                 
                 last_modified = obj['LastModified'].isoformat() if 'LastModified' in obj else None
                 
+                # Get metadata for this ticker
+                metadata = load_ticker_metadata()
+                ticker_metadata = metadata.get(key, {})
+                
                 tickers.append({
                     'ticker': ticker_symbol,
                     'display_name': display_name,  # Will be overridden by metadata if exists
@@ -4450,8 +4454,10 @@ def list_hedge_fund_tickers():
                 ticker['display_name'] = metadata[ticker_key].get('display_name', ticker['ticker'])
                 ticker['kpi'] = metadata[ticker_key].get('kpi', ticker['kpi'])
                 ticker['parent_ticker'] = metadata[ticker_key].get('parent_ticker', None)
+                ticker['relevance_percentage'] = metadata[ticker_key].get('relevance_percentage', None)
             else:
                 ticker['parent_ticker'] = None
+                ticker['relevance_percentage'] = None
         
         print(f"✅ Found {len(tickers)} tickers")
         return jsonify({'success': True, 'tickers': tickers})

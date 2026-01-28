@@ -5206,19 +5206,7 @@
                         ticker.hasCustomProfile = false;
                     }
                     
-                    // Load metadata to get relevance_percentage
-                    try {
-                        const metadataResponse = await fetch('/api/hedge-fund-iq/metadata');
-                        const metadataData = await metadataResponse.json();
-                        if (metadataData.success && metadataData.metadata) {
-                            const tickerMetadata = metadataData.metadata[ticker.s3_key];
-                            if (tickerMetadata) {
-                                ticker.relevance_percentage = tickerMetadata.relevance_percentage;
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Error loading metadata:', error);
-                    }
+                    // Relevance percentage is already included in ticker data from the list endpoint
                             ticker.hasCustomProfile = profileData.profiles.length > 0 && profileData.profiles[0] !== ticker.ticker;
                         } else {
                             ticker.profiles = [ticker.ticker];
