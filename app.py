@@ -5395,22 +5395,45 @@ def analyze_key_insights_with_ai():
                                     'index': item.get('index', 0)
                                 })
                     
-                    # Categories (NOT brands) - exclude brand-related categories
-                    elif 'PURCHASED' in cat_upper or 'CATEGORY' in cat_upper:
-                        # Only include if it's a category, not a brand
-                        if 'BRAND' not in cat_upper and 'SHOP' not in cat_upper:
-                            for item in items:
+                    # Categories (NOT brands) - look for purchased categories
+                    # Categories are typically things like "Food & Beverage", "Apparel", "Electronics", etc.
+                    # NOT individual brand names like "Nike", "Coca-Cola", etc.
+                    elif 'PURCHASED' in cat_upper:
+                        # Check if this category contains category-level items (not brands)
+                        # Category names are usually broader (e.g., "Food & Beverage", "Apparel & Accessories")
+                        # Brand names are usually specific company/product names
+                        for item in items:
+                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
                                 item_name = str(item.get('name', '')).upper()
-                                # Exclude if it looks like a brand name (has common brand indicators)
-                                if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
-                                    # Check if it's likely a category vs brand
-                                    is_likely_category = any(indicator in item_name for indicator in ['CATEGORY', 'TYPE', 'CLASS', 'GROUP'])
-                                    if is_likely_category or len(item_name.split()) <= 2:  # Short names might be categories
-                                        focused['categories'].append({
-                                            'name': item.get('name'),
-                                            'pct': item.get('pct', 0),
-                                            'index': item.get('index', 0)
-                                        })
+                                item_category = str(item.get('category', '')).upper()
+                                
+                                # Exclude if it's clearly a brand (common brand indicators)
+                                is_brand = any(indicator in item_name for indicator in [
+                                    'INC', 'LLC', 'CORP', 'CO.', 'COMPANY', 'BRAND'
+                                ]) or item_name in [
+                                    'NIKE', 'COCA-COLA', 'COKE', 'PEPSI', 'APPLE', 'SAMSUNG', 
+                                    'AMAZON', 'WALMART', 'TARGET', 'STARBUCKS', 'MCDONALDS'
+                                ]
+                                
+                                # Include if it's a category name (usually longer, descriptive)
+                                # Categories often have words like "&", "and", or are multi-word descriptive terms
+                                is_category = (
+                                    '&' in item_name or 
+                                    ' AND ' in item_name or
+                                    len(item_name.split()) >= 3 or
+                                    any(cat_word in item_name for cat_word in [
+                                        'CATEGORY', 'TYPE', 'CLASS', 'GROUP', 'SECTOR', 'INDUSTRY'
+                                    ])
+                                )
+                                
+                                # Also check the category field - if it contains category-level info
+                                if not is_brand and (is_category or 'PURCHASED' in item_category):
+                                    focused['categories'].append({
+                                        'name': item.get('name'),
+                                        'pct': item.get('pct', 0),
+                                        'index': item.get('index', 0),
+                                        'category': item.get('category', category)
+                                    })
             
             # Sort by index (descending) and take top items
             for key in ['interests', 'socialMedia', 'streamingPlatforms', 'streamingMusic', 'categories']:
