@@ -11556,12 +11556,32 @@
                                 
                                 <!-- Expanded View (Hidden by default) -->
                                 <div id="dateRangeExpanded" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-                                    <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                                    <!-- Mode Toggle -->
+                                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center;">
+                                        <button id="trendsDateModeBtn" class="dash-action-btn" onclick="toggleTrendsDateMode('date')" style="background: var(--accent-cyan); color: var(--bg-dark);">📅 Calendar Dates</button>
+                                        <button id="trendsQuarterModeBtn" class="dash-action-btn" onclick="toggleTrendsDateMode('quarter')" style="background: var(--bg-input); color: var(--text-primary);">📊 Quarters</button>
+                                    </div>
+                                    
+                                    <!-- Calendar Date Mode -->
+                                    <div id="trendsDateMode" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                                         <input type="date" id="trendsStartDate" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
                                         <span style="color: var(--text-secondary);">to</span>
                                         <input type="date" id="trendsEndDate" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
                                         <button class="dash-action-btn" onclick="applyTrendsDateRange()">Apply</button>
                                         <button class="dash-action-btn" onclick="resetToQuarterToDate()">Reset to QTD</button>
+                                    </div>
+                                    
+                                    <!-- Quarter Mode -->
+                                    <div id="trendsQuarterMode" style="display: none; gap: 1rem; align-items: center; flex-wrap: wrap; flex-direction: row;">
+                                        <select id="trendsStartQuarter" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); min-width: 150px;">
+                                            <option value="">Select Start Quarter</option>
+                                        </select>
+                                        <span style="color: var(--text-secondary);">to</span>
+                                        <select id="trendsEndQuarter" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); min-width: 150px;">
+                                            <option value="">Select End Quarter</option>
+                                        </select>
+                                        <button class="dash-action-btn" onclick="applyTrendsQuarterRange()">Apply</button>
+                                        <button class="dash-action-btn" onclick="resetTrendsQuarterRange()">Reset to All</button>
                                     </div>
                                 </div>
                             </div>
@@ -11601,12 +11621,32 @@
                                 
                                 <!-- Expanded View (Hidden by default) -->
                                 <div id="dailyDateRangeExpanded" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-                                    <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                                    <!-- Mode Toggle -->
+                                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center;">
+                                        <button id="dailyDateModeBtn" class="dash-action-btn" onclick="toggleDailyDateMode('date')" style="background: var(--accent-cyan); color: var(--bg-dark);">📅 Calendar Dates</button>
+                                        <button id="dailyQuarterModeBtn" class="dash-action-btn" onclick="toggleDailyDateMode('quarter')" style="background: var(--bg-input); color: var(--text-primary);">📊 Quarters</button>
+                                    </div>
+                                    
+                                    <!-- Calendar Date Mode -->
+                                    <div id="dailyDateMode" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                                         <input type="date" id="dailyStartDate" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
                                         <span style="color: var(--text-secondary);">to</span>
                                         <input type="date" id="dailyEndDate" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
                                         <button class="dash-action-btn" onclick="applyDailyDateRange()">Apply</button>
                                         <button class="dash-action-btn" onclick="resetDailyDateRange()">Reset to All</button>
+                                    </div>
+                                    
+                                    <!-- Quarter Mode -->
+                                    <div id="dailyQuarterMode" style="display: none; gap: 1rem; align-items: center; flex-wrap: wrap; flex-direction: row;">
+                                        <select id="dailyStartQuarter" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); min-width: 150px;">
+                                            <option value="">Select Start Quarter</option>
+                                        </select>
+                                        <span style="color: var(--text-secondary);">to</span>
+                                        <select id="dailyEndQuarter" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); min-width: 150px;">
+                                            <option value="">Select End Quarter</option>
+                                        </select>
+                                        <button class="dash-action-btn" onclick="applyDailyQuarterRange()">Apply</button>
+                                        <button class="dash-action-btn" onclick="resetDailyQuarterRange()">Reset to All</button>
                                     </div>
                                 </div>
                             </div>
@@ -11658,12 +11698,32 @@
                                 
                                 <!-- Expanded View (Hidden by default) -->
                                 <div id="historicDateRangeExpanded" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-                                    <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                                    <!-- Mode Toggle -->
+                                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center;">
+                                        <button id="historicDateModeBtn" class="dash-action-btn" onclick="toggleHistoricDateMode('date')" style="background: var(--accent-cyan); color: var(--bg-dark);">📅 Calendar Dates</button>
+                                        <button id="historicQuarterModeBtn" class="dash-action-btn" onclick="toggleHistoricDateMode('quarter')" style="background: var(--bg-input); color: var(--text-primary);">📊 Quarters</button>
+                                    </div>
+                                    
+                                    <!-- Calendar Date Mode -->
+                                    <div id="historicDateMode" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                                         <input type="date" id="historicStartDate" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
                                         <span style="color: var(--text-secondary);">to</span>
                                         <input type="date" id="historicEndDate" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
                                         <button class="dash-action-btn" onclick="applyHistoricDateRange()">Apply</button>
                                         <button class="dash-action-btn" onclick="resetHistoricDateRange()">Reset to All</button>
+                                    </div>
+                                    
+                                    <!-- Quarter Mode -->
+                                    <div id="historicQuarterMode" style="display: none; gap: 1rem; align-items: center; flex-wrap: wrap; flex-direction: row;">
+                                        <select id="historicStartQuarter" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); min-width: 150px;">
+                                            <option value="">Select Start Quarter</option>
+                                        </select>
+                                        <span style="color: var(--text-secondary);">to</span>
+                                        <select id="historicEndQuarter" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); min-width: 150px;">
+                                            <option value="">Select End Quarter</option>
+                                        </select>
+                                        <button class="dash-action-btn" onclick="applyHistoricQuarterRange()">Apply</button>
+                                        <button class="dash-action-btn" onclick="resetHistoricQuarterRange()">Reset to All</button>
                                     </div>
                                 </div>
                             </div>
@@ -13734,14 +13794,24 @@
         }
         
         function updateDateRangeDisplay() {
-            const startDate = document.getElementById('trendsStartDate').value;
-            const endDate = document.getElementById('trendsEndDate').value;
             const display = document.getElementById('dateRangeDisplay');
             
-            if (startDate && endDate) {
-                display.textContent = `${startDate} to ${endDate}`;
+            if (trendsDateMode === 'quarter') {
+                const startQuarter = document.getElementById('trendsStartQuarter').value;
+                const endQuarter = document.getElementById('trendsEndQuarter').value;
+                if (startQuarter && endQuarter) {
+                    display.textContent = `${startQuarter} to ${endQuarter}`;
+                } else {
+                    display.textContent = 'All quarters';
+                }
             } else {
-                display.textContent = 'Not set';
+                const startDate = document.getElementById('trendsStartDate').value;
+                const endDate = document.getElementById('trendsEndDate').value;
+                if (startDate && endDate) {
+                    display.textContent = `${startDate} to ${endDate}`;
+                } else {
+                    display.textContent = 'Not set';
+                }
             }
         }
         
@@ -13811,6 +13881,147 @@
             document.getElementById('dateRangeToggleIcon').style.transform = 'rotate(0deg)';
         }
         
+        // Helper function to get unique quarters from data
+        function getAvailableQuarters(data) {
+            if (!data || !data.data) return [];
+            const quarters = [...new Set(data.data.map(d => d.Quarter).filter(q => q))];
+            // Sort quarters: Q4 2025, Q3 2025, Q2 2025, Q1 2025, Q4 2024, etc.
+            return quarters.sort((a, b) => {
+                const [qA, yearA] = a.split(' ');
+                const [qB, yearB] = b.split(' ');
+                const qNumA = parseInt(qA.replace('Q', ''));
+                const qNumB = parseInt(qB.replace('Q', ''));
+                if (yearB !== yearA) {
+                    return parseInt(yearB) - parseInt(yearA);
+                }
+                return qNumB - qNumA;
+            });
+        }
+        
+        // Helper function to populate quarter dropdowns
+        function populateQuarterDropdowns(selectId, data) {
+            const select = document.getElementById(selectId);
+            if (!select) return;
+            
+            // Clear existing options except the first one
+            while (select.options.length > 1) {
+                select.remove(1);
+            }
+            
+            const quarters = getAvailableQuarters(data);
+            quarters.forEach(quarter => {
+                const option = document.createElement('option');
+                option.value = quarter;
+                option.textContent = quarter;
+                select.appendChild(option);
+            });
+        }
+        
+        // Trends Tab Quarter Functions
+        let trendsDateMode = 'date';
+        
+        function toggleTrendsDateMode(mode) {
+            trendsDateMode = mode;
+            const dateMode = document.getElementById('trendsDateMode');
+            const quarterMode = document.getElementById('trendsQuarterMode');
+            const dateBtn = document.getElementById('trendsDateModeBtn');
+            const quarterBtn = document.getElementById('trendsQuarterModeBtn');
+            
+            if (mode === 'date') {
+                dateMode.style.display = 'flex';
+                quarterMode.style.display = 'none';
+                dateBtn.style.background = 'var(--accent-cyan)';
+                dateBtn.style.color = 'var(--bg-dark)';
+                quarterBtn.style.background = 'var(--bg-input)';
+                quarterBtn.style.color = 'var(--text-primary)';
+            } else {
+                dateMode.style.display = 'none';
+                quarterMode.style.display = 'flex';
+                quarterMode.style.flexDirection = 'row';
+                dateBtn.style.background = 'var(--bg-input)';
+                dateBtn.style.color = 'var(--text-primary)';
+                quarterBtn.style.background = 'var(--accent-cyan)';
+                quarterBtn.style.color = 'var(--bg-dark)';
+                
+                // Populate quarter dropdowns if not already done
+                if (currentTickerData) {
+                    populateQuarterDropdowns('trendsStartQuarter', currentTickerData);
+                    populateQuarterDropdowns('trendsEndQuarter', currentTickerData);
+                }
+            }
+        }
+        
+        function applyTrendsQuarterRange() {
+            const startQuarter = document.getElementById('trendsStartQuarter').value;
+            const endQuarter = document.getElementById('trendsEndQuarter').value;
+            
+            if (!startQuarter || !endQuarter) {
+                alert('Please select both start and end quarters');
+                return;
+            }
+            
+            if (!currentTickerData || !currentTickerData.data) {
+                alert('No ticker data loaded');
+                return;
+            }
+            
+            // Get all quarters between start and end (inclusive)
+            const quarters = getAvailableQuarters(currentTickerData);
+            const startIdx = quarters.indexOf(startQuarter);
+            const endIdx = quarters.indexOf(endQuarter);
+            
+            if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) {
+                alert('Invalid quarter range');
+                return;
+            }
+            
+            const selectedQuarters = quarters.slice(endIdx, startIdx + 1); // Reverse order (newest first)
+            
+            // Filter data by quarters
+            const filtered = currentTickerData.data.filter(d => selectedQuarters.includes(d.Quarter));
+            
+            if (filtered.length === 0) {
+                alert('No data found in the selected quarter range');
+                return;
+            }
+            
+            // Update chart with filtered data
+            filteredTickerData = filtered;
+            renderDailyChurnChart(filtered);
+            
+            // Update display
+            const display = document.getElementById('dateRangeDisplay');
+            display.textContent = `${startQuarter} to ${endQuarter}`;
+            
+            // Collapse
+            document.getElementById('dateRangeExpanded').style.display = 'none';
+            document.getElementById('dateRangeToggleIcon').textContent = '▼';
+            document.getElementById('dateRangeToggleIcon').style.transform = 'rotate(0deg)';
+        }
+        
+        function resetTrendsQuarterRange() {
+            if (!currentTickerData || !currentTickerData.data) {
+                return;
+            }
+            
+            // Clear quarter selections
+            document.getElementById('trendsStartQuarter').value = '';
+            document.getElementById('trendsEndQuarter').value = '';
+            
+            // Reset chart to all data
+            filteredTickerData = null;
+            renderDailyChurnChart(currentTickerData.data);
+            
+            // Update display
+            const display = document.getElementById('dateRangeDisplay');
+            display.textContent = 'All quarters';
+            
+            // Collapse
+            document.getElementById('dateRangeExpanded').style.display = 'none';
+            document.getElementById('dateRangeToggleIcon').textContent = '▼';
+            document.getElementById('dateRangeToggleIcon').style.transform = 'rotate(0deg)';
+        }
+        
         // Daily Metrics Date Range Functions
         function toggleDailyDateRangeExpanded() {
             const collapsed = document.getElementById('dailyDateRangeCollapsed');
@@ -13829,14 +14040,24 @@
         }
         
         function updateDailyDateRangeDisplay() {
-            const startDate = document.getElementById('dailyStartDate').value;
-            const endDate = document.getElementById('dailyEndDate').value;
             const display = document.getElementById('dailyDateRangeDisplay');
             
-            if (startDate && endDate) {
-                display.textContent = `${startDate} to ${endDate}`;
+            if (dailyDateMode === 'quarter') {
+                const startQuarter = document.getElementById('dailyStartQuarter').value;
+                const endQuarter = document.getElementById('dailyEndQuarter').value;
+                if (startQuarter && endQuarter) {
+                    display.textContent = `${startQuarter} to ${endQuarter}`;
+                } else {
+                    display.textContent = 'All dates';
+                }
             } else {
-                display.textContent = 'All dates';
+                const startDate = document.getElementById('dailyStartDate').value;
+                const endDate = document.getElementById('dailyEndDate').value;
+                if (startDate && endDate) {
+                    display.textContent = `${startDate} to ${endDate}`;
+                } else {
+                    display.textContent = 'All dates';
+                }
             }
         }
         
@@ -13894,6 +14115,110 @@
             document.getElementById('dailyDateRangeToggleIcon').style.transform = 'rotate(0deg)';
         }
         
+        // Daily Metrics Quarter Functions
+        let dailyDateMode = 'date';
+        
+        function toggleDailyDateMode(mode) {
+            dailyDateMode = mode;
+            const dateMode = document.getElementById('dailyDateMode');
+            const quarterMode = document.getElementById('dailyQuarterMode');
+            const dateBtn = document.getElementById('dailyDateModeBtn');
+            const quarterBtn = document.getElementById('dailyQuarterModeBtn');
+            
+            if (mode === 'date') {
+                dateMode.style.display = 'flex';
+                quarterMode.style.display = 'none';
+                dateBtn.style.background = 'var(--accent-cyan)';
+                dateBtn.style.color = 'var(--bg-dark)';
+                quarterBtn.style.background = 'var(--bg-input)';
+                quarterBtn.style.color = 'var(--text-primary)';
+            } else {
+                dateMode.style.display = 'none';
+                quarterMode.style.display = 'flex';
+                quarterMode.style.flexDirection = 'row';
+                dateBtn.style.background = 'var(--bg-input)';
+                dateBtn.style.color = 'var(--text-primary)';
+                quarterBtn.style.background = 'var(--accent-cyan)';
+                quarterBtn.style.color = 'var(--bg-dark)';
+                
+                // Populate quarter dropdowns if not already done
+                if (currentTickerData) {
+                    populateQuarterDropdowns('dailyStartQuarter', currentTickerData);
+                    populateQuarterDropdowns('dailyEndQuarter', currentTickerData);
+                }
+            }
+        }
+        
+        function applyDailyQuarterRange() {
+            const startQuarter = document.getElementById('dailyStartQuarter').value;
+            const endQuarter = document.getElementById('dailyEndQuarter').value;
+            
+            if (!startQuarter || !endQuarter) {
+                alert('Please select both start and end quarters');
+                return;
+            }
+            
+            if (!dailyTableDataCache) {
+                alert('No ticker data loaded');
+                return;
+            }
+            
+            // Get all quarters between start and end (inclusive)
+            const tempData = { data: dailyTableDataCache };
+            const quarters = getAvailableQuarters(tempData);
+            const startIdx = quarters.indexOf(startQuarter);
+            const endIdx = quarters.indexOf(endQuarter);
+            
+            if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) {
+                alert('Invalid quarter range');
+                return;
+            }
+            
+            const selectedQuarters = quarters.slice(endIdx, startIdx + 1); // Reverse order (newest first)
+            
+            // Filter data by quarters
+            const filtered = dailyTableDataCache.filter(d => selectedQuarters.includes(d.Quarter));
+            
+            if (filtered.length === 0) {
+                alert('No data found in the selected quarter range');
+                return;
+            }
+            
+            // Re-render table with filtered data
+            renderDailyTable(filtered, currentDailySortMode);
+            
+            // Update display
+            const display = document.getElementById('dailyDateRangeDisplay');
+            display.textContent = `${startQuarter} to ${endQuarter}`;
+            
+            // Collapse
+            document.getElementById('dailyDateRangeExpanded').style.display = 'none';
+            document.getElementById('dailyDateRangeToggleIcon').textContent = '▼';
+            document.getElementById('dailyDateRangeToggleIcon').style.transform = 'rotate(0deg)';
+        }
+        
+        function resetDailyQuarterRange() {
+            if (!dailyTableDataCache) {
+                return;
+            }
+            
+            // Clear quarter selections
+            document.getElementById('dailyStartQuarter').value = '';
+            document.getElementById('dailyEndQuarter').value = '';
+            
+            // Reset table to show all data
+            renderDailyTable(dailyTableDataCache, currentDailySortMode);
+            
+            // Update display
+            const display = document.getElementById('dailyDateRangeDisplay');
+            display.textContent = 'All dates';
+            
+            // Collapse
+            document.getElementById('dailyDateRangeExpanded').style.display = 'none';
+            document.getElementById('dailyDateRangeToggleIcon').textContent = '▼';
+            document.getElementById('dailyDateRangeToggleIcon').style.transform = 'rotate(0deg)';
+        }
+        
         // Historic Performance Date Range Functions
         function toggleHistoricDateRangeExpanded() {
             const collapsed = document.getElementById('historicDateRangeCollapsed');
@@ -13912,14 +14237,24 @@
         }
         
         function updateHistoricDateRangeDisplay() {
-            const startDate = document.getElementById('historicStartDate').value;
-            const endDate = document.getElementById('historicEndDate').value;
             const display = document.getElementById('historicDateRangeDisplay');
             
-            if (startDate && endDate) {
-                display.textContent = `${startDate} to ${endDate}`;
+            if (historicDateMode === 'quarter') {
+                const startQuarter = document.getElementById('historicStartQuarter').value;
+                const endQuarter = document.getElementById('historicEndQuarter').value;
+                if (startQuarter && endQuarter) {
+                    display.textContent = `${startQuarter} to ${endQuarter}`;
+                } else {
+                    display.textContent = 'All quarters';
+                }
             } else {
-                display.textContent = 'All quarters';
+                const startDate = document.getElementById('historicStartDate').value;
+                const endDate = document.getElementById('historicEndDate').value;
+                if (startDate && endDate) {
+                    display.textContent = `${startDate} to ${endDate}`;
+                } else {
+                    display.textContent = 'All quarters';
+                }
             }
         }
         
@@ -13972,6 +14307,109 @@
             
             // Update display and collapse
             updateHistoricDateRangeDisplay();
+            document.getElementById('historicDateRangeExpanded').style.display = 'none';
+            document.getElementById('historicDateRangeToggleIcon').textContent = '▼';
+            document.getElementById('historicDateRangeToggleIcon').style.transform = 'rotate(0deg)';
+        }
+        
+        // Historic Performance Quarter Functions
+        let historicDateMode = 'date';
+        
+        function toggleHistoricDateMode(mode) {
+            historicDateMode = mode;
+            const dateMode = document.getElementById('historicDateMode');
+            const quarterMode = document.getElementById('historicQuarterMode');
+            const dateBtn = document.getElementById('historicDateModeBtn');
+            const quarterBtn = document.getElementById('historicQuarterModeBtn');
+            
+            if (mode === 'date') {
+                dateMode.style.display = 'flex';
+                quarterMode.style.display = 'none';
+                dateBtn.style.background = 'var(--accent-cyan)';
+                dateBtn.style.color = 'var(--bg-dark)';
+                quarterBtn.style.background = 'var(--bg-input)';
+                quarterBtn.style.color = 'var(--text-primary)';
+            } else {
+                dateMode.style.display = 'none';
+                quarterMode.style.display = 'flex';
+                quarterMode.style.flexDirection = 'row';
+                dateBtn.style.background = 'var(--bg-input)';
+                dateBtn.style.color = 'var(--text-primary)';
+                quarterBtn.style.background = 'var(--accent-cyan)';
+                quarterBtn.style.color = 'var(--bg-dark)';
+                
+                // Populate quarter dropdowns if not already done
+                if (currentTickerData) {
+                    populateQuarterDropdowns('historicStartQuarter', currentTickerData);
+                    populateQuarterDropdowns('historicEndQuarter', currentTickerData);
+                }
+            }
+        }
+        
+        function applyHistoricQuarterRange() {
+            const startQuarter = document.getElementById('historicStartQuarter').value;
+            const endQuarter = document.getElementById('historicEndQuarter').value;
+            
+            if (!startQuarter || !endQuarter) {
+                alert('Please select both start and end quarters');
+                return;
+            }
+            
+            if (!currentTickerData || !currentTickerData.data) {
+                alert('No ticker data loaded');
+                return;
+            }
+            
+            // Get all quarters between start and end (inclusive)
+            const quarters = getAvailableQuarters(currentTickerData);
+            const startIdx = quarters.indexOf(startQuarter);
+            const endIdx = quarters.indexOf(endQuarter);
+            
+            if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) {
+                alert('Invalid quarter range');
+                return;
+            }
+            
+            const selectedQuarters = quarters.slice(endIdx, startIdx + 1); // Reverse order (newest first)
+            
+            // Filter data by quarters
+            const filtered = currentTickerData.data.filter(d => selectedQuarters.includes(d.Quarter));
+            
+            if (filtered.length === 0) {
+                alert('No data found in the selected quarter range');
+                return;
+            }
+            
+            // Re-render quarterly table with filtered data
+            renderQuarterlyTable(filtered, currentQuarterlySortMode);
+            
+            // Update display
+            const display = document.getElementById('historicDateRangeDisplay');
+            display.textContent = `${startQuarter} to ${endQuarter}`;
+            
+            // Collapse
+            document.getElementById('historicDateRangeExpanded').style.display = 'none';
+            document.getElementById('historicDateRangeToggleIcon').textContent = '▼';
+            document.getElementById('historicDateRangeToggleIcon').style.transform = 'rotate(0deg)';
+        }
+        
+        function resetHistoricQuarterRange() {
+            if (!currentTickerData || !currentTickerData.data) {
+                return;
+            }
+            
+            // Clear quarter selections
+            document.getElementById('historicStartQuarter').value = '';
+            document.getElementById('historicEndQuarter').value = '';
+            
+            // Reset table to show all data
+            renderQuarterlyTable(currentTickerData.data, currentQuarterlySortMode);
+            
+            // Update display
+            const display = document.getElementById('historicDateRangeDisplay');
+            display.textContent = 'All quarters';
+            
+            // Collapse
             document.getElementById('historicDateRangeExpanded').style.display = 'none';
             document.getElementById('historicDateRangeToggleIcon').textContent = '▼';
             document.getElementById('historicDateRangeToggleIcon').style.transform = 'rotate(0deg)';
@@ -14179,6 +14617,14 @@
                 // Update the collapsed display
                 updateDateRangeDisplay();
             }
+            
+            // Populate quarter dropdowns for all tabs
+            populateQuarterDropdowns('trendsStartQuarter', data);
+            populateQuarterDropdowns('trendsEndQuarter', data);
+            populateQuarterDropdowns('dailyStartQuarter', data);
+            populateQuarterDropdowns('dailyEndQuarter', data);
+            populateQuarterDropdowns('historicStartQuarter', data);
+            populateQuarterDropdowns('historicEndQuarter', data);
             
             // Render daily chart with QTD data only
             renderDailyChurnChart(currentQuarterData);
@@ -14891,6 +15337,15 @@
         
         // Expose to window for onclick handlers
         window.toggleTickerHoverDescriptors = toggleTickerHoverDescriptors;
+        window.toggleTrendsDateMode = toggleTrendsDateMode;
+        window.toggleDailyDateMode = toggleDailyDateMode;
+        window.toggleHistoricDateMode = toggleHistoricDateMode;
+        window.applyTrendsQuarterRange = applyTrendsQuarterRange;
+        window.resetTrendsQuarterRange = resetTrendsQuarterRange;
+        window.applyDailyQuarterRange = applyDailyQuarterRange;
+        window.resetDailyQuarterRange = resetDailyQuarterRange;
+        window.applyHistoricQuarterRange = applyHistoricQuarterRange;
+        window.resetHistoricQuarterRange = resetHistoricQuarterRange;
         
         // ============================================================================
         // END HEDGE FUND IQ FUNCTIONS
