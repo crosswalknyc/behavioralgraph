@@ -2520,6 +2520,53 @@
             border-radius: 8px;
             padding: 1.25rem;
             text-align: left;
+            min-width: 0; /* Prevent overflow */
+        }
+        
+        /* Responsive grid for ticker dashboard cards */
+        .ticker-cards-grid {
+            display: grid;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .ticker-cards-grid.two-columns {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .ticker-cards-grid.four-columns {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        /* Responsive breakpoints */
+        @media (max-width: 768px) {
+            .ticker-cards-grid.two-columns,
+            .ticker-cards-grid.four-columns {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .ticker-cards-grid.four-columns {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (min-width: 1025px) {
+            .ticker-cards-grid.four-columns {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        /* Ensure stat values don't overflow */
+        .stat-value {
+            word-break: break-word;
+            overflow-wrap: break-word;
+            font-size: clamp(1.5rem, 4vw, 2.5rem);
+        }
+        
+        .stat-label {
+            font-size: clamp(0.75rem, 2vw, 0.9rem);
         }
 
         /* Pulsing Card - Static (no animation on card itself) */
@@ -11442,10 +11489,10 @@
                             </div>
                             
                             <!-- Projected Growth Rate + Accuracy - Side by Side -->
-                            <div style="margin-bottom: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div class="ticker-cards-grid two-columns">
                                 <div class="stat-card" id="projectedGrowthCard" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column;" onclick="navigateToTrends()">
                                     <div class="stat-label" id="projectedGrowthLabel">🔮 Q1 2026 Projected Net Growth Rate</div>
-                                    <div class="stat-value pulsing-number" id="projectedGrowth" style="font-size: 2.5rem; display: block;">--</div>
+                                    <div class="stat-value pulsing-number" id="projectedGrowth" style="display: block;">--</div>
                                     <div class="stat-label" id="projectedGrowthKPI" style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem;">--</div>
                                 </div>
                                 <div id="liveDataAccuracyBadge" class="stat-card" style="display: none;">
@@ -11455,7 +11502,7 @@
                             </div>
                             
                             <!-- 2x2 Grid -->
-                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
+                            <div class="ticker-cards-grid four-columns" style="margin-bottom: 1.5rem;">
                                 <div class="stat-card">
                                     <div class="stat-label">💹 QTD Net Growth %</div>
                                     <div class="stat-value" id="netGrowth">--</div>
