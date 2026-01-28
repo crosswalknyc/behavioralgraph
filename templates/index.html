@@ -32288,7 +32288,7 @@
                 name: window.currentProfileData.name || 'Profile',
                 sampleSize: window.currentProfileData.sampleSize || 0,
                 projectedUS: window.currentProfileData.projectedUS || 0,
-                medianAge: calculateMedianAge(window.currentProfileData.demographics?.age || {}),
+                medianAge: calculateMedianAgeFromDistribution(window.currentProfileData.demographics?.age || {}),
                 demographics: window.currentProfileData.demographics || {},
                 demographicsProjection: window.currentProfileData.demographicsProjection || {},
                 behavioral: window.currentProfileData.behavioral || {}
@@ -32316,7 +32316,7 @@
                             name: genPopProfile.name || 'General Population',
                             sampleSize: parsed.sampleSize || 0,
                             projectedUS: parsed.projectedUS || 0,
-                            medianAge: calculateMedianAge(parsed.demographics?.age || {}),
+                            medianAge: calculateMedianAgeFromDistribution(parsed.demographics?.age || {}),
                             demographics: parsed.demographics || {},
                             demographicsProjection: parsed.demographicsProjection || {},
                             behavioral: parsed.behavioral || {}
