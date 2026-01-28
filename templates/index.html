@@ -4928,17 +4928,17 @@
         }
         
         /* Affinity Map Tab */
-        .affinity-container, .sponsorship-container, .talent-container, .media-container {
+        .affinity-container, .sponsorship-container, .talent-container, .media-container, .ecosystem-container {
             padding: 0;
         }
-        .affinity-header, .sponsorship-header, .talent-header, .media-header {
+        .affinity-header, .sponsorship-header, .talent-header, .media-header, .ecosystem-header {
             margin-bottom: 1rem;
         }
-        .affinity-header h2, .sponsorship-header h2, .talent-header h2, .media-header h2 {
+        .affinity-header h2, .sponsorship-header h2, .talent-header h2, .media-header h2, .ecosystem-header h2 {
             margin: 0 0 0.5rem 0;
             font-size: 1.5rem;
         }
-        .affinity-header p, .sponsorship-header p, .talent-header p, .media-header p {
+        .affinity-header p, .sponsorship-header p, .talent-header p, .media-header p, .ecosystem-header p {
             color: var(--text-secondary);
             margin: 0;
         }
@@ -5057,9 +5057,105 @@
             font-style: italic;
         }
         
+        /* Ecosystem Tab Styles */
+        .ecosystem-section {
+            margin-bottom: 2.5rem;
+        }
+        .ecosystem-section-header {
+            margin-bottom: 1.5rem;
+        }
+        .ecosystem-section-header h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.2rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .ecosystem-section-header .section-description {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.5;
+            margin: 0;
+        }
+        .ecosystem-section-header .section-description span {
+            color: var(--accent-lime);
+            font-weight: 600;
+        }
+        .ecosystem-insights-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+        .ecosystem-insight-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1.25rem;
+            transition: all 0.3s ease;
+        }
+        .ecosystem-insight-card:hover {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 4px 12px rgba(0, 200, 255, 0.1);
+        }
+        .ecosystem-insight-card.highlight {
+            border-color: var(--accent-lime);
+            background: linear-gradient(135deg, rgba(200, 230, 0, 0.05), transparent);
+        }
+        .ecosystem-insight-card.highlight.warning {
+            border-color: #f59e0b;
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.05), transparent);
+        }
+        .ecosystem-insight-card h4 {
+            margin: 0 0 1rem 0;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .ecosystem-insight-card .insight-content {
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+        .ecosystem-insight-card .insight-content ul {
+            margin: 0;
+            padding-left: 1.25rem;
+        }
+        .ecosystem-insight-card .insight-content li {
+            margin-bottom: 0.5rem;
+        }
+        .ecosystem-insight-card .insight-content .insight-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+            padding: 0.5rem;
+            background: var(--bg-input);
+            border-radius: 6px;
+        }
+        .ecosystem-insight-card .insight-content .insight-item::before {
+            content: "→";
+            color: var(--accent-cyan);
+            font-weight: bold;
+            margin-right: 0.25rem;
+        }
+        .ecosystem-insight-card .insight-content .insight-label {
+            font-weight: 600;
+            color: var(--accent-lime);
+            margin-right: 0.5rem;
+        }
+        .ecosystem-insight-card .insight-content .insight-value {
+            flex: 1;
+            color: var(--text-primary);
+        }
+        
         @media (max-width: 1200px) {
             .affinity-insights-row, .sponsor-summary-row { grid-template-columns: 1fr; }
             .activation-grid { grid-template-columns: repeat(2, 1fr); }
+            .ecosystem-insights-grid { grid-template-columns: 1fr; }
         }
         
         .affinity-grid, .sponsorship-grid, .talent-grid, .media-grid {
@@ -7214,6 +7310,156 @@
             overflow-y: auto;
             padding: 2rem;
         }
+        
+        /* Key Insight Builder Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1001;
+        }
+        
+        .modal-overlay .modal-content {
+            background: var(--bg-card);
+            border-radius: 12px;
+            width: 90%;
+            max-width: 1200px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 2rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+        
+        .swot-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+        
+        .swot-card {
+            background: var(--bg-input);
+            border: 2px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1.25rem;
+        }
+        
+        .swot-card.strengths {
+            border-color: #10b981;
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), transparent);
+        }
+        
+        .swot-card.weaknesses {
+            border-color: #f59e0b;
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), transparent);
+        }
+        
+        .swot-card.opportunities {
+            border-color: var(--accent-cyan);
+            background: linear-gradient(135deg, rgba(0, 217, 255, 0.1), transparent);
+        }
+        
+        .swot-card.threats {
+            border-color: #ef4444;
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), transparent);
+        }
+        
+        .swot-card h4 {
+            margin: 0 0 0.75rem 0;
+            font-size: 1rem;
+            font-weight: 700;
+        }
+        
+        .swot-card ul {
+            margin: 0;
+            padding-left: 1.25rem;
+            list-style: disc;
+        }
+        
+        .swot-card li {
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        
+        .demographics-overview {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .demo-item {
+            background: var(--bg-card);
+            padding: 0.75rem;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .demo-item-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 0.25rem;
+        }
+        
+        .demo-item-value {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .shines-section {
+            background: linear-gradient(135deg, rgba(200, 230, 0, 0.1), transparent);
+            border: 2px solid var(--accent-lime);
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        
+        .shines-section h3 {
+            margin: 0 0 1rem 0;
+            color: var(--accent-lime);
+        }
+        
+        .shines-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+        
+        .shine-item {
+            background: var(--bg-card);
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 4px solid var(--accent-lime);
+        }
+        
+        .shine-item h4 {
+            margin: 0 0 0.5rem 0;
+            font-size: 0.9rem;
+            color: var(--accent-lime);
+        }
+        
+        .shine-item p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+        }
 
         .summary-header {
             display: flex;
@@ -8669,6 +8915,7 @@
                         <button class="tab-btn tool-tab has-tooltip" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-tooltip="Affinity: Cross-category affinities showing what else this audience engages with across brands and content." onclick="showTab('affinity')"><span class="tab-icon">🔗</span><span class="tab-label">AFFINITY</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-tooltip="Ecosystem: Behavioral ecosystem analysis showing life moments, substitution patterns, cultural signals, emotional engagement, relevance shifts, and white-space opportunities." onclick="showTab('ecosystem')"><span class="tab-icon">🌐</span><span class="tab-label">ECOSYSTEM</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-tooltip="Sponsorship: Sponsorship valuation and partnership opportunity analysis for brand collaborations." onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-tooltip="Media: Media consumption patterns including TV, streaming, social media, and digital platform preferences." onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">MEDIA</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-tooltip="Content: Content consumption preferences including genres, formats, and viewing habits." onclick="showTab('content')"><span class="tab-icon">🎬</span><span class="tab-label">CONTENT</span></button>
@@ -9583,6 +9830,185 @@
                 </div>
             </div>
 
+            <!-- Ecosystem Tab -->
+            <div id="tab-ecosystem" class="tab-content">
+                <div class="ecosystem-container">
+                    <!-- Ecosystem Overview -->
+                    <div class="ecosystem-header">
+                        <h2 style="margin: 0; font-size: 1.5rem; color: var(--text-primary);">🌐 Ecosystem Analysis</h2>
+                        <p style="margin: 0.5rem 0 1.5rem 0; color: var(--text-secondary); font-size: 0.9rem;">Behavioral ecosystem insights derived from profile data showing life moments, substitution patterns, cultural signals, and white-space opportunities.</p>
+                    </div>
+
+                    <!-- Insight Section 1: Life Moments & Behaviors -->
+                    <div class="ecosystem-section">
+                        <div class="ecosystem-section-header">
+                            <h3>🔄 Life Moments & Behavioral Context</h3>
+                            <p class="section-description">What people are doing before and after <span id="ecosystemBrandName">PROFILE</span> enters their life. What life moments precede brand interactions, and what behaviors the brand competes with.</p>
+                        </div>
+                        <div class="ecosystem-insights-grid">
+                            <div class="ecosystem-insight-card">
+                                <h4 class="has-tooltip" data-tooltip="Pre-Engagement Behaviors: Activities and behaviors that typically occur before consumers interact with the brand.">⏮️ Before Engagement</h4>
+                                <div id="ecosystemBeforeEngagement" class="insight-content">
+                                    <div class="loading-placeholder">Analyzing pre-engagement patterns...</div>
+                                </div>
+                            </div>
+                            <div class="ecosystem-insight-card">
+                                <h4 class="has-tooltip" data-tooltip="Post-Engagement Behaviors: Activities and behaviors that typically occur after consumers interact with the brand.">⏭️ After Engagement</h4>
+                                <div id="ecosystemAfterEngagement" class="insight-content">
+                                    <div class="loading-placeholder">Analyzing post-engagement patterns...</div>
+                                </div>
+                            </div>
+                            <div class="ecosystem-insight-card highlight">
+                                <h4 class="has-tooltip" data-tooltip="Competitive Behaviors: What behaviors and categories compete with the brand for consumer attention and engagement.">⚔️ Competitive Behaviors</h4>
+                                <div id="ecosystemCompetitiveBehaviors" class="insight-content">
+                                    <div class="loading-placeholder">Identifying competitive moments...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Insight Section 2: Cross-Category Substitution -->
+                    <div class="ecosystem-section">
+                        <div class="ecosystem-section-header">
+                            <h3>🔄 Cross-Category Substitution & Occasion Leakage</h3>
+                            <p class="section-description">Early-warning signal data showing when people leave the category entirely, what replaces it, and functional shifts (e.g., fitness apps leading to soda drops, coffee rituals replacing soda moments).</p>
+                        </div>
+                        <div class="ecosystem-insights-grid">
+                            <div class="ecosystem-insight-card highlight">
+                                <h4 class="has-tooltip" data-tooltip="Category Exit Signals: Behavioral indicators that consumers are leaving the category before sales data shows it.">🚪 Category Exit Signals</h4>
+                                <div id="ecosystemCategoryExit" class="insight-content">
+                                    <div class="loading-placeholder">Detecting exit patterns...</div>
+                                </div>
+                            </div>
+                            <div class="ecosystem-insight-card">
+                                <h4 class="has-tooltip" data-tooltip="Replacement Categories: What categories and behaviors are replacing the brand's category in consumer lives.">🔄 Replacement Categories</h4>
+                                <div id="ecosystemReplacements" class="insight-content">
+                                    <div class="loading-placeholder">Identifying replacements...</div>
+                                </div>
+                            </div>
+                            <div class="ecosystem-insight-card">
+                                <h4 class="has-tooltip" data-tooltip="Functional Shifts: How functional needs are being met by alternative categories (e.g., energy drinks vs sleep, functional beverages vs soda).">⚡ Functional Shifts</h4>
+                                <div id="ecosystemFunctionalShifts" class="insight-content">
+                                    <div class="loading-placeholder">Analyzing functional shifts...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Insight Section 3: Cultural Momentum Signals -->
+                    <div class="ecosystem-section">
+                        <div class="ecosystem-section-header">
+                            <h3>📈 Cultural Momentum Signals (Pre-Trend Detection)</h3>
+                            <p class="section-description">Behavioral shifts before culture names them. Not TikTok views, but actual behavioral changes that precede trend identification (e.g., nighttime consumption moving earlier, solo consumption replacing social, nostalgia usage spiking).</p>
+                        </div>
+                        <div class="ecosystem-insights-grid">
+                            <div class="ecosystem-insight-card">
+                                <h4 class="has-tooltip" data-tooltip="Temporal Shifts: Changes in when consumers engage with the brand or category (e.g., nighttime moving to earlier times).">⏰ Temporal Shifts</h4>
+                                <div id="ecosystemTemporalShifts" class="insight-content">
+                                    <div class="loading-placeholder">Detecting temporal patterns...</div>
+                                </div>
+                            </div>
+                            <div class="ecosystem-insight-card">
+                                <h4 class="has-tooltip" data-tooltip="Social Context Changes: Shifts in how consumers engage (solo vs social, treat reframed as mental health reward).">👥 Social Context Changes</h4>
+                                <div id="ecosystemSocialContext" class="insight-content">
+                                    <div class="loading-placeholder">Analyzing social patterns...</div>
+                                </div>
+                            </div>
+                            <div class="ecosystem-insight-card highlight">
+                                <h4 class="has-tooltip" data-tooltip="Emerging Patterns: Behavioral patterns that are emerging before they become named trends.">🌱 Emerging Patterns</h4>
+                                <div id="ecosystemEmergingPatterns" class="insight-content">
+                                    <div class="loading-placeholder">Identifying emerging signals...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Insight Section 4: Attention & Emotion -->
+                    <div class="ecosystem-section">
+                        <div class="ecosystem-section-header">
+                            <h3>💭 Attention & Emotional Receptivity</h3>
+                            <p class="section-description">When people are actually mentally receptive, their emotional state at exposure, and whether the brand shows up in comfort vs celebration modes. Not just where ads run, but when consumers are emotionally ready.</p>
+                        </div>
+                        <div class="ecosystem-insights-grid">
+                            <div class="ecosystem-insight-card highlight">
+                                <h4 class="has-tooltip" data-tooltip="Emotional States: What emotional states are most receptive to brand engagement (e.g., recovery, relief, celebration, comfort).">😊 Emotional Receptivity</h4>
+                                <div id="ecosystemEmotionalStates" class="insight-content">
+                                    <div class="loading-placeholder">Analyzing emotional patterns...</div>
+                                </div>
+                            </div>
+                            <div class="ecosystem-insight-card">
+                                <h4 class="has-tooltip" data-tooltip="Mental Receptivity: When consumers are most mentally available and receptive to brand messaging.">🧠 Mental Receptivity Windows</h4>
+                                <div id="ecosystemMentalReceptivity" class="insight-content">
+                                    <div class="loading-placeholder">Identifying receptivity windows...</div>
+                                </div>
+                            </div>
+                            <div class="ecosystem-insight-card">
+                                <h4 class="has-tooltip" data-tooltip="Context Modes: Whether the brand appears in comfort vs celebration modes, and which performs better.">🎭 Context Modes</h4>
+                                <div id="ecosystemContextModes" class="insight-content">
+                                    <div class="loading-placeholder">Analyzing context modes...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Insight Section 5: Relevance Loss -->
+                    <div class="ecosystem-section">
+                        <div class="ecosystem-section-header">
+                            <h3>⚠️ Relevance Loss Signals</h3>
+                            <p class="section-description">Who the brand is losing relevance with before sales show it. Audiences who still purchase but are emotionally disengaging, replacing 'joy' with 'habit'.</p>
+                        </div>
+                        <div class="ecosystem-insights-grid">
+                            <div class="ecosystem-insight-card highlight warning">
+                                <h4 class="has-tooltip" data-tooltip="At-Risk Audiences: Demographics or segments that still purchase but show declining emotional engagement.">⚠️ At-Risk Audiences</h4>
+                                <div id="ecosystemAtRiskAudiences" class="insight-content">
+                                    <div class="loading-placeholder">Identifying at-risk segments...</div>
+                                </div>
+                            </div>
+                            <div class="ecosystem-insight-card">
+                                <h4 class="has-tooltip" data-tooltip="Engagement Shift: How engagement is changing from emotional connection to habitual behavior.">📉 Engagement Shift</h4>
+                                <div id="ecosystemEngagementShift" class="insight-content">
+                                    <div class="loading-placeholder">Analyzing engagement changes...</div>
+                                </div>
+                            </div>
+                            <div class="ecosystem-insight-card">
+                                <h4 class="has-tooltip" data-tooltip="Identity Disconnection: Segments where the brand no longer anchors identity or social expression.">🔗 Identity Disconnection</h4>
+                                <div id="ecosystemIdentityDisconnect" class="insight-content">
+                                    <div class="loading-placeholder">Detecting identity shifts...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Insight Section 6: White-Space Occasions -->
+                    <div class="ecosystem-section">
+                        <div class="ecosystem-section-header">
+                            <h3>🚀 White-Space Occasions</h3>
+                            <p class="section-description">New moments the brand doesn't own yet. Not new flavors, but new occasions: productivity breaks, micro-celebrations, stress-relief rituals, solo rewards vs shared joy.</p>
+                        </div>
+                        <div class="ecosystem-insights-grid">
+                            <div class="ecosystem-insight-card highlight">
+                                <h4 class="has-tooltip" data-tooltip="Untapped Occasions: New moments and occasions where the brand could play but currently doesn't.">💡 Untapped Occasions</h4>
+                                <div id="ecosystemUntappedOccasions" class="insight-content">
+                                    <div class="loading-placeholder">Identifying white-space moments...</div>
+                                </div>
+                            </div>
+                            <div class="ecosystem-insight-card">
+                                <h4 class="has-tooltip" data-tooltip="Occasion Opportunities: Specific opportunities for innovation, packaging, creative, and partnerships.">🎯 Opportunity Areas</h4>
+                                <div id="ecosystemOpportunities" class="insight-content">
+                                    <div class="loading-placeholder">Analyzing opportunities...</div>
+                                </div>
+                            </div>
+                            <div class="ecosystem-insight-card">
+                                <h4 class="has-tooltip" data-tooltip="Strategic Recommendations: Actionable recommendations for innovation, packaging, creative, and partnerships.">📋 Strategic Recommendations</h4>
+                                <div id="ecosystemRecommendations" class="insight-content">
+                                    <div class="loading-placeholder">Generating recommendations...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Sponsorship Match Tab -->
             <div id="tab-sponsorship" class="tab-content">
                 <div class="sponsorship-container">
@@ -10457,6 +10883,7 @@
                             <option value="comp-location">📍 Location</option>
                         </select>
                         <button class="btn btn-small" onclick="generateExecutiveSummary()" title="Generate Executive Summary">📄 Executive Summary</button>
+                        <button class="btn btn-small" onclick="generateKeyInsightBuilder()" title="Generate SWOT Analysis and Key Insights for Primary Brand" style="background: linear-gradient(135deg, var(--accent-lime), var(--accent-cyan)); border: none; color: var(--bg-primary); font-weight: 600;">🎯 Key Insight Builder</button>
                         <div class="comp-mode-toggle" id="displayModeToggle" onclick="toggleDisplayMode()" title="Click to toggle between percentages and US population numbers">
                             <span id="displayModeLabel">US %</span>
                         </div>
@@ -10565,6 +10992,19 @@
                     </div>
                 </div>
 
+            </div>
+            
+            <!-- Key Insight Builder Modal -->
+            <div id="keyInsightBuilderModal" class="modal-overlay" style="display: none;">
+                <div class="modal-content" style="max-width: 1200px; max-height: 90vh; overflow-y: auto;">
+                    <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid var(--border-color);">
+                        <h2 style="margin: 0; font-size: 1.5rem; color: var(--text-primary);">🎯 Key Insight Builder</h2>
+                        <button onclick="closeKeyInsightBuilder()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); padding: 0.25rem 0.5rem;">&times;</button>
+                    </div>
+                    <div id="keyInsightBuilderContent">
+                        <div class="loading-placeholder">Generating insights...</div>
+                    </div>
+                </div>
             </div>
             
             <!-- Collaboration Hub Tab -->
@@ -16628,6 +17068,7 @@
                     'interests': 'INTERESTS',
                     'location': 'LOCATION',
                     'affinity': 'AFFINITY',
+                    'ecosystem': 'ECOSYSTEM',
                     'sponsorship': 'SPONSORSHIP',
                     'media': 'MEDIA',
                     'content': 'CONTENT',
@@ -18040,6 +18481,7 @@
                 // Re-render insights and other tabs
                 renderTopInsights(currentDashboardData);
                 renderAffinityMap(currentDashboardData);
+                renderEcosystemInsights(currentDashboardData);
                 renderSponsorshipFinder(currentDashboardData);
                 renderMediaOptimizer(currentDashboardData);
             }
@@ -25173,6 +25615,7 @@
             
             // Also render the other tabs when insights are rendered
             renderAffinityMap(data);
+            renderEcosystemInsights(data);
             renderSponsorshipFinder(data);
             renderTalentAssessment(data);
             renderMediaOptimizer(data);
@@ -25340,6 +25783,359 @@
             
             // Render network visualization
             renderAffinityNetwork(allItems.sort((a, b) => b.index - a.index).slice(0, 12));
+        }
+        
+        // ============================================================================
+        // ECOSYSTEM INSIGHTS FUNCTIONS
+        // ============================================================================
+        
+        function renderEcosystemInsights(data) {
+            if (!data || !data.behavioral) return;
+            
+            const allItems = collectAllBehavioralItems(data);
+            const profileName = currentProfileData?.name || 'PROFILE';
+            const demographics = data.demographics || {};
+            
+            // Update brand name in ecosystem header
+            const brandNameEl = document.getElementById('ecosystemBrandName');
+            if (brandNameEl) brandNameEl.textContent = profileName;
+            
+            // === SECTION 1: Life Moments & Behavioral Context ===
+            const beverageCategories = ['BEVERAGE', 'DRINK', 'SODA', 'COFFEE', 'TEA', 'WATER', 'ENERGY', 'ALCOHOL', 'BEER', 'WINE'];
+            const sleepCategories = ['SLEEP', 'REST', 'BEDTIME', 'MEDITATION', 'CALM', 'HEADSPACE'];
+            const fitnessCategories = ['FITNESS', 'WORKOUT', 'GYM', 'EXERCISE', 'RUNNING', 'YOGA', 'PELOTON', 'STRAVA'];
+            const socialCategories = ['SOCIAL', 'DATING', 'TINDER', 'BUMBLE', 'HINGE', 'MEETUP', 'EVENT'];
+            
+            const beverageItems = allItems.filter(i => beverageCategories.some(c => i.category.toUpperCase().includes(c) || i.name.toUpperCase().includes(c)));
+            const sleepItems = allItems.filter(i => sleepCategories.some(c => i.category.toUpperCase().includes(c) || i.name.toUpperCase().includes(c)));
+            const fitnessItems = allItems.filter(i => fitnessCategories.some(c => i.category.toUpperCase().includes(c) || i.name.toUpperCase().includes(c)));
+            const socialItems = allItems.filter(i => socialCategories.some(c => i.category.toUpperCase().includes(c) || i.name.toUpperCase().includes(c)));
+            
+            // Before engagement - items with high index that might precede brand interaction
+            const beforeEngagement = allItems
+                .filter(i => i.index >= 120 && !beverageItems.includes(i))
+                .sort((a, b) => b.index - a.index)
+                .slice(0, 5);
+            
+            // After engagement - items that correlate with brand users
+            const afterEngagement = allItems
+                .filter(i => i.index >= 110 && beverageItems.length > 0)
+                .sort((a, b) => b.index - a.index)
+                .slice(0, 5);
+            
+            // Competitive behaviors
+            const competitiveBehaviors = [];
+            if (fitnessItems.length > 0 && beverageItems.length > 0) {
+                const avgFitnessIndex = fitnessItems.reduce((s, i) => s + i.index, 0) / fitnessItems.length;
+                if (avgFitnessIndex > 100) {
+                    competitiveBehaviors.push(`<span class="insight-label">Fitness apps</span> <span class="insight-value">compete with beverage moments - when consumers use fitness apps 3x/week, beverage consumption patterns shift</span>`);
+                }
+            }
+            if (sleepItems.length > 0 && beverageItems.length > 0) {
+                const avgSleepIndex = sleepItems.reduce((s, i) => s + i.index, 0) / sleepItems.length;
+                if (avgSleepIndex > 100) {
+                    competitiveBehaviors.push(`<span class="insight-label">Sleep/wellness</span> <span class="insight-value">replaces energy drink moments - consumers choosing rest over stimulation</span>`);
+                }
+            }
+            const waterItems = allItems.filter(i => i.name.toUpperCase().includes('WATER') || i.category.toUpperCase().includes('WATER'));
+            if (waterItems.length > 0) {
+                competitiveBehaviors.push(`<span class="insight-label">Water consumption</span> <span class="insight-value">competes with soda moments - health pivots replacing indulgence</span>`);
+            }
+            const coffeeItems = allItems.filter(i => i.name.toUpperCase().includes('COFFEE') || i.category.toUpperCase().includes('COFFEE'));
+            if (coffeeItems.length > 0) {
+                competitiveBehaviors.push(`<span class="insight-label">Coffee rituals</span> <span class="insight-value">replace soda moments - functional beverages vs. treat beverages</span>`);
+            }
+            
+            document.getElementById('ecosystemBeforeEngagement').innerHTML = beforeEngagement.length > 0
+                ? beforeEngagement.map(i => `<div class="insight-item"><span class="insight-label">${i.name}</span> <span class="insight-value">(${i.category}) - Index ${i.index}</span></div>`).join('')
+                : '<p style="color: var(--text-secondary);">Analyzing pre-engagement patterns...</p>';
+            
+            document.getElementById('ecosystemAfterEngagement').innerHTML = afterEngagement.length > 0
+                ? afterEngagement.map(i => `<div class="insight-item"><span class="insight-label">${i.name}</span> <span class="insight-value">(${i.category}) - Index ${i.index}</span></div>`).join('')
+                : '<p style="color: var(--text-secondary);">Analyzing post-engagement patterns...</p>';
+            
+            document.getElementById('ecosystemCompetitiveBehaviors').innerHTML = competitiveBehaviors.length > 0
+                ? competitiveBehaviors.map(b => `<div class="insight-item">${b}</div>`).join('')
+                : '<p style="color: var(--text-secondary);">Identifying competitive moments...</p>';
+            
+            // === SECTION 2: Cross-Category Substitution ===
+            const functionalBeverages = allItems.filter(i => 
+                i.name.toUpperCase().includes('PROTEIN') || 
+                i.name.toUpperCase().includes('VITAMIN') ||
+                i.name.toUpperCase().includes('SUPPLEMENT') ||
+                i.category.toUpperCase().includes('HEALTH')
+            );
+            const alcoholItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('ALCOHOL') ||
+                i.name.toUpperCase().includes('BEER') ||
+                i.name.toUpperCase().includes('WINE') ||
+                i.name.toUpperCase().includes('SPIRITS')
+            );
+            
+            const categoryExitSignals = [];
+            if (fitnessItems.length > 2) {
+                categoryExitSignals.push(`<span class="insight-label">Fitness engagement spike:</span> <span class="insight-value">When consumers start using fitness apps 3x/week, beverage consumption drops before they consciously choose alternatives</span>`);
+            }
+            if (functionalBeverages.length > 0) {
+                categoryExitSignals.push(`<span class="insight-label">Functional beverage adoption:</span> <span class="insight-value">Consumers leaving category for functional alternatives (protein drinks, vitamins, supplements)</span>`);
+            }
+            
+            const replacements = [];
+            if (coffeeItems.length > 0) {
+                const avgCoffeeIndex = coffeeItems.reduce((s, i) => s + i.index, 0) / coffeeItems.length;
+                if (avgCoffeeIndex > 100) {
+                    replacements.push(`<span class="insight-label">Coffee rituals</span> <span class="insight-value">replacing beverage moments - morning/afternoon routines shifting</span>`);
+                }
+            }
+            if (waterItems.length > 0) {
+                replacements.push(`<span class="insight-label">Water consumption</span> <span class="insight-value">increasing as health-conscious pivot</span>`);
+            }
+            if (functionalBeverages.length > 0) {
+                replacements.push(`<span class="insight-label">Functional beverages</span> <span class="insight-value">(protein, vitamins, supplements) replacing traditional beverage occasions</span>`);
+            }
+            if (alcoholItems.length > 0 && beverageItems.length > 0) {
+                replacements.push(`<span class="insight-label">Alcohol-lite moments</span> <span class="insight-value">- low/no-alcohol options competing with traditional beverages</span>`);
+            }
+            
+            const functionalShifts = [];
+            if (fitnessItems.length > 0 && sleepItems.length > 0) {
+                functionalShifts.push(`<span class="insight-label">Energy vs. Sleep:</span> <span class="insight-value">Consumers choosing rest (sleep apps, meditation) over energy drinks</span>`);
+            }
+            if (waterItems.length > 0 && beverageItems.length > 0) {
+                functionalShifts.push(`<span class="insight-label">Water vs. Soda:</span> <span class="insight-value">Health pivots replacing indulgence moments</span>`);
+            }
+            if (coffeeItems.length > 0 && beverageItems.length > 0) {
+                functionalShifts.push(`<span class="insight-label">Coffee vs. Soda:</span> <span class="insight-value">Functional morning rituals vs. treat moments</span>`);
+            }
+            
+            document.getElementById('ecosystemCategoryExit').innerHTML = categoryExitSignals.length > 0
+                ? categoryExitSignals.map(s => `<div class="insight-item">${s}</div>`).join('')
+                : '<p style="color: var(--text-secondary);">Detecting exit patterns...</p>';
+            
+            document.getElementById('ecosystemReplacements').innerHTML = replacements.length > 0
+                ? replacements.map(r => `<div class="insight-item">${r}</div>`).join('')
+                : '<p style="color: var(--text-secondary);">Identifying replacements...</p>';
+            
+            document.getElementById('ecosystemFunctionalShifts').innerHTML = functionalShifts.length > 0
+                ? functionalShifts.map(f => `<div class="insight-item">${f}</div>`).join('')
+                : '<p style="color: var(--text-secondary);">Analyzing functional shifts...</p>';
+            
+            // === SECTION 3: Cultural Momentum Signals ===
+            const streamingItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('STREAMING') ||
+                i.category.toUpperCase().includes('SERIES') ||
+                i.name.toUpperCase().includes('NETFLIX') ||
+                i.name.toUpperCase().includes('HULU')
+            );
+            const gamingItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('GAMING') ||
+                i.name.toUpperCase().includes('XBOX') ||
+                i.name.toUpperCase().includes('PLAYSTATION') ||
+                i.name.toUpperCase().includes('NINTENDO')
+            );
+            
+            const temporalShifts = [];
+            if (streamingItems.length > 0) {
+                temporalShifts.push(`<span class="insight-label">Nighttime consumption:</span> <span class="insight-value">Moving earlier as streaming habits shift viewing times</span>`);
+            }
+            if (gamingItems.length > 0) {
+                temporalShifts.push(`<span class="insight-label">Evening routines:</span> <span class="insight-value">Gaming sessions replacing traditional beverage occasions</span>`);
+            }
+            
+            const socialContextChanges = [];
+            if (socialItems.length > 0) {
+                const soloItems = allItems.filter(i => 
+                    i.name.toUpperCase().includes('SOLO') ||
+                    i.category.toUpperCase().includes('INDIVIDUAL')
+                );
+                if (soloItems.length > socialItems.length) {
+                    socialContextChanges.push(`<span class="insight-label">Solo consumption:</span> <span class="insight-value">Replacing social occasions - individual moments vs. shared experiences</span>`);
+                }
+            }
+            socialContextChanges.push(`<span class="insight-label">"Treat" reframing:</span> <span class="insight-value">Beverage consumption as mental health reward, not just indulgence</span>`);
+            
+            const emergingPatterns = [];
+            const nostalgiaItems = allItems.filter(i => 
+                i.name.toUpperCase().includes('RETRO') ||
+                i.name.toUpperCase().includes('VINTAGE') ||
+                i.name.toUpperCase().includes('CLASSIC') ||
+                i.category.toUpperCase().includes('NOSTALGIA')
+            );
+            if (nostalgiaItems.length > 0) {
+                emergingPatterns.push(`<span class="insight-label">Nostalgia usage spike:</span> <span class="insight-value">Retro/classic preferences emerging before cultural campaigns launch</span>`);
+            }
+            if (fitnessItems.length > 0 && beverageItems.length > 0) {
+                emergingPatterns.push(`<span class="insight-label">Wellness integration:</span> <span class="insight-value">Fitness and beverage consumption patterns converging</span>`);
+            }
+            
+            document.getElementById('ecosystemTemporalShifts').innerHTML = temporalShifts.length > 0
+                ? temporalShifts.map(t => `<div class="insight-item">${t}</div>`).join('')
+                : '<p style="color: var(--text-secondary);">Detecting temporal patterns...</p>';
+            
+            document.getElementById('ecosystemSocialContext').innerHTML = socialContextChanges.length > 0
+                ? socialContextChanges.map(s => `<div class="insight-item">${s}</div>`).join('')
+                : '<p style="color: var(--text-secondary);">Analyzing social patterns...</p>';
+            
+            document.getElementById('ecosystemEmergingPatterns').innerHTML = emergingPatterns.length > 0
+                ? emergingPatterns.map(e => `<div class="insight-item">${e}</div>`).join('')
+                : '<p style="color: var(--text-secondary);">Identifying emerging signals...</p>';
+            
+            // === SECTION 4: Attention & Emotional Receptivity ===
+            const comfortItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('COMFORT') ||
+                i.name.toUpperCase().includes('COMFORT') ||
+                i.category.toUpperCase().includes('RELIEF')
+            );
+            const celebrationItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('CELEBRATION') ||
+                i.name.toUpperCase().includes('PARTY') ||
+                i.category.toUpperCase().includes('EVENT')
+            );
+            
+            const emotionalStates = [];
+            if (comfortItems.length > 0) {
+                emotionalStates.push(`<span class="insight-label">Recovery/Relief states:</span> <span class="insight-value">Brand content performs best when consumers are in recovery or relief modes, not peak happiness</span>`);
+            }
+            if (celebrationItems.length > 0) {
+                emotionalStates.push(`<span class="insight-label">Celebration moments:</span> <span class="insight-value">Secondary engagement mode - less receptive than comfort states</span>`);
+            }
+            emotionalStates.push(`<span class="insight-label">Mental receptivity:</span> <span class="insight-value">Consumers most receptive during stress-relief rituals and micro-celebrations</span>`);
+            
+            const mentalReceptivity = [];
+            const morningItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('MORNING') ||
+                i.name.toUpperCase().includes('BREAKFAST')
+            );
+            const afternoonItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('AFTERNOON') ||
+                i.category.toUpperCase().includes('BREAK')
+            );
+            if (morningItems.length > 0) {
+                mentalReceptivity.push(`<span class="insight-label">Morning windows:</span> <span class="insight-value">High receptivity during morning routines and productivity breaks</span>`);
+            }
+            if (afternoonItems.length > 0) {
+                mentalReceptivity.push(`<span class="insight-label">Afternoon breaks:</span> <span class="insight-value">Peak mental availability during work breaks and transition moments</span>`);
+            }
+            
+            const contextModes = [];
+            if (comfortItems.length > celebrationItems.length) {
+                contextModes.push(`<span class="insight-label">Comfort mode dominance:</span> <span class="insight-value">Brand appears more in comfort contexts than celebration - emotional support positioning</span>`);
+            } else {
+                contextModes.push(`<span class="insight-label">Celebration mode:</span> <span class="insight-value">Brand associated with shared joy and social moments</span>`);
+            }
+            
+            document.getElementById('ecosystemEmotionalStates').innerHTML = emotionalStates.length > 0
+                ? emotionalStates.map(e => `<div class="insight-item">${e}</div>`).join('')
+                : '<p style="color: var(--text-secondary);">Analyzing emotional patterns...</p>';
+            
+            document.getElementById('ecosystemMentalReceptivity').innerHTML = mentalReceptivity.length > 0
+                ? mentalReceptivity.map(m => `<div class="insight-item">${m}</div>`).join('')
+                : '<p style="color: var(--text-secondary);">Identifying receptivity windows...</p>';
+            
+            document.getElementById('ecosystemContextModes').innerHTML = contextModes.length > 0
+                ? contextModes.map(c => `<div class="insight-item">${c}</div>`).join('')
+                : '<p style="color: var(--text-secondary);">Analyzing context modes...</p>';
+            
+            // === SECTION 5: Relevance Loss Signals ===
+            const ageGroups = Object.keys(demographics.age || {});
+            const genZItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('GEN Z') ||
+                i.name.toUpperCase().includes('GEN Z') ||
+                i.category.toUpperCase().includes('YOUNG')
+            );
+            
+            const atRiskAudiences = [];
+            if (genZItems.length > 0) {
+                atRiskAudiences.push(`<span class="insight-label">Gen Z:</span> <span class="insight-value">Still purchasing but emotionally disengaging - brand no longer anchors identity or social expression</span>`);
+            }
+            if (ageGroups.length > 0) {
+                const youngAgeGroups = ageGroups.filter(a => 
+                    a.includes('18') || a.includes('25') || a.includes('30')
+                );
+                if (youngAgeGroups.length > 0) {
+                    atRiskAudiences.push(`<span class="insight-label">Younger demographics:</span> <span class="insight-value">Replacing "joy" with "habit" - functional relationship replacing emotional connection</span>`);
+                }
+            }
+            
+            const engagementShift = [];
+            const highIndexItems = allItems.filter(i => i.index >= 150);
+            const mediumIndexItems = allItems.filter(i => i.index >= 100 && i.index < 150);
+            if (mediumIndexItems.length > highIndexItems.length) {
+                engagementShift.push(`<span class="insight-label">Engagement normalization:</span> <span class="insight-value">High emotional engagement (150+ index) declining, moderate engagement (100-150) increasing - shift from passion to routine</span>`);
+            }
+            engagementShift.push(`<span class="insight-label">Habitual vs. Emotional:</span> <span class="insight-value">Consumers maintaining purchase frequency but losing emotional attachment</span>`);
+            
+            const identityDisconnect = [];
+            if (socialItems.length > 0 && beverageItems.length > 0) {
+                const socialIndex = socialItems.reduce((s, i) => s + i.index, 0) / socialItems.length;
+                const beverageIndex = beverageItems.reduce((s, i) => s + i.index, 0) / beverageItems.length;
+                if (socialIndex > beverageIndex * 1.2) {
+                    identityDisconnect.push(`<span class="insight-label">Social expression shift:</span> <span class="insight-value">Brand no longer central to social identity - other categories taking precedence</span>`);
+                }
+            }
+            
+            document.getElementById('ecosystemAtRiskAudiences').innerHTML = atRiskAudiences.length > 0
+                ? atRiskAudiences.map(a => `<div class="insight-item">${a}</div>`).join('')
+                : '<p style="color: var(--text-secondary);">Identifying at-risk segments...</p>';
+            
+            document.getElementById('ecosystemEngagementShift').innerHTML = engagementShift.length > 0
+                ? engagementShift.map(e => `<div class="insight-item">${e}</div>`).join('')
+                : '<p style="color: var(--text-secondary);">Analyzing engagement changes...</p>';
+            
+            document.getElementById('ecosystemIdentityDisconnect').innerHTML = identityDisconnect.length > 0
+                ? identityDisconnect.map(i => `<div class="insight-item">${i}</div>`).join('')
+                : '<p style="color: var(--text-secondary);">Detecting identity shifts...</p>';
+            
+            // === SECTION 6: White-Space Occasions ===
+            const productivityItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('PRODUCTIVITY') ||
+                i.name.toUpperCase().includes('WORK') ||
+                i.name.toUpperCase().includes('OFFICE')
+            );
+            const stressReliefItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('STRESS') ||
+                i.category.toUpperCase().includes('RELIEF') ||
+                i.name.toUpperCase().includes('MEDITATION') ||
+                i.name.toUpperCase().includes('CALM')
+            );
+            
+            const untappedOccasions = [];
+            if (productivityItems.length > 0) {
+                untappedOccasions.push(`<span class="insight-label">Productivity breaks:</span> <span class="insight-value">Not indulgence moments - work breaks, focus sessions, transition periods</span>`);
+            }
+            untappedOccasions.push(`<span class="insight-label">Micro-celebrations:</span> <span class="insight-value">Small wins, personal milestones, daily achievements - not just big events</span>`);
+            if (stressReliefItems.length > 0) {
+                untappedOccasions.push(`<span class="insight-label">Stress-relief rituals:</span> <span class="insight-value">Daily decompression moments, not just weekend treats</span>`);
+            }
+            untappedOccasions.push(`<span class="insight-label">Solo rewards:</span> <span class="insight-value">Individual self-care vs. shared joy - personal moments of indulgence</span>`);
+            
+            const opportunities = [];
+            if (productivityItems.length > 0) {
+                opportunities.push(`<span class="insight-label">Innovation:</span> <span class="insight-value">Productivity-focused packaging and messaging for work break occasions</span>`);
+            }
+            if (stressReliefItems.length > 0) {
+                opportunities.push(`<span class="insight-label">Packaging:</span> <span class="insight-value">Single-serve, portable formats for stress-relief and micro-celebration moments</span>`);
+            }
+            opportunities.push(`<span class="insight-label">Creative:</span> <span class="insight-value">Messaging around personal rewards, mental health breaks, and solo moments of joy</span>`);
+            opportunities.push(`<span class="insight-label">Partnerships:</span> <span class="insight-value">Collaborate with productivity apps, wellness platforms, and stress-relief brands</span>`);
+            
+            const recommendations = [];
+            recommendations.push(`<span class="insight-label">1. Innovation:</span> <span class="insight-value">Develop products for productivity breaks and micro-celebrations, not just indulgence</span>`);
+            recommendations.push(`<span class="insight-label">2. Packaging:</span> <span class="insight-value">Single-serve, portable formats for solo reward moments and stress-relief rituals</span>`);
+            recommendations.push(`<span class="insight-label">3. Creative:</span> <span class="insight-value">Reframe brand as mental health reward and personal celebration, not just social treat</span>`);
+            recommendations.push(`<span class="insight-label">4. Partnerships:</span> <span class="insight-value">Collaborate with fitness apps, productivity tools, and wellness platforms to own new occasions</span>`);
+            
+            document.getElementById('ecosystemUntappedOccasions').innerHTML = untappedOccasions.length > 0
+                ? untappedOccasions.map(u => `<div class="insight-item">${u}</div>`).join('')
+                : '<p style="color: var(--text-secondary);">Identifying white-space moments...</p>';
+            
+            document.getElementById('ecosystemOpportunities').innerHTML = opportunities.length > 0
+                ? opportunities.map(o => `<div class="insight-item">${o}</div>`).join('')
+                : '<p style="color: var(--text-secondary);">Analyzing opportunities...</p>';
+            
+            document.getElementById('ecosystemRecommendations').innerHTML = recommendations.length > 0
+                ? recommendations.map(r => `<div class="insight-item">${r}</div>`).join('')
+                : '<p style="color: var(--text-secondary);">Generating recommendations...</p>';
         }
         
         function renderAffinityList(items) {
@@ -30705,6 +31501,540 @@
             // Close the modal
             closeSummaryModal();
             printWindow.print();
+        }
+        
+        // ============================================================================
+        // KEY INSIGHT BUILDER - SWOT Analysis for Primary Brand
+        // ============================================================================
+        
+        function generateKeyInsightBuilder() {
+            if (!window.comparisonProfilesData || window.comparisonProfilesData.length === 0) {
+                alert('Please run a comparison first. The leftmost (first) profile will be analyzed as the primary brand.');
+                return;
+            }
+            
+            const profiles = window.comparisonProfilesData;
+            const primaryBrand = profiles[0]; // Leftmost/first profile is the primary brand
+            const otherProfiles = profiles.slice(1);
+            
+            if (!primaryBrand) {
+                alert('No primary brand found. Please ensure at least one profile is selected.');
+                return;
+            }
+            
+            // Show modal
+            document.getElementById('keyInsightBuilderModal').style.display = 'flex';
+            document.getElementById('keyInsightBuilderContent').innerHTML = '<div class="loading-placeholder">Generating SWOT analysis and insights...</div>';
+            
+            // Generate SWOT analysis
+            const swot = generateSWOTAnalysis(primaryBrand, otherProfiles);
+            
+            // Generate demographics overview
+            const demographics = generateDemographicsOverview(primaryBrand);
+            
+            // Find where primary brand shines
+            const shines = findWhereBrandShines(primaryBrand, otherProfiles);
+            
+            // Build HTML
+            const html = `
+                <div style="display: flex; flex-direction: column; gap: 2rem;">
+                    <!-- Primary Brand Header -->
+                    <div style="text-align: center; padding: 1.5rem; background: linear-gradient(135deg, ${primaryBrand.color}20, transparent); border-radius: 10px; border: 2px solid ${primaryBrand.color}40;">
+                        <h2 style="margin: 0; color: ${primaryBrand.color}; font-size: 1.75rem;">${primaryBrand.name}</h2>
+                        <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);">Primary Brand Analysis</p>
+                        <div style="display: flex; justify-content: center; gap: 2rem; margin-top: 1rem; font-size: 0.9rem;">
+                            <span><strong>Sample Size:</strong> ${formatNumber(primaryBrand.sampleSize || 0)}</span>
+                            <span><strong>Projected US:</strong> ${formatNumber(primaryBrand.projectedUS || 0)}</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Demographics Overview -->
+                    <div class="demographics-overview">
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1.2rem;">👥 Demographics Overview</h3>
+                        <div class="demo-grid">
+                            ${demographics.map(demo => `
+                                <div class="demo-item">
+                                    <div class="demo-item-label">${demo.label}</div>
+                                    <div class="demo-item-value">${demo.value}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <!-- SWOT Analysis -->
+                    <div>
+                        <h3 style="margin: 0 0 1rem 0; font-size: 1.2rem;">📊 SWOT Analysis (Marketing Perspective)</h3>
+                        <div class="swot-grid">
+                            <div class="swot-card strengths">
+                                <h4>💪 Strengths</h4>
+                                <ul>
+                                    ${swot.strengths.map(s => `<li>${s}</li>`).join('')}
+                                </ul>
+                            </div>
+                            <div class="swot-card weaknesses">
+                                <h4>⚠️ Weaknesses</h4>
+                                <ul>
+                                    ${swot.weaknesses.map(w => `<li>${w}</li>`).join('')}
+                                </ul>
+                            </div>
+                            <div class="swot-card opportunities">
+                                <h4>🚀 Opportunities</h4>
+                                <ul>
+                                    ${swot.opportunities.map(o => `<li>${o}</li>`).join('')}
+                                </ul>
+                            </div>
+                            <div class="swot-card threats">
+                                <h4>⚠️ Threats</h4>
+                                <ul>
+                                    ${swot.threats.map(t => `<li>${t}</li>`).join('')}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Where Brand Shines -->
+                    <div class="shines-section">
+                        <h3>✨ Where ${primaryBrand.name} Shines</h3>
+                        <div class="shines-grid">
+                            ${shines.map(shine => `
+                                <div class="shine-item">
+                                    <h4>${shine.category}</h4>
+                                    <p>${shine.description}</p>
+                                    ${shine.metrics ? `<p style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">${shine.metrics}</p>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+                        <button class="btn btn-small" onclick="copyKeyInsightsToClipboard()" style="background: var(--bg-input);">📋 Copy</button>
+                        <button class="btn btn-small" onclick="printKeyInsights()" style="background: var(--bg-input);">🖨️ Print</button>
+                        <button class="btn btn-small" onclick="addKeyInsightsToDeck()" style="background: linear-gradient(135deg, var(--accent-lime), var(--accent-cyan)); border: none; color: var(--bg-primary); font-weight: 600;">📊 Add to Deck</button>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('keyInsightBuilderContent').innerHTML = html;
+        }
+        
+        function generateSWOTAnalysis(primaryBrand, otherProfiles) {
+            const swot = {
+                strengths: [],
+                weaknesses: [],
+                opportunities: [],
+                threats: []
+            };
+            
+            // Collect all behavioral items for primary brand
+            const primaryItems = [];
+            if (primaryBrand.behavioral) {
+                Object.values(primaryBrand.behavioral).forEach(arr => {
+                    if (Array.isArray(arr)) {
+                        arr.forEach(item => {
+                            if (item.index && item.index > 0) {
+                                primaryItems.push(item);
+                            }
+                        });
+                    }
+                });
+            }
+            
+            // Calculate average index
+            const avgIndex = primaryItems.length > 0 
+                ? Math.round(primaryItems.reduce((sum, i) => sum + (i.index || 0), 0) / primaryItems.length)
+                : 0;
+            
+            // High index items (150+)
+            const highIndexItems = primaryItems.filter(i => i.index >= 150);
+            const veryHighIndexItems = primaryItems.filter(i => i.index >= 200);
+            
+            // STRENGTHS
+            if (avgIndex > 120) {
+                swot.strengths.push(`Strong overall engagement with average index of ${avgIndex} - significantly above general population`);
+            }
+            if (highIndexItems.length > 10) {
+                swot.strengths.push(`${highIndexItems.length} behavioral categories with exceptional over-indexing (150+ index) - strong brand alignment`);
+            }
+            if (veryHighIndexItems.length > 0) {
+                swot.strengths.push(`${veryHighIndexItems.length} categories with exceptional affinity (200+ index) - premium positioning opportunity`);
+            }
+            
+            // Sample size strength
+            if (primaryBrand.sampleSize > 10000) {
+                swot.strengths.push(`Large sample size (${formatNumber(primaryBrand.sampleSize)}) provides high statistical confidence`);
+            }
+            
+            // Top categories
+            const categoryStats = {};
+            primaryItems.forEach(item => {
+                const cat = item.category?.split('/')[0] || 'Other';
+                if (!categoryStats[cat]) categoryStats[cat] = { items: [], totalIndex: 0 };
+                categoryStats[cat].items.push(item);
+                categoryStats[cat].totalIndex += item.index || 0;
+            });
+            const topCategories = Object.entries(categoryStats)
+                .map(([cat, stats]) => ({
+                    cat,
+                    avgIndex: Math.round(stats.totalIndex / stats.items.length),
+                    count: stats.items.length
+                }))
+                .sort((a, b) => b.avgIndex - a.avgIndex)
+                .slice(0, 3);
+            
+            if (topCategories.length > 0) {
+                swot.strengths.push(`Dominant in ${topCategories.map(c => c.cat).join(', ')} categories - clear category leadership`);
+            }
+            
+            // WEAKNESSES
+            const lowIndexItems = primaryItems.filter(i => i.index < 80);
+            if (lowIndexItems.length > 5) {
+                swot.weaknesses.push(`${lowIndexItems.length} categories under-indexing (<80) - potential gaps in audience engagement`);
+            }
+            
+            if (primaryBrand.sampleSize < 5000) {
+                swot.weaknesses.push(`Smaller sample size (${formatNumber(primaryBrand.sampleSize)}) may limit statistical confidence`);
+            }
+            
+            // Compare to other profiles
+            if (otherProfiles.length > 0) {
+                const otherAvgIndexes = otherProfiles.map(p => {
+                    const items = [];
+                    if (p.behavioral) {
+                        Object.values(p.behavioral).forEach(arr => {
+                            if (Array.isArray(arr)) {
+                                arr.forEach(item => {
+                                    if (item.index && item.index > 0) items.push(item);
+                                });
+                            }
+                        });
+                    }
+                    return items.length > 0 
+                        ? items.reduce((sum, i) => sum + (i.index || 0), 0) / items.length
+                        : 0;
+                });
+                const maxOtherIndex = Math.max(...otherAvgIndexes);
+                if (avgIndex < maxOtherIndex * 0.9) {
+                    swot.weaknesses.push(`Lower average engagement compared to competing profiles - need to strengthen positioning`);
+                }
+            }
+            
+            // OPPORTUNITIES
+            const mediumIndexItems = primaryItems.filter(i => i.index >= 100 && i.index < 150);
+            if (mediumIndexItems.length > 0) {
+                swot.opportunities.push(`${mediumIndexItems.length} categories with solid engagement (100-150 index) - growth potential with targeted campaigns`);
+            }
+            
+            // Demographic opportunities
+            const demographics = primaryBrand.demographics || {};
+            const ageGroups = Object.keys(demographics.age || {});
+            if (ageGroups.length > 0) {
+                const topAgeGroup = Object.entries(demographics.age || {})
+                    .sort((a, b) => b[1] - a[1])[0];
+                if (topAgeGroup) {
+                    swot.opportunities.push(`Strong concentration in ${topAgeGroup[0]} age group (${topAgeGroup[1].toFixed(1)}%) - prime target for age-specific messaging`);
+                }
+            }
+            
+            // Geographic opportunities
+            if (primaryBrand.locations && primaryBrand.locations.length > 0) {
+                const topLocations = primaryBrand.locations
+                    .filter(l => l.index > 100)
+                    .sort((a, b) => b.index - a.index)
+                    .slice(0, 3);
+                if (topLocations.length > 0) {
+                    swot.opportunities.push(`Geographic strength in ${topLocations.map(l => l.name).join(', ')} - regional expansion opportunity`);
+                }
+            }
+            
+            // Cross-category opportunities
+            if (highIndexItems.length > 0) {
+                const topCategories = highIndexItems
+                    .sort((a, b) => b.index - a.index)
+                    .slice(0, 5)
+                    .map(i => i.name || i.value);
+                swot.opportunities.push(`Partnership opportunities with: ${topCategories.join(', ')} - co-marketing potential`);
+            }
+            
+            // THREATS
+            if (otherProfiles.length > 0) {
+                // Find categories where competitors outperform
+                const competitorStrengths = new Set();
+                otherProfiles.forEach(p => {
+                    const items = [];
+                    if (p.behavioral) {
+                        Object.values(p.behavioral).forEach(arr => {
+                            if (Array.isArray(arr)) {
+                                arr.forEach(item => {
+                                    if (item.index && item.index >= 150) items.push(item);
+                                });
+                            }
+                        });
+                    }
+                    items.forEach(item => {
+                        const name = (item.name || item.value || '').toLowerCase();
+                        competitorStrengths.add(name);
+                    });
+                });
+                
+                const primaryHighItems = highIndexItems.map(i => (i.name || i.value || '').toLowerCase());
+                const overlap = primaryHighItems.filter(name => competitorStrengths.has(name));
+                if (overlap.length > 0) {
+                    swot.threats.push(`Competitive overlap in ${overlap.length} high-value categories - differentiation needed`);
+                }
+            }
+            
+            // Under-indexing threats
+            if (lowIndexItems.length > 10) {
+                swot.threats.push(`Significant under-indexing in ${lowIndexItems.length} categories - risk of audience erosion`);
+            }
+            
+            // Sample size threat
+            if (primaryBrand.sampleSize < 3000 && otherProfiles.some(p => p.sampleSize > primaryBrand.sampleSize * 2)) {
+                swot.threats.push(`Smaller sample size compared to competitors may limit market insights and campaign effectiveness`);
+            }
+            
+            // Ensure we have at least something in each category
+            if (swot.strengths.length === 0) swot.strengths.push('Analyzing strengths...');
+            if (swot.weaknesses.length === 0) swot.weaknesses.push('No significant weaknesses identified');
+            if (swot.opportunities.length === 0) swot.opportunities.push('Analyzing opportunities...');
+            if (swot.threats.length === 0) swot.threats.push('No significant threats identified');
+            
+            return swot;
+        }
+        
+        function generateDemographicsOverview(primaryBrand) {
+            const demographics = primaryBrand.demographics || {};
+            const overview = [];
+            
+            // Gender
+            if (demographics.gender) {
+                const topGender = Object.entries(demographics.gender)
+                    .sort((a, b) => b[1] - a[1])[0];
+                if (topGender) {
+                    overview.push({
+                        label: 'Primary Gender',
+                        value: `${topGender[0]} (${topGender[1].toFixed(1)}%)`
+                    });
+                }
+            }
+            
+            // Age
+            if (demographics.age) {
+                const topAge = Object.entries(demographics.age)
+                    .sort((a, b) => b[1] - a[1])[0];
+                if (topAge) {
+                    overview.push({
+                        label: 'Primary Age Group',
+                        value: `${topAge[0]} (${topAge[1].toFixed(1)}%)`
+                    });
+                }
+                if (primaryBrand.medianAge) {
+                    overview.push({
+                        label: 'Median Age',
+                        value: `${primaryBrand.medianAge} years`
+                    });
+                }
+            }
+            
+            // Ethnicity
+            if (demographics.ethnicity) {
+                const topEthnicity = Object.entries(demographics.ethnicity)
+                    .sort((a, b) => b[1] - a[1])[0];
+                if (topEthnicity) {
+                    overview.push({
+                        label: 'Primary Ethnicity',
+                        value: `${topEthnicity[0]} (${topEthnicity[1].toFixed(1)}%)`
+                    });
+                }
+            }
+            
+            // Income
+            if (demographics.income) {
+                const topIncome = Object.entries(demographics.income)
+                    .sort((a, b) => b[1] - a[1])[0];
+                if (topIncome) {
+                    overview.push({
+                        label: 'Primary Income',
+                        value: `${topIncome[0]} (${topIncome[1].toFixed(1)}%)`
+                    });
+                }
+            }
+            
+            // Education
+            if (demographics.education) {
+                const topEducation = Object.entries(demographics.education)
+                    .sort((a, b) => b[1] - a[1])[0];
+                if (topEducation) {
+                    overview.push({
+                        label: 'Primary Education',
+                        value: `${topEducation[0]} (${topEducation[1].toFixed(1)}%)`
+                    });
+                }
+            }
+            
+            // Sample Size
+            overview.push({
+                label: 'Sample Size',
+                value: formatNumber(primaryBrand.sampleSize || 0)
+            });
+            
+            // Projected US
+            overview.push({
+                label: 'Projected US Population',
+                value: formatNumber(primaryBrand.projectedUS || 0)
+            });
+            
+            return overview;
+        }
+        
+        function findWhereBrandShines(primaryBrand, otherProfiles) {
+            const shines = [];
+            
+            // Collect all behavioral items
+            const primaryItems = [];
+            if (primaryBrand.behavioral) {
+                Object.values(primaryBrand.behavioral).forEach(arr => {
+                    if (Array.isArray(arr)) {
+                        arr.forEach(item => {
+                            if (item.index && item.index > 0) {
+                                primaryItems.push({
+                                    ...item,
+                                    category: item.category || 'Other'
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+            
+            // Find highest index items
+            const topItems = primaryItems
+                .sort((a, b) => b.index - a.index)
+                .slice(0, 10);
+            
+            // Group by category
+            const categoryGroups = {};
+            topItems.forEach(item => {
+                const cat = item.category.split('/')[0];
+                if (!categoryGroups[cat]) categoryGroups[cat] = [];
+                categoryGroups[cat].push(item);
+            });
+            
+            // Create shine items
+            Object.entries(categoryGroups).forEach(([cat, items]) => {
+                const avgIndex = Math.round(items.reduce((sum, i) => sum + i.index, 0) / items.length);
+                const topItem = items[0];
+                
+                shines.push({
+                    category: cat,
+                    description: `Exceptional engagement with ${items.length} item${items.length > 1 ? 's' : ''} in this category, led by "${topItem.name || topItem.value}" with index ${topItem.index}`,
+                    metrics: `Average index: ${avgIndex} | Top item: ${topItem.index}`
+                });
+            });
+            
+            // Compare to other profiles
+            if (otherProfiles.length > 0) {
+                const primaryTopCategories = Object.keys(categoryGroups);
+                otherProfiles.forEach(competitor => {
+                    const compItems = [];
+                    if (competitor.behavioral) {
+                        Object.values(competitor.behavioral).forEach(arr => {
+                            if (Array.isArray(arr)) {
+                                arr.forEach(item => {
+                                    if (item.index && item.index > 0) compItems.push(item);
+                                });
+                            }
+                        });
+                    }
+                    
+                    // Find categories where primary outperforms
+                    primaryTopCategories.forEach(cat => {
+                        const primaryCatItems = categoryGroups[cat];
+                        const compCatItems = compItems.filter(i => 
+                            (i.category || '').split('/')[0] === cat
+                        );
+                        
+                        if (compCatItems.length > 0) {
+                            const primaryAvg = primaryCatItems.reduce((sum, i) => sum + i.index, 0) / primaryCatItems.length;
+                            const compAvg = compCatItems.reduce((sum, i) => sum + i.index, 0) / compCatItems.length;
+                            
+                            if (primaryAvg > compAvg * 1.2) {
+                                shines.push({
+                                    category: `vs ${competitor.name}`,
+                                    description: `Outperforms ${competitor.name} in ${cat} category by ${Math.round((primaryAvg / compAvg - 1) * 100)}%`,
+                                    metrics: `Primary: ${Math.round(primaryAvg)} vs Competitor: ${Math.round(compAvg)}`
+                                });
+                            }
+                        }
+                    });
+                });
+            }
+            
+            // If no shines found, add default
+            if (shines.length === 0) {
+                shines.push({
+                    category: 'Overall Performance',
+                    description: 'Analyzing where the brand performs best...',
+                    metrics: ''
+                });
+            }
+            
+            return shines.slice(0, 8); // Limit to top 8
+        }
+        
+        function closeKeyInsightBuilder() {
+            document.getElementById('keyInsightBuilderModal').style.display = 'none';
+        }
+        
+        function copyKeyInsightsToClipboard() {
+            const content = document.getElementById('keyInsightBuilderContent');
+            const text = content.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Key Insights copied to clipboard!');
+            });
+        }
+        
+        function printKeyInsights() {
+            const content = document.getElementById('keyInsightBuilderContent').innerHTML;
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html>
+                <head>
+                    <title>Key Insight Builder - SWOT Analysis</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 2rem; }
+                        h2, h3, h4 { color: #1a1a1a; }
+                        .swot-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 1.5rem 0; }
+                        .swot-card { border: 2px solid #ddd; border-radius: 10px; padding: 1.25rem; }
+                        ul { margin: 0; padding-left: 1.25rem; }
+                        li { margin-bottom: 0.5rem; }
+                    </style>
+                </head>
+                <body>${content}</body>
+                </html>
+            `);
+            printWindow.document.close();
+            setTimeout(() => printWindow.print(), 500);
+        }
+        
+        function addKeyInsightsToDeck() {
+            const content = document.getElementById('keyInsightBuilderContent').innerHTML;
+            const profiles = window.comparisonProfilesData || [];
+            const primaryBrand = profiles[0];
+            
+            if (!window.deckItems) window.deckItems = [];
+            window.deckItems.push({
+                id: 'key-insights-' + Date.now(),
+                type: 'key-insights',
+                title: `Key Insight Builder: ${primaryBrand?.name || 'Primary Brand'}`,
+                content: content,
+                timestamp: new Date().toISOString(),
+                profiles: [{ name: primaryBrand?.name || 'Primary Brand', color: primaryBrand?.color || '#4a8ac9' }]
+            });
+            
+            updateDeckBadge();
+            alert('Key Insights added to Deck Builder!');
         }
         
         function shareComparison() {
