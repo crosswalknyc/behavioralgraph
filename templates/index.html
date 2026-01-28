@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Profile IQ | Crosswalk</title>
+    <title>Crosswalk IQ+</title>
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
@@ -11646,6 +11646,17 @@
                                 <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 80px; padding: 0.6rem 1rem;" data-tooltip="">
                                     <div class="stat-label" style="font-size: 0.7rem;">📉 Total Cancels QTD</div>
                                     <div class="stat-value" id="totalCancels" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Net Growth Trend Card (Full Width) -->
+                            <div class="stat-card has-tooltip" id="netGrowthTrendCard" style="display: none; margin-bottom: 0.75rem; padding: 0.75rem 1rem; cursor: pointer; transition: all 0.2s ease;" onclick="switchTickerTab(event, 'trends')" data-tooltip="Click to view detailed trends analysis">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <div class="stat-label" style="font-size: 0.75rem;">📊 Net Growth Trend (Last 7 Days)</div>
+                                    <span style="font-size: 0.65rem; color: var(--accent-cyan);">Click for details →</span>
+                                </div>
+                                <div style="height: 60px; position: relative;">
+                                    <canvas id="miniTrendChart"></canvas>
                                 </div>
                             </div>
                         </div>
