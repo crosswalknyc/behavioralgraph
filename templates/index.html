@@ -2565,9 +2565,30 @@
             font-size: clamp(1rem, 2.5vw, 1.5rem);
         }
         
-        /* Large font for projected growth only */
+        /* Large font for projected growth only - dynamically fills available space */
         .stat-value.pulsing-number {
-            font-size: clamp(1.8rem, 5vw, 2.5rem);
+            font-size: clamp(2rem, 8vw, 4.5rem);
+            line-height: 1.1;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            min-height: 0;
+            flex: 1;
+        }
+        
+        /* Make the container allow the number to grow */
+        #projectedGrowthCard > div > div:first-child {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-width: 0;
+        }
+        
+        #projectedGrowth {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
         }
         
         .stat-label {
@@ -11517,11 +11538,11 @@
                             <div class="ticker-cards-grid two-columns" style="margin-bottom: 1rem;">
                                 <!-- Left: Projected Growth with Accuracy on right side -->
                                 <div class="stat-card has-tooltip" id="projectedGrowthCard" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; position: relative;" onclick="navigateToTrends()" data-tooltip="">
-                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
-                                        <div style="flex: 1;">
-                                            <div class="stat-label" id="projectedGrowthLabel" style="font-size: 0.75rem;">🔮 Q1 2026 Projected Net Growth Rate</div>
-                                            <div class="stat-value pulsing-number" id="projectedGrowth" style="display: block; margin: 0.5rem 0;">--</div>
-                                            <div class="stat-label" id="projectedGrowthKPI" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">--</div>
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex: 1;">
+                                        <div style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+                                            <div class="stat-label" id="projectedGrowthLabel" style="font-size: 0.75rem; flex-shrink: 0;">🔮 Q1 2026 Projected Net Growth Rate</div>
+                                            <div class="stat-value pulsing-number" id="projectedGrowth" style="flex: 1; display: flex; align-items: center; margin: 0.5rem 0; min-height: 0;">--</div>
+                                            <div class="stat-label" id="projectedGrowthKPI" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem; flex-shrink: 0;">--</div>
                                         </div>
                                         <div id="liveDataAccuracyBadge" style="display: none; min-width: 140px; text-align: right;">
                                             <div class="stat-label" style="font-size: 0.75rem; margin-bottom: 0.5rem;">📊 Accuracy</div>
@@ -14667,6 +14688,9 @@
                         delete el.dataset.tooltipAttached;
                     });
                 }, 0);
+                
+                // Adjust font size after accuracy badge is shown
+                setTimeout(() => adjustProjectedGrowthFontSize(), 100);
             } else {
                 accuracyHeader.style.display = 'none';
                 liveDataAccuracyBadge.style.display = 'none';
@@ -14686,7 +14710,15 @@
             document.getElementById('totalSubs').textContent = (stats.total_subs || 0).toLocaleString();
             document.getElementById('totalCancels').textContent = (stats.total_cancels || 0).toLocaleString();
             document.getElementById('netGrowth').textContent = `${stats.net_growth_pct || 0}%`;
-            document.getElementById('projectedGrowth').textContent = `${stats.projected_growth_pct || 0}%`;
+            
+            // Update projected growth value
+            const projectedGrowthElement = document.getElementById('projectedGrowth');
+            projectedGrowthElement.textContent = `${stats.projected_growth_pct || 0}%`;
+            
+            // Dynamically adjust font size to fill available space
+            setTimeout(() => {
+                adjustProjectedGrowthFontSize();
+            }, 100);
             
             // Update projected growth KPI metadata
             document.getElementById('projectedGrowthKPI').textContent = `KPI: ${data.kpi || 'N/A'}`;
@@ -14756,6 +14788,49 @@
             // Generate AI prediction
             generateEarningsPrediction(data);
         }
+        
+        function adjustProjectedGrowthFontSize() {
+            const projectedGrowthElement = document.getElementById('projectedGrowth');
+            const projectedCard = document.getElementById('projectedGrowthCard');
+            
+            if (!projectedGrowthElement || !projectedCard) return;
+            
+            // Get container dimensions
+            const container = projectedGrowthElement.parentElement;
+            if (!container) return;
+            
+            const containerHeight = container.clientHeight;
+            const containerWidth = container.clientWidth;
+            
+            // Get label and KPI heights (they're flex-shrink: 0, so they take fixed space)
+            const labelElement = document.getElementById('projectedGrowthLabel');
+            const kpiElement = document.getElementById('projectedGrowthKPI');
+            const labelHeight = labelElement ? labelElement.offsetHeight : 20;
+            const kpiHeight = kpiElement ? kpiElement.offsetHeight : 20;
+            
+            // Calculate available height for the number (subtract margins and other elements)
+            const margins = 16; // 0.5rem top + 0.5rem bottom = ~16px
+            const availableHeight = containerHeight - labelHeight - kpiHeight - margins;
+            
+            // Calculate font size based on available space
+            // Use 80% of available height for font size (to account for line-height)
+            let fontSize = Math.min(availableHeight * 0.8, containerWidth * 0.35);
+            
+            // Clamp between reasonable min and max
+            fontSize = Math.max(1.5, Math.min(fontSize, 5));
+            
+            // Apply the calculated font size
+            projectedGrowthElement.style.fontSize = `${fontSize}rem`;
+        }
+        
+        // Adjust font size on window resize
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                adjustProjectedGrowthFontSize();
+            }, 150);
+        });
         
         async function analyzeBeatMiss(data, stats) {
             try {
