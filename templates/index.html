@@ -11513,16 +11513,25 @@
                                 <span class="live-indicator">🔴 LIVE</span>
                             </div>
                             
-                            <!-- Projected Growth Rate + Accuracy - Side by Side -->
+                            <!-- Projected Growth Rate + Accuracy (Left) + Beat/Miss (Right) -->
                             <div class="ticker-cards-grid two-columns" style="margin-bottom: 1rem;">
-                                <div class="stat-card has-tooltip" id="projectedGrowthCard" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px;" onclick="navigateToTrends()" data-tooltip="">
-                                    <div class="stat-label" id="projectedGrowthLabel" style="font-size: 0.75rem;">🔮 Q1 2026 Projected Net Growth Rate</div>
-                                    <div class="stat-value pulsing-number" id="projectedGrowth" style="display: block; margin: 0.5rem 0;">--</div>
-                                    <div class="stat-label" id="projectedGrowthKPI" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">--</div>
+                                <!-- Left: Projected Growth with Accuracy on right side -->
+                                <div class="stat-card has-tooltip" id="projectedGrowthCard" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; position: relative;" onclick="navigateToTrends()" data-tooltip="">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
+                                        <div style="flex: 1;">
+                                            <div class="stat-label" id="projectedGrowthLabel" style="font-size: 0.75rem;">🔮 Q1 2026 Projected Net Growth Rate</div>
+                                            <div class="stat-value pulsing-number" id="projectedGrowth" style="display: block; margin: 0.5rem 0;">--</div>
+                                            <div class="stat-label" id="projectedGrowthKPI" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">--</div>
+                                        </div>
+                                        <div id="liveDataAccuracyBadge" style="display: none; min-width: 140px; text-align: right;">
+                                            <div class="stat-label" style="font-size: 0.75rem; margin-bottom: 0.5rem;">📊 Accuracy</div>
+                                            <div id="liveDataAccuracyValue" style="font-weight: 600; font-size: 0.9rem;"></div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div id="liveDataAccuracyBadge" class="stat-card" style="display: none;">
-                                    <div class="stat-label" style="font-size: 0.75rem;">🎯 Accuracy</div>
-                                    <div id="liveDataAccuracyValue" style="font-weight: 600; font-size: 0.9rem;"></div>
+                                <!-- Right: Beat/Miss Earnings -->
+                                <div id="beatMissCard" class="stat-card" style="display: none; min-height: 120px;">
+                                    <!-- Content will be populated by analyzeBeatMiss function -->
                                 </div>
                             </div>
                             
@@ -14633,28 +14642,17 @@
                 // Update Live Data tab accuracy badge with detailed breakdown
                 // Each metric will have its own tooltip
                 const accuracyTooltip = `Data accuracy: ${stats.accuracy_score}% (${stats.accuracy_rating}). This measures the reliability and consistency of the data. Higher accuracy indicates more reliable metrics for decision-making.`;
-                let accuracyDetails = `<span class="has-tooltip" data-tooltip="${accuracyTooltip}" style="color: ${color}; cursor: default;">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
+                let accuracyDetails = `<div style="font-size: 0.9rem; margin-bottom: 0.5rem;"><span class="has-tooltip" data-tooltip="${accuracyTooltip}" style="color: ${color}; cursor: default; font-weight: 600;">${stats.accuracy_score}% (${stats.accuracy_rating})</span></div>`;
                 
                 if (stats.overall_variance !== null) {
                     const overallVarianceTooltip = `Overall Variance: ${stats.overall_variance}%. This represents the average variance across all quarters in the dataset. Lower variance indicates more consistent and reliable data.`;
-                    accuracyDetails += `<div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
-                        <div>Overall Variance: <span class="has-tooltip" data-tooltip="${overallVarianceTooltip}" style="color: ${color}; cursor: default;">${stats.overall_variance}%</span></div>`;
+                    accuracyDetails += `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                        <div>Overall Variance: <span class="has-tooltip" data-tooltip="${overallVarianceTooltip}" style="color: var(--text-secondary); cursor: default;">${stats.overall_variance}%</span></div>`;
                     if (stats.quarter_variance !== null) {
                         const quarterVarianceTooltip = `${currentQuarter} Variance: ${stats.quarter_variance}%. This represents the variance for the current quarter (${currentQuarter}). Lower variance indicates more consistent data within this specific quarter.`;
-                        accuracyDetails += `<div>${currentQuarter} Variance: <span class="has-tooltip" data-tooltip="${quarterVarianceTooltip}" style="color: ${color}; cursor: default;">${stats.quarter_variance}%</span></div>`;
-                    }
-                    // Add Stock Impact if available
-                    if (data.relevance_percentage !== null && data.relevance_percentage !== undefined) {
-                        const stockImpactTooltip = `Stock Impact: ${data.relevance_percentage}%. This KPI represents approximately ${data.relevance_percentage}% of the stock price movement. This is a force-ranked metric (0-100 scale) based on historical significance of the KPI to the company's share price behavior, determined by examining relative surprise from reporting and subsequent share price behavior over the 5-day period following earnings.`;
-                        accuracyDetails += `<div>Stock Impact: <span class="has-tooltip" data-tooltip="${stockImpactTooltip}" style="color: var(--accent-cyan); cursor: default;">${data.relevance_percentage}%</span></div>`;
+                        accuracyDetails += `<div>${currentQuarter} Variance: <span class="has-tooltip" data-tooltip="${quarterVarianceTooltip}" style="color: var(--text-secondary); cursor: default;">${stats.quarter_variance}%</span></div>`;
                     }
                     accuracyDetails += `</div>`;
-                } else if (data.relevance_percentage !== null && data.relevance_percentage !== undefined) {
-                    // Show Stock Impact even if no variance data
-                    const stockImpactTooltip = `Stock Impact: ${data.relevance_percentage}%. This KPI represents approximately ${data.relevance_percentage}% of the stock price movement. This is a force-ranked metric (0-100 scale) based on historical significance of the KPI to the company's share price behavior, determined by examining relative surprise from reporting and subsequent share price behavior over the 5-day period following earnings.`;
-                    accuracyDetails += `<div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
-                        <div>Stock Impact: <span class="has-tooltip" data-tooltip="${stockImpactTooltip}" style="color: var(--accent-cyan); cursor: default;">${data.relevance_percentage}%</span></div>
-                    </div>`;
                 }
                 liveDataAccuracyValue.innerHTML = accuracyDetails;
                 liveDataAccuracyBadge.style.display = 'block';
@@ -14694,9 +14692,12 @@
             document.getElementById('projectedGrowthKPI').textContent = `KPI: ${data.kpi || 'N/A'}`;
             
             // Update projected growth label with quarter
-            const projectedCard = document.querySelector('[id="projectedGrowth"]').closest('.stat-card');
+            const projectedCard = document.getElementById('projectedGrowthCard');
             if (projectedCard) {
-                projectedCard.querySelector('#projectedGrowthLabel').textContent = `🔮 ${latestQuarter} Projected Net Growth Rate`;
+                const labelElement = projectedCard.querySelector('#projectedGrowthLabel');
+                if (labelElement) {
+                    labelElement.textContent = `🔮 ${latestQuarter} Projected Net Growth Rate`;
+                }
                 projectedCard.setAttribute('data-tooltip', `Projected net growth rate for ${latestQuarter}`);
             }
             
@@ -14796,6 +14797,9 @@
                             existingSection.remove();
                         }
                         
+                        // Get the beat/miss card
+                        const beatMissCard = document.getElementById('beatMissCard');
+                        
                         if (result.prediction === 'BEAT' || result.prediction === 'MISS') {
                             const isBeat = result.prediction === 'BEAT';
                             const color = isBeat ? '#10b981' : '#ef4444';
@@ -14809,40 +14813,32 @@
                                     ? result.consensus_estimate 
                                     : 'Not available');
                             
-                            // Create beat/miss section
-                            const beatMissSection = document.createElement('div');
-                            beatMissSection.id = 'beatMissSection';
-                            beatMissSection.style.cssText = 'margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);';
-                            
-                            beatMissSection.innerHTML = `
-                                <div style="margin-bottom: 0.75rem;">
-                                    <div style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Beat/Miss Earnings</div>
-                                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
-                                        <span style="font-size: 1.5rem;">${icon}</span>
-                                        <span style="color: ${color}; font-weight: 600; font-size: 1.1rem;">${text}</span>
+                            // Populate beat/miss card
+                            if (beatMissCard) {
+                                beatMissCard.innerHTML = `
+                                    <div style="display: flex; flex-direction: column; height: 100%;">
+                                        <div style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Beat/Miss Earnings</div>
+                                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                                            <span style="font-size: 1.5rem;">${icon}</span>
+                                            <span style="color: ${color}; font-weight: 600; font-size: 1.1rem;">${text}</span>
+                                        </div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem; flex: 1;">
+                                            <div style="font-weight: 600; margin-bottom: 0.25rem;">Company Projection:</div>
+                                            <div>${companyProjection}</div>
+                                        </div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5;">
+                                            <div style="font-weight: 600; margin-bottom: 0.25rem;">Analysis:</div>
+                                            <div>${result.analysis || 'Analysis unavailable'}</div>
+                                        </div>
                                     </div>
-                                </div>
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
-                                    <div style="font-weight: 600; margin-bottom: 0.25rem;">Company Projection:</div>
-                                    <div>${companyProjection}</div>
-                                </div>
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5;">
-                                    <div style="font-weight: 600; margin-bottom: 0.25rem;">Analysis:</div>
-                                    <div>${result.analysis || 'Analysis unavailable'}</div>
-                                </div>
-                            `;
-                            
-                            // Insert after the KPI element
-                            if (kpiElement && kpiElement.parentNode) {
-                                kpiElement.parentNode.insertBefore(beatMissSection, kpiElement.nextSibling);
-                            } else {
-                                projectedCard.appendChild(beatMissSection);
+                                `;
+                                beatMissCard.style.display = 'block';
                             }
                         } else {
-                            // UNDECIDED - don't show indicator
-                            const existingSection = projectedCard.querySelector('#beatMissSection');
-                            if (existingSection) {
-                                existingSection.remove();
+                            // UNDECIDED - hide the card
+                            if (beatMissCard) {
+                                beatMissCard.style.display = 'none';
+                                beatMissCard.innerHTML = '';
                             }
                         }
                     }
