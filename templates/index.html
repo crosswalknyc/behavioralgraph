@@ -33280,7 +33280,7 @@
             // Helper to create sortable header with median age
             const sortableHeader = (section, idx, name, color, medianAge) => {
                 const isSorted = sortSection === section && sortProfileIdx === idx;
-                const ageDisplay = medianAge > 0 ? `<span class="header-median-age">${Math.round(medianAge)}</span>` : '';
+                const ageDisplay = medianAge > 0 ? `<span class="header-median-age" title="Median Age">${Math.round(medianAge)}</span>` : '';
                 return `<th class="sortable ${isSorted ? 'sorted' : ''}" style="border-bottom: 3px solid ${color}" onclick="sortComparisonTable('${section}', ${idx})">${name} ${ageDisplay}</th>`;
             };
 
