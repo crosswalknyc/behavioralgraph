@@ -14508,35 +14508,36 @@
                 }
                 
                 // Update header accuracy with tooltip
-                accuracyHeader.innerHTML = `Accuracy: <span style="color: ${color}; font-weight: 600;" title="${varianceTooltip}">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
+                accuracyHeader.innerHTML = `Accuracy: <span style="color: ${color}; font-weight: 600;">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
                 accuracyHeader.style.display = 'block';
-                accuracyHeader.style.cursor = 'help';
+                accuracyHeader.style.cursor = 'default';
+                accuracyHeader.classList.add('has-tooltip');
                 accuracyHeader.setAttribute('data-tooltip', `Data accuracy rating: ${stats.accuracy_score}% (${stats.accuracy_rating}). This measures how reliable and consistent the data is. ${varianceTooltip ? 'Variance metrics: ' + varianceTooltip.replace(/\n/g, ' ') : ''}`);
                 
                 // Update Live Data tab accuracy badge with detailed breakdown
                 // Each metric will have its own tooltip
                 const accuracyTooltip = `Data accuracy: ${stats.accuracy_score}% (${stats.accuracy_rating}). This measures the reliability and consistency of the data. Higher accuracy indicates more reliable metrics for decision-making.`;
-                let accuracyDetails = `<span class="has-tooltip" data-tooltip="${accuracyTooltip}" style="color: ${color}; cursor: help;">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
+                let accuracyDetails = `<span class="has-tooltip" data-tooltip="${accuracyTooltip}" style="color: ${color}; cursor: default;">${stats.accuracy_score}% (${stats.accuracy_rating})</span>`;
                 
                 if (stats.overall_variance !== null) {
                     const overallVarianceTooltip = `Overall Variance: ${stats.overall_variance}%. This represents the average variance across all quarters in the dataset. Lower variance indicates more consistent and reliable data.`;
                     accuracyDetails += `<div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
-                        <div>Overall Variance: <span class="has-tooltip" data-tooltip="${overallVarianceTooltip}" style="color: ${color}; cursor: help;">${stats.overall_variance}%</span></div>`;
+                        <div>Overall Variance: <span class="has-tooltip" data-tooltip="${overallVarianceTooltip}" style="color: ${color}; cursor: default;">${stats.overall_variance}%</span></div>`;
                     if (stats.quarter_variance !== null) {
                         const quarterVarianceTooltip = `${currentQuarter} Variance: ${stats.quarter_variance}%. This represents the variance for the current quarter (${currentQuarter}). Lower variance indicates more consistent data within this specific quarter.`;
-                        accuracyDetails += `<div>${currentQuarter} Variance: <span class="has-tooltip" data-tooltip="${quarterVarianceTooltip}" style="color: ${color}; cursor: help;">${stats.quarter_variance}%</span></div>`;
+                        accuracyDetails += `<div>${currentQuarter} Variance: <span class="has-tooltip" data-tooltip="${quarterVarianceTooltip}" style="color: ${color}; cursor: default;">${stats.quarter_variance}%</span></div>`;
                     }
                     // Add Stock Impact if available
                     if (data.relevance_percentage !== null && data.relevance_percentage !== undefined) {
                         const stockImpactTooltip = `Stock Impact: ${data.relevance_percentage}%. This KPI represents approximately ${data.relevance_percentage}% of the stock price movement. This is a force-ranked metric (0-100 scale) based on historical significance of the KPI to the company's share price behavior, determined by examining relative surprise from reporting and subsequent share price behavior over the 5-day period following earnings.`;
-                        accuracyDetails += `<div>Stock Impact: <span class="has-tooltip" data-tooltip="${stockImpactTooltip}" style="color: var(--accent-cyan); cursor: help;">${data.relevance_percentage}%</span></div>`;
+                        accuracyDetails += `<div>Stock Impact: <span class="has-tooltip" data-tooltip="${stockImpactTooltip}" style="color: var(--accent-cyan); cursor: default;">${data.relevance_percentage}%</span></div>`;
                     }
                     accuracyDetails += `</div>`;
                 } else if (data.relevance_percentage !== null && data.relevance_percentage !== undefined) {
                     // Show Stock Impact even if no variance data
                     const stockImpactTooltip = `Stock Impact: ${data.relevance_percentage}%. This KPI represents approximately ${data.relevance_percentage}% of the stock price movement. This is a force-ranked metric (0-100 scale) based on historical significance of the KPI to the company's share price behavior, determined by examining relative surprise from reporting and subsequent share price behavior over the 5-day period following earnings.`;
                     accuracyDetails += `<div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
-                        <div>Stock Impact: <span class="has-tooltip" data-tooltip="${stockImpactTooltip}" style="color: var(--accent-cyan); cursor: help;">${data.relevance_percentage}%</span></div>
+                        <div>Stock Impact: <span class="has-tooltip" data-tooltip="${stockImpactTooltip}" style="color: var(--accent-cyan); cursor: default;">${data.relevance_percentage}%</span></div>
                     </div>`;
                 }
                 liveDataAccuracyValue.innerHTML = accuracyDetails;
