@@ -9907,7 +9907,7 @@
                             <div style="padding: 1.5rem; background: var(--bg-card); border-radius: 8px; border-left: 4px solid var(--accent-purple);">
                                 <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
                                     <span style="font-size: 1.5rem;">✨</span>
-                                    <h3 style="margin: 0; color: var(--accent-purple);">AI-Powered Strategic Insights</h3>
+                                    <h3 style="margin: 0; color: var(--accent-purple);">Strategic Insights</h3>
                                 </div>
                                 <div id="ecosystemAIContent" style="color: var(--text-secondary); line-height: 1.8;">
                                     <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
@@ -10958,15 +10958,15 @@
                         <span id="displayModeLabel">US %</span>
                     </div>
                     <select id="compJumpToSelect" class="comp-action-select" onchange="jumpToCompSection(this.value)" title="Jump to section">
-                        <option value="">📍 Jump to...</option>
-                        <option value="comp-summary">📊 Summary Data</option>
-                        <option value="comp-gender">👫 Gender</option>
-                        <option value="comp-age">📅 Age</option>
-                        <option value="comp-ethnicity">🌍 Ethnicity</option>
-                        <option value="comp-income">💰 Income</option>
-                        <option value="comp-behavioral">🎯 Behavioral</option>
-                        <option value="comp-location">📍 Location</option>
-                    </select>
+                            <option value="">📍 Jump to...</option>
+                            <option value="comp-summary">📊 Summary Data</option>
+                            <option value="comp-gender">👫 Gender</option>
+                            <option value="comp-age">📅 Age</option>
+                            <option value="comp-ethnicity">🌍 Ethnicity</option>
+                            <option value="comp-income">💰 Income</option>
+                            <option value="comp-behavioral">🎯 Behavioral</option>
+                            <option value="comp-location">📍 Location</option>
+                        </select>
                 </div>
                 
                 <!-- Comparison Report View -->
@@ -17088,6 +17088,7 @@
             interests: { icon: '🎯', title: 'Interests', desc: 'Top interests and passions categorized by topic area with index scores.' },
             location: { icon: '📍', title: 'Location', desc: 'Geographic distribution showing where this audience is concentrated.' },
             affinity: { icon: '🔗', title: 'Affinity', desc: 'Cross-category affinities showing what else this audience engages with.' },
+            ecosystem: { icon: '🌐', title: 'Ecosystem', desc: 'Behavioral ecosystem analysis showing life moments, substitution patterns, cultural signals, emotional engagement, relevance shifts, and white-space opportunities.' },
             sponsorship: { icon: '💰', title: 'Sponsorship', desc: 'Sponsorship valuation and partnership opportunity analysis.' },
             media: { icon: '📺', title: 'Media', desc: 'Media consumption patterns including TV, streaming, social media preferences.' },
             content: { icon: '🎬', title: 'Content', desc: 'Content consumption preferences including genres, formats, and viewing habits.' },
@@ -32330,23 +32331,23 @@
                         <div class="summary-modal-content" style="max-width: 900px;">
                             <div class="summary-header">
                                 <h2>📄 Executive Summary: ${primaryProfile.name}</h2>
-                                <div style="display: flex; gap: 0.5rem;">
-                                    <button class="btn btn-small" onclick="sendSummaryToDeck()" style="background: rgba(139, 92, 246, 0.3); border-color: #8b5cf6;">📊 Add to Deck</button>
-                                    <button class="btn btn-small" onclick="copySummaryToClipboard()">📋 Copy</button>
-                                    <button class="btn btn-small" onclick="printSummary()">🖨️ Print</button>
-                                    <button class="btn btn-small" onclick="closeSummaryModal()">✕ Close</button>
-                                </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-small" onclick="sendSummaryToDeck()" style="background: rgba(139, 92, 246, 0.3); border-color: #8b5cf6;">📊 Add to Deck</button>
+                                <button class="btn btn-small" onclick="copySummaryToClipboard()">📋 Copy</button>
+                                <button class="btn btn-small" onclick="printSummary()">🖨️ Print</button>
+                                <button class="btn btn-small" onclick="closeSummaryModal()">✕ Close</button>
                             </div>
-                            
-                            <div class="summary-section">
-                                <h3>Overview</h3>
+                        </div>
+                        
+                        <div class="summary-section">
+                            <h3>Overview</h3>
                                 <p><strong>Primary Profile:</strong> ${primaryProfile.name}</p>
                                 <p><strong>Sample Size:</strong> ${formatNumber(primaryProfile.sampleSize || 0)} | <strong>Projected US:</strong> ${formatNumber(primaryProfile.projectedUS || 0)} | <strong>Median Age:</strong> ${primaryProfile.medianAge || 'N/A'}</p>
                                 ${competitors.length > 0 ? `<p><strong>Competitors:</strong> ${competitors.map(c => c.name).join(', ')}</p>` : ''}
                                 ${genPopProfile ? `<p><strong>Baseline:</strong> Gen Pop (General Population)</p>` : ''}
-                                <p style="color: var(--text-secondary); font-size: 0.85rem;">Generated on ${new Date().toLocaleDateString()}</p>
-                            </div>
-                            
+                            <p style="color: var(--text-secondary); font-size: 0.85rem;">Generated on ${new Date().toLocaleDateString()}</p>
+                        </div>
+                        
                             ${aiInsights.executiveOverview ? `
                                 <div class="summary-section" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), transparent); padding: 1.5rem; border-radius: 8px; margin: 1rem 0;">
                                     <h3>🎯 Executive Overview</h3>
@@ -32355,21 +32356,21 @@
                             ` : ''}
                             
                             ${aiInsights.demographicsInsights ? `
-                                <div class="summary-section">
+                        <div class="summary-section">
                                     <h3>👥 Demographics Insights</h3>
                                     <p style="line-height: 1.6;">${aiInsights.demographicsInsights}</p>
-                                </div>
+                        </div>
                             ` : ''}
-                            
+                        
                             ${aiInsights.competitivePositioning ? `
-                                <div class="summary-section">
+                        <div class="summary-section">
                                     <h3>⚔️ Competitive Positioning</h3>
                                     <p style="line-height: 1.6;">${aiInsights.competitivePositioning}</p>
-                                </div>
-                            ` : ''}
-                            
+                        </div>
+                        ` : ''}
+                        
                             ${aiInsights.categoryAnalysis ? `
-                                <div class="summary-section">
+                        <div class="summary-section">
                                     <h3>📊 Category Analysis</h3>
                                     <p style="line-height: 1.6;">${aiInsights.categoryAnalysis}</p>
                                 </div>
@@ -32387,8 +32388,8 @@
                                     <h3>💡 Key Strategic Recommendations</h3>
                                     <ul style="line-height: 1.8; margin-left: 1.5rem;">
                                         ${aiInsights.keyStrategicRecommendations.map(rec => `<li>${rec}</li>`).join('')}
-                                    </ul>
-                                </div>
+                                        </ul>
+                                    </div>
                             ` : ''}
                             
                             ${aiInsights.criticalWarnings && aiInsights.criticalWarnings.length > 0 ? `
@@ -32397,7 +32398,7 @@
                                     <ul style="line-height: 1.8; margin-left: 1.5rem;">
                                         ${aiInsights.criticalWarnings.map(warning => `<li>${warning}</li>`).join('')}
                                     </ul>
-                                </div>
+                        </div>
                             ` : ''}
                             
                             ${aiInsights.opportunities && aiInsights.opportunities.length > 0 ? `
@@ -32405,13 +32406,13 @@
                                     <h3>🚀 Opportunities</h3>
                                     <ul style="line-height: 1.8; margin-left: 1.5rem;">
                                         ${aiInsights.opportunities.map(opp => `<li>${opp}</li>`).join('')}
-                                    </ul>
-                                </div>
-                            ` : ''}
+                            </ul>
                         </div>
+                            ` : ''}
                     </div>
-                `;
-                
+                </div>
+            `;
+            
                 // Replace modal content
                 const modal = document.querySelector('.summary-modal');
                 if (modal) {

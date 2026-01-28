@@ -5087,19 +5087,26 @@ BEHAVIORAL DATA (Top 100 items by index):
 DEMOGRAPHIC DATA:
 {json.dumps(demographic_data, indent=2)}
 
+CRITICAL REQUIREMENTS:
+- You MUST reference specific data points from the behavioral data provided (brand names, item names, index values, percentages)
+- Include actual numbers, indices, or percentages when making claims
+- Cite specific items from the data to support every insight
+- Do not make generic statements without data backing
+- Example: Instead of "consumers engage with fitness apps", say "consumers show strong engagement with Peloton (index 245) and Strava (index 198), indicating fitness apps are competing with beverage moments"
+
 Provide your analysis in JSON format:
 {{
-    "question1_beforeAfter": "Detailed insight about what happens before and after engagement",
-    "question2_substitution": "Detailed insight about cross-category substitution and occasion leakage",
-    "question3_culturalMomentum": "Detailed insight about pre-trend cultural momentum signals",
-    "question4_attentionEmotion": "Detailed insight about attention and emotional receptivity",
-    "question5_relevanceLoss": "Detailed insight about who is losing relevance and why",
-    "question6_whiteSpace": "Detailed insight about white-space occasions and opportunities",
-    "executiveSummary": "2-3 sentence high-level summary of the most critical insights",
-    "keyRecommendations": ["Strategic recommendation 1", "Strategic recommendation 2", "Strategic recommendation 3"]
+    "question1_beforeAfter": "Detailed insight about what happens before and after engagement. MUST include specific brands/items from the data with their indices or percentages.",
+    "question2_substitution": "Detailed insight about cross-category substitution and occasion leakage. MUST reference specific items from the data.",
+    "question3_culturalMomentum": "Detailed insight about pre-trend cultural momentum signals. MUST cite specific behavioral data points.",
+    "question4_attentionEmotion": "Detailed insight about attention and emotional receptivity. MUST reference actual data from the behavioral items.",
+    "question5_relevanceLoss": "Detailed insight about who is losing relevance and why. MUST include specific demographic or behavioral data points.",
+    "question6_whiteSpace": "Detailed insight about white-space occasions and opportunities. MUST reference specific items or categories from the data.",
+    "executiveSummary": "2-3 sentence high-level summary of the most critical insights. MUST include at least one specific data point (brand, item, index, or percentage).",
+    "keyRecommendations": ["Strategic recommendation 1 with data reference", "Strategic recommendation 2 with data reference", "Strategic recommendation 3 with data reference"]
 }}
 
-Be specific, data-driven, strategic, and actionable. Reference specific items/brands when relevant. Think like a CMO, not a data analyst."""
+Be specific, data-driven, strategic, and actionable. Every insight MUST reference underlying data. Think like a CMO, not a data analyst."""
 
         # Call ChatGPT
         response = client.chat.completions.create(
