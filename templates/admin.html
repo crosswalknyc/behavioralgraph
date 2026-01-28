@@ -138,6 +138,33 @@
             border-radius: 12px;
             padding: 1.5rem;
         }
+        
+        /* Custom scrollbar styling - blue theme */
+        ::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--bg-dark);
+            border-radius: 6px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--accent-blue);
+            border-radius: 6px;
+            border: 2px solid var(--bg-dark);
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-cyan);
+        }
+        
+        /* Firefox scrollbar */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent-blue) var(--bg-dark);
+        }
 
         .card-header {
             display: flex;
@@ -5312,25 +5339,25 @@
                 }
                 
                 html += `
-                    <div class="card" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" 
+                    <div class="card" style="cursor: pointer; transition: all 0.3s ease; border: 1px solid rgba(90, 154, 217, 0.2); background: linear-gradient(135deg, var(--bg-card) 0%, rgba(13, 33, 55, 0.95) 100%);" 
                          onclick="showTickerDetail('${ticker.ticker}')"
-                         onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)';"
-                         onmouseleave="this.style.transform=''; this.style.boxShadow='';">
-                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+                         onmouseenter="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 24px rgba(90, 154, 217, 0.15), 0 4px 8px rgba(0,0,0,0.2)'; this.style.borderColor='rgba(90, 154, 217, 0.4)';"
+                         onmouseleave="this.style.transform=''; this.style.boxShadow=''; this.style.borderColor='rgba(90, 154, 217, 0.2)';">
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem;">
                             <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
                                 ${ticker.hasImage ? 
-                                    `<img src="${ticker.imageUrl}" alt="${ticker.ticker}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;">` :
-                                    `<div style="width: 50px; height: 50px; background: var(--bg-input); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">📈</div>`
+                                    `<img src="${ticker.imageUrl}" alt="${ticker.ticker}" style="width: 50px; height: 50px; border-radius: 10px; object-fit: cover; border: 2px solid rgba(90, 154, 217, 0.2);">` :
+                                    `<div style="width: 50px; height: 50px; background: linear-gradient(135deg, var(--bg-input) 0%, rgba(19, 47, 76, 0.8) 100%); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; border: 2px solid rgba(90, 154, 217, 0.2);">📈</div>`
                                 }
-                                ${statusIcons.length > 0 ? `<div style="display: flex; gap: 0.25rem; margin-top: 0.25rem; font-size: 1rem;">${statusIcons.join('')}</div>` : ''}
+                                ${statusIcons.length > 0 ? `<div style="display: flex; gap: 0.25rem; margin-top: 0.5rem; font-size: 0.9rem; opacity: 0.8;">${statusIcons.join('')}</div>` : ''}
                             </div>
                             <div style="flex: 1;">
-                                <h3 style="margin: 0; font-size: 1.1rem;">${ticker.ticker}</h3>
-                                <div style="color: var(--text-secondary); font-size: 0.85rem;">${ticker.display_name}</div>
+                                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 600; color: var(--text-primary); letter-spacing: 0.3px;">${ticker.ticker}</h3>
+                                <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.25rem;">${ticker.display_name}</div>
                             </div>
                         </div>
-                        <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">
-                            <strong>KPI:</strong> ${ticker.kpi}
+                        <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(90, 154, 217, 0.1);">
+                            <strong style="color: var(--accent-cyan); font-weight: 500;">KPI:</strong> <span style="color: var(--text-primary);">${ticker.kpi}</span>
                         </div>
                     </div>
                 `;
