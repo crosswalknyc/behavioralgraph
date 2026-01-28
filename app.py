@@ -5009,10 +5009,10 @@ Provide your analysis in JSON format:
 {{
     "prediction": "BEAT" or "MISS" or "UNDECIDED",
     "confidence": <number 0-100>,
-    "company_guidance": "<what the company has publicly projected, if found. Specify if it's for overall company or this specific KPI>",
-    "consensus_estimate": "<analyst consensus, if found. Specify if it's for overall company or this specific KPI>",
+    "company_guidance": "<EXPLICIT: What specific percentage/net growth rate the company has publicly projected for {quarter}. Format as: 'X.X% net growth of revenue' or 'X.X% growth' with the actual number. If for overall company, state 'overall company revenue/net growth of X.X%'. If for this specific KPI, state '{kpi} growth of X.X%'. If not found, state 'Not specified' or 'Not found'>",
+    "consensus_estimate": "<EXPLICIT: What specific percentage/net growth rate analyst consensus projects for {quarter}. Format as: 'X.X% net growth of revenue' or 'X.X% growth' with the actual number. If for overall company, state 'overall company revenue/net growth of X.X%'. If for this specific KPI, state '{kpi} growth of X.X%'. If not found, state 'Not available' or 'Not found'>",
     "our_projection": {projected_growth_pct},
-    "analysis": "<3-4 sentence explanation that: (1) acknowledges our projection is for a specific KPI, not overall company growth, (2) explains how Stock Impact affects the prediction, (3) compares appropriately based on whether company guidance is for overall company or this KPI, (4) provides reasoning for beat/miss/undecided>"
+    "analysis": "<4-5 sentence explanation that: (1) explicitly states the company's projection (with number), (2) explicitly states the consensus estimate (with number), (3) states our projection for this specific KPI ({projected_growth_pct}%), (4) explains how our KPI metric fits in with the company and consensus projections, considering Stock Impact ({relevance_pct}%), (5) provides reasoning for beat/miss/undecided>"
 }}
 
 Respond ONLY with valid JSON, no additional text."""

@@ -14812,12 +14812,14 @@
                             const icon = isBeat ? '👍' : '👎';
                             const text = isBeat ? 'Beat' : 'Miss';
                             
-                            // Get company guidance or consensus estimate
-                            const companyProjection = result.company_guidance && result.company_guidance !== 'Not found' 
+                            // Get company guidance and consensus estimate separately
+                            const companyProjection = result.company_guidance && result.company_guidance !== 'Not found' && result.company_guidance !== 'Not specified'
                                 ? result.company_guidance 
-                                : (result.consensus_estimate && result.consensus_estimate !== 'Not found' 
-                                    ? result.consensus_estimate 
-                                    : 'Not available');
+                                : 'Not specified';
+                            
+                            const consensusProjection = result.consensus_estimate && result.consensus_estimate !== 'Not found' && result.consensus_estimate !== 'Not available'
+                                ? result.consensus_estimate
+                                : 'Not available';
                             
                             // Populate beat/miss card
                             if (beatMissCard) {
@@ -14828,11 +14830,15 @@
                                             <span style="font-size: 1.5rem;">${icon}</span>
                                             <span style="color: ${color}; font-weight: 600; font-size: 1.1rem;">${text}</span>
                                         </div>
-                                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem; flex: 1;">
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
                                             <div style="font-weight: 600; margin-bottom: 0.25rem;">Company Projection:</div>
                                             <div>${companyProjection}</div>
                                         </div>
-                                        <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5;">
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                                            <div style="font-weight: 600; margin-bottom: 0.25rem;">Consensus Estimate:</div>
+                                            <div>${consensusProjection}</div>
+                                        </div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5; flex: 1;">
                                             <div style="font-weight: 600; margin-bottom: 0.25rem;">Analysis:</div>
                                             <div>${result.analysis || 'Analysis unavailable'}</div>
                                         </div>
