@@ -5154,6 +5154,148 @@ Be specific, data-driven, strategic, and actionable. Reference specific items/br
         }), 500
 
 
+@app.route('/api/executive-summary/ai-analyze', methods=['POST'])
+@requires_auth
+def analyze_executive_summary_with_ai():
+    """Generate AI-powered executive summary from comparison data."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        primary_profile = data.get('primaryProfile')
+        competitors = data.get('competitors', [])
+        gen_pop_profile = data.get('genPopProfile')
+        
+        if not primary_profile:
+            return jsonify({'success': False, 'error': 'No primary profile provided'}), 400
+        
+        # Get OpenAI client
+        client = get_openai_client()
+        if not client:
+            return jsonify({
+                'success': False, 
+                'error': 'OpenAI API not available',
+                'fallback': True
+            }), 503
+        
+        # Prepare structured data for AI
+        summary_data = {
+            'primaryProfile': {
+                'name': primary_profile.get('name', 'Unknown'),
+                'sampleSize': primary_profile.get('sampleSize', 0),
+                'projectedUS': primary_profile.get('projectedUS', 0),
+                'medianAge': primary_profile.get('medianAge', 'N/A'),
+                'demographics': primary_profile.get('demographics', {}),
+                'demographicsProjection': primary_profile.get('demographicsProjection', {}),
+                'topCategories': primary_profile.get('topCategories', []),
+                'topInterests': primary_profile.get('topInterests', [])
+            },
+            'competitors': [
+                {
+                    'name': comp.get('name', 'Unknown'),
+                    'demographics': comp.get('demographics', {}),
+                    'demographicsProjection': comp.get('demographicsProjection', {}),
+                    'topCategories': comp.get('topCategories', []),
+                    'topInterests': comp.get('topInterests', [])
+                }
+                for comp in competitors
+            ],
+            'genPop': {
+                'demographics': gen_pop_profile.get('demographics', {}) if gen_pop_profile else {},
+                'demographicsProjection': gen_pop_profile.get('demographicsProjection', {}) if gen_pop_profile else {},
+                'topCategories': gen_pop_profile.get('topCategories', []) if gen_pop_profile else [],
+                'topInterests': gen_pop_profile.get('topInterests', []) if gen_pop_profile else []
+            } if gen_pop_profile else None
+        }
+        
+        # Build comprehensive prompt for strategic executive summary
+        prompt = f"""You are a C-suite marketing strategist analyzing competitive consumer data. Generate a high-level, strategic executive summary that transforms raw data into actionable business insights.
+
+PRIMARY PROFILE: {summary_data['primaryProfile']['name']}
+- Sample Size: {summary_data['primaryProfile']['sampleSize']:,}
+- Projected US Population: {summary_data['primaryProfile']['projectedUS']:,}
+- Median Age: {summary_data['primaryProfile']['medianAge']}
+
+COMPETITORS: {', '.join([c['name'] for c in summary_data['competitors']]) if summary_data['competitors'] else 'None'}
+
+FULL DATA:
+{json.dumps(summary_data, indent=2)}
+
+Your task: Generate a strategic executive summary that:
+1. **Identifies the most critical business insights** - not just data points, but what they mean for strategy
+2. **Highlights competitive advantages and vulnerabilities** - where does the primary brand win vs. competitors and Gen Pop?
+3. **Reveals demographic shifts and implications** - is the audience aging? shifting gender? income changes?
+4. **Explains category and interest patterns** - what does this tell us about positioning and messaging?
+5. **Provides strategic recommendations** - what should leadership focus on?
+
+Format your response as JSON:
+{{
+    "executiveOverview": "2-3 sentence high-level strategic overview",
+    "demographicsInsights": "Strategic insights about demographics - what they mean, not just numbers. Compare to competitors and Gen Pop. Are they aging? Shifting? What are the implications?",
+    "competitivePositioning": "How the primary brand positions vs. competitors - strengths, weaknesses, opportunities",
+    "categoryAnalysis": "Strategic insights about purchased categories - what this reveals about brand positioning and consumer behavior",
+    "interestBehaviorInsights": "What the top interests/behaviors reveal about the consumer mindset and brand fit",
+    "keyStrategicRecommendations": ["Recommendation 1", "Recommendation 2", "Recommendation 3"],
+    "criticalWarnings": ["Any red flags or risks to highlight"],
+    "opportunities": ["Strategic opportunities to pursue"]
+}}
+
+Be strategic, not descriptive. Think like a CMO presenting to the board. Use percentages and numbers where relevant, but focus on what they MEAN for the business."""
+        
+        # Call ChatGPT
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a world-class marketing strategist and C-suite advisor. You transform consumer data into high-level strategic insights for executive decision-making."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2500
+        )
+        
+        # Parse response
+        ai_response = response.choices[0].message.content
+        
+        # Try to parse as JSON
+        try:
+            # Try to extract JSON from markdown code blocks if present
+            if '```json' in ai_response:
+                ai_response = ai_response.split('```json')[1].split('```')[0].strip()
+            elif '```' in ai_response:
+                ai_response = ai_response.split('```')[1].split('```')[0].strip()
+            
+            insights = json.loads(ai_response)
+        except Exception as e:
+            print(f"⚠️ Could not parse AI response as JSON: {e}")
+            # Fallback: wrap in structure
+            insights = {
+                "executiveOverview": ai_response,
+                "demographicsInsights": "AI analysis available but could not be parsed",
+                "competitivePositioning": "",
+                "categoryAnalysis": "",
+                "interestBehaviorInsights": "",
+                "keyStrategicRecommendations": [],
+                "criticalWarnings": [],
+                "opportunities": []
+            }
+        
+        return jsonify({
+            'success': True,
+            'insights': insights
+        })
+        
+    except Exception as e:
+        print(f"❌ Error analyzing executive summary with AI: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'fallback': True
+        }), 500
+
+
 @app.route('/api/admin/refresh-cache', methods=['POST'])
 @requires_admin
 def refresh_metadata_cache():
