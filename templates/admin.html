@@ -1907,7 +1907,7 @@
             
             <div style="margin-bottom: 1rem;">
                 <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600;">Quarter</label>
-                <input type="text" id="secActualQuarter" placeholder="e.g., Q1 2026" style="width: 100%; padding: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                <input type="text" id="secActualQuarterModal" placeholder="e.g., Q1 2026" style="width: 100%; padding: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
                 <small style="color: var(--text-secondary); font-size: 0.7rem;">Format: Q1 2026, Q2 2025, etc.</small>
             </div>
             
@@ -4806,14 +4806,16 @@
         
         function showAddSecActualModal() {
             document.getElementById('secActualTicker').value = '';
-            document.getElementById('secActualQuarter').value = '';
+            const quarterInput = document.getElementById('secActualQuarterModal');
+            if (quarterInput) quarterInput.value = '';
             document.getElementById('secActualValue').value = '';
             document.getElementById('secActualModal').classList.add('show');
         }
         
         function editSecActual(ticker, quarter, value) {
             document.getElementById('secActualTicker').value = ticker;
-            document.getElementById('secActualQuarter').value = quarter;
+            const quarterInput = document.getElementById('secActualQuarterModal');
+            if (quarterInput) quarterInput.value = quarter;
             document.getElementById('secActualValue').value = value;
             document.getElementById('secActualModal').classList.add('show');
         }
@@ -4824,7 +4826,8 @@
         
         async function saveSecActual() {
             const ticker = document.getElementById('secActualTicker').value;
-            const quarter = document.getElementById('secActualQuarter').value;
+            const quarterInput = document.getElementById('secActualQuarterModal');
+            const quarter = quarterInput ? quarterInput.value : '';
             const value = document.getElementById('secActualValue').value;
             
             if (!ticker || !quarter) {
@@ -5198,15 +5201,6 @@
                         if (profileData.success && profileData.profiles && profileData.profiles.length > 0) {
                             ticker.profiles = profileData.profiles;
                             ticker.profileFilename = profileData.profiles[0]; // First profile for display
-                            ticker.hasCustomProfile = true;
-                        } else {
-                            ticker.hasCustomProfile = false;
-                        }
-                    } catch (error) {
-                        ticker.hasCustomProfile = false;
-                    }
-                    
-                    // Relevance percentage is already included in ticker data from the list endpoint
                             ticker.hasCustomProfile = profileData.profiles.length > 0 && profileData.profiles[0] !== ticker.ticker;
                         } else {
                             ticker.profiles = [ticker.ticker];
@@ -5218,6 +5212,8 @@
                         ticker.profileFilename = ticker.ticker;
                         ticker.hasCustomProfile = false;
                     }
+                    
+                    // Relevance percentage is already included in ticker data from the list endpoint
                 }
                 
                 renderTickers();
