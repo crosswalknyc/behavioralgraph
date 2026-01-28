@@ -2535,20 +2535,22 @@
             box-shadow: 0 4px 20px rgba(0, 255, 255, 0.4);
         }
         
-        /* Pulsing Number Animation - Subtle */
+        /* Pulsing Number Animation with Glow */
         .pulsing-number {
-            animation: pulse-number 2s ease-in-out infinite;
+            animation: pulse-number-glow 2s ease-in-out infinite;
             display: inline-block;
         }
         
-        @keyframes pulse-number {
+        @keyframes pulse-number-glow {
             0%, 100% {
                 transform: scale(1);
                 opacity: 1;
+                text-shadow: 0 0 0px rgba(139, 92, 246, 0);
             }
             50% {
-                transform: scale(1.02);
-                opacity: 0.85;
+                transform: scale(1.03);
+                opacity: 1;
+                text-shadow: 0 0 15px rgba(139, 92, 246, 0.6), 0 0 25px rgba(139, 92, 246, 0.4);
             }
         }
         
