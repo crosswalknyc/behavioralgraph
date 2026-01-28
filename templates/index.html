@@ -11735,7 +11735,7 @@
                             
                             <!-- Projected Growth Rate + Accuracy (Left) + Beat/Miss (Right) -->
                             <div class="ticker-cards-grid two-columns" style="margin-bottom: 0.5rem;">
-                                <!-- Left: Projected Growth with Accuracy on right side -->
+                                <!-- Left: Projected Growth with Accuracy on right side + Net Growth Trend below -->
                                 <div class="stat-card has-tooltip" id="projectedGrowthCard" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; justify-content: flex-start; position: relative; padding: 0.75rem 1rem; min-height: 0;" onclick="navigateToTrends()" data-tooltip="">
                                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
                                         <div style="flex: 1; display: flex; flex-direction: column;">
@@ -11746,6 +11746,16 @@
                                         <div id="liveDataAccuracyBadge" style="display: none; min-width: 140px; text-align: right;">
                                             <div class="stat-label" style="font-size: 0.75rem; margin-bottom: 0.5rem;">📊 Accuracy</div>
                                             <div id="liveDataAccuracyValue" style="font-weight: 600; font-size: 0.9rem;"></div>
+                                        </div>
+                                    </div>
+                                    <!-- Net Growth Trend (Last 7 Days) - embedded in projected growth card -->
+                                    <div id="netGrowthTrendSection" style="display: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                            <div class="stat-label" style="font-size: 0.7rem;">📊 Net Growth Trend</div>
+                                            <span style="font-size: 0.6rem; color: var(--accent-cyan);">🔴 LIVE</span>
+                                        </div>
+                                        <div style="height: 60px; position: relative;">
+                                            <canvas id="miniTrendChart"></canvas>
                                         </div>
                                     </div>
                                 </div>
@@ -11783,16 +11793,6 @@
                                 </div>
                             </div>
                             
-                            <!-- Net Growth Trend Card (Full Width) -->
-                            <div class="stat-card has-tooltip" id="netGrowthTrendCard" style="display: none; margin-bottom: 0.75rem; padding: 0.75rem 1rem; cursor: pointer; transition: all 0.2s ease;" onclick="showTickerTab('trends')" data-tooltip="Click to view detailed trends analysis">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                    <div class="stat-label" style="font-size: 0.75rem;">📊 Net Growth Trend (Last 7 Days)</div>
-                                    <span style="font-size: 0.65rem; color: var(--accent-cyan);">Click for details →</span>
-                                </div>
-                                <div style="height: 60px; position: relative;">
-                                    <canvas id="miniTrendChart"></canvas>
-                                </div>
-                            </div>
                         </div>
 
                         <!-- Trends Tab -->
@@ -15216,21 +15216,21 @@
         
         function renderMiniTrendChart(dailyData) {
             const canvas = document.getElementById('miniTrendChart');
-            const trendCard = document.getElementById('netGrowthTrendCard');
+            const trendSection = document.getElementById('netGrowthTrendSection');
             
-            if (!canvas || !trendCard) return;
+            if (!canvas || !trendSection) return;
             
             // Get last 7 days of data
             const last7Days = dailyData.slice(-7);
             
             if (last7Days.length < 2) {
                 // Not enough data to show trend
-                trendCard.style.display = 'none';
+                trendSection.style.display = 'none';
                 return;
             }
             
-            // Show the card
-            trendCard.style.display = 'block';
+            // Show the section
+            trendSection.style.display = 'block';
             
             const ctx = canvas.getContext('2d');
             
