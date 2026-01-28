@@ -294,6 +294,7 @@ def invalidate_cache(filename=None):
 TICKER_IMAGES_FILE = 'metadata/ticker_images_cache.json'
 TICKER_PROFILES_FILE = 'metadata/ticker_profile_mappings.json'
 SEC_ACTUALS_FILE = 'metadata/hedge_fund_sec_actuals.json'
+QUICK_SELECTS_FILE = 'metadata/admin_quick_selects.json'
 
 def ensure_metadata_folder():
     """Ensure the metadata folder exists in S3 by creating empty files if needed."""
@@ -4926,6 +4927,51 @@ def update_sec_actuals():
         
     except Exception as e:
         print(f"❌ Error updating SEC actuals: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/quick-selects', methods=['GET'])
+@requires_admin
+def get_quick_selects():
+    """Get quick selects configuration (admin only)."""
+    try:
+        quick_selects = load_json_from_s3(QUICK_SELECTS_FILE)
+        return jsonify({
+            'success': True,
+            'profiles': quick_selects.get('profiles', {}),
+            'tickers': quick_selects.get('tickers', {})
+        })
+    except Exception as e:
+        print(f"❌ Error loading quick selects: {e}")
+        return jsonify({
+            'success': True,  # Return success with empty data if file doesn't exist
+            'profiles': {},
+            'tickers': {}
+        })
+
+
+@app.route('/api/admin/quick-selects', methods=['POST'])
+@requires_admin
+def save_quick_selects():
+    """Save quick selects configuration (admin only)."""
+    try:
+        data = request.get_json()
+        profiles = data.get('profiles', {})
+        tickers = data.get('tickers', {})
+        
+        quick_selects = {
+            'profiles': profiles,
+            'tickers': tickers,
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        save_json_to_s3(QUICK_SELECTS_FILE, quick_selects)
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"❌ Error saving quick selects: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500

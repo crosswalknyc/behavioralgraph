@@ -601,6 +601,14 @@
             color: #1a1a1a;
         }
 
+        /* Settings Tabs */
+        .settings-tab-content {
+            display: none;
+        }
+        .settings-tab-content.active {
+            display: block;
+        }
+        
         /* Admin Tabs */
         .admin-tabs {
             display: flex;
@@ -1144,6 +1152,14 @@
 
         <!-- SETTINGS SECTION -->
         <div id="section-settings" class="admin-section">
+            <!-- Settings Tabs -->
+            <div class="admin-tabs" style="margin-bottom: 1.5rem; border-bottom: 2px solid var(--border-color);">
+                <button class="admin-tab active" onclick="showSettingsTab('gmail')">📧 Gmail Integration</button>
+                <button class="admin-tab" onclick="showSettingsTab('quickSelects')">⚡ Quick Selects</button>
+            </div>
+            
+            <!-- Gmail Integration Tab -->
+            <div id="settings-tab-gmail" class="settings-tab-content active">
             <div class="stats-grid">
                 <div class="stat-card">
                     <h3>Email Status</h3>
@@ -1223,6 +1239,77 @@
                         ⚠️ Gmail OAuth is not configured. Add <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> 
                         to your environment variables on Render.
                     </p>
+                </div>
+            </div>
+            </div>
+            
+            <!-- Quick Selects Tab -->
+            <div id="settings-tab-quickSelects" class="settings-tab-content" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>⚡ Quick Selects</h2>
+                        <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                            Configure default selections for profiles and tickers. Unselected items will be excluded when using "Add All" functionality when granting user access.
+                        </p>
+                    </div>
+                    
+                    <!-- Profiles Section -->
+                    <div class="dashboard-access-item" style="margin-bottom: 1.5rem;">
+                        <div class="dashboard-access-header" onclick="toggleQuickSelectSection('profiles')">
+                            <label class="checkbox-group" onclick="event.stopPropagation()">
+                                <span style="font-weight: 600; font-size: 1rem;">📊 Profiles</span>
+                            </label>
+                            <span class="collapse-icon rotated" id="quickSelectProfilesIcon">▼</span>
+                        </div>
+                        <div id="quickSelectProfilesSection" class="dashboard-access-content" style="display: none;">
+                            <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
+                                <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="quickSelectAllProfiles" checked onchange="toggleAllQuickSelectProfiles()">
+                                        <span>Select All Profiles</span>
+                                    </label>
+                                    <button class="btn btn-small btn-primary" onclick="saveQuickSelects()">💾 Save Quick Selects</button>
+                                </div>
+                                <div style="max-height: 400px; overflow-y: auto;">
+                                    <input type="text" id="quickSelectProfileSearch" placeholder="🔍 Search profiles..." 
+                                           style="width: 100%; padding: 0.5rem; margin-bottom: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);"
+                                           onkeyup="filterQuickSelectProfiles()">
+                                    <div id="quickSelectProfilesList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;">
+                                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading profiles...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tickers Section -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header" onclick="toggleQuickSelectSection('tickers')">
+                            <label class="checkbox-group" onclick="event.stopPropagation()">
+                                <span style="font-weight: 600; font-size: 1rem;">📈 Tickers</span>
+                            </label>
+                            <span class="collapse-icon rotated" id="quickSelectTickersIcon">▼</span>
+                        </div>
+                        <div id="quickSelectTickersSection" class="dashboard-access-content" style="display: none;">
+                            <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
+                                <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="quickSelectAllTickers" checked onchange="toggleAllQuickSelectTickers()">
+                                        <span>Select All Tickers</span>
+                                    </label>
+                                    <button class="btn btn-small btn-primary" onclick="saveQuickSelects()">💾 Save Quick Selects</button>
+                                </div>
+                                <div style="max-height: 400px; overflow-y: auto;">
+                                    <input type="text" id="quickSelectTickerSearch" placeholder="🔍 Search tickers..." 
+                                           style="width: 100%; padding: 0.5rem; margin-bottom: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);"
+                                           onkeyup="filterQuickSelectTickers()">
+                                    <div id="quickSelectTickersList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.5rem;">
+                                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading tickers...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1418,7 +1505,7 @@
                                 <input type="checkbox" id="hasProfileIQAccess" checked onchange="toggleProfileIQSection()">
                                 <span style="font-weight: 600;">✅ PROFILE IQ</span>
                             </label>
-                            <span class="collapse-icon" id="profileIQIcon">▼</span>
+                            <span class="collapse-icon rotated" id="profileIQIcon">▼</span>
                         </div>
                         <div id="profileIQSection" class="dashboard-access-content" style="display: none;">
                             <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
@@ -1463,7 +1550,7 @@
                                 <input type="checkbox" id="hasHedgeFundIQAccess" onchange="toggleHedgeFundIQSection()">
                                 <span style="font-weight: 600;">📈 HEDGE FUND IQ</span>
                             </label>
-                            <span class="collapse-icon" id="hedgeFundIQIcon">▼</span>
+                            <span class="collapse-icon rotated" id="hedgeFundIQIcon">▼</span>
                         </div>
                         <div id="hedgeFundIQSection" class="dashboard-access-content" style="display: none;">
                             <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
@@ -1517,7 +1604,7 @@
                                 <input type="checkbox" id="hasAnalysisIQAccess" onchange="toggleAnalysisIQSection()">
                                 <span style="font-weight: 600;">📊 ANALYSIS IQ</span>
                             </label>
-                            <span class="collapse-icon" id="analysisIQIcon">▼</span>
+                            <span class="collapse-icon rotated" id="analysisIQIcon">▼</span>
                         </div>
                         <div id="analysisIQSection" class="dashboard-access-content" style="display: none;">
                             <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
@@ -1935,7 +2022,293 @@
             }
             if (tabName === 'settings') {
                 checkGmailStatus();
+                loadQuickSelects(); // Load quick selects when settings tab is opened
             }
+        }
+        
+        // Settings Tab Switching
+        function showSettingsTab(tabName) {
+            document.querySelectorAll('#section-settings .admin-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.settings-tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`#section-settings .admin-tab[onclick="showSettingsTab('${tabName}')"]`).classList.add('active');
+            document.getElementById('settings-tab-' + tabName).classList.add('active');
+            
+            if (tabName === 'quickSelects') {
+                loadQuickSelectProfiles();
+                loadQuickSelectTickers();
+            }
+        }
+        
+        // Quick Selects Variables
+        let quickSelectProfiles = [];
+        let quickSelectTickers = [];
+        let quickSelectProfilesData = {}; // Store selected profiles
+        let quickSelectTickersData = {}; // Store selected tickers
+        
+        // Toggle Quick Select Section
+        function toggleQuickSelectSection(sectionName) {
+            const section = document.getElementById(`quickSelect${sectionName.charAt(0).toUpperCase() + sectionName.slice(1)}Section`);
+            const icon = document.getElementById(`quickSelect${sectionName.charAt(0).toUpperCase() + sectionName.slice(1)}Icon`);
+            
+            if (section.style.display === 'none' || section.style.display === '') {
+                section.style.display = 'block';
+                icon.classList.remove('rotated');
+            } else {
+                section.style.display = 'none';
+                icon.classList.add('rotated');
+            }
+        }
+        
+        // Load Quick Select Profiles
+        async function loadQuickSelectProfiles() {
+            const container = document.getElementById('quickSelectProfilesList');
+            if (!container) return;
+            
+            try {
+                const response = await fetch('/api/jobs', { credentials: 'same-origin' });
+                if (!response.ok) {
+                    container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">Failed to load profiles</div>';
+                    return;
+                }
+                
+                const data = await response.json();
+                const profiles = data.jobs || [];
+                quickSelectProfiles = profiles.filter(p => p.status === 'cached' || p.status === 'completed');
+                
+                // Load saved selections
+                await loadQuickSelects();
+                
+                renderQuickSelectProfiles();
+            } catch (error) {
+                console.error('Error loading profiles:', error);
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">Error loading profiles</div>';
+            }
+        }
+        
+        // Render Quick Select Profiles
+        function renderQuickSelectProfiles() {
+            const container = document.getElementById('quickSelectProfilesList');
+            const searchTerm = (document.getElementById('quickSelectProfileSearch')?.value || '').toLowerCase();
+            
+            const filtered = quickSelectProfiles.filter(p => {
+                const name = (p.s3_key || p.job_id || '').toLowerCase();
+                return name.includes(searchTerm);
+            });
+            
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); text-align: center;">No profiles found</div>';
+                return;
+            }
+            
+            container.innerHTML = filtered.map(p => {
+                const profileId = p.s3_key || p.job_id;
+                const profileName = profileId.replace('.csv', '').replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '').replace(/_/g, ' ');
+                const isSelected = quickSelectProfilesData[profileId] !== false; // Default to true if not explicitly set to false
+                
+                return `
+                    <label class="checkbox-group" style="padding: 0.5rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);">
+                        <input type="checkbox" class="quick-select-profile-checkbox" value="${profileId}" ${isSelected ? 'checked' : ''} onchange="updateQuickSelectProfile('${profileId}', this.checked)">
+                        <span style="font-size: 0.85rem;">${profileName}</span>
+                    </label>
+                `;
+            }).join('');
+            
+            // Update "Select All" checkbox
+            const allChecked = filtered.every(p => {
+                const profileId = p.s3_key || p.job_id;
+                return quickSelectProfilesData[profileId] !== false;
+            });
+            document.getElementById('quickSelectAllProfiles').checked = allChecked;
+        }
+        
+        // Load Quick Select Tickers
+        async function loadQuickSelectTickers() {
+            const container = document.getElementById('quickSelectTickersList');
+            if (!container) return;
+            
+            try {
+                const response = await fetch('/api/hedge-fund-iq/tickers', { credentials: 'same-origin' });
+                if (!response.ok) {
+                    container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">Failed to load tickers</div>';
+                    return;
+                }
+                
+                const data = await response.json();
+                if (data.success && data.tickers) {
+                    quickSelectTickers = data.tickers;
+                    
+                    // Load saved selections
+                    await loadQuickSelects();
+                    
+                    renderQuickSelectTickers();
+                } else {
+                    container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No tickers available</div>';
+                }
+            } catch (error) {
+                console.error('Error loading tickers:', error);
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">Error loading tickers</div>';
+            }
+        }
+        
+        // Render Quick Select Tickers
+        function renderQuickSelectTickers() {
+            const container = document.getElementById('quickSelectTickersList');
+            const searchTerm = (document.getElementById('quickSelectTickerSearch')?.value || '').toLowerCase();
+            
+            const filtered = quickSelectTickers.filter(t => {
+                const ticker = (t.ticker || '').toLowerCase();
+                return ticker.includes(searchTerm);
+            });
+            
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); text-align: center;">No tickers found</div>';
+                return;
+            }
+            
+            container.innerHTML = filtered.map(t => {
+                const ticker = t.ticker;
+                const isSelected = quickSelectTickersData[ticker] !== false; // Default to true if not explicitly set to false
+                
+                return `
+                    <label class="checkbox-group" style="padding: 0.5rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);">
+                        <input type="checkbox" class="quick-select-ticker-checkbox" value="${ticker}" ${isSelected ? 'checked' : ''} onchange="updateQuickSelectTicker('${ticker}', this.checked)">
+                        <span style="font-size: 0.85rem;">${ticker}</span>
+                    </label>
+                `;
+            }).join('');
+            
+            // Update "Select All" checkbox
+            const allChecked = filtered.every(t => {
+                const ticker = t.ticker;
+                return quickSelectTickersData[ticker] !== false;
+            });
+            document.getElementById('quickSelectAllTickers').checked = allChecked;
+        }
+        
+        // Update Quick Select Profile
+        function updateQuickSelectProfile(profileId, isSelected) {
+            quickSelectProfilesData[profileId] = isSelected;
+            updateQuickSelectAllProfiles();
+        }
+        
+        // Update Quick Select Ticker
+        function updateQuickSelectTicker(ticker, isSelected) {
+            quickSelectTickersData[ticker] = isSelected;
+            updateQuickSelectAllTickers();
+        }
+        
+        // Toggle All Quick Select Profiles
+        function toggleAllQuickSelectProfiles() {
+            const allChecked = document.getElementById('quickSelectAllProfiles').checked;
+            document.querySelectorAll('.quick-select-profile-checkbox').forEach(cb => {
+                cb.checked = allChecked;
+                const profileId = cb.value;
+                quickSelectProfilesData[profileId] = allChecked;
+            });
+        }
+        
+        // Toggle All Quick Select Tickers
+        function toggleAllQuickSelectTickers() {
+            const allChecked = document.getElementById('quickSelectAllTickers').checked;
+            document.querySelectorAll('.quick-select-ticker-checkbox').forEach(cb => {
+                cb.checked = allChecked;
+                const ticker = cb.value;
+                quickSelectTickersData[ticker] = allChecked;
+            });
+        }
+        
+        // Update "Select All" checkbox state
+        function updateQuickSelectAllProfiles() {
+            const allChecked = document.querySelectorAll('.quick-select-profile-checkbox').length > 0 &&
+                               document.querySelectorAll('.quick-select-profile-checkbox:checked').length === 
+                               document.querySelectorAll('.quick-select-profile-checkbox').length;
+            document.getElementById('quickSelectAllProfiles').checked = allChecked;
+        }
+        
+        function updateQuickSelectAllTickers() {
+            const allChecked = document.querySelectorAll('.quick-select-ticker-checkbox').length > 0 &&
+                               document.querySelectorAll('.quick-select-ticker-checkbox:checked').length === 
+                               document.querySelectorAll('.quick-select-ticker-checkbox').length;
+            document.getElementById('quickSelectAllTickers').checked = allChecked;
+        }
+        
+        // Filter Quick Select Profiles
+        function filterQuickSelectProfiles() {
+            renderQuickSelectProfiles();
+        }
+        
+        // Filter Quick Select Tickers
+        function filterQuickSelectTickers() {
+            renderQuickSelectTickers();
+        }
+        
+        // Save Quick Selects
+        async function saveQuickSelects() {
+            try {
+                const response = await fetch('/api/admin/quick-selects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        profiles: quickSelectProfilesData,
+                        tickers: quickSelectTickersData
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to save quick selects');
+                }
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('✅ Quick selects saved successfully!');
+                } else {
+                    alert('❌ Failed to save quick selects: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error saving quick selects:', error);
+                alert('❌ Error saving quick selects');
+            }
+        }
+        
+        // Load Quick Selects
+        async function loadQuickSelects() {
+            try {
+                const response = await fetch('/api/admin/quick-selects', { credentials: 'same-origin' });
+                if (!response.ok) {
+                    // If endpoint doesn't exist yet, use defaults (all selected)
+                    quickSelectProfilesData = {};
+                    quickSelectTickersData = {};
+                    return;
+                }
+                
+                const data = await response.json();
+                if (data.success) {
+                    quickSelectProfilesData = data.profiles || {};
+                    quickSelectTickersData = data.tickers || {};
+                }
+            } catch (error) {
+                console.error('Error loading quick selects:', error);
+                // Use defaults (all selected)
+                quickSelectProfilesData = {};
+                quickSelectTickersData = {};
+            }
+        }
+        
+        // Get Quick Select Profiles (for use in "Add All" functionality)
+        function getQuickSelectProfiles() {
+            return quickSelectProfiles.filter(p => {
+                const profileId = p.s3_key || p.job_id;
+                return quickSelectProfilesData[profileId] !== false; // Include if not explicitly excluded
+            });
+        }
+        
+        // Get Quick Select Tickers (for use in "Add All" functionality)
+        function getQuickSelectTickers() {
+            return quickSelectTickers.filter(t => {
+                const ticker = t.ticker;
+                return quickSelectTickersData[ticker] !== false; // Include if not explicitly excluded
+            });
         }
         
         // ============ PROFILE IMAGES ============
@@ -2899,7 +3272,18 @@
         function toggleAllHedgeFundTickers() {
             const allTickersCheckbox = document.getElementById('allHedgeFundTickers');
             const tickerCheckboxes = document.querySelectorAll('.hedge-fund-ticker-checkbox');
-            tickerCheckboxes.forEach(cb => cb.checked = allTickersCheckbox.checked);
+            
+            if (allTickersCheckbox.checked) {
+                // Only check tickers that are in quick selects
+                const quickSelectTickerList = getQuickSelectTickers();
+                const quickSelectTickerSet = new Set(quickSelectTickerList.map(t => t.ticker));
+                
+                tickerCheckboxes.forEach(cb => {
+                    cb.checked = quickSelectTickerSet.has(cb.value);
+                });
+            } else {
+                tickerCheckboxes.forEach(cb => cb.checked = false);
+            }
         }
         
         // Load Hedge Fund Tickers for Access Control
@@ -2916,11 +3300,17 @@
                     container.innerHTML = '';
                     
                     console.log(`✅ Loading ${data.tickers.length} tickers...`);
+                    
+                    // Get quick select tickers
+                    const quickSelectTickerList = getQuickSelectTickers();
+                    const quickSelectTickerSet = new Set(quickSelectTickerList.map(t => t.ticker));
+                    
                     data.tickers.forEach(ticker => {
                         const label = document.createElement('label');
                         label.className = 'checkbox-group';
+                        const isQuickSelected = quickSelectTickerSet.has(ticker.ticker);
                         label.innerHTML = `
-                            <input type="checkbox" class="hedge-fund-ticker-checkbox" value="${ticker.ticker}">
+                            <input type="checkbox" class="hedge-fund-ticker-checkbox" value="${ticker.ticker}" ${isQuickSelected ? 'checked' : ''}>
                             <span>${ticker.ticker}</span>
                         `;
                         container.appendChild(label);
