@@ -15274,6 +15274,10 @@
             const lastValue = netGrowth[netGrowth.length - 1];
             const trendColor = lastValue >= firstValue ? '#10b981' : '#ef4444';
             
+            // Create array of point radii - make last point larger for pulsing
+            const pointRadii = dates.map((_, index) => index === dates.length - 1 ? 5 : 3);
+            const pointHoverRadii = dates.map((_, index) => index === dates.length - 1 ? 7 : 5);
+            
             miniTrendChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -15286,8 +15290,8 @@
                         borderWidth: 2,
                         fill: true,
                         tension: 0.4,
-                        pointRadius: 3,
-                        pointHoverRadius: 5,
+                        pointRadius: pointRadii,
+                        pointHoverRadius: pointHoverRadii,
                         pointBackgroundColor: trendColor,
                         pointBorderColor: '#fff',
                         pointBorderWidth: 1
@@ -15349,6 +15353,57 @@
                     }
                 }
             });
+            
+            // Start pulsing animation for the last point
+            startMiniChartPulse(trendColor);
+        }
+        
+        // Mini chart pulse animation
+        let miniChartPulseInterval = null;
+        
+        function startMiniChartPulse(color) {
+            // Clear any existing interval
+            if (miniChartPulseInterval) {
+                clearInterval(miniChartPulseInterval);
+            }
+            
+            if (!miniTrendChartInstance) return;
+            
+            let growing = true;
+            let currentRadius = 5;
+            const minRadius = 4;
+            const maxRadius = 7;
+            
+            miniChartPulseInterval = setInterval(() => {
+                if (!miniTrendChartInstance) {
+                    clearInterval(miniChartPulseInterval);
+                    return;
+                }
+                
+                if (growing) {
+                    currentRadius += 0.3;
+                    if (currentRadius >= maxRadius) growing = false;
+                } else {
+                    currentRadius -= 0.3;
+                    if (currentRadius <= minRadius) growing = true;
+                }
+                
+                // Update only the last point radius
+                const dataset = miniTrendChartInstance.data.datasets[0];
+                const lastIdx = dataset.data.length - 1;
+                if (Array.isArray(dataset.pointRadius)) {
+                    dataset.pointRadius[lastIdx] = currentRadius;
+                }
+                
+                miniTrendChartInstance.update('none'); // Update without animation
+            }, 50);
+        }
+        
+        function stopMiniChartPulse() {
+            if (miniChartPulseInterval) {
+                clearInterval(miniChartPulseInterval);
+                miniChartPulseInterval = null;
+            }
         }
         
         function showDayDetails(dayData) {
