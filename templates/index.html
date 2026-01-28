@@ -7024,6 +7024,17 @@
             text-shadow: 0 0 4px rgba(255, 215, 0, 0.5);
         }
 
+        /* Primary column highlighting in comparison tables */
+        .comp-table th.primary-col,
+        .comp-table td.primary-col {
+            background: rgba(255, 215, 0, 0.08) !important;
+            box-shadow: inset 0 0 0 1px rgba(255, 215, 0, 0.2);
+        }
+        
+        .comp-table th.primary-col {
+            background: rgba(255, 215, 0, 0.15) !important;
+        }
+
         /* Table header close button - white X */
         .comp-table-close-btn {
             background: rgba(255,255,255,0.2);
@@ -33633,8 +33644,10 @@
             // Helper to create sortable header with median age
             const sortableHeader = (section, idx, name, color, medianAge) => {
                 const isSorted = sortSection === section && sortProfileIdx === idx;
+                const isPrimary = idx === primaryProfileIndex;
+                const primaryClass = isPrimary ? 'primary-col' : '';
                 const ageDisplay = medianAge > 0 ? `<span class="header-median-age" title="Median Age">${Math.round(medianAge)}</span>` : '';
-                return `<th class="sortable ${isSorted ? 'sorted' : ''}" style="border-bottom: 3px solid ${color}" onclick="sortComparisonTable('${section}', ${idx})">${name} ${ageDisplay}</th>`;
+                return `<th class="sortable ${isSorted ? 'sorted' : ''} ${primaryClass}" style="border-bottom: 3px solid ${color}" onclick="sortComparisonTable('${section}', ${idx})">${name} ${ageDisplay}</th>`;
             };
 
             // Build profile tabs bar for comparison (no median age in tabs)
@@ -33657,7 +33670,7 @@
                     ${profileTabsHtml}
                 </div>
                 <div class="comp-profile-tabs-helper">
-                    <span class="helper-star">★</span> = Primary Profile (used for Executive Summary & Key Insights) · Click any tab to change primary
+                    <span class="helper-star">★</span> = Primary Profile (used for Executive Summary & Key Insights) · Click any tab to change primary · <span style="color: var(--accent-cyan);">Tip: Click a profile in the sidebar to add it back</span>
                 </div>
                 
                 <!-- Summary Data -->
@@ -33667,7 +33680,7 @@
                         <thead>
                             <tr>
                                 <th></th>
-                                ${profiles.map((p, idx) => `<th style="border-bottom: 3px solid ${p.color}">
+                                ${profiles.map((p, idx) => `<th class="${idx === primaryProfileIndex ? 'primary-col' : ''}" style="border-bottom: 3px solid ${p.color}">
                                     <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                                         <span>${p.name}</span>
                                         <button onclick="removeProfileFromComparison('${p.id}', ${p.isSegment || false})" class="comp-table-close-btn" title="Remove from comparison">×</button>
@@ -33678,15 +33691,15 @@
                         <tbody>
                             <tr>
                                 <td>Crosswalk Respondents</td>
-                                ${profiles.map(p => `<td>n=${formatNumber(p.sampleSize)}</td>`).join('')}
+                                ${profiles.map((p, idx) => `<td class="${idx === primaryProfileIndex ? 'primary-col' : ''}">n=${formatNumber(p.sampleSize)}</td>`).join('')}
                             </tr>
                             <tr>
                                 <td>Projected US</td>
-                                ${profiles.map(p => `<td>${formatNumber(p.projectedUS)}</td>`).join('')}
+                                ${profiles.map((p, idx) => `<td class="${idx === primaryProfileIndex ? 'primary-col' : ''}">${formatNumber(p.projectedUS)}</td>`).join('')}
                             </tr>
                             <tr>
                                 <td>Median Age</td>
-                                ${profiles.map(p => `<td>${p.medianAge > 0 ? p.medianAge.toFixed(2) + ' years' : '-'}</td>`).join('')}
+                                ${profiles.map((p, idx) => `<td class="${idx === primaryProfileIndex ? 'primary-col' : ''}">${p.medianAge > 0 ? p.medianAge.toFixed(2) + ' years' : '-'}</td>`).join('')}
                             </tr>
                         </tbody>
                     </table>
@@ -33885,6 +33898,8 @@
                         const pct = row.pctData[i];
                         const proj = row.projData[i];
                         const index = row.indexData[i];
+                        const isPrimary = i === primaryProfileIndex;
+                        const primaryClass = isPrimary ? 'primary-col' : '';
                         const displayVal = displayMode === 'projection' 
                             ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                             : (pct > 0 ? pct.toFixed(2) + '%' : '-');
@@ -33894,7 +33909,7 @@
                         const indexDisplay = index > 0 ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${index}</span>` : '';
                         
                         return `
-                            <td>
+                            <td class="${primaryClass}">
                                 <div class="comp-bar-cell">
                                     <div class="comp-bar">
                                         <div class="comp-bar-fill" style="width: ${Math.min(pct / 30 * 100, 100)}%; background: ${p.color};"></div>
@@ -33947,11 +33962,13 @@
                     ${profiles.map((p, i) => {
                         const pct = row.pctData[i];
                         const proj = row.projData[i];
+                        const isPrimary = i === primaryProfileIndex;
+                        const primaryClass = isPrimary ? 'primary-col' : '';
                         const displayVal = displayMode === 'projection' 
                             ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                             : (pct > 0 ? pct.toFixed(2) + '%' : '-');
                         return `
-                            <td>
+                            <td class="${primaryClass}">
                                 <div class="comp-bar-cell">
                                     <div class="comp-bar">
                                         <div class="comp-bar-fill" style="width: ${Math.min(pct / 10 * 100, 100)}%; background: ${p.color};"></div>
@@ -34004,6 +34021,8 @@
                             const proj = row.projData[i];
                             const index = row.indexData[i];
                             const maxPct = 60;
+                            const isPrimary = i === primaryProfileIndex;
+                            const primaryClass = isPrimary ? 'primary-col' : '';
                             const displayVal = displayMode === 'projection' 
                                 ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                                 : (pct > 0 ? pct.toFixed(2) + '%' : '-');
@@ -34013,7 +34032,7 @@
                             const indexBadge = index > 0 ? `<span class="index-badge" style="color: ${indexColor};">${index}</span>` : '';
                             
                             return `
-                                <td>
+                                <td class="${primaryClass}">
                                     <div class="comp-bar-cell">
                                         <div class="comp-bar">
                                             <div class="comp-bar-fill" style="width: ${Math.min(pct / maxPct * 100, 100)}%; background: ${p.color};"></div>
