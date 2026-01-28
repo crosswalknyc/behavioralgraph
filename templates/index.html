@@ -2548,7 +2548,7 @@
         
         .ticker-cards-grid.two-columns {
             grid-template-columns: repeat(2, 1fr);
-            align-items: start;
+            align-items: stretch;
         }
         
         .ticker-cards-grid.four-columns {
@@ -11746,9 +11746,9 @@
                             </div>
                             
                             <!-- Projected Growth Rate + Accuracy (Left) + Beat/Miss (Right) -->
-                            <div class="ticker-cards-grid two-columns" style="margin-bottom: 0.5rem;">
+                            <div class="ticker-cards-grid two-columns" style="margin-bottom: 0.5rem; align-items: stretch;">
                                 <!-- Left: Projected Growth with Accuracy on right side + Net Growth Trend below -->
-                                <div class="stat-card has-tooltip" id="projectedGrowthCard" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; justify-content: flex-start; position: relative; padding: 0.75rem 1rem; min-height: 0;" onclick="navigateToTrends()" data-tooltip="">
+                                <div class="stat-card has-tooltip" id="projectedGrowthCard" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; justify-content: space-between; position: relative; padding: 0.75rem 1rem;" onclick="navigateToTrends()" data-tooltip="">
                                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
                                         <div style="flex: 1; display: flex; flex-direction: column;">
                                             <div class="stat-label" id="projectedGrowthLabel" style="font-size: 0.75rem; margin-bottom: 0.5rem;">🔮 Q1 2026 Projected Net Growth Rate</div>
@@ -11772,7 +11772,7 @@
                                     </div>
                                 </div>
                                 <!-- Right: Beat/Miss Earnings -->
-                                <div id="beatMissCard" class="stat-card" style="min-height: 0; padding: 0.75rem 1rem;">
+                                <div id="beatMissCard" class="stat-card" style="padding: 0.75rem 1rem; display: flex; flex-direction: column;">
                                     <!-- Loading state shown by default, content will be populated by analyzeBeatMiss function -->
                                     <div id="beatMissLoading" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 120px;">
                                         <div style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Beat/Miss Earnings</div>
