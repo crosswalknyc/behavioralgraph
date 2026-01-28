@@ -1174,10 +1174,6 @@
                                     <input type="number" id="tickerRelevance" placeholder="0-100" min="0" max="100" step="0.1" style="font-size: 0.85rem;">
                                     <small style="font-size: 0.75rem;">What percentage does this KPI represent of the stock price movement?</small>
                                 </div>
-                                <div class="form-group" style="margin-bottom: 0.75rem;">
-                                    <label style="font-size: 0.85rem;">S3 File</label>
-                                    <input type="text" id="tickerS3Key" readonly style="background: var(--bg-dark); cursor: not-allowed; font-size: 0.85rem;">
-                                </div>
                                 <button class="btn btn-small btn-success" onclick="saveTickerMetadataFromModal()">💾 Save Metadata</button>
                             </div>
                         </div>
@@ -5403,7 +5399,11 @@
             document.getElementById('tickerDisplayName').value = ticker.display_name;
             document.getElementById('tickerKPI').value = ticker.kpi;
             document.getElementById('tickerRelevance').value = ticker.relevance_percentage || '';
-            document.getElementById('tickerS3Key').value = ticker.s3_key;
+            
+            // Ensure s3_key is available (it should be from the ticker data)
+            if (!ticker.s3_key) {
+                console.warn('Ticker missing s3_key:', ticker.ticker);
+            }
             
             // Set image
             if (ticker.hasImage) {
@@ -5464,6 +5464,12 @@
             }
             
             try {
+                // Ensure we have s3_key from the ticker object
+                if (!currentTickerInModal.s3_key) {
+                    showToast('❌ Error: Missing ticker data. Please refresh and try again.', true);
+                    return;
+                }
+                
                 const response = await fetch('/api/hedge-fund-iq/metadata', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

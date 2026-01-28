@@ -6124,6 +6124,7 @@ def get_tickers_full():
                 'display_name': ticker_data.get('display_name', ticker),
                 'kpi': ticker_data.get('kpi', 'Customers'),
                 'relevance_percentage': ticker_data.get('relevance_percentage'),
+                's3_key': ticker_data.get('s3_key'),  # Include s3_key for metadata updates
                 'hasImage': has_image,
                 'imageUrl': image_url,
                 'profiles': profiles,
