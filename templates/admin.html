@@ -2029,11 +2029,38 @@
         // Settings Tab Switching
         function showSettingsTab(tabName) {
             document.querySelectorAll('#section-settings .admin-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.settings-tab-content').forEach(c => c.classList.remove('active'));
-            document.querySelector(`#section-settings .admin-tab[onclick="showSettingsTab('${tabName}')"]`).classList.add('active');
-            document.getElementById('settings-tab-' + tabName).classList.add('active');
+            document.querySelectorAll('.settings-tab-content').forEach(c => {
+                c.classList.remove('active');
+                c.style.display = 'none'; // Also set inline style to ensure it's hidden
+            });
+            
+            const activeTab = document.querySelector(`#section-settings .admin-tab[onclick="showSettingsTab('${tabName}')"]`);
+            if (activeTab) {
+                activeTab.classList.add('active');
+            }
+            
+            const activeContent = document.getElementById('settings-tab-' + tabName);
+            if (activeContent) {
+                activeContent.classList.add('active');
+                activeContent.style.display = 'block'; // Override inline style
+            }
             
             if (tabName === 'quickSelects') {
+                // Expand sections by default when tab is shown
+                const profilesSection = document.getElementById('quickSelectProfilesSection');
+                const tickersSection = document.getElementById('quickSelectTickersSection');
+                const profilesIcon = document.getElementById('quickSelectProfilesIcon');
+                const tickersIcon = document.getElementById('quickSelectTickersIcon');
+                
+                if (profilesSection && profilesSection.style.display === 'none') {
+                    profilesSection.style.display = 'block';
+                    if (profilesIcon) profilesIcon.classList.remove('rotated');
+                }
+                if (tickersSection && tickersSection.style.display === 'none') {
+                    tickersSection.style.display = 'block';
+                    if (tickersIcon) tickersIcon.classList.remove('rotated');
+                }
+                
                 loadQuickSelectProfiles();
                 loadQuickSelectTickers();
             }
@@ -2062,12 +2089,18 @@
         // Load Quick Select Profiles
         async function loadQuickSelectProfiles() {
             const container = document.getElementById('quickSelectProfilesList');
-            if (!container) return;
+            if (!container) {
+                console.error('quickSelectProfilesList container not found');
+                return;
+            }
+            
+            container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading profiles...</div>';
             
             try {
                 const response = await fetch('/api/jobs', { credentials: 'same-origin' });
                 if (!response.ok) {
-                    container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">Failed to load profiles</div>';
+                    console.error('Failed to fetch profiles:', response.status, response.statusText);
+                    container.innerHTML = '<div style="padding: 1rem; color: var(--accent-red);">Failed to load profiles. Please try again.</div>';
                     return;
                 }
                 
@@ -2075,13 +2108,15 @@
                 const profiles = data.jobs || [];
                 quickSelectProfiles = profiles.filter(p => p.status === 'cached' || p.status === 'completed');
                 
+                console.log(`Loaded ${quickSelectProfiles.length} profiles for quick select`);
+                
                 // Load saved selections
                 await loadQuickSelects();
                 
                 renderQuickSelectProfiles();
             } catch (error) {
                 console.error('Error loading profiles:', error);
-                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">Error loading profiles</div>';
+                container.innerHTML = '<div style="padding: 1rem; color: var(--accent-red);">Error loading profiles: ' + error.message + '</div>';
             }
         }
         
@@ -2124,18 +2159,26 @@
         // Load Quick Select Tickers
         async function loadQuickSelectTickers() {
             const container = document.getElementById('quickSelectTickersList');
-            if (!container) return;
+            if (!container) {
+                console.error('quickSelectTickersList container not found');
+                return;
+            }
+            
+            container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading tickers...</div>';
             
             try {
                 const response = await fetch('/api/hedge-fund-iq/tickers', { credentials: 'same-origin' });
                 if (!response.ok) {
-                    container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">Failed to load tickers</div>';
+                    console.error('Failed to fetch tickers:', response.status, response.statusText);
+                    container.innerHTML = '<div style="padding: 1rem; color: var(--accent-red);">Failed to load tickers. Please try again.</div>';
                     return;
                 }
                 
                 const data = await response.json();
                 if (data.success && data.tickers) {
                     quickSelectTickers = data.tickers;
+                    
+                    console.log(`Loaded ${quickSelectTickers.length} tickers for quick select`);
                     
                     // Load saved selections
                     await loadQuickSelects();
@@ -2146,7 +2189,7 @@
                 }
             } catch (error) {
                 console.error('Error loading tickers:', error);
-                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">Error loading tickers</div>';
+                container.innerHTML = '<div style="padding: 1rem; color: var(--accent-red);">Error loading tickers: ' + error.message + '</div>';
             }
         }
         
