@@ -6933,6 +6933,21 @@
             margin-right: 0.25rem;
         }
 
+        .comp-profile-tabs-helper {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            padding: 0.25rem 1rem 0.5rem 1rem;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            margin-top: -1rem;
+            margin-bottom: 1rem;
+        }
+
+        .comp-profile-tabs-helper .helper-star {
+            color: #ffd700;
+            text-shadow: 0 0 4px rgba(255, 215, 0, 0.5);
+        }
+
         /* Table header close button - white X */
         .comp-table-close-btn {
             background: rgba(255,255,255,0.2);
@@ -33337,6 +33352,9 @@
                 <!-- Profile Tabs Bar -->
                 <div class="comp-profile-tabs-bar">
                     ${profileTabsHtml}
+                </div>
+                <div class="comp-profile-tabs-helper">
+                    <span class="helper-star">★</span> = Primary Profile (used for Executive Summary & Key Insights) · Click any tab to change primary
                 </div>
                 
                 <!-- Summary Data -->
