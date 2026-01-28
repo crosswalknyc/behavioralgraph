@@ -20154,20 +20154,47 @@
                 .sort((a, b) => b[1].avgIndex - a[1].avgIndex)
                 .slice(0, 6);
             
-            document.getElementById('behavioralTopCategories').innerHTML = topCategories.map(([cat, stats]) => `
-                <div class="behavioral-top-cat has-tooltip" data-tooltip="${cat}: ${stats.count} items tracked, avg profile ${stats.avgPct.toFixed(2)}%, avg Gen Pop ${stats.avgGenPop.toFixed(2)}%, avg index ${formatIndex(stats.avgIndex)}, ${stats.highCount} strong over-indexers (>1.5x).">
+            const US_POP_CATS = 324700000;
+            const isProjectionCats = dashDisplayMode === 'projection';
+            document.getElementById('behavioralTopCategories').innerHTML = topCategories.map(([cat, stats]) => {
+                const profileDisplay = isProjectionCats 
+                    ? formatNumber(Math.round((stats.avgPct / 100) * US_POP_CATS))
+                    : stats.avgPct.toFixed(2) + '%';
+                const gpDisplay = stats.avgGenPop < 0.01 
+                    ? 'N/A' 
+                    : (isProjectionCats 
+                        ? formatNumber(Math.round((stats.avgGenPop / 100) * US_POP_CATS))
+                        : stats.avgGenPop.toFixed(2) + '%');
+                return `
+                <div class="behavioral-top-cat has-tooltip" data-tooltip="${cat}: ${stats.count} items tracked, avg profile ${stats.avgPct.toFixed(2)}%, avg Gen Pop ${stats.avgGenPop < 0.01 ? 'N/A' : stats.avgGenPop.toFixed(2) + '%'}, avg index ${formatIndex(stats.avgIndex)}, ${stats.highCount} strong over-indexers (>1.5x).">
                     <span class="cat-name">${cat}</span>
                     <span class="cat-stats">
-                        <span class="cat-pct" style="color: var(--accent-lime); min-width: 45px; text-align: right;">${stats.avgPct.toFixed(2)}%</span>
-                        <span class="cat-gp" style="color: var(--text-secondary); min-width: 55px; text-align: right;">GP: ${stats.avgGenPop.toFixed(2)}%</span>
+                        <span class="cat-pct" style="color: var(--accent-lime); min-width: 55px; text-align: right;">${profileDisplay}</span>
+                        <span class="cat-gp" style="color: var(--text-secondary); min-width: 65px; text-align: right;">GP: ${gpDisplay}</span>
                         <span class="cat-idx" style="color: ${stats.avgIndex >= 100 ? '#10b981' : '#ef4444'}; min-width: 45px; text-align: right;">${formatIndex(stats.avgIndex)}</span>
                         <span class="cat-high" style="min-width: 35px; text-align: right;">${stats.highCount > 0 ? stats.highCount + '🔥' : '-'}</span>
                     </span>
                 </div>
-            `).join('') || '<p style="color: var(--text-secondary);">No data available</p>';
+            `}).join('') || '<p style="color: var(--text-secondary);">No data available</p>';
             
             // === ACTIVATION OPPORTUNITIES ===
             const activations = [];
+            
+            // Helper to format activation stats with N/A for missing Gen Pop
+            const formatActivationStats = (item) => {
+                const pctDisplay = item.pct.toFixed(2) + '%';
+                const gpDisplay = item.genPop < 0.01 ? 'N/A' : item.genPop.toFixed(2) + '%';
+                return `(${pctDisplay} | GP: ${gpDisplay} | ${formatIndex(item.index)})`;
+            };
+            const formatActivationTooltip = (item) => {
+                const gpDisplay = item.genPop < 0.01 ? 'N/A' : item.genPop.toFixed(2) + '%';
+                return `${item.name} (${item.pct.toFixed(2)}% vs GP ${gpDisplay}, ${formatIndex(item.index)})`;
+            };
+            const US_POP_ACT = 324700000;
+            const isProjectionAct = dashDisplayMode === 'projection';
+            
+            // Helper to format profile/GP values based on display mode
+            const formatActPct = (pct) => isProjectionAct ? formatNumber(Math.round((pct / 100) * US_POP_ACT)) : pct.toFixed(2) + '%';
             
             // ============ COMPREHENSIVE BRAND/BUSINESS CATEGORIZATION ============
             // Retail Store Categories
@@ -20221,8 +20248,8 @@
             if (bigBoxMatches.length > 0) {
                 activations.push({
                     icon: '🏬',
-                    text: `<strong>Big Box:</strong> ${bigBoxMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${bigBoxMatches[0].pct.toFixed(2)}% | GP: ${bigBoxMatches[0].genPop.toFixed(2)}% | ${formatIndex(bigBoxMatches[0].index)})</span>`,
-                    tooltip: `Big Box Retail: This audience shops at ${bigBoxMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store activations, endcap displays, or retail media network ads.`
+                    text: `<strong>Big Box:</strong> ${bigBoxMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(bigBoxMatches[0])}</span>`,
+                    tooltip: `Big Box Retail: This audience shops at ${bigBoxMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider in-store activations, endcap displays, or retail media network ads.`
                 });
             }
             
@@ -20233,8 +20260,8 @@
             if (deptMatches.length > 0) {
                 activations.push({
                     icon: '👔',
-                    text: `<strong>Dept Store:</strong> ${deptMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${deptMatches[0].pct.toFixed(2)}% | GP: ${deptMatches[0].genPop.toFixed(2)}% | ${formatIndex(deptMatches[0].index)})</span>`,
-                    tooltip: `Department Stores: This audience shops at ${deptMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider premium placement, store events, or loyalty program partnerships.`
+                    text: `<strong>Dept Store:</strong> ${deptMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(deptMatches[0])}</span>`,
+                    tooltip: `Department Stores: This audience shops at ${deptMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider premium placement, store events, or loyalty program partnerships.`
                 });
             }
             
@@ -20245,8 +20272,8 @@
             if (ecomMatches.length > 0) {
                 activations.push({
                     icon: '🛒',
-                    text: `<strong>E-commerce:</strong> ${ecomMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${ecomMatches[0].pct.toFixed(2)}% | GP: ${ecomMatches[0].genPop.toFixed(2)}% | ${formatIndex(ecomMatches[0].index)})</span>`,
-                    tooltip: `E-commerce: This audience shops online at ${ecomMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider sponsored products, display ads, or marketplace partnerships.`
+                    text: `<strong>E-commerce:</strong> ${ecomMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(ecomMatches[0])}</span>`,
+                    tooltip: `E-commerce: This audience shops online at ${ecomMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider sponsored products, display ads, or marketplace partnerships.`
                 });
             }
             
@@ -20257,8 +20284,8 @@
             if (groceryMatches.length > 0) {
                 activations.push({
                     icon: '🥬',
-                    text: `<strong>Grocery:</strong> ${groceryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${groceryMatches[0].pct.toFixed(2)}% | GP: ${groceryMatches[0].genPop.toFixed(2)}% | ${formatIndex(groceryMatches[0].index)})</span>`,
-                    tooltip: `Grocery: This audience shops at ${groceryMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store sampling, circular ads, or loyalty card targeting.`
+                    text: `<strong>Grocery:</strong> ${groceryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(groceryMatches[0])}</span>`,
+                    tooltip: `Grocery: This audience shops at ${groceryMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider in-store sampling, circular ads, or loyalty card targeting.`
                 });
             }
             
@@ -20271,8 +20298,8 @@
             if (searchMatches.length > 0) {
                 activations.push({
                     icon: '🔍',
-                    text: `<strong>Search:</strong> ${searchMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${searchMatches[0].pct.toFixed(2)}% | GP: ${searchMatches[0].genPop.toFixed(2)}% | ${formatIndex(searchMatches[0].index)})</span>`,
-                    tooltip: `Search Engines: This audience uses ${searchMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Prioritize SEM/PPC campaigns on these platforms for maximum reach.`
+                    text: `<strong>Search:</strong> ${searchMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(searchMatches[0])}</span>`,
+                    tooltip: `Search Engines: This audience uses ${searchMatches.map(b => formatActivationTooltip(b)).join('; ')}. Prioritize SEM/PPC campaigns on these platforms for maximum reach.`
                 });
             }
             
@@ -20289,8 +20316,8 @@
             if (foodDeliveryMatches.length > 0) {
                 activations.push({
                     icon: '🍔',
-                    text: `<strong>Food Delivery:</strong> ${foodDeliveryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${foodDeliveryMatches[0].pct.toFixed(2)}% | GP: ${foodDeliveryMatches[0].genPop.toFixed(2)}% | ${formatIndex(foodDeliveryMatches[0].index)})</span>`,
-                    tooltip: `Food Delivery: This audience uses ${foodDeliveryMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider sponsored placements, promo code partnerships, or in-app advertising.`
+                    text: `<strong>Food Delivery:</strong> ${foodDeliveryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(foodDeliveryMatches[0])}</span>`,
+                    tooltip: `Food Delivery: This audience uses ${foodDeliveryMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider sponsored placements, promo code partnerships, or in-app advertising.`
                 });
             }
             
@@ -20301,8 +20328,8 @@
             if (rideshareMatches.length > 0) {
                 activations.push({
                     icon: '🚗',
-                    text: `<strong>Rideshare:</strong> ${rideshareMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${rideshareMatches[0].pct.toFixed(2)}% | GP: ${rideshareMatches[0].genPop.toFixed(2)}% | ${formatIndex(rideshareMatches[0].index)})</span>`,
-                    tooltip: `Rideshare: This audience uses ${rideshareMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-app ads, promo partnerships, or event transportation sponsorships.`
+                    text: `<strong>Rideshare:</strong> ${rideshareMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(rideshareMatches[0])}</span>`,
+                    tooltip: `Rideshare: This audience uses ${rideshareMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider in-app ads, promo partnerships, or event transportation sponsorships.`
                 });
             }
             
@@ -20313,8 +20340,8 @@
             if (fitnessMatches.length > 0) {
                 activations.push({
                     icon: '💪',
-                    text: `<strong>Fitness:</strong> ${fitnessMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${fitnessMatches[0].pct.toFixed(2)}% | GP: ${fitnessMatches[0].genPop.toFixed(2)}% | ${formatIndex(fitnessMatches[0].index)})</span>`,
-                    tooltip: `Fitness/Wellness: This audience uses ${fitnessMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider health-focused partnerships, workout integrations, or wellness sponsorships.`
+                    text: `<strong>Fitness:</strong> ${fitnessMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(fitnessMatches[0])}</span>`,
+                    tooltip: `Fitness/Wellness: This audience uses ${fitnessMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider health-focused partnerships, workout integrations, or wellness sponsorships.`
                 });
             }
             
