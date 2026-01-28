@@ -1492,6 +1492,22 @@
             background: rgba(0,0,0,0.3);
         }
 
+        .profile-tab.dragging {
+            opacity: 0.5;
+            background: var(--bg-input);
+            border: 2px dashed var(--accent-cyan);
+        }
+
+        .profile-tab.drag-over {
+            border-left: 3px solid var(--accent-cyan);
+            margin-left: -2px;
+        }
+
+        .profile-tab.drag-over-right {
+            border-right: 3px solid var(--accent-cyan);
+            margin-right: -2px;
+        }
+
         .profile-tabs-empty {
             color: var(--text-secondary);
             font-size: 0.85rem;
@@ -19590,11 +19606,16 @@
             }
             
             let html = '';
-            openProfileTabs.forEach(tab => {
+            openProfileTabs.forEach((tab, index) => {
                 const isActive = tab.id === activeProfileTabId;
                 const shortName = tab.name.length > 20 ? tab.name.substring(0, 18) + '...' : tab.name;
                 html += `
-                    <div class="profile-tab ${isActive ? 'active' : ''}" onclick="switchToProfileTab('${tab.id}')" title="${tab.name}">
+                    <div class="profile-tab ${isActive ? 'active' : ''}" 
+                         draggable="true" 
+                         data-tab-id="${tab.id}" 
+                         data-tab-index="${index}"
+                         onclick="switchToProfileTab('${tab.id}')" 
+                         title="${tab.name} (drag to reorder)">
                         <span class="profile-tab-name">${shortName}</span>
                         <button class="profile-tab-close" onclick="event.stopPropagation(); closeProfileTab('${tab.id}')" title="Close tab">×</button>
                     </div>
@@ -19602,6 +19623,94 @@
             });
             
             container.innerHTML = html;
+            
+            // Add drag event listeners to all tabs
+            container.querySelectorAll('.profile-tab').forEach(tabEl => {
+                tabEl.addEventListener('dragstart', handleProfileTabDragStart);
+                tabEl.addEventListener('dragend', handleProfileTabDragEnd);
+                tabEl.addEventListener('dragover', handleProfileTabDragOver);
+                tabEl.addEventListener('dragleave', handleProfileTabDragLeave);
+                tabEl.addEventListener('drop', handleProfileTabDrop);
+            });
+        }
+        
+        let draggedProfileTabId = null;
+        
+        function handleProfileTabDragStart(e) {
+            draggedProfileTabId = e.currentTarget.dataset.tabId;
+            e.currentTarget.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', draggedProfileTabId);
+        }
+        
+        function handleProfileTabDragEnd(e) {
+            e.currentTarget.classList.remove('dragging');
+            document.querySelectorAll('.profile-tab').forEach(tab => {
+                tab.classList.remove('drag-over', 'drag-over-right');
+            });
+            draggedProfileTabId = null;
+        }
+        
+        function handleProfileTabDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            const targetTab = e.currentTarget;
+            if (targetTab.dataset.tabId === draggedProfileTabId) return;
+            
+            // Determine if dropping to left or right of target
+            const rect = targetTab.getBoundingClientRect();
+            const midpoint = rect.left + rect.width / 2;
+            
+            targetTab.classList.remove('drag-over', 'drag-over-right');
+            if (e.clientX < midpoint) {
+                targetTab.classList.add('drag-over');
+            } else {
+                targetTab.classList.add('drag-over-right');
+            }
+        }
+        
+        function handleProfileTabDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over', 'drag-over-right');
+        }
+        
+        function handleProfileTabDrop(e) {
+            e.preventDefault();
+            const targetTab = e.currentTarget;
+            const targetId = targetTab.dataset.tabId;
+            
+            if (!draggedProfileTabId || draggedProfileTabId === targetId) return;
+            
+            // Find indices
+            const draggedIndex = openProfileTabs.findIndex(t => t.id === draggedProfileTabId);
+            const targetIndex = openProfileTabs.findIndex(t => t.id === targetId);
+            
+            if (draggedIndex === -1 || targetIndex === -1) return;
+            
+            // Determine drop position (before or after target)
+            const rect = targetTab.getBoundingClientRect();
+            const midpoint = rect.left + rect.width / 2;
+            const dropAfter = e.clientX >= midpoint;
+            
+            // Remove dragged tab from array
+            const [draggedTab] = openProfileTabs.splice(draggedIndex, 1);
+            
+            // Calculate new index (adjust if dragged from before target)
+            let newIndex = targetIndex;
+            if (draggedIndex < targetIndex) newIndex--;
+            if (dropAfter) newIndex++;
+            
+            // Insert at new position
+            openProfileTabs.splice(newIndex, 0, draggedTab);
+            
+            // Save and re-render
+            saveOpenTabs();
+            renderProfileTabsBar();
+            
+            // Clear drag state
+            document.querySelectorAll('.profile-tab').forEach(tab => {
+                tab.classList.remove('drag-over', 'drag-over-right', 'dragging');
+            });
         }
         
         function switchToProfileTab(profileId) {
@@ -26259,22 +26368,32 @@
             if (data.demographics) {
                 // Top gender
                 const topGender = Object.entries(data.demographics.gender || {}).sort((a,b) => b[1] - a[1])[0];
-                if (topGender) demoInsights.push({ label: 'Dominant Gender', value: topGender[0], sub: topGender[1].toFixed(2) + '%' });
+                if (topGender) {
+                    const genderIdx = data.demographicsIndex?.gender?.[topGender[0]] || data.demographicsIndex?.Gender?.[topGender[0]] || 100;
+                    demoInsights.push({ label: 'Dominant Gender', value: topGender[0], sub: topGender[1].toFixed(2) + '%', index: genderIdx });
+                }
                 
                 // Top age group
                 const topAge = Object.entries(data.demographics.age || {}).sort((a,b) => b[1] - a[1])[0];
                 if (topAge) {
                     const displayAge = getAgeDisplayLabel(topAge[0]);
-                    demoInsights.push({ label: 'Largest Age Group', value: displayAge, sub: topAge[1].toFixed(2) + '%' });
+                    const ageIdx = data.demographicsIndex?.age?.[topAge[0]] || data.demographicsIndex?.Age?.[topAge[0]] || 100;
+                    demoInsights.push({ label: 'Largest Age Group', value: displayAge, sub: topAge[1].toFixed(2) + '%', index: ageIdx });
                 }
                 
                 // Top ethnicity
                 const topEth = Object.entries(data.demographics.ethnicity || {}).sort((a,b) => b[1] - a[1])[0];
-                if (topEth) demoInsights.push({ label: 'Top Ethnicity', value: topEth[0], sub: topEth[1].toFixed(2) + '%' });
+                if (topEth) {
+                    const ethIdx = data.demographicsIndex?.ethnicity?.[topEth[0]] || data.demographicsIndex?.Ethnicity?.[topEth[0]] || 100;
+                    demoInsights.push({ label: 'Top Ethnicity', value: topEth[0], sub: topEth[1].toFixed(2) + '%', index: ethIdx });
+                }
                 
                 // Top income
                 const topIncome = Object.entries(data.demographics.income || {}).sort((a,b) => b[1] - a[1])[0];
-                if (topIncome) demoInsights.push({ label: 'Top Income', value: topIncome[0], sub: topIncome[1].toFixed(2) + '%' });
+                if (topIncome) {
+                    const incomeIdx = data.demographicsIndex?.income?.[topIncome[0]] || data.demographicsIndex?.Income?.[topIncome[0]] || 100;
+                    demoInsights.push({ label: 'Top Income', value: topIncome[0], sub: topIncome[1].toFixed(2) + '%', index: incomeIdx });
+                }
             }
             
             // Tooltip descriptions for each snapshot category
@@ -26285,13 +26404,17 @@
                 'Top Income': 'The income bracket most common among this audience.'
             };
             
-            document.getElementById('audienceSnapshot').innerHTML = demoInsights.map(d => `
-                <div class="snapshot-item has-tooltip" data-tooltip="${snapshotTooltips[d.label] || d.label}: ${d.value} at ${d.sub} of the audience.">
+            document.getElementById('audienceSnapshot').innerHTML = demoInsights.map(d => {
+                const idxValue = (d.index / 100).toFixed(2);
+                const idxColor = d.index >= 100 ? '#10b981' : '#ef4444';
+                return `
+                <div class="snapshot-item has-tooltip" data-tooltip="${snapshotTooltips[d.label] || d.label}: ${d.value} at ${d.sub} of the audience. Index: ${idxValue}x vs Gen Pop.">
                     <div class="snapshot-label">${d.label}</div>
                     <div class="snapshot-value">${d.value}</div>
                     <div class="snapshot-subtext">${d.sub}</div>
+                    <div class="snapshot-index" style="font-size: 0.75rem; font-weight: 600; color: ${idxColor}; margin-top: 0.25rem;">${idxValue}x</div>
                 </div>
-            `).join('') || '<div class="snapshot-loading">No demographic data</div>';
+            `}).join('') || '<div class="snapshot-loading">No demographic data</div>';
             
             // Metrics row
             document.getElementById('insightsSampleSize').textContent = formatNumber(data.sampleSize || 0);
