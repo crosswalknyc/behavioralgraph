@@ -11366,6 +11366,8 @@
                                 <div class="stat-card" id="projectedGrowthCard" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;" onclick="navigateToTrends()">
                                     <div class="stat-label" id="projectedGrowthLabel">🔮 Q1 2026 Projected Net Growth Rate</div>
                                     <div class="stat-value pulsing-number" id="projectedGrowth" style="font-size: 2.5rem;">--</div>
+                                    <div class="stat-label" id="projectedGrowthLabel2" style="margin-top: 1rem;">🔮 Q1 2026 Projected Net Growth Rate</div>
+                                    <div class="stat-value pulsing-number" id="projectedGrowth2" style="font-size: 2.5rem;">--</div>
                                 </div>
                                 <div id="liveDataAccuracyBadge" class="stat-card" style="display: none;">
                                     <div class="stat-label">🎯 Accuracy</div>
@@ -13682,10 +13684,14 @@
             document.getElementById('totalCancels').textContent = (stats.total_cancels || 0).toLocaleString();
             document.getElementById('netGrowth').textContent = `${stats.net_growth_pct || 0}%`;
             document.getElementById('projectedGrowth').textContent = `${stats.projected_growth_pct || 0}%`;
+            document.getElementById('projectedGrowth2').textContent = `${stats.projected_growth_pct || 0}%`;
             
             // Update projected growth label with quarter
             const projectedCard = document.querySelector('[id="projectedGrowth"]').closest('.stat-card');
-            if (projectedCard) projectedCard.querySelector('.stat-label').textContent = `🔮 ${latestQuarter} Projected Net Growth Rate`;
+            if (projectedCard) {
+                projectedCard.querySelector('#projectedGrowthLabel').textContent = `🔮 ${latestQuarter} Projected Net Growth Rate`;
+                projectedCard.querySelector('#projectedGrowthLabel2').textContent = `🔮 ${latestQuarter} Projected Net Growth Rate`;
+            }
             
             // Set default date range to current quarter
             if (currentQuarterData.length > 0) {
@@ -25801,49 +25807,245 @@
             if (brandNameEl) brandNameEl.textContent = profileName;
             
             // === SECTION 1: Life Moments & Behavioral Context ===
-            const beverageCategories = ['BEVERAGE', 'DRINK', 'SODA', 'COFFEE', 'TEA', 'WATER', 'ENERGY', 'ALCOHOL', 'BEER', 'WINE'];
-            const sleepCategories = ['SLEEP', 'REST', 'BEDTIME', 'MEDITATION', 'CALM', 'HEADSPACE'];
-            const fitnessCategories = ['FITNESS', 'WORKOUT', 'GYM', 'EXERCISE', 'RUNNING', 'YOGA', 'PELOTON', 'STRAVA'];
-            const socialCategories = ['SOCIAL', 'DATING', 'TINDER', 'BUMBLE', 'HINGE', 'MEETUP', 'EVENT'];
+            // Identify the profile's primary category
+            const categoryStats = {};
+            allItems.forEach(i => {
+                const cat = i.category.split('/')[0].toUpperCase();
+                if (!categoryStats[cat]) categoryStats[cat] = { items: [], totalIndex: 0, count: 0 };
+                categoryStats[cat].items.push(i);
+                categoryStats[cat].totalIndex += i.index;
+                categoryStats[cat].count++;
+            });
             
-            const beverageItems = allItems.filter(i => beverageCategories.some(c => i.category.toUpperCase().includes(c) || i.name.toUpperCase().includes(c)));
-            const sleepItems = allItems.filter(i => sleepCategories.some(c => i.category.toUpperCase().includes(c) || i.name.toUpperCase().includes(c)));
-            const fitnessItems = allItems.filter(i => fitnessCategories.some(c => i.category.toUpperCase().includes(c) || i.name.toUpperCase().includes(c)));
-            const socialItems = allItems.filter(i => socialCategories.some(c => i.category.toUpperCase().includes(c) || i.name.toUpperCase().includes(c)));
+            // Find the dominant category (highest average index with significant count)
+            const dominantCategory = Object.entries(categoryStats)
+                .filter(([_, stats]) => stats.count >= 3) // At least 3 items
+                .map(([cat, stats]) => ({
+                    cat,
+                    avgIndex: stats.totalIndex / stats.count,
+                    count: stats.count
+                }))
+                .sort((a, b) => {
+                    // Sort by average index, but prioritize categories with more items
+                    const scoreA = a.avgIndex * Math.log(a.count + 1);
+                    const scoreB = b.avgIndex * Math.log(b.count + 1);
+                    return scoreB - scoreA;
+                })[0];
             
-            // Before engagement - items with high index that might precede brand interaction
+            const profileCategory = dominantCategory?.cat || 'OTHER';
+            const profileCategoryItems = dominantCategory ? categoryStats[profileCategory].items : [];
+            
+            // Define category relationships for "before" and "after" logic
+            const categoryRelationships = {
+                'BEVERAGE': {
+                    before: ['FITNESS', 'WORKOUT', 'GYM', 'EXERCISE', 'SOCIAL', 'DATING', 'WORK', 'PRODUCTIVITY', 'STRESS', 'MEETING', 'BREAK'],
+                    after: ['SNACK', 'FOOD', 'RESTAURANT', 'SOCIAL', 'CELEBRATION', 'RELAXATION', 'ENTERTAINMENT']
+                },
+                'SERIES': {
+                    before: ['SOCIAL MEDIA', 'NEWS', 'ENTERTAINMENT', 'STREAMING MUSIC', 'PODCAST', 'GAMING', 'SEARCH', 'RECOMMENDATION'],
+                    after: ['DISCUSSION', 'SOCIAL MEDIA', 'MERCHANDISE', 'RELATED CONTENT', 'STREAMING MUSIC', 'PODCAST', 'GAMING']
+                },
+                'STREAMING VIDEO': {
+                    before: ['SOCIAL MEDIA', 'NEWS', 'ENTERTAINMENT', 'SEARCH', 'RECOMMENDATION', 'GAMING'],
+                    after: ['DISCUSSION', 'SOCIAL MEDIA', 'RELATED CONTENT', 'MERCHANDISE']
+                },
+                'STREAMING/PLATFORM': {
+                    before: ['SOCIAL MEDIA', 'NEWS', 'ENTERTAINMENT', 'SEARCH', 'RECOMMENDATION'],
+                    after: ['DISCUSSION', 'SOCIAL MEDIA', 'RELATED CONTENT']
+                },
+                'SERIES - NETFLIX': {
+                    before: ['SOCIAL MEDIA', 'NEWS', 'ENTERTAINMENT', 'STREAMING MUSIC', 'PODCAST', 'SEARCH', 'RECOMMENDATION'],
+                    after: ['DISCUSSION', 'SOCIAL MEDIA', 'RELATED CONTENT', 'STREAMING MUSIC']
+                },
+                'FOOD': {
+                    before: ['WORK', 'FITNESS', 'SOCIAL', 'GROCERY', 'PLANNING', 'MEAL PREP'],
+                    after: ['BEVERAGE', 'SNACK', 'SOCIAL', 'RELAXATION']
+                },
+                'FITNESS': {
+                    before: ['HEALTH', 'WELLNESS', 'MOTIVATION', 'SOCIAL', 'PLANNING'],
+                    after: ['BEVERAGE', 'FOOD', 'RECOVERY', 'SOCIAL', 'RELAXATION']
+                },
+                'SOCIAL': {
+                    before: ['PLANNING', 'COMMUNICATION', 'EVENT', 'DATING'],
+                    after: ['FOOD', 'BEVERAGE', 'ENTERTAINMENT', 'CELEBRATION']
+                }
+            };
+            
+            // Find category relationships
+            let beforeCategories = [];
+            let afterCategories = [];
+            
+            // Check exact category match first
+            if (categoryRelationships[profileCategory]) {
+                beforeCategories = categoryRelationships[profileCategory].before;
+                afterCategories = categoryRelationships[profileCategory].after;
+            } else {
+                // Check for partial matches (e.g., "SERIES - NETFLIX" contains "SERIES")
+                for (const [key, value] of Object.entries(categoryRelationships)) {
+                    if (profileCategory.includes(key) || key.includes(profileCategory)) {
+                        beforeCategories = value.before;
+                        afterCategories = value.after;
+                        break;
+                    }
+                }
+            }
+            
+            // If no specific relationship found, use general logic
+            if (beforeCategories.length === 0) {
+                // General "before" logic: items from different categories that might lead to this category
+                beforeCategories = ['SOCIAL', 'WORK', 'FITNESS', 'HEALTH', 'PLANNING', 'SEARCH', 'NEWS', 'ENTERTAINMENT'];
+            }
+            if (afterCategories.length === 0) {
+                // General "after" logic: complementary categories that follow engagement
+                afterCategories = ['SOCIAL', 'DISCUSSION', 'RELATED', 'COMPLEMENTARY', 'FOLLOW-UP'];
+            }
+            
+            // Get items that are likely to come BEFORE engagement with profile category
             const beforeEngagement = allItems
-                .filter(i => i.index >= 120 && !beverageItems.includes(i))
-                .sort((a, b) => b.index - a.index)
+                .filter(i => {
+                    const itemCat = i.category.toUpperCase();
+                    const itemName = i.name.toUpperCase();
+                    
+                    // Exclude items from the profile's own category
+                    if (itemCat.includes(profileCategory) || profileCategoryItems.some(pi => pi.name === i.name)) {
+                        return false;
+                    }
+                    
+                    // Include items from "before" categories
+                    const isBeforeCategory = beforeCategories.some(bc => 
+                        itemCat.includes(bc) || itemName.includes(bc)
+                    );
+                    
+                    // Include items with moderate to high index (80-200) that aren't in profile category
+                    return isBeforeCategory && i.index >= 80 && i.index <= 200;
+                })
+                .sort((a, b) => {
+                    // Prioritize items from "before" categories, then by index
+                    const aIsBefore = beforeCategories.some(bc => 
+                        a.category.toUpperCase().includes(bc) || a.name.toUpperCase().includes(bc)
+                    );
+                    const bIsBefore = beforeCategories.some(bc => 
+                        b.category.toUpperCase().includes(bc) || b.name.toUpperCase().includes(bc)
+                    );
+                    
+                    if (aIsBefore && !bIsBefore) return -1;
+                    if (!aIsBefore && bIsBefore) return 1;
+                    return b.index - a.index;
+                })
                 .slice(0, 5);
             
-            // After engagement - items that correlate with brand users
+            // Get items that are likely to come AFTER engagement with profile category
             const afterEngagement = allItems
-                .filter(i => i.index >= 110 && beverageItems.length > 0)
-                .sort((a, b) => b.index - a.index)
+                .filter(i => {
+                    const itemCat = i.category.toUpperCase();
+                    const itemName = i.name.toUpperCase();
+                    
+                    // Exclude items from the profile's own category (unless they're complementary)
+                    const isProfileCategory = itemCat.includes(profileCategory);
+                    
+                    // Include items from "after" categories
+                    const isAfterCategory = afterCategories.some(ac => 
+                        itemCat.includes(ac) || itemName.includes(ac)
+                    );
+                    
+                    // Include high-index items that are complementary (not in same category)
+                    return !isProfileCategory && (isAfterCategory || i.index >= 100);
+                })
+                .sort((a, b) => {
+                    // Prioritize items from "after" categories, then by index
+                    const aIsAfter = afterCategories.some(ac => 
+                        a.category.toUpperCase().includes(ac) || a.name.toUpperCase().includes(ac)
+                    );
+                    const bIsAfter = afterCategories.some(ac => 
+                        b.category.toUpperCase().includes(ac) || b.name.toUpperCase().includes(ac)
+                    );
+                    
+                    if (aIsAfter && !bIsAfter) return -1;
+                    if (!aIsAfter && bIsAfter) return 1;
+                    return b.index - a.index;
+                })
                 .slice(0, 5);
             
-            // Competitive behaviors
+            // Competitive behaviors - find categories that compete with profile category
             const competitiveBehaviors = [];
-            if (fitnessItems.length > 0 && beverageItems.length > 0) {
-                const avgFitnessIndex = fitnessItems.reduce((s, i) => s + i.index, 0) / fitnessItems.length;
-                if (avgFitnessIndex > 100) {
-                    competitiveBehaviors.push(`<span class="insight-label">Fitness apps</span> <span class="insight-value">compete with beverage moments - when consumers use fitness apps 3x/week, beverage consumption patterns shift</span>`);
+            
+            // Find items from different categories that might compete
+            const competingCategories = {};
+            allItems.forEach(i => {
+                const itemCat = i.category.toUpperCase();
+                // Skip items from profile's own category
+                if (!itemCat.includes(profileCategory) && i.index >= 100) {
+                    const baseCat = itemCat.split('/')[0];
+                    if (!competingCategories[baseCat]) {
+                        competingCategories[baseCat] = { items: [], totalIndex: 0 };
+                    }
+                    competingCategories[baseCat].items.push(i);
+                    competingCategories[baseCat].totalIndex += i.index;
+                }
+            });
+            
+            // Find top competing categories
+            const topCompeting = Object.entries(competingCategories)
+                .map(([cat, stats]) => ({
+                    cat,
+                    avgIndex: stats.totalIndex / stats.items.length,
+                    count: stats.items.length
+                }))
+                .filter(c => c.count >= 2 && c.avgIndex >= 100)
+                .sort((a, b) => b.avgIndex - a.avgIndex)
+                .slice(0, 3);
+            
+            topCompeting.forEach(comp => {
+                const categoryName = comp.cat.toLowerCase().replace(/_/g, ' ');
+                competitiveBehaviors.push(
+                    `<span class="insight-label">${comp.cat}</span> <span class="insight-value">competes with ${profileCategory.toLowerCase()} moments - consumers choosing ${categoryName} alternatives (avg index: ${Math.round(comp.avgIndex)})</span>`
+                );
+            });
+            
+            // Add specific competitive insights based on profile category
+            if (profileCategory.includes('BEVERAGE') || profileCategory.includes('DRINK')) {
+                const fitnessItems = allItems.filter(i => 
+                    i.category.toUpperCase().includes('FITNESS') || 
+                    i.category.toUpperCase().includes('WORKOUT') ||
+                    i.name.toUpperCase().includes('FITNESS') ||
+                    i.name.toUpperCase().includes('PELOTON') ||
+                    i.name.toUpperCase().includes('STRAVA') ||
+                    i.name.toUpperCase().includes('MYFITNESSPAL')
+                );
+                if (fitnessItems.length > 0) {
+                    const avgFitnessIndex = fitnessItems.reduce((s, i) => s + i.index, 0) / fitnessItems.length;
+                    if (avgFitnessIndex > 100) {
+                        const topFitnessApps = fitnessItems
+                            .sort((a, b) => b.index - a.index)
+                            .slice(0, 5)
+                            .map(i => `${i.name} (${i.index})`)
+                            .join(', ');
+                        competitiveBehaviors.push(`<span class="insight-label">Fitness apps</span> <span class="insight-value">compete with beverage moments - when consumers use fitness apps 3x/week, beverage consumption patterns shift. Top apps: ${topFitnessApps}</span>`);
+                    }
                 }
             }
-            if (sleepItems.length > 0 && beverageItems.length > 0) {
-                const avgSleepIndex = sleepItems.reduce((s, i) => s + i.index, 0) / sleepItems.length;
-                if (avgSleepIndex > 100) {
-                    competitiveBehaviors.push(`<span class="insight-label">Sleep/wellness</span> <span class="insight-value">replaces energy drink moments - consumers choosing rest over stimulation</span>`);
+            
+            if (profileCategory.includes('SERIES') || profileCategory.includes('STREAMING')) {
+                const gamingItems = allItems.filter(i => 
+                    i.category.toUpperCase().includes('GAMING') || 
+                    i.category.toUpperCase().includes('GAME') ||
+                    i.name.toUpperCase().includes('GAMING') ||
+                    i.name.toUpperCase().includes('XBOX') ||
+                    i.name.toUpperCase().includes('PLAYSTATION') ||
+                    i.name.toUpperCase().includes('NINTENDO') ||
+                    i.name.toUpperCase().includes('STEAM')
+                );
+                if (gamingItems.length > 0) {
+                    const avgGamingIndex = gamingItems.reduce((s, i) => s + i.index, 0) / gamingItems.length;
+                    if (avgGamingIndex > 100) {
+                        const topGaming = gamingItems
+                            .sort((a, b) => b.index - a.index)
+                            .slice(0, 5)
+                            .map(i => `${i.name} (${i.index})`)
+                            .join(', ');
+                        competitiveBehaviors.push(`<span class="insight-label">Gaming</span> <span class="insight-value">competes with streaming content - consumers choosing interactive entertainment over passive viewing. Top platforms: ${topGaming}</span>`);
+                    }
                 }
-            }
-            const waterItems = allItems.filter(i => i.name.toUpperCase().includes('WATER') || i.category.toUpperCase().includes('WATER'));
-            if (waterItems.length > 0) {
-                competitiveBehaviors.push(`<span class="insight-label">Water consumption</span> <span class="insight-value">competes with soda moments - health pivots replacing indulgence</span>`);
-            }
-            const coffeeItems = allItems.filter(i => i.name.toUpperCase().includes('COFFEE') || i.category.toUpperCase().includes('COFFEE'));
-            if (coffeeItems.length > 0) {
-                competitiveBehaviors.push(`<span class="insight-label">Coffee rituals</span> <span class="insight-value">replace soda moments - functional beverages vs. treat beverages</span>`);
             }
             
             document.getElementById('ecosystemBeforeEngagement').innerHTML = beforeEngagement.length > 0
@@ -25859,12 +26061,58 @@
                 : '<p style="color: var(--text-secondary);">Identifying competitive moments...</p>';
             
             // === SECTION 2: Cross-Category Substitution ===
+            // Define items for analysis (need to check if profile category is beverage-related)
+            const isBeverageProfile = profileCategory.includes('BEVERAGE') || profileCategory.includes('DRINK') || 
+                                     profileCategoryItems.some(i => 
+                                         i.category.toUpperCase().includes('BEVERAGE') || 
+                                         i.category.toUpperCase().includes('DRINK')
+                                     );
+            
+            const fitnessItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('FITNESS') || 
+                i.category.toUpperCase().includes('WORKOUT') ||
+                i.name.toUpperCase().includes('FITNESS') ||
+                i.name.toUpperCase().includes('PELOTON') ||
+                i.name.toUpperCase().includes('STRAVA') ||
+                i.name.toUpperCase().includes('MYFITNESSPAL') ||
+                i.name.toUpperCase().includes('FITBIT')
+            );
+            
+            const sleepItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('SLEEP') || 
+                i.category.toUpperCase().includes('REST') ||
+                i.name.toUpperCase().includes('SLEEP') ||
+                i.name.toUpperCase().includes('CALM') ||
+                i.name.toUpperCase().includes('HEADSPACE') ||
+                i.name.toUpperCase().includes('MEDITATION')
+            );
+            
             const functionalBeverages = allItems.filter(i => 
                 i.name.toUpperCase().includes('PROTEIN') || 
                 i.name.toUpperCase().includes('VITAMIN') ||
                 i.name.toUpperCase().includes('SUPPLEMENT') ||
+                i.name.toUpperCase().includes('NUTRITION') ||
                 i.category.toUpperCase().includes('HEALTH')
             );
+            
+            const coffeeItems = allItems.filter(i => 
+                i.name.toUpperCase().includes('COFFEE') || 
+                i.category.toUpperCase().includes('COFFEE')
+            );
+            
+            const waterItems = allItems.filter(i => 
+                i.name.toUpperCase().includes('WATER') || 
+                i.category.toUpperCase().includes('WATER')
+            );
+            
+            const beverageItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('BEVERAGE') || 
+                i.category.toUpperCase().includes('DRINK') ||
+                i.name.toUpperCase().includes('SODA') ||
+                i.name.toUpperCase().includes('COKE') ||
+                i.name.toUpperCase().includes('PEPSI')
+            );
+            
             const alcoholItems = allItems.filter(i => 
                 i.category.toUpperCase().includes('ALCOHOL') ||
                 i.name.toUpperCase().includes('BEER') ||
@@ -25873,39 +26121,84 @@
             );
             
             const categoryExitSignals = [];
-            if (fitnessItems.length > 2) {
-                categoryExitSignals.push(`<span class="insight-label">Fitness engagement spike:</span> <span class="insight-value">When consumers start using fitness apps 3x/week, beverage consumption drops before they consciously choose alternatives</span>`);
+            if (fitnessItems.length > 2 && isBeverageProfile) {
+                const topFitnessApps = fitnessItems
+                    .sort((a, b) => b.index - a.index)
+                    .slice(0, 5)
+                    .map(i => `${i.name} (${i.index})`)
+                    .join(', ');
+                categoryExitSignals.push(`<span class="insight-label">Fitness engagement spike:</span> <span class="insight-value">When consumers start using fitness apps 3x/week, beverage consumption drops before they consciously choose alternatives. Top fitness apps: ${topFitnessApps}</span>`);
             }
-            if (functionalBeverages.length > 0) {
-                categoryExitSignals.push(`<span class="insight-label">Functional beverage adoption:</span> <span class="insight-value">Consumers leaving category for functional alternatives (protein drinks, vitamins, supplements)</span>`);
+            if (functionalBeverages.length > 0 && isBeverageProfile) {
+                const topFunctional = functionalBeverages
+                    .sort((a, b) => b.index - a.index)
+                    .slice(0, 5)
+                    .map(i => `${i.name} (${i.index})`)
+                    .join(', ');
+                categoryExitSignals.push(`<span class="insight-label">Functional beverage adoption:</span> <span class="insight-value">Consumers leaving category for functional alternatives. Top items: ${topFunctional}</span>`);
             }
             
             const replacements = [];
-            if (coffeeItems.length > 0) {
+            if (coffeeItems.length > 0 && isBeverageProfile) {
                 const avgCoffeeIndex = coffeeItems.reduce((s, i) => s + i.index, 0) / coffeeItems.length;
                 if (avgCoffeeIndex > 100) {
-                    replacements.push(`<span class="insight-label">Coffee rituals</span> <span class="insight-value">replacing beverage moments - morning/afternoon routines shifting</span>`);
+                    const topCoffee = coffeeItems
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 3)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    replacements.push(`<span class="insight-label">Coffee rituals</span> <span class="insight-value">replacing beverage moments - morning/afternoon routines shifting. Top coffee: ${topCoffee}</span>`);
                 }
             }
-            if (waterItems.length > 0) {
-                replacements.push(`<span class="insight-label">Water consumption</span> <span class="insight-value">increasing as health-conscious pivot</span>`);
+            if (waterItems.length > 0 && isBeverageProfile) {
+                const topWater = waterItems
+                    .sort((a, b) => b.index - a.index)
+                    .slice(0, 3)
+                    .map(i => `${i.name} (${i.index})`)
+                    .join(', ');
+                replacements.push(`<span class="insight-label">Water consumption</span> <span class="insight-value">increasing as health-conscious pivot. Top water brands: ${topWater}</span>`);
             }
-            if (functionalBeverages.length > 0) {
-                replacements.push(`<span class="insight-label">Functional beverages</span> <span class="insight-value">(protein, vitamins, supplements) replacing traditional beverage occasions</span>`);
+            if (functionalBeverages.length > 0 && isBeverageProfile) {
+                const topFunctional = functionalBeverages
+                    .sort((a, b) => b.index - a.index)
+                    .slice(0, 5)
+                    .map(i => `${i.name} (${i.index})`)
+                    .join(', ');
+                replacements.push(`<span class="insight-label">Functional beverages</span> <span class="insight-value">replacing traditional beverage occasions. Top items: ${topFunctional}</span>`);
             }
-            if (alcoholItems.length > 0 && beverageItems.length > 0) {
-                replacements.push(`<span class="insight-label">Alcohol-lite moments</span> <span class="insight-value">- low/no-alcohol options competing with traditional beverages</span>`);
+            if (alcoholItems.length > 0 && beverageItems.length > 0 && isBeverageProfile) {
+                const topAlcohol = alcoholItems
+                    .sort((a, b) => b.index - a.index)
+                    .slice(0, 3)
+                    .map(i => `${i.name} (${i.index})`)
+                    .join(', ');
+                replacements.push(`<span class="insight-label">Alcohol-lite moments</span> <span class="insight-value">- low/no-alcohol options competing with traditional beverages. Top items: ${topAlcohol}</span>`);
             }
             
             const functionalShifts = [];
-            if (fitnessItems.length > 0 && sleepItems.length > 0) {
-                functionalShifts.push(`<span class="insight-label">Energy vs. Sleep:</span> <span class="insight-value">Consumers choosing rest (sleep apps, meditation) over energy drinks</span>`);
+            if (fitnessItems.length > 0 && sleepItems.length > 0 && isBeverageProfile) {
+                const topSleep = sleepItems
+                    .sort((a, b) => b.index - a.index)
+                    .slice(0, 3)
+                    .map(i => `${i.name} (${i.index})`)
+                    .join(', ');
+                functionalShifts.push(`<span class="insight-label">Energy vs. Sleep:</span> <span class="insight-value">Consumers choosing rest over energy drinks. Top sleep/meditation apps: ${topSleep}</span>`);
             }
-            if (waterItems.length > 0 && beverageItems.length > 0) {
-                functionalShifts.push(`<span class="insight-label">Water vs. Soda:</span> <span class="insight-value">Health pivots replacing indulgence moments</span>`);
+            if (waterItems.length > 0 && beverageItems.length > 0 && isBeverageProfile) {
+                const topWater = waterItems
+                    .sort((a, b) => b.index - a.index)
+                    .slice(0, 3)
+                    .map(i => `${i.name} (${i.index})`)
+                    .join(', ');
+                functionalShifts.push(`<span class="insight-label">Water vs. Soda:</span> <span class="insight-value">Health pivots replacing indulgence moments. Top water brands: ${topWater}</span>`);
             }
-            if (coffeeItems.length > 0 && beverageItems.length > 0) {
-                functionalShifts.push(`<span class="insight-label">Coffee vs. Soda:</span> <span class="insight-value">Functional morning rituals vs. treat moments</span>`);
+            if (coffeeItems.length > 0 && beverageItems.length > 0 && isBeverageProfile) {
+                const topCoffee = coffeeItems
+                    .sort((a, b) => b.index - a.index)
+                    .slice(0, 3)
+                    .map(i => `${i.name} (${i.index})`)
+                    .join(', ');
+                functionalShifts.push(`<span class="insight-label">Coffee vs. Soda:</span> <span class="insight-value">Functional morning rituals vs. treat moments. Top coffee: ${topCoffee}</span>`);
             }
             
             document.getElementById('ecosystemCategoryExit').innerHTML = categoryExitSignals.length > 0
@@ -25936,20 +26229,42 @@
             
             const temporalShifts = [];
             if (streamingItems.length > 0) {
-                temporalShifts.push(`<span class="insight-label">Nighttime consumption:</span> <span class="insight-value">Moving earlier as streaming habits shift viewing times</span>`);
+                const topStreaming = streamingItems
+                    .sort((a, b) => b.index - a.index)
+                    .slice(0, 5)
+                    .map(i => `${i.name} (${i.index})`)
+                    .join(', ');
+                temporalShifts.push(`<span class="insight-label">Nighttime consumption:</span> <span class="insight-value">Moving earlier as streaming habits shift viewing times. Top platforms: ${topStreaming}</span>`);
             }
             if (gamingItems.length > 0) {
-                temporalShifts.push(`<span class="insight-label">Evening routines:</span> <span class="insight-value">Gaming sessions replacing traditional beverage occasions</span>`);
+                const topGaming = gamingItems
+                    .sort((a, b) => b.index - a.index)
+                    .slice(0, 5)
+                    .map(i => `${i.name} (${i.index})`)
+                    .join(', ');
+                temporalShifts.push(`<span class="insight-label">Evening routines:</span> <span class="insight-value">Gaming sessions replacing traditional beverage occasions. Top gaming platforms: ${topGaming}</span>`);
             }
             
             const socialContextChanges = [];
+            const socialItems = allItems.filter(i => 
+                i.category.toUpperCase().includes('SOCIAL') ||
+                i.category.toUpperCase().includes('DATING') ||
+                i.name.toUpperCase().includes('TINDER') ||
+                i.name.toUpperCase().includes('BUMBLE') ||
+                i.name.toUpperCase().includes('HINGE')
+            );
             if (socialItems.length > 0) {
                 const soloItems = allItems.filter(i => 
                     i.name.toUpperCase().includes('SOLO') ||
                     i.category.toUpperCase().includes('INDIVIDUAL')
                 );
                 if (soloItems.length > socialItems.length) {
-                    socialContextChanges.push(`<span class="insight-label">Solo consumption:</span> <span class="insight-value">Replacing social occasions - individual moments vs. shared experiences</span>`);
+                    const topSolo = soloItems
+                        .sort((a, b) => b.index - a.index)
+                        .slice(0, 3)
+                        .map(i => `${i.name} (${i.index})`)
+                        .join(', ');
+                    socialContextChanges.push(`<span class="insight-label">Solo consumption:</span> <span class="insight-value">Replacing social occasions - individual moments vs. shared experiences. Top solo activities: ${topSolo}</span>`);
                 }
             }
             socialContextChanges.push(`<span class="insight-label">"Treat" reframing:</span> <span class="insight-value">Beverage consumption as mental health reward, not just indulgence</span>`);
@@ -25962,10 +26277,20 @@
                 i.category.toUpperCase().includes('NOSTALGIA')
             );
             if (nostalgiaItems.length > 0) {
-                emergingPatterns.push(`<span class="insight-label">Nostalgia usage spike:</span> <span class="insight-value">Retro/classic preferences emerging before cultural campaigns launch</span>`);
+                const topNostalgia = nostalgiaItems
+                    .sort((a, b) => b.index - a.index)
+                    .slice(0, 5)
+                    .map(i => `${i.name} (${i.index})`)
+                    .join(', ');
+                emergingPatterns.push(`<span class="insight-label">Nostalgia usage spike:</span> <span class="insight-value">Retro/classic preferences emerging before cultural campaigns launch. Top items: ${topNostalgia}</span>`);
             }
-            if (fitnessItems.length > 0 && beverageItems.length > 0) {
-                emergingPatterns.push(`<span class="insight-label">Wellness integration:</span> <span class="insight-value">Fitness and beverage consumption patterns converging</span>`);
+            if (fitnessItems.length > 0 && beverageItems.length > 0 && isBeverageProfile) {
+                const topFitness = fitnessItems
+                    .sort((a, b) => b.index - a.index)
+                    .slice(0, 5)
+                    .map(i => `${i.name} (${i.index})`)
+                    .join(', ');
+                emergingPatterns.push(`<span class="insight-label">Wellness integration:</span> <span class="insight-value">Fitness and beverage consumption patterns converging. Top fitness apps: ${topFitness}</span>`);
             }
             
             document.getElementById('ecosystemTemporalShifts').innerHTML = temporalShifts.length > 0
@@ -31529,8 +31854,8 @@
             // Generate SWOT analysis
             const swot = generateSWOTAnalysis(primaryBrand, otherProfiles);
             
-            // Generate demographics overview
-            const demographics = generateDemographicsOverview(primaryBrand);
+            // Generate demographics overview with comparisons
+            const demographics = generateDemographicsOverview(primaryBrand, otherProfiles);
             
             // Find where primary brand shines
             const shines = findWhereBrandShines(primaryBrand, otherProfiles);
@@ -31633,7 +31958,11 @@
                     if (Array.isArray(arr)) {
                         arr.forEach(item => {
                             if (item.index && item.index > 0) {
-                                primaryItems.push(item);
+                                primaryItems.push({
+                                    ...item,
+                                    name: item.name || item.value || 'Unknown',
+                                    category: item.category || 'Other'
+                                });
                             }
                         });
                     }
@@ -31646,26 +31975,29 @@
                 : 0;
             
             // High index items (150+)
-            const highIndexItems = primaryItems.filter(i => i.index >= 150);
-            const veryHighIndexItems = primaryItems.filter(i => i.index >= 200);
+            const highIndexItems = primaryItems.filter(i => i.index >= 150).sort((a, b) => b.index - a.index);
+            const veryHighIndexItems = primaryItems.filter(i => i.index >= 200).sort((a, b) => b.index - a.index);
             
-            // STRENGTHS
+            // STRENGTHS - List actual items, not counts
             if (avgIndex > 120) {
-                swot.strengths.push(`Strong overall engagement with average index of ${avgIndex} - significantly above general population`);
+                swot.strengths.push(`Strong overall engagement (avg index: ${avgIndex}) - ${avgIndex > 150 ? 'exceptional' : avgIndex > 120 ? 'strong' : 'above average'} performance vs. general population`);
             }
-            if (highIndexItems.length > 10) {
-                swot.strengths.push(`${highIndexItems.length} behavioral categories with exceptional over-indexing (150+ index) - strong brand alignment`);
-            }
+            
+            // List top performing items
             if (veryHighIndexItems.length > 0) {
-                swot.strengths.push(`${veryHighIndexItems.length} categories with exceptional affinity (200+ index) - premium positioning opportunity`);
+                const topItems = veryHighIndexItems.slice(0, 8).map(i => `${i.name} (${i.index})`).join(', ');
+                swot.strengths.push(`Exceptional affinity items (200+ index): ${topItems}${veryHighIndexItems.length > 8 ? ` +${veryHighIndexItems.length - 8} more` : ''}`);
+            } else if (highIndexItems.length > 0) {
+                const topItems = highIndexItems.slice(0, 8).map(i => `${i.name} (${i.index})`).join(', ');
+                swot.strengths.push(`Strong over-indexing items (150+ index): ${topItems}${highIndexItems.length > 8 ? ` +${highIndexItems.length - 8} more` : ''}`);
             }
             
             // Sample size strength
             if (primaryBrand.sampleSize > 10000) {
-                swot.strengths.push(`Large sample size (${formatNumber(primaryBrand.sampleSize)}) provides high statistical confidence`);
+                swot.strengths.push(`Large sample size (${formatNumber(primaryBrand.sampleSize)}) provides high statistical confidence for insights`);
             }
             
-            // Top categories
+            // Top categories with actual items listed
             const categoryStats = {};
             primaryItems.forEach(item => {
                 const cat = item.category?.split('/')[0] || 'Other';
@@ -31677,28 +32009,34 @@
                 .map(([cat, stats]) => ({
                     cat,
                     avgIndex: Math.round(stats.totalIndex / stats.items.length),
-                    count: stats.items.length
+                    count: stats.items.length,
+                    topItems: stats.items.sort((a, b) => b.index - a.index).slice(0, 5)
                 }))
+                .filter(c => c.count >= 3)
                 .sort((a, b) => b.avgIndex - a.avgIndex)
                 .slice(0, 3);
             
             if (topCategories.length > 0) {
-                swot.strengths.push(`Dominant in ${topCategories.map(c => c.cat).join(', ')} categories - clear category leadership`);
+                topCategories.forEach(cat => {
+                    const itemsList = cat.topItems.map(i => `${i.name} (${i.index})`).join(', ');
+                    swot.strengths.push(`Dominant in ${cat.cat}: ${itemsList}${cat.count > 5 ? ` +${cat.count - 5} more items` : ''} (avg index: ${cat.avgIndex})`);
+                });
             }
             
-            // WEAKNESSES
-            const lowIndexItems = primaryItems.filter(i => i.index < 80);
+            // WEAKNESSES - List actual under-performing items
+            const lowIndexItems = primaryItems.filter(i => i.index < 80).sort((a, b) => a.index - b.index);
             if (lowIndexItems.length > 5) {
-                swot.weaknesses.push(`${lowIndexItems.length} categories under-indexing (<80) - potential gaps in audience engagement`);
+                const worstItems = lowIndexItems.slice(0, 8).map(i => `${i.name} (${i.index})`).join(', ');
+                swot.weaknesses.push(`Under-indexing items (<80 index): ${worstItems}${lowIndexItems.length > 8 ? ` +${lowIndexItems.length - 8} more` : ''} - potential gaps in audience engagement`);
             }
             
             if (primaryBrand.sampleSize < 5000) {
-                swot.weaknesses.push(`Smaller sample size (${formatNumber(primaryBrand.sampleSize)}) may limit statistical confidence`);
+                swot.weaknesses.push(`Smaller sample size (${formatNumber(primaryBrand.sampleSize)}) may limit statistical confidence - consider larger sample for more reliable insights`);
             }
             
-            // Compare to other profiles
+            // Compare to other profiles with names and specific comparisons
             if (otherProfiles.length > 0) {
-                const otherAvgIndexes = otherProfiles.map(p => {
+                const otherProfileData = otherProfiles.map(p => {
                     const items = [];
                     if (p.behavioral) {
                         Object.values(p.behavioral).forEach(arr => {
@@ -31709,31 +32047,65 @@
                             }
                         });
                     }
-                    return items.length > 0 
+                    const avgIdx = items.length > 0 
                         ? items.reduce((sum, i) => sum + (i.index || 0), 0) / items.length
                         : 0;
+                    return {
+                        name: p.name,
+                        avgIndex: avgIdx,
+                        sampleSize: p.sampleSize || 0,
+                        medianAge: p.medianAge || 0
+                    };
                 });
-                const maxOtherIndex = Math.max(...otherAvgIndexes);
-                if (avgIndex < maxOtherIndex * 0.9) {
-                    swot.weaknesses.push(`Lower average engagement compared to competing profiles - need to strengthen positioning`);
+                
+                // Compare average index
+                const maxOtherIndex = Math.max(...otherProfileData.map(p => p.avgIndex));
+                const betterProfiles = otherProfileData.filter(p => p.avgIndex > avgIndex);
+                if (betterProfiles.length > 0) {
+                    const betterNames = betterProfiles.map(p => `${p.name} (${Math.round(p.avgIndex)})`).join(', ');
+                    swot.weaknesses.push(`Lower engagement vs. competitors: ${betterNames} - ${primaryBrand.name} avg index ${avgIndex} vs. their ${Math.round(maxOtherIndex)}`);
+                }
+                
+                // Compare demographics - age analysis
+                const primaryAge = primaryBrand.medianAge || 0;
+                if (primaryAge > 0) {
+                    const olderProfiles = otherProfileData.filter(p => p.medianAge > primaryAge + 2);
+                    const youngerProfiles = otherProfileData.filter(p => p.medianAge > 0 && p.medianAge < primaryAge - 2);
+                    
+                    if (olderProfiles.length > 0) {
+                        const olderNames = olderProfiles.map(p => `${p.name} (${p.medianAge})`).join(', ');
+                        swot.weaknesses.push(`Younger audience vs. competitors: ${olderNames} have older audiences (${primaryBrand.name}: ${primaryAge} vs. theirs: ${olderProfiles.map(p => p.medianAge).join(', ')}) - may indicate audience aging risk`);
+                    }
+                    
+                    if (youngerProfiles.length > 0) {
+                        const youngerNames = youngerProfiles.map(p => `${p.name} (${p.medianAge})`).join(', ');
+                        swot.opportunities.push(`Older audience advantage: ${primaryBrand.name} (${primaryAge}) has older, more established audience vs. ${youngerNames} - indicates mature market position`);
+                    }
+                }
+                
+                // Compare sample sizes
+                const largerSamples = otherProfileData.filter(p => p.sampleSize > primaryBrand.sampleSize * 1.5);
+                if (largerSamples.length > 0) {
+                    const largerNames = largerSamples.map(p => `${p.name} (${formatNumber(p.sampleSize)})`).join(', ');
+                    swot.weaknesses.push(`Smaller sample vs. competitors: ${largerNames} have larger samples - may impact insight reliability`);
                 }
             }
             
-            // OPPORTUNITIES
-            const mediumIndexItems = primaryItems.filter(i => i.index >= 100 && i.index < 150);
+            // OPPORTUNITIES - List actual items with growth potential
+            const mediumIndexItems = primaryItems.filter(i => i.index >= 100 && i.index < 150).sort((a, b) => b.index - a.index);
             if (mediumIndexItems.length > 0) {
-                swot.opportunities.push(`${mediumIndexItems.length} categories with solid engagement (100-150 index) - growth potential with targeted campaigns`);
+                const growthItems = mediumIndexItems.slice(0, 8).map(i => `${i.name} (${i.index})`).join(', ');
+                swot.opportunities.push(`Growth potential items (100-150 index): ${growthItems}${mediumIndexItems.length > 8 ? ` +${mediumIndexItems.length - 8} more` : ''} - targeted campaigns could boost engagement`);
             }
             
-            // Demographic opportunities
+            // Demographic opportunities with context
             const demographics = primaryBrand.demographics || {};
-            const ageGroups = Object.keys(demographics.age || {});
+            const ageGroups = Object.entries(demographics.age || {})
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3);
             if (ageGroups.length > 0) {
-                const topAgeGroup = Object.entries(demographics.age || {})
-                    .sort((a, b) => b[1] - a[1])[0];
-                if (topAgeGroup) {
-                    swot.opportunities.push(`Strong concentration in ${topAgeGroup[0]} age group (${topAgeGroup[1].toFixed(1)}%) - prime target for age-specific messaging`);
-                }
+                const ageList = ageGroups.map(([age, pct]) => `${age} (${pct.toFixed(1)}%)`).join(', ');
+                swot.opportunities.push(`Age concentration: ${ageList} - prime targets for age-specific messaging and campaigns`);
             }
             
             // Geographic opportunities
@@ -31741,57 +32113,101 @@
                 const topLocations = primaryBrand.locations
                     .filter(l => l.index > 100)
                     .sort((a, b) => b.index - a.index)
-                    .slice(0, 3);
+                    .slice(0, 5);
                 if (topLocations.length > 0) {
-                    swot.opportunities.push(`Geographic strength in ${topLocations.map(l => l.name).join(', ')} - regional expansion opportunity`);
+                    const locList = topLocations.map(l => `${l.name} (${l.index})`).join(', ');
+                    swot.opportunities.push(`Geographic strength: ${locList} - regional expansion and local marketing opportunities`);
                 }
             }
             
-            // Cross-category opportunities
+            // Cross-category opportunities - list actual brands/items
             if (highIndexItems.length > 0) {
-                const topCategories = highIndexItems
-                    .sort((a, b) => b.index - a.index)
-                    .slice(0, 5)
-                    .map(i => i.name || i.value);
-                swot.opportunities.push(`Partnership opportunities with: ${topCategories.join(', ')} - co-marketing potential`);
+                const topPartners = highIndexItems
+                    .slice(0, 8)
+                    .map(i => `${i.name} (${i.index})`)
+                    .join(', ');
+                swot.opportunities.push(`Partnership opportunities: ${topPartners}${highIndexItems.length > 8 ? ` +${highIndexItems.length - 8} more` : ''} - co-marketing potential`);
             }
             
-            // THREATS
+            // THREATS - List actual competitors and overlapping items
             if (otherProfiles.length > 0) {
-                // Find categories where competitors outperform
-                const competitorStrengths = new Set();
-                otherProfiles.forEach(p => {
+                // Find specific items where competitors outperform
+                const competitorData = otherProfiles.map(p => {
                     const items = [];
                     if (p.behavioral) {
                         Object.values(p.behavioral).forEach(arr => {
                             if (Array.isArray(arr)) {
                                 arr.forEach(item => {
-                                    if (item.index && item.index >= 150) items.push(item);
+                                    if (item.index && item.index >= 150) {
+                                        items.push({
+                                            name: item.name || item.value || 'Unknown',
+                                            index: item.index
+                                        });
+                                    }
                                 });
                             }
                         });
                     }
-                    items.forEach(item => {
-                        const name = (item.name || item.value || '').toLowerCase();
-                        competitorStrengths.add(name);
-                    });
+                    return {
+                        name: p.name,
+                        highIndexItems: items.sort((a, b) => b.index - a.index)
+                    };
                 });
                 
-                const primaryHighItems = highIndexItems.map(i => (i.name || i.value || '').toLowerCase());
-                const overlap = primaryHighItems.filter(name => competitorStrengths.has(name));
-                if (overlap.length > 0) {
-                    swot.threats.push(`Competitive overlap in ${overlap.length} high-value categories - differentiation needed`);
+                // Find overlapping high-value items
+                competitorData.forEach(comp => {
+                    const overlap = comp.highIndexItems.filter(compItem => 
+                        highIndexItems.some(primaryItem => 
+                            primaryItem.name.toLowerCase() === compItem.name.toLowerCase()
+                        )
+                    );
+                    if (overlap.length > 0) {
+                        const overlapList = overlap.slice(0, 5).map(i => `${i.name} (${i.index})`).join(', ');
+                        swot.threats.push(`Competitive overlap with ${comp.name}: ${overlapList}${overlap.length > 5 ? ` +${overlap.length - 5} more` : ''} - differentiation needed`);
+                    }
+                    
+                    // Find where competitor outperforms
+                    const competitorWins = comp.highIndexItems.filter(compItem => {
+                        const primaryMatch = primaryItems.find(p => 
+                            p.name.toLowerCase() === compItem.name.toLowerCase()
+                        );
+                        return primaryMatch && compItem.index > primaryMatch.index * 1.2;
+                    });
+                    if (competitorWins.length > 0) {
+                        const winsList = competitorWins.slice(0, 5).map(i => `${i.name} (${i.index})`).join(', ');
+                        swot.threats.push(`${comp.name} outperforms in: ${winsList}${competitorWins.length > 5 ? ` +${competitorWins.length - 5} more` : ''} - competitive pressure`);
+                    }
+                });
+            }
+            
+            // Under-indexing threats - list actual categories
+            if (lowIndexItems.length > 10) {
+                const categoryGroups = {};
+                lowIndexItems.forEach(item => {
+                    const cat = item.category?.split('/')[0] || 'Other';
+                    if (!categoryGroups[cat]) categoryGroups[cat] = [];
+                    categoryGroups[cat].push(item);
+                });
+                const worstCategories = Object.entries(categoryGroups)
+                    .map(([cat, items]) => ({ cat, count: items.length, avgIndex: Math.round(items.reduce((s, i) => s + i.index, 0) / items.length) }))
+                    .sort((a, b) => a.avgIndex - b.avgIndex)
+                    .slice(0, 3);
+                
+                if (worstCategories.length > 0) {
+                    const catList = worstCategories.map(c => `${c.cat} (${c.count} items, avg ${c.avgIndex})`).join(', ');
+                    swot.threats.push(`Weak categories: ${catList} - risk of audience erosion in these areas`);
                 }
             }
             
-            // Under-indexing threats
-            if (lowIndexItems.length > 10) {
-                swot.threats.push(`Significant under-indexing in ${lowIndexItems.length} categories - risk of audience erosion`);
-            }
-            
-            // Sample size threat
-            if (primaryBrand.sampleSize < 3000 && otherProfiles.some(p => p.sampleSize > primaryBrand.sampleSize * 2)) {
-                swot.threats.push(`Smaller sample size compared to competitors may limit market insights and campaign effectiveness`);
+            // Sample size threat with competitor names
+            if (primaryBrand.sampleSize < 3000) {
+                const largerCompetitors = otherProfiles
+                    .filter(p => p.sampleSize > primaryBrand.sampleSize * 2)
+                    .map(p => `${p.name} (${formatNumber(p.sampleSize)})`)
+                    .join(', ');
+                if (largerCompetitors) {
+                    swot.threats.push(`Smaller sample (${formatNumber(primaryBrand.sampleSize)}) vs. ${largerCompetitors} - may limit market insights and campaign effectiveness`);
+                }
             }
             
             // Ensure we have at least something in each category
@@ -31803,7 +32219,7 @@
             return swot;
         }
         
-        function generateDemographicsOverview(primaryBrand) {
+        function generateDemographicsOverview(primaryBrand, otherProfiles = []) {
             const demographics = primaryBrand.demographics || {};
             const overview = [];
             
@@ -31812,27 +32228,59 @@
                 const topGender = Object.entries(demographics.gender)
                     .sort((a, b) => b[1] - a[1])[0];
                 if (topGender) {
+                    let value = `${topGender[0]} (${topGender[1].toFixed(1)}%)`;
+                    // Compare with other profiles
+                    if (otherProfiles.length > 0) {
+                        const otherGenders = otherProfiles.map(p => {
+                            const demo = p.demographics || {};
+                            const gender = demo.gender || {};
+                            const top = Object.entries(gender).sort((a, b) => b[1] - a[1])[0];
+                            return top ? { name: p.name, gender: top[0], pct: top[1] } : null;
+                        }).filter(Boolean);
+                        const differentGenders = otherGenders.filter(g => g.gender !== topGender[0]);
+                        if (differentGenders.length > 0) {
+                            value += ` vs. ${differentGenders.map(g => `${g.name}: ${g.gender}`).join(', ')}`;
+                        }
+                    }
                     overview.push({
                         label: 'Primary Gender',
-                        value: `${topGender[0]} (${topGender[1].toFixed(1)}%)`
+                        value: value
                     });
                 }
             }
             
-            // Age
+            // Age with comparison
             if (demographics.age) {
                 const topAge = Object.entries(demographics.age)
                     .sort((a, b) => b[1] - a[1])[0];
                 if (topAge) {
+                    let value = `${topAge[0]} (${topAge[1].toFixed(1)}%)`;
                     overview.push({
                         label: 'Primary Age Group',
-                        value: `${topAge[0]} (${topAge[1].toFixed(1)}%)`
+                        value: value
                     });
                 }
                 if (primaryBrand.medianAge) {
+                    let medianValue = `${primaryBrand.medianAge} years`;
+                    // Compare median age with other profiles
+                    if (otherProfiles.length > 0) {
+                        const otherAges = otherProfiles
+                            .filter(p => p.medianAge && p.medianAge > 0)
+                            .map(p => ({ name: p.name, age: p.medianAge }))
+                            .sort((a, b) => b.age - a.age);
+                        if (otherAges.length > 0) {
+                            const older = otherAges.filter(p => p.age > primaryBrand.medianAge + 2);
+                            const younger = otherAges.filter(p => p.age < primaryBrand.medianAge - 2);
+                            if (older.length > 0) {
+                                medianValue += ` (younger than ${older.map(p => `${p.name}: ${p.age}`).join(', ')})`;
+                            } else if (younger.length > 0) {
+                                medianValue += ` (older than ${younger.map(p => `${p.name}: ${p.age}`).join(', ')})`;
+                            }
+                        }
+                    }
                     overview.push({
                         label: 'Median Age',
-                        value: `${primaryBrand.medianAge} years`
+                        value: medianValue
                     });
                 }
             }
@@ -31873,10 +32321,23 @@
                 }
             }
             
-            // Sample Size
+            // Sample Size with comparison
+            let sampleValue = formatNumber(primaryBrand.sampleSize || 0);
+            if (otherProfiles.length > 0) {
+                const otherSamples = otherProfiles
+                    .map(p => ({ name: p.name, size: p.sampleSize || 0 }))
+                    .sort((a, b) => b.size - a.size);
+                const larger = otherSamples.filter(p => p.size > primaryBrand.sampleSize * 1.2);
+                const smaller = otherSamples.filter(p => p.size < primaryBrand.sampleSize * 0.8);
+                if (larger.length > 0) {
+                    sampleValue += ` (smaller than ${larger.map(p => `${p.name}: ${formatNumber(p.size)}`).join(', ')})`;
+                } else if (smaller.length > 0) {
+                    sampleValue += ` (larger than ${smaller.map(p => `${p.name}: ${formatNumber(p.size)}`).join(', ')})`;
+                }
+            }
             overview.push({
                 label: 'Sample Size',
-                value: formatNumber(primaryBrand.sampleSize || 0)
+                value: sampleValue
             });
             
             // Projected US
@@ -31921,15 +32382,15 @@
                 categoryGroups[cat].push(item);
             });
             
-            // Create shine items
+            // Create shine items with specific items listed
             Object.entries(categoryGroups).forEach(([cat, items]) => {
                 const avgIndex = Math.round(items.reduce((sum, i) => sum + i.index, 0) / items.length);
-                const topItem = items[0];
+                const itemsList = items.map(i => `${i.name || i.value} (${i.index})`).join(', ');
                 
                 shines.push({
                     category: cat,
-                    description: `Exceptional engagement with ${items.length} item${items.length > 1 ? 's' : ''} in this category, led by "${topItem.name || topItem.value}" with index ${topItem.index}`,
-                    metrics: `Average index: ${avgIndex} | Top item: ${topItem.index}`
+                    description: `Top items: ${itemsList}${items.length > 5 ? ` +${items.length - 5} more` : ''}`,
+                    metrics: `Average index: ${avgIndex} | ${items.length} item${items.length > 1 ? 's' : ''}`
                 });
             });
             
@@ -31960,10 +32421,15 @@
                             const compAvg = compCatItems.reduce((sum, i) => sum + i.index, 0) / compCatItems.length;
                             
                             if (primaryAvg > compAvg * 1.2) {
+                                const primaryTopItems = primaryCatItems
+                                    .sort((a, b) => b.index - a.index)
+                                    .slice(0, 3)
+                                    .map(i => `${i.name || i.value} (${i.index})`)
+                                    .join(', ');
                                 shines.push({
-                                    category: `vs ${competitor.name}`,
-                                    description: `Outperforms ${competitor.name} in ${cat} category by ${Math.round((primaryAvg / compAvg - 1) * 100)}%`,
-                                    metrics: `Primary: ${Math.round(primaryAvg)} vs Competitor: ${Math.round(compAvg)}`
+                                    category: `vs ${competitor.name} - ${cat}`,
+                                    description: `Outperforms by ${Math.round((primaryAvg / compAvg - 1) * 100)}%. Top items: ${primaryTopItems}`,
+                                    metrics: `${primaryBrand.name}: ${Math.round(primaryAvg)} vs ${competitor.name}: ${Math.round(compAvg)}`
                                 });
                             }
                         }
