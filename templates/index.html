@@ -11762,18 +11762,18 @@
                             
                             <!-- Projected Growth Rate + Accuracy (Left) + Beat/Miss (Right) -->
                             <div class="ticker-cards-grid two-columns" style="margin-bottom: 0.5rem; align-items: stretch;">
-                                <!-- Left: Projected Growth with Accuracy on right side + Net Growth Trend below -->
+                                <!-- Left: Projected Growth with Accuracy below + Net Growth Trend below -->
                                 <div class="stat-card has-tooltip" id="projectedGrowthCard" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; justify-content: space-between; position: relative; padding: 0.75rem 1rem;" onclick="navigateToTrends()" data-tooltip="">
-                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
-                                        <div style="flex: 1; display: flex; flex-direction: column;">
-                                            <div class="stat-label" id="projectedGrowthLabel" style="font-size: 0.75rem; margin-bottom: 0.5rem;">🔮 Q1 2026 Projected Net Growth Rate</div>
-                                            <div class="stat-value pulsing-number" id="projectedGrowth" style="display: block; margin: 0.25rem 0;">--</div>
-                                            <div class="stat-label" id="projectedGrowthKPI" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">--</div>
-                                        </div>
-                                        <div id="liveDataAccuracyBadge" style="display: none; min-width: 140px; text-align: right;">
-                                            <div class="stat-label" style="font-size: 0.75rem; margin-bottom: 0.5rem;">📊 Accuracy</div>
-                                            <div id="liveDataAccuracyValue" style="font-weight: 600; font-size: 0.9rem;"></div>
-                                        </div>
+                                    <!-- Projected Growth Rate and KPI -->
+                                    <div style="display: flex; flex-direction: column;">
+                                        <div class="stat-label" id="projectedGrowthLabel" style="font-size: 0.75rem; margin-bottom: 0.5rem;">🔮 Q1 2026 Projected Net Growth Rate</div>
+                                        <div class="stat-value pulsing-number" id="projectedGrowth" style="display: block; margin: 0.25rem 0;">--</div>
+                                        <div class="stat-label" id="projectedGrowthKPI" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">--</div>
+                                    </div>
+                                    <!-- Accuracy Section - below the number -->
+                                    <div id="liveDataAccuracyBadge" style="display: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                                        <div class="stat-label" style="font-size: 0.75rem; margin-bottom: 0.5rem;">📊 Accuracy</div>
+                                        <div id="liveDataAccuracyValue" style="font-weight: 600; font-size: 0.9rem;"></div>
                                     </div>
                                     <!-- Net Growth Trend (Last 7 Days) - embedded in projected growth card -->
                                     <div id="netGrowthTrendSection" style="display: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
