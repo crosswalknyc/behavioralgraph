@@ -4757,29 +4757,27 @@ def manage_ticker_metadata():
         if parent_ticker is not None:  # Allow empty string to clear
             metadata[s3_key]['parent_ticker'] = parent_ticker
         
-        # Handle relevance_percentage - allow None to clear, or a number 0-100
+        # Handle relevance_percentage - always process if key exists in request
         if 'relevance_percentage' in data:  # Check if key exists in request
-            if relevance_percentage is None:
-                # Explicitly clear the relevance
-                metadata[s3_key]['relevance_percentage'] = None
-            else:
-                # Validate it's a number between 0-100
-                try:
-                    # Handle both string and number inputs
-                    if isinstance(relevance_percentage, str):
-                        rel_pct = float(relevance_percentage) if relevance_percentage.strip() != '' else None
-                    else:
-                        rel_pct = float(relevance_percentage) if relevance_percentage != '' else None
-                    
-                    if rel_pct is not None:
+            try:
+                # Handle None, empty string, or number
+                if relevance_percentage is None:
+                    # Explicitly clear the relevance
+                    metadata[s3_key]['relevance_percentage'] = None
+                elif isinstance(relevance_percentage, str) and relevance_percentage.strip() == '':
+                    # Empty string - clear it
+                    metadata[s3_key]['relevance_percentage'] = None
+                else:
+                    # Try to convert to float
+                    try:
+                        rel_pct = float(relevance_percentage)
                         if rel_pct < 0 or rel_pct > 100:
                             return jsonify({'success': False, 'error': 'Relevance percentage must be between 0-100'}), 400
                         metadata[s3_key]['relevance_percentage'] = rel_pct
-                    else:
-                        # Clear if empty string
-                        metadata[s3_key]['relevance_percentage'] = None
-                except (ValueError, TypeError) as e:
-                    return jsonify({'success': False, 'error': f'Invalid relevance percentage format: {str(e)}'}), 400
+                    except (ValueError, TypeError):
+                        return jsonify({'success': False, 'error': 'Invalid relevance percentage format'}), 400
+            except Exception as e:
+                return jsonify({'success': False, 'error': f'Error processing relevance percentage: {str(e)}'}), 400
         
         save_ticker_metadata(metadata)
         

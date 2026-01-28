@@ -5198,6 +5198,27 @@
                         if (profileData.success && profileData.profiles && profileData.profiles.length > 0) {
                             ticker.profiles = profileData.profiles;
                             ticker.profileFilename = profileData.profiles[0]; // First profile for display
+                            ticker.hasCustomProfile = true;
+                        } else {
+                            ticker.hasCustomProfile = false;
+                        }
+                    } catch (error) {
+                        ticker.hasCustomProfile = false;
+                    }
+                    
+                    // Load metadata to get relevance_percentage
+                    try {
+                        const metadataResponse = await fetch('/api/hedge-fund-iq/metadata');
+                        const metadataData = await metadataResponse.json();
+                        if (metadataData.success && metadataData.metadata) {
+                            const tickerMetadata = metadataData.metadata[ticker.s3_key];
+                            if (tickerMetadata) {
+                                ticker.relevance_percentage = tickerMetadata.relevance_percentage;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error loading metadata:', error);
+                    }
                             ticker.hasCustomProfile = profileData.profiles.length > 0 && profileData.profiles[0] !== ticker.ticker;
                         } else {
                             ticker.profiles = [ticker.ticker];
@@ -5261,15 +5282,23 @@
                          onmouseenter="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)';"
                          onmouseleave="this.style.transform=''; this.style.boxShadow='';">
                         <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
-                            ${ticker.hasImage ? 
-                                `<img src="${ticker.imageUrl}" alt="${ticker.ticker}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;">` :
-                                `<div style="width: 50px; height: 50px; background: var(--bg-input); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">📈</div>`
-                            }
+                            <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
+                                ${ticker.hasImage ? 
+                                    `<img src="${ticker.imageUrl}" alt="${ticker.ticker}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;">` :
+                                    `<div style="width: 50px; height: 50px; background: var(--bg-input); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">📈</div>`
+                                }
+                                ${statusIcons.length > 0 ? `<div style="display: flex; gap: 0.25rem; margin-top: 0.25rem; font-size: 1rem;">${statusIcons.join('')}</div>` : ''}
+                                ${(ticker.relevance_percentage !== null && ticker.relevance_percentage !== undefined) ? 
+                                    `<div style="display: flex; flex-direction: column; align-items: center; gap: 0.1rem; margin-top: 0.25rem;">
+                                        <span style="font-size: 0.9rem;" title="Stock Impact Relevance: ${ticker.relevance_percentage}%">📊</span>
+                                        <span style="font-size: 0.6rem; color: var(--accent-cyan); font-weight: 600;">${ticker.relevance_percentage}%</span>
+                                    </div>` : ''
+                                }
+                            </div>
                             <div style="flex: 1;">
                                 <h3 style="margin: 0; font-size: 1.1rem;">${ticker.ticker}</h3>
                                 <div style="color: var(--text-secondary); font-size: 0.85rem;">${ticker.display_name}</div>
                             </div>
-                            ${statusIcons.length > 0 ? `<div style="font-size: 1.2rem;">${statusIcons.join(' ')}</div>` : ''}
                         </div>
                         <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">
                             <strong>KPI:</strong> ${ticker.kpi}
