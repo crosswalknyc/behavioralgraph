@@ -32545,13 +32545,9 @@
                 swot.weaknesses.push(`Smaller sample (${formatNumber(primaryBrand.sampleSize)}) vs. ${names} - limits insight reliability`);
             }
             
-            // High index items (150+)
+            // High index items (150+) - these are used in opportunities section
             const highIndexItems = primaryItems.filter(i => i.index >= 150).sort((a, b) => b.index - a.index);
             const veryHighIndexItems = primaryItems.filter(i => i.index >= 200).sort((a, b) => b.index - a.index);
-            
-            // STRENGTHS - List actual items, not counts
-            if (avgIndex > 120) {
-                swot.strengths.push(`Strong overall engagement (avg index: ${avgIndex}) - ${avgIndex > 150 ? 'exceptional' : avgIndex > 120 ? 'strong' : 'above average'} performance vs. general population`);
             }
             
             // List top performing items
