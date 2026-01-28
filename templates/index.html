@@ -9676,7 +9676,6 @@
                                     <span class="chart-card-title-row">
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Parental Status">👶 PARENTAL STATUS</span>
-                                        <span id="parentalStatusMedianDisplay" class="median-display"></span>
                                     </span>
                                     <span class="chart-card-controls-row">
                                         <select id="parentalStatusChartType" onchange="changeChartType('parentalStatus', this.value)" class="chart-type-select">
@@ -14096,7 +14095,6 @@
                             </div>
                             <div class="chart-card">
                                 <h3>👶 PARENTAL STATUS</h3>
-                                <span id="parentalStatusMedianDisplay" class="median-display"></span>
                                 <div class="chart-container"><canvas id="parentalStatusChart"></canvas></div>
                             </div>
                             <div class="chart-card">
@@ -22227,18 +22225,6 @@
                 
                 // Calculate max for x-axis with padding for labels (horizontal bar)
                 const psMax = psChartType === 'bar' ? Math.max(...psData) * 1.5 : undefined; // 50% padding for horizontal labels
-                
-                // Calculate median for parental status
-                const psMedian = calculateDemographicMedian(demographics.parental_status, demographicsGenPop.parental_status, 'parental_status');
-                
-                // Update median display in chart header
-                const psMedianDisplay = document.getElementById('parentalStatusMedianDisplay');
-                if (psMedianDisplay) {
-                    const profileName = currentProfileData?.name || 'Profile';
-                    const profileVal = psMedian.profile ? `${psMedian.profile.value} (${psMedian.profile.percentage.toFixed(2)}%)` : 'N/A';
-                    const genPopVal = psMedian.genPop ? `${psMedian.genPop.value} (${psMedian.genPop.percentage.toFixed(2)}%)` : 'N/A';
-                    psMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName}: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop: ${genPopVal}</span>`;
-                }
                 
                 charts.parentalStatus = new Chart(document.getElementById('parentalStatusChart'), {
                     type: psChartType,
