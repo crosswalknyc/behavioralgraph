@@ -32206,7 +32206,7 @@
                 return;
             }
             
-            // Show loading modal
+            // Show loading modal with status bar
             let summaryHTML = `
                 <div class="summary-modal" onclick="if(event.target === this) closeSummaryModal()">
                     <div class="summary-modal-content" style="max-width: 900px;">
@@ -32215,12 +32215,42 @@
                             <button class="btn btn-small" onclick="closeSummaryModal()">✕ Close</button>
                         </div>
                         <div class="summary-section" style="text-align: center; padding: 3rem;">
-                            <div class="loading-placeholder">Generating AI-powered executive summary...</div>
+                            <div style="margin-bottom: 1.5rem;">
+                                <div style="font-size: 1.1rem; color: var(--text-primary); margin-bottom: 1rem; font-weight: 600;">Generating Strategic Executive Summary...</div>
+                                <div style="width: 100%; height: 8px; background: var(--bg-input); border-radius: 4px; overflow: hidden; position: relative;">
+                                    <div id="execSummaryProgressBar" style="height: 100%; background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan)); border-radius: 4px; width: 0%; transition: width 0.3s ease; animation: progressPulse 1.5s ease-in-out infinite;"></div>
+                                </div>
+                                <div id="execSummaryStatusText" style="margin-top: 1rem; font-size: 0.9rem; color: var(--text-secondary);">Analyzing data...</div>
+                            </div>
                         </div>
                     </div>
                 </div>
             `;
             document.body.insertAdjacentHTML('beforeend', summaryHTML);
+            
+            // Animate progress bar
+            const progressBar = document.getElementById('execSummaryProgressBar');
+            const statusText = document.getElementById('execSummaryStatusText');
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += Math.random() * 15;
+                if (progress > 90) progress = 90; // Don't go to 100% until done
+                if (progressBar) progressBar.style.width = progress + '%';
+                
+                // Update status text
+                if (statusText) {
+                    if (progress < 30) {
+                        statusText.textContent = 'Collecting profile data...';
+                    } else if (progress < 60) {
+                        statusText.textContent = 'Analyzing demographics and behaviors...';
+                    } else if (progress < 90) {
+                        statusText.textContent = 'Generating strategic insights...';
+                    }
+                }
+            }, 500);
+            
+            // Store interval to clear later
+            window.execSummaryProgressInterval = progressInterval;
             
             // Helper to collect all behavioral items
             const collectItems = (profile) => {
@@ -32330,6 +32360,26 @@
                 
                 const aiInsights = result.insights;
                 
+                // Clear progress interval
+                if (window.execSummaryProgressInterval) {
+                    clearInterval(window.execSummaryProgressInterval);
+                    window.execSummaryProgressInterval = null;
+                }
+                
+                // Complete progress bar
+                const progressBar = document.getElementById('execSummaryProgressBar');
+                const statusText = document.getElementById('execSummaryStatusText');
+                if (progressBar) {
+                    progressBar.style.width = '100%';
+                    progressBar.style.animation = 'none';
+                }
+                if (statusText) {
+                    statusText.textContent = 'Complete!';
+                }
+                
+                // Small delay to show completion, then render content
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
                 // Build summary content with AI insights
                 summaryHTML = `
                     <div class="summary-modal" onclick="if(event.target === this) closeSummaryModal()">
@@ -32425,6 +32475,13 @@
                 }
             } catch (error) {
                 console.error('Error generating executive summary:', error);
+                
+                // Clear progress interval
+                if (window.execSummaryProgressInterval) {
+                    clearInterval(window.execSummaryProgressInterval);
+                    window.execSummaryProgressInterval = null;
+                }
+                
                 const modal = document.querySelector('.summary-modal');
                 if (modal) {
                     modal.querySelector('.summary-section').innerHTML = `
