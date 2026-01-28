@@ -6052,6 +6052,70 @@ def get_tickers_without_images():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/admin/tickers-full')
+@requires_admin
+def get_tickers_full():
+    """Get all tickers with images and profile mappings in one call for admin panel."""
+    try:
+        # Get all tickers
+        tickers_response = list_hedge_fund_tickers()
+        tickers_data = tickers_response.get_json()
+        
+        if not tickers_data.get('success'):
+            return jsonify({'success': False, 'error': 'Could not load tickers'}), 500
+        
+        all_tickers = tickers_data.get('tickers', [])
+        
+        # Load ticker images and profile mappings from S3 (cached)
+        ticker_images = load_json_from_s3(TICKER_IMAGES_FILE)
+        profile_mappings = load_json_from_s3(TICKER_PROFILES_FILE)
+        
+        # Enrich each ticker with image and profile data
+        enriched_tickers = []
+        for ticker_data in all_tickers:
+            ticker = ticker_data['ticker']
+            
+            # Get image info
+            has_image = False
+            image_url = None
+            if ticker in ticker_images and ticker_images[ticker].get('image_url'):
+                has_image = True
+                image_url = ticker_images[ticker].get('image_url')
+            
+            # Get profile mappings
+            profiles = [ticker]  # Default
+            has_custom_profile = False
+            if ticker in profile_mappings:
+                profiles = profile_mappings[ticker]
+                if isinstance(profiles, str):
+                    profiles = [profiles]
+                has_custom_profile = profiles[0] != ticker if profiles else False
+            
+            enriched_tickers.append({
+                'ticker': ticker,
+                'display_name': ticker_data.get('display_name', ticker),
+                'kpi': ticker_data.get('kpi', 'Customers'),
+                'relevance_percentage': ticker_data.get('relevance_percentage'),
+                'hasImage': has_image,
+                'imageUrl': image_url,
+                'profiles': profiles,
+                'profileFilename': profiles[0] if profiles else ticker,
+                'hasCustomProfile': has_custom_profile
+            })
+        
+        return jsonify({
+            'success': True,
+            'tickers': enriched_tickers,
+            'count': len(enriched_tickers)
+        })
+        
+    except Exception as e:
+        print(f"❌ Error in get_tickers_full: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/job-data/<job_id>')
 @requires_auth
 def get_job_data(job_id):
