@@ -10883,12 +10883,15 @@
 
             <!-- Comparison Tab -->
             <div id="tab-comparison" class="tab-content">
-                <div class="comparison-header">
-                    <div>
-                        <h1 class="comp-title" style="margin: 0;">COMPARISON</h1>
-                        <p style="margin: 0.25rem 0 0 0; font-size: 0.8rem; color: var(--text-secondary);">Side-by-side comparison of multiple profiles.</p>
+                <!-- Comparison Analysis Tabs with Action Buttons -->
+                <div class="comp-analysis-tabs" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                    <div style="display: flex; gap: 0.5rem; flex: 1;">
+                        <button class="comp-tab active" onclick="showCompTab('tables')">📊 Side-by-Side</button>
+                        <button class="comp-tab" onclick="showCompTab('overlap')">🔄 Overlap Analysis</button>
+                        <button class="comp-tab" onclick="showCompTab('benchmark')">📈 Benchmarking</button>
+                        <button class="comp-tab" onclick="showCompTab('insights')">💡 Key Insights</button>
                     </div>
-                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                         <select id="compJumpToSelect" onchange="jumpToCompSection(this.value)" style="padding: 0.5rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.8rem; cursor: pointer;">
                             <option value="">📍 Jump to...</option>
                             <option value="comp-summary">📊 Summary Data</option>
@@ -10905,14 +10908,6 @@
                             <span id="displayModeLabel">US %</span>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Comparison Analysis Tabs -->
-                <div class="comp-analysis-tabs">
-                    <button class="comp-tab active" onclick="showCompTab('tables')">📊 Side-by-Side</button>
-                    <button class="comp-tab" onclick="showCompTab('overlap')">🔄 Overlap Analysis</button>
-                    <button class="comp-tab" onclick="showCompTab('benchmark')">📈 Benchmarking</button>
-                    <button class="comp-tab" onclick="showCompTab('insights')">💡 Key Insights</button>
                 </div>
                 
                 <!-- Comparison Report View -->
@@ -17046,11 +17041,11 @@
             const header = document.getElementById('inlineTabHeader');
             if (!header) return;
             
-            // Hide header for comparison tab (it has its own header)
-            if (tabName === 'comparison') {
-                header.style.display = 'none';
-                return;
-            }
+            // Show header for comparison tab (buttons are now in tab bar)
+            // if (tabName === 'comparison') {
+            //     header.style.display = 'none';
+            //     return;
+            // }
             
             header.style.display = 'flex';
             if (TAB_HEADERS[tabName]) {
