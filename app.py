@@ -4877,6 +4877,122 @@ Respond ONLY with valid JSON, no additional text."""
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/hedge-fund-iq/beat-miss-analysis', methods=['POST'])
+@requires_auth
+def analyze_beat_miss():
+    """Analyze whether company will beat or miss earnings based on KPI data, relevance, and actual projections."""
+    client = get_openai_client()
+    if not client:
+        return jsonify({'success': False, 'error': 'OpenAI not configured'}), 500
+    
+    try:
+        data = request.get_json()
+        ticker = data.get('ticker')
+        display_name = data.get('display_name')
+        kpi = data.get('kpi')
+        quarter = data.get('quarter')  # e.g., "Q1 2026"
+        projected_growth_pct = data.get('projected_growth_pct', 0)
+        relevance_percentage = data.get('relevance_percentage')  # 0-100 scale
+        accuracy_score = data.get('accuracy_score')  # 0-100
+        variance = data.get('variance')  # percentage variance
+        current_consumers = data.get('current_consumers', 0)
+        
+        if not ticker or not quarter:
+            return jsonify({'success': False, 'error': 'Ticker and quarter required'}), 400
+        
+        # Extract quarter info (e.g., "Q1 2026" -> "Q1", "2026")
+        quarter_parts = quarter.split()
+        quarter_label = quarter_parts[0] if quarter_parts else quarter
+        year = quarter_parts[1] if len(quarter_parts) > 1 else None
+        
+        # Build comprehensive prompt for AI to research and analyze
+        prompt = f"""You are a financial analyst specializing in earnings predictions. Analyze whether {display_name} ({ticker}) will BEAT or MISS their earnings expectations for {quarter}.
+
+CRITICAL TASK:
+1. Research what {display_name} ({ticker}) has publicly projected for {quarter} earnings (check SEC filings, earnings calls, guidance)
+2. Compare our KPI-based projection to their public guidance
+3. Weight the analysis based on KPI relevance and data accuracy
+
+OUR DATA:
+- KPI Being Measured: {kpi}
+- Our Projected Growth: {projected_growth_pct}%
+- Current Consumers: {current_consumers:,}
+- Quarter: {quarter}
+
+KPI RELEVANCE: {relevance_percentage if relevance_percentage is not None else 'Unknown'}%
+This measures how much investors care about this metric (0-100 scale). Higher relevance means this KPI has historically been a strong predictor of share price movement after earnings.
+
+DATA ACCURACY:
+- Accuracy Score: {accuracy_score if accuracy_score is not None else 'Unknown'}%
+- Variance: {variance if variance is not None else 'Unknown'}%
+
+ANALYSIS REQUIREMENTS:
+1. Research {ticker}'s public earnings guidance for {quarter} from:
+   - SEC filings (10-Q, 10-K, 8-K)
+   - Earnings call transcripts
+   - Company guidance statements
+   - Analyst consensus estimates
+
+2. Compare our projected growth ({projected_growth_pct}%) to their guidance/consensus
+
+3. Weight the prediction by:
+   - KPI Relevance ({relevance_percentage}%): Higher = more important to investors
+   - Data Accuracy ({accuracy_score}%): Higher = more reliable our projection
+   - Variance ({variance}%): Lower = more consistent our data
+
+4. Determine if they will BEAT, MISS, or if it's UNDECIDED
+
+Provide your analysis in JSON format:
+{{
+    "prediction": "BEAT" or "MISS" or "UNDECIDED",
+    "confidence": <number 0-100>,
+    "company_guidance": "<what the company has publicly projected, if found>",
+    "consensus_estimate": "<analyst consensus, if found>",
+    "our_projection": {projected_growth_pct},
+    "analysis": "<2-3 sentence explanation of your reasoning, including how relevance and accuracy affect the prediction>"
+}}
+
+Respond ONLY with valid JSON, no additional text."""
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a financial analyst. Research company earnings guidance and compare to KPI projections. Respond only with valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=800
+        )
+        
+        result_text = response.choices[0].message.content.strip()
+        
+        # Parse JSON response
+        import json
+        # Try to extract JSON from markdown code blocks if present
+        if '```json' in result_text:
+            result_text = result_text.split('```json')[1].split('```')[0].strip()
+        elif '```' in result_text:
+            result_text = result_text.split('```')[1].split('```')[0].strip()
+        
+        result = json.loads(result_text)
+        
+        return jsonify({
+            'success': True,
+            'prediction': result.get('prediction', 'UNDECIDED'),
+            'confidence': result.get('confidence', 50),
+            'company_guidance': result.get('company_guidance', 'Not found'),
+            'consensus_estimate': result.get('consensus_estimate', 'Not found'),
+            'our_projection': projected_growth_pct,
+            'analysis': result.get('analysis', 'Analysis unavailable')
+        })
+        
+    except Exception as e:
+        print(f"❌ Error in analyze_beat_miss: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/hedge-fund-iq/sec-actuals/<ticker>')
 @requires_auth
 def get_sec_actuals(ticker):

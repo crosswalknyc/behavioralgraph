@@ -13772,6 +13772,9 @@
                 projectedCard.querySelector('#projectedGrowthLabel').textContent = `🔮 ${latestQuarter} Projected Net Growth Rate`;
             }
             
+            // Analyze beat/miss and display indicator
+            analyzeBeatMiss(data, stats);
+            
             // Set default date range to current quarter
             if (currentQuarterData.length > 0) {
                 document.getElementById('trendsStartDate').value = currentQuarterData[0].Date;
@@ -13791,6 +13794,81 @@
             
             // Generate AI prediction
             generateEarningsPrediction(data);
+        }
+        
+        async function analyzeBeatMiss(data, stats) {
+            try {
+                const latest = data.data[data.data.length - 1];
+                const latestQuarter = stats.latest_quarter || (latest ? latest.Quarter : 'N/A');
+                const projectedGrowthPct = stats.projected_growth_pct || 0;
+                const relevancePercentage = data.relevance_percentage;
+                const accuracyScore = stats.accuracy_score;
+                const variance = stats.overall_variance || stats.quarter_variance;
+                
+                // Call beat/miss analysis endpoint
+                const response = await fetch('/api/hedge-fund-iq/beat-miss-analysis', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        ticker: data.ticker,
+                        display_name: data.display_name,
+                        kpi: data.kpi,
+                        quarter: latestQuarter,
+                        projected_growth_pct: projectedGrowthPct,
+                        relevance_percentage: relevancePercentage,
+                        accuracy_score: accuracyScore,
+                        variance: variance,
+                        current_consumers: latest ? latest['Total Consumers'] : 0
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success) {
+                        // Update projected growth card with beat/miss indicator
+                        const projectedCard = document.getElementById('projectedGrowthCard');
+                        const kpiElement = document.getElementById('projectedGrowthKPI');
+                        
+                        if (result.prediction === 'BEAT') {
+                            // Add thumbs up and "Beat" in green
+                            if (!projectedCard.querySelector('#beatMissIndicator')) {
+                                const indicator = document.createElement('div');
+                                indicator.id = 'beatMissIndicator';
+                                indicator.style.cssText = 'display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; color: #10b981; font-weight: 600; font-size: 1rem;';
+                                indicator.innerHTML = '👍 <span>Beat</span>';
+                                projectedCard.appendChild(indicator);
+                            } else {
+                                const indicator = projectedCard.querySelector('#beatMissIndicator');
+                                indicator.style.color = '#10b981';
+                                indicator.innerHTML = '👍 <span>Beat</span>';
+                            }
+                        } else if (result.prediction === 'MISS') {
+                            // Add thumbs down and "Miss" in red
+                            if (!projectedCard.querySelector('#beatMissIndicator')) {
+                                const indicator = document.createElement('div');
+                                indicator.id = 'beatMissIndicator';
+                                indicator.style.cssText = 'display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; color: #ef4444; font-weight: 600; font-size: 1rem;';
+                                indicator.innerHTML = '👎 <span>Miss</span>';
+                                projectedCard.appendChild(indicator);
+                            } else {
+                                const indicator = projectedCard.querySelector('#beatMissIndicator');
+                                indicator.style.color = '#ef4444';
+                                indicator.innerHTML = '👎 <span>Miss</span>';
+                            }
+                        } else {
+                            // UNDECIDED - don't show indicator or show neutral
+                            const indicator = projectedCard.querySelector('#beatMissIndicator');
+                            if (indicator) {
+                                indicator.remove();
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error analyzing beat/miss:', error);
+                // Silently fail - don't show indicator if analysis fails
+            }
         }
         
         function renderDailyChurnChart(dailyData) {
