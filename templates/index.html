@@ -9035,6 +9035,7 @@
                         <button class="tab-btn tool-tab has-tooltip" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-tooltip="Affinity: Cross-category affinities showing what else this audience engages with across brands and content." onclick="showTab('affinity')"><span class="tab-icon">🔗</span><span class="tab-label">AFFINITY</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-tooltip="Executive Summary: AI-powered strategic executive summary comparing this profile to competitors and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXECUTIVE SUMMARY</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-tooltip="Key Insight Builder: AI-powered SWOT analysis and key insights for the primary brand, comparing to competitors and general population." onclick="generateKeyInsightBuilderFromNav()"><span class="tab-icon">🎯</span><span class="tab-label">KEY INSIGHT BUILDER</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-tooltip="Ecosystem: Behavioral ecosystem analysis showing life moments, substitution patterns, cultural signals, emotional engagement, relevance shifts, and white-space opportunities." onclick="showTab('ecosystem')"><span class="tab-icon">🌐</span><span class="tab-label">ECOSYSTEM</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-tooltip="Sponsorship: Sponsorship valuation and partnership opportunity analysis for brand collaborations." onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-tooltip="Media: Media consumption patterns including TV, streaming, social media, and digital platform preferences." onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">MEDIA</span></button>
@@ -32808,6 +32809,84 @@
         // ============================================================================
         // KEY INSIGHT BUILDER - SWOT Analysis for Primary Brand
         // ============================================================================
+        
+        // Wrapper function for nav bar - works with single profile or comparison
+        async function generateKeyInsightBuilderFromNav() {
+            // Check if we have comparison data first
+            if (window.comparisonProfilesData && window.comparisonProfilesData.length > 0) {
+                // Use comparison mode
+                return generateKeyInsightBuilder();
+            }
+            
+            // Otherwise, use current single profile
+            if (!window.currentProfileData) {
+                alert('Please select a profile first to generate key insights.');
+                return;
+            }
+            
+            // Create a single-profile comparison structure
+            const primaryBrand = {
+                name: window.currentProfileData.name || 'Profile',
+                sampleSize: window.currentProfileData.sampleSize || 0,
+                projectedUS: window.currentProfileData.projectedUS || 0,
+                medianAge: calculateMedianAgeFromDistribution(window.currentProfileData.demographics?.age || {}),
+                demographics: window.currentProfileData.demographics || {},
+                demographicsProjection: window.currentProfileData.demographicsProjection || {},
+                behavioral: window.currentProfileData.behavioral || {},
+                color: '#4a8ac9' // Default color
+            };
+            
+            // Try to find Gen Pop profile
+            let genPopProfile = null;
+            if (window.dashboardProfiles && Array.isArray(window.dashboardProfiles)) {
+                genPopProfile = window.dashboardProfiles.find(p => {
+                    const name = (p.name || '').toUpperCase();
+                    const key = (p.s3_key || '').toUpperCase();
+                    return name.includes('GEN POP') || name.includes('GENPOP') || name.includes('GENERAL POPULATION') ||
+                           key.includes('GEN_POP') || key.includes('GENPOP');
+                });
+            }
+            
+            // If we found Gen Pop, load it
+            if (genPopProfile && genPopProfile.s3_key) {
+                try {
+                    const response = await fetch(`/api/get-csv-data/${encodeURIComponent(genPopProfile.s3_key)}`);
+                    if (response.ok) {
+                        const csvData = await response.text();
+                        const parsed = parseAllData(csvData);
+                        genPopProfile = {
+                            name: genPopProfile.name || 'General Population',
+                            sampleSize: parsed.sampleSize || 0,
+                            projectedUS: parsed.projectedUS || 0,
+                            medianAge: calculateMedianAgeFromDistribution(parsed.demographics?.age || {}),
+                            demographics: parsed.demographics || {},
+                            demographicsProjection: parsed.demographicsProjection || {},
+                            behavioral: parsed.behavioral || {},
+                            color: '#888888'
+                        };
+                    }
+                } catch (error) {
+                    console.error('Error loading Gen Pop profile:', error);
+                }
+            }
+            
+            // Create profiles array for the function
+            const profiles = [primaryBrand];
+            if (genPopProfile) {
+                profiles.push(genPopProfile);
+            }
+            
+            // Temporarily set comparisonProfilesData so the function works
+            const originalComparisonData = window.comparisonProfilesData;
+            window.comparisonProfilesData = profiles;
+            
+            try {
+                await generateKeyInsightBuilder();
+            } finally {
+                // Restore original comparison data
+                window.comparisonProfilesData = originalComparisonData;
+            }
+        }
         
         async function generateKeyInsightBuilder() {
             if (!window.comparisonProfilesData || window.comparisonProfilesData.length === 0) {
