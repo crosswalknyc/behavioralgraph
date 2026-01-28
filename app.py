@@ -4785,9 +4785,17 @@ def manage_ticker_metadata():
             except Exception as e:
                 return jsonify({'success': False, 'error': f'Error processing relevance percentage: {str(e)}'}), 400
         
-        save_ticker_metadata(metadata)
+        # Save metadata to S3
+        save_result = save_ticker_metadata(metadata)
+        if not save_result:
+            return jsonify({'success': False, 'error': 'Failed to save metadata to S3'}), 500
         
-        return jsonify({'success': True, 'message': 'Metadata updated', 'metadata': metadata[s3_key]})
+        return jsonify({
+            'success': True, 
+            'message': 'Metadata updated', 
+            'metadata': metadata[s3_key],
+            'relevance_percentage': metadata[s3_key].get('relevance_percentage')
+        })
 
 
 def load_ticker_metadata():
@@ -4804,7 +4812,7 @@ def load_ticker_metadata():
 def save_ticker_metadata(metadata):
     """Save ticker metadata to S3."""
     if not s3_client:
-        return
+        return False
     try:
         s3_client.put_object(
             Bucket=S3_BUCKET,
@@ -4812,8 +4820,13 @@ def save_ticker_metadata(metadata):
             Body=json.dumps(metadata, indent=2),
             ContentType='application/json'
         )
+        print(f"✅ Successfully saved ticker metadata to S3")
+        return True
     except Exception as e:
         print(f"❌ Error saving ticker metadata: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 @app.route('/api/hedge-fund-iq/predict-earnings', methods=['POST'])

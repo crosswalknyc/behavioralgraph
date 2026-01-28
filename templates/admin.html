@@ -5391,6 +5391,10 @@
                 
                 const data = await response.json();
                 if (data.success) {
+                    // Update the ticker object with saved relevance
+                    if (currentTickerInModal) {
+                        currentTickerInModal.relevance_percentage = data.relevance_percentage;
+                    }
                     showToast('✅ Ticker metadata saved!');
                     await loadTickers();
                     showTickerDetail(currentTickerInModal.ticker);
