@@ -11486,10 +11486,12 @@
                         <div id="livedataTab" class="ticker-tab-content" style="display: block;">
                             <!-- Summary Stats -->
                             <div style="margin-bottom: 0.75rem;">
-                                <h3 id="quarterYTDHeader" style="font-size: 1.25rem; color: var(--accent-cyan); font-weight: 600; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
-                                    <span>Quarter to Date (QTD) Cumulative</span>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
                                     <span class="live-indicator">🔴 LIVE</span>
-                                </h3>
+                                    <h3 id="quarterYTDHeader" style="font-size: 1.25rem; color: var(--accent-cyan); font-weight: 600; margin: 0;">
+                                        Quarter to Date (QTD) Cumulative
+                                    </h3>
+                                </div>
                             </div>
                             
                             <!-- Projected Growth Rate + Accuracy - Side by Side -->
@@ -13805,7 +13807,7 @@
             // Update Quarter QTD header with live indicator
             const quarterHeader = document.getElementById('quarterYTDHeader');
             if (quarterHeader) {
-                quarterHeader.innerHTML = `<span>${latestQuarter} Quarter to Date (QTD) Cumulative</span><span class="live-indicator">🔴 LIVE</span>`;
+                quarterHeader.textContent = `${latestQuarter} Quarter to Date (QTD) Cumulative`;
             }
             
             // Get current quarter data for charts/tables
