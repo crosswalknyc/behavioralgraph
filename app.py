@@ -4958,6 +4958,9 @@ def save_quick_selects():
     """Save quick selects configuration (admin only)."""
     try:
         data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
         profiles = data.get('profiles', {})
         tickers = data.get('tickers', {})
         
@@ -4967,7 +4970,12 @@ def save_quick_selects():
             'updated_at': datetime.now().isoformat()
         }
         
-        save_json_to_s3(QUICK_SELECTS_FILE, quick_selects)
+        # Check if S3 save was successful
+        success = save_json_to_s3(QUICK_SELECTS_FILE, quick_selects)
+        if not success:
+            error_msg = 'Failed to save to S3. Check server logs for details.'
+            print(f"❌ {error_msg}")
+            return jsonify({'success': False, 'error': error_msg}), 500
         
         return jsonify({'success': True})
     except Exception as e:

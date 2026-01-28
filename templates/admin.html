@@ -2288,6 +2288,11 @@
         // Save Quick Selects
         async function saveQuickSelects() {
             try {
+                console.log('Saving quick selects:', {
+                    profiles: Object.keys(quickSelectProfilesData).length,
+                    tickers: Object.keys(quickSelectTickersData).length
+                });
+                
                 const response = await fetch('/api/admin/quick-selects', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2298,19 +2303,22 @@
                     })
                 });
                 
+                const data = await response.json();
+                console.log('Save response:', data);
+                
                 if (!response.ok) {
-                    throw new Error('Failed to save quick selects');
+                    const errorMsg = data.error || `HTTP ${response.status}: ${response.statusText}`;
+                    throw new Error(errorMsg);
                 }
                 
-                const data = await response.json();
                 if (data.success) {
                     alert('✅ Quick selects saved successfully!');
                 } else {
-                    alert('❌ Failed to save quick selects: ' + (data.error || 'Unknown error'));
+                    throw new Error(data.error || 'Unknown error');
                 }
             } catch (error) {
                 console.error('Error saving quick selects:', error);
-                alert('❌ Error saving quick selects');
+                alert('❌ Error saving quick selects: ' + error.message);
             }
         }
         
