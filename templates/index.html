@@ -10952,6 +10952,11 @@
                     <button class="comp-tab" onclick="showCompTab('overlap')">🔄 Overlap Analysis</button>
                     <button class="comp-tab" onclick="showCompTab('benchmark')">📈 Benchmarking</button>
                     <button class="comp-tab" onclick="showCompTab('insights')">💡 Key Insights</button>
+                    <button class="comp-action-btn" onclick="generateExecutiveSummary()" title="Generate Executive Summary">📄 Executive Summary</button>
+                    <button class="comp-action-btn" onclick="generateKeyInsightBuilder()" title="Generate SWOT Analysis and Key Insights for Primary Brand">🎯 Key Insight Builder</button>
+                    <div class="comp-mode-toggle" id="displayModeToggle" onclick="toggleDisplayMode()" title="Click to toggle between percentages and US population numbers">
+                        <span id="displayModeLabel">US %</span>
+                    </div>
                     <select id="compJumpToSelect" class="comp-action-select" onchange="jumpToCompSection(this.value)" title="Jump to section">
                         <option value="">📍 Jump to...</option>
                         <option value="comp-summary">📊 Summary Data</option>
@@ -10962,11 +10967,6 @@
                         <option value="comp-behavioral">🎯 Behavioral</option>
                         <option value="comp-location">📍 Location</option>
                     </select>
-                    <button class="comp-action-btn" onclick="generateExecutiveSummary()" title="Generate Executive Summary">📄 Executive Summary</button>
-                    <button class="comp-action-btn" onclick="generateKeyInsightBuilder()" title="Generate SWOT Analysis and Key Insights for Primary Brand" style="background: linear-gradient(135deg, var(--accent-lime), var(--accent-cyan)); border: none; color: var(--bg-primary); font-weight: 600;">🎯 Key Insight Builder</button>
-                    <div class="comp-mode-toggle" id="displayModeToggle" onclick="toggleDisplayMode()" title="Click to toggle between percentages and US population numbers">
-                        <span id="displayModeLabel">US %</span>
-                    </div>
                 </div>
                 
                 <!-- Comparison Report View -->
