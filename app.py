@@ -5117,7 +5117,6 @@ Be specific, data-driven, strategic, and actionable. Reference specific items/br
         
         # Try to parse as JSON
         try:
-            import json
             # Try to extract JSON from markdown code blocks if present
             if '```json' in ai_response:
                 ai_response = ai_response.split('```json')[1].split('```')[0].strip()
