@@ -13313,8 +13313,16 @@
                 return;
             }
             
-            // Clear container while loading (no loading indicator)
-            container.innerHTML = '';
+            // Show loading indicator
+            container.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; gap: 1rem;">
+                    <div class="ticker-loading-spinner" style="width: 32px; height: 32px; border: 3px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    <div style="color: var(--text-secondary); font-size: 0.85rem;">Loading tickers...</div>
+                </div>
+                <style>
+                    @keyframes spin { to { transform: rotate(360deg); } }
+                </style>
+            `;
             
             try {
                 const response = await fetch('/api/hedge-fund-iq/list', { credentials: 'same-origin' });
