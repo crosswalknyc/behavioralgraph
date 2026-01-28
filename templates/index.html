@@ -32065,14 +32065,276 @@
             }
             
             const profiles = window.comparisonProfilesData;
-            const shared = findSharedBehaviors(profiles);
+            const primaryProfile = profiles[0];
+            const otherProfiles = profiles.slice(1);
+            
+            // Find Gen Pop profile
+            const genPopProfile = profiles.find(p => {
+                const name = (p.name || '').toUpperCase();
+                return name.includes('GEN POP') || name.includes('GENPOP') || name.includes('GENERAL POPULATION');
+            });
+            
+            const competitors = otherProfiles.filter(p => p !== genPopProfile);
+            
+            if (!primaryProfile) {
+                alert('No primary profile found.');
+                return;
+            }
+            
+            // Helper to collect all behavioral items
+            const collectItems = (profile) => {
+                const items = [];
+                if (profile.behavioral) {
+                    Object.values(profile.behavioral).forEach(arr => {
+                        if (Array.isArray(arr)) {
+                            arr.forEach(item => {
+                                if (item.index && item.index > 0) {
+                                    items.push({
+                                        name: item.name || item.value || 'Unknown',
+                                        index: item.index || 0,
+                                        pct: item.pct || 0,
+                                        projection: item.projection || 0,
+                                        category: (item.category || 'Other').split('/')[0]
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+                return items;
+            };
+            
+            // Get top categories for primary profile
+            const getTopCategories = (items, topN = 5) => {
+                const catStats = {};
+                items.forEach(item => {
+                    const cat = item.category || 'Other';
+                    if (!catStats[cat]) catStats[cat] = { items: [], totalIndex: 0, count: 0, totalPct: 0, totalProjection: 0 };
+                    catStats[cat].items.push(item);
+                    catStats[cat].totalIndex += item.index || 0;
+                    catStats[cat].totalPct += item.pct || 0;
+                    catStats[cat].totalProjection += item.projection || 0;
+                    catStats[cat].count++;
+                });
+                return Object.entries(catStats)
+                    .map(([cat, stats]) => ({
+                        category: cat,
+                        avgIndex: Math.round(stats.totalIndex / stats.count),
+                        avgPct: stats.totalPct / stats.count,
+                        totalProjection: Math.round(stats.totalProjection),
+                        count: stats.count,
+                        topItems: stats.items.sort((a, b) => b.index - a.index).slice(0, 3)
+                    }))
+                    .filter(c => c.count >= 2)
+                    .sort((a, b) => b.avgIndex - a.avgIndex)
+                    .slice(0, topN);
+            };
+            
+            const primaryItems = collectItems(primaryProfile);
+            const primaryTopCategories = getTopCategories(primaryItems);
+            const primaryTopInterests = primaryItems.sort((a, b) => b.index - a.index).slice(0, 10);
+            
+            // Build insights
+            const insights = [];
+            
+            // === DEMOGRAPHICS ANALYSIS ===
+            insights.push('<h3>👥 Demographics Analysis</h3>');
+            
+            // Age comparison
+            const primaryAge = primaryProfile.demographics?.age || {};
+            if (Object.keys(primaryAge).length > 0) {
+                const topAgeGroup = Object.entries(primaryAge).sort((a, b) => b[1] - a[1])[0];
+                if (topAgeGroup) {
+                    const primaryPct = topAgeGroup[1];
+                    const primaryProjection = primaryProfile.demographicsProjection?.age?.[topAgeGroup[0]] || 0;
+                    
+                    let ageInsight = `<strong>Age:</strong> ${topAgeGroup[0]} is the dominant age group at ${primaryPct.toFixed(1)}% (${formatNumber(primaryProjection)} projected US). `;
+                    
+                    // Compare to competitors
+                    const competitorComparisons = [];
+                    competitors.forEach(comp => {
+                        const compAge = comp.demographics?.age || {};
+                        const compPct = compAge[topAgeGroup[0]] || 0;
+                        const compProjection = comp.demographicsProjection?.age?.[topAgeGroup[0]] || 0;
+                        if (compPct > 0) {
+                            const diff = primaryPct - compPct;
+                            const diffProjection = primaryProjection - compProjection;
+                            if (Math.abs(diff) > 2) {
+                                competitorComparisons.push(`${comp.name}: ${compPct.toFixed(1)}% (${formatNumber(compProjection)}) - ${diff > 0 ? 'over' : 'under'}-indexes by ${Math.abs(diff).toFixed(1)}pp`);
+                            }
+                        }
+                    });
+                    
+                    // Compare to Gen Pop
+                    if (genPopProfile) {
+                        const genPopAge = genPopProfile.demographics?.age || {};
+                        const genPopPct = genPopAge[topAgeGroup[0]] || 0;
+                        const genPopProjection = genPopProfile.demographicsProjection?.age?.[topAgeGroup[0]] || 0;
+                        if (genPopPct > 0) {
+                            const genPopDiff = primaryPct - genPopPct;
+                            const genPopDiffProjection = primaryProjection - genPopProjection;
+                            ageInsight += `vs. Gen Pop (${genPopPct.toFixed(1)}%, ${formatNumber(genPopProjection)}): ${genPopDiff > 0 ? 'over' : 'under'}-indexes by ${Math.abs(genPopDiff).toFixed(1)}pp (${genPopDiffProjection > 0 ? '+' : ''}${formatNumber(genPopDiffProjection)} projected). `;
+                        }
+                    }
+                    
+                    if (competitorComparisons.length > 0) {
+                        ageInsight += `Competitors: ${competitorComparisons.join('; ')}.`;
+                    }
+                    
+                    insights.push(`<p>${ageInsight}</p>`);
+                }
+            }
+            
+            // Gender comparison
+            const primaryGender = primaryProfile.demographics?.gender || {};
+            if (Object.keys(primaryGender).length > 0) {
+                const topGender = Object.entries(primaryGender).sort((a, b) => b[1] - a[1])[0];
+                if (topGender) {
+                    const primaryPct = topGender[1];
+                    const primaryProjection = primaryProfile.demographicsProjection?.gender?.[topGender[0]] || 0;
+                    
+                    let genderInsight = `<strong>Gender:</strong> ${topGender[0]} at ${primaryPct.toFixed(1)}% (${formatNumber(primaryProjection)} projected US). `;
+                    
+                    // Compare to competitors
+                    const competitorComparisons = [];
+                    competitors.forEach(comp => {
+                        const compGender = comp.demographics?.gender || {};
+                        const compPct = compGender[topGender[0]] || 0;
+                        const compProjection = comp.demographicsProjection?.gender?.[topGender[0]] || 0;
+                        if (compPct > 0) {
+                            const diff = primaryPct - compPct;
+                            if (Math.abs(diff) > 3) {
+                                competitorComparisons.push(`${comp.name}: ${compPct.toFixed(1)}% (${formatNumber(compProjection)}) - ${diff > 0 ? 'over' : 'under'}-indexes by ${Math.abs(diff).toFixed(1)}pp`);
+                            }
+                        }
+                    });
+                    
+                    // Compare to Gen Pop
+                    if (genPopProfile) {
+                        const genPopGender = genPopProfile.demographics?.gender || {};
+                        const genPopPct = genPopGender[topGender[0]] || 0;
+                        const genPopProjection = genPopProfile.demographicsProjection?.gender?.[topGender[0]] || 0;
+                        if (genPopPct > 0) {
+                            const genPopDiff = primaryPct - genPopPct;
+                            const genPopDiffProjection = primaryProjection - genPopProjection;
+                            genderInsight += `vs. Gen Pop (${genPopPct.toFixed(1)}%, ${formatNumber(genPopProjection)}): ${genPopDiff > 0 ? 'over' : 'under'}-indexes by ${Math.abs(genPopDiff).toFixed(1)}pp (${genPopDiffProjection > 0 ? '+' : ''}${formatNumber(genPopDiffProjection)} projected). `;
+                        }
+                    }
+                    
+                    if (competitorComparisons.length > 0) {
+                        genderInsight += `Competitors: ${competitorComparisons.join('; ')}.`;
+                    }
+                    
+                    insights.push(`<p>${genderInsight}</p>`);
+                }
+            }
+            
+            // Income comparison
+            const primaryIncome = primaryProfile.demographics?.income || {};
+            if (Object.keys(primaryIncome).length > 0) {
+                const topIncome = Object.entries(primaryIncome).sort((a, b) => b[1] - a[1])[0];
+                if (topIncome) {
+                    const primaryPct = topIncome[1];
+                    const primaryProjection = primaryProfile.demographicsProjection?.income?.[topIncome[0]] || 0;
+                    
+                    let incomeInsight = `<strong>Income:</strong> ${topIncome[0]} at ${primaryPct.toFixed(1)}% (${formatNumber(primaryProjection)} projected US). `;
+                    
+                    if (genPopProfile) {
+                        const genPopIncome = genPopProfile.demographics?.income || {};
+                        const genPopPct = genPopIncome[topIncome[0]] || 0;
+                        const genPopProjection = genPopProfile.demographicsProjection?.income?.[topIncome[0]] || 0;
+                        if (genPopPct > 0) {
+                            const genPopDiff = primaryPct - genPopPct;
+                            const genPopDiffProjection = primaryProjection - genPopProjection;
+                            incomeInsight += `vs. Gen Pop (${genPopPct.toFixed(1)}%, ${formatNumber(genPopProjection)}): ${genPopDiff > 0 ? 'over' : 'under'}-indexes by ${Math.abs(genPopDiff).toFixed(1)}pp (${genPopDiffProjection > 0 ? '+' : ''}${formatNumber(genPopDiffProjection)} projected).`;
+                        }
+                    }
+                    
+                    insights.push(`<p>${incomeInsight}</p>`);
+                }
+            }
+            
+            // === TOP CATEGORIES ANALYSIS ===
+            insights.push('<h3>📊 Most Purchased Categories</h3>');
+            
+            primaryTopCategories.forEach(cat => {
+                let categoryInsight = `<strong>${cat.category}:</strong> Avg index ${cat.avgIndex} (${cat.avgPct.toFixed(1)}% avg, ${formatNumber(cat.totalProjection)} projected US). `;
+                
+                // Compare to competitors
+                const competitorComparisons = [];
+                competitors.forEach(comp => {
+                    const compItems = collectItems(comp);
+                    const compTopCategories = getTopCategories(compItems);
+                    const compMatch = compTopCategories.find(c => c.category === cat.category);
+                    if (compMatch) {
+                        const indexDiff = cat.avgIndex - compMatch.avgIndex;
+                        const pctDiff = cat.avgPct - compMatch.avgPct;
+                        if (Math.abs(indexDiff) > 10) {
+                            competitorComparisons.push(`${comp.name}: index ${compMatch.avgIndex} (${compMatch.avgPct.toFixed(1)}%) - ${indexDiff > 0 ? 'over' : 'under'}-indexes by ${Math.abs(indexDiff)} points`);
+                        }
+                    }
+                });
+                
+                // Compare to Gen Pop (using index)
+                if (genPopProfile) {
+                    const genPopItems = collectItems(genPopProfile);
+                    const genPopTopCategories = getTopCategories(genPopItems);
+                    const genPopMatch = genPopTopCategories.find(c => c.category === cat.category);
+                    if (genPopMatch) {
+                        const indexDiff = cat.avgIndex - genPopMatch.avgIndex;
+                        categoryInsight += `vs. Gen Pop (index ${genPopMatch.avgIndex}): ${indexDiff > 0 ? 'over' : 'under'}-indexes by ${Math.abs(indexDiff)} points. `;
+                    } else {
+                        categoryInsight += `vs. Gen Pop: significantly over-indexes (category not in Gen Pop top categories). `;
+                    }
+                }
+                
+                if (competitorComparisons.length > 0) {
+                    categoryInsight += `Competitors: ${competitorComparisons.join('; ')}.`;
+                }
+                
+                insights.push(`<p>${categoryInsight}</p>`);
+            });
+            
+            // === TOP INTERESTS ANALYSIS ===
+            insights.push('<h3>🎯 Top Interests & Behaviors</h3>');
+            
+            primaryTopInterests.slice(0, 8).forEach(item => {
+                let interestInsight = `<strong>${item.name}:</strong> Index ${item.index} (${item.pct.toFixed(1)}%, ${formatNumber(item.projection)} projected US). `;
+                
+                // Compare to competitors
+                const competitorComparisons = [];
+                competitors.forEach(comp => {
+                    const compItems = collectItems(comp);
+                    const compMatch = compItems.find(i => i.name.toLowerCase() === item.name.toLowerCase());
+                    if (compMatch) {
+                        const indexDiff = item.index - compMatch.index;
+                        const pctDiff = item.pct - compMatch.pct;
+                        if (Math.abs(indexDiff) > 15) {
+                            competitorComparisons.push(`${comp.name}: index ${compMatch.index} (${compMatch.pct.toFixed(1)}%) - ${indexDiff > 0 ? 'over' : 'under'}-indexes by ${Math.abs(indexDiff)} points`);
+                        }
+                    }
+                });
+                
+                // Compare to Gen Pop (index should be relative to gen pop)
+                if (item.index >= 150) {
+                    interestInsight += `Strong over-indexing vs. Gen Pop (index 100 baseline). `;
+                } else if (item.index < 80) {
+                    interestInsight += `Under-indexing vs. Gen Pop. `;
+                }
+                
+                if (competitorComparisons.length > 0) {
+                    interestInsight += `Competitors: ${competitorComparisons.join('; ')}.`;
+                }
+                
+                insights.push(`<p>${interestInsight}</p>`);
+            });
             
             // Build summary content
             let summaryHTML = `
                 <div class="summary-modal" onclick="if(event.target === this) closeSummaryModal()">
-                    <div class="summary-modal-content">
+                    <div class="summary-modal-content" style="max-width: 900px;">
                         <div class="summary-header">
-                            <h2>📄 Executive Summary</h2>
+                            <h2>📄 Executive Summary: ${primaryProfile.name}</h2>
                             <div style="display: flex; gap: 0.5rem;">
                                 <button class="btn btn-small" onclick="sendSummaryToDeck()" style="background: rgba(139, 92, 246, 0.3); border-color: #8b5cf6;">📊 Add to Deck</button>
                                 <button class="btn btn-small" onclick="copySummaryToClipboard()">📋 Copy</button>
@@ -32083,72 +32345,14 @@
                         
                         <div class="summary-section">
                             <h3>Overview</h3>
-                            <p>Comparison of ${profiles.length} audience profiles: ${profiles.map(p => p.name).join(', ')}</p>
+                            <p><strong>Primary Profile:</strong> ${primaryProfile.name}</p>
+                            <p><strong>Sample Size:</strong> ${formatNumber(primaryProfile.sampleSize || 0)} | <strong>Projected US:</strong> ${formatNumber(primaryProfile.projectedUS || 0)} | <strong>Median Age:</strong> ${primaryProfile.medianAge || 'N/A'}</p>
+                            ${competitors.length > 0 ? `<p><strong>Competitors:</strong> ${competitors.map(c => c.name).join(', ')}</p>` : ''}
+                            ${genPopProfile ? `<p><strong>Baseline:</strong> Gen Pop (General Population)</p>` : ''}
                             <p style="color: var(--text-secondary); font-size: 0.85rem;">Generated on ${new Date().toLocaleDateString()}</p>
                         </div>
                         
-                        <div class="summary-section">
-                            <h3>Key Metrics</h3>
-                            <table style="width: 100%; border-collapse: collapse;">
-                                <thead>
-                                    <tr style="border-bottom: 1px solid var(--border-color);">
-                                        <th style="text-align: left; padding: 0.5rem;">Profile</th>
-                                        <th style="text-align: right; padding: 0.5rem;">Sample Size</th>
-                                        <th style="text-align: right; padding: 0.5rem;">Avg Index</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${profiles.map(p => {
-                                        const items = [];
-                                        if (p.behavioral) Object.values(p.behavioral).forEach(arr => arr.forEach(i => items.push(i)));
-                                        const avgIndex = items.length ? Math.round(items.reduce((sum, i) => sum + (i.index || 0), 0) / items.length) : 0;
-                                        return `
-                                            <tr style="border-bottom: 1px solid var(--border-color);">
-                                                <td style="padding: 0.5rem;">${p.name}</td>
-                                                <td style="text-align: right; padding: 0.5rem;">${formatNumber(p.sampleSize || 0)}</td>
-                                                <td style="text-align: right; padding: 0.5rem; color: ${avgIndex >= 100 ? 'var(--accent-green)' : 'var(--accent-red)'};">${avgIndex}</td>
-                                            </tr>
-                                        `;
-                                    }).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                        
-                        ${profiles.length >= 2 ? `
-                        <div class="summary-section">
-                            <h3>Shared Characteristics</h3>
-                            <p>Top behaviors where all profiles over-index:</p>
-                            <ul class="summary-bullets">
-                                ${shared.slice(0, 8).map(b => `<li>${b.name} (avg index: ${b.avgIndex})</li>`).join('')}
-                                ${shared.length === 0 ? '<li>No shared over-indexing behaviors found</li>' : ''}
-                            </ul>
-                        </div>
-                        ` : ''}
-                        
-                        <div class="summary-section">
-                            <h3>Profile Highlights</h3>
-                            ${profiles.map(p => {
-                                const top = getTopBehaviors(p, 5);
-                                return `
-                                    <div style="margin-bottom: 1rem;">
-                                        <h4 style="color: ${p.color}; font-size: 0.95rem;">${p.name}</h4>
-                                        <ul class="summary-bullets">
-                                            ${top.map(b => `<li>${b.name} - Index: ${b.index}</li>`).join('')}
-                                        </ul>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                        
-                        <div class="summary-section" style="border-bottom: none;">
-                            <h3>Recommendations</h3>
-                            <ul class="summary-bullets">
-                                ${shared.length > 3 ? `<li>Strong overlap detected - consider unified cross-audience campaigns</li>` : ''}
-                                <li>Focus media spend on channels with highest behavioral indexes</li>
-                                <li>Use shared behaviors for broad reach, unique behaviors for targeted messaging</li>
-                                ${profiles.some(p => (p.sampleSize || 0) < 5000) ? `<li>Some profiles have smaller sample sizes - validate with additional data sources</li>` : ''}
-                            </ul>
-                        </div>
+                        ${insights.join('')}
                     </div>
                 </div>
             `;
