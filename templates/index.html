@@ -23372,6 +23372,13 @@
                             </select>
                             <input type="text" placeholder="Search..." oninput="searchInCard('${catId}', this.value)" style="flex: 2; min-width: 60px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                         </div>
+                        <div class="behavioral-header-row" style="display: flex; align-items: center; padding: 0.35rem 0; margin-bottom: 0.25rem; border-bottom: 1px solid var(--border-color); font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; gap: 0.5rem;">
+                            <span style="width: 22px; text-align: right; flex-shrink: 0;">#</span>
+                            <span style="flex: 1; min-width: 0;">Item</span>
+                            <span style="min-width: 45px; text-align: center; flex-shrink: 0;">Index</span>
+                            <span style="min-width: 55px; text-align: right; flex-shrink: 0;">Profile</span>
+                            <span style="min-width: 55px; text-align: right; flex-shrink: 0;">Gen Pop</span>
+                        </div>
                         <div class="behavioral-list" id="list-${catId}" data-cat="${cat}">
                             ${renderBehavioralItems(displayItems, maxPct)}
                         </div>
