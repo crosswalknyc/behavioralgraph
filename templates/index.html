@@ -9835,20 +9835,23 @@
                 <div class="ecosystem-container">
                     <!-- Ecosystem Overview -->
                     <div class="ecosystem-header">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
-                            <div style="flex: 1;">
-                                <h2 style="margin: 0; font-size: 1.5rem; color: var(--text-primary);">🌐 Ecosystem Analysis</h2>
-                                <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary); font-size: 0.9rem;">Behavioral ecosystem insights derived from profile data showing life moments, substitution patterns, cultural signals, and white-space opportunities.</p>
+                        <h2 style="margin: 0; font-size: 1.5rem; color: var(--text-primary);">🌐 Ecosystem Analysis</h2>
+                        <p style="margin: 0.5rem 0 1.5rem 0; color: var(--text-secondary); font-size: 0.9rem;">AI-powered strategic insights analyzing behavioral patterns, cultural momentum, and market opportunities.</p>
+                        
+                        <!-- AI Insights Container -->
+                        <div id="ecosystemAIInsights" style="margin-bottom: 2rem;">
+                            <div style="padding: 1.5rem; background: var(--bg-card); border-radius: 8px; border-left: 4px solid var(--accent-purple);">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                                    <span style="font-size: 1.5rem;">✨</span>
+                                    <h3 style="margin: 0; color: var(--accent-purple);">AI-Powered Strategic Insights</h3>
+                                </div>
+                                <div id="ecosystemAIContent" style="color: var(--text-secondary); line-height: 1.8;">
+                                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                                        <div style="margin-bottom: 1rem;">🤖 Analyzing behavioral data...</div>
+                                        <div style="font-size: 0.85rem;">Generating high-level strategic insights from underlying data</div>
+                                    </div>
+                                </div>
                             </div>
-                            <button class="btn btn-primary" onclick="enhanceEcosystemWithAI()" id="enhanceEcosystemBtn" style="display: flex; align-items: center; gap: 0.5rem; margin-left: 1rem; white-space: nowrap;">
-                                <span>🤖</span>
-                                <span>Enhance with AI</span>
-                            </button>
-                        </div>
-                        <div id="ecosystemAISummary" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-card); border-radius: 8px; border-left: 3px solid var(--accent-purple);">
-                            <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-purple);">✨ AI-Enhanced Summary</h4>
-                            <div id="ecosystemAISummaryContent" style="color: var(--text-secondary); line-height: 1.6;"></div>
-                            <div id="ecosystemAIRecommendations" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);"></div>
                         </div>
                     </div>
 
@@ -26727,80 +26730,141 @@
             document.getElementById('ecosystemRecommendations').innerHTML = recommendations.length > 0
                 ? recommendations.map(r => `<div class="insight-item">${r}</div>`).join('')
                 : '<p style="color: var(--text-secondary);">Generating recommendations...</p>';
+            
+            // Automatically call AI analysis
+            analyzeEcosystemWithAI(data, profileName);
         }
         
-        // AI Enhancement for Ecosystem Insights
-        async function enhanceEcosystemWithAI() {
-            if (!window.ecosystemInsightsData) {
-                alert('Please wait for ecosystem insights to load first.');
+        // Automatically analyze ecosystem with AI
+        async function analyzeEcosystemWithAI(data, profileName) {
+            const aiContainer = document.getElementById('ecosystemAIContent');
+            if (!aiContainer) return;
+            
+            // Get the current profile's S3 key or ID
+            const profileId = currentProfileData?.s3_key || currentProfileData?.job_id || currentProfileData?.id;
+            if (!profileId) {
+                console.warn('No profile ID available for AI analysis');
                 return;
             }
             
-            const btn = document.getElementById('enhanceEcosystemBtn');
-            const summaryDiv = document.getElementById('ecosystemAISummary');
-            const summaryContent = document.getElementById('ecosystemAISummaryContent');
-            const recommendationsDiv = document.getElementById('ecosystemAIRecommendations');
-            
-            // Show loading state
-            const originalText = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<span>⏳</span><span>Enhancing...</span>';
-            summaryDiv.style.display = 'block';
-            summaryContent.innerHTML = '<div style="color: var(--text-secondary);">🤖 AI is analyzing your ecosystem insights...</div>';
-            
             try {
-                const response = await fetch('/api/ecosystem/ai-enhance', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    credentials: 'same-origin',
-                    body: JSON.stringify(window.ecosystemInsightsData)
+                // Fetch CSV data
+                const csvResponse = await fetch(`/api/get-csv-data/${encodeURIComponent(profileId)}`, {
+                    credentials: 'same-origin'
                 });
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                if (!csvResponse.ok) {
+                    throw new Error(`Failed to fetch CSV: ${csvResponse.status}`);
                 }
                 
-                const data = await response.json();
+                const csvData = await csvResponse.json();
+                if (!csvData.success || !csvData.data) {
+                    throw new Error('No CSV data available');
+                }
                 
-                if (data.success && data.enhanced) {
-                    const enhanced = data.enhanced;
-                    
-                    // Display summary
-                    if (enhanced.summary) {
-                        summaryContent.innerHTML = `<p style="margin: 0; line-height: 1.6;">${enhanced.summary}</p>`;
-                    } else if (enhanced.raw_response) {
-                        summaryContent.innerHTML = `<p style="margin: 0; line-height: 1.6;">${enhanced.raw_response}</p>`;
-                    }
-                    
-                    // Display recommendations if available
-                    if (enhanced.keyRecommendations && enhanced.keyRecommendations.length > 0) {
-                        recommendationsDiv.innerHTML = `
-                            <h5 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">💡 Key Recommendations</h5>
-                            <ul style="margin: 0; padding-left: 1.5rem; color: var(--text-secondary); line-height: 1.8;">
-                                ${enhanced.keyRecommendations.map(rec => `<li>${rec}</li>`).join('')}
-                            </ul>
-                        `;
-                    } else {
-                        recommendationsDiv.innerHTML = '';
-                    }
-                    
-                    btn.innerHTML = '<span>✅</span><span>Enhanced</span>';
-                    setTimeout(() => {
-                        btn.disabled = false;
-                        btn.innerHTML = originalText;
-                    }, 2000);
+                // Call AI analysis endpoint
+                const aiResponse = await fetch('/api/ecosystem/ai-analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        profileName: profileName,
+                        s3Key: profileId,
+                        csvData: csvData.data
+                    })
+                });
+                
+                if (!aiResponse.ok) {
+                    const errorData = await aiResponse.json();
+                    throw new Error(errorData.error || `HTTP ${aiResponse.status}`);
+                }
+                
+                const aiData = await aiResponse.json();
+                if (aiData.success && aiData.insights) {
+                    displayAIInsights(aiData.insights, profileName);
                 } else {
-                    throw new Error(data.error || 'Failed to enhance insights');
+                    throw new Error('AI analysis failed');
                 }
             } catch (error) {
-                console.error('Error enhancing ecosystem insights:', error);
-                summaryContent.innerHTML = `<div style="color: var(--accent-red);">❌ Error: ${error.message}. Please try again later.</div>`;
-                btn.disabled = false;
-                btn.innerHTML = originalText;
+                console.error('Error in AI analysis:', error);
+                aiContainer.innerHTML = `
+                    <div style="color: var(--accent-red); padding: 1rem; background: rgba(249, 38, 114, 0.1); border-radius: 6px;">
+                        <strong>⚠️ AI Analysis Unavailable</strong><br>
+                        <span style="font-size: 0.85rem;">${error.message}. Showing standard insights below.</span>
+                    </div>
+                `;
             }
         }
+        
+        function displayAIInsights(insights, profileName) {
+            const aiContainer = document.getElementById('ecosystemAIContent');
+            if (!aiContainer) return;
+            
+            const html = `
+                ${insights.executiveSummary ? `
+                    <div style="margin-bottom: 1.5rem; padding: 1rem; background: rgba(174, 129, 255, 0.1); border-radius: 6px; border-left: 3px solid var(--accent-purple);">
+                        <h4 style="margin: 0 0 0.5rem 0; color: var(--accent-purple);">Executive Summary</h4>
+                        <p style="margin: 0; color: var(--text-primary); line-height: 1.8;">${insights.executiveSummary}</p>
+                    </div>
+                ` : ''}
+                
+                <div style="display: grid; gap: 1.5rem;">
+                    ${insights.question1_beforeAfter ? `
+                        <div class="ecosystem-insight-card" style="padding: 1.25rem; background: var(--bg-dark); border-radius: 8px; border: 1px solid var(--border-color);">
+                            <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-cyan); font-size: 1rem;">⏮️⏭️ Before & After Engagement</h4>
+                            <p style="margin: 0; color: var(--text-secondary); line-height: 1.8;">${insights.question1_beforeAfter}</p>
+                        </div>
+                    ` : ''}
+                    
+                    ${insights.question2_substitution ? `
+                        <div class="ecosystem-insight-card" style="padding: 1.25rem; background: var(--bg-dark); border-radius: 8px; border: 1px solid var(--border-color);">
+                            <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-orange); font-size: 1rem;">🔄 Cross-Category Substitution & Occasion Leakage</h4>
+                            <p style="margin: 0; color: var(--text-secondary); line-height: 1.8;">${insights.question2_substitution}</p>
+                        </div>
+                    ` : ''}
+                    
+                    ${insights.question3_culturalMomentum ? `
+                        <div class="ecosystem-insight-card" style="padding: 1.25rem; background: var(--bg-dark); border-radius: 8px; border: 1px solid var(--border-color);">
+                            <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-green); font-size: 1rem;">📈 Cultural Momentum Signals (Pre-Trend)</h4>
+                            <p style="margin: 0; color: var(--text-secondary); line-height: 1.8;">${insights.question3_culturalMomentum}</p>
+                        </div>
+                    ` : ''}
+                    
+                    ${insights.question4_attentionEmotion ? `
+                        <div class="ecosystem-insight-card" style="padding: 1.25rem; background: var(--bg-dark); border-radius: 8px; border: 1px solid var(--border-color);">
+                            <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-lime); font-size: 1rem;">💭 Attention + Emotion, Not Impressions</h4>
+                            <p style="margin: 0; color: var(--text-secondary); line-height: 1.8;">${insights.question4_attentionEmotion}</p>
+                        </div>
+                    ` : ''}
+                    
+                    ${insights.question5_relevanceLoss ? `
+                        <div class="ecosystem-insight-card" style="padding: 1.25rem; background: var(--bg-dark); border-radius: 8px; border: 1px solid var(--border-color);">
+                            <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-red); font-size: 1rem;">⚠️ Relevance Loss Signals</h4>
+                            <p style="margin: 0; color: var(--text-secondary); line-height: 1.8;">${insights.question5_relevanceLoss}</p>
+                        </div>
+                    ` : ''}
+                    
+                    ${insights.question6_whiteSpace ? `
+                        <div class="ecosystem-insight-card" style="padding: 1.25rem; background: var(--bg-dark); border-radius: 8px; border: 1px solid var(--border-color);">
+                            <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-blue); font-size: 1rem;">🚀 White-Space Occasions</h4>
+                            <p style="margin: 0; color: var(--text-secondary); line-height: 1.8;">${insights.question6_whiteSpace}</p>
+                        </div>
+                    ` : ''}
+                </div>
+                
+                ${insights.keyRecommendations && insights.keyRecommendations.length > 0 ? `
+                    <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(90, 154, 217, 0.1); border-radius: 6px; border-left: 3px solid var(--accent-blue);">
+                        <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-blue);">💡 Key Strategic Recommendations</h4>
+                        <ul style="margin: 0; padding-left: 1.5rem; color: var(--text-secondary); line-height: 1.8;">
+                            ${insights.keyRecommendations.map(rec => `<li style="margin-bottom: 0.5rem;">${rec}</li>`).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
+            `;
+            
+            aiContainer.innerHTML = html;
+        }
+        
         
         function renderAffinityList(items) {
             if (!items.length) return '<p style="color: var(--text-secondary); padding: 0.5rem;">No data available</p>';

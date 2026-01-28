@@ -4985,18 +4985,21 @@ def save_quick_selects():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/ecosystem/ai-enhance', methods=['POST'])
+@app.route('/api/ecosystem/ai-analyze', methods=['POST'])
 @requires_auth
-def enhance_ecosystem_insights():
-    """Enhance ecosystem insights using ChatGPT AI."""
+def analyze_ecosystem_with_ai():
+    """Analyze ecosystem using ChatGPT AI with raw CSV data - answers 6 key questions."""
     try:
         data = request.get_json()
         if not data:
             return jsonify({'success': False, 'error': 'No data provided'}), 400
         
         profile_name = data.get('profileName', 'PROFILE')
-        profile_category = data.get('profileCategory', 'OTHER')
-        insights_data = data.get('insights', {})
+        s3_key = data.get('s3Key') or data.get('profileId')
+        csv_data = data.get('csvData')  # Raw CSV data as array of records
+        
+        if not csv_data and not s3_key:
+            return jsonify({'success': False, 'error': 'No CSV data or S3 key provided'}), 400
         
         # Get OpenAI client
         client = get_openai_client()
@@ -5007,69 +5010,142 @@ def enhance_ecosystem_insights():
                 'fallback': True
             }), 503
         
-        # Build prompt for ChatGPT
-        prompt = f"""You are a marketing insights analyst. Analyze the following behavioral data for {profile_name} (category: {profile_category}) and provide smart, actionable insights.
+        # If we have s3_key but no csv_data, fetch it
+        if s3_key and not csv_data:
+            try:
+                response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+                csv_content = response['Body'].read().decode('utf-8')
+                df = pd.read_csv(io.StringIO(csv_content))
+                df = df.fillna('')
+                csv_data = df.to_dict('records')
+            except Exception as e:
+                print(f"⚠️ Could not fetch CSV from S3: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': f'Could not fetch CSV data: {str(e)}'
+                }), 500
+        
+        # Prepare data summary for AI (limit to avoid token limits)
+        # Extract key behavioral data
+        behavioral_data = []
+        demographic_data = {}
+        
+        for record in csv_data[:500]:  # Limit to first 500 rows
+            col = str(record.get('Column', '')).upper()
+            val = record.get('Value', '')
+            idx = record.get('Index', 0)
+            
+            if 'BEHAVIORAL' in col or 'INTEREST' in col:
+                if isinstance(val, (int, float)) and val > 0:
+                    behavioral_data.append({
+                        'item': str(record.get('Column', '')),
+                        'index': float(idx) if idx else 0,
+                        'category': str(record.get('Category', 'Other'))
+                    })
+            elif 'DEMOGRAPHIC' in col or 'AGE' in col or 'GENDER' in col or 'INCOME' in col:
+                demographic_data[col] = val
+        
+        # Sort by index and get top items
+        behavioral_data.sort(key=lambda x: x.get('index', 0), reverse=True)
+        top_items = behavioral_data[:100]  # Top 100 items
+        
+        # Build comprehensive prompt
+        prompt = f"""You are a world-class marketing insights analyst. Analyze the behavioral data for {profile_name} as if you had the full CSV file. Answer these 6 critical questions with high-level, strategic insights:
 
-ECOSYSTEM INSIGHTS DATA:
-- Before Engagement: {insights_data.get('beforeEngagement', [])}
-- After Engagement: {insights_data.get('afterEngagement', [])}
-- Competitive Behaviors: {insights_data.get('competitiveBehaviors', [])}
-- Category Exit Signals: {insights_data.get('categoryExitSignals', [])}
-- Replacements: {insights_data.get('replacements', [])}
-- Functional Shifts: {insights_data.get('functionalShifts', [])}
-- Temporal Shifts: {insights_data.get('temporalShifts', [])}
-- Social Context Changes: {insights_data.get('socialContextChanges', [])}
-- Emerging Patterns: {insights_data.get('emergingPatterns', [])}
+1. **What people are doing before and after {profile_name} enters their life**
+   - What behaviors, activities, or brands precede engagement with {profile_name}?
+   - What behaviors follow engagement? What does this reveal about the customer journey?
 
-Provide enhanced insights in the following format (JSON):
+2. **Cross-category substitution & "occasion leakage"**
+   - When do people leave the category entirely? What replaces it?
+   - What functional shifts are happening (e.g., fitness apps replacing beverage moments)?
+   - Identify early-warning signals, not lagging sales data.
+
+3. **Cultural momentum signals (pre-trend, not trend)**
+   - What behavioral shifts are happening BEFORE culture names them?
+   - Examples: nighttime consumption moving earlier, solo replacing social, "treat" reframed as mental health reward
+   - Identify pre-trend signals, not TikTok views or obvious trends.
+
+4. **Attention + emotion, not impressions**
+   - When are people actually mentally receptive to {profile_name}?
+   - What emotional state are they in at exposure?
+   - Does {profile_name} show up in comfort vs. celebration modes?
+
+5. **Who {profile_name} is losing relevance with — before sales show it**
+   - Which audiences still purchase but are emotionally disengaging?
+   - Where is "joy" being replaced with "habit"?
+   - Identify at-risk segments before sales data reflects it.
+
+6. **White-space occasions {profile_name} doesn't own yet**
+   - What new moments could {profile_name} own?
+   - Examples: productivity breaks, micro-celebrations, stress-relief rituals, solo rewards
+   - Not "new flavors" — new moments.
+
+BEHAVIORAL DATA (Top 100 items by index):
+{json.dumps(top_items[:100], indent=2)}
+
+DEMOGRAPHIC DATA:
+{json.dumps(demographic_data, indent=2)}
+
+Provide your analysis in JSON format:
 {{
-    "summary": "A 2-3 sentence executive summary of the key ecosystem insights",
-    "beforeEngagement": "Enhanced insight about what happens before engagement with {profile_name}",
-    "afterEngagement": "Enhanced insight about what happens after engagement",
-    "competitiveBehaviors": "Enhanced insight about competitive behaviors",
-    "categoryExitSignals": "Enhanced insight about category exit signals",
-    "replacements": "Enhanced insight about replacement categories",
-    "functionalShifts": "Enhanced insight about functional shifts",
-    "temporalShifts": "Enhanced insight about temporal patterns",
-    "socialContextChanges": "Enhanced insight about social context changes",
-    "emergingPatterns": "Enhanced insight about emerging patterns",
-    "keyRecommendations": ["Recommendation 1", "Recommendation 2", "Recommendation 3"]
+    "question1_beforeAfter": "Detailed insight about what happens before and after engagement",
+    "question2_substitution": "Detailed insight about cross-category substitution and occasion leakage",
+    "question3_culturalMomentum": "Detailed insight about pre-trend cultural momentum signals",
+    "question4_attentionEmotion": "Detailed insight about attention and emotional receptivity",
+    "question5_relevanceLoss": "Detailed insight about who is losing relevance and why",
+    "question6_whiteSpace": "Detailed insight about white-space occasions and opportunities",
+    "executiveSummary": "2-3 sentence high-level summary of the most critical insights",
+    "keyRecommendations": ["Strategic recommendation 1", "Strategic recommendation 2", "Strategic recommendation 3"]
 }}
 
-Be specific, data-driven, and actionable. Reference specific items/brands when relevant. Focus on marketing and business implications."""
+Be specific, data-driven, strategic, and actionable. Reference specific items/brands when relevant. Think like a CMO, not a data analyst."""
 
         # Call ChatGPT
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Using cost-effective model
+            model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are an expert marketing insights analyst specializing in consumer behavior and brand ecosystem analysis."},
+                {"role": "system", "content": "You are a world-class marketing strategist and consumer behavior expert. You analyze behavioral data to provide high-level strategic insights for C-suite executives."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            max_tokens=2000
+            max_tokens=3000
         )
         
         # Parse response
         ai_response = response.choices[0].message.content
         
-        # Try to parse as JSON, fallback to text
+        # Try to parse as JSON
         try:
             import json
-            enhanced_insights = json.loads(ai_response)
-        except:
-            # If not JSON, wrap in a structure
-            enhanced_insights = {
-                "summary": ai_response,
-                "raw_response": ai_response
+            # Try to extract JSON from markdown code blocks if present
+            if '```json' in ai_response:
+                ai_response = ai_response.split('```json')[1].split('```')[0].strip()
+            elif '```' in ai_response:
+                ai_response = ai_response.split('```')[1].split('```')[0].strip()
+            
+            insights = json.loads(ai_response)
+        except Exception as e:
+            print(f"⚠️ Could not parse AI response as JSON: {e}")
+            # Fallback: wrap in structure
+            insights = {
+                "executiveSummary": ai_response,
+                "question1_beforeAfter": ai_response,
+                "question2_substitution": "",
+                "question3_culturalMomentum": "",
+                "question4_attentionEmotion": "",
+                "question5_relevanceLoss": "",
+                "question6_whiteSpace": "",
+                "keyRecommendations": []
             }
         
         return jsonify({
             'success': True,
-            'enhanced': enhanced_insights
+            'insights': insights
         })
         
     except Exception as e:
-        print(f"❌ Error enhancing ecosystem insights: {e}")
+        print(f"❌ Error analyzing ecosystem with AI: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({
