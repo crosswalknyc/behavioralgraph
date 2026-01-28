@@ -805,6 +805,15 @@
             background: rgba(249, 38, 114, 0.1);
             border: 1px solid var(--accent-red);
         }
+        /* Progress Bar Animation */
+        @keyframes progressPulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
+        }
     </style>
 </head>
 <body>
@@ -5171,6 +5180,39 @@
         let currentTickerInModal = null;
         
         async function loadTickers() {
+            const container = document.getElementById('tickersList');
+            
+            // Show loading indicator with progress
+            container.innerHTML = `
+                <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                    <div style="font-size: 1.1rem; margin-bottom: 1rem; color: var(--accent-cyan); font-weight: 600;">Loading Tickers...</div>
+                    <div style="width: 100%; max-width: 400px; margin: 0 auto; height: 8px; background: var(--bg-input); border-radius: 4px; overflow: hidden; position: relative;">
+                        <div id="tickersLoadingProgress" style="height: 100%; background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan)); border-radius: 4px; width: 0%; transition: width 0.3s ease; animation: progressPulse 1.5s ease-in-out infinite;"></div>
+                    </div>
+                    <div id="tickersLoadingStatus" style="margin-top: 1rem; font-size: 0.9rem; color: var(--text-secondary);">Fetching ticker data...</div>
+                </div>
+            `;
+            
+            const progressBar = document.getElementById('tickersLoadingProgress');
+            const statusText = document.getElementById('tickersLoadingStatus');
+            let progress = 0;
+            
+            // Animate progress
+            const progressInterval = setInterval(() => {
+                progress += Math.random() * 10;
+                if (progress > 85) progress = 85; // Don't go to 100% until done
+                if (progressBar) progressBar.style.width = progress + '%';
+                if (statusText) {
+                    if (progress < 30) {
+                        statusText.textContent = 'Fetching ticker data...';
+                    } else if (progress < 60) {
+                        statusText.textContent = 'Loading ticker images and profiles...';
+                    } else {
+                        statusText.textContent = 'Finalizing ticker list...';
+                    }
+                }
+            }, 300);
+            
             try {
                 // Load all tickers
                 const tickersResponse = await fetch('/api/hedge-fund-iq/list');
@@ -5182,7 +5224,14 @@
                 
                 allTickersData = tickersData.tickers;
                 
+                // Update progress
+                if (progressBar) progressBar.style.width = '40%';
+                if (statusText) statusText.textContent = `Loading data for ${allTickersData.length} tickers...`;
+                
                 // Load additional data for each ticker (images, profile mappings)
+                const totalTickers = allTickersData.length;
+                let loadedCount = 0;
+                
                 for (const ticker of allTickersData) {
                     // Load image info
                     try {
@@ -5214,15 +5263,38 @@
                     }
                     
                     // Relevance percentage is already included in ticker data from the list endpoint
+                    
+                    // Update progress
+                    loadedCount++;
+                    const tickerProgress = 40 + (loadedCount / totalTickers * 45); // 40-85%
+                    if (progressBar) progressBar.style.width = tickerProgress + '%';
+                    if (statusText) {
+                        statusText.textContent = `Processing ticker ${loadedCount} of ${totalTickers}...`;
+                    }
                 }
+                
+                // Complete progress
+                clearInterval(progressInterval);
+                if (progressBar) {
+                    progressBar.style.width = '100%';
+                    progressBar.style.animation = 'none';
+                }
+                if (statusText) {
+                    statusText.textContent = 'Complete!';
+                }
+                
+                // Small delay to show completion
+                await new Promise(resolve => setTimeout(resolve, 200));
                 
                 renderTickers();
                 
             } catch (error) {
+                clearInterval(progressInterval);
                 console.error('Error loading tickers:', error);
                 document.getElementById('tickersList').innerHTML = `
                     <div style="text-align: center; padding: 2rem; color: var(--accent-red);">
-                        Error loading tickers: ${error.message}
+                        <div style="font-size: 1.1rem; margin-bottom: 0.5rem; font-weight: 600;">Error loading tickers</div>
+                        <div style="font-size: 0.9rem;">${error.message}</div>
                     </div>
                 `;
             }
