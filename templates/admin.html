@@ -2106,9 +2106,23 @@
                 
                 const data = await response.json();
                 const profiles = data.jobs || [];
-                quickSelectProfiles = profiles.filter(p => p.status === 'cached' || p.status === 'completed');
                 
-                console.log(`Loaded ${quickSelectProfiles.length} profiles for quick select`);
+                console.log('API returned profiles:', profiles.length);
+                console.log('Sample profile:', profiles[0]);
+                
+                // Filter profiles - include all statuses, but prioritize cached/completed
+                quickSelectProfiles = profiles.filter(p => {
+                    // Include if status is cached or completed, or if status is undefined/null (legacy data)
+                    return !p.status || p.status === 'cached' || p.status === 'completed' || p.status === 'processing';
+                });
+                
+                // If no profiles match the filter, try including all profiles
+                if (quickSelectProfiles.length === 0 && profiles.length > 0) {
+                    console.warn('No profiles matched status filter, including all profiles');
+                    quickSelectProfiles = profiles;
+                }
+                
+                console.log(`Loaded ${quickSelectProfiles.length} profiles for quick select (from ${profiles.length} total)`);
                 
                 // Load saved selections
                 await loadQuickSelects();
@@ -2131,7 +2145,11 @@
             });
             
             if (filtered.length === 0) {
-                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); text-align: center;">No profiles found</div>';
+                if (quickSelectProfiles.length === 0) {
+                    container.innerHTML = '<div style="padding: 1rem; color: var(--accent-red); text-align: center;">No profiles available. Check that profiles exist and have been processed.</div>';
+                } else {
+                    container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); text-align: center;">No profiles match your search. Try a different search term.</div>';
+                }
                 return;
             }
             
