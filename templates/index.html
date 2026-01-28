@@ -6796,6 +6796,7 @@
         /* Comparison Analysis Tabs */
         .comp-analysis-tabs {
             display: flex;
+            align-items: center;
             gap: 0.25rem;
             padding: 0.75rem 1rem;
             background: var(--bg-card);
@@ -6804,6 +6805,8 @@
             top: 0;
             z-index: 99;
             margin-bottom: 1rem;
+            flex-wrap: nowrap;
+            overflow-x: auto;
         }
 
         .comp-tab {
@@ -6815,6 +6818,60 @@
             font-size: 0.8rem;
             border-radius: 4px;
             transition: all 0.2s;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        
+        /* Make all action buttons match comp-tab size */
+        .comp-action-btn, .comp-action-select {
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+            border-radius: 4px;
+            height: auto;
+            line-height: 1.2;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        
+        .comp-action-select {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+        
+        .comp-action-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .comp-action-btn:hover {
+            background: var(--bg-input);
+            border-color: var(--accent-cyan);
+        }
+        
+        .comp-mode-toggle {
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+            border-radius: 4px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            cursor: pointer;
+            white-space: nowrap;
+            flex-shrink: 0;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .comp-mode-toggle:hover {
+            background: var(--bg-input);
+            border-color: var(--accent-cyan);
         }
 
         .comp-tab:hover {
@@ -10885,29 +10942,25 @@
             <!-- Comparison Tab -->
             <div id="tab-comparison" class="tab-content">
                 <!-- Comparison Analysis Tabs with Action Buttons -->
-                <div class="comp-analysis-tabs" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                    <div style="display: flex; gap: 0.5rem; flex: 1;">
-                        <button class="comp-tab active" onclick="showCompTab('tables')">📊 Side-by-Side</button>
-                        <button class="comp-tab" onclick="showCompTab('overlap')">🔄 Overlap Analysis</button>
-                        <button class="comp-tab" onclick="showCompTab('benchmark')">📈 Benchmarking</button>
-                        <button class="comp-tab" onclick="showCompTab('insights')">💡 Key Insights</button>
-                    </div>
-                    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                        <select id="compJumpToSelect" onchange="jumpToCompSection(this.value)" style="padding: 0.5rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.8rem; cursor: pointer;">
-                            <option value="">📍 Jump to...</option>
-                            <option value="comp-summary">📊 Summary Data</option>
-                            <option value="comp-gender">👫 Gender</option>
-                            <option value="comp-age">📅 Age</option>
-                            <option value="comp-ethnicity">🌍 Ethnicity</option>
-                            <option value="comp-income">💰 Income</option>
-                            <option value="comp-behavioral">🎯 Behavioral</option>
-                            <option value="comp-location">📍 Location</option>
-                        </select>
-                        <button class="btn btn-small" onclick="generateExecutiveSummary()" title="Generate Executive Summary">📄 Executive Summary</button>
-                        <button class="btn btn-small" onclick="generateKeyInsightBuilder()" title="Generate SWOT Analysis and Key Insights for Primary Brand" style="background: linear-gradient(135deg, var(--accent-lime), var(--accent-cyan)); border: none; color: var(--bg-primary); font-weight: 600;">🎯 Key Insight Builder</button>
-                        <div class="comp-mode-toggle" id="displayModeToggle" onclick="toggleDisplayMode()" title="Click to toggle between percentages and US population numbers">
-                            <span id="displayModeLabel">US %</span>
-                        </div>
+                <div class="comp-analysis-tabs">
+                    <button class="comp-tab active" onclick="showCompTab('tables')">📊 Side-by-Side</button>
+                    <button class="comp-tab" onclick="showCompTab('overlap')">🔄 Overlap Analysis</button>
+                    <button class="comp-tab" onclick="showCompTab('benchmark')">📈 Benchmarking</button>
+                    <button class="comp-tab" onclick="showCompTab('insights')">💡 Key Insights</button>
+                    <select id="compJumpToSelect" class="comp-action-select" onchange="jumpToCompSection(this.value)" title="Jump to section">
+                        <option value="">📍 Jump to...</option>
+                        <option value="comp-summary">📊 Summary Data</option>
+                        <option value="comp-gender">👫 Gender</option>
+                        <option value="comp-age">📅 Age</option>
+                        <option value="comp-ethnicity">🌍 Ethnicity</option>
+                        <option value="comp-income">💰 Income</option>
+                        <option value="comp-behavioral">🎯 Behavioral</option>
+                        <option value="comp-location">📍 Location</option>
+                    </select>
+                    <button class="comp-action-btn" onclick="generateExecutiveSummary()" title="Generate Executive Summary">📄 Executive Summary</button>
+                    <button class="comp-action-btn" onclick="generateKeyInsightBuilder()" title="Generate SWOT Analysis and Key Insights for Primary Brand" style="background: linear-gradient(135deg, var(--accent-lime), var(--accent-cyan)); border: none; color: var(--bg-primary); font-weight: 600;">🎯 Key Insight Builder</button>
+                    <div class="comp-mode-toggle" id="displayModeToggle" onclick="toggleDisplayMode()" title="Click to toggle between percentages and US population numbers">
+                        <span id="displayModeLabel">US %</span>
                     </div>
                 </div>
                 
