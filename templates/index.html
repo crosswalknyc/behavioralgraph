@@ -4168,6 +4168,12 @@
             border-radius: 12px;
             padding: 1.25rem;
         }
+        /* Tighter spacing for date range selectors */
+        .insight-card-v2:has(#dateRangeCollapsed),
+        .insight-card-v2:has(#dailyDateRangeCollapsed),
+        .insight-card-v2:has(#historicDateRangeCollapsed) {
+            padding: 0.5rem 1rem;
+        }
         .insight-card-v2.full-width {
             grid-column: span 2;
         }
@@ -11544,9 +11550,9 @@
                         <!-- Trends Tab -->
                         <div id="trendsTab" class="ticker-tab-content" style="display: none;">
                             <!-- Date Range Selector (Collapsible) -->
-                            <div class="insight-card-v2" style="margin-bottom: 1.5rem;">
+                            <div class="insight-card-v2" style="margin-bottom: 1rem; padding: 0.5rem 1rem;">
                                 <!-- Collapsed View (Default) -->
-                                <div id="dateRangeCollapsed" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleDateRangeExpanded()">
+                                <div id="dateRangeCollapsed" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 0.25rem 0;" onclick="toggleDateRangeExpanded()">
                                     <div style="display: flex; align-items: center; gap: 0.75rem;">
                                         <span style="color: var(--text-primary); font-weight: 600;">📅 DATE RANGE:</span>
                                         <span id="dateRangeDisplay" style="color: var(--accent-cyan); font-weight: 600;">Loading...</span>
@@ -11555,9 +11561,9 @@
                                 </div>
                                 
                                 <!-- Expanded View (Hidden by default) -->
-                                <div id="dateRangeExpanded" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                                <div id="dateRangeExpanded" style="display: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
                                     <!-- Mode Toggle -->
-                                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center;">
+                                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; align-items: center;">
                                         <button id="trendsDateModeBtn" class="dash-action-btn" onclick="toggleTrendsDateMode('date')" style="background: var(--accent-cyan); color: var(--bg-dark);">📅 Calendar Dates</button>
                                         <button id="trendsQuarterModeBtn" class="dash-action-btn" onclick="toggleTrendsDateMode('quarter')" style="background: var(--bg-input); color: var(--text-primary);">📊 Quarters</button>
                                     </div>
@@ -11609,9 +11615,9 @@
                         <!-- Daily Metrics Tab -->
                         <div id="dailyTab" class="ticker-tab-content" style="display: none;">
                             <!-- Date Range Selector (Collapsible) -->
-                            <div class="insight-card-v2" style="margin-bottom: 1.5rem;">
+                            <div class="insight-card-v2" style="margin-bottom: 1rem; padding: 0.5rem 1rem;">
                                 <!-- Collapsed View (Default) -->
-                                <div id="dailyDateRangeCollapsed" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleDailyDateRangeExpanded()">
+                                <div id="dailyDateRangeCollapsed" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 0.25rem 0;" onclick="toggleDailyDateRangeExpanded()">
                                     <div style="display: flex; align-items: center; gap: 0.75rem;">
                                         <span style="color: var(--text-primary); font-weight: 600;">📅 DATE RANGE:</span>
                                         <span id="dailyDateRangeDisplay" style="color: var(--accent-cyan); font-weight: 600;">All dates</span>
@@ -11620,9 +11626,9 @@
                                 </div>
                                 
                                 <!-- Expanded View (Hidden by default) -->
-                                <div id="dailyDateRangeExpanded" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                                <div id="dailyDateRangeExpanded" style="display: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
                                     <!-- Mode Toggle -->
-                                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center;">
+                                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; align-items: center;">
                                         <button id="dailyDateModeBtn" class="dash-action-btn" onclick="toggleDailyDateMode('date')" style="background: var(--accent-cyan); color: var(--bg-dark);">📅 Calendar Dates</button>
                                         <button id="dailyQuarterModeBtn" class="dash-action-btn" onclick="toggleDailyDateMode('quarter')" style="background: var(--bg-input); color: var(--text-primary);">📊 Quarters</button>
                                     </div>
@@ -11686,9 +11692,9 @@
                         <!-- Historic Performance Tab -->
                         <div id="historicTab" class="ticker-tab-content" style="display: none;">
                             <!-- Date Range Selector (Collapsible) -->
-                            <div class="insight-card-v2" style="margin-bottom: 1.5rem;">
+                            <div class="insight-card-v2" style="margin-bottom: 1rem; padding: 0.5rem 1rem;">
                                 <!-- Collapsed View (Default) -->
-                                <div id="historicDateRangeCollapsed" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleHistoricDateRangeExpanded()">
+                                <div id="historicDateRangeCollapsed" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 0.25rem 0;" onclick="toggleHistoricDateRangeExpanded()">
                                     <div style="display: flex; align-items: center; gap: 0.75rem;">
                                         <span style="color: var(--text-primary); font-weight: 600;">📅 DATE RANGE:</span>
                                         <span id="historicDateRangeDisplay" style="color: var(--accent-cyan); font-weight: 600;">All quarters</span>
@@ -11697,9 +11703,9 @@
                                 </div>
                                 
                                 <!-- Expanded View (Hidden by default) -->
-                                <div id="historicDateRangeExpanded" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                                <div id="historicDateRangeExpanded" style="display: none; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
                                     <!-- Mode Toggle -->
-                                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center;">
+                                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; align-items: center;">
                                         <button id="historicDateModeBtn" class="dash-action-btn" onclick="toggleHistoricDateMode('date')" style="background: var(--accent-cyan); color: var(--bg-dark);">📅 Calendar Dates</button>
                                         <button id="historicQuarterModeBtn" class="dash-action-btn" onclick="toggleHistoricDateMode('quarter')" style="background: var(--bg-input); color: var(--text-primary);">📊 Quarters</button>
                                     </div>
@@ -13723,7 +13729,7 @@
         function renderTickerDemographicsTab(parsed, csvData) {
             const container = document.getElementById('tickerProfileTabContent');
             
-            // Create the demographics structure that renderDemographics expects
+            // Create the demographics structure
             container.innerHTML = `
                 <div id="tab-demographics" class="tab-content" style="display: block;">
                     <div class="demo-main">
@@ -13733,45 +13739,132 @@
                 </div>
             `;
             
-            // Now call renderDemographics with the parsed data
-            if (window.renderDemographics) {
-                window.renderDemographics(parsed);
-            } else {
-                container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Demographics rendering not available</p>';
+            // Render demographics using the existing renderCharts and renderDemoInsights functions
+            try {
+                if (typeof renderCharts === 'function' && typeof renderDemoInsights === 'function') {
+                    // Temporarily store the original container references
+                    const originalDemographicsContent = document.getElementById('demographicsContent');
+                    const originalDemoInsightsRow = document.getElementById('demoInsightsRow');
+                    
+                    // Render charts and insights
+                    renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
+                    renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop);
+                } else {
+                    container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Demographics rendering functions not available</p>';
+                }
+            } catch (error) {
+                console.error('Error rendering demographics:', error);
+                container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Error rendering demographics: ' + error.message + '</p>';
             }
         }
         
         function renderTickerBehavioralTab(parsed, csvData) {
             const container = document.getElementById('tickerProfileTabContent');
             
-            // Create the behavioral structure that renderBehavioral expects
+            // Create the behavioral structure
             container.innerHTML = `
                 <div id="tab-behavioral" class="tab-content" style="display: block;">
                     <div id="behavioralContent"></div>
                 </div>
             `;
             
-            if (window.renderBehavioral) {
-                window.renderBehavioral(parsed);
-            } else {
-                container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Behavioral rendering not available</p>';
+            // Render behavioral using the existing renderBehavioralCards function
+            try {
+                if (typeof renderBehavioralCards === 'function') {
+                    // Store reference to behavioralContent
+                    const behavioralContent = document.getElementById('behavioralContent');
+                    
+                    // Temporarily redirect behavioralCards container to our ticker profile container
+                    const originalBehavioralContainer = document.getElementById('behavioralCards');
+                    if (behavioralContent) {
+                        // Create a temporary container structure that renderBehavioralCards expects
+                        behavioralContent.innerHTML = '<div id="behavioralCards"></div>';
+                        renderBehavioralCards(parsed.behavioral);
+                        // Move the rendered content to our container
+                        const renderedContent = document.getElementById('behavioralCards');
+                        if (renderedContent && renderedContent.parentElement !== behavioralContent) {
+                            behavioralContent.innerHTML = renderedContent.innerHTML;
+                        }
+                    }
+                } else {
+                    container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Behavioral rendering function not available</p>';
+                }
+            } catch (error) {
+                console.error('Error rendering behavioral:', error);
+                container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Error rendering behavioral: ' + error.message + '</p>';
             }
         }
         
         function renderTickerLocationTab(parsed, csvData) {
             const container = document.getElementById('tickerProfileTabContent');
             
-            // Create the location structure that renderLocation expects
+            // Create the location structure
             container.innerHTML = `
                 <div id="tab-location" class="tab-content" style="display: block;">
                     <div id="locationContent"></div>
                 </div>
             `;
             
-            if (window.renderLocation) {
-                window.renderLocation(parsed);
-            } else {
-                container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Location rendering not available</p>';
+            // Render location using a simplified version
+            try {
+                const locationContent = document.getElementById('locationContent');
+                if (!locationContent) {
+                    container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Location container not found</p>';
+                    return;
+                }
+                
+                if (!parsed.locations || parsed.locations.length === 0) {
+                    locationContent.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No location data available</p>';
+                    return;
+                }
+                
+                // Sort locations by index (highest first)
+                const sortedLocations = [...parsed.locations].sort((a, b) => (b.index || 0) - (a.index || 0));
+                
+                // Split into over-indexing and under-indexing
+                const overIndexing = sortedLocations.filter(loc => (loc.index || 0) >= 100);
+                const underIndexing = sortedLocations.filter(loc => (loc.index || 0) < 100);
+                
+                let html = '<div style="margin-bottom: 2rem;">';
+                html += '<h3 style="color: var(--accent-cyan); margin-bottom: 1rem;">📍 Top DMAs (Over-Indexing)</h3>';
+                html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">';
+                
+                overIndexing.slice(0, 20).forEach((loc, i) => {
+                    html += `
+                        <div style="background: var(--bg-input); padding: 0.75rem; border-radius: 6px; border-left: 3px solid #10b981;">
+                            <div style="font-weight: 600; color: var(--text-primary);">${i + 1}. ${loc.name}</div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                ${(loc.pct || 0).toFixed(2)}% | Index: <span style="color: #10b981; font-weight: 600;">${formatIndex(loc.index || 0)}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div></div>';
+                
+                if (underIndexing.length > 0) {
+                    html += '<div>';
+                    html += '<h3 style="color: var(--accent-cyan); margin-bottom: 1rem;">📍 Under-Indexing DMAs</h3>';
+                    html += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.75rem;">';
+                    
+                    underIndexing.slice(0, 20).forEach((loc, i) => {
+                        html += `
+                            <div style="background: var(--bg-input); padding: 0.75rem; border-radius: 6px; border-left: 3px solid #ef4444;">
+                                <div style="font-weight: 600; color: var(--text-primary);">${i + 1}. ${loc.name}</div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                    ${(loc.pct || 0).toFixed(2)}% | Index: <span style="color: #ef4444; font-weight: 600;">${formatIndex(loc.index || 0)}</span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div></div>';
+                }
+                
+                locationContent.innerHTML = html;
+            } catch (error) {
+                console.error('Error rendering location:', error);
+                container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Error rendering location: ' + error.message + '</p>';
             }
         }
         
