@@ -4941,21 +4941,31 @@ def analyze_beat_miss():
         year = quarter_parts[1] if len(quarter_parts) > 1 else None
         
         # Build comprehensive prompt for AI to research and analyze
+        relevance_pct = relevance_percentage if relevance_percentage is not None else 0
+        stock_impact_note = ""
+        if relevance_pct >= 90:
+            stock_impact_note = f"CRITICAL: This KPI has {relevance_pct}% Stock Impact, meaning it represents approximately {relevance_pct}% of the stock price movement. This is a force-ranked metric based on historical significance of the KPI to the company's share price behavior."
+        elif relevance_pct >= 50:
+            stock_impact_note = f"IMPORTANT: This KPI has {relevance_pct}% Stock Impact, meaning it represents approximately {relevance_pct}% of the stock price movement."
+        else:
+            stock_impact_note = f"This KPI has {relevance_pct}% Stock Impact, meaning it represents approximately {relevance_pct}% of the stock price movement."
+        
         prompt = f"""You are a financial analyst specializing in earnings predictions. Analyze whether {display_name} ({ticker}) will BEAT or MISS their earnings expectations for {quarter}.
 
-CRITICAL TASK:
-1. Research what {display_name} ({ticker}) has publicly projected for {quarter} earnings (check SEC filings, earnings calls, guidance)
-2. Compare our KPI-based projection to their public guidance
-3. Weight the analysis based on KPI relevance and data accuracy
+CRITICAL DISTINCTION - READ CAREFULLY:
+Our projected growth of {projected_growth_pct}% is for ONE SPECIFIC KPI: "{kpi}"
+This is NOT the overall company revenue/net growth rate. It is the growth rate for this specific business metric.
+
+The company's guidance and analyst consensus estimates are typically for OVERALL company revenue/net growth, which may include multiple business segments and KPIs.
+
+{stock_impact_note}
 
 OUR DATA:
 - KPI Being Measured: {kpi}
-- Our Projected Growth: {projected_growth_pct}%
+- Our Projected Growth for THIS KPI: {projected_growth_pct}%
 - Current Consumers: {current_consumers:,}
 - Quarter: {quarter}
-
-KPI RELEVANCE: {relevance_percentage if relevance_percentage is not None else 'Unknown'}%
-This measures how much investors care about this metric (0-100 scale). Higher relevance means this KPI has historically been a strong predictor of share price movement after earnings.
+- Stock Impact (Relevance): {relevance_pct}%
 
 DATA ACCURACY:
 - Accuracy Score: {accuracy_score if accuracy_score is not None else 'Unknown'}%
@@ -4967,24 +4977,42 @@ ANALYSIS REQUIREMENTS:
    - Earnings call transcripts
    - Company guidance statements
    - Analyst consensus estimates
+   
+   IMPORTANT: Determine if their guidance is for:
+   - Overall company revenue/net growth (most common)
+   - This specific KPI ({kpi})
+   - A combination of metrics
 
-2. Compare our projected growth ({projected_growth_pct}%) to their guidance/consensus
+2. CRITICAL COMPARISON LOGIC:
+   - If company guidance is for overall company growth: Our {projected_growth_pct}% is for ONE component. Consider:
+     * Stock Impact ({relevance_pct}%): How much does this KPI drive stock price?
+     * If Stock Impact is high (80-100%): This KPI may be a strong proxy for overall performance
+     * If Stock Impact is lower: This is just one component; overall company may perform differently
+     * The company's overall growth may include other segments that could offset or amplify this KPI's performance
+   
+   - If company guidance is for this specific KPI: Direct comparison is valid
+   
+   - Always acknowledge in your analysis that you're comparing a single KPI to potentially overall company guidance
 
 3. Weight the prediction by:
-   - KPI Relevance ({relevance_percentage}%): Higher = more important to investors
+   - Stock Impact ({relevance_pct}%): Higher = this KPI is more predictive of stock movement
    - Data Accuracy ({accuracy_score}%): Higher = more reliable our projection
    - Variance ({variance}%): Lower = more consistent our data
+   - Whether guidance is for overall company vs. specific KPI
 
 4. Determine if they will BEAT, MISS, or if it's UNDECIDED
+   - Be more conservative if comparing a single KPI to overall company guidance
+   - Be more confident if Stock Impact is very high (90-100%) and guidance is for overall company
+   - Consider that a single KPI underperforming doesn't necessarily mean overall company will miss
 
 Provide your analysis in JSON format:
 {{
     "prediction": "BEAT" or "MISS" or "UNDECIDED",
     "confidence": <number 0-100>,
-    "company_guidance": "<what the company has publicly projected, if found>",
-    "consensus_estimate": "<analyst consensus, if found>",
+    "company_guidance": "<what the company has publicly projected, if found. Specify if it's for overall company or this specific KPI>",
+    "consensus_estimate": "<analyst consensus, if found. Specify if it's for overall company or this specific KPI>",
     "our_projection": {projected_growth_pct},
-    "analysis": "<2-3 sentence explanation of your reasoning, including how relevance and accuracy affect the prediction>"
+    "analysis": "<3-4 sentence explanation that: (1) acknowledges our projection is for a specific KPI, not overall company growth, (2) explains how Stock Impact affects the prediction, (3) compares appropriately based on whether company guidance is for overall company or this KPI, (4) provides reasoning for beat/miss/undecided>"
 }}
 
 Respond ONLY with valid JSON, no additional text."""
