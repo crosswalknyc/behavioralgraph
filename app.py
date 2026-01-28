@@ -4950,69 +4950,36 @@ def analyze_beat_miss():
         else:
             stock_impact_note = f"This KPI has {relevance_pct}% Stock Impact, meaning it represents approximately {relevance_pct}% of the stock price movement."
         
-        prompt = f"""You are a financial analyst specializing in earnings predictions. Analyze whether {display_name} ({ticker}) will BEAT or MISS their earnings expectations for {quarter}.
+        prompt = f"""You are a financial analyst. Determine whether {display_name} ({ticker}) will BEAT or MISS earnings expectations for {quarter}.
 
-CRITICAL DISTINCTION - READ CAREFULLY:
-Our projected growth of {projected_growth_pct}% is for ONE SPECIFIC KPI: "{kpi}"
-This is NOT the overall company revenue/net growth rate. It is the growth rate for this specific business metric.
-
-The company's guidance and analyst consensus estimates are typically for OVERALL company revenue/net growth, which may include multiple business segments and KPIs.
+CRITICAL FRAMING:
+- Companies and consensus project REVENUE GROWTH for the quarter. They do NOT project KPI-specific metrics like "{kpi}". So always extract and show what the company projects for revenue growth and what consensus projects for revenue growth (with exact % when available).
+- Our metric is our measured/calculated growth for the single KPI "{kpi}"—it will almost never match company/consensus because they project revenue, not this KPI. Your job: (1) Show company revenue growth and consensus revenue growth for the quarter. (2) Show our KPI metric. (3) Explain how our metric fits within that revenue picture based on relevance (Stock Impact) and the resulting likelihood of beat vs miss.
 
 {stock_impact_note}
 
-OUR DATA:
-- KPI Being Measured: {kpi}
-- Our Projected Growth for THIS KPI: {projected_growth_pct}%
-- Current Consumers: {current_consumers:,}
-- Quarter: {quarter}
-- Stock Impact (Relevance): {relevance_pct}%
+EXTRACT (revenue growth for the quarter only):
+- company_guidance: Revenue growth the company is projecting for {quarter}. One short phrase with exact % (e.g. "2.4% net revenue growth", "3% revenue growth"). If no number: "Not specified".
+- consensus_estimate: Revenue growth analyst consensus is projecting for {quarter}. One short phrase with exact % (e.g. "3.3% revenue growth"). If no number: "Not available".
 
-DATA ACCURACY:
-- Accuracy Score: {accuracy_score if accuracy_score is not None else 'Unknown'}%
-- Variance: {variance if variance is not None else 'Unknown'}%
+OUR DATA (measured KPI, not a company projection):
+- KPI: {kpi}
+- Our measured growth for this KPI this quarter: {projected_growth_pct}%
+- Quarter: {quarter} | Stock Impact: {relevance_pct}% | Accuracy: {accuracy_score if accuracy_score is not None else 'Unknown'}% | Variance: {variance if variance is not None else 'Unknown'}%
 
-ANALYSIS REQUIREMENTS:
-1. Research {ticker}'s public earnings guidance for {quarter} from:
-   - SEC filings (10-Q, 10-K, 8-K)
-   - Earnings call transcripts
-   - Company guidance statements
-   - Analyst consensus estimates
-   
-   IMPORTANT: Determine if their guidance is for:
-   - Overall company revenue/net growth (most common)
-   - This specific KPI ({kpi})
-   - A combination of metrics
+ANALYSIS:
+1. Research {ticker} guidance and consensus for {quarter} (SEC, earnings calls). Extract revenue growth numbers only.
+2. In the analysis text: State what company and consensus project for revenue growth (with numbers). State our metric ({projected_growth_pct}% for {kpi}). Then explain how our metric fits within that revenue outlook—using Stock Impact ({relevance_pct}%) and data quality—and the resulting likelihood of beat or miss. Do not ask for or reference KPI-specific company guidance; they project revenue.
+3. Output BEAT, MISS, or UNDECIDED.
 
-2. CRITICAL COMPARISON LOGIC:
-   - If company guidance is for overall company growth: Our {projected_growth_pct}% is for ONE component. Consider:
-     * Stock Impact ({relevance_pct}%): How much does this KPI drive stock price?
-     * If Stock Impact is high (80-100%): This KPI may be a strong proxy for overall performance
-     * If Stock Impact is lower: This is just one component; overall company may perform differently
-     * The company's overall growth may include other segments that could offset or amplify this KPI's performance
-   
-   - If company guidance is for this specific KPI: Direct comparison is valid
-   
-   - Always acknowledge in your analysis that you're comparing a single KPI to potentially overall company guidance
-
-3. Weight the prediction by:
-   - Stock Impact ({relevance_pct}%): Higher = this KPI is more predictive of stock movement
-   - Data Accuracy ({accuracy_score}%): Higher = more reliable our projection
-   - Variance ({variance}%): Lower = more consistent our data
-   - Whether guidance is for overall company vs. specific KPI
-
-4. Determine if they will BEAT, MISS, or if it's UNDECIDED
-   - Be more conservative if comparing a single KPI to overall company guidance
-   - Be more confident if Stock Impact is very high (90-100%) and guidance is for overall company
-   - Consider that a single KPI underperforming doesn't necessarily mean overall company will miss
-
-Provide your analysis in JSON format:
+JSON format. company_guidance and consensus_estimate: short phrase with exact % when available; else "Not specified" or "Not available".
 {{
     "prediction": "BEAT" or "MISS" or "UNDECIDED",
     "confidence": <number 0-100>,
-    "company_guidance": "<CRITICAL: Extract and state the EXACT percentage number the company has projected. Format examples: '{display_name} has projected 2.4% net growth of revenue for {quarter}' or 'Company projects 1.5% growth for {kpi}' or '2.4% net growth of revenue' - MUST include the actual percentage number. If for overall company revenue, explicitly state 'overall company revenue/net growth of X.X%'. If for this specific KPI ({kpi}), state '{kpi} growth of X.X%'. If no specific number found, state 'Not specified'.>",
-    "consensus_estimate": "<CRITICAL: Extract and state the EXACT percentage number from analyst consensus. Format examples: 'Consensus is 3.3% net growth of revenue for {quarter}' or 'Analyst consensus projects 1.2% growth for {kpi}' or '3.3% net growth of revenue' - MUST include the actual percentage number. If for overall company revenue, explicitly state 'overall company revenue/net growth of X.X%'. If for this specific KPI ({kpi}), state '{kpi} growth of X.X%'. If no specific number found, state 'Not available'.>",
+    "company_guidance": "<Revenue growth for the quarter the company is projecting. Exact % e.g. '2.4% net revenue growth'. If none: 'Not specified'.>",
+    "consensus_estimate": "<Revenue growth for the quarter consensus is projecting. Exact % e.g. '3.3% revenue growth'. If none: 'Not available'.>",
     "our_projection": {projected_growth_pct},
-    "analysis": "<4-5 sentence explanation that: (1) explicitly states the company's projection (with number), (2) explicitly states the consensus estimate (with number), (3) states our projection for this specific KPI ({projected_growth_pct}%), (4) explains how our KPI metric fits in with the company and consensus projections, considering Stock Impact ({relevance_pct}%), (5) provides reasoning for beat/miss/undecided>"
+    "analysis": "<State company and consensus revenue growth for the quarter (with numbers). State our metric ({projected_growth_pct}% for {kpi}). Explain how our metric fits within that revenue picture based on Stock Impact ({relevance_pct}%) and the resulting likelihood of beat or miss.>"
 }}
 
 Respond ONLY with valid JSON, no additional text."""
@@ -5020,7 +4987,7 @@ Respond ONLY with valid JSON, no additional text."""
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a financial analyst. Research company earnings guidance and compare to KPI projections. Respond only with valid JSON."},
+                {"role": "system", "content": "You are a financial analyst. Extract what the company and consensus project for revenue growth for the quarter (they do not project KPI-specific metrics). Then explain how the given KPI metric fits within that revenue picture based on relevance (Stock Impact) and the resulting beat/miss likelihood. Respond only with valid JSON."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.3,

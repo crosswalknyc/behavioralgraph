@@ -11669,9 +11669,17 @@
                             </div>
                             
                             <div class="chart-card">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
                                     <h3 style="margin: 0;">📋 Daily Metrics</h3>
-                                    <div style="display: flex; gap: 0.5rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                        <label style="color: var(--text-secondary); font-size: 0.8rem; font-weight: 600;">View:</label>
+                                        <select id="dailyVisualizerSelect" onchange="setDailyView(this.value)" style="padding: 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); font-size: 0.85rem; font-weight: 600; cursor: pointer; min-width: 180px;">
+                                            <option value="table">📋 Table</option>
+                                            <option value="line-net-growth">📈 Line – Net Growth %</option>
+                                            <option value="line-consumers">📊 Line – Total Consumers</option>
+                                            <option value="bar-subs-cancels">📊 Bar – Subs vs Cancels</option>
+                                            <option value="area-net-growth">📉 Area – Net Growth %</option>
+                                        </select>
                                         <button id="sortNewest" class="sort-btn active" onclick="sortDailyTable('newest')" style="padding: 0.5rem 1rem; background: var(--accent-cyan); color: var(--bg-dark); border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
                                             📅 Newest First
                                         </button>
@@ -11680,7 +11688,7 @@
                                         </button>
                                     </div>
                                 </div>
-                                <div style="overflow-x: auto;">
+                                <div id="dailyMetricsTableView" style="overflow-x: auto;">
                                     <table id="dailyDataTable" class="data-table" style="width: 100%; border-collapse: collapse;">
                                         <thead>
                                             <tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);">
@@ -11696,6 +11704,9 @@
                                             <tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">No data loaded</td></tr>
                                         </tbody>
                                     </table>
+                                </div>
+                                <div id="dailyMetricsChartView" style="display: none; height: 320px; position: relative;">
+                                    <canvas id="dailyMetricsChart"></canvas>
                                 </div>
                             </div>
                         </div>
@@ -14812,16 +14823,17 @@
                             const icon = isBeat ? '👍' : '👎';
                             const text = isBeat ? 'Beat' : 'Miss';
                             
-                            // Get company guidance and consensus estimate separately
+                            // Explicit projection lines: company, consensus, our metric
                             const companyProjection = result.company_guidance && result.company_guidance !== 'Not found' && result.company_guidance !== 'Not specified'
                                 ? result.company_guidance 
                                 : 'Not specified';
-                            
                             const consensusProjection = result.consensus_estimate && result.consensus_estimate !== 'Not found' && result.consensus_estimate !== 'Not available'
                                 ? result.consensus_estimate
                                 : 'Not available';
+                            const ourMetricPct = result.our_projection != null ? Number(result.our_projection) : projectedGrowthPct;
+                            const ourMetricDisplay = typeof ourMetricPct === 'number' ? ourMetricPct.toFixed(1) + '%' : (ourMetricPct + '%');
                             
-                            // Populate beat/miss card
+                            // Populate beat/miss card: always show Company, Consensus, Our metric, then Analysis
                             if (beatMissCard) {
                                 beatMissCard.innerHTML = `
                                     <div style="display: flex; flex-direction: column; height: 100%;">
@@ -14830,13 +14842,17 @@
                                             <span style="font-size: 1.5rem;">${icon}</span>
                                             <span style="color: ${color}; font-weight: 600; font-size: 1.1rem;">${text}</span>
                                         </div>
-                                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-                                            <div style="font-weight: 600; margin-bottom: 0.25rem;">Company Projection:</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                                            <div style="font-weight: 600; margin-bottom: 0.2rem;">Company (revenue growth):</div>
                                             <div>${companyProjection}</div>
                                         </div>
-                                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-                                            <div style="font-weight: 600; margin-bottom: 0.25rem;">Consensus Estimate:</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                                            <div style="font-weight: 600; margin-bottom: 0.2rem;">Consensus (revenue growth):</div>
                                             <div>${consensusProjection}</div>
+                                        </div>
+                                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                                            <div style="font-weight: 600; margin-bottom: 0.2rem;">Our metric (this KPI):</div>
+                                            <div>${ourMetricDisplay}</div>
                                         </div>
                                         <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5; flex: 1;">
                                             <div style="font-weight: 600; margin-bottom: 0.25rem;">Analysis:</div>
@@ -15317,6 +15333,157 @@
         // Store daily table data and sort mode
         let dailyTableDataCache = null;
         let currentDailySortMode = 'newest';
+        let currentDailyView = 'table';
+        let dailyMetricsChart = null;
+        
+        function getSortedDailyData() {
+            const data = dailyTableDataCache || [];
+            return currentDailySortMode === 'newest' ? data.slice().reverse() : data.slice();
+        }
+        
+        function setDailyView(view) {
+            currentDailyView = view;
+            const tableView = document.getElementById('dailyMetricsTableView');
+            const chartView = document.getElementById('dailyMetricsChartView');
+            const selectEl = document.getElementById('dailyVisualizerSelect');
+            if (selectEl) selectEl.value = view;
+            
+            if (view === 'table') {
+                if (tableView) tableView.style.display = 'block';
+                if (chartView) chartView.style.display = 'none';
+                if (dailyMetricsChart) {
+                    dailyMetricsChart.destroy();
+                    dailyMetricsChart = null;
+                }
+                if (dailyTableDataCache) renderDailyTable(dailyTableDataCache, currentDailySortMode);
+            } else {
+                if (tableView) tableView.style.display = 'none';
+                if (chartView) chartView.style.display = 'block';
+                renderDailyChart(getSortedDailyData(), view);
+            }
+        }
+        
+        function renderDailyChart(dailyData, chartType) {
+            const container = document.getElementById('dailyMetricsChartView');
+            const canvas = document.getElementById('dailyMetricsChart');
+            if (!container || !canvas) return;
+            
+            if (dailyMetricsChart) {
+                dailyMetricsChart.destroy();
+                dailyMetricsChart = null;
+            }
+            
+            if (!dailyData || dailyData.length === 0) {
+                container.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary); font-size: 0.9rem;">No data to display. Load a ticker and ensure date range has data.</div>';
+                return;
+            }
+            if (container.querySelector('div')) {
+                container.innerHTML = '<canvas id="dailyMetricsChart"></canvas>';
+            }
+            const ctx = document.getElementById('dailyMetricsChart').getContext('2d');
+            const labels = dailyData.map(d => d.Date);
+            const accentCyan = 'rgba(0, 255, 255, 0.9)';
+            const green = '#10b981';
+            const red = '#ef4444';
+            const blue = 'rgba(59, 130, 246, 0.9)';
+            
+            const commonOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 600 },
+                plugins: {
+                    legend: { labels: { color: '#e6f1ff' } },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#00ffff',
+                        bodyColor: '#e6f1ff',
+                        borderColor: '#00ffff',
+                        borderWidth: 1
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#94a3b8', maxTicksLimit: 12 } },
+                    y: { ticks: { color: '#94a3b8' } }
+                }
+            };
+            
+            if (chartType === 'line-net-growth' || chartType === 'area-net-growth') {
+                const netGrowth = dailyData.map(d => (d.Calculated_Net_Growth || 0) * 100);
+                const pointColors = netGrowth.map(v => v >= 0 ? green : red);
+                dailyMetricsChart = new Chart(ctx, {
+                    type: chartType === 'area-net-growth' ? 'line' : 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'Net Growth %',
+                            data: netGrowth,
+                            borderColor: accentCyan,
+                            backgroundColor: chartType === 'area-net-growth' ? 'rgba(0, 255, 255, 0.15)' : 'rgba(0, 255, 255, 0.08)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.35,
+                            pointRadius: 3,
+                            pointBackgroundColor: pointColors,
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 1
+                        }]
+                    },
+                    options: {
+                        ...commonOptions,
+                        scales: {
+                            ...commonOptions.scales,
+                            y: { ...commonOptions.scales.y, title: { display: true, text: 'Net Growth %', color: '#94a3b8' } }
+                        }
+                    }
+                });
+            } else if (chartType === 'line-consumers') {
+                const consumers = dailyData.map(d => d['Total Consumers'] || 0);
+                dailyMetricsChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'Total Consumers',
+                            data: consumers,
+                            borderColor: blue,
+                            backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.35,
+                            pointRadius: 3,
+                            pointBackgroundColor: blue
+                        }]
+                    },
+                    options: {
+                        ...commonOptions,
+                        scales: {
+                            ...commonOptions.scales,
+                            y: { ...commonOptions.scales.y, title: { display: true, text: 'Total Consumers', color: '#94a3b8' } }
+                        }
+                    }
+                });
+            } else if (chartType === 'bar-subs-cancels') {
+                const subs = dailyData.map(d => d['Total Subs'] || 0);
+                const cancels = dailyData.map(d => d['Total Cancels'] || 0);
+                dailyMetricsChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: 'Subs', data: subs, backgroundColor: 'rgba(16, 185, 129, 0.8)', borderColor: green, borderWidth: 1 },
+                            { label: 'Cancels', data: cancels, backgroundColor: 'rgba(239, 68, 68, 0.8)', borderColor: red, borderWidth: 1 }
+                        ]
+                    },
+                    options: {
+                        ...commonOptions,
+                        scales: {
+                            ...commonOptions.scales,
+                            y: { ...commonOptions.scales.y, title: { display: true, text: 'Count', color: '#94a3b8' } }
+                        }
+                    }
+                });
+            }
+        }
         
         function renderDailyTable(dailyData, sortMode = 'newest') {
             const tbody = document.getElementById('dailyDataTableBody');
@@ -15343,6 +15510,11 @@
             });
             
             tbody.innerHTML = html;
+            
+            // If current view is a chart, refresh the chart with same sorted data
+            if (currentDailyView !== 'table') {
+                renderDailyChart(getSortedDailyData(), currentDailyView);
+            }
         }
         
         function sortDailyTable(mode) {
