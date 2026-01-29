@@ -11787,6 +11787,9 @@
                 
                 <!-- Tab Content Area -->
                 <div class="dashboard-tab-content" id="hedgeFundDashboardContent" style="display: flex; flex-direction: column; overflow: hidden; height: 100%; flex: 1;">
+                    <!-- Ticker Tabs Bar -->
+                    <div class="profile-tabs-bar" id="tickerTabsBar" style="display: none;"></div>
+                    
                     <!-- Empty State -->
                     <div id="tickerEmptyState" class="dashboard-empty-state">
                         <div class="empty-state-content">
@@ -12864,6 +12867,14 @@
             
             // Load tickers
             loadHedgeFundTickers();
+            
+            // Restore saved ticker tabs if none are currently open
+            if (openTickerTabs.length === 0) {
+                loadSavedTickerTabs();
+            } else {
+                // Re-render tabs bar in case we're returning to this view
+                renderTickerTabsBar();
+            }
         }
         
         window.showTalentSearchIQ = function() {
@@ -13676,14 +13687,186 @@
             el.nextElementSibling.classList.toggle('open');
         }
         
+        // Ticker tab management
+        let openTickerTabs = []; // Array of { id, s3Key, name, kpi, data }
+        let activeTickerTabId = null;
+        
+        // Save ticker tabs to localStorage
+        function saveTickerTabs() {
+            const tabsToSave = openTickerTabs.map(t => ({
+                id: t.id,
+                s3Key: t.s3Key,
+                name: t.name,
+                kpi: t.kpi
+            }));
+            localStorage.setItem('openTickerTabs', JSON.stringify(tabsToSave));
+            localStorage.setItem('activeTickerTabId', activeTickerTabId || '');
+        }
+        
+        // Load saved ticker tabs from localStorage
+        async function loadSavedTickerTabs() {
+            try {
+                const savedTabs = JSON.parse(localStorage.getItem('openTickerTabs') || '[]');
+                const savedActiveId = localStorage.getItem('activeTickerTabId') || '';
+                
+                for (const savedTab of savedTabs) {
+                    try {
+                        const response = await fetch(`/api/hedge-fund-iq/data/${encodeURIComponent(savedTab.s3Key)}`, { credentials: 'same-origin' });
+                        if (response.status === 401) continue;
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            openTickerTabs.push({
+                                id: savedTab.id,
+                                s3Key: savedTab.s3Key,
+                                name: savedTab.name || data.ticker || 'Unknown',
+                                kpi: savedTab.kpi || data.kpi || '',
+                                data: data
+                            });
+                        }
+                    } catch (e) {
+                        console.warn('Failed to restore ticker tab:', savedTab.name);
+                    }
+                }
+                
+                renderTickerTabsBar();
+                
+                if (openTickerTabs.length > 0) {
+                    const tabToActivate = openTickerTabs.find(t => t.id === savedActiveId) || openTickerTabs[0];
+                    switchToTickerTab(tabToActivate.id);
+                }
+            } catch (e) {
+                console.warn('Failed to load saved ticker tabs:', e);
+            }
+        }
+        
+        function renderTickerTabsBar() {
+            const container = document.getElementById('tickerTabsBar');
+            if (!container) return;
+            
+            if (openTickerTabs.length === 0) {
+                container.style.display = 'none';
+                container.innerHTML = '';
+                return;
+            }
+            
+            container.style.display = 'flex';
+            
+            let html = '';
+            openTickerTabs.forEach((tab, index) => {
+                const isActive = tab.id === activeTickerTabId;
+                const shortName = tab.name.length > 25 ? tab.name.substring(0, 23) + '...' : tab.name;
+                html += `
+                    <div class="profile-tab ${isActive ? 'active' : ''}" 
+                         draggable="true" 
+                         data-tab-id="${tab.id}" 
+                         data-tab-index="${index}"
+                         onclick="switchToTickerTab('${tab.id}')" 
+                         title="${tab.name} - ${tab.kpi}">
+                        <span class="profile-tab-name">${shortName}</span>
+                        <button class="profile-tab-close" onclick="event.stopPropagation(); closeTickerTab('${tab.id}')" title="Close tab">×</button>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function switchToTickerTab(tabId) {
+            const tab = openTickerTabs.find(t => t.id === tabId);
+            if (!tab) return;
+            
+            activeTickerTabId = tabId;
+            currentTickerData = tab.data;
+            
+            // Update sidebar active state
+            document.querySelectorAll('#tickerTree .sidebar-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Render the dashboard for this tab
+            renderTickerDashboard(tab.data);
+            
+            // Always show Live Data tab first
+            showTickerTabDefault('livedata');
+            
+            // Update tabs bar
+            renderTickerTabsBar();
+            
+            // Save state
+            saveTickerTabs();
+        }
+        
+        function closeTickerTab(tabId) {
+            const tabIndex = openTickerTabs.findIndex(t => t.id === tabId);
+            if (tabIndex === -1) return;
+            
+            openTickerTabs.splice(tabIndex, 1);
+            
+            if (openTickerTabs.length === 0) {
+                // No more tabs, show empty state
+                activeTickerTabId = null;
+                currentTickerData = null;
+                document.getElementById('tickerEmptyState').style.display = 'flex';
+                document.getElementById('tickerDashboard').style.display = 'none';
+            } else if (activeTickerTabId === tabId) {
+                // Closed the active tab, switch to another
+                const newActiveTab = openTickerTabs[Math.min(tabIndex, openTickerTabs.length - 1)];
+                switchToTickerTab(newActiveTab.id);
+            }
+            
+            renderTickerTabsBar();
+            saveTickerTabs();
+        }
+        
+        // Helper to show ticker tab without event dependency
+        function showTickerTabDefault(tabName) {
+            // Stop live chart animation when leaving trends tab
+            if (tabName !== 'trends') {
+                stopLiveChartAnimation();
+            }
+            
+            // Hide all tabs
+            document.querySelectorAll('.ticker-tab-content').forEach(tab => tab.style.display = 'none');
+            
+            // Remove active class from all tab buttons
+            const mainTabs = document.querySelector('#hedgeFundIQView .dashboard-tabs');
+            if (mainTabs) {
+                mainTabs.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            }
+            
+            // Show selected tab and activate button
+            const tabElement = document.getElementById(tabName + 'Tab');
+            if (tabElement) {
+                tabElement.style.display = 'block';
+            }
+            
+            // Activate the correct button
+            if (mainTabs) {
+                const buttons = mainTabs.querySelectorAll('.tab-btn');
+                buttons.forEach(btn => {
+                    if (btn.textContent.toLowerCase().includes(tabName === 'livedata' ? 'live' : tabName)) {
+                        btn.classList.add('active');
+                    }
+                });
+            }
+            
+            // Start animation if trends tab
+            if (tabName === 'trends') {
+                setTimeout(() => startLiveChartAnimation(), 300);
+            }
+        }
+        
         async function selectTicker(s3Key) {
             console.log('🎯 Ticker clicked:', s3Key);
             
-            // Remove active class from all ticker items
-            document.querySelectorAll('.sidebar-item').forEach(item => item.classList.remove('active'));
-            
-            // Add active class to clicked item
-            event.target.closest('.sidebar-item')?.classList.add('active');
+            // Check if ticker is already open in a tab
+            const existingTab = openTickerTabs.find(t => t.s3Key === s3Key);
+            if (existingTab) {
+                // Switch to existing tab
+                switchToTickerTab(existingTab.id);
+                return;
+            }
             
             try {
                 console.log('📡 Fetching ticker data from API...');
@@ -13700,9 +13883,30 @@
                 console.log('📊 Ticker data received:', data);
                 
                 if (data.success) {
+                    // Create new tab
+                    const newTab = {
+                        id: 'ticker_' + Date.now(),
+                        s3Key: s3Key,
+                        name: data.ticker || s3Key.split('/').pop().replace('.csv', ''),
+                        kpi: data.kpi || '',
+                        data: data
+                    };
+                    
+                    openTickerTabs.push(newTab);
+                    activeTickerTabId = newTab.id;
                     currentTickerData = data;
+                    
+                    // Save to localStorage
+                    saveTickerTabs();
+                    
+                    // Render tabs bar
+                    renderTickerTabsBar();
+                    
                     console.log('✅ Rendering ticker dashboard...');
                     renderTickerDashboard(data);
+                    
+                    // Always default to Live Data tab
+                    showTickerTabDefault('livedata');
                 } else {
                     console.error('❌ API returned error:', data.error);
                     alert(`Error loading ticker: ${data.error}`);
@@ -16403,9 +16607,33 @@
             window.URL.revokeObjectURL(url);
         }
         
-        function refreshTickerData() {
-            if (currentTickerData) {
-                selectTicker(currentTickerData.s3_key);
+        async function refreshTickerData() {
+            if (!currentTickerData || !activeTickerTabId) return;
+            
+            const tab = openTickerTabs.find(t => t.id === activeTickerTabId);
+            if (!tab) return;
+            
+            try {
+                const response = await fetch(`/api/hedge-fund-iq/data/${encodeURIComponent(tab.s3Key)}`, { credentials: 'same-origin' });
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                const data = await response.json();
+                if (data.success) {
+                    // Update the tab data
+                    tab.data = data;
+                    currentTickerData = data;
+                    
+                    // Re-render the dashboard
+                    renderTickerDashboard(data);
+                    
+                    // Save updated state
+                    saveTickerTabs();
+                }
+            } catch (error) {
+                console.error('Error refreshing ticker data:', error);
             }
         }
         
