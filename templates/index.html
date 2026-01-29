@@ -14065,95 +14065,362 @@
             `;
         }
         
+        // Store ticker-specific chart instances to avoid conflicts with main dashboard
+        let tickerCharts = {};
+        
         function renderTickerDemographicsTab(parsed, csvData) {
             const container = document.getElementById('tickerProfileTabContent');
             
-            // Create the demographics structure with all required chart containers
+            // Destroy any existing ticker charts
+            Object.values(tickerCharts).forEach(chart => {
+                if (chart && typeof chart.destroy === 'function') {
+                    chart.destroy();
+                }
+            });
+            tickerCharts = {};
+            
+            // Create the demographics structure with unique IDs for ticker charts
             container.innerHTML = `
-                <div id="tab-demographics" class="tab-content" style="display: block;">
+                <div id="ticker-tab-demographics" class="tab-content" style="display: block;">
                     <div class="demo-main">
-                        <div class="demo-insights-row" id="demoInsightsRow"></div>
-                        <div id="demographicsContent">
+                        <div id="demographicsContent" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
                             <div class="chart-card">
                                 <h3>👤 AGE</h3>
-                                <span id="ageMedianDisplay" class="median-display" style="display: block; margin-top: 0.25rem; margin-bottom: 0.5rem; padding: 0 1rem;"></span>
-                                <div class="chart-container"><canvas id="ageChart"></canvas></div>
+                                <div class="chart-container"><canvas id="tickerAgeChart"></canvas></div>
                             </div>
                             <div class="chart-card">
                                 <h3>👫 GENDER</h3>
-                                <div class="chart-container"><canvas id="genderChart"></canvas></div>
+                                <div class="chart-container"><canvas id="tickerGenderChart"></canvas></div>
                             </div>
                             <div class="chart-card">
                                 <h3>🌍 ETHNICITY</h3>
-                                <div class="chart-container"><canvas id="ethnicityChart"></canvas></div>
+                                <div class="chart-container"><canvas id="tickerEthnicityChart"></canvas></div>
                             </div>
                             <div class="chart-card">
                                 <h3>💰 INCOME</h3>
-                                <span id="incomeMedianDisplay" class="median-display" style="display: block; margin-top: 0.25rem; margin-bottom: 0.5rem; padding: 0 1rem;"></span>
-                                <div class="chart-container"><canvas id="incomeChart"></canvas></div>
+                                <div class="chart-container"><canvas id="tickerIncomeChart"></canvas></div>
                             </div>
                             <div class="chart-card">
                                 <h3>🎓 EDUCATION</h3>
-                                <div class="chart-container"><canvas id="educationChart"></canvas></div>
+                                <div class="chart-container"><canvas id="tickerEducationChart"></canvas></div>
                             </div>
                             <div class="chart-card">
                                 <h3>💑 RELATIONSHIP STATUS</h3>
-                                <div class="chart-container"><canvas id="relationshipChart"></canvas></div>
+                                <div class="chart-container"><canvas id="tickerRelationshipChart"></canvas></div>
                             </div>
                             <div class="chart-card">
                                 <h3>🏳️‍🌈 SEXUAL ORIENTATION</h3>
-                                <div class="chart-container"><canvas id="sexualOrientationChart"></canvas></div>
+                                <div class="chart-container"><canvas id="tickerSexualOrientationChart"></canvas></div>
                             </div>
                             <div class="chart-card">
                                 <h3>👶 PARENTAL STATUS</h3>
-                                <div class="chart-container"><canvas id="parentalStatusChart"></canvas></div>
+                                <div class="chart-container"><canvas id="tickerParentalStatusChart"></canvas></div>
                             </div>
                             <div class="chart-card">
                                 <h3>💼 OCCUPATION</h3>
-                                <div class="chart-container"><canvas id="occupationChart"></canvas></div>
+                                <div class="chart-container"><canvas id="tickerOccupationChart"></canvas></div>
                             </div>
                         </div>
                     </div>
                 </div>
             `;
             
-            // Render demographics using the existing renderCharts and renderDemoInsights functions
+            // Render demographics using ticker-specific charts
             try {
-                if (typeof renderCharts === 'function' && typeof renderDemoInsights === 'function') {
-                    renderCharts(parsed.demographics, parsed.demographicsIndex, parsed.demographicsProjection, parsed.demographicsGenPop);
-                    renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop);
-                } else {
-                    container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Demographics rendering functions not available</p>';
-                }
+                renderTickerDemographicsCharts(parsed);
             } catch (error) {
                 console.error('Error rendering demographics:', error);
                 container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Error rendering demographics: ' + error.message + '</p>';
             }
         }
         
+        function renderTickerDemographicsCharts(parsed) {
+            const demographics = parsed.demographics || {};
+            const demographicsIndex = parsed.demographicsIndex || {};
+            const demographicsGenPop = parsed.demographicsGenPop || {};
+            
+            const colors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74', '#75715e'];
+            
+            // Age Chart
+            if (demographics.age && Object.keys(demographics.age).length > 0) {
+                const ageLabels = Object.keys(demographics.age);
+                const ageData = Object.values(demographics.age);
+                const ctx = document.getElementById('tickerAgeChart');
+                if (ctx) {
+                    tickerCharts.age = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: ageLabels,
+                            datasets: [{
+                                data: ageData,
+                                backgroundColor: colors,
+                                borderRadius: 4
+                            }]
+                        },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } },
+                                y: { grid: { display: false }, ticks: { color: '#e6f1ff' } }
+                            }
+                        }
+                    });
+                }
+            }
+            
+            // Gender Chart
+            if (demographics.gender && Object.keys(demographics.gender).length > 0) {
+                const genderLabels = Object.keys(demographics.gender);
+                const genderData = Object.values(demographics.gender);
+                const ctx = document.getElementById('tickerGenderChart');
+                if (ctx) {
+                    tickerCharts.gender = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: genderLabels,
+                            datasets: [{ data: genderData, backgroundColor: colors }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'right', labels: { color: '#e6f1ff' } } }
+                        }
+                    });
+                }
+            }
+            
+            // Ethnicity Chart
+            if (demographics.ethnicity && Object.keys(demographics.ethnicity).length > 0) {
+                const ethnicityLabels = Object.keys(demographics.ethnicity);
+                const ethnicityData = Object.values(demographics.ethnicity);
+                const ctx = document.getElementById('tickerEthnicityChart');
+                if (ctx) {
+                    tickerCharts.ethnicity = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ethnicityLabels,
+                            datasets: [{ data: ethnicityData, backgroundColor: colors }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'right', labels: { color: '#e6f1ff' } } }
+                        }
+                    });
+                }
+            }
+            
+            // Income Chart
+            if (demographics.income && Object.keys(demographics.income).length > 0) {
+                const incomeLabels = Object.keys(demographics.income);
+                const incomeData = Object.values(demographics.income);
+                const ctx = document.getElementById('tickerIncomeChart');
+                if (ctx) {
+                    tickerCharts.income = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: incomeLabels,
+                            datasets: [{ data: incomeData, backgroundColor: colors, borderRadius: 4 }]
+                        },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } },
+                                y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 10 } } }
+                            }
+                        }
+                    });
+                }
+            }
+            
+            // Education Chart
+            if (demographics.education && Object.keys(demographics.education).length > 0) {
+                const educationLabels = Object.keys(demographics.education);
+                const educationData = Object.values(demographics.education);
+                const ctx = document.getElementById('tickerEducationChart');
+                if (ctx) {
+                    tickerCharts.education = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: educationLabels,
+                            datasets: [{ data: educationData, backgroundColor: colors, borderRadius: 4 }]
+                        },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } },
+                                y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 10 } } }
+                            }
+                        }
+                    });
+                }
+            }
+            
+            // Relationship Chart
+            if (demographics.relationship && Object.keys(demographics.relationship).length > 0) {
+                const relationshipLabels = Object.keys(demographics.relationship);
+                const relationshipData = Object.values(demographics.relationship);
+                const ctx = document.getElementById('tickerRelationshipChart');
+                if (ctx) {
+                    tickerCharts.relationship = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: relationshipLabels,
+                            datasets: [{ data: relationshipData, backgroundColor: colors }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'right', labels: { color: '#e6f1ff' } } }
+                        }
+                    });
+                }
+            }
+            
+            // Sexual Orientation Chart
+            if (demographics.sexual_orientation && Object.keys(demographics.sexual_orientation).length > 0) {
+                const soLabels = Object.keys(demographics.sexual_orientation);
+                const soData = Object.values(demographics.sexual_orientation);
+                const ctx = document.getElementById('tickerSexualOrientationChart');
+                if (ctx) {
+                    tickerCharts.sexualOrientation = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: soLabels,
+                            datasets: [{ data: soData, backgroundColor: colors }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'right', labels: { color: '#e6f1ff' } } }
+                        }
+                    });
+                }
+            }
+            
+            // Parental Status Chart
+            if (demographics.parental_status && Object.keys(demographics.parental_status).length > 0) {
+                const psLabels = Object.keys(demographics.parental_status);
+                const psData = Object.values(demographics.parental_status);
+                const ctx = document.getElementById('tickerParentalStatusChart');
+                if (ctx) {
+                    tickerCharts.parentalStatus = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: psLabels,
+                            datasets: [{ data: psData, backgroundColor: colors }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'right', labels: { color: '#e6f1ff' } } }
+                        }
+                    });
+                }
+            }
+            
+            // Occupation Chart
+            if (demographics.occupation && Object.keys(demographics.occupation).length > 0) {
+                const occLabels = Object.keys(demographics.occupation);
+                const occData = Object.values(demographics.occupation);
+                const ctx = document.getElementById('tickerOccupationChart');
+                if (ctx) {
+                    tickerCharts.occupation = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: occLabels,
+                            datasets: [{ data: occData, backgroundColor: colors, borderRadius: 4 }]
+                        },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#8b949e' } },
+                                y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 9 } } }
+                            }
+                        }
+                    });
+                }
+            }
+        }
+        
         function renderTickerBehavioralTab(parsed, csvData) {
             const container = document.getElementById('tickerProfileTabContent');
             
-            // Create the behavioral structure with the container that renderBehavioralCards expects
-            container.innerHTML = `
-                <div id="tab-behavioral" class="tab-content" style="display: block;">
-                    <div id="behavioralContent">
-                        <div id="behavioralGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;"></div>
+            const behavioral = parsed.behavioral || {};
+            const categories = Object.keys(behavioral).sort();
+            
+            if (categories.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No behavioral data available</p>';
+                return;
+            }
+            
+            // Create the behavioral grid with categories
+            let html = `
+                <div id="ticker-tab-behavioral" class="tab-content" style="display: block;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 1rem;">
+            `;
+            
+            categories.forEach(cat => {
+                const items = behavioral[cat] || [];
+                if (items.length === 0) return;
+                
+                // Sort by percentage descending and take top 10
+                const sortedItems = [...items].sort((a, b) => (b.pct || 0) - (a.pct || 0)).slice(0, 10);
+                const maxPct = Math.max(...sortedItems.map(i => i.pct || 0), 1);
+                
+                html += `
+                    <div class="behavioral-card" style="background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color);">
+                        <h3 style="margin: 0 0 0.75rem 0; font-size: 0.9rem; color: var(--accent-cyan); display: flex; justify-content: space-between; align-items: center;">
+                            <span>${cat}</span>
+                            <span style="font-size: 0.7rem; color: var(--text-secondary); background: var(--bg-input); padding: 0.15rem 0.4rem; border-radius: 10px;">${items.length} items</span>
+                        </h3>
+                        <div class="behavioral-header-row" style="display: flex; align-items: center; padding: 0.35rem 0; margin-bottom: 0.25rem; border-bottom: 1px solid var(--border-color); font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; gap: 0.5rem;">
+                            <span style="width: 20px; text-align: right;">#</span>
+                            <span style="flex: 1;">Item</span>
+                            <span style="min-width: 50px; text-align: right;">Profile</span>
+                            <span style="min-width: 45px; text-align: center;">Index</span>
+                        </div>
+                        <div class="behavioral-list" style="max-height: 300px; overflow-y: auto;">
+                            ${sortedItems.map((item, idx) => {
+                                const pct = item.pct || 0;
+                                const index = item.index || 0;
+                                const indexColor = index >= 100 ? '#10b981' : '#ef4444';
+                                const barWidth = (pct / maxPct) * 100;
+                                return `
+                                    <div class="behavioral-item" style="display: flex; align-items: center; padding: 0.4rem 0; border-bottom: 1px solid var(--border-color); gap: 0.5rem; font-size: 0.8rem;">
+                                        <span style="width: 20px; text-align: right; color: var(--text-secondary); font-size: 0.75rem;">${idx + 1}</span>
+                                        <div style="flex: 1; min-width: 0; position: relative;">
+                                            <div style="position: absolute; left: 0; top: 0; bottom: 0; width: ${barWidth}%; background: rgba(90, 154, 217, 0.2); border-radius: 3px;"></div>
+                                            <span style="position: relative; z-index: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; padding: 0.1rem 0.3rem;" title="${item.name}">${item.name}</span>
+                                        </div>
+                                        <span style="min-width: 50px; text-align: right; color: var(--text-primary);">${pct.toFixed(2)}%</span>
+                                        <span style="min-width: 45px; text-align: center; color: ${indexColor}; font-weight: 600;">${index > 0 ? (index / 100).toFixed(2) + 'x' : '-'}</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += `
                     </div>
                 </div>
             `;
             
-            // Render behavioral using the existing renderBehavioralCards function
-            try {
-                if (typeof renderBehavioralCards === 'function') {
-                    renderBehavioralCards(parsed.behavioral);
-                } else {
-                    container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Behavioral rendering function not available</p>';
-                }
-            } catch (error) {
-                console.error('Error rendering behavioral:', error);
-                container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Error rendering behavioral: ' + error.message + '</p>';
-            }
+            container.innerHTML = html;
         }
         
         function renderTickerLocationTab(parsed, csvData) {
