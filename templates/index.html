@@ -21372,7 +21372,7 @@
                         category: category,
                         pct: item.pct || item.percentage || 0,
                         index: item.index || 100,
-                        genPop: item.genPop || item.gen_pop || 0
+                        genPop: item.genPopPct || item.genPop || item.gen_pop || 0
                     });
                 });
             });
@@ -21447,8 +21447,9 @@
                 const avgPct = items.length > 0
                     ? items.reduce((s, i) => s + (i.pct || i.percentage || 0), 0) / items.length
                     : 0;
+                // Look for genPopPct first (most common), then genPop, then gen_pop
                 const avgGenPop = items.length > 0
-                    ? items.reduce((s, i) => s + (i.genPop || i.gen_pop || 0), 0) / items.length
+                    ? items.reduce((s, i) => s + (i.genPopPct || i.genPop || i.gen_pop || 0), 0) / items.length
                     : 0;
                 const highCount = items.filter(i => (i.index || 100) >= 150).length;
                 categoryStats[cat] = { avgIndex: avgIdx, avgPct: avgPct, avgGenPop: avgGenPop, count: items.length, highCount };
