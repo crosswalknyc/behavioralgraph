@@ -9759,10 +9759,10 @@
                         <div class="top-cat-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.25rem; font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">
                             <span>Category</span>
                             <span style="display: flex; gap: 0.5rem;">
-                                <span class="has-tooltip" data-tooltip="Profile %: Average percentage of this audience engaging with items in this category." style="min-width: 45px; text-align: right;">Profile</span>
-                                <span class="has-tooltip" data-tooltip="Gen Pop %: Average percentage of general population engaging with items in this category." style="min-width: 55px; text-align: right;">GP</span>
-                                <span class="has-tooltip" data-tooltip="Avg Index: Average index across all items in this category. 1.0x = same as Gen Pop, 2.0x = 2x more likely than Gen Pop." style="min-width: 45px; text-align: right;">Index</span>
-                                <span class="has-tooltip" data-tooltip="Hot Count: Number of items in this category with index above 1.5x (strong over-indexers).">Hot 🔥</span>
+                                <span class="has-tooltip" data-tooltip="Profile %: Average percentage of this audience engaging with items in this category." style="min-width: 55px; text-align: center;">Profile</span>
+                                <span class="has-tooltip" data-tooltip="Gen Pop %: Average percentage of general population engaging with items in this category." style="min-width: 65px; text-align: center;">GP</span>
+                                <span class="has-tooltip" data-tooltip="Avg Index: Average index across all items in this category. 1.0x = same as Gen Pop, 2.0x = 2x more likely than Gen Pop." style="min-width: 45px; text-align: center;">Index</span>
+                                <span class="has-tooltip" data-tooltip="Hot Count: Number of items in this category with index above 1.5x (strong over-indexers)." style="min-width: 35px; text-align: center;">Hot 🔥</span>
                             </span>
                         </div>
                         <div id="behavioralTopCategories" class="behavioral-insight-content">
@@ -21473,10 +21473,10 @@
                 <div class="behavioral-top-cat has-tooltip" data-tooltip="${cat}: ${stats.count} items tracked, avg profile ${stats.avgPct.toFixed(2)}%, avg Gen Pop ${stats.avgGenPop < 0.01 ? 'N/A' : stats.avgGenPop.toFixed(2) + '%'}, avg index ${formatIndex(stats.avgIndex)}, ${stats.highCount} strong over-indexers (>1.5x).">
                     <span class="cat-name">${cat}</span>
                     <span class="cat-stats">
-                        <span class="cat-pct" style="color: var(--accent-lime); min-width: 55px; text-align: right;">${profileDisplay}</span>
-                        <span class="cat-gp" style="color: var(--text-secondary); min-width: 65px; text-align: right;">GP: ${gpDisplay}</span>
-                        <span class="cat-idx" style="color: ${stats.avgIndex >= 100 ? '#10b981' : '#ef4444'}; min-width: 45px; text-align: right;">${formatIndex(stats.avgIndex)}</span>
-                        <span class="cat-high" style="min-width: 35px; text-align: right;">${stats.highCount > 0 ? stats.highCount + '🔥' : '-'}</span>
+                        <span class="cat-pct" style="color: var(--accent-lime); min-width: 55px; text-align: center;">${profileDisplay}</span>
+                        <span class="cat-gp" style="color: var(--text-secondary); min-width: 65px; text-align: center;">${gpDisplay}</span>
+                        <span class="cat-idx" style="color: ${stats.avgIndex >= 100 ? '#10b981' : '#ef4444'}; min-width: 45px; text-align: center;">${formatIndex(stats.avgIndex)}</span>
+                        <span class="cat-high" style="min-width: 35px; text-align: center;">${stats.highCount > 0 ? stats.highCount + '🔥' : '-'}</span>
                     </span>
                 </div>
             `}).join('') || '<p style="color: var(--text-secondary);">No data available</p>';
