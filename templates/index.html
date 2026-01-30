@@ -9951,14 +9951,25 @@
                                 <span>🔥 Over-Indexing DMAs (≥1.0x)</span>
                                 <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('location', 'Over-Indexing DMAs')">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'Over-Indexing DMAs')">➕</button></span>
                             </h3>
-                            <input type="text" id="locationSearchTop" placeholder="🔍 Search DMAs..." class="has-tooltip" data-tooltip="Search Over-Indexing DMAs: Type to filter the list of markets where your audience over-indexes. Results update as you type." oninput="filterLocationList('top')" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; width: 150px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
+                                <select id="locationSortTop" onchange="sortLocationTableBySelect('top', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by Rank, Target %, or Index" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 80px;">
+                                    <option value="index-desc">Index ↓</option>
+                                    <option value="index-asc">Index ↑</option>
+                                    <option value="target-desc">Target ↓</option>
+                                    <option value="target-asc">Target ↑</option>
+                                    <option value="rank-asc">Rank ↓</option>
+                                    <option value="rank-desc">Rank ↑</option>
+                                </select>
+                                <input type="text" id="locationSearchTop" placeholder="🔍 Search..." class="has-tooltip" data-tooltip="Search Over-Indexing DMAs" oninput="filterLocationList('top')" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; width: 100px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                            </div>
                         </div>
                         <div class="location-row header">
                             <span>#</span>
                             <span>Location</span>
-                            <span class="sortable has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)" onclick="sortLocationTable('top', 'rank')" title="Sort by DMA Rank">Rank</span>
-                            <span class="sortable" onclick="sortLocationTable('top', 'target')" title="Sort by Target (Percentage)">Target</span>
-                            <span class="sortable" onclick="sortLocationTable('top', 'index')" title="Sort by Index">Index</span>
+                            <span class="has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)">Rank</span>
+                            <span>Target</span>
+                            <span>Index</span>
                         </div>
                         <div id="locationList" style="max-height: 500px; overflow-y: auto;"></div>
                         <div id="locationCountTop" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
@@ -9970,14 +9981,25 @@
                                 <span>❄️ Under-Indexing DMAs (&lt;1.0x)</span>
                                 <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('location', 'Under-Indexing DMAs')">CSV</button><button class="module-btn deck-btn" onclick="addModuleToDeck('location', 'Under-Indexing DMAs')">➕</button></span>
                             </h3>
-                            <input type="text" id="locationSearchBottom" placeholder="🔍 Search DMAs..." class="has-tooltip" data-tooltip="Search Under-Indexing DMAs: Type to filter the list of markets where your audience under-indexes. Results update as you type." oninput="filterLocationList('bottom')" style="padding: 0.4rem 0.75rem; font-size: 0.75rem; width: 150px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
+                                <select id="locationSortBottom" onchange="sortLocationTableBySelect('bottom', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by Rank, Target %, or Index" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 80px;">
+                                    <option value="index-asc">Index ↑</option>
+                                    <option value="index-desc">Index ↓</option>
+                                    <option value="target-desc">Target ↓</option>
+                                    <option value="target-asc">Target ↑</option>
+                                    <option value="rank-asc">Rank ↓</option>
+                                    <option value="rank-desc">Rank ↑</option>
+                                </select>
+                                <input type="text" id="locationSearchBottom" placeholder="🔍 Search..." class="has-tooltip" data-tooltip="Search Under-Indexing DMAs" oninput="filterLocationList('bottom')" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; width: 100px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                            </div>
                         </div>
                         <div class="location-row header">
                             <span>#</span>
                             <span>Location</span>
-                            <span class="sortable has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)" onclick="sortLocationTable('bottom', 'rank')" title="Sort by DMA Rank">Rank</span>
-                            <span class="sortable" onclick="sortLocationTable('bottom', 'target')" title="Sort by Target (Percentage)">Target</span>
-                            <span class="sortable" onclick="sortLocationTable('bottom', 'index')" title="Sort by Index">Index</span>
+                            <span class="has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)">Rank</span>
+                            <span>Target</span>
+                            <span>Index</span>
                         </div>
                         <div id="locationListBottom" style="max-height: 500px; overflow-y: auto;"></div>
                         <div id="locationCountBottom" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
@@ -9992,14 +10014,25 @@
                             <span>📊 All Locations by Percentage</span>
                             <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('location', 'All Locations')" data-tooltip="Export CSV: Download all location data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('location', 'All Locations')" data-tooltip="Add to Deck: Save all locations data to your presentation deck.">➕</button></span>
                         </h3>
-                        <input type="text" id="locationSearchAll" placeholder="🔍 Search DMAs..." class="has-tooltip" data-tooltip="Search All Locations: Type to filter the complete list of all DMAs by name. Results update as you type." oninput="filterAllLocations()" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); width: 200px;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
+                            <select id="locationSortAll" onchange="sortLocationTableBySelect('all', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by Rank, Target %, or Index" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 80px;">
+                                <option value="percentage-desc">Target ↓</option>
+                                <option value="percentage-asc">Target ↑</option>
+                                <option value="index-desc">Index ↓</option>
+                                <option value="index-asc">Index ↑</option>
+                                <option value="rank-asc">Rank ↓</option>
+                                <option value="rank-desc">Rank ↑</option>
+                            </select>
+                            <input type="text" id="locationSearchAll" placeholder="🔍 Search..." class="has-tooltip" data-tooltip="Search All Locations" oninput="filterAllLocations()" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; width: 120px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                        </div>
                     </div>
                     <div class="location-row header">
                         <span>#</span>
                         <span>Location</span>
-                        <span class="sortable has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)" onclick="sortLocationTable('all', 'rank')" title="Sort by DMA Rank">Rank</span>
-                        <span class="sortable" onclick="sortLocationTable('all', 'percentage')" title="Sort by Percentage">Target</span>
-                        <span class="sortable" onclick="sortLocationTable('all', 'index')" title="Sort by Index">Index</span>
+                        <span class="has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)">Rank</span>
+                        <span>Target</span>
+                        <span>Index</span>
                     </div>
                     <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
                     <div id="locationCountAll" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
@@ -11871,6 +11904,7 @@
                                         <div style="height: 60px; position: relative;">
                                             <canvas id="miniTrendChart"></canvas>
                                         </div>
+                                        <div id="miniTrendDates" style="display: flex; justify-content: space-between; font-size: 0.55rem; color: var(--text-secondary); margin-top: 0.25rem; padding: 0 0.25rem;"></div>
                                     </div>
                                 </div>
                                 <!-- Right: Beat/Miss Earnings -->
@@ -16141,6 +16175,7 @@
         function renderMiniTrendChart(dailyData) {
             const canvas = document.getElementById('miniTrendChart');
             const trendSection = document.getElementById('netGrowthTrendSection');
+            const datesContainer = document.getElementById('miniTrendDates');
             
             if (!canvas || !trendSection) return;
             
@@ -16165,6 +16200,21 @@
             
             const dates = last7Days.map(d => d.Date);
             const netGrowth = last7Days.map(d => (d.Calculated_Net_Growth || 0) * 100);
+            
+            // Format dates for display below chart (M/D format)
+            const formatShortDate = (dateStr) => {
+                if (!dateStr) return '';
+                const parts = dateStr.split('-');
+                if (parts.length >= 3) {
+                    return `${parseInt(parts[1])}/${parseInt(parts[2])}`;
+                }
+                return dateStr;
+            };
+            
+            // Populate date labels below chart
+            if (datesContainer) {
+                datesContainer.innerHTML = dates.map(d => `<span>${formatShortDate(d)}</span>`).join('');
+            }
             
             // Determine line color based on trend (last value vs first value)
             const firstValue = netGrowth[0];
@@ -25844,8 +25894,20 @@
                 state.direction = 'desc';
             }
             
-            // Update visual indicators
-            updateSortIndicators(table);
+            // Re-render the table
+            if (table === 'all') {
+                filterAllLocations();
+            } else {
+                filterLocationList(table);
+            }
+        }
+        
+        // Sort location table via dropdown select
+        function sortLocationTableBySelect(table, value) {
+            const [column, direction] = value.split('-');
+            const state = locationSortState[table];
+            state.column = column;
+            state.direction = direction;
             
             // Re-render the table
             if (table === 'all') {
@@ -25855,32 +25917,15 @@
             }
         }
         
-        function updateSortIndicators(table) {
-            const state = locationSortState[table];
-            const headerSelectors = {
-                top: '#tab-location .location-grid .location-section:first-child .location-row.header',
-                bottom: '#tab-location .location-grid .location-section:nth-child(2) .location-row.header',
-                all: '#tab-location .location-table:last-child .location-row.header'
-            };
+        // Update sort dropdown to match current state (called after rendering)
+        function updateLocationSortDropdowns() {
+            const topSelect = document.getElementById('locationSortTop');
+            const bottomSelect = document.getElementById('locationSortBottom');
+            const allSelect = document.getElementById('locationSortAll');
             
-            const headerRow = document.querySelector(headerSelectors[table]);
-            if (!headerRow) return;
-            
-            const headers = headerRow.querySelectorAll('span.sortable');
-            headers.forEach((span) => {
-                span.classList.remove('sort-asc', 'sort-desc');
-                
-                // Check which column this span represents based on onclick attribute
-                const onclick = span.getAttribute('onclick') || '';
-                if (onclick.includes("'rank'") && state.column === 'rank') {
-                    span.classList.add(state.direction === 'asc' ? 'sort-asc' : 'sort-desc');
-                } else if ((onclick.includes("'target'") || onclick.includes("'percentage'")) && 
-                           (state.column === 'target' || state.column === 'percentage')) {
-                    span.classList.add(state.direction === 'asc' ? 'sort-asc' : 'sort-desc');
-                } else if (onclick.includes("'index'") && state.column === 'index') {
-                    span.classList.add(state.direction === 'asc' ? 'sort-asc' : 'sort-desc');
-                }
-            });
+            if (topSelect) topSelect.value = `${locationSortState.top.column}-${locationSortState.top.direction}`;
+            if (bottomSelect) bottomSelect.value = `${locationSortState.bottom.column}-${locationSortState.bottom.direction}`;
+            if (allSelect) allSelect.value = `${locationSortState.all.column}-${locationSortState.all.direction}`;
         }
         
         // 2025 DMA Market Rankings (by Total Homes)
@@ -26117,10 +26162,8 @@
             // Store all locations for filtering
             allLocationData.all = sortedAll;
             
-            // Update sort indicators
-            updateSortIndicators('top');
-            updateSortIndicators('bottom');
-            updateSortIndicators('all');
+            // Update sort dropdowns to match state
+            updateLocationSortDropdowns();
             
             // Clear search inputs
             const searchTop = document.getElementById('locationSearchTop');
@@ -26171,9 +26214,6 @@
                     return state.direction === 'asc' ? -diff : diff;
                 });
             }
-            
-            // Update sort indicators
-            updateSortIndicators(which);
             
             // Render filtered results
             listEl.innerHTML = sorted.map((loc, i) => {
@@ -26236,9 +26276,6 @@
                     return state.direction === 'asc' ? -diff : diff;
                 });
             }
-            
-            // Update sort indicators
-            updateSortIndicators('all');
             
             // Render filtered results
             listEl.innerHTML = sorted.map((loc, i) => {
