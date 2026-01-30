@@ -15010,7 +15010,7 @@
                         <div style="background: var(--bg-input); padding: 0.75rem; border-radius: 6px; border-left: 3px solid #10b981;">
                             <div style="font-weight: 600; color: var(--text-primary);">${i + 1}. ${loc.name}</div>
                             <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                                ${(loc.pct || 0).toFixed(2)}% | Index: <span style="color: #10b981; font-weight: 600;">${formatIndex(loc.index || 0)}</span>
+                                ${(loc.pct || 0).toFixed(4)}% | Index: <span style="color: #10b981; font-weight: 600;">${formatIndex(loc.index || 0)}</span>
                             </div>
                         </div>
                     `;
@@ -15028,7 +15028,7 @@
                             <div style="background: var(--bg-input); padding: 0.75rem; border-radius: 6px; border-left: 3px solid #ef4444;">
                                 <div style="font-weight: 600; color: var(--text-primary);">${i + 1}. ${loc.name}</div>
                                 <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                                    ${(loc.pct || 0).toFixed(2)}% | Index: <span style="color: #ef4444; font-weight: 600;">${formatIndex(loc.index || 0)}</span>
+                                    ${(loc.pct || 0).toFixed(4)}% | Index: <span style="color: #ef4444; font-weight: 600;">${formatIndex(loc.index || 0)}</span>
                                 </div>
                             </div>
                         `;
@@ -25930,7 +25930,7 @@
                 const indexColor = '#10b981'; // Green for over-indexing
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
-                    : loc.pct.toFixed(2) + '%';
+                    : loc.pct.toFixed(4) + '%';
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span>${i + 1}</span>
@@ -25964,7 +25964,7 @@
                 const indexColor = '#ef4444'; // Red for under-indexing
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
-                    : loc.pct.toFixed(2) + '%';
+                    : loc.pct.toFixed(4) + '%';
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span>${i + 1}</span>
@@ -25998,7 +25998,7 @@
                 const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
-                    : loc.pct.toFixed(2) + '%';
+                    : loc.pct.toFixed(4) + '%';
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span>${i + 1}</span>
@@ -26069,7 +26069,7 @@
                 const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
-                    : loc.pct.toFixed(2) + '%';
+                    : loc.pct.toFixed(4) + '%';
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span>${i + 1}</span>
@@ -26125,7 +26125,7 @@
                 const indexColor = loc.index >= 100 ? '#10b981' : '#ef4444';
                 const displayValue = isProjection 
                     ? formatNumber(Math.round(loc.projection || 0))
-                    : loc.pct.toFixed(2) + '%';
+                    : loc.pct.toFixed(4) + '%';
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span>${i + 1}</span>
@@ -26218,7 +26218,7 @@
             
             if (data.locations) {
                 data.locations.forEach(loc => {
-                    csv += `"${loc.name}",${loc.pct.toFixed(2)},${(loc.genPopPct || 0).toFixed(2)},${loc.index || 0}\n`;
+                    csv += `"${loc.name}",${loc.pct.toFixed(4)},${(loc.genPopPct || 0).toFixed(4)},${loc.index || 0}\n`;
                 });
             }
             return csv;
@@ -26444,7 +26444,7 @@
                     ? locations.filter(l => l.index < 100)
                     : locations;
                 filteredLocs.forEach(loc => {
-                    csvContent += `"${loc.name}",${loc.pct.toFixed(2)}%,${loc.genPopPct?.toFixed(2) || 0}%,${loc.index}\n`;
+                    csvContent += `"${loc.name}",${loc.pct.toFixed(4)}%,${loc.genPopPct?.toFixed(4) || 0}%,${loc.index}\n`;
                 });
             } else if (type === 'affinity') {
                 const elementId = {
@@ -27344,7 +27344,7 @@
                         });
                     } else if (item.type === 'location' && item.data.locations) {
                         item.data.locations.forEach(loc => {
-                            csv += `${slideNum},"${profile}","Location","${loc.name}",${loc.pct?.toFixed(2) || 0},${loc.genPopPct?.toFixed(2) || 0},${loc.index || 100}\n`;
+                            csv += `${slideNum},"${profile}","Location","${loc.name}",${loc.pct?.toFixed(4) || 0},${loc.genPopPct?.toFixed(4) || 0},${loc.index || 100}\n`;
                         });
                     } else if (item.data.demographics) {
                         Object.entries(item.data.demographics).forEach(([cat, vals]) => {
