@@ -34730,6 +34730,21 @@
         };
         let selectedCategories = new Set();
         let allCategoriesSelected = true;
+        
+        // Item limits for comparison sections (default to 15, can be changed to 'All')
+        let comparisonSectionLimits = {};
+        
+        function setComparisonSectionLimit(sectionKey, limit) {
+            comparisonSectionLimits[sectionKey] = limit;
+            // Re-render the comparison with new limit
+            if (window.comparisonProfilesData) {
+                renderComparison(window.comparisonProfilesData, currentSortSection, currentSortColumn);
+            }
+        }
+        
+        function getComparisonSectionLimit(sectionKey) {
+            return comparisonSectionLimits[sectionKey] || 15;
+        }
 
         function sortComparisonTable(section, profileIndex) {
             const profiles = window.comparisonProfilesData;
@@ -35055,9 +35070,22 @@
                 const sectionId = firstBehavioral ? 'id="comp-behavioral"' : '';
                 firstBehavioral = false;
                 
+                const currentLimit = getComparisonSectionLimit(catKey);
+                const limitDisplay = currentLimit === 'All' ? 'All' : `Top ${currentLimit}`;
+                
                 html += `
                     <div class="comp-section" ${sectionId}>
-                        <div class="comp-section-title">${cat} (Top 15) <span style="font-size: 0.7rem; font-weight: normal; margin-left: 10px;">Index: <span style="color: #10b981;">●</span> &gt;100 Over | <span style="color: #ef4444;">●</span> &lt;100 Under</span></div>
+                        <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                            <span>${cat} (${limitDisplay}) <span style="font-size: 0.7rem; font-weight: normal; margin-left: 10px;">Index: <span style="color: #10b981;">●</span> &gt;100 Over | <span style="color: #ef4444;">●</span> &lt;100 Under</span></span>
+                            <select onchange="setComparisonSectionLimit('${catKey}', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                <option value="5" ${currentLimit == 5 ? 'selected' : ''}>Top 5</option>
+                                <option value="10" ${currentLimit == 10 ? 'selected' : ''}>Top 10</option>
+                                <option value="15" ${currentLimit == 15 ? 'selected' : ''}>Top 15</option>
+                                <option value="25" ${currentLimit == 25 ? 'selected' : ''}>Top 25</option>
+                                <option value="50" ${currentLimit == 50 ? 'selected' : ''}>Top 50</option>
+                                <option value="All" ${currentLimit === 'All' ? 'selected' : ''}>All</option>
+                            </select>
+                        </div>
                         <table class="comp-table">
                             <thead>
                                 <tr>
@@ -35066,7 +35094,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${renderBehavioralComparisonRows(profiles, cat, sortSection === catKey ? sortProfileIdx : null)}
+                                ${renderBehavioralComparisonRows(profiles, cat, sortSection === catKey ? sortProfileIdx : null, currentLimit)}
                             </tbody>
                         </table>
                     </div>
@@ -35076,9 +35104,22 @@
             // Add Location/DMA comparison if selected and has data
             const hasLocations = profiles.some(p => p.locations && p.locations.length > 0);
             if (hasLocations && selectedCategories.has('location')) {
+                const locationLimit = getComparisonSectionLimit('location');
+                const locationLimitDisplay = locationLimit === 'All' ? 'All' : `Top ${locationLimit}`;
+                
                 html += `
                     <div class="comp-section" id="comp-location">
-                        <div class="comp-section-title">Top Locations/DMAs</div>
+                        <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                            <span>Locations/DMAs (${locationLimitDisplay})</span>
+                            <select onchange="setComparisonSectionLimit('location', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                <option value="5" ${locationLimit == 5 ? 'selected' : ''}>Top 5</option>
+                                <option value="10" ${locationLimit == 10 ? 'selected' : ''}>Top 10</option>
+                                <option value="15" ${locationLimit == 15 ? 'selected' : ''}>Top 15</option>
+                                <option value="25" ${locationLimit == 25 ? 'selected' : ''}>Top 25</option>
+                                <option value="50" ${locationLimit == 50 ? 'selected' : ''}>Top 50</option>
+                                <option value="All" ${locationLimit === 'All' ? 'selected' : ''}>All</option>
+                            </select>
+                        </div>
                         <table class="comp-table">
                             <thead>
                                 <tr>
@@ -35087,7 +35128,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${renderLocationComparisonRows(profiles, sortSection === 'location' ? sortProfileIdx : null)}
+                                ${renderLocationComparisonRows(profiles, sortSection === 'location' ? sortProfileIdx : null, locationLimit)}
                             </tbody>
                         </table>
                     </div>
@@ -35102,7 +35143,7 @@
             container.innerHTML = html;
         }
 
-        function renderBehavioralComparisonRows(profiles, category, sortByProfileIdx = null) {
+        function renderBehavioralComparisonRows(profiles, category, sortByProfileIdx = null, limit = 15) {
             // Get all values across all profiles for this category
             const allValues = new Map();
             profiles.forEach(p => {
@@ -35148,8 +35189,11 @@
                 dataRows.sort((a, b) => Math.max(...b.pctData) - Math.max(...a.pctData));
             }
 
-            // Take top 15
-            dataRows = dataRows.slice(0, 15);
+            // Apply limit (unless 'All')
+            if (limit !== 'All') {
+                const numLimit = parseInt(limit) || 15;
+                dataRows = dataRows.slice(0, numLimit);
+            }
 
             return dataRows.map(row => `
                 <tr>
@@ -35184,7 +35228,7 @@
             `).join('');
         }
 
-        function renderLocationComparisonRows(profiles, sortByProfileIdx = null) {
+        function renderLocationComparisonRows(profiles, sortByProfileIdx = null, limit = 15) {
             // Get all locations across all profiles
             const allLocations = new Set();
             profiles.forEach(p => {
@@ -35213,8 +35257,11 @@
                 dataRows.sort((a, b) => Math.max(...b.pctData) - Math.max(...a.pctData));
             }
 
-            // Take top 15
-            dataRows = dataRows.slice(0, 15);
+            // Apply limit (unless 'All')
+            if (limit !== 'All') {
+                const numLimit = parseInt(limit) || 15;
+                dataRows = dataRows.slice(0, numLimit);
+            }
 
             return dataRows.map(row => `
                 <tr>
