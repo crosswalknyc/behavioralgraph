@@ -9956,11 +9956,8 @@
                         <div class="location-row header">
                             <span>#</span>
                             <span>Location</span>
-                            <span class="has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)" style="cursor: help;">Rank</span>
-                            <span style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort by:</span>
-                                <span class="sortable" onclick="sortLocationTable('top', 'target')" title="Sort by Target (Percentage)">Target</span>
-                            </span>
+                            <span class="sortable has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)" onclick="sortLocationTable('top', 'rank')" title="Sort by DMA Rank">Rank</span>
+                            <span class="sortable" onclick="sortLocationTable('top', 'target')" title="Sort by Target (Percentage)">Target</span>
                             <span class="sortable" onclick="sortLocationTable('top', 'index')" title="Sort by Index">Index</span>
                         </div>
                         <div id="locationList" style="max-height: 500px; overflow-y: auto;"></div>
@@ -9978,11 +9975,8 @@
                         <div class="location-row header">
                             <span>#</span>
                             <span>Location</span>
-                            <span class="has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)" style="cursor: help;">Rank</span>
-                            <span style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort by:</span>
-                                <span class="sortable" onclick="sortLocationTable('bottom', 'target')" title="Sort by Target (Percentage)">Target</span>
-                            </span>
+                            <span class="sortable has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)" onclick="sortLocationTable('bottom', 'rank')" title="Sort by DMA Rank">Rank</span>
+                            <span class="sortable" onclick="sortLocationTable('bottom', 'target')" title="Sort by Target (Percentage)">Target</span>
                             <span class="sortable" onclick="sortLocationTable('bottom', 'index')" title="Sort by Index">Index</span>
                         </div>
                         <div id="locationListBottom" style="max-height: 500px; overflow-y: auto;"></div>
@@ -10003,11 +9997,8 @@
                     <div class="location-row header">
                         <span>#</span>
                         <span>Location</span>
-                        <span class="has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)" style="cursor: help;">Rank</span>
-                        <span style="display: flex; align-items: center; gap: 0.5rem;">
-                            <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort by:</span>
-                            <span class="sortable" onclick="sortLocationTable('all', 'percentage')" title="Sort by Percentage">Target</span>
-                        </span>
+                        <span class="sortable has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)" onclick="sortLocationTable('all', 'rank')" title="Sort by DMA Rank">Rank</span>
+                        <span class="sortable" onclick="sortLocationTable('all', 'percentage')" title="Sort by Percentage">Target</span>
                         <span class="sortable" onclick="sortLocationTable('all', 'index')" title="Sort by Index">Index</span>
                     </div>
                     <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
@@ -25875,25 +25866,19 @@
             const headerRow = document.querySelector(headerSelectors[table]);
             if (!headerRow) return;
             
-            const headers = headerRow.querySelectorAll('span');
-            headers.forEach((span, idx) => {
-                if (idx === 0 || idx === 1) return; // Skip # and Location columns
-                
+            const headers = headerRow.querySelectorAll('span.sortable');
+            headers.forEach((span) => {
                 span.classList.remove('sort-asc', 'sort-desc');
-                if (span.classList.contains('sortable')) {
-                    if (table === 'all') {
-                        if (idx === 2 && state.column === 'percentage') {
-                            span.classList.add(state.direction === 'asc' ? 'sort-asc' : 'sort-desc');
-                        } else if (idx === 3 && state.column === 'index') {
-                            span.classList.add(state.direction === 'asc' ? 'sort-asc' : 'sort-desc');
-                        }
-                    } else {
-                        if (idx === 2 && state.column === 'target') {
-                            span.classList.add(state.direction === 'asc' ? 'sort-asc' : 'sort-desc');
-                        } else if (idx === 3 && state.column === 'index') {
-                            span.classList.add(state.direction === 'asc' ? 'sort-asc' : 'sort-desc');
-                        }
-                    }
+                
+                // Check which column this span represents based on onclick attribute
+                const onclick = span.getAttribute('onclick') || '';
+                if (onclick.includes("'rank'") && state.column === 'rank') {
+                    span.classList.add(state.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+                } else if ((onclick.includes("'target'") || onclick.includes("'percentage'")) && 
+                           (state.column === 'target' || state.column === 'percentage')) {
+                    span.classList.add(state.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+                } else if (onclick.includes("'index'") && state.column === 'index') {
+                    span.classList.add(state.direction === 'asc' ? 'sort-asc' : 'sort-desc');
                 }
             });
         }
@@ -26005,7 +25990,14 @@
             // Sort over-indexing DMAs based on sort state
             const topState = locationSortState.top;
             let sortedOverIndexing = [...overIndexing];
-            if (topState.column === 'target') {
+            if (topState.column === 'rank') {
+                sortedOverIndexing.sort((a, b) => {
+                    const rankA = getDMARank(a.name) || 999;
+                    const rankB = getDMARank(b.name) || 999;
+                    const diff = rankA - rankB;
+                    return topState.direction === 'asc' ? diff : -diff;
+                });
+            } else if (topState.column === 'target') {
                 sortedOverIndexing.sort((a, b) => {
                     const diff = b.pct - a.pct;
                     return topState.direction === 'asc' ? -diff : diff;
@@ -26041,7 +26033,14 @@
             // Sort under-indexing DMAs based on sort state
             const bottomState = locationSortState.bottom;
             let sortedUnderIndexing = [...underIndexing];
-            if (bottomState.column === 'target') {
+            if (bottomState.column === 'rank') {
+                sortedUnderIndexing.sort((a, b) => {
+                    const rankA = getDMARank(a.name) || 999;
+                    const rankB = getDMARank(b.name) || 999;
+                    const diff = rankA - rankB;
+                    return bottomState.direction === 'asc' ? diff : -diff;
+                });
+            } else if (bottomState.column === 'target') {
                 sortedUnderIndexing.sort((a, b) => {
                     const diff = b.pct - a.pct;
                     return bottomState.direction === 'asc' ? -diff : diff;
@@ -26077,7 +26076,14 @@
             // Sort ALL locations based on sort state
             const allState = locationSortState.all;
             let sortedAll = [...locations];
-            if (allState.column === 'percentage') {
+            if (allState.column === 'rank') {
+                sortedAll.sort((a, b) => {
+                    const rankA = getDMARank(a.name) || 999;
+                    const rankB = getDMARank(b.name) || 999;
+                    const diff = rankA - rankB;
+                    return allState.direction === 'asc' ? diff : -diff;
+                });
+            } else if (allState.column === 'percentage') {
                 sortedAll.sort((a, b) => {
                     const diff = b.pct - a.pct;
                     return allState.direction === 'asc' ? -diff : diff;
@@ -26147,7 +26153,14 @@
             const state = locationSortState[which];
             let sorted = [...filtered];
             
-            if (state.column === 'target' || state.column === 'percentage') {
+            if (state.column === 'rank') {
+                sorted.sort((a, b) => {
+                    const rankA = getDMARank(a.name) || 999;
+                    const rankB = getDMARank(b.name) || 999;
+                    const diff = rankA - rankB;
+                    return state.direction === 'asc' ? diff : -diff;
+                });
+            } else if (state.column === 'target' || state.column === 'percentage') {
                 sorted.sort((a, b) => {
                     const diff = b.pct - a.pct;
                     return state.direction === 'asc' ? -diff : diff;
@@ -26205,7 +26218,14 @@
             const state = locationSortState.all;
             let sorted = [...filtered];
             
-            if (state.column === 'percentage') {
+            if (state.column === 'rank') {
+                sorted.sort((a, b) => {
+                    const rankA = getDMARank(a.name) || 999;
+                    const rankB = getDMARank(b.name) || 999;
+                    const diff = rankA - rankB;
+                    return state.direction === 'asc' ? diff : -diff;
+                });
+            } else if (state.column === 'percentage') {
                 sorted.sort((a, b) => {
                     const diff = b.pct - a.pct;
                     return state.direction === 'asc' ? -diff : diff;
