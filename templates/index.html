@@ -12192,10 +12192,21 @@
                                 </div>
                             </div>
                             
-                            <!-- Comparison Results -->
+                            <!-- Live Trend Preview (shows immediately) -->
+                            <div id="tickerCompareTrendPreview" class="insight-card-v2" style="margin-bottom: 1rem;">
+                                <h4 style="margin: 0 0 1rem 0; color: var(--accent-cyan);">📈 Net Growth Trend Comparison</h4>
+                                <div style="height: 350px; position: relative;">
+                                    <canvas id="tickerCompareTrendChart"></canvas>
+                                </div>
+                                <div id="tickerCompareTrendEmpty" style="display: none; text-align: center; padding: 2rem; color: var(--text-secondary);">
+                                    <p>Select at least 2 tickers to see trend comparison.</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Comparison Results (metrics table) -->
                             <div id="tickerCompareResults">
-                                <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
-                                    <p>Select at least 2 tickers and click "Run Comparison" to see results.</p>
+                                <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                                    <p>Select at least 2 tickers and click "Run Comparison" to see detailed metrics.</p>
                                 </div>
                             </div>
                         </div>
@@ -14090,6 +14101,7 @@
             
             if (openTickerTabs.length < 2) {
                 container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem;">Open at least 2 tickers to compare them.</p>';
+                updateTrendPreviewChart();
                 return;
             }
             
@@ -14114,6 +14126,135 @@
             });
             
             container.innerHTML = html;
+            
+            // Update the live trend preview chart
+            updateTrendPreviewChart();
+        }
+        
+        // Live trend preview chart instance
+        let trendPreviewChartInstance = null;
+        
+        function updateTrendPreviewChart() {
+            const selectedTickers = openTickerTabs.filter(t => selectedTickersForComparison.has(t.id));
+            const ctx = document.getElementById('tickerCompareTrendChart');
+            const emptyMsg = document.getElementById('tickerCompareTrendEmpty');
+            
+            if (!ctx) return;
+            
+            // Destroy existing chart
+            if (trendPreviewChartInstance) {
+                trendPreviewChartInstance.destroy();
+                trendPreviewChartInstance = null;
+            }
+            
+            if (selectedTickers.length < 2) {
+                ctx.style.display = 'none';
+                if (emptyMsg) emptyMsg.style.display = 'block';
+                return;
+            }
+            
+            ctx.style.display = 'block';
+            if (emptyMsg) emptyMsg.style.display = 'none';
+            
+            // Get all unique dates across all tickers
+            const allDates = new Set();
+            selectedTickers.forEach(t => {
+                if (t.data && t.data.daily_data) {
+                    t.data.daily_data.forEach(d => allDates.add(d.Date));
+                }
+            });
+            
+            const sortedDates = Array.from(allDates).sort();
+            
+            // Create datasets for each ticker
+            const datasets = selectedTickers.map((ticker, idx) => {
+                const color = tickerCompareColors[idx % tickerCompareColors.length];
+                const dailyData = ticker.data?.daily_data || [];
+                
+                const dataMap = {};
+                dailyData.forEach(d => {
+                    dataMap[d.Date] = (d.Calculated_Net_Growth || 0) * 100;
+                });
+                
+                return {
+                    label: ticker.name,
+                    data: sortedDates.map(date => dataMap[date] ?? null),
+                    borderColor: color,
+                    backgroundColor: color + '20',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 2,
+                    pointHoverRadius: 5,
+                    spanGaps: true
+                };
+            });
+            
+            trendPreviewChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: sortedDates,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: '#e6f1ff',
+                                usePointStyle: true,
+                                padding: 15,
+                                font: { size: 11 }
+                            }
+                        },
+                        tooltip: {
+                            enabled: true,
+                            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                            titleColor: '#00ffff',
+                            bodyColor: '#e6f1ff',
+                            borderColor: '#00ffff',
+                            borderWidth: 1,
+                            padding: 12,
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.raw?.toFixed(2) || 'N/A'}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { 
+                                color: '#8b949e',
+                                maxRotation: 45,
+                                font: { size: 10 }
+                            }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { 
+                                color: '#8b949e',
+                                callback: function(value) {
+                                    return value.toFixed(1) + '%';
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Net Growth %',
+                                color: '#8b949e'
+                            }
+                        }
+                    }
+                }
+            });
         }
         
         function toggleTickerForComparison(tickerId) {
@@ -14129,8 +14270,8 @@
             selectedTickersForComparison.clear();
             renderTickerCompareSelection();
             document.getElementById('tickerCompareResults').innerHTML = `
-                <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
-                    <p>Select at least 2 tickers and click "Run Comparison" to see results.</p>
+                <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    <p>Select at least 2 tickers and click "Run Comparison" to see detailed metrics.</p>
                 </div>
             `;
         }
@@ -14275,25 +14416,15 @@
                 </div>
             `;
             
-            // Add trend comparison chart
-            html += `
-                <div class="insight-card-v2">
-                    <h4 style="margin: 0 0 1rem 0; color: var(--accent-cyan);">📈 Net Growth Trend Comparison</h4>
-                    <div style="height: 350px; position: relative;">
-                        <canvas id="tickerCompareChart"></canvas>
-                    </div>
-                </div>
-            `;
-            
             resultsContainer.innerHTML = html;
-            
-            // Render comparison chart
-            renderTickerComparisonChart(selectedTickers);
         }
         
+        // Legacy chart instance (kept for compatibility)
         let tickerCompareChartInstance = null;
         
         function renderTickerComparisonChart(selectedTickers) {
+            // This function is now handled by updateTrendPreviewChart()
+            // Keeping for backward compatibility
             const ctx = document.getElementById('tickerCompareChart');
             if (!ctx) return;
             
