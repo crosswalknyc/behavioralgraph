@@ -26194,20 +26194,60 @@
             // Direct match first
             if (DMA_RANKS[dmaName]) return DMA_RANKS[dmaName];
             
-            // Normalize function - remove all punctuation and extra spaces, lowercase
-            const normalize = (str) => str.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+            // Normalize function for comparison
+            const normalize = (str) => {
+                return str.toLowerCase()
+                    .replace(/ft\./g, 'fort')           // Ft. -> Fort
+                    .replace(/st\./g, 'saint')          // St. -> Saint
+                    .replace(/\([^)]*\)/g, '')          // Remove parenthetical parts like (Prescott)
+                    .replace(/[^a-z0-9\s]/g, '')        // Remove punctuation
+                    .replace(/\s+/g, ' ')               // Normalize spaces
+                    .trim();
+            };
+            
+            // Get just the primary city name (before state abbreviation)
+            const getPrimaryCity = (str) => {
+                const normalized = normalize(str);
+                // Split on double space or state abbreviation pattern
+                const parts = normalized.split(/\s{2,}/);
+                return parts[0].trim();
+            };
+            
+            // Get state abbreviation
+            const getState = (str) => {
+                const match = str.match(/\b([A-Z]{2})\s*$/i) || str.match(/\s{2,}([A-Z]{2})\b/i);
+                return match ? match[1].toLowerCase() : '';
+            };
+            
             const normalizedInput = normalize(dmaName);
+            const inputCity = getPrimaryCity(dmaName);
+            const inputState = getState(dmaName);
             
             for (const [key, rank] of Object.entries(DMA_RANKS)) {
                 const normalizedKey = normalize(key);
+                
+                // Exact normalized match
                 if (normalizedKey === normalizedInput) return rank;
                 
-                // Check if the primary city matches (first word or words before state)
-                const inputCity = normalizedInput.split(/\s{2,}|\s+[a-z]{2}$/)[0].trim();
-                const keyCity = normalizedKey.split(/\s{2,}|\s+[a-z]{2}$/)[0].trim();
-                if (inputCity && keyCity && inputCity === keyCity) return rank;
+                // Match primary city + state
+                const keyCity = getPrimaryCity(key);
+                const keyState = getState(key);
                 
-                // Also try matching just alphanumeric characters
+                if (inputCity && keyCity && inputState && keyState) {
+                    // Primary city and state match
+                    if (inputCity === keyCity && inputState === keyState) return rank;
+                    
+                    // Check if input city starts with or contains key city
+                    if (inputState === keyState) {
+                        if (inputCity.startsWith(keyCity) || keyCity.startsWith(inputCity)) return rank;
+                        // Check if first word matches (e.g., "dallas" matches "dallas fort worth")
+                        const inputFirstWord = inputCity.split(' ')[0];
+                        const keyFirstWord = keyCity.split(' ')[0];
+                        if (inputFirstWord === keyFirstWord && inputFirstWord.length > 3) return rank;
+                    }
+                }
+                
+                // Alphanumeric only comparison (catches most variations)
                 const alphaInput = dmaName.toLowerCase().replace(/[^a-z0-9]/g, '');
                 const alphaKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
                 if (alphaInput === alphaKey) return rank;
