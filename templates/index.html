@@ -14159,8 +14159,8 @@
             // Get all unique dates across all tickers
             const allDates = new Set();
             selectedTickers.forEach(t => {
-                if (t.data && t.data.daily_data) {
-                    t.data.daily_data.forEach(d => allDates.add(d.Date));
+                if (t.data && t.data.data) {
+                    t.data.data.forEach(d => allDates.add(d.Date));
                 }
             });
             
@@ -14169,7 +14169,7 @@
             // Create datasets for each ticker
             const datasets = selectedTickers.map((ticker, idx) => {
                 const color = tickerCompareColors[idx % tickerCompareColors.length];
-                const dailyData = ticker.data?.daily_data || [];
+                const dailyData = ticker.data?.data || [];
                 
                 const dataMap = {};
                 dailyData.forEach(d => {
@@ -14308,7 +14308,7 @@
             html += `
                 <tr>
                     <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">KPI</td>
-                    ${selectedTickers.map(t => `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${t.data.kpi || '-'}</td>`).join('')}
+                    ${selectedTickers.map(t => `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${t.kpi || t.data.kpi || '-'}</td>`).join('')}
                 </tr>
             `;
             
@@ -14317,9 +14317,10 @@
                 <tr>
                     <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Projected Growth Rate</td>
                     ${selectedTickers.map(t => {
-                        const growth = t.data.projected_growth_rate;
+                        const stats = t.data.calculated_stats || {};
+                        const growth = stats.projected_growth_pct;
                         const color = growth > 0 ? '#10b981' : growth < 0 ? '#ef4444' : 'var(--text-primary)';
-                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: ${color}; font-weight: 600;">${growth !== undefined ? (growth > 0 ? '+' : '') + growth.toFixed(2) + '%' : '-'}</td>`;
+                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: ${color}; font-weight: 600;">${growth !== undefined && growth !== null ? (growth > 0 ? '+' : '') + growth.toFixed(2) + '%' : '-'}</td>`;
                     }).join('')}
                 </tr>
             `;
@@ -14329,8 +14330,9 @@
                 <tr>
                     <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Accuracy</td>
                     ${selectedTickers.map(t => {
-                        const accuracy = t.data.accuracy;
-                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${accuracy !== undefined ? accuracy.toFixed(1) + '%' : '-'}</td>`;
+                        const stats = t.data.calculated_stats || {};
+                        const accuracy = stats.accuracy_score;
+                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${accuracy !== undefined && accuracy !== null ? accuracy.toFixed(1) + '%' : '-'}</td>`;
                     }).join('')}
                 </tr>
             `;
@@ -14340,9 +14342,8 @@
                 <tr>
                     <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Stock Impact</td>
                     ${selectedTickers.map(t => {
-                        const impact = t.data.stock_impact;
-                        const color = impact > 0 ? '#10b981' : impact < 0 ? '#ef4444' : 'var(--text-primary)';
-                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: ${color};">${impact !== undefined ? (impact > 0 ? '+' : '') + impact.toFixed(0) + '%' : '-'}</td>`;
+                        const impact = t.data.relevance_percentage;
+                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${impact !== undefined && impact !== null ? impact + '%' : '-'}</td>`;
                     }).join('')}
                 </tr>
             `;
@@ -14351,7 +14352,13 @@
             html += `
                 <tr>
                     <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Data Range</td>
-                    ${selectedTickers.map(t => `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-size: 0.8rem;">${t.data.date_range || '-'}</td>`).join('')}
+                    ${selectedTickers.map(t => {
+                        const data = t.data.data || [];
+                        if (data.length === 0) return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-size: 0.8rem;">-</td>`;
+                        const startDate = data[0]?.Date || '-';
+                        const endDate = data[data.length - 1]?.Date || '-';
+                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-size: 0.8rem;">${startDate} - ${endDate}</td>`;
+                    }).join('')}
                 </tr>
             `;
             
@@ -14368,43 +14375,46 @@
                 <tr>
                     <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Latest Data</td>
                     ${selectedTickers.map(t => {
-                        const latest = t.data.data && t.data.data.length > 0 ? t.data.data[t.data.data.length - 1] : null;
-                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-size: 0.8rem;">${latest ? latest.date : '-'}</td>`;
+                        const data = t.data.data || [];
+                        const latest = data.length > 0 ? data[data.length - 1] : null;
+                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-size: 0.8rem;">${latest ? latest.Date : '-'}</td>`;
                     }).join('')}
                 </tr>
             `;
             
-            // QTD Net Growth
+            // Current Consumers
             html += `
                 <tr>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">QTD Net Growth</td>
+                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Current Consumers</td>
                     ${selectedTickers.map(t => {
-                        const latest = t.data.data && t.data.data.length > 0 ? t.data.data[t.data.data.length - 1] : null;
-                        const net = latest ? latest.net_growth : null;
-                        const color = net > 0 ? '#10b981' : net < 0 ? '#ef4444' : 'var(--text-primary)';
-                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: ${color}; font-weight: 600;">${net !== null ? formatNumber(net) : '-'}</td>`;
+                        const data = t.data.data || [];
+                        const latest = data.length > 0 ? data[data.length - 1] : null;
+                        const consumers = latest ? latest['Total Consumers'] : null;
+                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 600;">${consumers !== null ? formatNumber(consumers) : '-'}</td>`;
                     }).join('')}
                 </tr>
             `;
             
-            // QTD New Subs
+            // QTD Total Subs
             html += `
                 <tr>
-                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">QTD New Subscriptions</td>
+                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">QTD Total Subs</td>
                     ${selectedTickers.map(t => {
-                        const latest = t.data.data && t.data.data.length > 0 ? t.data.data[t.data.data.length - 1] : null;
-                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">${latest && latest.new_subs !== undefined ? formatNumber(latest.new_subs) : '-'}</td>`;
+                        const stats = t.data.calculated_stats || {};
+                        const subs = stats.total_subs;
+                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: #10b981;">${subs !== undefined && subs !== null ? '+' + formatNumber(subs) : '-'}</td>`;
                     }).join('')}
                 </tr>
             `;
             
-            // QTD Cancellations
+            // QTD Total Cancels
             html += `
                 <tr>
-                    <td style="padding: 0.75rem; color: var(--text-secondary);">QTD Cancellations</td>
+                    <td style="padding: 0.75rem; color: var(--text-secondary);">QTD Total Cancels</td>
                     ${selectedTickers.map(t => {
-                        const latest = t.data.data && t.data.data.length > 0 ? t.data.data[t.data.data.length - 1] : null;
-                        return `<td style="text-align: center; padding: 0.75rem;">${latest && latest.cancellations !== undefined ? formatNumber(latest.cancellations) : '-'}</td>`;
+                        const stats = t.data.calculated_stats || {};
+                        const cancels = stats.total_cancels;
+                        return `<td style="text-align: center; padding: 0.75rem; color: #ef4444;">${cancels !== undefined && cancels !== null ? '-' + formatNumber(cancels) : '-'}</td>`;
                     }).join('')}
                 </tr>
             `;
