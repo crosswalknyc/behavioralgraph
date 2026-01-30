@@ -11808,6 +11808,15 @@
                     <div class="sidebar-header-section">
                         <h3>📈 Tickers</h3>
                         <input type="text" id="tickerSearchInput" class="sidebar-search" placeholder="🔍 Search tickers..." onkeyup="filterTickers()">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                            <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
+                            <select id="tickerSortSelect" onchange="sortTickers(this.value)" style="flex: 1; padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                <option value="alpha">A-Z</option>
+                                <option value="alpha-desc">Z-A</option>
+                                <option value="industry">Industry</option>
+                                <option value="kpi">KPI</option>
+                            </select>
+                        </div>
                     </div>
                     <div id="tickerTree" class="profile-select-tree"></div>
                 </div>
@@ -13616,6 +13625,7 @@
         let currentTickerData = null;
         let dailyChurnChart = null;
         let liveChartAnimation = null;
+        let tickerSortMode = 'alpha'; // 'alpha', 'alpha-desc', 'industry', 'kpi'
         
         // Navigate to Trends tab from Live Data
         function navigateToTrends() {
@@ -13672,12 +13682,13 @@
             const container = document.getElementById('tickerTree');
             const searchTerm = (document.getElementById('tickerSearchInput')?.value || '').toLowerCase();
             
-            let filteredTickers = hedgeFundTickers;
+            let filteredTickers = [...hedgeFundTickers];
             if (searchTerm) {
-                filteredTickers = hedgeFundTickers.filter(t => 
+                filteredTickers = filteredTickers.filter(t => 
                     t.display_name.toLowerCase().includes(searchTerm) ||
                     t.ticker.toLowerCase().includes(searchTerm) ||
-                    t.kpi.toLowerCase().includes(searchTerm)
+                    t.kpi.toLowerCase().includes(searchTerm) ||
+                    (t.industry || '').toLowerCase().includes(searchTerm)
                 );
             }
             
@@ -13686,32 +13697,26 @@
                 return;
             }
             
-            // Group by parent ticker or show all
-            const grouped = {};
-            filteredTickers.forEach(ticker => {
-                const parent = ticker.parent_ticker || ticker.ticker;
-                if (!grouped[parent]) grouped[parent] = [];
-                grouped[parent].push(ticker);
-            });
-            
             let html = '';
-            Object.keys(grouped).sort().forEach(parent => {
-                const tickers = grouped[parent];
-                if (tickers.length === 1) {
-                    const t = tickers[0];
-                    html += `
-                        <div class="sidebar-item" onclick="selectTicker('${t.s3_key}')">
-                            <span class="sidebar-item-name">${t.display_name}</span>
-                            <span class="sidebar-item-meta" style="font-size: 0.7rem; color: var(--text-secondary);">${t.kpi}</span>
-                        </div>
-                    `;
-                } else {
+            
+            // Handle different sort modes
+            if (tickerSortMode === 'industry') {
+                // Group by industry
+                const byIndustry = {};
+                filteredTickers.forEach(t => {
+                    const industry = t.industry || 'Other';
+                    if (!byIndustry[industry]) byIndustry[industry] = [];
+                    byIndustry[industry].push(t);
+                });
+                
+                Object.keys(byIndustry).sort().forEach(industry => {
+                    const tickers = byIndustry[industry].sort((a, b) => a.display_name.localeCompare(b.display_name));
                     html += `
                         <div class="sidebar-category" onclick="toggleTickerCategory(this)">
-                            <span>${parent}</span>
+                            <span>📁 ${industry}</span>
                             <span class="sidebar-category-arrow">▼</span>
                         </div>
-                        <div class="sidebar-category-items">
+                        <div class="sidebar-category-items" style="display: block;">
                             ${tickers.map(t => `
                                 <div class="sidebar-item" onclick="selectTicker('${t.s3_key}')">
                                     <span class="sidebar-item-name">${t.display_name}</span>
@@ -13720,10 +13725,56 @@
                             `).join('')}
                         </div>
                     `;
-                }
-            });
+                });
+            } else if (tickerSortMode === 'kpi') {
+                // Group by KPI
+                const byKpi = {};
+                filteredTickers.forEach(t => {
+                    const kpi = t.kpi || 'Other';
+                    if (!byKpi[kpi]) byKpi[kpi] = [];
+                    byKpi[kpi].push(t);
+                });
+                
+                Object.keys(byKpi).sort().forEach(kpi => {
+                    const tickers = byKpi[kpi].sort((a, b) => a.display_name.localeCompare(b.display_name));
+                    html += `
+                        <div class="sidebar-category" onclick="toggleTickerCategory(this)">
+                            <span>📊 ${kpi}</span>
+                            <span class="sidebar-category-arrow">▼</span>
+                        </div>
+                        <div class="sidebar-category-items" style="display: block;">
+                            ${tickers.map(t => `
+                                <div class="sidebar-item" onclick="selectTicker('${t.s3_key}')">
+                                    <span class="sidebar-item-name">${t.display_name}</span>
+                                    <span class="sidebar-item-meta" style="font-size: 0.7rem; color: var(--text-secondary);">${t.industry || ''}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                });
+            } else {
+                // Alpha sort (A-Z or Z-A)
+                const sorted = filteredTickers.sort((a, b) => {
+                    const cmp = a.display_name.localeCompare(b.display_name);
+                    return tickerSortMode === 'alpha-desc' ? -cmp : cmp;
+                });
+                
+                sorted.forEach(t => {
+                    html += `
+                        <div class="sidebar-item" onclick="selectTicker('${t.s3_key}')">
+                            <span class="sidebar-item-name">${t.display_name}</span>
+                            <span class="sidebar-item-meta" style="font-size: 0.7rem; color: var(--text-secondary);">${t.kpi}</span>
+                        </div>
+                    `;
+                });
+            }
             
             container.innerHTML = html;
+        }
+        
+        function sortTickers(mode) {
+            tickerSortMode = mode;
+            renderTickerTree();
         }
         
         function filterTickers() {
