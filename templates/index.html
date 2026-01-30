@@ -11829,6 +11829,7 @@
                                     <button class="tab-btn" onclick="showTickerTab('daily')">📋 Daily Metrics</button>
                                     <button class="tab-btn" onclick="showTickerTab('historic')">📅 Historic Performance</button>
                                     <button class="tab-btn" onclick="showTickerTab('profile')">👥 Customer Profile</button>
+                                    <button class="tab-btn" onclick="showTickerTab('compare')">⚖️ Compare</button>
                                 </div>
                                 
                                 <!-- Action Buttons -->
@@ -12132,6 +12133,34 @@
                             <!-- Profile Content Container -->
                             <div id="tickerProfileContent">
                                 <div class="loading-placeholder">Loading customer profile...</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Ticker Comparison Tab -->
+                        <div id="compareTab" class="ticker-tab-content" style="display: none;">
+                            <div class="insight-card-v2" style="margin-bottom: 1rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                    <h3 style="margin: 0; color: var(--accent-cyan);">⚖️ Ticker Comparison</h3>
+                                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                        <span id="tickerCompareCount" style="font-size: 0.8rem; color: var(--text-secondary);">0 tickers selected</span>
+                                        <button class="dash-action-btn" onclick="runTickerComparison()" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Run Comparison</button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Ticker Selection Tabs -->
+                                <div id="tickerCompareTabsBar" class="comp-profile-tabs-bar" style="margin-bottom: 0.5rem;"></div>
+                                <div class="comp-profile-tabs-helper" style="margin-top: 0; margin-bottom: 1rem;">
+                                    <span class="helper-star">★</span> = Primary Ticker · Click any tab to change primary · Click × to remove from comparison
+                                </div>
+                            </div>
+                            
+                            <!-- Comparison Results -->
+                            <div id="tickerComparisonResults">
+                                <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                                    <div style="font-size: 3rem; margin-bottom: 1rem;">⚖️</div>
+                                    <h3 style="margin-bottom: 0.5rem;">Select Tickers to Compare</h3>
+                                    <p>Open multiple tickers from the sidebar to add them to comparison.<br>Then click "Run Comparison" to see side-by-side metrics.</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -13837,7 +13866,12 @@
             if (mainTabs) {
                 const buttons = mainTabs.querySelectorAll('.tab-btn');
                 buttons.forEach(btn => {
-                    if (btn.textContent.toLowerCase().includes(tabName === 'livedata' ? 'live' : tabName)) {
+                    const btnText = btn.textContent.toLowerCase();
+                    if (tabName === 'livedata' && btnText.includes('live')) {
+                        btn.classList.add('active');
+                    } else if (tabName === 'compare' && btnText.includes('compare')) {
+                        btn.classList.add('active');
+                    } else if (tabName !== 'livedata' && tabName !== 'compare' && btnText.includes(tabName)) {
                         btn.classList.add('active');
                     }
                 });
@@ -13952,7 +13986,337 @@
                 if (event && event.target) event.target.classList.add('active');
                 // Load profile data if not already loaded
                 loadTickerProfile();
+            } else if (tabName === 'compare') {
+                document.getElementById('tickerCompareTab').style.display = 'block';
+                if (event && event.target) event.target.classList.add('active');
+                // Render comparison tabs
+                renderTickerComparisonTabs();
             }
+        }
+        
+        // Ticker Comparison State
+        let tickersForComparison = new Set(); // Set of tab IDs to compare
+        let primaryTickerIndex = 0;
+        
+        function renderTickerComparisonTabs() {
+            const container = document.getElementById('tickerCompareTabsBar');
+            const countEl = document.getElementById('tickerCompareCount');
+            
+            if (!container) return;
+            
+            // Auto-add all open tabs to comparison
+            openTickerTabs.forEach(tab => {
+                tickersForComparison.add(tab.id);
+            });
+            
+            const selectedTabs = openTickerTabs.filter(t => tickersForComparison.has(t.id));
+            
+            if (countEl) {
+                countEl.textContent = `${selectedTabs.length} tickers selected`;
+            }
+            
+            if (selectedTabs.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-secondary); font-style: italic; padding: 0.5rem;">No tickers open. Select tickers from the sidebar.</div>';
+                return;
+            }
+            
+            const colors = ['#5a9ad9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+            
+            let html = '';
+            selectedTabs.forEach((tab, idx) => {
+                const isPrimary = idx === primaryTickerIndex;
+                const color = colors[idx % colors.length];
+                const shortName = tab.name.length > 20 ? tab.name.substring(0, 18) + '...' : tab.name;
+                
+                html += `
+                    <div class="comp-profile-tab ${isPrimary ? 'is-primary' : ''}" 
+                         style="background: ${color}; cursor: pointer;"
+                         onclick="setTickerComparisonPrimary(${idx})"
+                         title="${tab.name} - ${tab.kpi}${isPrimary ? ' (Primary)' : ''}">
+                        ${isPrimary ? '<span class="comp-profile-tab-primary">★</span>' : ''}
+                        <span class="comp-profile-tab-name">${shortName}</span>
+                        <span class="comp-profile-tab-age">${tab.kpi || ''}</span>
+                        <button class="comp-profile-tab-close" onclick="event.stopPropagation(); removeTickerFromComparison('${tab.id}')" title="Remove from comparison">×</button>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function setTickerComparisonPrimary(index) {
+            primaryTickerIndex = index;
+            renderTickerComparisonTabs();
+            // Re-run comparison if already showing results
+            const resultsContainer = document.getElementById('tickerComparisonResults');
+            if (resultsContainer && !resultsContainer.innerHTML.includes('Select Tickers to Compare')) {
+                runTickerComparison();
+            }
+        }
+        
+        function removeTickerFromComparison(tabId) {
+            tickersForComparison.delete(tabId);
+            
+            // Adjust primary index if needed
+            const selectedTabs = openTickerTabs.filter(t => tickersForComparison.has(t.id));
+            if (primaryTickerIndex >= selectedTabs.length) {
+                primaryTickerIndex = Math.max(0, selectedTabs.length - 1);
+            }
+            
+            renderTickerComparisonTabs();
+            
+            // Re-run comparison if we still have tickers
+            if (selectedTabs.length > 0) {
+                runTickerComparison();
+            } else {
+                // Reset results
+                const resultsContainer = document.getElementById('tickerComparisonResults');
+                if (resultsContainer) {
+                    resultsContainer.innerHTML = `
+                        <div style="text-align: center; padding: 3rem; color: var(--text-secondary);">
+                            <div style="font-size: 3rem; margin-bottom: 1rem;">⚖️</div>
+                            <h3 style="margin-bottom: 0.5rem;">Select Tickers to Compare</h3>
+                            <p>Open multiple tickers from the sidebar to add them to comparison.<br>Then click "Run Comparison" to see side-by-side metrics.</p>
+                        </div>
+                    `;
+                }
+            }
+        }
+        
+        function addTickerToComparison(tabId) {
+            tickersForComparison.add(tabId);
+            renderTickerComparisonTabs();
+        }
+        
+        async function runTickerComparison() {
+            const selectedTabs = openTickerTabs.filter(t => tickersForComparison.has(t.id));
+            
+            if (selectedTabs.length < 1) {
+                alert('Please open at least one ticker to compare');
+                return;
+            }
+            
+            const resultsContainer = document.getElementById('tickerComparisonResults');
+            if (!resultsContainer) return;
+            
+            resultsContainer.innerHTML = '<div style="text-align: center; padding: 2rem;"><div class="loading-spinner"></div><p style="margin-top: 1rem; color: var(--text-secondary);">Loading comparison data...</p></div>';
+            
+            const colors = ['#5a9ad9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+            
+            // Build comparison HTML
+            let html = '';
+            
+            // Summary Table
+            html += `
+                <div class="insight-card-v2" style="margin-bottom: 1rem;">
+                    <h3 style="margin-bottom: 1rem; color: var(--accent-cyan);">📊 Summary Comparison</h3>
+                    <div style="overflow-x: auto;">
+                        <table class="comp-table" style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: left; padding: 0.75rem; border-bottom: 2px solid var(--border-color); color: var(--text-secondary);">Metric</th>
+                                    ${selectedTabs.map((tab, idx) => `
+                                        <th style="text-align: center; padding: 0.75rem; border-bottom: 2px solid var(--border-color); color: ${colors[idx % colors.length]}; ${idx === primaryTickerIndex ? 'background: rgba(255, 215, 0, 0.1);' : ''}">
+                                            ${idx === primaryTickerIndex ? '★ ' : ''}${tab.name}
+                                        </th>
+                                    `).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+            `;
+            
+            // Ticker / KPI
+            html += `
+                <tr>
+                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Ticker</td>
+                    ${selectedTabs.map((tab, idx) => `
+                        <td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); ${idx === primaryTickerIndex ? 'background: rgba(255, 215, 0, 0.1);' : ''}">${tab.data?.ticker || '-'}</td>
+                    `).join('')}
+                </tr>
+                <tr>
+                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">KPI</td>
+                    ${selectedTabs.map((tab, idx) => `
+                        <td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); ${idx === primaryTickerIndex ? 'background: rgba(255, 215, 0, 0.1);' : ''}">${tab.kpi || '-'}</td>
+                    `).join('')}
+                </tr>
+            `;
+            
+            // Latest Data Date
+            html += `
+                <tr>
+                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Latest Data</td>
+                    ${selectedTabs.map((tab, idx) => {
+                        const latest = tab.data?.data?.[tab.data.data.length - 1];
+                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); ${idx === primaryTickerIndex ? 'background: rgba(255, 215, 0, 0.1);' : ''}">${latest?.date || '-'}</td>`;
+                    }).join('')}
+                </tr>
+            `;
+            
+            // Data Points
+            html += `
+                <tr>
+                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Data Points</td>
+                    ${selectedTabs.map((tab, idx) => `
+                        <td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); ${idx === primaryTickerIndex ? 'background: rgba(255, 215, 0, 0.1);' : ''}">${tab.data?.data?.length || 0}</td>
+                    `).join('')}
+                </tr>
+            `;
+            
+            // Accuracy
+            html += `
+                <tr>
+                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Accuracy</td>
+                    ${selectedTabs.map((tab, idx) => {
+                        const accuracy = tab.data?.accuracy;
+                        const accColor = accuracy >= 90 ? '#10b981' : accuracy >= 70 ? '#f59e0b' : '#ef4444';
+                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: ${accColor}; font-weight: 600; ${idx === primaryTickerIndex ? 'background: rgba(255, 215, 0, 0.1);' : ''}">${accuracy ? accuracy.toFixed(1) + '%' : '-'}</td>`;
+                    }).join('')}
+                </tr>
+            `;
+            
+            // QTD Net Growth
+            html += `
+                <tr>
+                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">QTD Net Growth</td>
+                    ${selectedTabs.map((tab, idx) => {
+                        const latest = tab.data?.data?.[tab.data.data.length - 1];
+                        const netGrowth = latest?.cumulative_net_growth;
+                        const growthColor = netGrowth > 0 ? '#10b981' : netGrowth < 0 ? '#ef4444' : 'var(--text-primary)';
+                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: ${growthColor}; font-weight: 600; ${idx === primaryTickerIndex ? 'background: rgba(255, 215, 0, 0.1);' : ''}">${netGrowth !== undefined ? (netGrowth > 0 ? '+' : '') + netGrowth.toFixed(2) + '%' : '-'}</td>`;
+                    }).join('')}
+                </tr>
+            `;
+            
+            // Total New (QTD)
+            html += `
+                <tr>
+                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">QTD New</td>
+                    ${selectedTabs.map((tab, idx) => {
+                        const latest = tab.data?.data?.[tab.data.data.length - 1];
+                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: #10b981; ${idx === primaryTickerIndex ? 'background: rgba(255, 215, 0, 0.1);' : ''}">${latest?.cumulative_new !== undefined ? '+' + latest.cumulative_new.toLocaleString() : '-'}</td>`;
+                    }).join('')}
+                </tr>
+            `;
+            
+            // Total Churned (QTD)
+            html += `
+                <tr>
+                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">QTD Churned</td>
+                    ${selectedTabs.map((tab, idx) => {
+                        const latest = tab.data?.data?.[tab.data.data.length - 1];
+                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: #ef4444; ${idx === primaryTickerIndex ? 'background: rgba(255, 215, 0, 0.1);' : ''}">${latest?.cumulative_churned !== undefined ? '-' + latest.cumulative_churned.toLocaleString() : '-'}</td>`;
+                    }).join('')}
+                </tr>
+            `;
+            
+            // Stock Impact
+            html += `
+                <tr>
+                    <td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">Stock Impact</td>
+                    ${selectedTabs.map((tab, idx) => {
+                        const impact = tab.data?.stock_impact;
+                        return `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); ${idx === primaryTickerIndex ? 'background: rgba(255, 215, 0, 0.1);' : ''}">${impact ? impact + '%' : '-'}</td>`;
+                    }).join('')}
+                </tr>
+            `;
+            
+            html += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            
+            // Trend Comparison Chart
+            html += `
+                <div class="insight-card-v2" style="margin-bottom: 1rem;">
+                    <h3 style="margin-bottom: 1rem; color: var(--accent-cyan);">📈 Net Growth Trend Comparison</h3>
+                    <div style="height: 350px; position: relative;">
+                        <canvas id="tickerComparisonChart"></canvas>
+                    </div>
+                </div>
+            `;
+            
+            resultsContainer.innerHTML = html;
+            
+            // Render comparison chart
+            renderTickerComparisonChart(selectedTabs, colors);
+        }
+        
+        function renderTickerComparisonChart(selectedTabs, colors) {
+            const ctx = document.getElementById('tickerComparisonChart');
+            if (!ctx) return;
+            
+            // Get all unique dates across all tickers
+            const allDates = new Set();
+            selectedTabs.forEach(tab => {
+                (tab.data?.data || []).forEach(d => allDates.add(d.date));
+            });
+            const sortedDates = Array.from(allDates).sort();
+            
+            // Build datasets
+            const datasets = selectedTabs.map((tab, idx) => {
+                const dataMap = {};
+                (tab.data?.data || []).forEach(d => {
+                    dataMap[d.date] = d.cumulative_net_growth;
+                });
+                
+                return {
+                    label: tab.name,
+                    data: sortedDates.map(date => dataMap[date] !== undefined ? dataMap[date] : null),
+                    borderColor: colors[idx % colors.length],
+                    backgroundColor: colors[idx % colors.length] + '20',
+                    fill: false,
+                    tension: 0.3,
+                    pointRadius: 2,
+                    borderWidth: idx === primaryTickerIndex ? 3 : 2
+                };
+            });
+            
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: sortedDates,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { color: '#e6f1ff' }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    return `${context.dataset.label}: ${value !== null ? (value > 0 ? '+' : '') + value.toFixed(2) + '%' : 'N/A'}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            ticks: { color: '#8b949e', maxRotation: 45, minRotation: 45 }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            ticks: {
+                                color: '#8b949e',
+                                callback: function(value) {
+                                    return (value > 0 ? '+' : '') + value.toFixed(1) + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
         }
         
         let currentTickerForProfile = null;
