@@ -6621,7 +6621,7 @@
 
         .location-row {
             display: grid;
-            grid-template-columns: 40px 1fr 50px 70px 60px;
+            grid-template-columns: 120px 50px 1fr 70px 60px;
             padding: 0.4rem 0;
             border-bottom: 1px solid var(--border-color);
             font-size: 0.75rem;
@@ -9953,22 +9953,22 @@
                             </h3>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
-                                <select id="locationSortTop" onchange="sortLocationTableBySelect('top', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by Rank, Target %, or Index" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 80px;">
+                                <select id="locationSortTop" onchange="sortLocationTableBySelect('top', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by Profile, Profile %, or Index" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 80px;">
                                     <option value="index-desc">Index ↓</option>
                                     <option value="index-asc">Index ↑</option>
-                                    <option value="target-desc">Target ↓</option>
-                                    <option value="target-asc">Target ↑</option>
-                                    <option value="rank-asc">Rank ↓</option>
-                                    <option value="rank-desc">Rank ↑</option>
+                                    <option value="target-desc">Profile ↓</option>
+                                    <option value="target-asc">Profile ↑</option>
+                                    <option value="rank-asc">Profile ↓</option>
+                                    <option value="rank-desc">Profile ↑</option>
                                 </select>
                                 <input type="text" id="locationSearchTop" placeholder="🔍 Search..." class="has-tooltip" data-tooltip="Search Over-Indexing DMAs" oninput="filterLocationList('top')" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; width: 100px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                             </div>
                         </div>
                         <div class="location-row header">
-                            <span>#</span>
+                            <span id="locationRankHeaderTop">PROFILE NAME Rank</span>
+                            <span class="has-tooltip" data-tooltip="Profile percentage for this DMA">Profile</span>
                             <span>Location</span>
-                            <span class="has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)">Rank</span>
-                            <span>Target</span>
+                            <span>Profile</span>
                             <span>Index</span>
                         </div>
                         <div id="locationList" style="max-height: 500px; overflow-y: auto;"></div>
@@ -9983,22 +9983,22 @@
                             </h3>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
-                                <select id="locationSortBottom" onchange="sortLocationTableBySelect('bottom', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by Rank, Target %, or Index" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 80px;">
+                                <select id="locationSortBottom" onchange="sortLocationTableBySelect('bottom', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by Profile, Profile %, or Index" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 80px;">
                                     <option value="index-asc">Index ↑</option>
                                     <option value="index-desc">Index ↓</option>
-                                    <option value="target-desc">Target ↓</option>
-                                    <option value="target-asc">Target ↑</option>
-                                    <option value="rank-asc">Rank ↓</option>
-                                    <option value="rank-desc">Rank ↑</option>
+                                    <option value="target-desc">Profile ↓</option>
+                                    <option value="target-asc">Profile ↑</option>
+                                    <option value="rank-asc">Profile ↓</option>
+                                    <option value="rank-desc">Profile ↑</option>
                                 </select>
                                 <input type="text" id="locationSearchBottom" placeholder="🔍 Search..." class="has-tooltip" data-tooltip="Search Under-Indexing DMAs" oninput="filterLocationList('bottom')" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; width: 100px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                             </div>
                         </div>
                         <div class="location-row header">
-                            <span>#</span>
+                            <span id="locationRankHeaderBottom">PROFILE NAME Rank</span>
+                            <span class="has-tooltip" data-tooltip="Profile percentage for this DMA">Profile</span>
                             <span>Location</span>
-                            <span class="has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)">Rank</span>
-                            <span>Target</span>
+                            <span>Profile</span>
                             <span>Index</span>
                         </div>
                         <div id="locationListBottom" style="max-height: 500px; overflow-y: auto;"></div>
@@ -10016,22 +10016,22 @@
                         </h3>
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
-                            <select id="locationSortAll" onchange="sortLocationTableBySelect('all', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by Rank, Target %, or Index" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 80px;">
-                                <option value="percentage-desc">Target ↓</option>
-                                <option value="percentage-asc">Target ↑</option>
+                            <select id="locationSortAll" onchange="sortLocationTableBySelect('all', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by Profile, Profile %, or Index" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 80px;">
+                                <option value="percentage-desc">Profile ↓</option>
+                                <option value="percentage-asc">Profile ↑</option>
                                 <option value="index-desc">Index ↓</option>
                                 <option value="index-asc">Index ↑</option>
-                                <option value="rank-asc">Rank ↓</option>
-                                <option value="rank-desc">Rank ↑</option>
+                                <option value="rank-asc">Profile ↓</option>
+                                <option value="rank-desc">Profile ↑</option>
                             </select>
                             <input type="text" id="locationSearchAll" placeholder="🔍 Search..." class="has-tooltip" data-tooltip="Search All Locations" oninput="filterAllLocations()" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; width: 120px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                         </div>
                     </div>
                     <div class="location-row header">
-                        <span>#</span>
+                        <span>PROFILE NAME Rank</span>
                         <span>Location</span>
-                        <span class="has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)">Rank</span>
-                        <span>Target</span>
+                        <span class="has-tooltip" data-tooltip="Profile percentage for this DMA">Profile</span>
+                        <span>Profile</span>
                         <span>Index</span>
                     </div>
                     <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
@@ -26303,8 +26303,8 @@
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span>${i + 1}</span>
-                        <span>${loc.name}</span>
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
+                        <span>${loc.name}</span>
                         <span>${displayValue}</span>
                         <span style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
                     </div>
@@ -26346,8 +26346,8 @@
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span>${i + 1}</span>
-                        <span>${loc.name}</span>
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
+                        <span>${loc.name}</span>
                         <span>${displayValue}</span>
                         <span style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
                     </div>
@@ -26389,8 +26389,8 @@
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span>${i + 1}</span>
-                        <span>${loc.name}</span>
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
+                        <span>${loc.name}</span>
                         <span style="font-weight: 600;">${displayValue}</span>
                         <span style="color: ${indexColor};">${formatIndex(loc.index)}</span>
                     </div>
@@ -26464,8 +26464,8 @@
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span>${i + 1}</span>
-                        <span>${loc.name}</span>
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
+                        <span>${loc.name}</span>
                         <span>${displayValue}</span>
                         <span style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
                     </div>
@@ -26526,8 +26526,8 @@
                 return `
                     <div class="location-row" data-name="${loc.name.toLowerCase()}">
                         <span>${i + 1}</span>
-                        <span>${loc.name}</span>
                         <span style="color: var(--accent-cyan); font-weight: 500;">${dmaRank || '-'}</span>
+                        <span>${loc.name}</span>
                         <span style="font-weight: 600;">${displayValue}</span>
                         <span style="color: ${indexColor};">${formatIndex(loc.index)}</span>
                     </div>
