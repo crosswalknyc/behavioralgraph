@@ -34604,12 +34604,13 @@
                 }
             });
 
-            // Helper to create sortable header with median age
+            // Helper to create sortable header with median age (only shown for age section)
             const sortableHeader = (section, idx, name, color, medianAge) => {
                 const isSorted = sortSection === section && sortProfileIdx === idx;
                 const isPrimary = idx === primaryProfileIndex;
                 const primaryClass = isPrimary ? 'primary-col' : '';
-                const ageDisplay = medianAge > 0 ? `<span class="header-median-age" title="Median Age">${Math.round(medianAge)}</span>` : '';
+                // Only show median age badge in the Age section
+                const ageDisplay = (section === 'age' && medianAge > 0) ? `<span class="header-median-age" title="Median Age">Median: ${medianAge.toFixed(2)}</span>` : '';
                 return `<th class="sortable ${isSorted ? 'sorted' : ''} ${primaryClass}" style="border-bottom: 3px solid ${color}" onclick="sortComparisonTable('${section}', ${idx})">${name} ${ageDisplay}</th>`;
             };
 
@@ -34662,7 +34663,7 @@
                             </tr>
                             <tr>
                                 <td>Median Age</td>
-                                ${profiles.map((p, idx) => `<td class="${idx === primaryProfileIndex ? 'primary-col' : ''}">${p.medianAge > 0 ? p.medianAge.toFixed(2) + ' years' : '-'}</td>`).join('')}
+                                ${profiles.map((p, idx) => `<td class="${idx === primaryProfileIndex ? 'primary-col' : ''}">${p.medianAge > 0 ? 'Median: ' + p.medianAge.toFixed(2) : '-'}</td>`).join('')}
                             </tr>
                         </tbody>
                     </table>
