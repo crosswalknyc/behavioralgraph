@@ -23895,6 +23895,14 @@
                             <span>${cat.name}</span>
                             <span class="cat-avg" style="color: ${avgColor};">Avg: ${avgPctDisplay}</span>
                         </h4>
+                        <div class="interest-category-header" style="display: flex; justify-content: space-between; padding: 0.25rem 0; margin-bottom: 0.25rem; border-bottom: 1px solid var(--border-color); font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
+                            <span style="flex: 1;">Item</span>
+                            <span style="display: flex; gap: 0.5rem;">
+                                <span style="min-width: 50px; text-align: center;">${isProjection ? 'US #' : 'Profile'}</span>
+                                <span style="min-width: 50px; text-align: center;">${isProjection ? 'GP #' : 'GP'}</span>
+                                <span style="min-width: 40px; text-align: center;">Index</span>
+                            </span>
+                        </div>
                         <div class="interest-category-items">
                             ${cat.items.map(item => {
                                 const isOverIndex = item.index >= 100;
@@ -23913,14 +23921,14 @@
                                 
                                 const genPopDisplay = isProjection 
                                     ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
-                                    : 'GP: ' + formatValueOrNA(genPopPct, true);
+                                    : formatValueOrNA(genPopPct, true);
                                 
                                 return `<div class="interest-category-item">
                                     <span class="item-name">${item.name}</span>
                                     <span class="item-stats">
-                                        <span style="color: ${idxColor}; font-weight: 600;">${formatIndex(item.index)}</span>
-                                        <span style="color: ${idxColor};">${profileDisplay}</span>
-                                        <span style="color: ${isOverIndex ? '#6b7280' : '#fca5a5'};">(${genPopDisplay})</span>
+                                        <span style="min-width: 50px; text-align: center;">${profileDisplay}</span>
+                                        <span style="min-width: 50px; text-align: center; color: var(--text-secondary);">(${genPopDisplay})</span>
+                                        <span style="min-width: 40px; text-align: center; color: ${idxColor}; font-weight: 600;">${formatIndex(item.index)}</span>
                                     </span>
                                 </div>`;
                             }).join('')}
@@ -23964,7 +23972,18 @@
             
             const maxPct = Math.max(...sorted.map(i => i.pct), 1);
             
-            container.innerHTML = sorted.map((item, idx) => {
+            // Add header row
+            const headerRow = `
+                <div class="interest-header-row" style="display: flex; align-items: center; padding: 0.5rem 0.4rem; border-bottom: 2px solid var(--border-color); font-size: 0.7rem; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; background: rgba(102, 217, 239, 0.05); gap: 0.35rem;">
+                    <span style="width: 22px; text-align: right; flex-shrink: 0;">#</span>
+                    <span style="flex: 1; min-width: 0;">Item</span>
+                    <span style="min-width: 55px; text-align: center; flex-shrink: 0;">${isProjection ? 'US #' : 'Profile'}</span>
+                    <span style="min-width: 55px; text-align: center; flex-shrink: 0;">${isProjection ? 'GP #' : 'Gen Pop'}</span>
+                    <span style="min-width: 45px; text-align: center; flex-shrink: 0;">Index</span>
+                </div>
+            `;
+            
+            const itemsHtml = sorted.map((item, idx) => {
                 const isOverIndex = item.index >= 100;
                 const indexColor = isOverIndex ? '#10b981' : '#ef4444';
                 
@@ -23979,7 +23998,7 @@
                     : formatValueOrNA(item.pct, true);
                 const genPopDisplay = isProjection 
                     ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
-                    : 'GP: ' + formatValueOrNA(genPopPct, true);
+                    : formatValueOrNA(genPopPct, true);
                 
                 return `
                     <div class="interest-item" data-name="${item.name.toLowerCase()}" data-category="${item.category}">
@@ -23988,12 +24007,14 @@
                         <div class="interest-bar-container">
                             <div class="interest-bar" style="width: ${(item.pct / maxPct) * 100}%"></div>
                         </div>
-                        <span class="interest-index" style="color: ${indexColor};">${formatIndex(item.index)}</span>
-                        <span class="interest-pct" style="color: ${indexColor};">${profileDisplay}</span>
-                        <span class="interest-genpop" style="color: ${isOverIndex ? '#6b7280' : '#fca5a5'};">(${genPopDisplay})</span>
+                        <span class="interest-pct" style="min-width: 55px; text-align: center;">${profileDisplay}</span>
+                        <span class="interest-genpop" style="min-width: 55px; text-align: center; color: var(--text-secondary);">${genPopDisplay}</span>
+                        <span class="interest-index" style="min-width: 45px; text-align: center; color: ${indexColor};">${formatIndex(item.index)}</span>
                     </div>
                 `;
             }).join('');
+            
+            container.innerHTML = headerRow + itemsHtml;
         }
         
         function sortInterests(sortBy) {
