@@ -38909,16 +38909,16 @@
                         <h2>📁 Create New Workspace</h2>
                         <button onclick="document.getElementById('createWorkspaceModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
                     </div>
-                    <div style="padding: 1rem;">
-                        <div style="margin-bottom: 1rem;">
-                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Workspace Name</label>
-                            <input type="text" id="newWorkspaceName" placeholder="e.g., Q1 Campaign Analysis" style="width: 100%; padding: 0.5rem; border-radius: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary);">
+                    <div style="padding: 1rem; text-align: left;">
+                        <div style="margin-bottom: 1rem; text-align: left;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; font-size: 0.7rem; color: var(--text-secondary);">Workspace Name</label>
+                            <input type="text" id="newWorkspaceName" placeholder="e.g., Q1 Campaign Analysis" style="width: 100%; padding: 0.5rem; border-radius: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); text-align: left;">
                         </div>
-                        <div style="margin-bottom: 1rem;">
-                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Add Team Members</label>
+                        <div style="margin-bottom: 1rem; text-align: left;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; font-size: 0.7rem; color: var(--text-secondary);">Add Team Members</label>
                             <div id="workspaceMembersList" style="max-height: 200px; overflow-y: auto; background: var(--bg-input); border-radius: 4px; padding: 0.5rem;">
                                 ${collabTeamMembers.length > 0 ? collabTeamMembers.map(m => `
-                                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
+                                    <label style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
                                         <input type="checkbox" class="workspace-member-cb" value="${m.username}">
                                         <span>${m.username}</span>
                                         <span style="font-size: 0.7rem; color: var(--text-secondary);">${m.department || ''}</span>
@@ -38926,9 +38926,9 @@
                                 `).join('') : '<p style="color: var(--text-secondary); font-size: 0.8rem;">No team members available</p>'}
                             </div>
                         </div>
-                        <div style="margin-bottom: 1rem;">
-                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Description (optional)</label>
-                            <textarea id="newWorkspaceDesc" placeholder="What is this workspace for?" style="width: 100%; padding: 0.5rem; border-radius: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); min-height: 60px;"></textarea>
+                        <div style="margin-bottom: 1rem; text-align: left;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; text-transform: uppercase; font-size: 0.7rem; color: var(--text-secondary);">Description (optional)</label>
+                            <textarea id="newWorkspaceDesc" placeholder="What is this workspace for?" style="width: 100%; padding: 0.5rem; border-radius: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); min-height: 60px; text-align: left;"></textarea>
                         </div>
                         <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
                             <button class="btn btn-secondary" onclick="document.getElementById('createWorkspaceModal').remove()">Cancel</button>
