@@ -25850,7 +25850,7 @@
                                     <button class="module-btn csv-btn has-tooltip" onclick="event.stopPropagation(); exportModuleCSV('behavioral', '${cat}')" data-tooltip="Export CSV: Download this behavioral category data as a CSV file.">CSV</button>
                                     <button class="module-btn png-btn has-tooltip" onclick="event.stopPropagation(); exportModulePNG('behavioral', '${cat}')" data-tooltip="Export PNG: Download this behavioral category chart as a PNG image.">PNG</button>
                                     <button class="module-btn deck-btn has-tooltip" onclick="event.stopPropagation(); addModuleToDeck('behavioral', '${cat}')" data-tooltip="Add to Deck: Save this behavioral category to your presentation deck.">➕</button>
-                                    <button class="module-btn spotlight-btn has-tooltip" onclick="event.stopPropagation(); openBehavioralSpotlight('${cat.replace(/'/g, "\\'")}')" data-tooltip="Spotlight: Expand this category to view all data in a larger popup window.">🔍</button>
+                                    <button class="module-btn spotlight-btn has-tooltip" onclick="event.stopPropagation(); openBehavioralSpotlight('${cat}')" data-tooltip="Spotlight: Expand this category to view all data in a larger popup window.">🔍</button>
                                 </span>
                                 <select class="item-limit-select has-tooltip" id="limit-${catId}" onchange="event.stopPropagation(); setCategoryItemLimit('${catId}', '${cat}', this.value)" data-tooltip="Click to change how many items are displayed">
                                     ${generateItemLimitOptions(cat, items.length)}
@@ -27773,11 +27773,14 @@
         
         // Spotlight modal for behavioral categories
         function openBehavioralSpotlight(category) {
+            console.log('Opening spotlight for category:', category);
+            
             if (!currentDashboardData || !currentProfileData) {
                 alert('Please select a profile first');
                 return;
             }
             
+            try {
             trackActivity('spotlight_open', category);
             
             // Find the behavioral data for this category
@@ -27884,6 +27887,12 @@
             
             // Add escape key listener
             document.addEventListener('keydown', handleSpotlightEscape);
+            
+            console.log('Spotlight modal opened successfully');
+            } catch (error) {
+                console.error('Error opening spotlight:', error);
+                alert('Error opening spotlight: ' + error.message);
+            }
         }
         
         function closeSpotlightModal(event) {
