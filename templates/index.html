@@ -35411,7 +35411,6 @@
                     <div class="comp-profile-tab ${primaryClass}" style="background: linear-gradient(135deg, ${p.color}dd, ${p.color}99); border-bottom: 3px solid ${p.color};" onclick="setPrimaryProfile(${idx})" title="${isPrimary ? 'Primary Profile' : 'Click to set as primary'}">
                         ${primaryIndicator}
                         <span class="comp-profile-tab-name">${p.name}</span>
-                        <button class="comp-profile-tab-close" onclick="event.stopPropagation(); removeProfileFromComparison('${p.id}', ${p.isSegment || false})" title="Remove from comparison">×</button>
                     </div>
                 `;
             }).join('');
@@ -35433,10 +35432,7 @@
                             <tr>
                                 <th></th>
                                 ${profiles.map((p, idx) => `<th class="${idx === primaryProfileIndex ? 'primary-col' : ''}" style="border-bottom: 3px solid ${p.color}">
-                                    <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-                                        <span>${p.name}</span>
-                                        <button onclick="removeProfileFromComparison('${p.id}', ${p.isSegment || false})" class="comp-table-close-btn" title="Remove from comparison">×</button>
-                                    </div>
+                                    <span>${p.name}</span>
                                 </th>`).join('')}
                             </tr>
                         </thead>
