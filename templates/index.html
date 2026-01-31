@@ -36097,35 +36097,62 @@
                 const allItems = [];
                 if (p.behavioral) {
                     Object.values(p.behavioral).forEach(items => {
-                        items.forEach(item => allItems.push(item));
+                        if (Array.isArray(items)) {
+                            items.forEach(item => {
+                                if (item && typeof item.index === 'number') {
+                                    allItems.push(item);
+                                }
+                            });
+                        }
                     });
                 }
                 
-                const avgIndex = allItems.length ? Math.round(allItems.reduce((sum, i) => sum + (i.index || 0), 0) / allItems.length) : 0;
-                const overIndexCount = allItems.filter(i => i.index > 100).length;
-                const underIndexCount = allItems.filter(i => i.index < 100).length;
-                const strongOverIndex = allItems.filter(i => i.index > 200).length;
+                // Check if this is Gen Pop (baseline profile)
+                const isGenPop = p.name.toUpperCase() === 'GEN POP' || p.name.toUpperCase() === 'GENPOP';
+                
+                const avgIndex = allItems.length ? Math.round(allItems.reduce((sum, i) => sum + (i.index || 100), 0) / allItems.length) : (isGenPop ? 100 : 0);
+                const overIndexCount = allItems.filter(i => (i.index || 100) > 100).length;
+                const underIndexCount = allItems.filter(i => (i.index || 100) < 100).length;
+                const strongOverIndex = allItems.filter(i => (i.index || 100) >= 200).length;
+                const veryStrongOverIndex = allItems.filter(i => (i.index || 100) >= 300).length;
+                const moderateOverIndex = allItems.filter(i => (i.index || 100) >= 150 && (i.index || 100) < 200).length;
+                
+                // Find top over-indexing items
+                const topItems = [...allItems]
+                    .filter(i => (i.index || 100) > 100)
+                    .sort((a, b) => (b.index || 100) - (a.index || 100))
+                    .slice(0, 5);
                 
                 return {
                     name: p.name,
                     color: p.color,
                     sampleSize: p.sampleSize || 0,
+                    projectedUS: p.projectedUS || 0,
                     avgIndex,
                     overIndexCount,
                     underIndexCount,
                     strongOverIndex,
-                    totalBehaviors: allItems.length
+                    veryStrongOverIndex,
+                    moderateOverIndex,
+                    totalBehaviors: allItems.length,
+                    topItems,
+                    isGenPop
                 };
             });
+            
+            // Find the profile with highest avg index (excluding Gen Pop)
+            const topPerformer = benchmarks
+                .filter(b => !b.isGenPop)
+                .sort((a, b) => b.avgIndex - a.avgIndex)[0];
             
             let html = `
                 <div class="benchmark-grid">
                     ${benchmarks.map(b => `
-                        <div class="overlap-card">
-                            <h4 style="color: ${b.color};">${b.name}</h4>
+                        <div class="overlap-card" style="${b.isGenPop ? 'opacity: 0.8;' : ''}">
+                            <h4 style="color: ${b.color};">${b.name} ${b.isGenPop ? '<span style="font-size: 0.7rem; color: var(--text-secondary);">(Baseline)</span>' : ''}</h4>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
                                 <div>
-                                    <div class="benchmark-value ${b.avgIndex >= 100 ? 'positive' : 'negative'}">${b.avgIndex}</div>
+                                    <div class="benchmark-value ${b.avgIndex >= 100 ? 'positive' : 'negative'}">${b.avgIndex || 100}</div>
                                     <div style="font-size: 0.75rem; color: var(--text-secondary);">Avg Index</div>
                                 </div>
                                 <div>
@@ -36133,20 +36160,39 @@
                                     <div style="font-size: 0.75rem; color: var(--text-secondary);">Sample Size</div>
                                 </div>
                                 <div>
-                                    <div class="benchmark-value positive">+${b.overIndexCount}</div>
-                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Over-Indexing</div>
+                                    <div class="benchmark-value positive">+${b.overIndexCount || 0}</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Over-Indexing (100+)</div>
                                 </div>
                                 <div>
-                                    <div class="benchmark-value negative">-${b.underIndexCount}</div>
+                                    <div class="benchmark-value negative">${b.underIndexCount || 0}</div>
                                     <div style="font-size: 0.75rem; color: var(--text-secondary);">Under-Indexing</div>
                                 </div>
                             </div>
                             <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.5rem;">
+                                    <span>Moderate Over-Index (150-199)</span>
+                                    <span style="color: var(--accent-cyan); font-weight: 600;">${b.moderateOverIndex || 0}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.5rem;">
+                                    <span>Strong Over-Index (200-299)</span>
+                                    <span style="color: var(--accent-lime); font-weight: 600;">${b.strongOverIndex || 0}</span>
+                                </div>
                                 <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
-                                    <span>Strong Over-Index (200+)</span>
-                                    <span style="color: var(--accent-lime); font-weight: 600;">${b.strongOverIndex}</span>
+                                    <span>Very Strong Over-Index (300+)</span>
+                                    <span style="color: #f59e0b; font-weight: 600;">${b.veryStrongOverIndex || 0}</span>
                                 </div>
                             </div>
+                            ${!b.isGenPop && b.topItems.length > 0 ? `
+                                <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Top Over-Indexers:</div>
+                                    ${b.topItems.slice(0, 3).map(item => `
+                                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; padding: 0.25rem 0;">
+                                            <span style="color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;">${item.name}</span>
+                                            <span style="color: var(--accent-lime); font-weight: 600;">${item.index}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
                         </div>
                     `).join('')}
                 </div>
@@ -36157,28 +36203,54 @@
                         <thead>
                             <tr>
                                 <th>Metric</th>
-                                ${benchmarks.map(b => `<th style="color: ${b.color};">${b.name.substring(0, 15)}...</th>`).join('')}
+                                ${benchmarks.map(b => `<th style="color: ${b.color};">${b.name.length > 12 ? b.name.substring(0, 12) + '...' : b.name}</th>`).join('')}
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
                                 <td>Average Index</td>
-                                ${benchmarks.map(b => `<td style="color: ${b.avgIndex >= 100 ? 'var(--accent-green)' : 'var(--accent-red)'}; font-weight: 600;">${b.avgIndex}</td>`).join('')}
+                                ${benchmarks.map(b => `<td style="color: ${b.avgIndex >= 100 ? 'var(--accent-green)' : 'var(--accent-red)'}; font-weight: 600;">${b.avgIndex || 100}</td>`).join('')}
                             </tr>
                             <tr>
                                 <td>Behaviors Analyzed</td>
-                                ${benchmarks.map(b => `<td>${b.totalBehaviors}</td>`).join('')}
+                                ${benchmarks.map(b => `<td>${b.totalBehaviors || 0}</td>`).join('')}
+                            </tr>
+                            <tr>
+                                <td>Over-Indexing (100+)</td>
+                                ${benchmarks.map(b => `<td style="color: var(--accent-green);">${b.overIndexCount || 0}</td>`).join('')}
+                            </tr>
+                            <tr>
+                                <td>Strong Over-Index (200+)</td>
+                                ${benchmarks.map(b => `<td style="color: var(--accent-lime);">${b.strongOverIndex || 0}</td>`).join('')}
                             </tr>
                             <tr>
                                 <td>Over vs Under Ratio</td>
                                 ${benchmarks.map(b => {
-                                    const ratio = b.underIndexCount > 0 ? (b.overIndexCount / b.underIndexCount).toFixed(2) : b.overIndexCount;
-                                    return `<td style="color: ${ratio >= 1 ? 'var(--accent-green)' : 'var(--accent-red)'};">${ratio}:1</td>`;
+                                    if (b.isGenPop) return `<td style="color: var(--text-secondary);">N/A</td>`;
+                                    const ratio = b.underIndexCount > 0 ? (b.overIndexCount / b.underIndexCount).toFixed(1) : (b.overIndexCount > 0 ? '∞' : '0');
+                                    const ratioNum = b.underIndexCount > 0 ? (b.overIndexCount / b.underIndexCount) : b.overIndexCount;
+                                    return `<td style="color: ${ratioNum >= 1 ? 'var(--accent-green)' : 'var(--accent-red)'};">${ratio}:1</td>`;
                                 }).join('')}
+                            </tr>
+                            <tr>
+                                <td>Projected US Population</td>
+                                ${benchmarks.map(b => `<td>${formatNumber(b.projectedUS || 0)}</td>`).join('')}
                             </tr>
                         </tbody>
                     </table>
                 </div>
+                
+                ${topPerformer ? `
+                <div class="overlap-card" style="margin-top: 1rem; border-left: 3px solid ${topPerformer.color};">
+                    <h4>🏆 Top Performer: <span style="color: ${topPerformer.color};">${topPerformer.name}</span></h4>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                        With an average index of <strong style="color: var(--accent-lime);">${topPerformer.avgIndex}</strong>, 
+                        ${topPerformer.name} shows the strongest behavioral differentiation with 
+                        <strong style="color: var(--accent-lime);">${topPerformer.strongOverIndex}</strong> behaviors at 200+ index
+                        and <strong style="color: #f59e0b;">${topPerformer.veryStrongOverIndex}</strong> at 300+.
+                    </p>
+                </div>
+                ` : ''}
             `;
             
             document.getElementById('benchmarkContent').innerHTML = html;
