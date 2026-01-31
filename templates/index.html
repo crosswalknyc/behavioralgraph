@@ -23758,14 +23758,88 @@
                 }
             });
             
-            // Add overall summary based on average index
-            const avgIdx = demoInsights.reduce((sum, d) => sum + d.index, 0) / demoInsights.length;
-            if (avgIdx >= 115) {
-                takeaways.push(`<strong>Overall:</strong> This audience has <span class="takeaway-over">distinct demographic characteristics</span> compared to the general population`);
-            } else if (avgIdx <= 90) {
-                takeaways.push(`<strong>Overall:</strong> This audience <span class="takeaway-under">differs from Gen Pop</span> in key demographics`);
+            // Generate smart overall summary based on specific demographic differences
+            const overallTraits = [];
+            
+            // Analyze age skew
+            const ageInsight = demoInsights.find(d => d.label === 'Largest Age Group');
+            if (ageInsight) {
+                const ageValue = ageInsight.value;
+                const ageIdx = ageInsight.index;
+                // Determine if younger or older
+                const youngerAges = ['<16', '16-18', '17-18', '18-20', '19-20', '21-25', '26-30'];
+                const olderAges = ['60+', '65+', '41-59'];
+                
+                if (ageIdx >= 120) {
+                    if (youngerAges.some(a => ageValue.includes(a) || ageValue === a)) {
+                        overallTraits.push('younger');
+                    } else if (olderAges.some(a => ageValue.includes(a) || ageValue === a)) {
+                        overallTraits.push('older');
+                    }
+                }
+            }
+            
+            // Analyze ethnicity/diversity
+            const ethnicityInsight = demoInsights.find(d => d.label === 'Top Ethnicity');
+            if (ethnicityInsight) {
+                const ethValue = ethnicityInsight.value.toUpperCase();
+                const ethIdx = ethnicityInsight.index;
+                
+                // Check if more diverse (non-white ethnicities over-indexed)
+                if (ethIdx >= 120 && !ethValue.includes('WHITE') && !ethValue.includes('CAUCASIAN')) {
+                    overallTraits.push('more multicultural');
+                } else if (ethIdx >= 130 && (ethValue.includes('BLACK') || ethValue.includes('AFRICAN'))) {
+                    overallTraits.push('more diverse with strong Black representation');
+                } else if (ethIdx >= 130 && (ethValue.includes('HISPANIC') || ethValue.includes('LATINO'))) {
+                    overallTraits.push('more diverse with strong Hispanic/Latino representation');
+                } else if (ethIdx >= 130 && (ethValue.includes('ASIAN'))) {
+                    overallTraits.push('more diverse with strong Asian representation');
+                } else if (ethIdx <= 80 && (ethValue.includes('WHITE') || ethValue.includes('CAUCASIAN'))) {
+                    overallTraits.push('more ethnically diverse');
+                }
+            }
+            
+            // Analyze gender skew
+            const genderInsight = demoInsights.find(d => d.label === 'Dominant Gender');
+            if (genderInsight && genderInsight.index >= 130) {
+                const genderValue = genderInsight.value.toLowerCase();
+                overallTraits.push(`predominantly ${genderValue}`);
+            }
+            
+            // Analyze income/affluence
+            const incomeInsight = demoInsights.find(d => d.label === 'Top Income');
+            if (incomeInsight) {
+                const incValue = incomeInsight.value;
+                const incIdx = incomeInsight.index;
+                const isHighIncome = incValue.includes('150') || incValue.includes('250') || incValue.includes('200') || incValue.includes('100k');
+                const isLowIncome = incValue.includes('40') || incValue.includes('Under') || incValue.includes('under');
+                
+                if (incIdx >= 130 && isHighIncome) {
+                    overallTraits.push('more affluent');
+                } else if (incIdx >= 130 && isLowIncome) {
+                    overallTraits.push('more budget-conscious');
+                }
+            }
+            
+            // Build the overall summary
+            if (overallTraits.length > 0) {
+                const traitsList = overallTraits.length === 1 
+                    ? overallTraits[0]
+                    : overallTraits.length === 2
+                        ? `${overallTraits[0]} and ${overallTraits[1]}`
+                        : `${overallTraits.slice(0, -1).join(', ')}, and ${overallTraits[overallTraits.length - 1]}`;
+                
+                takeaways.push(`<strong>Overall:</strong> This audience is <span class="takeaway-over">${traitsList}</span> than the US general population`);
             } else {
-                takeaways.push(`<strong>Overall:</strong> Demographics are <span class="takeaway-highlight">broadly representative</span> of the US population`);
+                // Fallback to generic summary
+                const avgIdx = demoInsights.reduce((sum, d) => sum + d.index, 0) / demoInsights.length;
+                if (avgIdx >= 115) {
+                    takeaways.push(`<strong>Overall:</strong> This audience has <span class="takeaway-over">distinct demographic characteristics</span> compared to the general population`);
+                } else if (avgIdx <= 90) {
+                    takeaways.push(`<strong>Overall:</strong> This audience <span class="takeaway-under">differs from Gen Pop</span> in key demographics`);
+                } else {
+                    takeaways.push(`<strong>Overall:</strong> Demographics are <span class="takeaway-highlight">broadly representative</span> of the US population`);
+                }
             }
             
             if (takeaways.length > 0) {
