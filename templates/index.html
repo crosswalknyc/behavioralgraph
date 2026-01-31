@@ -7689,12 +7689,25 @@
             background: var(--bg-card);
             border-radius: 8px;
             padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
 
         .collab-sidebar h3 {
             font-size: 0.9rem;
             color: var(--accent-cyan);
             margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .collab-sidebar h3 .team-header-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            object-fit: cover;
         }
 
         .workspace-list {
@@ -7721,8 +7734,9 @@
         }
 
         .team-members-list {
-            max-height: 150px;
+            flex: 1;
             overflow-y: auto;
+            min-height: 200px;
         }
 
         .team-member {
@@ -7734,8 +7748,21 @@
         }
 
         .team-member-avatar {
-            width: 28px;
-            height: 28px;
+            width: 32px;
+            height: 32px;
+            flex-shrink: 0;
+        }
+        
+        .team-member-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
+        }
+        
+        .team-member-initials {
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             background: var(--accent-blue);
             display: flex;
@@ -11769,7 +11796,14 @@
                         </div>
                         <button class="btn btn-small" style="width: 100%; margin-top: 0.5rem;" onclick="showCreateWorkspaceModal()">+ New Workspace</button>
                         
-                        <h3 style="margin-top: 1.5rem;">👤 Your Team</h3>
+                        <h3 style="margin-top: 1.5rem;" id="yourTeamHeader">
+                            {% if profile_picture %}
+                            <img src="{{ profile_picture }}" alt="" class="team-header-avatar">
+                            {% else %}
+                            <span style="width: 24px; height: 24px; border-radius: 50%; background: var(--accent-blue); display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 600;">{{ username[:2]|upper }}</span>
+                            {% endif %}
+                            Your Team
+                        </h3>
                         <div id="userTeamInfo" class="team-info-box">
                             <div class="team-info-row"><span class="team-label">Company:</span> <span id="userCompany">--</span></div>
                             <div class="team-info-row"><span class="team-label">Department:</span> <span id="userDepartment">--</span></div>
@@ -40562,15 +40596,25 @@
                                 if (teammates.length === 0) {
                                     list.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">No teammates assigned. Ask your admin to set up your team.</div>';
                                 } else {
-                                    list.innerHTML = teammates.map(u => `
-                                        <div class="team-member" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.5rem;">
-                                            <div class="team-member-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: var(--accent-blue); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.7rem;">${u.username.substring(0, 2).toUpperCase()}</div>
-                                            <div class="team-member-info" style="flex: 1;">
-                                                <span class="team-member-name" style="display: block; font-weight: 600; font-size: 0.85rem;">${u.username}</span>
-                                                <span class="team-member-dept" style="font-size: 0.7rem; color: var(--text-secondary);">${u.department || 'No department'}</span>
+                                    list.innerHTML = teammates.map(u => {
+                                        const displayName = u.first_name && u.last_name 
+                                            ? `${u.first_name} ${u.last_name}` 
+                                            : u.username;
+                                        const avatarHtml = u.profile_picture 
+                                            ? `<img src="${u.profile_picture}" alt="${displayName}">`
+                                            : `<div style="width: 100%; height: 100%; border-radius: 50%; background: var(--accent-blue); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.7rem; color: white;">${u.username.substring(0, 2).toUpperCase()}</div>`;
+                                        return `
+                                            <div class="team-member" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.5rem; background: var(--bg-input); border-radius: 6px; margin-bottom: 0.5rem; border: 1px solid var(--border-color);">
+                                                <div class="team-member-avatar" style="width: 36px; height: 36px; border-radius: 50%; overflow: hidden; flex-shrink: 0;">
+                                                    ${avatarHtml}
+                                                </div>
+                                                <div class="team-member-info" style="flex: 1; min-width: 0;">
+                                                    <span class="team-member-name" style="display: block; font-weight: 600; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</span>
+                                                    <span class="team-member-dept" style="font-size: 0.7rem; color: var(--text-secondary);">${u.department || 'No department'}</span>
+                                                </div>
                                             </div>
-                                        </div>
-                                    `).join('');
+                                        `;
+                                    }).join('');
                                 }
                             }
                         }

@@ -2865,7 +2865,10 @@ def get_users_list():
                 'username': username,
                 'role': user.get('role', 'user'),
                 'company': user.get('company', ''),
-                'department': user.get('department', '')
+                'department': user.get('department', ''),
+                'first_name': user.get('first_name', ''),
+                'last_name': user.get('last_name', ''),
+                'profile_picture': user.get('profile_picture', '')
             })
         return jsonify({'success': True, 'users': users})
     except Exception as e:
