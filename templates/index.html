@@ -3485,14 +3485,24 @@
         }
         
         .interest-category-item .item-stats {
-            display: grid;
-            grid-template-columns: 45px 65px 85px;
+            display: flex;
             gap: 0.5rem;
-            text-align: left;
         }
         
         .interest-category-item .item-stats span {
-            text-align: left;
+            text-align: right;
+        }
+        
+        .interest-category-item .item-stats span:nth-child(1) {
+            min-width: 55px;
+        }
+        
+        .interest-category-item .item-stats span:nth-child(2) {
+            min-width: 55px;
+        }
+        
+        .interest-category-item .item-stats span:nth-child(3) {
+            min-width: 45px;
         }
         
         /* Interests List Section */
@@ -24853,13 +24863,11 @@
                             <span>${cat.name}</span>
                             <span class="cat-avg" style="color: ${avgColor};">Avg: ${avgPctDisplay}</span>
                         </h4>
-                        <div class="interest-category-header" style="display: flex; justify-content: space-between; padding: 0.25rem 0; margin-bottom: 0.25rem; border-bottom: 1px solid var(--border-color); font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
+                        <div class="interest-category-header" style="display: flex; justify-content: space-between; padding: 0.25rem 0; margin-bottom: 0.25rem; border-bottom: 1px solid var(--border-color); font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; gap: 1rem;">
                             <span style="flex: 1; text-align: left;">Item</span>
-                            <span style="display: flex; gap: 0.5rem;">
-                                <span style="min-width: 55px; text-align: right;">${isProjection ? 'US #' : 'Profile'}</span>
-                                <span style="min-width: 55px; text-align: right;">${isProjection ? 'GP #' : 'GP'}</span>
-                                <span style="min-width: 45px; text-align: right;">Index</span>
-                            </span>
+                            <span style="min-width: 55px; text-align: right;">${isProjection ? 'US #' : 'Profile'}</span>
+                            <span style="min-width: 55px; text-align: right;">${isProjection ? 'GP #' : 'GP'}</span>
+                            <span style="min-width: 45px; text-align: right;">Index</span>
                         </div>
                         <div class="interest-category-items">
                             ${cat.items.map(item => {
@@ -24881,13 +24889,11 @@
                                     ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
                                     : formatValueOrNA(genPopPct, true);
                                 
-                                return `<div class="interest-category-item">
-                                    <span class="item-name" style="flex: 1; text-align: left;">${item.name}</span>
-                                    <span class="item-stats">
-                                        <span style="min-width: 55px; text-align: right;">${profileDisplay}</span>
-                                        <span style="min-width: 55px; text-align: right; color: var(--text-secondary);">(${genPopDisplay})</span>
-                                        <span style="min-width: 45px; text-align: right; color: ${idxColor}; font-weight: 600;">${formatIndex(item.index)}</span>
-                                    </span>
+                                return `<div class="interest-category-item" style="display: flex; gap: 1rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border-color); align-items: center;">
+                                    <span class="item-name" style="flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.name}</span>
+                                    <span style="min-width: 55px; text-align: right;">${profileDisplay}</span>
+                                    <span style="min-width: 55px; text-align: right; color: var(--text-secondary);">(${genPopDisplay})</span>
+                                    <span style="min-width: 45px; text-align: right; color: ${idxColor}; font-weight: 600;">${formatIndex(item.index)}</span>
                                 </div>`;
                             }).join('')}
                         </div>
