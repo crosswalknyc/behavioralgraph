@@ -35567,80 +35567,76 @@
             document.getElementById('compJumpToSelect').value = '';
         }
         
-        // Jump to behavioral category in the interests section
+        // Jump to behavioral category card on the Behavioral tab
         function jumpToBehavioralCategory(categoryName) {
-            // First, switch to the Interests tab
-            if (typeof showTab === 'function') {
-                showTab('interests');
-            }
+            // Find the behavioral card with this category
+            const behavioralCards = document.querySelectorAll('.behavioral-card');
+            let targetCard = null;
             
-            // Small delay to ensure tab is switched before filtering
-            setTimeout(() => {
-                // Set the category filter in the All Interests section
-                const categorySelect = document.getElementById('interestsCategorySelect');
-                if (categorySelect) {
-                    // Find the matching option (case-insensitive)
-                    const options = Array.from(categorySelect.options);
-                    const matchingOption = options.find(opt => 
-                        opt.value.toLowerCase() === categoryName.toLowerCase() ||
-                        opt.text.toLowerCase() === categoryName.toLowerCase()
-                    );
-                    if (matchingOption) {
-                        categorySelect.value = matchingOption.value;
-                        // Trigger the filter
-                        if (typeof filterInterests === 'function') {
-                            filterInterests();
-                        }
-                    }
+            behavioralCards.forEach(card => {
+                const cardCategory = card.dataset.category;
+                if (cardCategory && cardCategory.toLowerCase() === categoryName.toLowerCase()) {
+                    targetCard = card;
                 }
+            });
+            
+            if (targetCard) {
+                // Scroll to the card
+                targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 
-                // Scroll to the All Interests section
-                const interestsSection = document.querySelector('.interests-list-section');
-                if (interestsSection) {
-                    interestsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                // Highlight the card briefly
+                targetCard.classList.add('highlighted');
+                setTimeout(() => {
+                    targetCard.classList.remove('highlighted');
+                }, 2000);
+            } else {
+                // If card not found, try to move it to top using the dropdown
+                if (typeof moveCategoryToTop === 'function') {
+                    moveCategoryToTop(categoryName);
                 }
-            }, 100);
+            }
         }
         
-        // Jump to brand/item in the interests section from Top Performing Brands
+        // Jump to brand/item category card on the Behavioral tab
         function jumpToBrandCategory(category, searchTerm) {
-            // First, switch to the Interests tab
-            if (typeof showTab === 'function') {
-                showTab('interests');
-            }
+            if (!category) return;
             
-            // Small delay to ensure tab is switched before filtering
-            setTimeout(() => {
-                // Set the category filter if provided
-                const categorySelect = document.getElementById('interestsCategorySelect');
-                if (categorySelect && category) {
-                    const options = Array.from(categorySelect.options);
-                    const matchingOption = options.find(opt => 
-                        opt.value.toLowerCase() === category.toLowerCase() ||
-                        opt.text.toLowerCase() === category.toLowerCase()
-                    );
-                    if (matchingOption) {
-                        categorySelect.value = matchingOption.value;
+            // Find the behavioral card with this category
+            const behavioralCards = document.querySelectorAll('.behavioral-card');
+            let targetCard = null;
+            
+            behavioralCards.forEach(card => {
+                const cardCategory = card.dataset.category;
+                if (cardCategory && cardCategory.toLowerCase() === category.toLowerCase()) {
+                    targetCard = card;
+                }
+            });
+            
+            if (targetCard) {
+                // Scroll to the card
+                targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Highlight the card briefly
+                targetCard.classList.add('highlighted');
+                setTimeout(() => {
+                    targetCard.classList.remove('highlighted');
+                }, 2000);
+                
+                // If there's a search term, try to find and use the search input in that card
+                if (searchTerm) {
+                    const cardId = targetCard.dataset.category.replace(/[^a-zA-Z0-9]/g, '_');
+                    const searchInput = targetCard.querySelector('input[type="text"]');
+                    if (searchInput) {
+                        searchInput.value = searchTerm;
+                        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
                     }
                 }
-                
-                // Set the search term to find the specific brand
-                const searchInput = document.getElementById('interestsSearchInput');
-                if (searchInput && searchTerm) {
-                    searchInput.value = searchTerm;
+            } else {
+                // If card not found, try to move it to top using the dropdown
+                if (typeof moveCategoryToTop === 'function') {
+                    moveCategoryToTop(category);
                 }
-                
-                // Trigger the filter
-                if (typeof filterInterests === 'function') {
-                    filterInterests();
-                }
-                
-                // Scroll to the All Interests section
-                const interestsSection = document.querySelector('.interests-list-section');
-                if (interestsSection) {
-                    interestsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            }, 100);
+            }
         }
 
         function toggleDisplayMode() {
