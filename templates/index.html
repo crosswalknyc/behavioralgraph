@@ -11511,7 +11511,6 @@
                             <div style="margin-top: 1rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; text-align: center;">
                                 <span class="comp-selected-count" style="font-weight: 600;">0 selected</span>
                             </div>
-                            <button class="btn btn-primary" style="margin-top: 0.5rem; width: 100%;" onclick="runComparison()">📊 COMPARE SELECTED</button>
                             <button class="btn btn-small" style="margin-top: 0.5rem; width: 100%; background: var(--bg-dark);" onclick="clearComparison()">CLEAR ALL</button>
                         </div>
                         <div class="comparison-main">
@@ -11519,8 +11518,8 @@
                             <div id="comp-tab-tables" class="comp-tab-content active">
                                 <div id="comparisonResults">
                                     <div class="comparison-empty">
-                                        <p>Select profiles from the left and click "Compare Selected"</p>
-                                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">All open tabs and Gen Pop are auto-selected when you switch to this tab</p>
+                                        <p>Select profiles from the left to compare</p>
+                                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Check any profile to add it to the comparison grid</p>
                                     </div>
                                 </div>
                             </div>
@@ -34501,7 +34500,8 @@
                 primaryProfileIndex = 0;
                 document.getElementById('comparisonResults').innerHTML = `
                     <div class="comparison-empty">
-                        <p>All profiles removed. Select profiles from the sidebar to compare.</p>
+                        <p>Select profiles from the left to compare</p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Check any profile to add it to the comparison grid</p>
                     </div>
                 `;
             }
@@ -34549,6 +34549,18 @@
             });
             updateSelectedCount();
             renderComparisonProfiles(comparisonProfiles);
+            
+            // Auto-run comparison
+            if (selectedForComparison.size > 0) {
+                runComparison();
+            } else {
+                document.getElementById('comparisonResults').innerHTML = `
+                    <div class="comparison-empty">
+                        <p>Select profiles from the left to compare</p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Check any profile to add it to the comparison grid</p>
+                    </div>
+                `;
+            }
         }
         
         function toggleMasterCategorySelection(masterCategory) {
@@ -34571,6 +34583,18 @@
             });
             updateSelectedCount();
             renderComparisonProfiles(comparisonProfiles);
+            
+            // Auto-run comparison
+            if (selectedForComparison.size > 0) {
+                runComparison();
+            } else {
+                document.getElementById('comparisonResults').innerHTML = `
+                    <div class="comparison-empty">
+                        <p>Select profiles from the left to compare</p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Check any profile to add it to the comparison grid</p>
+                    </div>
+                `;
+            }
         }
 
         function filterComparisonProfiles() {
@@ -34600,6 +34624,19 @@
             }
             updateSelectedCount();
             renderComparisonProfiles(comparisonProfiles);
+            
+            // Automatically run comparison when profiles are selected/deselected
+            if (selectedForComparison.size > 0) {
+                runComparison();
+            } else {
+                // Clear the comparison results when nothing is selected
+                document.getElementById('comparisonResults').innerHTML = `
+                    <div class="comparison-empty">
+                        <p>Select profiles from the left to compare</p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Check any profile to add it to the comparison grid</p>
+                    </div>
+                `;
+            }
         }
 
         function updateSelectedCount() {
@@ -34621,8 +34658,8 @@
             currentSortSection = null;
             updateSelectedCount();
             renderComparisonProfiles(comparisonProfiles);
-            document.getElementById('comparisonResults').innerHTML = '<div class="comparison-empty"><p>Select profiles from the left and click "Compare Selected"</p></div>';
-            document.getElementById('categoryFilterList').innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">Run comparison first</div>';
+            document.getElementById('comparisonResults').innerHTML = '<div class="comparison-empty"><p>Select profiles from the left to compare</p><p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Check any profile to add it to the comparison grid</p></div>';
+            document.getElementById('categoryFilterList').innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">Select profiles to compare</div>';
         }
 
         function selectAllComparison(checked) {
@@ -34636,6 +34673,18 @@
             });
             updateSelectedCount();
             renderComparisonProfiles(comparisonProfiles);
+            
+            // Auto-run comparison
+            if (selectedForComparison.size > 0) {
+                runComparison();
+            } else {
+                document.getElementById('comparisonResults').innerHTML = `
+                    <div class="comparison-empty">
+                        <p>Select profiles from the left to compare</p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Check any profile to add it to the comparison grid</p>
+                    </div>
+                `;
+            }
         }
 
         let currentReportType = 'comparison';
@@ -35152,7 +35201,7 @@
 
         async function runComparison() {
             if (selectedForComparison.size < 1) {
-                alert('Please select at least 1 profile to compare');
+                // No alert needed - the empty state message handles this
                 return;
             }
             
