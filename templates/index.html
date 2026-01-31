@@ -35616,19 +35616,20 @@
 
             // Add behavioral categories (only if selected)
             const sortedBehavioralCats = Array.from(allBehavioralCats).sort();
-            let firstBehavioral = true;
+            const displayedBehavioralCats = []; // Track which categories are displayed for Jump To dropdown
             sortedBehavioralCats.forEach(cat => {
                 const catKey = 'beh_' + cat;
                 if (!selectedCategories.has(catKey)) return; // Skip if not selected
                 
-                const sectionId = firstBehavioral ? 'id="comp-behavioral"' : '';
-                firstBehavioral = false;
+                // Create a safe ID from category name
+                const safeCatId = cat.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+                displayedBehavioralCats.push({ name: cat, id: safeCatId });
                 
                 const currentLimit = getComparisonSectionLimit(catKey);
                 const limitDisplay = currentLimit === 'All' ? 'All' : `Top ${currentLimit}`;
                 
                 html += `
-                    <div class="comp-section" ${sectionId}>
+                    <div class="comp-section" id="comp-beh-${safeCatId}">
                         <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                             <span>${cat} (${limitDisplay}) <span style="font-size: 0.7rem; font-weight: normal; margin-left: 10px;">Index: <span style="color: #10b981;">●</span> &gt;100 Over | <span style="color: #ef4444;">●</span> &lt;100 Under</span></span>
                             <select onchange="setComparisonSectionLimit('${catKey}', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
@@ -35695,6 +35696,45 @@
             }
 
             container.innerHTML = html;
+            
+            // Update the Jump To dropdown with all displayed categories
+            updateJumpToDropdown(displayedBehavioralCats, hasLocations && selectedCategories.has('location'));
+        }
+        
+        function updateJumpToDropdown(behavioralCats, hasLocations) {
+            const dropdown = document.getElementById('compJumpToSelect');
+            if (!dropdown) return;
+            
+            let options = `
+                <option value="">📍 Jump to...</option>
+                <option value="comp-summary">📊 Summary Data</option>
+            `;
+            
+            // Add demographic sections if they exist
+            if (selectedCategories.has('demo_gender')) {
+                options += `<option value="comp-gender">👫 Gender</option>`;
+            }
+            if (selectedCategories.has('demo_age')) {
+                options += `<option value="comp-age">📅 Age</option>`;
+            }
+            if (selectedCategories.has('demo_ethnicity')) {
+                options += `<option value="comp-ethnicity">🌍 Ethnicity</option>`;
+            }
+            if (selectedCategories.has('demo_income')) {
+                options += `<option value="comp-income">💰 Income</option>`;
+            }
+            
+            // Add all behavioral categories
+            behavioralCats.forEach(cat => {
+                options += `<option value="comp-beh-${cat.id}">🎯 ${cat.name}</option>`;
+            });
+            
+            // Add location if available
+            if (hasLocations) {
+                options += `<option value="comp-location">📍 Location</option>`;
+            }
+            
+            dropdown.innerHTML = options;
         }
 
         function renderBehavioralComparisonRows(profiles, category, sortByProfileIdx = null, limit = 15) {
