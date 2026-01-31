@@ -7875,6 +7875,338 @@
             color: var(--text-secondary);
         }
 
+        /* Workspace Deck Builder Styles */
+        .workspace-deck-builder {
+            height: calc(100vh - 400px);
+            min-height: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .deck-builder-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .deck-builder-container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 1rem;
+            flex: 1;
+            min-height: 0;
+        }
+        
+        .deck-list-sidebar {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            padding: 0.75rem;
+            overflow-y: auto;
+        }
+        
+        .deck-list-items {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .deck-list-item {
+            padding: 0.75rem;
+            background: var(--bg-input);
+            border-radius: 6px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .deck-list-item:hover {
+            background: var(--bg-card);
+            border-color: var(--border-color);
+        }
+        
+        .deck-list-item.active {
+            border-color: var(--accent-lime);
+            background: rgba(166, 226, 46, 0.1);
+        }
+        
+        .deck-list-item .deck-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .deck-list-item .deck-meta {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .slide-editor-panel {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .slide-editor-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .slide-editor-toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .slide-editor-toolbar-right {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .slide-editor-body {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            flex: 1;
+            min-height: 0;
+        }
+        
+        .slide-thumbnails {
+            background: var(--bg-input);
+            padding: 0.75rem;
+            overflow-y: auto;
+            border-right: 1px solid var(--border-color);
+        }
+        
+        .slide-thumbnail {
+            aspect-ratio: 16/9;
+            background: var(--bg-card);
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            border: 2px solid transparent;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .slide-thumbnail:hover {
+            border-color: var(--border-color);
+        }
+        
+        .slide-thumbnail.active {
+            border-color: var(--accent-lime);
+        }
+        
+        .slide-thumbnail-number {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        
+        .slide-thumbnail-content {
+            padding: 0.5rem;
+            font-size: 0.6rem;
+            color: var(--text-secondary);
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100%;
+        }
+        
+        .slide-thumbnail-actions {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            display: none;
+            gap: 2px;
+        }
+        
+        .slide-thumbnail:hover .slide-thumbnail-actions {
+            display: flex;
+        }
+        
+        .slide-thumbnail-actions button {
+            background: rgba(0,0,0,0.7);
+            border: none;
+            color: white;
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.6rem;
+        }
+        
+        .slide-canvas {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .slide-preview {
+            width: 100%;
+            max-width: 900px;
+            aspect-ratio: 16/9;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .slide-preview.title-slide {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 2rem;
+        }
+        
+        .slide-preview .slide-title-input {
+            font-size: 2rem;
+            font-weight: 700;
+            background: transparent;
+            border: none;
+            color: white;
+            text-align: center;
+            width: 100%;
+            outline: none;
+        }
+        
+        .slide-preview .slide-title-input:focus {
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+        }
+        
+        .slide-preview .slide-subtitle-input {
+            font-size: 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            text-align: center;
+            width: 100%;
+            outline: none;
+            margin-top: 0.5rem;
+        }
+        
+        .slide-preview.content-slide {
+            padding: 1.5rem;
+        }
+        
+        .slide-content-header {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--accent-lime);
+        }
+        
+        .slide-content-body {
+            flex: 1;
+            overflow: auto;
+        }
+        
+        .slide-notes-section {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--bg-card);
+            border-radius: 6px;
+            width: 100%;
+            max-width: 900px;
+        }
+        
+        .slide-notes-section label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+        
+        .slide-notes-section textarea {
+            width: 100%;
+            min-height: 60px;
+            padding: 0.5rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            resize: vertical;
+        }
+        
+        .add-slide-btn {
+            margin-top: 0.5rem;
+            width: 100%;
+            padding: 0.5rem;
+            background: transparent;
+            border: 2px dashed var(--border-color);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.75rem;
+        }
+        
+        .add-slide-btn:hover {
+            border-color: var(--accent-lime);
+            color: var(--accent-lime);
+        }
+        
+        .module-library {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--bg-card);
+            border-radius: 6px;
+            width: 100%;
+            max-width: 900px;
+        }
+        
+        .module-library h4 {
+            font-size: 0.8rem;
+            margin-bottom: 0.75rem;
+            color: var(--text-secondary);
+        }
+        
+        .module-library-items {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 0.5rem;
+        }
+        
+        .module-library-item {
+            padding: 0.5rem;
+            background: var(--bg-input);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: grab;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .module-library-item:hover {
+            border-color: var(--accent-lime);
+            background: rgba(166, 226, 46, 0.1);
+        }
+        
+        .module-library-item.dragging {
+            opacity: 0.5;
+        }
+
         .shared-profiles-header {
             display: flex;
             justify-content: space-between;
@@ -11876,15 +12208,42 @@
                         </div>
                         
                         <div id="collab-tab-decks" class="collab-tab-content">
-                            <div class="shared-decks-section">
-                                <div class="shared-decks-header">
-                                    <h3>Shared Decks & Presentations</h3>
-                                    <button class="btn btn-primary btn-small" onclick="openDeckWorkspace()">📊 Open Deck Builder</button>
+                            <div class="workspace-deck-builder">
+                                <div class="deck-builder-header">
+                                    <h3>📊 Deck Builder</h3>
+                                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                        <select id="deckWorkspaceFilter" onchange="filterWorkspaceDecks()" style="padding: 0.4rem 0.75rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.8rem;">
+                                            <option value="current">Current Workspace</option>
+                                            <option value="all">All Workspaces</option>
+                                        </select>
+                                        <button class="btn btn-primary btn-small" onclick="createNewWorkspaceDeck()">+ New Deck</button>
+                                    </div>
                                 </div>
-                                <div id="sharedDecksList" class="shared-decks-list">
-                                    <div class="collab-empty">
-                                        <p>No shared decks yet</p>
-                                        <p style="font-size: 0.8rem; color: var(--text-secondary);">Create and share presentation decks with your team</p>
+                                
+                                <div class="deck-builder-container">
+                                    <!-- Left: Deck List -->
+                                    <div class="deck-list-sidebar" id="deckListSidebar">
+                                        <div class="deck-list-items" id="workspaceDecksList">
+                                            <div class="collab-empty" style="padding: 1rem;">
+                                                <p>No decks yet</p>
+                                                <p style="font-size: 0.75rem;">Create a deck to get started</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Right: Slide Editor -->
+                                    <div class="slide-editor-panel" id="slideEditorPanel">
+                                        <div class="slide-editor-empty" id="slideEditorEmpty">
+                                            <div style="text-align: center; padding: 3rem;">
+                                                <div style="font-size: 3rem; margin-bottom: 1rem;">📑</div>
+                                                <h3 style="margin-bottom: 0.5rem;">Select or Create a Deck</h3>
+                                                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Choose a deck from the list or create a new one to start building your presentation.</p>
+                                                <button class="btn btn-primary" onclick="createNewWorkspaceDeck()">+ Create New Deck</button>
+                                            </div>
+                                        </div>
+                                        <div class="slide-editor-content" id="slideEditorContent" style="display: none;">
+                                            <!-- Populated by JavaScript -->
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -27720,6 +28079,7 @@
         
         // Workspace/Deck items storage
         let deckWorkspaceItems = JSON.parse(localStorage.getItem('deckWorkspaceItems') || '[]');
+        let workspaceDecks = JSON.parse(localStorage.getItem('workspaceDecks') || '{}');
         
         function addModuleToDeck(type, category) {
             if (!currentDashboardData || !currentProfileData) {
@@ -27727,16 +28087,185 @@
                 return;
             }
             
-            trackActivity('add_module_to_deck', `${type}:${category}`);
+            // Check if any workspaces or decks exist
+            const wsKeys = Object.keys(workspaces || {});
+            const hasWorkspaces = wsKeys.length > 0;
+            const hasDecks = Object.values(workspaceDecks).some(decks => decks && decks.length > 0);
             
+            if (!hasWorkspaces || !hasDecks) {
+                // Show popup to create workspace/deck first
+                showCreateWorkspaceDeckPrompt(type, category);
+                return;
+            }
+            
+            // Show workspace/deck selection popup
+            showDeckSelectionPopup(type, category);
+        }
+        
+        function showCreateWorkspaceDeckPrompt(type, category) {
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'createFirstModal';
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 450px;">
+                    <div class="deck-workspace-header">
+                        <h2>📊 Create a Deck First</h2>
+                        <button onclick="document.getElementById('createFirstModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1.5rem; text-align: left;">
+                        <p style="margin-bottom: 1.5rem; color: var(--text-secondary); line-height: 1.6;">
+                            To add modules to a deck, you need to create a workspace and deck first. 
+                            Go to the <strong>Collaborate</strong> tab to create a workspace, then create a deck within it.
+                        </p>
+                        <div style="display: flex; gap: 0.75rem;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('createFirstModal').remove()" style="flex: 1;">Cancel</button>
+                            <button class="btn btn-primary" onclick="document.getElementById('createFirstModal').remove(); showTab('collaboration'); setTimeout(() => showCollabTab('decks'), 100);" style="flex: 1;">Go to Collaborate</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function showDeckSelectionPopup(type, category) {
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'deckSelectionModal';
+            
+            // Build workspace and deck options
+            let workspaceOptions = '';
+            Object.entries(workspaces || {}).forEach(([wsId, ws]) => {
+                workspaceOptions += `<option value="${wsId}">${ws.name || wsId}</option>`;
+            });
+            
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 450px;">
+                    <div class="deck-workspace-header">
+                        <h2>➕ Add to Deck</h2>
+                        <button onclick="document.getElementById('deckSelectionModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1.5rem; text-align: left;">
+                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-dark); border-radius: 8px; border-left: 3px solid var(--accent-lime);">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Adding:</div>
+                            <div style="font-weight: 600;">${currentProfileData?.name || 'Profile'} - ${category}</div>
+                        </div>
+                        
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.8rem; color: var(--text-secondary);">SELECT WORKSPACE</label>
+                            <select id="deckSelectWorkspace" onchange="updateDeckOptions()" style="width: 100%; padding: 0.6rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary);">
+                                ${workspaceOptions}
+                            </select>
+                        </div>
+                        
+                        <div style="margin-bottom: 1.5rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.8rem; color: var(--text-secondary);">SELECT DECK</label>
+                            <select id="deckSelectDeck" style="width: 100%; padding: 0.6rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary);">
+                                <option value="">-- Select a deck --</option>
+                            </select>
+                            <button onclick="quickCreateDeck()" style="margin-top: 0.5rem; padding: 0.4rem 0.75rem; font-size: 0.75rem; background: transparent; border: 1px dashed var(--border-color); color: var(--text-secondary); border-radius: 4px; cursor: pointer;">+ Create New Deck</button>
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.75rem;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('deckSelectionModal').remove()" style="flex: 1;">Cancel</button>
+                            <button class="btn btn-primary" onclick="confirmAddToDeck('${type}', '${category}')" style="flex: 1;">Add to Deck</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            // Initialize deck options for first workspace
+            updateDeckOptions();
+        }
+        
+        function updateDeckOptions() {
+            const wsId = document.getElementById('deckSelectWorkspace')?.value;
+            const deckSelect = document.getElementById('deckSelectDeck');
+            if (!deckSelect || !wsId) return;
+            
+            const decks = workspaceDecks[wsId] || [];
+            deckSelect.innerHTML = decks.length === 0 
+                ? '<option value="">No decks - create one first</option>'
+                : decks.map(d => `<option value="${d.id}">${d.name} (${d.slides?.length || 0} slides)</option>`).join('');
+        }
+        
+        function quickCreateDeck() {
+            const wsId = document.getElementById('deckSelectWorkspace')?.value;
+            if (!wsId) {
+                alert('Please select a workspace first');
+                return;
+            }
+            
+            const name = prompt('Enter deck name:', 'New Deck');
+            if (!name) return;
+            
+            const newDeck = {
+                id: 'deck_' + Date.now(),
+                name: name,
+                workspaceId: wsId,
+                slides: [],
+                titleSlide: {
+                    title: currentProfileData?.name || 'Audience Profile',
+                    subtitle: 'Powered by Crosswalk IQ',
+                    image: currentProfileData?.image || null
+                },
+                createdBy: currentUsername,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            
+            if (!workspaceDecks[wsId]) workspaceDecks[wsId] = [];
+            workspaceDecks[wsId].push(newDeck);
+            localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            
+            updateDeckOptions();
+            document.getElementById('deckSelectDeck').value = newDeck.id;
+            showNotification(`✅ Deck "${name}" created!`, 'success');
+        }
+        
+        function confirmAddToDeck(type, category) {
+            const wsId = document.getElementById('deckSelectWorkspace')?.value;
+            const deckId = document.getElementById('deckSelectDeck')?.value;
+            
+            if (!wsId || !deckId) {
+                alert('Please select a workspace and deck');
+                return;
+            }
+            
+            // Find the deck
+            const decks = workspaceDecks[wsId] || [];
+            const deck = decks.find(d => d.id === deckId);
+            if (!deck) {
+                alert('Deck not found');
+                return;
+            }
+            
+            // Create the slide/module item
+            const item = createModuleItem(type, category);
+            
+            // Add to deck slides
+            if (!deck.slides) deck.slides = [];
+            deck.slides.push(item);
+            deck.updatedAt = new Date().toISOString();
+            
+            localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            
+            document.getElementById('deckSelectionModal')?.remove();
+            showNotification(`✅ Added "${item.title}" to ${deck.name}`, 'success');
+            trackActivity('add_module_to_deck', `${type}:${category}:${deck.name}`);
+        }
+        
+        function createModuleItem(type, category) {
             const item = {
-                id: Date.now(),
+                id: 'slide_' + Date.now(),
                 type: type,
                 category: category,
-                profileName: currentProfileData.name || 'Profile',
+                profileName: currentProfileData?.name || 'Profile',
                 profileKey: currentS3Key,
                 dateAdded: new Date().toISOString(),
-                data: null
+                data: null,
+                customTitle: null,
+                customNotes: ''
             };
             
             // Store specific module data
@@ -27756,7 +28285,6 @@
                 item.title = `${item.profileName} - ${category}`;
             } else if (type === 'location') {
                 if (category === 'Regional Breakdown') {
-                    // Get regional data from the DOM
                     const regions = [];
                     document.querySelectorAll('#regionalBreakdown .regional-stat').forEach(el => {
                         regions.push({
@@ -27778,7 +28306,6 @@
                 }
                 item.title = `${item.profileName} - ${category}`;
             } else if (type === 'affinity') {
-                // Get affinity data from the DOM element
                 const elementId = {
                     'Content & Entertainment': 'affinityContent',
                     'Brand Affinities': 'affinityBrands',
@@ -27798,13 +28325,16 @@
                 }
                 item.data = { items };
                 item.title = `${item.profileName} - ${category}`;
+            } else if (type === 'chart') {
+                // Capture chart as image
+                const canvas = document.querySelector(`#${category}Chart`);
+                if (canvas) {
+                    item.data = { chartImage: canvas.toDataURL('image/png') };
+                }
+                item.title = `${item.profileName} - ${category} Chart`;
             }
             
-            deckWorkspaceItems.push(item);
-            localStorage.setItem('deckWorkspaceItems', JSON.stringify(deckWorkspaceItems));
-            updateDeckCount();
-            
-            showDeckNotification(item.title);
+            return item;
         }
         
         // Spotlight modal for behavioral categories
@@ -39941,7 +40471,7 @@
             if (tabName === 'activity') {
                 loadActivityLog();
             } else if (tabName === 'decks') {
-                loadSharedDecks();
+                initWorkspaceDeckBuilder();
             } else if (tabName === 'shared') {
                 renderSharedProfiles();
             } else if (tabName === 'comments') {
@@ -40535,6 +41065,847 @@
                 alert('Error copying deck');
             }
         }
+        
+        // ============================================================================
+        // WORKSPACE DECK BUILDER - Integrated Slide Editor
+        // ============================================================================
+        
+        let currentEditingDeck = null;
+        let currentEditingSlide = 0;
+        
+        function initWorkspaceDeckBuilder() {
+            // Load decks for current workspace
+            renderWorkspaceDecks();
+        }
+        
+        function filterWorkspaceDecks() {
+            renderWorkspaceDecks();
+        }
+        
+        function renderWorkspaceDecks() {
+            const list = document.getElementById('workspaceDecksList');
+            if (!list) return;
+            
+            const filter = document.getElementById('deckWorkspaceFilter')?.value || 'current';
+            let decksToShow = [];
+            
+            if (filter === 'current') {
+                decksToShow = workspaceDecks[currentWorkspace] || [];
+            } else {
+                // All workspaces
+                Object.entries(workspaceDecks).forEach(([wsId, decks]) => {
+                    const wsName = workspaces[wsId]?.name || wsId;
+                    (decks || []).forEach(d => {
+                        decksToShow.push({ ...d, workspaceName: wsName });
+                    });
+                });
+            }
+            
+            if (decksToShow.length === 0) {
+                list.innerHTML = `
+                    <div class="collab-empty" style="padding: 1rem;">
+                        <p>No decks yet</p>
+                        <p style="font-size: 0.75rem;">Create a deck to get started</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            list.innerHTML = decksToShow.map(d => `
+                <div class="deck-list-item ${currentEditingDeck?.id === d.id ? 'active' : ''}" onclick="openDeckInEditor('${d.workspaceId || currentWorkspace}', '${d.id}')">
+                    <div class="deck-name">${d.name}</div>
+                    <div class="deck-meta">
+                        <span>${d.slides?.length || 0} slides</span>
+                        ${d.workspaceName ? `<span>• ${d.workspaceName}</span>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function createNewWorkspaceDeck() {
+            const name = prompt('Enter deck name:', 'New Presentation');
+            if (!name) return;
+            
+            const newDeck = {
+                id: 'deck_' + Date.now(),
+                name: name,
+                workspaceId: currentWorkspace,
+                slides: [],
+                titleSlide: {
+                    title: currentProfileData?.name || 'Audience Profile',
+                    subtitle: 'Powered by Crosswalk IQ',
+                    image: null
+                },
+                createdBy: currentUsername,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            
+            if (!workspaceDecks[currentWorkspace]) workspaceDecks[currentWorkspace] = [];
+            workspaceDecks[currentWorkspace].push(newDeck);
+            localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            
+            renderWorkspaceDecks();
+            openDeckInEditor(currentWorkspace, newDeck.id);
+            showNotification(`✅ Deck "${name}" created!`, 'success');
+        }
+        
+        function openDeckInEditor(wsId, deckId) {
+            const decks = workspaceDecks[wsId] || [];
+            const deck = decks.find(d => d.id === deckId);
+            if (!deck) {
+                alert('Deck not found');
+                return;
+            }
+            
+            currentEditingDeck = deck;
+            currentEditingSlide = 0;
+            
+            renderWorkspaceDecks();
+            renderSlideEditor();
+        }
+        
+        function renderSlideEditor() {
+            const emptyEl = document.getElementById('slideEditorEmpty');
+            const contentEl = document.getElementById('slideEditorContent');
+            
+            if (!currentEditingDeck) {
+                if (emptyEl) emptyEl.style.display = 'block';
+                if (contentEl) contentEl.style.display = 'none';
+                return;
+            }
+            
+            if (emptyEl) emptyEl.style.display = 'none';
+            if (contentEl) contentEl.style.display = 'flex';
+            
+            const deck = currentEditingDeck;
+            const allSlides = [{ type: 'title', ...deck.titleSlide }, ...(deck.slides || [])];
+            const currentSlide = allSlides[currentEditingSlide] || allSlides[0];
+            
+            contentEl.innerHTML = `
+                <div class="slide-editor-toolbar">
+                    <div class="slide-editor-toolbar-left">
+                        <input type="text" value="${deck.name}" onchange="updateDeckNameInEditor(this.value)" 
+                               style="font-size: 1rem; font-weight: 600; background: transparent; border: none; color: var(--text-primary); width: 200px;">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary);">${allSlides.length} slides</span>
+                    </div>
+                    <div class="slide-editor-toolbar-right">
+                        <div class="export-dropdown" style="position: relative;">
+                            <button class="btn btn-small btn-secondary" onclick="toggleDeckExportMenu()">📥 Export ▾</button>
+                            <div id="deckExportMenu" class="export-dropdown-menu" style="display: none; position: absolute; top: 100%; right: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 180px; z-index: 1000; margin-top: 0.25rem;">
+                                <a onclick="exportDeckToPDF()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">📄 PDF</a>
+                                <a onclick="exportDeckToGoogleSlides()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">📑 Google Slides</a>
+                                <a onclick="exportDeckToPPT()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">📊 PowerPoint (.pptx)</a>
+                                <a onclick="exportDeckToKeynote()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">🍎 Keynote</a>
+                            </div>
+                        </div>
+                        <button class="btn btn-small btn-primary" onclick="shareDeckWithTeam()">👥 Share</button>
+                        <button class="btn btn-small btn-danger" onclick="deleteDeckFromEditor()" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">🗑️</button>
+                    </div>
+                </div>
+                
+                <div class="slide-editor-body">
+                    <div class="slide-thumbnails">
+                        ${allSlides.map((slide, idx) => `
+                            <div class="slide-thumbnail ${idx === currentEditingSlide ? 'active' : ''}" 
+                                 onclick="selectSlide(${idx})"
+                                 draggable="${idx > 0 ? 'true' : 'false'}"
+                                 ondragstart="handleSlideDragStart(event, ${idx})"
+                                 ondragover="handleSlideDragOver(event)"
+                                 ondrop="handleSlideDrop(event, ${idx})">
+                                <span class="slide-thumbnail-number">${idx + 1}</span>
+                                <div class="slide-thumbnail-content">
+                                    ${idx === 0 ? '📑 Title' : (slide.title || slide.category || 'Slide')}
+                                </div>
+                                ${idx > 0 ? `
+                                    <div class="slide-thumbnail-actions">
+                                        <button onclick="event.stopPropagation(); moveSlideInDeck(${idx}, -1)" title="Move up">↑</button>
+                                        <button onclick="event.stopPropagation(); moveSlideInDeck(${idx}, 1)" title="Move down">↓</button>
+                                        <button onclick="event.stopPropagation(); deleteSlideFromDeck(${idx})" title="Delete">×</button>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `).join('')}
+                        <button class="add-slide-btn" onclick="showAddSlideOptions()">+ Add Slide</button>
+                    </div>
+                    
+                    <div class="slide-canvas">
+                        ${renderCurrentSlide(currentSlide, currentEditingSlide)}
+                        
+                        <div class="slide-notes-section">
+                            <label>Speaker Notes</label>
+                            <textarea placeholder="Add notes for this slide..." 
+                                      onchange="updateSlideNotes(${currentEditingSlide}, this.value)">${currentSlide.notes || ''}</textarea>
+                        </div>
+                        
+                        ${currentEditingSlide === 0 ? '' : `
+                            <div class="module-library">
+                                <h4>📦 Available Modules (drag to add)</h4>
+                                <div class="module-library-items" id="moduleLibraryItems">
+                                    ${renderModuleLibrary()}
+                                </div>
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderCurrentSlide(slide, idx) {
+            if (idx === 0 || slide.type === 'title') {
+                // Title slide
+                return `
+                    <div class="slide-preview title-slide">
+                        <div style="margin-bottom: 2rem;">
+                            ${slide.image ? `<img src="${slide.image}" style="max-width: 150px; max-height: 150px; border-radius: 8px; margin-bottom: 1rem;">` : ''}
+                        </div>
+                        <input type="text" class="slide-title-input" value="${slide.title || 'Presentation Title'}" 
+                               onchange="updateTitleSlide('title', this.value)" placeholder="Presentation Title">
+                        <input type="text" class="slide-subtitle-input" value="${slide.subtitle || ''}" 
+                               onchange="updateTitleSlide('subtitle', this.value)" placeholder="Subtitle or description">
+                        <div style="margin-top: 2rem;">
+                            <button class="btn btn-small btn-secondary" onclick="uploadTitleImage()">🖼️ Add Image</button>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Content slide
+            return `
+                <div class="slide-preview content-slide">
+                    <div class="slide-content-header">
+                        <input type="text" value="${slide.customTitle || slide.title || slide.category}" 
+                               onchange="updateSlideTitle(${idx}, this.value)"
+                               style="font-size: 1.25rem; font-weight: 600; background: transparent; border: none; color: var(--accent-lime); width: 100%;">
+                    </div>
+                    <div class="slide-content-body">
+                        ${renderSlideContent(slide)}
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderSlideContent(slide) {
+            if (!slide.data) {
+                return '<p style="color: var(--text-secondary);">No data available for this slide</p>';
+            }
+            
+            if (slide.type === 'demographic') {
+                const values = slide.data.values || {};
+                const entries = Object.entries(values).sort((a, b) => b[1] - a[1]).slice(0, 8);
+                return `
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                        ${entries.map(([key, val]) => `
+                            <div style="background: var(--bg-input); padding: 0.75rem; border-radius: 6px;">
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">${key}</div>
+                                <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-lime);">${parseFloat(val).toFixed(1)}%</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            if (slide.type === 'behavioral') {
+                const items = slide.data.items || {};
+                const entries = Object.entries(items).sort((a, b) => b[1] - a[1]).slice(0, 10);
+                return `
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        ${entries.map(([key, val], i) => `
+                            <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px;">
+                                <span style="font-size: 0.75rem; color: var(--text-secondary); width: 20px;">${i + 1}</span>
+                                <span style="flex: 1; font-size: 0.85rem;">${key}</span>
+                                <span style="font-weight: 600; color: var(--accent-lime);">${parseFloat(val).toFixed(1)}%</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            if (slide.type === 'location') {
+                const locations = slide.data.locations || slide.data.regions || [];
+                return `
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                        ${locations.slice(0, 12).map(loc => `
+                            <div style="padding: 0.5rem; background: var(--bg-input); border-radius: 4px; font-size: 0.8rem;">
+                                ${loc.name || loc.dma || loc.region} - ${loc.value || loc.pct?.toFixed(1) + '%' || ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            if (slide.type === 'chart' && slide.data.chartImage) {
+                return `<img src="${slide.data.chartImage}" style="max-width: 100%; border-radius: 8px;">`;
+            }
+            
+            return '<p style="color: var(--text-secondary);">Content preview</p>';
+        }
+        
+        function renderModuleLibrary() {
+            // Show available modules that can be added
+            const modules = [];
+            
+            if (currentDashboardData) {
+                // Demographics
+                if (currentDashboardData.demographics) {
+                    Object.keys(currentDashboardData.demographics).forEach(key => {
+                        modules.push({ type: 'demographic', category: key, label: `📊 ${key}` });
+                    });
+                }
+                
+                // Behavioral
+                if (currentDashboardData.behavioral) {
+                    Object.keys(currentDashboardData.behavioral).slice(0, 10).forEach(key => {
+                        modules.push({ type: 'behavioral', category: key, label: `🎯 ${key}` });
+                    });
+                }
+            }
+            
+            if (modules.length === 0) {
+                return '<p style="color: var(--text-secondary); font-size: 0.75rem;">Load a profile to see available modules</p>';
+            }
+            
+            return modules.map(m => `
+                <div class="module-library-item" draggable="true" 
+                     ondragstart="handleModuleDragStart(event, '${m.type}', '${m.category}')"
+                     onclick="addModuleToCurrentDeck('${m.type}', '${m.category}')">
+                    ${m.label}
+                </div>
+            `).join('');
+        }
+        
+        function selectSlide(idx) {
+            currentEditingSlide = idx;
+            renderSlideEditor();
+        }
+        
+        function updateTitleSlide(field, value) {
+            if (!currentEditingDeck) return;
+            if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
+            currentEditingDeck.titleSlide[field] = value;
+            saveDeckChanges();
+        }
+        
+        function updateSlideTitle(idx, value) {
+            if (!currentEditingDeck || idx === 0) return;
+            const slideIdx = idx - 1;
+            if (currentEditingDeck.slides[slideIdx]) {
+                currentEditingDeck.slides[slideIdx].customTitle = value;
+                saveDeckChanges();
+            }
+        }
+        
+        function updateSlideNotes(idx, value) {
+            if (!currentEditingDeck) return;
+            if (idx === 0) {
+                currentEditingDeck.titleSlide.notes = value;
+            } else {
+                const slideIdx = idx - 1;
+                if (currentEditingDeck.slides[slideIdx]) {
+                    currentEditingDeck.slides[slideIdx].notes = value;
+                }
+            }
+            saveDeckChanges();
+        }
+        
+        function updateDeckNameInEditor(value) {
+            if (!currentEditingDeck) return;
+            currentEditingDeck.name = value;
+            saveDeckChanges();
+            renderWorkspaceDecks();
+        }
+        
+        function saveDeckChanges() {
+            if (!currentEditingDeck) return;
+            currentEditingDeck.updatedAt = new Date().toISOString();
+            
+            const wsId = currentEditingDeck.workspaceId || currentWorkspace;
+            const decks = workspaceDecks[wsId] || [];
+            const idx = decks.findIndex(d => d.id === currentEditingDeck.id);
+            if (idx >= 0) {
+                decks[idx] = currentEditingDeck;
+                workspaceDecks[wsId] = decks;
+                localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            }
+        }
+        
+        function moveSlideInDeck(idx, direction) {
+            if (!currentEditingDeck || idx <= 0) return;
+            const slideIdx = idx - 1;
+            const newIdx = slideIdx + direction;
+            
+            if (newIdx < 0 || newIdx >= currentEditingDeck.slides.length) return;
+            
+            const slides = currentEditingDeck.slides;
+            [slides[slideIdx], slides[newIdx]] = [slides[newIdx], slides[slideIdx]];
+            
+            saveDeckChanges();
+            currentEditingSlide = newIdx + 1;
+            renderSlideEditor();
+        }
+        
+        function deleteSlideFromDeck(idx) {
+            if (!currentEditingDeck || idx <= 0) return;
+            if (!confirm('Delete this slide?')) return;
+            
+            const slideIdx = idx - 1;
+            currentEditingDeck.slides.splice(slideIdx, 1);
+            saveDeckChanges();
+            
+            if (currentEditingSlide >= idx) {
+                currentEditingSlide = Math.max(0, currentEditingSlide - 1);
+            }
+            renderSlideEditor();
+        }
+        
+        function deleteDeckFromEditor() {
+            if (!currentEditingDeck) return;
+            if (!confirm(`Delete deck "${currentEditingDeck.name}"? This cannot be undone.`)) return;
+            
+            const wsId = currentEditingDeck.workspaceId || currentWorkspace;
+            const decks = workspaceDecks[wsId] || [];
+            const idx = decks.findIndex(d => d.id === currentEditingDeck.id);
+            if (idx >= 0) {
+                decks.splice(idx, 1);
+                workspaceDecks[wsId] = decks;
+                localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            }
+            
+            currentEditingDeck = null;
+            currentEditingSlide = 0;
+            renderWorkspaceDecks();
+            renderSlideEditor();
+            showNotification('✅ Deck deleted', 'success');
+        }
+        
+        function showAddSlideOptions() {
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'addSlideModal';
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 500px;">
+                    <div class="deck-workspace-header">
+                        <h2>➕ Add Slide</h2>
+                        <button onclick="document.getElementById('addSlideModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1.5rem;">
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                            <div onclick="addBlankSlide()" style="padding: 1.5rem; background: var(--bg-input); border-radius: 8px; cursor: pointer; text-align: center; border: 2px solid transparent; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-lime)'" onmouseout="this.style.borderColor='transparent'">
+                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">📄</div>
+                                <div style="font-weight: 600;">Blank Slide</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Start from scratch</div>
+                            </div>
+                            <div onclick="addSlideFromModule()" style="padding: 1.5rem; background: var(--bg-input); border-radius: 8px; cursor: pointer; text-align: center; border: 2px solid transparent; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-lime)'" onmouseout="this.style.borderColor='transparent'">
+                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+                                <div style="font-weight: 600;">From Module</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Add data from dashboard</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function addBlankSlide() {
+            document.getElementById('addSlideModal')?.remove();
+            if (!currentEditingDeck) return;
+            
+            const slide = {
+                id: 'slide_' + Date.now(),
+                type: 'content',
+                title: 'New Slide',
+                customTitle: null,
+                data: null,
+                notes: ''
+            };
+            
+            if (!currentEditingDeck.slides) currentEditingDeck.slides = [];
+            currentEditingDeck.slides.push(slide);
+            saveDeckChanges();
+            
+            currentEditingSlide = currentEditingDeck.slides.length;
+            renderSlideEditor();
+        }
+        
+        function addSlideFromModule() {
+            document.getElementById('addSlideModal')?.remove();
+            // Show module selection
+            if (!currentDashboardData) {
+                alert('Please load a profile first to add modules');
+                return;
+            }
+            
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'moduleSelectModal';
+            
+            let moduleOptions = '';
+            
+            // Demographics
+            if (currentDashboardData.demographics) {
+                moduleOptions += '<h4 style="margin: 1rem 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Demographics</h4>';
+                Object.keys(currentDashboardData.demographics).forEach(key => {
+                    moduleOptions += `<div onclick="addModuleToCurrentDeck('demographic', '${key}')" style="padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer;">📊 ${key}</div>`;
+                });
+            }
+            
+            // Behavioral
+            if (currentDashboardData.behavioral) {
+                moduleOptions += '<h4 style="margin: 1rem 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Behavioral</h4>';
+                Object.keys(currentDashboardData.behavioral).slice(0, 15).forEach(key => {
+                    moduleOptions += `<div onclick="addModuleToCurrentDeck('behavioral', '${key}')" style="padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer;">🎯 ${key}</div>`;
+                });
+            }
+            
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 400px; max-height: 80vh;">
+                    <div class="deck-workspace-header">
+                        <h2>Select Module</h2>
+                        <button onclick="document.getElementById('moduleSelectModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1rem; max-height: 60vh; overflow-y: auto;">
+                        ${moduleOptions || '<p>No modules available</p>'}
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function addModuleToCurrentDeck(type, category) {
+            document.getElementById('moduleSelectModal')?.remove();
+            if (!currentEditingDeck) return;
+            
+            const item = createModuleItem(type, category);
+            
+            if (!currentEditingDeck.slides) currentEditingDeck.slides = [];
+            currentEditingDeck.slides.push(item);
+            saveDeckChanges();
+            
+            currentEditingSlide = currentEditingDeck.slides.length;
+            renderSlideEditor();
+            showNotification(`✅ Added ${category} slide`, 'success');
+        }
+        
+        function uploadTitleImage() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        if (currentEditingDeck) {
+                            currentEditingDeck.titleSlide.image = ev.target.result;
+                            saveDeckChanges();
+                            renderSlideEditor();
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+            input.click();
+        }
+        
+        // Drag and drop for slides
+        let draggedSlideIdx = null;
+        
+        function handleSlideDragStart(event, idx) {
+            if (idx === 0) {
+                event.preventDefault();
+                return;
+            }
+            draggedSlideIdx = idx;
+            event.dataTransfer.effectAllowed = 'move';
+        }
+        
+        function handleSlideDragOver(event) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+        }
+        
+        function handleSlideDrop(event, targetIdx) {
+            event.preventDefault();
+            if (draggedSlideIdx === null || draggedSlideIdx === 0 || targetIdx === 0) return;
+            if (draggedSlideIdx === targetIdx) return;
+            
+            const slides = currentEditingDeck.slides;
+            const dragIdx = draggedSlideIdx - 1;
+            const dropIdx = targetIdx - 1;
+            
+            const [removed] = slides.splice(dragIdx, 1);
+            slides.splice(dropIdx, 0, removed);
+            
+            saveDeckChanges();
+            currentEditingSlide = targetIdx;
+            renderSlideEditor();
+            draggedSlideIdx = null;
+        }
+        
+        function handleModuleDragStart(event, type, category) {
+            event.dataTransfer.setData('moduleType', type);
+            event.dataTransfer.setData('moduleCategory', category);
+        }
+        
+        function toggleDeckExportMenu() {
+            const menu = document.getElementById('deckExportMenu');
+            if (menu) {
+                menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+        
+        // Export functions
+        async function exportDeckToPDF() {
+            toggleDeckExportMenu();
+            if (!currentEditingDeck) return;
+            
+            showNotification('📄 Generating PDF...', 'info');
+            
+            // Use jsPDF if available, otherwise create a printable version
+            try {
+                const { jsPDF } = window.jspdf || {};
+                if (jsPDF) {
+                    const doc = new jsPDF('landscape', 'pt', 'letter');
+                    const deck = currentEditingDeck;
+                    
+                    // Title slide
+                    doc.setFontSize(32);
+                    doc.text(deck.titleSlide?.title || 'Presentation', 400, 250, { align: 'center' });
+                    doc.setFontSize(16);
+                    doc.text(deck.titleSlide?.subtitle || '', 400, 300, { align: 'center' });
+                    
+                    // Content slides
+                    (deck.slides || []).forEach((slide, i) => {
+                        doc.addPage();
+                        doc.setFontSize(24);
+                        doc.text(slide.customTitle || slide.title || slide.category || `Slide ${i + 2}`, 50, 50);
+                        
+                        // Add basic content
+                        doc.setFontSize(12);
+                        if (slide.data) {
+                            let y = 100;
+                            if (slide.type === 'demographic' && slide.data.values) {
+                                Object.entries(slide.data.values).slice(0, 10).forEach(([k, v]) => {
+                                    doc.text(`${k}: ${parseFloat(v).toFixed(1)}%`, 50, y);
+                                    y += 20;
+                                });
+                            } else if (slide.type === 'behavioral' && slide.data.items) {
+                                Object.entries(slide.data.items).slice(0, 10).forEach(([k, v]) => {
+                                    doc.text(`${k}: ${parseFloat(v).toFixed(1)}%`, 50, y);
+                                    y += 20;
+                                });
+                            }
+                        }
+                    });
+                    
+                    doc.save(`${deck.name.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+                    showNotification('✅ PDF downloaded!', 'success');
+                } else {
+                    // Fallback: open print dialog
+                    window.print();
+                }
+            } catch (e) {
+                console.error('PDF export error:', e);
+                showNotification('❌ PDF export failed', 'error');
+            }
+        }
+        
+        async function exportDeckToGoogleSlides() {
+            toggleDeckExportMenu();
+            if (!currentEditingDeck) return;
+            
+            // Generate Google Slides compatible format
+            const deck = currentEditingDeck;
+            const slidesData = {
+                title: deck.name,
+                slides: [
+                    { title: deck.titleSlide?.title, subtitle: deck.titleSlide?.subtitle, type: 'title' },
+                    ...(deck.slides || []).map(s => ({
+                        title: s.customTitle || s.title || s.category,
+                        content: s.data,
+                        type: s.type
+                    }))
+                ]
+            };
+            
+            // Create a download link for the data
+            const blob = new Blob([JSON.stringify(slidesData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${deck.name.replace(/[^a-z0-9]/gi, '_')}_google_slides.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showNotification('📑 Google Slides data exported! Import into Google Slides using Add-ons.', 'success');
+        }
+        
+        async function exportDeckToPPT() {
+            toggleDeckExportMenu();
+            if (!currentEditingDeck) return;
+            
+            showNotification('📊 Generating PowerPoint...', 'info');
+            
+            try {
+                // Use PptxGenJS if available
+                if (typeof PptxGenJS !== 'undefined') {
+                    const pptx = new PptxGenJS();
+                    const deck = currentEditingDeck;
+                    
+                    pptx.title = deck.name;
+                    pptx.author = currentUsername;
+                    
+                    // Title slide
+                    let slide = pptx.addSlide();
+                    slide.addText(deck.titleSlide?.title || 'Presentation', { x: 0.5, y: 2, w: '90%', fontSize: 44, bold: true, align: 'center' });
+                    slide.addText(deck.titleSlide?.subtitle || '', { x: 0.5, y: 3, w: '90%', fontSize: 20, align: 'center', color: '666666' });
+                    
+                    // Content slides
+                    (deck.slides || []).forEach(s => {
+                        slide = pptx.addSlide();
+                        slide.addText(s.customTitle || s.title || s.category || 'Slide', { x: 0.5, y: 0.5, fontSize: 28, bold: true, color: 'A6E22E' });
+                        
+                        if (s.data) {
+                            let rows = [];
+                            if (s.type === 'demographic' && s.data.values) {
+                                rows = Object.entries(s.data.values).slice(0, 10).map(([k, v]) => [k, `${parseFloat(v).toFixed(1)}%`]);
+                            } else if (s.type === 'behavioral' && s.data.items) {
+                                rows = Object.entries(s.data.items).slice(0, 10).map(([k, v]) => [k, `${parseFloat(v).toFixed(1)}%`]);
+                            }
+                            if (rows.length > 0) {
+                                slide.addTable(rows, { x: 0.5, y: 1.5, w: 9, fontSize: 14 });
+                            }
+                        }
+                    });
+                    
+                    pptx.writeFile({ fileName: `${deck.name.replace(/[^a-z0-9]/gi, '_')}.pptx` });
+                    showNotification('✅ PowerPoint downloaded!', 'success');
+                } else {
+                    // Fallback: export as JSON
+                    const blob = new Blob([JSON.stringify(currentEditingDeck, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${currentEditingDeck.name.replace(/[^a-z0-9]/gi, '_')}_ppt_data.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showNotification('📊 Deck data exported (install PptxGenJS for .pptx)', 'info');
+                }
+            } catch (e) {
+                console.error('PPT export error:', e);
+                showNotification('❌ PowerPoint export failed', 'error');
+            }
+        }
+        
+        async function exportDeckToKeynote() {
+            toggleDeckExportMenu();
+            if (!currentEditingDeck) return;
+            
+            // Keynote uses the same format as PowerPoint essentially
+            // Export as JSON that can be imported
+            const deck = currentEditingDeck;
+            const keynoteData = {
+                format: 'keynote',
+                title: deck.name,
+                slides: [
+                    { type: 'title', title: deck.titleSlide?.title, subtitle: deck.titleSlide?.subtitle },
+                    ...(deck.slides || []).map(s => ({
+                        type: s.type,
+                        title: s.customTitle || s.title || s.category,
+                        data: s.data,
+                        notes: s.notes
+                    }))
+                ]
+            };
+            
+            const blob = new Blob([JSON.stringify(keynoteData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${deck.name.replace(/[^a-z0-9]/gi, '_')}_keynote.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showNotification('🍎 Keynote data exported!', 'success');
+        }
+        
+        function shareDeckWithTeam() {
+            if (!currentEditingDeck) return;
+            
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'shareDeckModal';
+            
+            const teamOptions = collabTeamMembers.map(m => `
+                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" class="share-deck-member" value="${m.username}">
+                    <span>${m.first_name && m.last_name ? `${m.first_name} ${m.last_name}` : m.username}</span>
+                </label>
+            `).join('');
+            
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 400px;">
+                    <div class="deck-workspace-header">
+                        <h2>👥 Share Deck</h2>
+                        <button onclick="document.getElementById('shareDeckModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1.5rem; text-align: left;">
+                        <p style="margin-bottom: 1rem; color: var(--text-secondary);">Share "${currentEditingDeck.name}" with team members:</p>
+                        <div style="max-height: 200px; overflow-y: auto; background: var(--bg-input); border-radius: 6px; padding: 0.5rem; margin-bottom: 1rem;">
+                            ${teamOptions || '<p style="padding: 0.5rem; color: var(--text-secondary);">No team members available</p>'}
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('shareDeckModal').remove()" style="flex: 1;">Cancel</button>
+                            <button class="btn btn-primary" onclick="confirmShareDeck()" style="flex: 1;">Share</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function confirmShareDeck() {
+            const members = Array.from(document.querySelectorAll('.share-deck-member:checked')).map(cb => cb.value);
+            if (members.length === 0) {
+                alert('Please select at least one team member');
+                return;
+            }
+            
+            // Mark deck as shared
+            if (currentEditingDeck) {
+                currentEditingDeck.sharedWith = members;
+                currentEditingDeck.isShared = true;
+                saveDeckChanges();
+            }
+            
+            document.getElementById('shareDeckModal')?.remove();
+            showNotification(`✅ Deck shared with ${members.length} team member(s)`, 'success');
+            
+            // Add notification for shared members
+            addNotification({
+                type: 'deck_shared',
+                message: `${currentUsername} shared deck "${currentEditingDeck.name}" with you`,
+                recipients: members,
+                deckId: currentEditingDeck.id
+            });
+        }
+        
+        // Initialize deck builder when collaboration tab loads
+        document.addEventListener('DOMContentLoaded', () => {
+            // Watch for collaboration tab changes
+            const observer = new MutationObserver(() => {
+                const decksTab = document.getElementById('collab-tab-decks');
+                if (decksTab && decksTab.classList.contains('active')) {
+                    initWorkspaceDeckBuilder();
+                }
+            });
+            
+            const collabMain = document.querySelector('.collab-main');
+            if (collabMain) {
+                observer.observe(collabMain, { subtree: true, attributes: true, attributeFilter: ['class'] });
+            }
+        });
         
         function filterActivityLog() {
             loadActivityLog();
