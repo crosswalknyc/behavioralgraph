@@ -35567,15 +35567,16 @@
                 html += `
                 <div class="comp-section" id="comp-gender">
                     <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                        <span>Gender (${modeLabel}) <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; margin-left: 8px;">${genderCount} values</span></span>
-                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <span style="display: flex; align-items: center; gap: 0.75rem;">
+                            Gender (${modeLabel})
+                            <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7;">${genderCount} values</span>
                             <select onchange="setComparisonSectionLimit('demo_gender', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                <option value="15" ${genderLimit == 15 ? 'selected' : ''}>Top 15</option>
-                                <option value="25" ${genderLimit == 25 ? 'selected' : ''}>Top 25</option>
-                                <option value="50" ${genderLimit == 50 ? 'selected' : ''}>Top 50</option>
-                                <option value="All" ${genderLimit === 'All' ? 'selected' : ''}>All</option>
+                                <option value="15" ${genderLimit == 15 ? 'selected' : ''}>Show Top 15</option>
+                                <option value="25" ${genderLimit == 25 ? 'selected' : ''}>Show Top 25</option>
+                                <option value="50" ${genderLimit == 50 ? 'selected' : ''}>Show Top 50</option>
+                                <option value="All" ${genderLimit === 'All' ? 'selected' : ''}>Show All</option>
                             </select>
-                        </div>
+                        </span>
                     </div>
                     <table class="comp-table">
                         <thead>
@@ -35599,15 +35600,16 @@
                 html += `
                 <div class="comp-section" id="comp-age">
                     <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                        <span>Age (${modeLabel}) <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; margin-left: 8px;">${ageCount} values</span></span>
-                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <span style="display: flex; align-items: center; gap: 0.75rem;">
+                            Age (${modeLabel})
+                            <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7;">${ageCount} values</span>
                             <select onchange="setComparisonSectionLimit('demo_age', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                <option value="15" ${ageLimit == 15 ? 'selected' : ''}>Top 15</option>
-                                <option value="25" ${ageLimit == 25 ? 'selected' : ''}>Top 25</option>
-                                <option value="50" ${ageLimit == 50 ? 'selected' : ''}>Top 50</option>
-                                <option value="All" ${ageLimit === 'All' ? 'selected' : ''}>All</option>
+                                <option value="15" ${ageLimit == 15 ? 'selected' : ''}>Show Top 15</option>
+                                <option value="25" ${ageLimit == 25 ? 'selected' : ''}>Show Top 25</option>
+                                <option value="50" ${ageLimit == 50 ? 'selected' : ''}>Show Top 50</option>
+                                <option value="All" ${ageLimit === 'All' ? 'selected' : ''}>Show All</option>
                             </select>
-                        </div>
+                        </span>
                     </div>
                     <table class="comp-table">
                         <thead>
@@ -35631,15 +35633,16 @@
                 html += `
                 <div class="comp-section" id="comp-ethnicity">
                     <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                        <span>Ethnicity (${modeLabel}) <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; margin-left: 8px;">${ethnicityCount} values</span></span>
-                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <span style="display: flex; align-items: center; gap: 0.75rem;">
+                            Ethnicity (${modeLabel})
+                            <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7;">${ethnicityCount} values</span>
                             <select onchange="setComparisonSectionLimit('demo_ethnicity', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                <option value="15" ${ethnicityLimit == 15 ? 'selected' : ''}>Top 15</option>
-                                <option value="25" ${ethnicityLimit == 25 ? 'selected' : ''}>Top 25</option>
-                                <option value="50" ${ethnicityLimit == 50 ? 'selected' : ''}>Top 50</option>
-                                <option value="All" ${ethnicityLimit === 'All' ? 'selected' : ''}>All</option>
+                                <option value="15" ${ethnicityLimit == 15 ? 'selected' : ''}>Show Top 15</option>
+                                <option value="25" ${ethnicityLimit == 25 ? 'selected' : ''}>Show Top 25</option>
+                                <option value="50" ${ethnicityLimit == 50 ? 'selected' : ''}>Show Top 50</option>
+                                <option value="All" ${ethnicityLimit === 'All' ? 'selected' : ''}>Show All</option>
                             </select>
-                        </div>
+                        </span>
                     </div>
                     <table class="comp-table">
                         <thead>
@@ -35663,15 +35666,16 @@
                 html += `
                 <div class="comp-section" id="comp-income">
                     <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                        <span>Income (${modeLabel}) <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; margin-left: 8px;">${incomeCount} values</span></span>
-                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <span style="display: flex; align-items: center; gap: 0.75rem;">
+                            Income (${modeLabel})
+                            <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7;">${incomeCount} values</span>
                             <select onchange="setComparisonSectionLimit('demo_income', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                <option value="15" ${incomeLimit == 15 ? 'selected' : ''}>Top 15</option>
-                                <option value="25" ${incomeLimit == 25 ? 'selected' : ''}>Top 25</option>
-                                <option value="50" ${incomeLimit == 50 ? 'selected' : ''}>Top 50</option>
-                                <option value="All" ${incomeLimit === 'All' ? 'selected' : ''}>All</option>
+                                <option value="15" ${incomeLimit == 15 ? 'selected' : ''}>Show Top 15</option>
+                                <option value="25" ${incomeLimit == 25 ? 'selected' : ''}>Show Top 25</option>
+                                <option value="50" ${incomeLimit == 50 ? 'selected' : ''}>Show Top 50</option>
+                                <option value="All" ${incomeLimit === 'All' ? 'selected' : ''}>Show All</option>
                             </select>
-                        </div>
+                        </span>
                     </div>
                     <table class="comp-table">
                         <thead>
@@ -35699,20 +35703,20 @@
                 displayedBehavioralCats.push({ name: cat, id: safeCatId });
                 
                 const currentLimit = getComparisonSectionLimit(catKey);
-                const limitDisplay = currentLimit === 'All' ? 'All' : `Top ${currentLimit}`;
                 
                 html += `
                     <div class="comp-section" id="comp-beh-${safeCatId}">
                         <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                            <span>${cat} (${limitDisplay}) <span style="font-size: 0.7rem; font-weight: normal; margin-left: 10px;">Index: <span style="color: #10b981;">●</span> &gt;100 Over | <span style="color: #ef4444;">●</span> &lt;100 Under</span></span>
-                            <select onchange="setComparisonSectionLimit('${catKey}', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                <option value="5" ${currentLimit == 5 ? 'selected' : ''}>Top 5</option>
-                                <option value="10" ${currentLimit == 10 ? 'selected' : ''}>Top 10</option>
-                                <option value="15" ${currentLimit == 15 ? 'selected' : ''}>Top 15</option>
-                                <option value="25" ${currentLimit == 25 ? 'selected' : ''}>Top 25</option>
-                                <option value="50" ${currentLimit == 50 ? 'selected' : ''}>Top 50</option>
-                                <option value="All" ${currentLimit === 'All' ? 'selected' : ''}>All</option>
-                            </select>
+                            <span style="display: flex; align-items: center; gap: 0.75rem;">
+                                ${cat}
+                                <span style="font-size: 0.7rem; font-weight: normal;">Index: <span style="color: #10b981;">●</span> &gt;100 Over | <span style="color: #ef4444;">●</span> &lt;100 Under</span>
+                                <select onchange="setComparisonSectionLimit('${catKey}', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="15" ${currentLimit == 15 ? 'selected' : ''}>Show Top 15</option>
+                                    <option value="25" ${currentLimit == 25 ? 'selected' : ''}>Show Top 25</option>
+                                    <option value="50" ${currentLimit == 50 ? 'selected' : ''}>Show Top 50</option>
+                                    <option value="All" ${currentLimit === 'All' ? 'selected' : ''}>Show All</option>
+                                </select>
+                            </span>
                         </div>
                         <table class="comp-table">
                             <thead>
@@ -35738,15 +35742,15 @@
                 html += `
                     <div class="comp-section" id="comp-location">
                         <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                            <span>Locations/DMAs (${locationLimitDisplay})</span>
-                            <select onchange="setComparisonSectionLimit('location', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                <option value="5" ${locationLimit == 5 ? 'selected' : ''}>Top 5</option>
-                                <option value="10" ${locationLimit == 10 ? 'selected' : ''}>Top 10</option>
-                                <option value="15" ${locationLimit == 15 ? 'selected' : ''}>Top 15</option>
-                                <option value="25" ${locationLimit == 25 ? 'selected' : ''}>Top 25</option>
-                                <option value="50" ${locationLimit == 50 ? 'selected' : ''}>Top 50</option>
-                                <option value="All" ${locationLimit === 'All' ? 'selected' : ''}>All</option>
-                            </select>
+                            <span style="display: flex; align-items: center; gap: 0.75rem;">
+                                Locations/DMAs
+                                <select onchange="setComparisonSectionLimit('location', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="15" ${locationLimit == 15 ? 'selected' : ''}>Show Top 15</option>
+                                    <option value="25" ${locationLimit == 25 ? 'selected' : ''}>Show Top 25</option>
+                                    <option value="50" ${locationLimit == 50 ? 'selected' : ''}>Show Top 50</option>
+                                    <option value="All" ${locationLimit === 'All' ? 'selected' : ''}>Show All</option>
+                                </select>
+                            </span>
                         </div>
                         <table class="comp-table">
                             <thead>
