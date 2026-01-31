@@ -8768,9 +8768,19 @@
             align-items: center;
         }
         
+        .slide-editor-content {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
         /* Full Slide Editor Styles */
         .slide-editor-wrapper {
             width: 100%;
+            flex: 1;
+            min-height: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -8855,6 +8865,16 @@
             border-color: var(--accent-blue);
         }
         
+        .slide-canvas-zoom-wrapper {
+            flex: 1;
+            overflow: auto;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 1rem;
+            min-height: 0;
+        }
+        
         .slide-canvas-container {
             width: 100%;
             max-width: 960px;
@@ -8864,6 +8884,8 @@
             border-radius: 8px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.3);
             overflow: hidden;
+            transform-origin: top center;
+            transition: transform 0.2s ease;
         }
         
         .slide-element {
@@ -13071,7 +13093,7 @@
                         <!-- Workspace Selector Dropdown -->
                         <div class="workspace-selector-bar" style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
                             <label style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">WORKSPACE:</label>
-                            <div class="workspace-dropdown" style="position: relative; flex: 1; max-width: 300px;">
+                            <div class="workspace-dropdown" style="position: relative; flex: 1; max-width: 240px;">
                                 <button id="workspaceDropdownBtn" onclick="toggleWorkspaceDropdown()" style="width: 100%; padding: 0.5rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem;">
                                     <span id="activeWorkspaceName">My Workspace</span>
                                     <span>▾</span>
@@ -13080,6 +13102,7 @@
                                     <div id="workspaceDropdownList">
                                         <!-- Populated by JS -->
                                     </div>
+                                    <div id="sharedWorkspaceOption" style="border-top: 1px solid var(--border-color); padding: 0.5rem;"></div>
                                     <div id="archivedWorkspacesSection" style="display: none; border-top: 1px solid var(--border-color);">
                                         <div style="padding: 0.5rem 0.75rem; font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; background: var(--bg-dark);">📦 ARCHIVED</div>
                                         <div id="archivedWorkspacesList"></div>
@@ -13089,17 +13112,19 @@
                                     </div>
                                 </div>
                             </div>
-                            <div style="display: flex; gap: 0.5rem;">
-                                <button onclick="showWorkspaceActions()" class="btn btn-small btn-secondary" style="padding: 0.4rem 0.6rem; font-size: 0.75rem;">⚙️</button>
-                            </div>
+                            <label style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">DECK:</label>
+                            <select id="deckSelectDropdown" onchange="selectDeckFromDropdown(this.value)" style="min-width: 180px; padding: 0.5rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem;">
+                                <option value="">Select Deck...</option>
+                            </select>
+                            <button onclick="showWorkspaceActions()" class="btn btn-small btn-secondary" style="padding: 0.4rem 0.6rem; font-size: 0.75rem;">⚙️</button>
                         </div>
                         
                         <div class="collab-tabs">
-                            <button class="collab-tab active" onclick="showCollabTab('datapoints')">📦 Data Points</button>
-                            <button class="collab-tab" onclick="showCollabTab('decks')">📊 Deck Builder</button>
+                            <button class="collab-tab" onclick="showCollabTab('datapoints')">📦 Data Points</button>
+                            <button class="collab-tab active" onclick="showCollabTab('decks')">📊 Deck Builder</button>
                         </div>
                         
-                        <div id="collab-tab-datapoints" class="collab-tab-content active">
+                        <div id="collab-tab-datapoints" class="collab-tab-content">
                             <div class="datapoints-section">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                                     <h3>📦 Saved Data Points</h3>
@@ -13119,20 +13144,12 @@
                             </div>
                         </div>
                         
-                        <div id="collab-tab-decks" class="collab-tab-content">
+                        <div id="collab-tab-decks" class="collab-tab-content active">
                             <div class="workspace-deck-builder">
                                 <!-- Header with dropdowns and actions -->
                                 <div class="deck-builder-header" id="deckBuilderHeader">
                                     <div class="deck-header-controls" style="flex: 1;">
                                         <h3 style="margin: 0; font-size: 1rem; margin-right: 0.5rem;">📊 Deck Builder</h3>
-                                        <select id="deckWorkspaceFilter" onchange="filterWorkspaceDecks()" style="border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); min-width: 160px;">
-                                            <option value="current">Current Workspace</option>
-                                            <option value="all">All Workspaces</option>
-                                            <option value="shared">Shared with Me (Cloud)</option>
-                                        </select>
-                                        <select id="deckSelectDropdown" onchange="selectDeckFromDropdown(this.value)" style="border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); min-width: 150px;">
-                                            <option value="">Select Deck...</option>
-                                        </select>
                                         <button class="btn btn-primary btn-small" onclick="createNewWorkspaceDeck()" style="white-space: nowrap;">+ New Deck</button>
                                         <div id="deckActionButtons" style="display: none; align-items: center; gap: 0.5rem; margin-left: 0.5rem;">
                                             <button class="btn btn-small btn-success" onclick="shareDeckWithTeam()">👥 SHARE</button>
@@ -41951,9 +41968,11 @@
         
         function showCollabTab(tabName) {
             document.querySelectorAll('.collab-tab').forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
+            const tabBtn = document.querySelector(`.collab-tab[onclick*="'${tabName}'"]`);
+            if (tabBtn) tabBtn.classList.add('active');
             document.querySelectorAll('.collab-tab-content').forEach(c => c.classList.remove('active'));
-            document.getElementById('collab-tab-' + tabName).classList.add('active');
+            const content = document.getElementById('collab-tab-' + tabName);
+            if (content) content.classList.add('active');
             
             if (tabName === 'decks') {
                 initWorkspaceDeckBuilder();
@@ -42121,7 +42140,7 @@
             if (element) element.classList.add('active');
             
             // Update dropdown display
-            const wsName = workspaces[id]?.name || 'My Workspace';
+            const wsName = id === 'cloud' ? 'Shared with Me (Cloud)' : (workspaces[id]?.name || 'My Workspace');
             const nameEl = document.getElementById('activeWorkspaceName');
             if (nameEl) nameEl.textContent = wsName;
             
@@ -42131,6 +42150,13 @@
             
             renderSharedProfiles();
             loadWorkspaceData();
+            renderDeckDropdown();
+            const deckWs = currentEditingDeck?.workspaceId || (currentEditingDeck?.serverDeckId ? 'cloud' : currentWorkspace);
+            if (currentEditingDeck && deckWs !== id) {
+                currentEditingDeck = null;
+                currentEditingSlide = 0;
+                renderSlideEditor();
+            }
         }
         
         function toggleWorkspaceDropdown() {
@@ -42170,6 +42196,12 @@
             
             list.innerHTML = html || '<div style="padding: 0.75rem; color: var(--text-secondary); font-size: 0.8rem;">No workspaces</div>';
             
+            const sharedEl = document.getElementById('sharedWorkspaceOption');
+            if (sharedEl) {
+                const isCloud = currentWorkspace === 'cloud';
+                sharedEl.innerHTML = `<div onclick="selectWorkspace('cloud'); toggleWorkspaceDropdown();" style="padding: 0.5rem 0.75rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; border-radius: 4px; ${isCloud ? 'background: rgba(166, 226, 46, 0.1); border-left: 3px solid var(--accent-lime);' : ''}" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='${isCloud ? 'rgba(166, 226, 46, 0.1)' : 'transparent'}'"><span>☁️</span><span style="font-size: 0.85rem;">Shared with Me (Cloud)</span>${isCloud ? ' <span style="color: var(--accent-lime);">✓</span>' : ''}</div>`;
+            }
+            
             // Render archived workspaces
             renderArchivedWorkspaces();
         }
@@ -42200,6 +42232,10 @@
         function showWorkspaceActions() {
             if (currentWorkspace === 'default') {
                 alert('Cannot modify the default workspace');
+                return;
+            }
+            if (currentWorkspace === 'cloud') {
+                alert('Cloud workspace (Shared with Me) cannot be modified');
                 return;
             }
             
@@ -42959,13 +42995,9 @@
         
         let currentEditingDeck = null;
         let currentEditingSlide = 0;
+        let slideEditorZoom = 100;
         
         function initWorkspaceDeckBuilder() {
-            // Load decks for current workspace
-            renderWorkspaceDecks();
-        }
-        
-        function filterWorkspaceDecks() {
             renderWorkspaceDecks();
             renderDeckDropdown();
         }
@@ -42985,10 +43017,9 @@
             const dropdown = document.getElementById('deckSelectDropdown');
             if (!dropdown) return;
             
-            const filter = document.getElementById('deckWorkspaceFilter')?.value || 'current';
             let decksToShow = [];
             
-            if (filter === 'shared') {
+            if (currentWorkspace === 'cloud') {
                 try {
                     const res = await fetch('/api/decks', { credentials: 'same-origin' });
                     const data = await res.json();
@@ -43005,15 +43036,8 @@
                 } catch (e) {
                     cloudDecks = [];
                 }
-            } else if (filter === 'current') {
-                decksToShow = (workspaceDecks[currentWorkspace] || []).map(d => ({ ...d, workspaceName: workspaces[currentWorkspace]?.name || currentWorkspace, workspaceId: currentWorkspace }));
             } else {
-                Object.entries(workspaceDecks).forEach(([wsId, decks]) => {
-                    const wsName = workspaces[wsId]?.name || wsId;
-                    (decks || []).forEach(d => {
-                        decksToShow.push({ ...d, workspaceName: wsName, workspaceId: wsId });
-                    });
-                });
+                decksToShow = (workspaceDecks[currentWorkspace] || []).map(d => ({ ...d, workspaceName: workspaces[currentWorkspace]?.name || currentWorkspace, workspaceId: currentWorkspace }));
             }
             
             dropdown.innerHTML = `
@@ -43610,6 +43634,15 @@
                     <!-- Slide Toolbar -->
                     <div class="slide-toolbar" id="slideToolbar">
                         <div class="slide-toolbar-group">
+                            <select class="toolbar-btn" onchange="setSlideViewZoom(this.value)" title="Slide view size" style="padding: 0.3rem; min-width: 80px;">
+                                <option value="50" ${slideEditorZoom === 50 ? 'selected' : ''}>50%</option>
+                                <option value="75" ${slideEditorZoom === 75 ? 'selected' : ''}>75%</option>
+                                <option value="100" ${slideEditorZoom === 100 ? 'selected' : ''}>100%</option>
+                                <option value="125" ${slideEditorZoom === 125 ? 'selected' : ''}>125%</option>
+                                <option value="150" ${slideEditorZoom === 150 ? 'selected' : ''}>150%</option>
+                            </select>
+                        </div>
+                        <div class="slide-toolbar-group">
                             <button class="toolbar-btn" onclick="addSlideElement('text')" title="Add Text">📝 Text</button>
                             <button class="toolbar-btn" onclick="addSlideElement('image')" title="Add Image (upload)">🖼️ Image</button>
                             <button class="toolbar-btn" onclick="addSlideElement('imageUrl')" title="Add Image from URL">🔗 Image URL</button>
@@ -43649,13 +43682,16 @@
                     </div>
                     
                     <!-- Slide Canvas -->
-                    <div class="slide-canvas-container" id="slideCanvas"
-                         onclick="handleCanvasClick(event)"
-                         ondragover="handleSlideCanvasDragOver(event)"
-                         ondragleave="handleSlideCanvasDragLeave(event)"
-                         ondrop="handleSlideCanvasDrop(event)">
-                        ${renderSlideElements(currentSlide, currentEditingSlide)}
-                        <div class="collab-cursors" id="collabCursors"></div>
+                    <div class="slide-canvas-zoom-wrapper">
+                        <div class="slide-canvas-container" id="slideCanvas"
+                             onclick="handleCanvasClick(event)"
+                             ondragover="handleSlideCanvasDragOver(event)"
+                             ondragleave="handleSlideCanvasDragLeave(event)"
+                             ondrop="handleSlideCanvasDrop(event)"
+                             style="transform: scale(${slideEditorZoom / 100});">
+                            ${renderSlideElements(currentSlide, currentEditingSlide)}
+                            <div class="collab-cursors" id="collabCursors"></div>
+                        </div>
                     </div>
                     
                     <!-- Speaker Notes -->
@@ -43699,6 +43735,14 @@
             }
         }
         
+        function setSlideViewZoom(percent) {
+            slideEditorZoom = Math.min(150, Math.max(50, parseInt(percent, 10) || 100));
+            const canvas = document.getElementById('slideCanvas');
+            if (canvas) canvas.style.transform = 'scale(' + (slideEditorZoom / 100) + ')';
+            const sel = document.querySelector('#slideToolbar select[onchange*="setSlideViewZoom"]');
+            if (sel) sel.value = String(slideEditorZoom);
+        }
+        
         // Slide element state
         let selectedElementId = null;
         let isDraggingElement = false;
@@ -43730,7 +43774,7 @@
                     profileImage ? {
                         id: 'title_image',
                         type: 'image',
-                        x: 50, y: 5,
+                        x: 42.5, y: 5,
                         width: 15, height: 25,
                         src: profileImage,
                         locked: false
@@ -43803,7 +43847,12 @@
                 `;
             }
             
-            return elements.map(el => renderSingleElement(el)).join('');
+            return elements.map(el => {
+                if (idx === 0 && el.id === 'title_image' && el.width === 15 && el.x === 50) {
+                    el.x = 42.5;
+                }
+                return renderSingleElement(el);
+            }).join('');
         }
         
         function renderSingleElement(el) {
@@ -45673,6 +45722,8 @@
         // Initialize collaboration when tab is shown
         function initCollaboration() {
             loadWorkspaceData();
+            renderDeckDropdown();
+            initWorkspaceDeckBuilder();
             renderSharedProfiles();
             renderComments();
             renderNotifications();
