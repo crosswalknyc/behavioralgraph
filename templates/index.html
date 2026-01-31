@@ -23933,7 +23933,10 @@
             const behavioralCard = document.getElementById('behavioralProfileCard');
             if (!behavioralCard) return;
             
-            const profileName = currentDashboardData?.brandName || 'This audience';
+            // Get the actual profile name from multiple sources
+            const profileName = currentProfileData?.name || 
+                               document.getElementById('dashBrandNameHeader')?.textContent || 
+                               'This audience';
             
             try {
                 const profileData = {
@@ -23974,7 +23977,10 @@
             const summaryCard = document.getElementById('behavioralProfileSummary');
             if (!summaryCard) return;
             
-            const profileName = currentDashboardData?.brandName || 'This audience';
+            // Get the actual profile name from multiple sources
+            const profileName = currentProfileData?.name || 
+                               document.getElementById('dashBrandNameHeader')?.textContent || 
+                               'This audience';
             
             // Build top over-indexers from allItems for the API
             const topOverIndexers = allItems
