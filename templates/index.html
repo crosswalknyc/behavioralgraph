@@ -25257,59 +25257,66 @@
             'ORGANIZATIONAL MEMBERSHIPS', 'PORN MEDIA', 'TELECOM'
         ];
 
-        function renderBehavioralCards(behavioral, highlightCategory = null) {
-            // Aggregate Sports categories into SPORTS module
-            const sportsCategories = [
-                'AFC', 'SPORTS TEAM', 'LA LIGA', 'METROPOLITAN DIVISION', 'MLB', 'MLS', 
-                'EASTERN CONFERENCE', 'CENTRAL DIVISION', 'ATLANTIC DIVISION', 'AFC EAST', 
-                'NBA', 'NFC EAST', 'NFC NORTH', 'NFC SOUTH', 'NFC WEST', 'NFL', 'NFC', 
-                'AFC NORTH', 'NWSL', 'PREMIER LEAGUE', 'RUGBY', 'SERIE A', 'SOCCER', 
-                'PACIFIC DIVISION', 'AFC SOUTH', 'AFC WEST', 'AL', 'WNBA', 'AL CENTRAL', 
-                'AL EAST', 'AL WEST', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'HORSE RACING'
-            ];
+        function renderBehavioralCards(behavioral, highlightCategory = null, skipAggregation = false) {
+            let aggregatedBehavioral;
             
-            // Aggregate Talent categories into TALENT module
-            const talentCategories = [
-                'ACTOR', 'ATHLETE', 'HOST/PERSONALITY', 'INFLUENCER/CREATOR', 
-                'CREATOR/INFLUENCER', 'MLB ATHLETE', 'MUSICIAN/BAND', 'NBA ATHLETE', 
-                'NFL ATHLETE', 'NHL ATHLETE', 'POLITICS/ACTIVIST', 'SOCCER ATHLETE', 
-                'WNBA ATHLETE', 'WRITER/DIRECTOR/AUTHOR/ARTIST'
-            ];
-            
-            // Create aggregated behavioral object
-            const aggregatedBehavioral = { ...behavioral };
-            
-            // Aggregate Sports
-            const sportsItems = [];
-            sportsCategories.forEach(cat => {
-                if (aggregatedBehavioral[cat]) {
-                    sportsItems.push(...aggregatedBehavioral[cat].map(item => ({
-                        ...item,
-                        originalCategory: cat
-                    })));
-                    delete aggregatedBehavioral[cat]; // Remove individual category
+            if (skipAggregation) {
+                // Use data as-is (already aggregated)
+                aggregatedBehavioral = behavioral;
+            } else {
+                // Aggregate Sports categories into SPORTS module
+                const sportsCategories = [
+                    'AFC', 'SPORTS TEAM', 'LA LIGA', 'METROPOLITAN DIVISION', 'MLB', 'MLS', 
+                    'EASTERN CONFERENCE', 'CENTRAL DIVISION', 'ATLANTIC DIVISION', 'AFC EAST', 
+                    'NBA', 'NFC EAST', 'NFC NORTH', 'NFC SOUTH', 'NFC WEST', 'NFL', 'NFC', 
+                    'AFC NORTH', 'NWSL', 'PREMIER LEAGUE', 'RUGBY', 'SERIE A', 'SOCCER', 
+                    'PACIFIC DIVISION', 'AFC SOUTH', 'AFC WEST', 'AL', 'WNBA', 'AL CENTRAL', 
+                    'AL EAST', 'AL WEST', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'HORSE RACING'
+                ];
+                
+                // Aggregate Talent categories into TALENT module
+                const talentCategories = [
+                    'ACTOR', 'ATHLETE', 'HOST/PERSONALITY', 'INFLUENCER/CREATOR', 
+                    'CREATOR/INFLUENCER', 'MLB ATHLETE', 'MUSICIAN/BAND', 'NBA ATHLETE', 
+                    'NFL ATHLETE', 'NHL ATHLETE', 'POLITICS/ACTIVIST', 'SOCCER ATHLETE', 
+                    'WNBA ATHLETE', 'WRITER/DIRECTOR/AUTHOR/ARTIST'
+                ];
+                
+                // Create aggregated behavioral object
+                aggregatedBehavioral = { ...behavioral };
+                
+                // Aggregate Sports
+                const sportsItems = [];
+                sportsCategories.forEach(cat => {
+                    if (aggregatedBehavioral[cat]) {
+                        sportsItems.push(...aggregatedBehavioral[cat].map(item => ({
+                            ...item,
+                            originalCategory: cat
+                        })));
+                        delete aggregatedBehavioral[cat]; // Remove individual category
+                    }
+                });
+                if (sportsItems.length > 0) {
+                    aggregatedBehavioral['SPORTS'] = sportsItems;
                 }
-            });
-            if (sportsItems.length > 0) {
-                aggregatedBehavioral['SPORTS'] = sportsItems;
-            }
-            
-            // Aggregate Talent
-            const talentItems = [];
-            talentCategories.forEach(cat => {
-                if (aggregatedBehavioral[cat]) {
-                    talentItems.push(...aggregatedBehavioral[cat].map(item => ({
-                        ...item,
-                        originalCategory: cat
-                    })));
-                    delete aggregatedBehavioral[cat]; // Remove individual category
+                
+                // Aggregate Talent
+                const talentItems = [];
+                talentCategories.forEach(cat => {
+                    if (aggregatedBehavioral[cat]) {
+                        talentItems.push(...aggregatedBehavioral[cat].map(item => ({
+                            ...item,
+                            originalCategory: cat
+                        })));
+                        delete aggregatedBehavioral[cat]; // Remove individual category
+                    }
+                });
+                if (talentItems.length > 0) {
+                    aggregatedBehavioral['TALENT'] = talentItems;
                 }
-            });
-            if (talentItems.length > 0) {
-                aggregatedBehavioral['TALENT'] = talentItems;
+                
+                allBehavioralData = aggregatedBehavioral;
             }
-            
-            allBehavioralData = aggregatedBehavioral;
             const container = document.getElementById('behavioralGrid');
             
             // Get all categories and sort them
@@ -25871,25 +25878,48 @@
         }
         
         function moveCategoryToTop(category) {
-            if (!category || !allBehavioralData[category]) return;
+            if (!category) {
+                console.log('moveCategoryToTop: No category provided');
+                return;
+            }
+            
+            // Check if category exists in data (case-insensitive search)
+            const allCats = Object.keys(allBehavioralData);
+            const matchedCategory = allCats.find(c => c === category || c.toLowerCase() === category.toLowerCase());
+            
+            if (!matchedCategory) {
+                console.log('moveCategoryToTop: Category not found in data:', category);
+                console.log('Available categories:', allCats);
+                return;
+            }
             
             // Remove from current position and add to front
-            currentCategoryOrder = currentCategoryOrder.filter(c => c !== category);
-            currentCategoryOrder.unshift(category);
+            currentCategoryOrder = currentCategoryOrder.filter(c => c !== matchedCategory);
+            currentCategoryOrder.unshift(matchedCategory);
             
-            // Re-render with highlight
-            renderBehavioralCards(allBehavioralData, category);
+            // Save the new order
+            saveModuleOrder('behavioral', currentCategoryOrder);
+            
+            // Re-render with highlight (skip aggregation since data is already aggregated)
+            renderBehavioralCards(allBehavioralData, matchedCategory, true);
             
             // Reset dropdown
-            document.getElementById('categoryReorderSelect').value = '';
+            const dropdown = document.getElementById('categoryReorderSelect');
+            if (dropdown) dropdown.value = '';
             
             // Scroll to top of grid
-            document.getElementById('behavioralGrid').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            const grid = document.getElementById('behavioralGrid');
+            if (grid) {
+                grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
         }
         
         function resetCategoryOrder() {
             currentCategoryOrder = [];
-            renderBehavioralCards(allBehavioralData);
+            // Clear saved order from localStorage
+            saveModuleOrder('behavioral', []);
+            // Re-render with default order (skip aggregation since data is already aggregated)
+            renderBehavioralCards(allBehavioralData, null, true);
         }
         
         // ============================================
@@ -36137,9 +36167,9 @@
                 html += `
                 <div class="comp-section" id="comp-gender">
                     <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                        <span style="display: flex; align-items: center; gap: 0.75rem;">
-                            Gender (${modeLabel})
-                            <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7;">${genderCount} values</span>
+                        <span style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                            <span style="white-space: nowrap;">Gender (${modeLabel})</span>
+                            <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${genderCount} values</span>
                             <select onchange="setComparisonSectionLimit('demo_gender', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                 <option value="15" ${genderLimit == 15 ? 'selected' : ''}>Show Top 15</option>
                                 <option value="25" ${genderLimit == 25 ? 'selected' : ''}>Show Top 25</option>
@@ -36174,9 +36204,9 @@
                 html += `
                 <div class="comp-section" id="comp-age">
                     <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                        <span style="display: flex; align-items: center; gap: 0.75rem;">
-                            Age (${modeLabel})
-                            <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7;">${ageCount} values</span>
+                        <span style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                            <span style="white-space: nowrap;">Age (${modeLabel})</span>
+                            <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${ageCount} values</span>
                             <select onchange="setComparisonSectionLimit('demo_age', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                 <option value="15" ${ageLimit == 15 ? 'selected' : ''}>Show Top 15</option>
                                 <option value="25" ${ageLimit == 25 ? 'selected' : ''}>Show Top 25</option>
@@ -36211,9 +36241,9 @@
                 html += `
                 <div class="comp-section" id="comp-ethnicity">
                     <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                        <span style="display: flex; align-items: center; gap: 0.75rem;">
-                            Ethnicity (${modeLabel})
-                            <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7;">${ethnicityCount} values</span>
+                        <span style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                            <span style="white-space: nowrap;">Ethnicity (${modeLabel})</span>
+                            <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${ethnicityCount} values</span>
                             <select onchange="setComparisonSectionLimit('demo_ethnicity', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                 <option value="15" ${ethnicityLimit == 15 ? 'selected' : ''}>Show Top 15</option>
                                 <option value="25" ${ethnicityLimit == 25 ? 'selected' : ''}>Show Top 25</option>
@@ -36248,9 +36278,9 @@
                 html += `
                 <div class="comp-section" id="comp-income">
                     <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                        <span style="display: flex; align-items: center; gap: 0.75rem;">
-                            Income (${modeLabel})
-                            <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7;">${incomeCount} values</span>
+                        <span style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                            <span style="white-space: nowrap;">Income (${modeLabel})</span>
+                            <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${incomeCount} values</span>
                             <select onchange="setComparisonSectionLimit('demo_income', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                                 <option value="15" ${incomeLimit == 15 ? 'selected' : ''}>Show Top 15</option>
                                 <option value="25" ${incomeLimit == 25 ? 'selected' : ''}>Show Top 25</option>
@@ -39925,4 +39955,5 @@
     </div>
     
 </body>
+</html>
 </html>
