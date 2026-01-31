@@ -4602,11 +4602,11 @@
             border-bottom: 1px solid var(--border-color);
             margin-bottom: 0.5rem;
         }
-        .diff-col-rank { min-width: 24px; }
-        .diff-col-name { flex: 1; }
-        .diff-col-pct { min-width: 65px; text-align: right; }
-        .diff-col-gp { min-width: 65px; text-align: right; }
-        .diff-col-index { min-width: 55px; text-align: center; }
+        .diff-col-rank { min-width: 24px; text-align: left; }
+        .diff-col-name { flex: 1; text-align: left; }
+        .diff-col-pct { min-width: 65px; text-align: left; }
+        .diff-col-gp { min-width: 65px; text-align: left; }
+        .diff-col-index { min-width: 55px; text-align: left; }
         .differentiator-item {
             display: flex;
             align-items: center;
@@ -11053,15 +11053,30 @@
                             
                             <!-- Demographic Highlights -->
                             <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Demographic Highlights">
-                                <h3 class="has-tooltip" data-tooltip="Demographic Highlights: Shows which demographic segments (age, gender, income, etc.) significantly over-index (>110) or under-index (<80) compared to Gen Pop. Helps identify who your core audience is.">
-                                    <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                    <span>👥 Demographic Highlights</span>
-                                </h3>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <h3 class="has-tooltip" data-tooltip="Demographic Highlights: Shows which demographic segments (age, gender, income, etc.) significantly over-index (>110) or under-index (<80) compared to Gen Pop. Helps identify who your core audience is." style="margin: 0;">
+                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                        <span>👥 Demographic Highlights</span>
+                                    </h3>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
+                                        <select id="demoHighlightsSortSelect" onchange="sortDemoHighlights(this.value)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 100px;">
+                                            <option value="index-desc">Index ↓</option>
+                                            <option value="index-asc">Index ↑</option>
+                                            <option value="profile-desc">Profile % ↓</option>
+                                            <option value="profile-asc">Profile % ↑</option>
+                                            <option value="genpop-desc">Gen Pop % ↓</option>
+                                            <option value="genpop-asc">Gen Pop % ↑</option>
+                                            <option value="segment-asc">Segment A-Z</option>
+                                            <option value="segment-desc">Segment Z-A</option>
+                                        </select>
+                                    </div>
+                                </div>
                                 <div class="differentiator-header" style="margin-bottom: 0.5rem;">
-                                    <span class="diff-col-name">Segment</span>
-                                    <span class="diff-col-pct has-tooltip" data-tooltip="Profile %: The percentage of THIS audience in this demographic segment.">Profile %</span>
-                                    <span class="diff-col-gp has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population in this demographic segment.">Gen Pop %</span>
-                                    <span class="diff-col-index has-tooltip" data-tooltip="Index: How much more/less likely this segment is vs Gen Pop. 100 = same as Gen Pop. Green = over-indexes, Red = under-indexes.">Index</span>
+                                    <span class="diff-col-name" style="text-align: left;">Segment</span>
+                                    <span class="diff-col-pct has-tooltip" data-tooltip="Profile %: The percentage of THIS audience in this demographic segment." style="text-align: left;">Profile %</span>
+                                    <span class="diff-col-gp has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population in this demographic segment." style="text-align: left;">Gen Pop %</span>
+                                    <span class="diff-col-index has-tooltip" data-tooltip="Index: How much more/less likely this segment is vs Gen Pop. 100 = same as Gen Pop. Green = over-indexes, Red = under-indexes." style="text-align: left;">Index</span>
                                 </div>
                                 <div id="demoHighlights" class="highlight-list"></div>
                             </div>
@@ -23696,6 +23711,76 @@
             return AGE_DISPLAY_LABELS[lower] || AGE_DISPLAY_LABELS[originalLabel] || originalLabel;
         }
         
+        // Demographic Highlights sort state
+        let demoHighlightsSortState = 'index-desc';
+        
+        // Sort and render demographic highlights
+        function sortDemoHighlights(sortValue) {
+            demoHighlightsSortState = sortValue;
+            renderDemoHighlights(sortValue);
+        }
+        
+        // Render demographic highlights with sorting
+        function renderDemoHighlights(sortValue) {
+            const container = document.getElementById('demoHighlights');
+            if (!container || !window.demoHighlightsData) return;
+            
+            const US_POP_DEMO = 324700000;
+            const isProjectionDemo = dashDisplayMode === 'projection';
+            const sampleSize = window.demoHighlightsSampleSize || 0;
+            
+            // Sort the data
+            let sorted = [...window.demoHighlightsData];
+            const [column, direction] = sortValue.split('-');
+            
+            sorted.sort((a, b) => {
+                let diff = 0;
+                switch (column) {
+                    case 'index':
+                        // Sort by deviation from 100 (most different first)
+                        diff = Math.abs(b.index - 100) - Math.abs(a.index - 100);
+                        break;
+                    case 'profile':
+                        diff = b.profilePct - a.profilePct;
+                        break;
+                    case 'genpop':
+                        diff = b.genPopPct - a.genPopPct;
+                        break;
+                    case 'segment':
+                        diff = a.value.localeCompare(b.value);
+                        break;
+                }
+                return direction === 'asc' ? -diff : diff;
+            });
+            
+            // Take top items
+            sorted = sorted.slice(0, 6);
+            
+            container.innerHTML = sorted.map(h => {
+                const profileDisplay = isProjectionDemo 
+                    ? formatNumber(Math.round((h.profilePct / 100) * sampleSize))
+                    : h.profilePct.toFixed(2) + '%';
+                const genPopDisplay = isProjectionDemo 
+                    ? formatNumber(Math.round((h.genPopPct / 100) * US_POP_DEMO))
+                    : h.genPopPct.toFixed(2) + '%';
+                const indexClass = h.index >= 100 ? 'high' : 'low';
+                // Use getAgeDisplayLabel for age ranges to match demographics page
+                const displayValue = h.category.toLowerCase() === 'age' ? getAgeDisplayLabel(h.value) : h.value;
+                return `
+                <div class="highlight-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
+                    <span class="label" style="flex: 1; font-size: 0.85rem; text-align: left;">${displayValue}</span>
+                    <span class="diff-col-pct" style="min-width: 80px; text-align: left; font-size: 0.85rem;">${profileDisplay}</span>
+                    <span class="diff-col-gp" style="min-width: 80px; text-align: left; font-size: 0.85rem; color: var(--text-secondary);">${genPopDisplay}</span>
+                    <span class="differentiator-index ${indexClass}" style="min-width: 70px; text-align: left;">${formatIndex(h.index)}</span>
+                </div>
+            `;
+            }).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No significant demographic differences</p>';
+            
+            // Update dropdown to match current sort
+            const dropdown = document.getElementById('demoHighlightsSortSelect');
+            if (dropdown) dropdown.value = sortValue;
+        }
+        
         // Generate audience vs Gen Pop takeaways
         function generateAudienceTakeaways(demoInsights, data) {
             const takeawaysContainer = document.getElementById('audienceTakeaways');
@@ -28585,7 +28670,7 @@
             document.getElementById('totalDataPoints').textContent = allItems.length.toLocaleString();
             
             // Demographic highlights - top over/under indexing demographics
-            const demoHighlights = [];
+            const demoHighlightsData = [];
             if (data.demographicsIndex && data.demographics && data.demographicsGenPop) {
                 Object.entries(data.demographicsIndex).forEach(([cat, values]) => {
                     Object.entries(values).forEach(([val, idx]) => {
@@ -28594,7 +28679,7 @@
                         const projection = data.demographicsProjection?.[cat.toLowerCase()]?.[val] || 0;
                         
                         if (idx > 110 || idx < 80) {
-                            demoHighlights.push({ 
+                            demoHighlightsData.push({ 
                                 category: cat, 
                                 value: val, 
                                 label: `${cat}: ${val}`, 
@@ -28608,30 +28693,13 @@
                     });
                 });
             }
-            const US_POP_DEMO = 324700000;
-            const isProjectionDemo = dashDisplayMode === 'projection';
-            document.getElementById('demoHighlights').innerHTML = demoHighlights
-                .sort((a,b) => Math.abs(b.index - 100) - Math.abs(a.index - 100))
-                .slice(0, 6)
-                .map(h => {
-                    const profileDisplay = isProjectionDemo 
-                        ? formatNumber(Math.round((h.profilePct / 100) * (data.sampleSize || 0)))
-                        : h.profilePct.toFixed(2) + '%';
-                    const genPopDisplay = isProjectionDemo 
-                        ? formatNumber(Math.round((h.genPopPct / 100) * US_POP_DEMO))
-                        : h.genPopPct.toFixed(2) + '%';
-                    const indexClass = h.index >= 100 ? 'high' : 'low';
-                    // Use getAgeDisplayLabel for age ranges to match demographics page
-                    const displayValue = h.category.toLowerCase() === 'age' ? getAgeDisplayLabel(h.value) : h.value;
-                    return `
-                    <div class="highlight-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
-                        <span class="label" style="flex: 1; font-size: 0.85rem;">${displayValue}</span>
-                        <span class="diff-col-pct" style="min-width: 80px; text-align: right; font-size: 0.85rem;">${profileDisplay}</span>
-                        <span class="diff-col-gp" style="min-width: 80px; text-align: right; font-size: 0.85rem; color: var(--text-secondary);">${genPopDisplay}</span>
-                        <span class="differentiator-index ${indexClass}" style="min-width: 70px; text-align: right;">${formatIndex(h.index)}</span>
-                    </div>
-                `;
-                }).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No significant demographic differences</p>';
+            
+            // Store globally for sorting
+            window.demoHighlightsData = demoHighlightsData;
+            window.demoHighlightsSampleSize = data.sampleSize || 0;
+            
+            // Render with default sort (index descending by deviation from 100)
+            renderDemoHighlights('index-desc');
             
             // Top differentiators - group by category, show top 3 items per category
             const itemsByCategory = {};
