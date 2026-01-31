@@ -20751,7 +20751,7 @@
             renderDemoInsights(parsed.demographics, parsed.demographicsIndex, parsed.demographicsGenPop);
             
             // Render behavioral insights
-            renderBehavioralInsights(parsed.behavioral);
+            renderBehavioralInsights(parsed.behavioral, parsed);
             
             // Render top insights for this profile
             renderTopInsights(parsed);
@@ -21731,7 +21731,7 @@
         // ============================================================================
         // BEHAVIORAL INSIGHTS
         // ============================================================================
-        function renderBehavioralInsights(behavioral) {
+        function renderBehavioralInsights(behavioral, fullData) {
             if (!behavioral || Object.keys(behavioral).length === 0) {
                 return;
             }
@@ -21759,8 +21759,8 @@
                 </div>
             `;
             
-            // Fetch AI-generated behavioral summary for this card
-            fetchBehavioralProfileSummary(data, allItems);
+            // Fetch AI-generated behavioral summary for this card (non-blocking)
+            fetchBehavioralProfileSummary(fullData, allItems);
             
             // === TOP CATEGORIES ===
             const categoryStats = {};
