@@ -2910,6 +2910,75 @@ def get_user_info():
         'collab_team': user.get('collab_team', [])
     })
 
+
+# ============================================================================
+# CHAT STATUS API (Available/Busy)
+# ============================================================================
+
+CHAT_STATUS_S3_KEY = 'system/chat_statuses.json'
+
+def _load_chat_statuses():
+    """Load user statuses from S3."""
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=CHAT_STATUS_S3_KEY)
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except Exception:
+        return {}
+
+def _save_chat_statuses(statuses):
+    """Save user statuses to S3."""
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=CHAT_STATUS_S3_KEY,
+            Body=json.dumps(statuses),
+            ContentType='application/json'
+        )
+    except Exception as e:
+        print(f"Error saving chat statuses: {e}")
+
+@app.route('/api/chat/status', methods=['GET'])
+@requires_auth
+def get_chat_statuses():
+    """Get all users' chat status (available/busy) for the user's company."""
+    try:
+        statuses = _load_chat_statuses()
+        user = get_current_user()
+        company = user.get('company', '')
+        username = session.get('username', '')
+        
+        # Filter to same company users only (or return all if no company)
+        data = load_users()
+        company_users = {username}
+        for u, info in data.get('users', {}).items():
+            if not company or info.get('company') == company:
+                company_users.add(u)
+        
+        filtered = {k: v for k, v in statuses.items() if k in company_users}
+        return jsonify({'success': True, 'statuses': filtered})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'statuses': {}})
+
+@app.route('/api/chat/status', methods=['POST'])
+@requires_auth
+def set_chat_status():
+    """Set current user's chat status (available/busy)."""
+    try:
+        data = request.get_json() or {}
+        status = data.get('status', 'available')
+        if status not in ('available', 'busy'):
+            status = 'available'
+        
+        username = session.get('username', '')
+        statuses = _load_chat_statuses()
+        statuses[username] = {'status': status, 'updated_at': datetime.now().isoformat()}
+        _save_chat_statuses(statuses)
+        
+        return jsonify({'success': True, 'status': status})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
 # ============================================================================
 # MAIN ROUTES
 # ============================================================================
@@ -4866,6 +4935,50 @@ def get_subscriber_iq_data(s3_key):
 
 
 # ============================================================================
+# HEDGE FUND IQ DAILY CACHE (shared across all users, refreshed each day)
+# ============================================================================
+
+HEDGE_FUND_CACHE_PREFIX = 'system/hedge_fund_daily_cache/'
+
+def _hedge_fund_cache_key(s3_key_or_slug):
+    """Create a safe S3 key from s3_key or slug (no slashes)."""
+    return s3_key_or_slug.replace('/', '__').replace(' ', '_')
+
+def _load_hedge_fund_daily_cache(cache_slug):
+    """Load cached hedge fund data if valid for today."""
+    try:
+        today = datetime.now().strftime('%Y-%m-%d')
+        key = f"{HEDGE_FUND_CACHE_PREFIX}{today}/{_hedge_fund_cache_key(cache_slug)}.json"
+        response = s3_client.get_object(Bucket=METADATA_BUCKET, Key=key)
+        cached = json.loads(response['Body'].read().decode('utf-8'))
+        cached_date = cached.get('cached_date', '')
+        if cached_date == today:
+            print(f"📦 Hedge Fund daily cache HIT: {cache_slug}")
+            return cached.get('data')
+    except s3_client.exceptions.NoSuchKey:
+        pass
+    except Exception as e:
+        print(f"⚠️ Hedge Fund cache read error: {e}")
+    return None
+
+def _save_hedge_fund_daily_cache(cache_slug, data):
+    """Save hedge fund data to daily cache."""
+    try:
+        today = datetime.now().strftime('%Y-%m-%d')
+        key = f"{HEDGE_FUND_CACHE_PREFIX}{today}/{_hedge_fund_cache_key(cache_slug)}.json"
+        entry = {'cached_date': today, 'cached_at': datetime.now().isoformat(), 'data': data}
+        s3_client.put_object(
+            Bucket=METADATA_BUCKET,
+            Key=key,
+            Body=json.dumps(entry, indent=2),
+            ContentType='application/json'
+        )
+        print(f"💾 Hedge Fund daily cache SAVED: {cache_slug}")
+    except Exception as e:
+        print(f"⚠️ Hedge Fund cache write error: {e}")
+
+
+# ============================================================================
 # HEDGE FUND IQ API ENDPOINTS
 # ============================================================================
 
@@ -4960,8 +5073,13 @@ def list_hedge_fund_tickers():
 @app.route('/api/hedge-fund-iq/data/<path:s3_key>')
 @requires_auth
 def get_hedge_fund_ticker_data(s3_key):
-    """Get ticker CSV data and calculate day-over-day metrics."""
+    """Get ticker CSV data and calculate day-over-day metrics. Cached daily for all users."""
     print(f"📥 get_hedge_fund_ticker_data called for: {s3_key}")
+    
+    # Check daily cache first (shared across all users)
+    cached = _load_hedge_fund_daily_cache(s3_key)
+    if cached is not None:
+        return jsonify(cached)
     
     if not hedge_fund_s3_client:
         print("❌ Hedge Fund S3 client not configured")
@@ -5204,6 +5322,9 @@ def get_hedge_fund_ticker_data(s3_key):
             'calculated_stats': calculated_stats  # Pre-calculated stats for instant display
         }
         
+        # Save to daily cache for other users
+        _save_hedge_fund_daily_cache(s3_key, response_data)
+        
         return jsonify(response_data)
         
     except KeyError as e:
@@ -5323,14 +5444,22 @@ def save_ticker_metadata(metadata):
 @app.route('/api/hedge-fund-iq/predict-earnings', methods=['POST'])
 @requires_auth
 def predict_earnings():
-    """Use AI to predict earnings beat/miss based on KPI data."""
-    client = get_openai_client()
-    if not client:
-        return jsonify({'success': False, 'error': 'OpenAI not configured'}), 500
-    
+    """Use AI to predict earnings beat/miss based on KPI data. Cached daily for all users."""
     try:
         data = request.get_json()
         ticker = data.get('ticker')
+        quarter = data.get('quarter')
+        
+        # Check daily cache first
+        cache_slug = f"predict_{ticker}_{quarter}" if ticker and quarter else None
+        if cache_slug:
+            cached = _load_hedge_fund_daily_cache(cache_slug)
+            if cached is not None:
+                return jsonify(cached)
+        
+        client = get_openai_client()
+        if not client:
+            return jsonify({'success': False, 'error': 'OpenAI not configured'}), 500
         display_name = data.get('display_name')
         kpi = data.get('kpi')
         current_consumers = data.get('current_consumers')
@@ -5386,12 +5515,19 @@ Respond ONLY with valid JSON, no additional text."""
         import json
         result = json.loads(result_text)
         
-        return jsonify({
+        response_data = {
             'success': True,
             'prediction': result.get('prediction', 'UNKNOWN'),
             'confidence': result.get('confidence', 50),
             'analysis': result.get('analysis', 'Analysis unavailable')
-        })
+        }
+        
+        # Save to daily cache
+        quarter = data.get('quarter')
+        if ticker and quarter:
+            _save_hedge_fund_daily_cache(f"predict_{ticker}_{quarter}", response_data)
+        
+        return jsonify(response_data)
         
     except Exception as e:
         print(f"❌ Error in predict_earnings: {e}")
@@ -5403,14 +5539,23 @@ Respond ONLY with valid JSON, no additional text."""
 @app.route('/api/hedge-fund-iq/beat-miss-analysis', methods=['POST'])
 @requires_auth
 def analyze_beat_miss():
-    """Analyze whether company will beat or miss earnings based on KPI data, relevance, and actual projections."""
-    client = get_openai_client()
-    if not client:
-        return jsonify({'success': False, 'error': 'OpenAI not configured'}), 500
-    
+    """Analyze whether company will beat or miss earnings based on KPI data. Cached daily for all users."""
     try:
         data = request.get_json()
         ticker = data.get('ticker')
+        quarter = data.get('quarter')
+        
+        # Check daily cache first
+        cache_slug = f"beatmiss_{ticker}_{quarter}" if ticker and quarter else None
+        if cache_slug:
+            cached = _load_hedge_fund_daily_cache(cache_slug)
+            if cached is not None:
+                return jsonify(cached)
+        
+        client = get_openai_client()
+        if not client:
+            return jsonify({'success': False, 'error': 'OpenAI not configured'}), 500
+        
         display_name = data.get('display_name')
         kpi = data.get('kpi')
         quarter = data.get('quarter')  # e.g., "Q1 2026"
@@ -5494,7 +5639,7 @@ Respond ONLY with valid JSON, no additional text."""
         
         result = json.loads(result_text)
         
-        return jsonify({
+        response_data = {
             'success': True,
             'prediction': result.get('prediction', 'UNDECIDED'),
             'confidence': result.get('confidence', 50),
@@ -5502,7 +5647,13 @@ Respond ONLY with valid JSON, no additional text."""
             'consensus_estimate': result.get('consensus_estimate', 'Not found'),
             'our_projection': projected_growth_pct,
             'analysis': result.get('analysis', 'Analysis unavailable')
-        })
+        }
+        
+        # Save to daily cache
+        if ticker and quarter:
+            _save_hedge_fund_daily_cache(f"beatmiss_{ticker}_{quarter}", response_data)
+        
+        return jsonify(response_data)
         
     except Exception as e:
         print(f"❌ Error in analyze_beat_miss: {e}")
@@ -9361,6 +9512,89 @@ def sync_workspace_deck():
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
+# DECK SLIDE AI ANALYSIS
+# ============================================================================
+
+@app.route('/api/decks/analyze-slide', methods=['POST'])
+@requires_auth
+def analyze_slide_with_ai():
+    """Use ChatGPT to analyze slide data and return key points and takeaways."""
+    client = get_openai_client()
+    if not client:
+        return jsonify({'success': False, 'error': 'OpenAI not configured'}), 500
+
+    try:
+        data = request.get_json()
+        content = data.get('content', '') or data.get('slideContent', '')
+        slide_title = data.get('title', data.get('slideTitle', 'Slide'))
+
+        if not content or not content.strip():
+            return jsonify({'success': False, 'error': 'No content to analyze'}), 400
+
+        prompt = f"""Analyze the following slide content and provide:
+1. **Key Points** - 3-5 bullet points summarizing the most important data/insights
+2. **Takeaways** - 2-4 actionable takeaways or conclusions for the audience
+
+Slide title: {slide_title}
+
+Content:
+{content[:8000]}
+
+Format your response as JSON:
+{{
+  "key_points": ["point 1", "point 2", ...],
+  "takeaways": ["takeaway 1", "takeaway 2", ...]
+}}
+
+Respond ONLY with valid JSON, no additional text."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an analyst summarizing data for executives. Be concise and insightful. Respond only with valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=600
+        )
+
+        result_text = response.choices[0].message.content.strip()
+        if '```json' in result_text:
+            result_text = result_text.split('```json')[1].split('```')[0].strip()
+        elif '```' in result_text:
+            result_text = result_text.split('```')[1].split('```')[0].strip()
+
+        result = json.loads(result_text)
+        key_points = result.get('key_points', [])
+        takeaways = result.get('takeaways', [])
+
+        combined = []
+        if key_points:
+            combined.append('**Key Points**')
+            combined.extend(f"• {p}" for p in key_points)
+        if takeaways:
+            combined.append('')
+            combined.append('**Takeaways**')
+            combined.extend(f"• {t}" for t in takeaways)
+
+        analysis_text = '\n'.join(combined)
+
+        return jsonify({
+            'success': True,
+            'key_points': key_points,
+            'takeaways': takeaways,
+            'analysis': analysis_text
+        })
+    except json.JSONDecodeError as e:
+        return jsonify({'success': False, 'error': f'Invalid AI response: {str(e)}'}), 500
+    except Exception as e:
+        print(f"❌ Error in analyze_slide_with_ai: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # ============================================================================

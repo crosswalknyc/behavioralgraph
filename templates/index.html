@@ -490,6 +490,32 @@
         #customAnalysisView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #customAnalysisView.active { display: flex; }
         #dashboardView { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+        
+        /* App Footer - Data Source */
+        .app-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 0.5rem 1.25rem;
+            background: var(--bg-dark);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            z-index: 100;
+            min-height: 36px;
+        }
+        .app-footer-logo {
+            height: 24px;
+            width: auto;
+            object-fit: contain;
+        }
+        .app-footer-text {
+            font-size: 0.75rem;
+            font-style: italic;
+            color: var(--text-secondary);
+        }
         #subscriberIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #talentSearchIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #talentTheaterIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
@@ -7829,13 +7855,13 @@
         }
 
         /* ============================================
-           CHAT WIDGET STYLES
+           CHAT WIDGET STYLES - Floating bottom right
            ============================================ */
         .chat-widget {
             position: fixed;
             bottom: 20px;
             right: 20px;
-            z-index: 9999;
+            z-index: 99999;
             font-family: inherit;
         }
         
@@ -7895,8 +7921,9 @@
             position: absolute;
             bottom: 70px;
             right: 0;
-            width: 380px;
-            height: 500px;
+            width: min(380px, 95vw);
+            height: min(560px, 85vh);
+            max-height: calc(100vh - 120px);
             background: var(--bg-card);
             border-radius: 16px;
             box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
@@ -8021,15 +8048,20 @@
             color: white;
         }
         
-        .chat-contact-avatar .online-indicator {
+        .chat-contact-avatar .status-indicator {
             position: absolute;
             bottom: 2px;
             right: 2px;
             width: 10px;
             height: 10px;
-            background: #22c55e;
             border-radius: 50%;
             border: 2px solid var(--bg-card);
+        }
+        .chat-contact-avatar .status-indicator.available {
+            background: #22c55e;
+        }
+        .chat-contact-avatar .status-indicator.busy {
+            background: #ef4444;
         }
         
         .chat-contact-info {
@@ -14334,7 +14366,7 @@
         // Track current profile to prevent showing wrong image
         let currentProfileForImage = null;
         
-        async function fetchProfileImage(profileName, retryCount = 0, forceRefresh = false) {
+        async function fetchProfileImage(profileName, retryCount = 0, forceRefresh = false, onImageLoaded = null) {
             const imageContainer = document.getElementById('dashProfileImage');
             const img = imageContainer?.querySelector('img');
             if (!imageContainer || !img) return;
@@ -14373,6 +14405,7 @@
                         // Double-check we're still showing the right profile
                         if (currentProfileForImage === cacheKey) {
                             imageContainer.classList.add('loaded');
+                            if (typeof onImageLoaded === 'function') onImageLoaded(cachedUrl);
                         }
                     };
                     img.onerror = () => {
@@ -14433,6 +14466,7 @@
                         if (currentProfileForImage === cacheKey) {
                             img.src = data.image_url;
                             imageContainer.classList.add('loaded');
+                            if (typeof onImageLoaded === 'function') onImageLoaded(data.image_url);
                         } else {
                             console.log(`⏭️ Profile changed, not setting image for ${profileName}`);
                         }
@@ -39833,8 +39867,30 @@
                 return `${cat.category}&#10;&#10;Avg Gap: ${cat.avgGap > 0 ? '+' : ''}${cat.avgGap}&#10;Strengths: ${cat.opportunities} | Gaps: ${cat.weaknesses}&#10;&#10;Top Items:&#10;${topItemsText}`;
             };
             
+            // Store gap data globally for category deep dive
+            window.gapAnalysisData = {
+                primaryProfile,
+                comparisonProfiles,
+                gaps,
+                sortedCategoryGaps,
+                categoryGaps,
+                createGapTooltip,
+                createCategoryTooltip
+            };
+            
             let html = `
                 <div class="gap-grid" style="display: grid; grid-template-columns: 1fr; gap: 1rem; padding: 1rem;">
+                    <!-- Controls Row - Category Deep Dive -->
+                    <div style="display: flex; gap: 1rem; margin-bottom: 0.5rem; flex-wrap: wrap; align-items: center;">
+                        <div class="has-tooltip" data-tooltip="Select a category to see detailed gap analysis and item-level comparison for that category.">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary); margin-right: 0.5rem;">Category Deep Dive:</label>
+                            <select id="gapCategorySelect" onchange="renderGapCategoryDeepDive(this.value)" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); min-width: 200px;">
+                                <option value="">Select a category...</option>
+                                ${sortedCategoryGaps.map(c => `<option value="${c.category}">${c.category}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+                    
                     <!-- Summary Card -->
                     <div class="overlap-card" style="grid-column: 1 / -1;">
                         <h4 class="has-tooltip" data-tooltip="Comprehensive gap analysis comparing ${primaryProfile.name} against ${comparisonProfiles.map(p => p.name).join(', ')}">📊 Gap Analysis Summary: <span style="color: ${primaryProfile.color};">${primaryProfile.name}</span> vs Others</h4>
@@ -39936,11 +39992,11 @@
                     <div class="overlap-card">
                         <h4 class="has-tooltip" data-tooltip="Aggregated gap analysis by category. Shows average index difference and breakdown of strengths vs gaps within each category.">📂 Category-Level Gap Analysis</h4>
                         <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-                            Average index difference by category for ${primaryProfile.name}. Hover over each category for top items.
+                            Average index difference by category for ${primaryProfile.name}. Click any category to deep dive.
                         </p>
                         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem; margin-top: 1rem;">
                             ${sortedCategoryGaps.map(c => `
-                                <div class="has-tooltip" data-tooltip="${createCategoryTooltip(c)}" style="background: var(--bg-dark); padding: 0.85rem; border-radius: 8px; border-left: 4px solid ${c.avgGap >= 0 ? 'var(--accent-lime)' : 'var(--accent-red)'}; cursor: help; transition: transform 0.2s; border: 1px solid var(--border-color);" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                                <div class="has-tooltip" data-tooltip="${createCategoryTooltip(c)}" data-gap-category="${(c.category || '').replace(/"/g, '&quot;')}" onclick="gapCategoryDeepDiveClick(this)" style="background: var(--bg-dark); padding: 0.85rem; border-radius: 8px; border-left: 4px solid ${c.avgGap >= 0 ? 'var(--accent-lime)' : 'var(--accent-red)'}; cursor: pointer; transition: transform 0.2s; border: 1px solid var(--border-color);" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
                                     <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 0.35rem; color: var(--text-primary);">${c.category}</div>
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <span style="font-size: 1.5rem; font-weight: 700; color: ${c.avgGap >= 0 ? 'var(--accent-lime)' : 'var(--accent-red)'};">
@@ -39961,6 +40017,8 @@
                                 </div>
                             `).join('')}
                         </div>
+                        <!-- Category Deep Dive Container -->
+                        <div id="gapCategoryDeepDiveContainer" style="display: none; margin-top: 1rem;"></div>
                     </div>
                     
                     <!-- Strategic Recommendations -->
@@ -40010,6 +40068,108 @@
             `;
             
             document.getElementById('gapContent').innerHTML = html;
+        }
+        
+        // Helper: click handler for gap category cards
+        function gapCategoryDeepDiveClick(el) {
+            const cat = (el.getAttribute('data-gap-category') || '').replace(/&quot;/g, '"');
+            if (cat) {
+                const sel = document.getElementById('gapCategorySelect');
+                if (sel) sel.value = cat;
+                renderGapCategoryDeepDive(cat);
+            }
+        }
+        
+        // Gap Analysis Category Deep Dive function
+        function renderGapCategoryDeepDive(category) {
+            const container = document.getElementById('gapCategoryDeepDiveContainer');
+            if (!category || !window.gapAnalysisData) {
+                if (container) container.style.display = 'none';
+                return;
+            }
+            
+            const { primaryProfile, comparisonProfiles, gaps, createGapTooltip } = window.gapAnalysisData;
+            
+            // Get all gap items for this category - group by item name
+            const categoryGaps = gaps.filter(g => g.category === category);
+            const itemMap = {};
+            categoryGaps.forEach(g => {
+                if (!itemMap[g.name]) {
+                    itemMap[g.name] = { name: g.name, primaryIndex: g.primaryIndex, comps: {}, maxGap: g.indexDiff };
+                }
+                itemMap[g.name].comps[g.compProfile] = { compIndex: g.compIndex, indexDiff: g.indexDiff };
+                if (Math.abs(g.indexDiff) > Math.abs(itemMap[g.name].maxGap)) {
+                    itemMap[g.name].maxGap = g.indexDiff;
+                }
+            });
+            
+            const items = Object.values(itemMap).sort((a, b) => Math.abs(b.maxGap) - Math.abs(a.maxGap));
+            const strengths = items.filter(i => i.maxGap > 0).length;
+            const weaknesses = items.filter(i => i.maxGap < 0).length;
+            
+            container.style.display = 'block';
+            
+            let html = `
+                <div class="overlap-card" style="border: 2px solid var(--accent-cyan);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h4>🔍 Deep Dive: ${category}</h4>
+                        <button class="module-btn" onclick="document.getElementById('gapCategoryDeepDiveContainer').style.display='none'; document.getElementById('gapCategorySelect').value='';" style="font-size: 0.75rem;">✕ Close</button>
+                    </div>
+                    
+                    <!-- Category Summary -->
+                    <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                        <div style="background: var(--bg-dark); padding: 0.75rem 1rem; border-radius: 8px; border-left: 3px solid var(--accent-lime);">
+                            <div style="font-weight: 600; color: var(--accent-lime); font-size: 0.85rem;">💪 Strengths</div>
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-lime);">${strengths}</div>
+                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${primaryProfile.name} over-indexes</div>
+                        </div>
+                        <div style="background: var(--bg-dark); padding: 0.75rem 1rem; border-radius: 8px; border-left: 3px solid var(--accent-red);">
+                            <div style="font-weight: 600; color: var(--accent-red); font-size: 0.85rem;">📉 Gaps</div>
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-red);">${weaknesses}</div>
+                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${primaryProfile.name} under-indexes</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Items Table -->
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        <table class="comp-table" style="width: 100%; font-size: 0.8rem;">
+                            <thead style="position: sticky; top: 0; background: var(--bg-card);">
+                                <tr>
+                                    <th style="text-align: left; min-width: 180px;">Item</th>
+                                    <th style="color: ${primaryProfile.color};">${primaryProfile.name}</th>
+                                    ${comparisonProfiles.map(p => `<th style="color: ${p.color};">${p.name}</th>`).join('')}
+                                    <th>Max Gap</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${items.slice(0, 50).map(item => {
+                                    const firstGap = categoryGaps.find(g => g.name === item.name);
+                                    const tooltip = firstGap ? createGapTooltip(firstGap, item.maxGap > 0) : '';
+                                    return `
+                                    <tr class="has-tooltip" data-tooltip="${tooltip}">
+                                        <td style="text-align: left; font-weight: 500;">${item.name}</td>
+                                        <td style="color: ${primaryProfile.color}; font-weight: 600;">${item.primaryIndex}</td>
+                                        ${comparisonProfiles.map(p => {
+                                            const compData = item.comps[p.name];
+                                            if (!compData) return '<td style="color: var(--text-secondary);">-</td>';
+                                            return `<td style="color: ${p.color};">${compData.compIndex}</td>`;
+                                        }).join('')}
+                                        <td style="color: ${item.maxGap > 0 ? 'var(--accent-lime)' : 'var(--accent-red)'}; font-weight: 600;">${item.maxGap > 0 ? '+' : ''}${item.maxGap}</td>
+                                    </tr>
+                                `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div style="margin-top: 0.75rem; font-size: 0.75rem; color: var(--text-secondary);">
+                        Showing ${Math.min(items.length, 50)} of ${items.length} items in ${category}
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+            container.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
         
         // Sort gap lists
@@ -43445,6 +43605,9 @@
                             <button class="toolbar-btn" onclick="alignElement('right')" title="Align Right">➡</button>
                         </div>
                         <div class="slide-toolbar-group">
+                            <button class="toolbar-btn" onclick="analyzeSlideWithAI()" title="Analyze slide data with AI and add key points & takeaways" style="background: var(--accent-cyan); color: var(--bg-dark);">🤖 Analyze with AI</button>
+                        </div>
+                        <div class="slide-toolbar-group">
                             <button class="toolbar-btn" onclick="bringToFront()" title="Bring to Front">⬆️</button>
                             <button class="toolbar-btn" onclick="sendToBack()" title="Send to Back">⬇️</button>
                             <button class="toolbar-btn" onclick="deleteSelectedElement()" title="Delete" style="color: #ef4444;">🗑️</button>
@@ -43473,6 +43636,21 @@
             // Initialize slide elements
             initSlideElements();
             
+            // If title slide has no profile image but we have a profile, fetch it and update when loaded
+            if (currentEditingSlide === 0 && currentEditingDeck && currentProfileData?.name) {
+                const titleSlide = currentEditingDeck.titleSlide || {};
+                if (!titleSlide.image && !getDeckTitleSlideProfileImage({ ...titleSlide, image: null })) {
+                    fetchProfileImage(currentProfileData.name, 0, false, (imageUrl) => {
+                        if (currentEditingDeck && currentEditingSlide === 0 && imageUrl) {
+                            if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
+                            currentEditingDeck.titleSlide.image = imageUrl;
+                            saveDeckChanges();
+                            renderSlideEditor();
+                        }
+                    });
+                }
+            }
+            
             // Focus the panel for keyboard navigation
             const panel = document.getElementById('slideEditorPanel');
             if (panel) panel.focus();
@@ -43494,13 +43672,26 @@
         let dragStartPos = { x: 0, y: 0 };
         let elementStartPos = { x: 0, y: 0 };
         
+        function getDeckTitleSlideProfileImage(slide) {
+            if (slide?.image) return slide.image;
+            if (currentProfileData?.image) return currentProfileData.image;
+            if (currentProfileData?.name) {
+                const cacheKey = currentProfileData.name.toLowerCase().trim();
+                const cached = profileImageCache[cacheKey];
+                if (cached && cached !== 'pending' && cached !== 'none') return cached;
+            }
+            const dashImg = document.querySelector('#dashProfileImage img');
+            if (dashImg?.src && !dashImg.src.endsWith('/')) return dashImg.src;
+            return null;
+        }
+        
         function renderSlideElements(slide, idx) {
             // Get elements from slide or create defaults for title slide
             let elements = slide.elements || [];
             
             // For title slide, create default elements if none exist
             if ((idx === 0 || slide.type === 'title') && elements.length === 0) {
-                const profileImage = slide.image || currentProfileData?.image || null;
+                let profileImage = getDeckTitleSlideProfileImage(slide);
                 elements = [
                     profileImage ? {
                         id: 'title_image',
@@ -43562,6 +43753,20 @@
                         borderRadius: 8
                     }))
                 ];
+            }
+            
+            // For module slides (demographic, behavioral, location, chart, affinity, insight, demographics) with data - render the imported data + any elements (e.g. AI analysis)
+            const moduleTypes = ['demographic', 'behavioral', 'location', 'chart', 'affinity', 'insight', 'demographics'];
+            if (idx > 0 && slide.data && moduleTypes.includes(slide.type)) {
+                const title = slide.customTitle || slide.title || slide.category || 'Slide';
+                const analysisBlock = slide.aiAnalysis ? `<div style="margin-top: 1rem; padding: 1rem; background: rgba(74, 138, 201, 0.1); border-radius: 8px; border-left: 3px solid var(--accent-cyan); font-size: 0.9rem; line-height: 1.5;"><div style="font-size: 0.8rem; font-weight: 600; color: var(--accent-cyan); margin-bottom: 0.5rem;">🤖 AI Key Points & Takeaways</div><div>${slide.aiAnalysis}</div></div>` : '';
+                return `
+                    <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 10%; width: 90%; height: 80%; overflow-y: auto; padding: 0.5rem;">
+                        <div class="slide-module-title" style="font-size: 1.5rem; font-weight: 600; color: var(--accent-lime); margin-bottom: 1rem;">${escapeHtml(title)}</div>
+                        ${renderSlideContent(slide)}
+                        ${analysisBlock}
+                    </div>
+                `;
             }
             
             return elements.map(el => renderSingleElement(el)).join('');
@@ -43963,6 +44168,108 @@
             }
         }
         
+        async function analyzeSlideWithAI() {
+            if (!currentEditingDeck) return;
+            const allSlides = [{ type: 'title', ...currentEditingDeck.titleSlide }, ...(currentEditingDeck.slides || [])];
+            const slide = allSlides[currentEditingSlide];
+            if (!slide) return;
+            
+            let content = '';
+            const title = slide.customTitle || slide.title || slide.category || 'Slide';
+            
+            if (slide.elements && slide.elements.length > 0) {
+                content = slide.elements.filter(e => e.type === 'text').map(e => {
+                    const c = (e.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                    return c;
+                }).filter(Boolean).join('\n');
+            }
+            if (!content && slide.data) {
+                const parts = [];
+                if (slide.type === 'demographic' && slide.data.values) {
+                    Object.entries(slide.data.values).sort((a,b)=>b[1]-a[1]).forEach(([k,v]) => parts.push(`${k}: ${parseFloat(v).toFixed(1)}%`));
+                } else if (slide.type === 'behavioral' && slide.data.items) {
+                    const items = Array.isArray(slide.data.items) ? slide.data.items : [];
+                    items.slice(0, 15).forEach(i => parts.push(`${i.name}: ${parseFloat(i.pct||0).toFixed(1)}%`));
+                } else if (slide.type === 'location') {
+                    const locs = slide.data.locations || slide.data.regions || [];
+                    locs.slice(0, 12).forEach(l => parts.push(`${l.name||l.dma||l.region}: ${l.value||l.pct||''}`));
+                } else if (slide.type === 'demographics' && slide.data.categories) {
+                    Object.entries(slide.data.categories).forEach(([cat, catData]) => {
+                        parts.push(cat + ':');
+                        Object.entries(catData.values||{}).slice(0, 5).forEach(([k,v]) => parts.push(`  ${k}: ${parseFloat(v).toFixed(1)}%`));
+                    });
+                } else if (slide.type === 'affinity' && slide.data.items) {
+                    (slide.data.items||[]).slice(0, 10).forEach(i => parts.push(`${i.name}: ${i.index||''}`));
+                }
+                content = parts.join('\n');
+            }
+            if (!content && slide.contentItems?.length > 0) {
+                content = slide.contentItems.map(i => `${i.title || ''} - ${i.profileName || ''}`).join('\n');
+            }
+            if (!content || !content.trim()) {
+                showNotification('No content on this slide to analyze', 'warning');
+                return;
+            }
+            
+            const btn = document.querySelector('[onclick="analyzeSlideWithAI()"]');
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Analyzing...'; }
+            try {
+                const resp = await fetch('/api/decks/analyze-slide', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ content, title })
+                });
+                const data = await resp.json();
+                if (btn) { btn.disabled = false; btn.textContent = '🤖 Analyze with AI'; }
+                if (!data.success) {
+                    showNotification(data.error || 'Analysis failed', 'error');
+                    return;
+                }
+                const analysis = data.analysis || '';
+                if (!analysis) {
+                    showNotification('No analysis returned', 'warning');
+                    return;
+                }
+                const slideObj = currentEditingSlide === 0 ? currentEditingDeck.titleSlide : currentEditingDeck.slides[currentEditingSlide - 1];
+                if (slideObj) {
+                    slideObj.notes = (slideObj.notes || '') + (slideObj.notes ? '\n\n' : '') + analysis;
+                    const analysisHtml = analysis.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+                    const moduleTypes = ['demographic', 'behavioral', 'location', 'chart', 'affinity', 'insight', 'demographics'];
+                    if (slideObj.data && moduleTypes.includes(slideObj.type)) {
+                        slideObj.aiAnalysis = analysisHtml;
+                    } else {
+                        if (!slideObj.elements) slideObj.elements = [];
+                        const maxY = Math.max(0, ...slideObj.elements.map(e => (e.y || 0) + (e.height || 10)));
+                        slideObj.elements.push({
+                            id: 'ai_analysis_' + Date.now(),
+                            type: 'text',
+                            x: 5, y: Math.min(maxY + 5, 55),
+                            width: 90, height: 40,
+                            content: analysisHtml,
+                            fontSize: 16,
+                            color: '#e2e8f0',
+                            align: 'left',
+                            background: 'rgba(74, 138, 201, 0.15)',
+                            padding: 12,
+                            borderRadius: 8
+                        });
+                    }
+                }
+                const notesEl = document.querySelector('.slide-notes-section textarea');
+                if (notesEl) {
+                    notesEl.value = (notesEl.value ? notesEl.value + '\n\n' : '') + analysis;
+                    debouncedUpdateSlideNotes(currentEditingSlide, notesEl.value);
+                }
+                saveDeckChanges();
+                renderSlideEditor();
+                showNotification('✅ AI analysis added to slide', 'success');
+            } catch (err) {
+                if (btn) { btn.disabled = false; btn.textContent = '🤖 Analyze with AI'; }
+                showNotification(err.message || 'Analysis failed', 'error');
+            }
+        }
+        
         function bringToFront() {
             if (!selectedElementId || !currentEditingDeck) return;
             
@@ -44317,15 +44624,17 @@
             }
             
             if (slide.type === 'behavioral') {
-                const items = slide.data.items || {};
-                const entries = Object.entries(items).sort((a, b) => b[1] - a[1]).slice(0, 10);
+                const items = slide.data.items || [];
+                const entries = Array.isArray(items)
+                    ? items.map(i => [i.name, i.pct]).filter(([k]) => k).sort((a, b) => (parseFloat(b[1]) || 0) - (parseFloat(a[1]) || 0)).slice(0, 10)
+                    : Object.entries(items).sort((a, b) => (parseFloat(b[1]) || 0) - (parseFloat(a[1]) || 0)).slice(0, 10);
                 return `
                     <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                         ${entries.map(([key, val], i) => `
                             <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px;">
                                 <span style="font-size: 0.75rem; color: var(--text-secondary); width: 20px;">${i + 1}</span>
-                                <span style="flex: 1; font-size: 0.85rem;">${key}</span>
-                                <span style="font-weight: 600; color: var(--accent-lime);">${parseFloat(val).toFixed(1)}%</span>
+                                <span style="flex: 1; font-size: 0.85rem;">${(key || '').replace(/</g, '&lt;')}</span>
+                                <span style="font-weight: 600; color: var(--accent-lime);">${parseFloat(val || 0).toFixed(1)}%</span>
                             </div>
                         `).join('')}
                     </div>
@@ -44347,6 +44656,43 @@
             
             if (slide.type === 'chart' && slide.data.chartImage) {
                 return `<img src="${slide.data.chartImage}" style="max-width: 100%; border-radius: 8px;">`;
+            }
+            
+            if (slide.type === 'affinity' && slide.data.items) {
+                const items = slide.data.items || [];
+                const entries = Array.isArray(items) ? items.slice(0, 12) : [];
+                return `
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                        ${entries.map(item => `
+                            <div style="padding: 0.5rem; background: var(--bg-input); border-radius: 4px; font-size: 0.85rem;">
+                                <span>${(item.name || '').replace(/</g, '&lt;')}</span>
+                                <span style="color: var(--accent-lime); margin-left: 0.5rem;">${String(item.index || '').replace(/</g, '&lt;')}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            if (slide.type === 'demographics' && slide.data && slide.data.categories) {
+                const cats = slide.data.categories || {};
+                return Object.entries(cats).map(([catName, catData]) => {
+                    const values = catData.values || {};
+                    const entries = Object.entries(values).sort((a, b) => b[1] - a[1]).slice(0, 6);
+                    const label = (catName || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    return `
+                        <div style="margin-bottom: 1rem;">
+                            <div style="font-size: 0.9rem; font-weight: 600; color: var(--accent-cyan); margin-bottom: 0.5rem;">${(label || catName).replace(/</g, '&lt;')}</div>
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                                ${entries.map(([key, val]) => `
+                                    <div style="padding: 0.5rem; background: var(--bg-input); border-radius: 4px; font-size: 0.8rem;">
+                                        <div style="color: var(--text-secondary);">${(key || '').replace(/</g, '&lt;')}</div>
+                                        <div style="font-weight: 600; color: var(--accent-lime);">${parseFloat(val || 0).toFixed(1)}%</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
             }
             
             return '<p style="color: var(--text-secondary);">Content preview</p>';
@@ -44538,7 +44884,7 @@
                         <button onclick="document.getElementById('addSlideModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
                     </div>
                     <div style="padding: 1.5rem;">
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
                             <div onclick="addBlankSlide()" style="padding: 1.5rem; background: var(--bg-input); border-radius: 8px; cursor: pointer; text-align: center; border: 2px solid transparent; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-lime)'" onmouseout="this.style.borderColor='transparent'">
                                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">📄</div>
                                 <div style="font-weight: 600;">Blank Slide</div>
@@ -44547,7 +44893,12 @@
                             <div onclick="addSlideFromModule()" style="padding: 1.5rem; background: var(--bg-input); border-radius: 8px; cursor: pointer; text-align: center; border: 2px solid transparent; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-lime)'" onmouseout="this.style.borderColor='transparent'">
                                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
                                 <div style="font-weight: 600;">From Module</div>
-                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Add data from dashboard</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Add single module data</div>
+                            </div>
+                            <div onclick="addSlideFromCategory()" style="padding: 1.5rem; background: var(--bg-input); border-radius: 8px; cursor: pointer; text-align: center; border: 2px solid transparent; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-lime)'" onmouseout="this.style.borderColor='transparent'">
+                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">📋</div>
+                                <div style="font-weight: 600;">From Category</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Demographics (all or selected)</div>
                             </div>
                         </div>
                     </div>
@@ -44592,10 +44943,12 @@
             let moduleOptions = '';
             
             // Demographics
+            const demoLabels = { age: 'Age', gender: 'Gender', ethnicity: 'Ethnicity', income: 'Income', education: 'Education', relationship: 'Relationship Status', sexual_orientation: 'Sexual Orientation', parental_status: 'Parental Status', occupation: 'Occupation' };
             if (currentDashboardData.demographics) {
                 moduleOptions += '<h4 style="margin: 1rem 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Demographics</h4>';
                 Object.keys(currentDashboardData.demographics).forEach(key => {
-                    moduleOptions += `<div onclick="addModuleToCurrentDeck('demographic', '${key}')" style="padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer;">📊 ${key}</div>`;
+                    const label = demoLabels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    moduleOptions += `<div onclick="addModuleToCurrentDeck('demographic', '${key}')" style="padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer;">📊 ${label}</div>`;
                 });
             }
             
@@ -44619,6 +44972,94 @@
                 </div>
             `;
             document.body.appendChild(modal);
+        }
+        
+        function addSlideFromCategory() {
+            document.getElementById('addSlideModal')?.remove();
+            if (!currentDashboardData || !currentDashboardData.demographics) {
+                alert('Please load a profile first to add demographics pages');
+                return;
+            }
+            const demoKeys = Object.keys(currentDashboardData.demographics);
+            const demoLabels = { age: 'Age', gender: 'Gender', ethnicity: 'Ethnicity', income: 'Income', education: 'Education', relationship: 'Relationship Status', sexual_orientation: 'Sexual Orientation', parental_status: 'Parental Status', occupation: 'Occupation' };
+            let checkboxesHtml = demoKeys.map(key => {
+                const label = demoLabels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                return `<label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0; cursor: pointer;">
+                    <input type="checkbox" class="demo-cat-check" data-key="${key}" ${key === 'age' ? 'checked' : ''}>
+                    <span>${label}</span>
+                </label>`;
+            }).join('');
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'categorySelectModal';
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 420px;">
+                    <div class="deck-workspace-header">
+                        <h2>📋 Add Page from Category</h2>
+                        <button onclick="document.getElementById('categorySelectModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1rem;">
+                        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Select demographics to include on the slide:</p>
+                        <div style="margin-bottom: 0.75rem;">
+                            <button onclick="document.querySelectorAll('.demo-cat-check').forEach(c => c.checked = true)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">Select All</button>
+                            <button onclick="document.querySelectorAll('.demo-cat-check').forEach(c => c.checked = false)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer; margin-left: 0.5rem;">Clear</button>
+                        </div>
+                        <div style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px; padding: 0.75rem; background: var(--bg-dark);">
+                            ${checkboxesHtml}
+                        </div>
+                        <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('categorySelectModal').remove()" style="flex: 1;">Cancel</button>
+                            <button class="btn btn-primary" onclick="confirmAddSlideFromCategory()" style="flex: 1;">Add Page</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function confirmAddSlideFromCategory() {
+            const modal = document.getElementById('categorySelectModal');
+            if (!modal || !currentEditingDeck) return;
+            const checked = Array.from(modal.querySelectorAll('.demo-cat-check:checked')).map(c => c.dataset.key);
+            if (checked.length === 0) {
+                alert('Please select at least one demographic category');
+                return;
+            }
+            modal.remove();
+            const item = createDemographicsCategoryItem(checked);
+            if (!currentEditingDeck.slides) currentEditingDeck.slides = [];
+            currentEditingDeck.slides.push(item);
+            saveDeckChanges();
+            currentEditingSlide = currentEditingDeck.slides.length;
+            renderSlideEditor();
+            showNotification(`✅ Added demographics slide (${checked.length} categories)`, 'success');
+        }
+        
+        function createDemographicsCategoryItem(selectedKeys) {
+            const categories = {};
+            selectedKeys.forEach(key => {
+                categories[key] = {
+                    values: currentDashboardData.demographics[key] || {},
+                    index: currentDashboardData.demographicsIndex?.[key] || {},
+                    genPop: currentDashboardData.demographicsGenPop?.[key] || {}
+                };
+            });
+            const labels = { age: 'Age', gender: 'Gender', ethnicity: 'Ethnicity', income: 'Income', education: 'Education', relationship: 'Relationship', sexual_orientation: 'Sexual Orientation', parental_status: 'Parental Status', occupation: 'Occupation' };
+            const title = selectedKeys.length === Object.keys(currentDashboardData.demographics || {}).length
+                ? 'All Demographics'
+                : selectedKeys.map(k => labels[k] || k).join(', ');
+            return {
+                id: 'slide_' + Date.now(),
+                type: 'demographics',
+                category: 'Demographics',
+                profileName: currentProfileData?.name || 'Profile',
+                profileKey: currentS3Key,
+                dateAdded: new Date().toISOString(),
+                data: { categories },
+                customTitle: title,
+                title: `${currentProfileData?.name || 'Profile'} - ${title}`,
+                customNotes: ''
+            };
         }
         
         function addModuleToCurrentDeck(type, category) {
@@ -45435,6 +45876,8 @@
         let chatConversations = JSON.parse(localStorage.getItem('chatConversations') || '{}');
         let currentChatConversation = null;
         let chatUnreadCount = 0;
+        let userStatuses = {};
+        let myChatStatus = 'available';
         
         function toggleChatWindow() {
             const window = document.getElementById('chatWindow');
@@ -45445,7 +45888,72 @@
             } else {
                 window.classList.add('open');
                 btn.classList.remove('has-notification');
+                // Load team members if not yet loaded (chat works without visiting Workspace first)
+                if (collabTeamMembers.length === 0) {
+                    loadWorkspaceData().then(() => {
+                        loadChatContacts();
+                        fetchUserStatuses();
+                    }).catch(() => loadChatContacts());
+                } else {
+                    loadChatContacts();
+                    fetchUserStatuses();
+                }
+            }
+        }
+        
+        async function fetchUserStatuses() {
+            try {
+                const res = await fetch('/api/chat/status', { credentials: 'same-origin' });
+                const data = await res.json();
+                if (data.success && data.statuses) {
+                    userStatuses = data.statuses;
+                    if (userStatuses[currentUsername]?.status) {
+                        myChatStatus = userStatuses[currentUsername].status;
+                    }
+                    updateChatStatusHeader();
+                    loadChatContacts();
+                }
+            } catch (e) {
+                console.warn('Could not fetch chat statuses:', e);
+            }
+        }
+        
+        async function setMyChatStatus(status) {
+            myChatStatus = status;
+            try {
+                await fetch('/api/chat/status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status }),
+                    credentials: 'same-origin'
+                });
+                userStatuses[currentUsername] = { status, updated_at: new Date().toISOString() };
+                updateChatStatusHeader();
                 loadChatContacts();
+            } catch (e) {
+                console.warn('Could not set chat status:', e);
+            }
+        }
+        
+        function toggleChatStatusMenu() {
+            const menu = document.getElementById('chatStatusMenu');
+            if (menu) {
+                menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+        
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.chat-status-dropdown')) {
+                const menu = document.getElementById('chatStatusMenu');
+                if (menu) menu.style.display = 'none';
+            }
+        });
+        
+        function updateChatStatusHeader() {
+            const indicator = document.getElementById('chatMyStatusIndicator');
+            if (indicator) {
+                indicator.className = 'status-indicator ' + (myChatStatus === 'available' ? 'available' : 'busy');
+                indicator.title = myChatStatus === 'available' ? 'Available' : 'Busy';
             }
         }
         
@@ -45453,24 +45961,56 @@
             const list = document.getElementById('chatContactsList');
             if (!list) return;
             
-            if (collabTeamMembers.length === 0) {
-                list.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.8rem;">No team members yet. Go to Workspace tab to load your team.</div>';
+            let html = '';
+            
+            // Group chats section
+            const groupConvos = Object.entries(chatConversations).filter(([id, c]) => c.isGroup && c.participants?.includes(currentUsername));
+            if (groupConvos.length > 0) {
+                html += '<div style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; margin: 0.5rem 0 0.35rem 0; text-transform: uppercase;">Group Chats</div>';
+                groupConvos.forEach(([convoId, convo]) => {
+                    const lastMsg = convo.messages?.[convo.messages.length - 1];
+                    const unread = convo.unread?.[currentUsername] || 0;
+                    html += `
+                        <div class="chat-contact-item" onclick="openGroupChatById('${convoId}')">
+                            <div class="chat-contact-avatar" style="position: relative;">
+                                <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--accent-cyan); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 1rem;">👥</div>
+                            </div>
+                            <div class="chat-contact-info">
+                                <div class="chat-contact-name">${convo.name || 'Group Chat'}</div>
+                                <div class="chat-contact-preview">${lastMsg ? lastMsg.text.substring(0, 30) + (lastMsg.text.length > 30 ? '...' : '') : 'No messages yet'}</div>
+                            </div>
+                            ${unread > 0 ? `<span class="chat-contact-unread">${unread}</span>` : ''}
+                        </div>
+                    `;
+                });
+                html += '<div style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; margin: 0.75rem 0 0.35rem 0; text-transform: uppercase;">Team Members</div>';
+            }
+            
+            if (collabTeamMembers.length === 0 && groupConvos.length === 0) {
+                list.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.8rem;">No team members yet. Go to Workspace tab or contact your admin to set up your team.</div>';
                 return;
             }
             
-            list.innerHTML = collabTeamMembers.map(m => {
+            if (collabTeamMembers.length === 0) {
+                list.innerHTML = html;
+                return;
+            }
+            
+            html += collabTeamMembers.map(m => {
                 const displayName = m.first_name && m.last_name ? `${m.first_name} ${m.last_name}` : m.username;
                 const convoId = getConversationId([currentUsername, m.username]);
                 const convo = chatConversations[convoId];
                 const lastMsg = convo?.messages?.[convo.messages.length - 1];
                 const unread = convo?.unread?.[currentUsername] || 0;
+                const status = userStatuses[m.username]?.status || 'available';
                 const avatarHtml = m.profile_picture 
                     ? `<img src="${m.profile_picture}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;">`
                     : `<div style="width: 36px; height: 36px; border-radius: 50%; background: var(--accent-blue); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.7rem; color: white;">${m.username.substring(0, 2).toUpperCase()}</div>`;
+                const statusIndicator = `<span class="status-indicator ${status}" title="${status === 'available' ? 'Available' : 'Busy'}"></span>`;
                 
                 return `
                     <div class="chat-contact-item" onclick="openChatWith('${m.username}')">
-                        <div class="chat-contact-avatar">${avatarHtml}</div>
+                        <div class="chat-contact-avatar" style="position: relative;">${avatarHtml}${statusIndicator}</div>
                         <div class="chat-contact-info">
                             <div class="chat-contact-name">${displayName}</div>
                             <div class="chat-contact-preview">${lastMsg ? lastMsg.text.substring(0, 30) + (lastMsg.text.length > 30 ? '...' : '') : 'No messages yet'}</div>
@@ -45479,6 +46019,22 @@
                     </div>
                 `;
             }).join('');
+            
+            list.innerHTML = html;
+        }
+        
+        function openGroupChatById(convoId) {
+            const convo = chatConversations[convoId];
+            if (!convo) return;
+            currentChatConversation = { id: convoId, ...convo };
+            chatConversations[convoId].unread = chatConversations[convoId].unread || {};
+            chatConversations[convoId].unread[currentUsername] = 0;
+            localStorage.setItem('chatConversations', JSON.stringify(chatConversations));
+            document.getElementById('chatContactsView').style.display = 'none';
+            document.getElementById('chatConversationView').style.display = 'flex';
+            document.getElementById('chatConvoName').textContent = convo.name || 'Group Chat';
+            renderChatMessages();
+            updateChatUnreadBadge();
         }
         
         function filterChatContacts(searchTerm) {
@@ -45549,11 +46105,15 @@
                 return;
             }
             
+            const isGroup = currentChatConversation.isGroup;
             container.innerHTML = messages.map(msg => {
                 const isMe = msg.sender === currentUsername;
                 const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const member = collabTeamMembers.find(m => m.username === msg.sender);
+                const senderName = isGroup && !isMe ? (member ? (member.first_name && member.last_name ? `${member.first_name} ${member.last_name}` : member.username) : msg.sender) : '';
                 return `
                     <div class="chat-message ${isMe ? 'sent' : 'received'}">
+                        ${isGroup && !isMe && senderName ? `<div class="chat-message-sender" style="font-size: 0.7rem; color: var(--accent-cyan); margin-bottom: 0.2rem;">${senderName}</div>` : ''}
                         <div class="chat-message-content">${msg.text}</div>
                         <div class="chat-message-time">${time}</div>
                     </div>
@@ -45609,7 +46169,10 @@
             renderChatMessages();
         }
         
-        function startNewGroupChat() {
+        async function startNewGroupChat() {
+            if (collabTeamMembers.length === 0) {
+                await loadWorkspaceData();
+            }
             const modal = document.createElement('div');
             modal.className = 'deck-workspace-modal';
             modal.id = 'groupChatModal';
@@ -45712,10 +46275,13 @@
         document.addEventListener('DOMContentLoaded', () => {
             updateChatUnreadBadge();
             
-            // Check for new messages periodically (simulated - in real app would use WebSocket)
+            // Check for new messages and status updates periodically
             setInterval(() => {
                 updateChatUnreadBadge();
-            }, 5000);
+                if (document.getElementById('chatWindow')?.classList.contains('open')) {
+                    fetchUserStatuses();
+                }
+            }, 10000);
         });
         
         // Make openChatWith available for team member clicks
@@ -45753,7 +46319,21 @@
         <div class="chat-window" id="chatWindow">
             <div class="chat-header">
                 <h3>💬 Team Chat</h3>
-                <div class="chat-header-actions">
+                <div class="chat-header-actions" style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div class="chat-status-dropdown" style="position: relative;">
+                        <button id="chatStatusBtn" onclick="toggleChatStatusMenu()" title="Your status" style="background: transparent; border: none; cursor: pointer; padding: 0.25rem; display: flex; align-items: center;">
+                            <span id="chatMyStatusIndicator" class="status-indicator available" style="width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--bg-card);"></span>
+                        </button>
+                        <div id="chatStatusMenu" style="display: none; position: absolute; bottom: 100%; right: 0; margin-bottom: 0.5rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 140px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); z-index: 10;">
+                            <div style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Your status</div>
+                            <button onclick="setMyChatStatus('available'); document.getElementById('chatStatusMenu').style.display='none';" style="width: 100%; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: transparent; border: none; color: var(--text-primary); cursor: pointer; font-size: 0.85rem; border-radius: 4px; text-align: left;">
+                                <span class="status-indicator available" style="width: 10px; height: 10px;"></span> Available
+                            </button>
+                            <button onclick="setMyChatStatus('busy'); document.getElementById('chatStatusMenu').style.display='none';" style="width: 100%; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: transparent; border: none; color: var(--text-primary); cursor: pointer; font-size: 0.85rem; border-radius: 4px; text-align: left;">
+                                <span class="status-indicator busy" style="width: 10px; height: 10px;"></span> Busy
+                            </button>
+                        </div>
+                    </div>
                     <button onclick="startNewGroupChat()" title="New Group Chat">👥</button>
                     <button onclick="toggleChatWindow()" title="Minimize">−</button>
                 </div>
@@ -45776,7 +46356,7 @@
                 <!-- Conversation View -->
                 <div class="chat-conversation" id="chatConversationView">
                     <div class="chat-conversation-header">
-                        <button class="chat-back-btn" onclick="showChatContacts()">←</button>
+                        <button class="chat-back-btn" onclick="backToChatContacts()">←</button>
                         <div class="chat-conversation-avatar" id="chatConvoAvatar">
                             <div class="avatar-initials">?</div>
                         </div>
@@ -45794,6 +46374,11 @@
         </div>
     </div>
     
+    <!-- Left-justified footer with data source -->
+    <footer class="app-footer">
+        <img src="/static/crosswalk-logo-small.png" alt="Crosswalk" class="app-footer-logo" onerror="this.src='/static/crosswalk-logo-stacked.svg'; this.style.height='24px';">
+        <span class="app-footer-text">Data Source: Crosswalk's Intelligence Platform, a 10M Gen Pop Digital Behavioral Panel</span>
+    </footer>
+    
 </body>
-</html>
 </html>
