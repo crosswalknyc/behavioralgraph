@@ -11090,15 +11090,6 @@
                                 <p class="card-desc">What makes this audience unique</p>
                                 <div id="topDifferentiators" class="differentiator-list-grouped"></div>
                             </div>
-                            
-                            <!-- Key Statistics (At-a-Glance) - LAST -->
-                            <div class="insight-card-v2 full-width" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="At-a-Glance Statistics">
-                                <h3 class="has-tooltip" data-tooltip="At-a-Glance Statistics: Summary metrics including total behavioral items tracked, number of categories, and counts of items where this audience over/under-indexes vs. Gen Pop.">
-                                    <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                    <span>📊 At-a-Glance Statistics</span>
-                                </h3>
-                                <div id="keyStatsGrid" class="key-stats-grid"></div>
-                            </div>
                         </div>
                     </div>
                     
@@ -28757,15 +28748,6 @@
                 `;
             }).join('');
             
-            // Key stats grid with tooltips for each stat
-            document.getElementById('keyStatsGrid').innerHTML = `
-                <div class="key-stat-item has-tooltip" data-tooltip="Uniqueness Score: How distinctive this audience is compared to the general population. Calculated as the percentage of over-indexing items that have an index above 150 (strongly differentiated). 100% = highly unique, 0% = similar to Gen Pop."><div class="key-stat-label">Uniqueness Score</div><div class="key-stat-value neutral">${uniquenessScore}%</div></div>
-                <div class="key-stat-item has-tooltip" data-tooltip="Categories: Number of unique behavioral categories this audience has data for (e.g., QSR, Streaming, Social Media, etc.)"><div class="key-stat-label">Categories</div><div class="key-stat-value neutral">${categoryCount}</div></div>
-                <div class="key-stat-item has-tooltip" data-tooltip="Over-Index Count: Number of items where this audience indexes above 1.0x (more likely to engage than Gen Pop). Higher = more distinct interests."><div class="key-stat-label">Over-Index</div><div class="key-stat-value">${over100Count.toLocaleString()}</div></div>
-                <div class="key-stat-item has-tooltip" data-tooltip="Under-Index Count: Number of items where this audience indexes below 1.0x (less likely to engage than Gen Pop). Helps identify what to avoid in targeting."><div class="key-stat-label">Under-Index</div><div class="key-stat-value" style="color:#ef4444">${under100Count.toLocaleString()}</div></div>
-                <div class="key-stat-item has-tooltip" data-tooltip="Average Index: Mean index across all behavioral items. 1.0x = same as Gen Pop. Higher values indicate a more distinctive audience profile."><div class="key-stat-label">Avg Index</div><div class="key-stat-value neutral">${formatIndex(Math.round(allItems.reduce((s,i) => s+i.index, 0) / Math.max(1, allItems.length)))}</div></div>
-                <div class="key-stat-item has-tooltip" data-tooltip="Max Index: The highest index score in this profile. Shows the strongest affinity this audience has compared to Gen Pop."><div class="key-stat-label">Max Index</div><div class="key-stat-value">${formatIndex(sortedByIndex[0]?.index || 0)}</div></div>
-            `;
             
             // ===== BEHAVIORAL DNA TAB =====
             
