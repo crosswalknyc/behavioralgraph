@@ -35926,62 +35926,124 @@
                 return;
             }
             
-            // Find shared behaviors (present in all profiles with index > 100)
+            // Separate Gen Pop from other profiles for special handling
+            const genPopProfile = profiles.find(p => p.name.toUpperCase() === 'GEN POP' || p.name.toUpperCase() === 'GENPOP');
+            const nonGenPopProfiles = profiles.filter(p => p.name.toUpperCase() !== 'GEN POP' && p.name.toUpperCase() !== 'GENPOP');
+            
+            // Collect ALL behaviors across all profiles with their indices
             const allBehaviors = {};
+            const overIndexThreshold = 110; // Consider over-indexing at 110+
+            
             profiles.forEach(p => {
                 if (p.behavioral) {
                     Object.entries(p.behavioral).forEach(([cat, items]) => {
                         items.forEach(item => {
                             const key = cat + '|' + item.name;
                             if (!allBehaviors[key]) {
-                                allBehaviors[key] = { name: item.name, category: cat, profiles: [], avgIndex: 0 };
+                                allBehaviors[key] = { 
+                                    name: item.name, 
+                                    category: cat, 
+                                    profileData: {},
+                                    overIndexingProfiles: [],
+                                    totalIndex: 0,
+                                    count: 0
+                                };
                             }
-                            if (item.index > 100) {
-                                allBehaviors[key].profiles.push(p.name);
-                                allBehaviors[key].avgIndex += item.index;
+                            // Store data for each profile
+                            allBehaviors[key].profileData[p.name] = {
+                                index: item.index || 100,
+                                pct: item.pct || item.percentage || 0
+                            };
+                            // Track which non-GenPop profiles over-index
+                            if (item.index >= overIndexThreshold && p.name.toUpperCase() !== 'GEN POP' && p.name.toUpperCase() !== 'GENPOP') {
+                                allBehaviors[key].overIndexingProfiles.push(p.name);
+                                allBehaviors[key].totalIndex += item.index;
+                                allBehaviors[key].count++;
                             }
                         });
                     });
                 }
             });
             
-            // Shared = present in ALL profiles
+            // Calculate shared behaviors (where ALL non-GenPop profiles over-index)
+            const targetProfiles = nonGenPopProfiles.length > 0 ? nonGenPopProfiles : profiles;
             const shared = Object.values(allBehaviors)
-                .filter(b => b.profiles.length === profiles.length)
-                .map(b => ({ ...b, avgIndex: Math.round(b.avgIndex / b.profiles.length) }))
+                .filter(b => {
+                    // For shared: all target profiles must over-index
+                    return targetProfiles.every(p => b.overIndexingProfiles.includes(p.name));
+                })
+                .map(b => ({ 
+                    ...b, 
+                    avgIndex: b.count > 0 ? Math.round(b.totalIndex / b.count) : 100 
+                }))
                 .sort((a, b) => b.avgIndex - a.avgIndex)
-                .slice(0, 15);
+                .slice(0, 20);
             
-            // Unique to each profile
+            // Unique to each profile (only this profile over-indexes, others don't)
             const uniqueByProfile = {};
             profiles.forEach(p => {
-                uniqueByProfile[p.name] = Object.values(allBehaviors)
-                    .filter(b => b.profiles.length === 1 && b.profiles[0] === p.name)
-                    .sort((a, b) => b.avgIndex - a.avgIndex)
-                    .slice(0, 10);
+                if (p.name.toUpperCase() === 'GEN POP' || p.name.toUpperCase() === 'GENPOP') {
+                    // For Gen Pop, show behaviors where Gen Pop is at baseline but others over-index significantly
+                    uniqueByProfile[p.name] = [];
+                } else {
+                    // For other profiles, find behaviors unique to them
+                    uniqueByProfile[p.name] = Object.values(allBehaviors)
+                        .filter(b => {
+                            // This profile over-indexes
+                            const thisOverIndexes = b.overIndexingProfiles.includes(p.name);
+                            // No other non-GenPop profiles over-index
+                            const othersOverIndex = b.overIndexingProfiles.filter(name => name !== p.name).length;
+                            return thisOverIndexes && othersOverIndex === 0;
+                        })
+                        .map(b => ({
+                            ...b,
+                            avgIndex: b.profileData[p.name]?.index || 100
+                        }))
+                        .sort((a, b) => b.avgIndex - a.avgIndex)
+                        .slice(0, 15);
+                }
             });
             
-            // Calculate overlap percentage
+            // Calculate overlap statistics
             const totalBehaviors = Object.keys(allBehaviors).length;
+            const behaviorsWithOverIndex = Object.values(allBehaviors).filter(b => b.overIndexingProfiles.length > 0).length;
             const sharedCount = shared.length;
-            const overlapPct = totalBehaviors > 0 ? Math.round((sharedCount / totalBehaviors) * 100) : 0;
+            
+            // Calculate overlap percentage based on behaviors that appear in multiple profiles
+            const multiProfileBehaviors = Object.values(allBehaviors).filter(b => b.overIndexingProfiles.length >= 2).length;
+            const overlapPct = behaviorsWithOverIndex > 0 ? Math.round((multiProfileBehaviors / behaviorsWithOverIndex) * 100) : 0;
+            
+            // Build profile names for display
+            const profileNames = nonGenPopProfiles.length > 0 
+                ? nonGenPopProfiles.map(p => p.name).join(' & ')
+                : profiles.map(p => p.name).join(' & ');
             
             let html = `
                 <div class="overlap-grid">
                     <div class="overlap-card" style="grid-column: 1 / -1;">
                         <h4>📊 Overlap Summary</h4>
-                        <div style="display: flex; gap: 2rem; align-items: center;">
+                        <div style="display: flex; gap: 2rem; align-items: center; flex-wrap: wrap;">
                             <div>
                                 <div class="overlap-stat">${overlapPct}%</div>
                                 <div style="color: var(--text-secondary); font-size: 0.85rem;">Behavioral Overlap</div>
                             </div>
-                            <div style="flex: 1;">
+                            <div style="flex: 1; min-width: 200px;">
                                 <div style="background: var(--bg-dark); height: 20px; border-radius: 10px; overflow: hidden;">
-                                    <div style="width: ${overlapPct}%; height: 100%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-lime));"></div>
+                                    <div style="width: ${Math.max(overlapPct, 2)}%; height: 100%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-lime));"></div>
                                 </div>
                                 <div style="display: flex; justify-content: space-between; margin-top: 0.25rem; font-size: 0.75rem; color: var(--text-secondary);">
-                                    <span>${sharedCount} shared behaviors</span>
+                                    <span>${sharedCount} shared over-indexing behaviors</span>
                                     <span>${totalBehaviors} total analyzed</span>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                                <div style="text-align: center; padding: 0.5rem 1rem; background: var(--bg-dark); border-radius: 8px;">
+                                    <div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-lime);">${behaviorsWithOverIndex}</div>
+                                    <div style="font-size: 0.7rem; color: var(--text-secondary);">Over-indexing (110+)</div>
+                                </div>
+                                <div style="text-align: center; padding: 0.5rem 1rem; background: var(--bg-dark); border-radius: 8px;">
+                                    <div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-cyan);">${multiProfileBehaviors}</div>
+                                    <div style="font-size: 0.7rem; color: var(--text-secondary);">Multi-profile overlap</div>
                                 </div>
                             </div>
                         </div>
@@ -35990,28 +36052,28 @@
                     <div class="overlap-card">
                         <h4>🤝 Shared Over-Indexing Behaviors</h4>
                         <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-                            Behaviors where ALL selected profiles over-index (index > 100)
+                            Behaviors where ${profileNames} all over-index (index ≥ 110)
                         </p>
-                        <div class="overlap-list">
+                        <div class="overlap-list" style="max-height: 400px; overflow-y: auto;">
                             ${shared.length ? shared.map(b => `
                                 <div class="overlap-item">
-                                    <span>${b.name}</span>
+                                    <span style="flex: 1;">${b.name} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${b.category})</span></span>
                                     <span style="color: var(--accent-green); font-weight: 600;">${b.avgIndex}</span>
                                 </div>
-                            `).join('') : '<div style="color: var(--text-secondary); font-size: 0.8rem;">No shared over-indexing behaviors found</div>'}
+                            `).join('') : '<div style="color: var(--text-secondary); font-size: 0.8rem;">No shared over-indexing behaviors found between these profiles</div>'}
                         </div>
                     </div>
                     
-                    ${profiles.map(p => `
+                    ${profiles.filter(p => p.name.toUpperCase() !== 'GEN POP' && p.name.toUpperCase() !== 'GENPOP').map(p => `
                         <div class="overlap-card">
                             <h4 style="color: ${p.color};">🎯 Unique to ${p.name}</h4>
                             <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
                                 Behaviors where ONLY this profile over-indexes
                             </p>
-                            <div class="overlap-list">
+                            <div class="overlap-list" style="max-height: 350px; overflow-y: auto;">
                                 ${uniqueByProfile[p.name]?.length ? uniqueByProfile[p.name].map(b => `
                                     <div class="overlap-item">
-                                        <span>${b.name}</span>
+                                        <span style="flex: 1;">${b.name} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${b.category})</span></span>
                                         <span style="color: var(--accent-green); font-weight: 600;">${b.avgIndex}</span>
                                     </div>
                                 `).join('') : '<div style="color: var(--text-secondary); font-size: 0.8rem;">No unique behaviors</div>'}
