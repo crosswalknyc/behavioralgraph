@@ -11062,34 +11062,32 @@
                                 </div>
                             </div>
                             
-                            <!-- Demographic Highlights -->
-                            <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Demographic Highlights">
+                            <!-- Interest Highlights -->
+                            <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Interest Highlights">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                                    <h3 class="has-tooltip" data-tooltip="Demographic Highlights: Shows which demographic segments (age, gender, income, etc.) significantly over-index (>110) or under-index (<80) compared to Gen Pop. Helps identify who your core audience is." style="margin: 0;">
+                                    <h3 class="has-tooltip" data-tooltip="Interest Highlights: Top interests and behaviors where this audience most over-indexes compared to the general population. Shows what this audience is passionate about." style="margin: 0;">
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                        <span>👥 Demographic Highlights</span>
+                                        <span>⭐ Interest Highlights</span>
                                     </h3>
                                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                                         <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
-                                        <select id="demoHighlightsSortSelect" onchange="sortDemoHighlights(this.value)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 100px;">
+                                        <select id="interestHighlightsSortSelect" onchange="sortInterestHighlights(this.value)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 100px;">
                                             <option value="index-desc">Index ↓</option>
                                             <option value="index-asc">Index ↑</option>
                                             <option value="profile-desc">Profile % ↓</option>
                                             <option value="profile-asc">Profile % ↑</option>
-                                            <option value="genpop-desc">Gen Pop % ↓</option>
-                                            <option value="genpop-asc">Gen Pop % ↑</option>
-                                            <option value="segment-asc">Segment A-Z</option>
-                                            <option value="segment-desc">Segment Z-A</option>
+                                            <option value="name-asc">Name A-Z</option>
+                                            <option value="name-desc">Name Z-A</option>
                                         </select>
                                     </div>
                                 </div>
                                 <div class="differentiator-header" style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem;">
-                                    <span style="flex: 1; text-align: left;">Segment</span>
-                                    <span class="has-tooltip" data-tooltip="Profile %: The percentage of THIS audience in this demographic segment." style="min-width: 80px; text-align: left;">Profile %</span>
-                                    <span class="has-tooltip" data-tooltip="Gen Pop %: The percentage of the general US population in this demographic segment." style="min-width: 80px; text-align: left;">Gen Pop %</span>
-                                    <span class="has-tooltip" data-tooltip="Index: How much more/less likely this segment is vs Gen Pop. 100 = same as Gen Pop. Green = over-indexes, Red = under-indexes." style="min-width: 70px; text-align: left;">Index</span>
+                                    <span style="flex: 1; text-align: left;">Interest</span>
+                                    <span style="min-width: 80px; text-align: left;">Category</span>
+                                    <span class="has-tooltip" data-tooltip="Profile %: The percentage of THIS audience that engages with this interest." style="min-width: 70px; text-align: left;">Profile %</span>
+                                    <span class="has-tooltip" data-tooltip="Index: How much more likely this audience is to engage vs Gen Pop. 2.0x = twice as likely." style="min-width: 60px; text-align: left;">Index</span>
                                 </div>
-                                <div id="demoHighlights" class="highlight-list"></div>
+                                <div id="interestHighlights" class="highlight-list"></div>
                             </div>
                             
                             <!-- Top Differentiators -->
@@ -23763,6 +23761,60 @@
             if (dropdown) dropdown.value = sortValue;
         }
         
+        // Interest Highlights sort state
+        let interestHighlightsSortState = 'index-desc';
+        
+        // Sort and render interest highlights
+        function sortInterestHighlights(sortValue) {
+            interestHighlightsSortState = sortValue;
+            renderInterestHighlights(sortValue);
+        }
+        
+        // Render interest highlights with sorting
+        function renderInterestHighlights(sortValue) {
+            const container = document.getElementById('interestHighlights');
+            if (!container || !window.interestHighlightsData) return;
+            
+            // Sort the data
+            let sorted = [...window.interestHighlightsData];
+            const [column, direction] = sortValue.split('-');
+            
+            sorted.sort((a, b) => {
+                let diff = 0;
+                switch (column) {
+                    case 'index':
+                        diff = b.index - a.index;
+                        break;
+                    case 'profile':
+                        diff = b.pct - a.pct;
+                        break;
+                    case 'name':
+                        diff = a.name.localeCompare(b.name);
+                        break;
+                }
+                return direction === 'asc' ? -diff : diff;
+            });
+            
+            // Take top 8 items
+            sorted = sorted.slice(0, 8);
+            
+            container.innerHTML = sorted.map(item => {
+                const indexClass = item.index >= 150 ? 'high' : item.index >= 100 ? '' : 'low';
+                return `
+                <div class="highlight-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
+                    <span class="label" style="flex: 1; font-size: 0.85rem; text-align: left; color: var(--text-primary);">${item.name}</span>
+                    <span style="min-width: 80px; text-align: left; font-size: 0.75rem; color: var(--text-secondary);">${item.category}</span>
+                    <span style="min-width: 70px; text-align: left; font-size: 0.85rem;">${item.pct.toFixed(1)}%</span>
+                    <span class="differentiator-index ${indexClass}" style="min-width: 60px; text-align: left;">${formatIndex(item.index)}</span>
+                </div>
+            `;
+            }).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No interest data available</p>';
+            
+            // Update dropdown to match current sort
+            const dropdown = document.getElementById('interestHighlightsSortSelect');
+            if (dropdown) dropdown.value = sortValue;
+        }
+        
         // Generate audience vs Gen Pop takeaways with AI behavioral summary
         async function generateAudienceTakeaways(demoInsights, data) {
             const takeawaysContainer = document.getElementById('audienceTakeaways');
@@ -28787,6 +28839,25 @@
             
             // Render with default sort (index descending by deviation from 100)
             renderDemoHighlights('index-desc');
+            
+            // Interest Highlights - top over-indexing interests/behaviors
+            const interestHighlightsData = allItems
+                .filter(i => i.index >= 120 && i.pct < 99) // Over-indexing items, exclude near-100% items
+                .sort((a, b) => b.index - a.index)
+                .slice(0, 20) // Keep top 20 for sorting flexibility
+                .map(item => ({
+                    name: item.name,
+                    category: item.category,
+                    pct: item.pct,
+                    genPop: item.genPop,
+                    index: item.index
+                }));
+            
+            // Store globally for sorting
+            window.interestHighlightsData = interestHighlightsData;
+            
+            // Render with default sort (index descending)
+            renderInterestHighlights('index-desc');
             
             // Top differentiators - group by category, show top 3 items per category
             const itemsByCategory = {};
