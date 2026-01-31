@@ -12118,17 +12118,7 @@
             <div id="tab-collaboration" class="tab-content">
                 <div class="collab-container">
                     <div class="collab-sidebar">
-                        <h3>📁 Workspaces</h3>
-                        <div id="workspaceList" class="workspace-list">
-                            <div class="workspace-item active" data-id="default" onclick="selectWorkspace('default', this)">
-                                <span class="workspace-icon">🏠</span>
-                                <span class="workspace-name">My Workspace</span>
-                                <span class="workspace-count" id="ws-count-default">0</span>
-                            </div>
-                        </div>
-                        <button class="btn btn-small" style="width: 100%; margin-top: 0.5rem;" onclick="showCreateWorkspaceModal()">+ New Workspace</button>
-                        
-                        <h3 style="margin-top: 1.5rem;" id="yourTeamHeader">
+                        <h3 id="yourTeamHeader">
                             {% if profile_picture %}
                             <img src="{{ profile_picture }}" alt="" class="team-header-avatar">
                             {% else %}
@@ -12146,10 +12136,29 @@
                     </div>
                     
                     <div class="collab-main">
+                        <!-- Workspace Selector Dropdown -->
+                        <div class="workspace-selector-bar" style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">WORKSPACE:</label>
+                            <div class="workspace-dropdown" style="position: relative; flex: 1; max-width: 300px;">
+                                <button id="workspaceDropdownBtn" onclick="toggleWorkspaceDropdown()" style="width: 100%; padding: 0.5rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem;">
+                                    <span id="activeWorkspaceName">My Workspace</span>
+                                    <span>▾</span>
+                                </button>
+                                <div id="workspaceDropdownMenu" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; margin-top: 0.25rem; z-index: 100; max-height: 250px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                                    <div id="workspaceDropdownList">
+                                        <!-- Populated by JS -->
+                                    </div>
+                                    <div style="border-top: 1px solid var(--border-color); padding: 0.5rem;">
+                                        <button onclick="showCreateWorkspaceModal(); toggleWorkspaceDropdown();" style="width: 100%; padding: 0.5rem; background: transparent; border: 1px dashed var(--border-color); border-radius: 4px; color: var(--accent-lime); cursor: pointer; font-size: 0.8rem;">+ Create New Workspace</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div class="collab-tabs">
                             <button class="collab-tab active" onclick="showCollabTab('shared')">📤 Shared Profiles</button>
                             <button class="collab-tab" onclick="showCollabTab('comments')">💬 Comments</button>
-                            <button class="collab-tab" onclick="showCollabTab('decks')">📊 Shared Decks</button>
+                            <button class="collab-tab" onclick="showCollabTab('decks')">📊 Deck Builder</button>
                             <button class="collab-tab" onclick="showCollabTab('activity')">📋 Activity Log</button>
                             <button class="collab-tab" onclick="showCollabTab('notifications')">🔔 Notifications</button>
                         </div>
@@ -12158,10 +12167,6 @@
                             <div class="shared-profiles-header">
                                 <h3>Shared Profiles</h3>
                                 <div style="display: flex; gap: 0.5rem;">
-                                    <select id="shareWithSelect" style="padding: 0.4rem; border-radius: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.8rem;">
-                                        <option value="workspace">Share to Workspace</option>
-                                        <option value="team">Share with Team</option>
-                                    </select>
                                     <button class="btn btn-primary btn-small" onclick="shareCurrentProfile()">+ Share Profile</button>
                                 </div>
                             </div>
@@ -40485,9 +40490,61 @@
             currentWorkspace = id;
             document.querySelectorAll('.workspace-item').forEach(w => w.classList.remove('active'));
             if (element) element.classList.add('active');
+            
+            // Update dropdown display
+            const wsName = workspaces[id]?.name || 'My Workspace';
+            const nameEl = document.getElementById('activeWorkspaceName');
+            if (nameEl) nameEl.textContent = wsName;
+            
+            // Close dropdown if open
+            const menu = document.getElementById('workspaceDropdownMenu');
+            if (menu) menu.style.display = 'none';
+            
             renderSharedProfiles();
             loadWorkspaceData();
         }
+        
+        function toggleWorkspaceDropdown() {
+            const menu = document.getElementById('workspaceDropdownMenu');
+            if (!menu) return;
+            
+            if (menu.style.display === 'none') {
+                // Populate the dropdown
+                renderWorkspaceDropdown();
+                menu.style.display = 'block';
+            } else {
+                menu.style.display = 'none';
+            }
+        }
+        
+        function renderWorkspaceDropdown() {
+            const list = document.getElementById('workspaceDropdownList');
+            if (!list) return;
+            
+            let html = '';
+            Object.entries(workspaces).forEach(([id, ws]) => {
+                const isActive = id === currentWorkspace;
+                const icon = id === 'default' ? '🏠' : '📁';
+                html += `
+                    <div onclick="selectWorkspace('${id}')" style="padding: 0.6rem 0.75rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; ${isActive ? 'background: rgba(166, 226, 46, 0.1); border-left: 3px solid var(--accent-lime);' : ''}" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='${isActive ? 'rgba(166, 226, 46, 0.1)' : 'transparent'}'">
+                        <span>${icon}</span>
+                        <span style="flex: 1; font-size: 0.85rem;">${ws.name || id}</span>
+                        ${isActive ? '<span style="color: var(--accent-lime);">✓</span>' : ''}
+                    </div>
+                `;
+            });
+            
+            list.innerHTML = html || '<div style="padding: 0.75rem; color: var(--text-secondary); font-size: 0.8rem;">No workspaces</div>';
+        }
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const dropdown = document.querySelector('.workspace-dropdown');
+            const menu = document.getElementById('workspaceDropdownMenu');
+            if (dropdown && menu && !dropdown.contains(e.target)) {
+                menu.style.display = 'none';
+            }
+        });
         
         function showCreateWorkspaceModal() {
             const modal = document.createElement('div');
@@ -40512,14 +40569,17 @@
                                     <button type="button" onclick="deselectAllWorkspaceMembers()" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-dark); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer;">Clear</button>
                                 </div>
                             </div>
-                            <div id="workspaceMembersList" style="max-height: 250px; overflow-y: auto; background: var(--bg-input); border-radius: 6px; padding: 0.5rem; border: 1px solid var(--border-color);">
+                            <div style="margin-bottom: 0.5rem;">
+                                <input type="text" id="workspaceMemberSearch" placeholder="🔍 Search by name..." oninput="filterWorkspaceMembers(this.value)" style="width: 100%; padding: 0.5rem 0.75rem; border-radius: 6px; background: var(--bg-dark); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.85rem;">
+                            </div>
+                            <div id="workspaceMembersList" style="max-height: 220px; overflow-y: auto; background: var(--bg-input); border-radius: 6px; padding: 0.5rem; border: 1px solid var(--border-color);">
                                 ${collabTeamMembers.length > 0 ? collabTeamMembers.map(m => {
                                     const displayName = m.first_name && m.last_name ? `${m.first_name} ${m.last_name}` : m.username;
                                     const avatarHtml = m.profile_picture 
                                         ? `<img src="${m.profile_picture}" style="width: 28px; height: 28px; border-radius: 50%; object-fit: cover;">`
                                         : `<div style="width: 28px; height: 28px; border-radius: 50%; background: var(--accent-blue); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.6rem; color: white;">${m.username.substring(0, 2).toUpperCase()}</div>`;
                                     return `
-                                        <label style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.5rem; cursor: pointer; border-bottom: 1px solid var(--border-color);">
+                                        <label class="workspace-member-row" data-name="${displayName.toLowerCase()}" data-username="${m.username.toLowerCase()}" data-dept="${(m.department || '').toLowerCase()}" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.5rem; cursor: pointer; border-bottom: 1px solid var(--border-color);">
                                             <input type="checkbox" class="workspace-member-cb" value="${m.username}" data-email="${m.email || ''}" style="width: 18px; height: 18px; cursor: pointer;">
                                             ${avatarHtml}
                                             <div style="flex: 1; text-align: left;">
@@ -40554,7 +40614,13 @@
         }
         
         function selectAllWorkspaceMembers() {
-            document.querySelectorAll('.workspace-member-cb').forEach(cb => cb.checked = true);
+            // Only select visible (not hidden by search) members
+            document.querySelectorAll('.workspace-member-row').forEach(row => {
+                if (row.style.display !== 'none') {
+                    const cb = row.querySelector('.workspace-member-cb');
+                    if (cb) cb.checked = true;
+                }
+            });
             updateWorkspaceMemberCount();
         }
         
@@ -40567,6 +40633,21 @@
             const count = document.querySelectorAll('.workspace-member-cb:checked').length;
             const countEl = document.getElementById('workspaceMemberCount');
             if (countEl) countEl.textContent = count;
+        }
+        
+        function filterWorkspaceMembers(searchTerm) {
+            const term = searchTerm.toLowerCase().trim();
+            document.querySelectorAll('.workspace-member-row').forEach(row => {
+                const name = row.dataset.name || '';
+                const username = row.dataset.username || '';
+                const dept = row.dataset.dept || '';
+                
+                if (!term || name.includes(term) || username.includes(term) || dept.includes(term)) {
+                    row.style.display = 'flex';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
         }
         
         async function createWorkspace() {
@@ -40597,16 +40678,10 @@
             
             localStorage.setItem('collabWorkspaces', JSON.stringify(workspaces));
             
-            // Add to workspace list
-            const html = `
-                <div class="workspace-item" data-id="${id}" onclick="selectWorkspace('${id}', this)">
-                    <span class="workspace-icon">📁</span>
-                    <span class="workspace-name">${name}</span>
-                    <span class="workspace-count" id="ws-count-${id}">0</span>
-                </div>
-            `;
-            document.getElementById('workspaceList').insertAdjacentHTML('beforeend', html);
             document.getElementById('createWorkspaceModal')?.remove();
+            
+            // Select the new workspace
+            selectWorkspace(id);
             
             // Send notification to added members
             if (members.length > 0) {

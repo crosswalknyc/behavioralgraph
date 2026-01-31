@@ -1056,7 +1056,8 @@ def requires_admin(f):
                 return jsonify({'success': False, 'error': 'Session expired. Please log in again.'}), 401
             return redirect(url_for('login_page'))
         user = get_current_user()
-        if not user or user.get('role') != 'admin':
+        role = user.get('role', '') if user else ''
+        if not user or (role != 'admin' and role != 'super_admin'):
             return jsonify({'success': False, 'error': 'Admin access required'}), 403
         return f(*args, **kwargs)
     return decorated
@@ -2200,7 +2201,8 @@ def share_gmail_integration():
         for username in target_usernames:
             if username not in data['users']:
                 return jsonify({'success': False, 'error': f'User {username} not found'})
-            if data['users'][username].get('role') != 'admin':
+            user_role = data['users'][username].get('role', '')
+            if user_role != 'admin' and user_role != 'super_admin':
                 return jsonify({'success': False, 'error': f'User {username} is not an admin'})
         
         # Update Gmail sharing settings
@@ -2248,8 +2250,8 @@ def upload_profile_picture():
         # Get target username (defaults to current user)
         target_username = request.form.get('username', current_user)
         
-        # Only admin can change other users' pictures
-        if target_username != current_user and current_role != 'admin':
+        # Only admin/super_admin can change other users' pictures
+        if target_username != current_user and current_role != 'admin' and current_role != 'super_admin':
             return jsonify({'success': False, 'error': 'Permission denied'}), 403
         
         if 'file' not in request.files:
@@ -2304,7 +2306,7 @@ def delete_profile_picture():
         
         target_username = request.args.get('username', current_user)
         
-        if target_username != current_user and current_role != 'admin':
+        if target_username != current_user and current_role != 'admin' and current_role != 'super_admin':
             return jsonify({'success': False, 'error': 'Permission denied'}), 403
         
         data = load_users()
@@ -9673,7 +9675,7 @@ def submit_talent_search():
         
         # Check access
         role = user.get('role', 'user')
-        if role != 'admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
             return jsonify({'error': 'Attribution IQ access required'}), 403
         
         data = request.json
@@ -9743,7 +9745,7 @@ def submit_talent_theater():
         
         # Check access
         role = user.get('role', 'user')
-        if role != 'admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
             return jsonify({'error': 'Attribution IQ access required'}), 403
         
         data = request.json
@@ -10011,7 +10013,7 @@ def submit_svod_acquisition():
         
         # Check access
         role = user.get('role', 'user')
-        if role != 'admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
             return jsonify({'error': 'Attribution IQ access required'}), 403
         
         data = request.json
@@ -10095,7 +10097,7 @@ def submit_campaign_roi():
         
         # Check access
         role = user.get('role', 'user')
-        if role != 'admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
             return jsonify({'error': 'Attribution IQ access required'}), 403
         
         data = request.json
@@ -10370,7 +10372,7 @@ def submit_cross_show():
         
         # Check access
         role = user.get('role', 'user')
-        if role != 'admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
             return jsonify({'error': 'Attribution IQ access required'}), 403
         
         data = request.json
@@ -10440,7 +10442,7 @@ def submit_watch_time():
         
         # Check access
         role = user.get('role', 'user')
-        if role != 'admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
             return jsonify({'error': 'Attribution IQ access required'}), 403
         
         data = request.json
