@@ -35303,6 +35303,9 @@
         // Item limits for comparison sections (default to 15, can be changed to 'All')
         let comparisonSectionLimits = {};
         
+        // Sort type for comparison sections: 'pct' (percentage/#) or 'index'
+        let comparisonSectionSortTypes = {};
+        
         function setComparisonSectionLimit(sectionKey, limit) {
             comparisonSectionLimits[sectionKey] = limit;
             // Re-render the comparison with new limit
@@ -35313,6 +35316,18 @@
         
         function getComparisonSectionLimit(sectionKey) {
             return comparisonSectionLimits[sectionKey] || 15;
+        }
+        
+        function setComparisonSectionSortType(sectionKey, sortType) {
+            comparisonSectionSortTypes[sectionKey] = sortType;
+            // Re-render the comparison with new sort type
+            if (window.comparisonProfilesData) {
+                renderComparison(window.comparisonProfilesData, currentSortSection, currentSortColumn);
+            }
+        }
+        
+        function getComparisonSectionSortType(sectionKey) {
+            return comparisonSectionSortTypes[sectionKey] || 'pct';
         }
 
         function sortComparisonTable(section, profileIndex) {
@@ -35562,8 +35577,8 @@
             // Gender Comparison (if selected)
             if (selectedCategories.has('demo_gender')) {
                 const genderLimit = getComparisonSectionLimit('demo_gender');
+                const genderSortType = getComparisonSectionSortType('demo_gender');
                 const genderCount = countDemoValues('gender');
-                const genderLimitDisplay = genderLimit === 'All' ? 'All' : `Top ${genderLimit}`;
                 html += `
                 <div class="comp-section" id="comp-gender">
                     <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
@@ -35576,6 +35591,10 @@
                                 <option value="50" ${genderLimit == 50 ? 'selected' : ''}>Show Top 50</option>
                                 <option value="All" ${genderLimit === 'All' ? 'selected' : ''}>Show All</option>
                             </select>
+                            <select onchange="setComparisonSectionSortType('demo_gender', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                <option value="pct" ${genderSortType === 'pct' ? 'selected' : ''}>Sort by ${displayMode === 'projection' ? '#' : '%'}</option>
+                                <option value="index" ${genderSortType === 'index' ? 'selected' : ''}>Sort by Index</option>
+                            </select>
                         </span>
                     </div>
                     <table class="comp-table">
@@ -35586,7 +35605,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'gender', sortSection === 'gender' ? sortProfileIdx : null, genderLimit)}
+                            ${renderDemoComparisonRows(profiles, 'gender', sortSection === 'gender' ? sortProfileIdx : null, genderLimit, genderSortType)}
                         </tbody>
                     </table>
                 </div>`;
@@ -35595,8 +35614,8 @@
             // Age Comparison (if selected)
             if (selectedCategories.has('demo_age')) {
                 const ageLimit = getComparisonSectionLimit('demo_age');
+                const ageSortType = getComparisonSectionSortType('demo_age');
                 const ageCount = countDemoValues('age');
-                const ageLimitDisplay = ageLimit === 'All' ? 'All' : `Top ${ageLimit}`;
                 html += `
                 <div class="comp-section" id="comp-age">
                     <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
@@ -35609,6 +35628,10 @@
                                 <option value="50" ${ageLimit == 50 ? 'selected' : ''}>Show Top 50</option>
                                 <option value="All" ${ageLimit === 'All' ? 'selected' : ''}>Show All</option>
                             </select>
+                            <select onchange="setComparisonSectionSortType('demo_age', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                <option value="pct" ${ageSortType === 'pct' ? 'selected' : ''}>Sort by ${displayMode === 'projection' ? '#' : '%'}</option>
+                                <option value="index" ${ageSortType === 'index' ? 'selected' : ''}>Sort by Index</option>
+                            </select>
                         </span>
                     </div>
                     <table class="comp-table">
@@ -35619,7 +35642,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'age', sortSection === 'age' ? sortProfileIdx : null, ageLimit)}
+                            ${renderDemoComparisonRows(profiles, 'age', sortSection === 'age' ? sortProfileIdx : null, ageLimit, ageSortType)}
                         </tbody>
                     </table>
                 </div>`;
@@ -35628,8 +35651,8 @@
             // Ethnicity Comparison (if selected)
             if (selectedCategories.has('demo_ethnicity')) {
                 const ethnicityLimit = getComparisonSectionLimit('demo_ethnicity');
+                const ethnicitySortType = getComparisonSectionSortType('demo_ethnicity');
                 const ethnicityCount = countDemoValues('ethnicity');
-                const ethnicityLimitDisplay = ethnicityLimit === 'All' ? 'All' : `Top ${ethnicityLimit}`;
                 html += `
                 <div class="comp-section" id="comp-ethnicity">
                     <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
@@ -35642,6 +35665,10 @@
                                 <option value="50" ${ethnicityLimit == 50 ? 'selected' : ''}>Show Top 50</option>
                                 <option value="All" ${ethnicityLimit === 'All' ? 'selected' : ''}>Show All</option>
                             </select>
+                            <select onchange="setComparisonSectionSortType('demo_ethnicity', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                <option value="pct" ${ethnicitySortType === 'pct' ? 'selected' : ''}>Sort by ${displayMode === 'projection' ? '#' : '%'}</option>
+                                <option value="index" ${ethnicitySortType === 'index' ? 'selected' : ''}>Sort by Index</option>
+                            </select>
                         </span>
                     </div>
                     <table class="comp-table">
@@ -35652,7 +35679,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'ethnicity', sortSection === 'ethnicity' ? sortProfileIdx : null, ethnicityLimit)}
+                            ${renderDemoComparisonRows(profiles, 'ethnicity', sortSection === 'ethnicity' ? sortProfileIdx : null, ethnicityLimit, ethnicitySortType)}
                         </tbody>
                     </table>
                 </div>`;
@@ -35661,8 +35688,8 @@
             // Income Comparison (if selected)
             if (selectedCategories.has('demo_income')) {
                 const incomeLimit = getComparisonSectionLimit('demo_income');
+                const incomeSortType = getComparisonSectionSortType('demo_income');
                 const incomeCount = countDemoValues('income');
-                const incomeLimitDisplay = incomeLimit === 'All' ? 'All' : `Top ${incomeLimit}`;
                 html += `
                 <div class="comp-section" id="comp-income">
                     <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
@@ -35675,6 +35702,10 @@
                                 <option value="50" ${incomeLimit == 50 ? 'selected' : ''}>Show Top 50</option>
                                 <option value="All" ${incomeLimit === 'All' ? 'selected' : ''}>Show All</option>
                             </select>
+                            <select onchange="setComparisonSectionSortType('demo_income', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                <option value="pct" ${incomeSortType === 'pct' ? 'selected' : ''}>Sort by ${displayMode === 'projection' ? '#' : '%'}</option>
+                                <option value="index" ${incomeSortType === 'index' ? 'selected' : ''}>Sort by Index</option>
+                            </select>
                         </span>
                     </div>
                     <table class="comp-table">
@@ -35685,7 +35716,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'income', sortSection === 'income' ? sortProfileIdx : null, incomeLimit)}
+                            ${renderDemoComparisonRows(profiles, 'income', sortSection === 'income' ? sortProfileIdx : null, incomeLimit, incomeSortType)}
                         </tbody>
                     </table>
                 </div>`;
@@ -35703,6 +35734,7 @@
                 displayedBehavioralCats.push({ name: cat, id: safeCatId });
                 
                 const currentLimit = getComparisonSectionLimit(catKey);
+                const currentSortType = getComparisonSectionSortType(catKey);
                 
                 html += `
                     <div class="comp-section" id="comp-beh-${safeCatId}">
@@ -35716,6 +35748,10 @@
                                     <option value="50" ${currentLimit == 50 ? 'selected' : ''}>Show Top 50</option>
                                     <option value="All" ${currentLimit === 'All' ? 'selected' : ''}>Show All</option>
                                 </select>
+                                <select onchange="setComparisonSectionSortType('${catKey}', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="pct" ${currentSortType === 'pct' ? 'selected' : ''}>Sort by ${displayMode === 'projection' ? '#' : '%'}</option>
+                                    <option value="index" ${currentSortType === 'index' ? 'selected' : ''}>Sort by Index</option>
+                                </select>
                             </span>
                         </div>
                         <table class="comp-table">
@@ -35726,7 +35762,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${renderBehavioralComparisonRows(profiles, cat, sortSection === catKey ? sortProfileIdx : null, currentLimit)}
+                                ${renderBehavioralComparisonRows(profiles, cat, sortSection === catKey ? sortProfileIdx : null, currentLimit, currentSortType)}
                             </tbody>
                         </table>
                     </div>
@@ -35737,7 +35773,7 @@
             const hasLocations = profiles.some(p => p.locations && p.locations.length > 0);
             if (hasLocations && selectedCategories.has('location')) {
                 const locationLimit = getComparisonSectionLimit('location');
-                const locationLimitDisplay = locationLimit === 'All' ? 'All' : `Top ${locationLimit}`;
+                const locationSortType = getComparisonSectionSortType('location');
                 
                 html += `
                     <div class="comp-section" id="comp-location">
@@ -35750,6 +35786,10 @@
                                     <option value="50" ${locationLimit == 50 ? 'selected' : ''}>Show Top 50</option>
                                     <option value="All" ${locationLimit === 'All' ? 'selected' : ''}>Show All</option>
                                 </select>
+                                <select onchange="setComparisonSectionSortType('location', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="pct" ${locationSortType === 'pct' ? 'selected' : ''}>Sort by ${displayMode === 'projection' ? '#' : '%'}</option>
+                                    <option value="index" ${locationSortType === 'index' ? 'selected' : ''}>Sort by Index</option>
+                                </select>
                             </span>
                         </div>
                         <table class="comp-table">
@@ -35760,7 +35800,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${renderLocationComparisonRows(profiles, sortSection === 'location' ? sortProfileIdx : null, locationLimit)}
+                                ${renderLocationComparisonRows(profiles, sortSection === 'location' ? sortProfileIdx : null, locationLimit, locationSortType)}
                             </tbody>
                         </table>
                     </div>
@@ -35814,7 +35854,7 @@
             dropdown.innerHTML = options;
         }
 
-        function renderBehavioralComparisonRows(profiles, category, sortByProfileIdx = null, limit = 15) {
+        function renderBehavioralComparisonRows(profiles, category, sortByProfileIdx = null, limit = 15, sortType = 'pct') {
             // Get all values across all profiles for this category
             const allValues = new Map();
             profiles.forEach(p => {
@@ -35852,12 +35892,24 @@
                 };
             });
 
-            // Sort by selected profile column (always use pct for sorting), or by max value
+            // Determine which data to use for sorting based on sortType
+            const getSortValue = (row, idx) => {
+                if (sortType === 'index') {
+                    return row.indexData[idx] || 0;
+                }
+                return row.pctData[idx] || 0;
+            };
+
+            // Sort by selected profile column or by max value
             if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
-                dataRows.sort((a, b) => b.pctData[sortByProfileIdx] - a.pctData[sortByProfileIdx]);
+                dataRows.sort((a, b) => getSortValue(b, sortByProfileIdx) - getSortValue(a, sortByProfileIdx));
             } else {
                 // Default: sort by max value across all profiles
-                dataRows.sort((a, b) => Math.max(...b.pctData) - Math.max(...a.pctData));
+                if (sortType === 'index') {
+                    dataRows.sort((a, b) => Math.max(...b.indexData) - Math.max(...a.indexData));
+                } else {
+                    dataRows.sort((a, b) => Math.max(...b.pctData) - Math.max(...a.pctData));
+                }
             }
 
             // Apply limit (unless 'All')
@@ -35899,14 +35951,14 @@
             `).join('');
         }
 
-        function renderLocationComparisonRows(profiles, sortByProfileIdx = null, limit = 15) {
+        function renderLocationComparisonRows(profiles, sortByProfileIdx = null, limit = 15, sortType = 'pct') {
             // Get all locations across all profiles
             const allLocations = new Set();
             profiles.forEach(p => {
                 (p.locations || []).forEach(loc => allLocations.add(loc.name));
             });
 
-            // Build data rows with both pct and projection
+            // Build data rows with pct, projection, and index
             let dataRows = Array.from(allLocations).map(locName => {
                 return {
                     value: locName,
@@ -35917,15 +35969,31 @@
                     projData: profiles.map(p => {
                         const loc = (p.locations || []).find(l => l.name === locName);
                         return loc ? (loc.projection || 0) : 0;
+                    }),
+                    indexData: profiles.map(p => {
+                        const loc = (p.locations || []).find(l => l.name === locName);
+                        return loc ? (loc.index || 0) : 0;
                     })
                 };
             });
 
-            // Sort by selected profile column (use pct), or by max value
+            // Determine which data to use for sorting based on sortType
+            const getSortValue = (row, idx) => {
+                if (sortType === 'index') {
+                    return row.indexData[idx] || 0;
+                }
+                return row.pctData[idx] || 0;
+            };
+
+            // Sort by selected profile column or by max value
             if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
-                dataRows.sort((a, b) => b.pctData[sortByProfileIdx] - a.pctData[sortByProfileIdx]);
+                dataRows.sort((a, b) => getSortValue(b, sortByProfileIdx) - getSortValue(a, sortByProfileIdx));
             } else {
-                dataRows.sort((a, b) => Math.max(...b.pctData) - Math.max(...a.pctData));
+                if (sortType === 'index') {
+                    dataRows.sort((a, b) => Math.max(...b.indexData) - Math.max(...a.indexData));
+                } else {
+                    dataRows.sort((a, b) => Math.max(...b.pctData) - Math.max(...a.pctData));
+                }
             }
 
             // Apply limit (unless 'All')
@@ -35940,11 +36008,17 @@
                     ${profiles.map((p, i) => {
                         const pct = row.pctData[i];
                         const proj = row.projData[i];
+                        const index = row.indexData[i];
                         const isPrimary = i === primaryProfileIndex;
                         const primaryClass = isPrimary ? 'primary-col' : '';
                         const displayVal = displayMode === 'projection' 
                             ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                             : (pct > 0 ? pct.toFixed(2) + '%' : '-');
+                        
+                        // Index color: green if >= 100, red if < 100
+                        const indexColor = index >= 100 ? '#10b981' : '#ef4444';
+                        const indexDisplay = index > 0 ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${Math.round(index)}</span>` : '';
+                        
                         return `
                             <td class="${primaryClass}">
                                 <div class="comp-bar-cell">
@@ -35952,6 +36026,7 @@
                                         <div class="comp-bar-fill" style="width: ${Math.min(pct / 10 * 100, 100)}%; background: ${p.color};"></div>
                                     </div>
                                     <span class="comp-bar-pct">${displayVal}</span>
+                                    ${indexDisplay}
                                 </div>
                             </td>
                         `;
@@ -35960,14 +36035,14 @@
             `).join('');
         }
 
-        function renderDemoComparisonRows(profiles, demoType, sortByProfileIdx = null, limit = 15) {
+        function renderDemoComparisonRows(profiles, demoType, sortByProfileIdx = null, limit = 15, sortType = 'pct') {
             // Get all unique values across all profiles
             const allValues = new Set();
             profiles.forEach(p => {
                 Object.keys(p.demographics[demoType] || {}).forEach(v => allValues.add(v));
             });
 
-            // Build data array with values for sorting (always sort by percentage for consistent ordering)
+            // Build data array with values for sorting
             let dataRows = Array.from(allValues).map(value => {
                 return {
                     value: value,
@@ -35977,18 +36052,27 @@
                 };
             });
 
-            // Sort by selected profile column (use pct for sorting), or default sort
+            // Determine which data to use for sorting based on sortType
+            const getSortValue = (row, idx) => {
+                if (sortType === 'index') {
+                    return row.indexData[idx] || 0;
+                }
+                return row.pctData[idx] || 0;
+            };
+
+            // Sort by selected profile column or default sort
             if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
-                dataRows.sort((a, b) => b.pctData[sortByProfileIdx] - a.pctData[sortByProfileIdx]);
-            } else if (demoType === 'age') {
+                dataRows.sort((a, b) => getSortValue(b, sortByProfileIdx) - getSortValue(a, sortByProfileIdx));
+            } else if (demoType === 'age' && sortType === 'pct') {
+                // For age with pct sort, use natural age order
                 dataRows.sort((a, b) => {
                     const numA = parseInt(a.value.replace(/[^0-9]/g, '')) || 0;
                     const numB = parseInt(b.value.replace(/[^0-9]/g, '')) || 0;
                     return numA - numB;
                 });
             } else {
-                // Default sort by first profile's percentage descending
-                dataRows.sort((a, b) => b.pctData[0] - a.pctData[0]);
+                // Default sort by first profile's value descending
+                dataRows.sort((a, b) => getSortValue(b, 0) - getSortValue(a, 0));
             }
 
             // Apply limit
