@@ -24001,11 +24001,18 @@
                     topOverIndexers: currentDashboardData?.topOverIndexers || []
                 };
                 
+                // Add timeout to prevent hanging
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+                
                 const response = await fetch('/api/ai/behavioral-summary', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(profileData)
+                    body: JSON.stringify(profileData),
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
                 
                 const result = await response.json();
                 
@@ -24016,11 +24023,14 @@
                         </ul>
                     `;
                 } else if (result.error) {
-                    behavioralCard.innerHTML = `<div style="color: var(--text-secondary); font-style: italic; font-size: 0.85rem;">Unable to generate behavioral insights</div>`;
+                    behavioralCard.innerHTML = `<div style="color: var(--text-secondary); font-style: italic; font-size: 0.85rem;">AI insights unavailable - ${result.error}</div>`;
+                } else {
+                    behavioralCard.innerHTML = `<div style="color: var(--text-secondary); font-style: italic; font-size: 0.85rem;">No behavioral insights generated</div>`;
                 }
             } catch (err) {
                 console.error('Error fetching behavioral summary:', err);
-                behavioralCard.innerHTML = `<div style="color: var(--text-secondary); font-style: italic; font-size: 0.85rem;">Behavioral insights unavailable</div>`;
+                const errorMsg = err.name === 'AbortError' ? 'Request timed out' : 'Service unavailable';
+                behavioralCard.innerHTML = `<div style="color: var(--text-secondary); font-style: italic; font-size: 0.85rem;">Behavioral insights unavailable - ${errorMsg}</div>`;
             }
         }
         
@@ -24028,6 +24038,12 @@
         async function fetchBehavioralProfileSummary(data, allItems) {
             const summaryCard = document.getElementById('behavioralProfileSummary');
             if (!summaryCard) return;
+            
+            // If no items, show fallback immediately
+            if (!allItems || allItems.length === 0) {
+                showBehavioralFallback(summaryCard, [], 'No behavioral data available');
+                return;
+            }
             
             // Get the actual profile name from multiple sources
             const profileName = currentProfileData?.name || 
@@ -24058,11 +24074,18 @@
                     topOverIndexers: topOverIndexers
                 };
                 
+                // Add timeout to prevent hanging
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+                
                 const response = await fetch('/api/ai/behavioral-summary', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(profileData)
+                    body: JSON.stringify(profileData),
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
                 
                 const result = await response.json();
                 
@@ -24073,12 +24096,73 @@
                         </ul>
                     `;
                 } else if (result.error) {
-                    summaryCard.innerHTML = `<div style="color: var(--text-secondary); font-style: italic; font-size: 0.85rem;">Unable to generate behavioral insights</div>`;
+                    showBehavioralFallback(summaryCard, allItems, result.error);
+                } else {
+                    showBehavioralFallback(summaryCard, allItems, 'No insights generated');
                 }
             } catch (err) {
                 console.error('Error fetching behavioral profile summary:', err);
-                summaryCard.innerHTML = `<div style="color: var(--text-secondary); font-style: italic; font-size: 0.85rem;">Behavioral insights unavailable</div>`;
+                showBehavioralFallback(summaryCard, allItems, err.name === 'AbortError' ? 'Request timed out' : err.message);
             }
+        }
+        
+        // Fallback function to show basic stats when AI is unavailable
+        function showBehavioralFallback(container, allItems, errorMsg) {
+            if (!allItems || allItems.length === 0) {
+                container.innerHTML = `<div style="color: var(--text-secondary); font-style: italic; font-size: 0.85rem;">${errorMsg || 'No data available'}</div>`;
+                return;
+            }
+            
+            // Generate basic stats as fallback
+            const topItem = allItems.filter(i => i.pct < 99.5).sort((a, b) => b.index - a.index)[0];
+            const highIndexers = allItems.filter(i => i.index >= 150).length;
+            const veryHighIndexers = allItems.filter(i => i.index >= 200).length;
+            const avgIndex = allItems.length > 0 ? Math.round(allItems.reduce((s, i) => s + i.index, 0) / allItems.length) : 100;
+            
+            // Find category with most high indexers
+            const catHighIndexers = {};
+            allItems.filter(i => i.index >= 150).forEach(i => {
+                catHighIndexers[i.category] = (catHighIndexers[i.category] || 0) + 1;
+            });
+            const topCatForHigh = Object.entries(catHighIndexers).sort((a, b) => b[1] - a[1])[0];
+            
+            const summaryItems = [];
+            
+            if (topItem) {
+                summaryItems.push({
+                    icon: '🔥',
+                    text: `Strongest signal: <strong style="color: var(--accent-lime);">${topItem.name}</strong> (${topItem.category})`,
+                    value: formatIndex(topItem.index)
+                });
+            }
+            
+            summaryItems.push({
+                icon: '📈',
+                text: `<strong style="color: var(--accent-lime);">${highIndexers}</strong> items 1.5x+, <strong style="color: #10b981;">${veryHighIndexers}</strong> at 2.0x+`,
+                value: ''
+            });
+            
+            if (topCatForHigh) {
+                summaryItems.push({
+                    icon: '🎯',
+                    text: `Most distinctive in: <strong style="color: var(--accent-lime);">${topCatForHigh[0]}</strong>`,
+                    value: `${topCatForHigh[1]}`
+                });
+            }
+            
+            summaryItems.push({
+                icon: '📊',
+                text: `<strong style="color: var(--accent-lime);">${allItems.length}</strong> total signals, avg: <strong style="color: ${avgIndex > 110 ? '#10b981' : 'var(--text-primary)'}">${formatIndex(avgIndex)}</strong>`,
+                value: ''
+            });
+            
+            container.innerHTML = summaryItems.map(i => `
+                <div class="behavioral-stat-row" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid var(--border-color);">
+                    <span style="font-size: 1rem;">${i.icon}</span>
+                    <span style="flex: 1; font-size: 0.85rem;">${i.text}</span>
+                    ${i.value ? `<span style="font-size: 0.85rem; color: #10b981; font-weight: 600;">${i.value}</span>` : ''}
+                </div>
+            `).join('');
         }
         
         // Map original income labels to display labels
