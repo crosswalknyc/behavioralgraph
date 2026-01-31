@@ -3222,38 +3222,47 @@
         }
         
         .interest-item {
-            display: flex;
+            display: grid;
+            grid-template-columns: 30px 1fr 70px 70px 60px;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.75rem;
             align-items: center;
-            justify-content: flex-start;
-            padding: 0.25rem 0.4rem;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-            gap: 0.35rem;
-            transition: all 0.15s;
-            text-align: left;
         }
         
         .interest-item:hover {
             background: var(--bg-input);
         }
         
-        .interest-rank {
-            font-size: 0.6rem;
+        .interest-header-row {
+            display: grid;
+            grid-template-columns: 30px 1fr 70px 70px 60px;
+            padding: 0.4rem 0;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 0.7rem;
+            font-weight: 600;
             color: var(--text-secondary);
-            width: 18px;
-            text-align: right;
-            flex-shrink: 0;
+            text-transform: uppercase;
+        }
+        
+        .interest-rank {
+            font-size: 0.7rem;
+            color: var(--accent-blue);
+            text-align: center;
         }
         
         .interest-name {
-            width: 200px;
-            min-width: 200px;
-            max-width: 200px;
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            text-align: left;
-            flex-shrink: 0;
+        }
+        
+        .interest-pct,
+        .interest-genpop,
+        .interest-index {
+            font-size: 0.75rem;
+            text-align: right;
         }
         
         .interest-bar-container {
@@ -24936,15 +24945,14 @@
             
             const maxPct = Math.max(...sorted.map(i => i.pct), 1);
             
-            // Add header row - columns aligned to the right side
+            // Add header row - matching locations table format
             const headerRow = `
-                <div class="interest-header-row" style="display: flex; align-items: center; padding: 0.5rem 0.4rem; border-bottom: 2px solid var(--border-color); font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; gap: 0.35rem;">
-                    <span style="width: 18px; flex-shrink: 0;">#</span>
-                    <span style="width: 200px; flex-shrink: 0;">Item</span>
-                    <div style="width: 60px; flex-shrink: 0;"></div>
-                    <span style="min-width: 55px; text-align: left; flex-shrink: 0;">${isProjection ? 'Profile' : 'Profile'}</span>
-                    <span style="min-width: 55px; text-align: left; flex-shrink: 0;">${isProjection ? 'Gen Pop' : 'Gen Pop'}</span>
-                    <span style="min-width: 45px; text-align: left; flex-shrink: 0;">Index</span>
+                <div class="interest-header-row">
+                    <span>#</span>
+                    <span>Item</span>
+                    <span>Profile</span>
+                    <span>Gen Pop</span>
+                    <span>Index</span>
                 </div>
             `;
             
@@ -24969,12 +24977,9 @@
                     <div class="interest-item" data-name="${item.name.toLowerCase()}" data-category="${item.category}">
                         <span class="interest-rank">${idx + 1}</span>
                         <span class="interest-name" title="${item.name}">${item.name}</span>
-                        <div class="interest-bar-container">
-                            <div class="interest-bar" style="width: ${(item.pct / maxPct) * 100}%"></div>
-                        </div>
-                        <span class="interest-pct" style="min-width: 55px; text-align: left;">${profileDisplay}</span>
-                        <span class="interest-genpop" style="min-width: 55px; text-align: left; color: var(--text-secondary);">${genPopDisplay}</span>
-                        <span class="interest-index" style="min-width: 45px; text-align: left; color: ${indexColor};">${formatIndex(item.index)}</span>
+                        <span class="interest-pct">${profileDisplay}</span>
+                        <span class="interest-genpop" style="color: var(--text-secondary);">${genPopDisplay}</span>
+                        <span class="interest-index" style="color: ${indexColor};">${formatIndex(item.index)}</span>
                     </div>
                 `;
             }).join('');
