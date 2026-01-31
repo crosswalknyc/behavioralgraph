@@ -12707,6 +12707,60 @@
             if (multiplier < 0.005) return 'N/A';
             return multiplier.toFixed(2) + 'x';
         }
+        
+        // Normalize a name for deduplication (handles variations like "Patrick Mahomes" vs "patrick-mahomes")
+        function normalizeNameForDedup(name) {
+            if (!name) return '';
+            return name.toLowerCase()
+                .replace(/[-_]/g, ' ')  // Replace dashes/underscores with spaces
+                .replace(/\s+/g, ' ')   // Collapse multiple spaces
+                .trim();
+        }
+        
+        // Deduplicate an array of items by normalized name, keeping the one with highest value
+        function deduplicateItems(items, valueKey = 'pct') {
+            if (!Array.isArray(items)) return items;
+            
+            const seen = new Map(); // normalized name -> best item
+            
+            items.forEach(item => {
+                const name = item.name || item.value || '';
+                const normalizedName = normalizeNameForDedup(name);
+                
+                if (!normalizedName) return;
+                
+                const existing = seen.get(normalizedName);
+                const currentValue = item[valueKey] || item.pct || item.index || 0;
+                
+                if (!existing) {
+                    seen.set(normalizedName, item);
+                } else {
+                    // Keep the one with higher value, or merge data if needed
+                    const existingValue = existing[valueKey] || existing.pct || existing.index || 0;
+                    if (currentValue > existingValue) {
+                        seen.set(normalizedName, item);
+                    }
+                }
+            });
+            
+            return Array.from(seen.values());
+        }
+        
+        // Deduplicate a Map of names, keeping the first occurrence (for comparison rows)
+        function deduplicateNameMap(nameMap) {
+            const seen = new Set();
+            const result = new Map();
+            
+            for (const [name, data] of nameMap) {
+                const normalizedName = normalizeNameForDedup(name);
+                if (!seen.has(normalizedName)) {
+                    seen.add(normalizedName);
+                    result.set(name, data);
+                }
+            }
+            
+            return result;
+        }
 
         // Profile image cache to avoid repeated API calls
         const profileImageCache = {};
@@ -23808,8 +23862,17 @@
             const container = document.getElementById('interestHighlights');
             if (!container || !window.interestHighlightsData) return;
             
+            // Deduplicate by normalized name first
+            const seenNormalized = new Set();
+            let deduped = window.interestHighlightsData.filter(item => {
+                const normalizedName = normalizeNameForDedup(item.name);
+                if (seenNormalized.has(normalizedName)) return false;
+                seenNormalized.add(normalizedName);
+                return true;
+            });
+            
             // Sort the data
-            let sorted = [...window.interestHighlightsData];
+            let sorted = [...deduped];
             const [column, direction] = sortValue.split('-');
             
             sorted.sort((a, b) => {
@@ -23866,11 +23929,18 @@
             const isProjectionDiff = dashDisplayMode === 'projection';
             const [column, direction] = sortValue.split('-');
             
-            // Sort items within each category based on sort value
+            // Sort items within each category based on sort value, with deduplication
             const sortedCategories = window.topDifferentiatorsData.map(catGroup => {
-                let sortedItems = [...catGroup.items];
+                // Deduplicate items by normalized name within each category
+                const seenNormalized = new Set();
+                let dedupedItems = catGroup.items.filter(item => {
+                    const normalizedName = normalizeNameForDedup(item.name);
+                    if (seenNormalized.has(normalizedName)) return false;
+                    seenNormalized.add(normalizedName);
+                    return true;
+                });
                 
-                sortedItems.sort((a, b) => {
+                dedupedItems.sort((a, b) => {
                     let diff = 0;
                     switch (column) {
                         case 'index':
@@ -23888,7 +23958,7 @@
                 
                 return {
                     ...catGroup,
-                    items: sortedItems.slice(0, 5) // Top 5 per category
+                    items: dedupedItems.slice(0, 5) // Top 5 per category
                 };
             });
             
@@ -25275,11 +25345,21 @@
             container.innerHTML = sortedCats.map((cat, idx) => {
                 const catId = cat.replace(/[^a-zA-Z0-9]/g, '');
                 const items = aggregatedBehavioral[cat];
+                
+                // Deduplicate items by normalized name before sorting
+                const seenNormalized = new Set();
+                const dedupedItems = items.filter(item => {
+                    const normalizedName = normalizeNameForDedup(item.name);
+                    if (seenNormalized.has(normalizedName)) return false;
+                    seenNormalized.add(normalizedName);
+                    return true;
+                });
+                
                 // Default sort by percentage descending
-                const sortedItems = items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                const sortedItems = dedupedItems.sort((a, b) => (b.pct || 0) - (a.pct || 0));
                 // Apply item limit (default to 3)
                 const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
-                const displayItems = itemLimit === 'All' || itemLimit >= items.length ? sortedItems : sortedItems.slice(0, itemLimit);
+                const displayItems = itemLimit === 'All' || itemLimit >= sortedItems.length ? sortedItems : sortedItems.slice(0, itemLimit);
                 const maxPct = Math.max(...sortedItems.map(i => i.pct), 1); // Calculate max from all items
                 const isHighlighted = cat === highlightCategory;
                 const positionBadge = idx === 0 ? '<span style="background: var(--accent-lime); color: #000; padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.55rem;">1ST</span>' : '';
@@ -35855,36 +35935,49 @@
         }
 
         function renderBehavioralComparisonRows(profiles, category, sortByProfileIdx = null, limit = 15, sortType = 'pct') {
-            // Get all values across all profiles for this category
+            // Get all values across all profiles for this category, with deduplication
             const allValues = new Map();
+            const seenNormalized = new Set();
+            
             profiles.forEach(p => {
                 (p.behavioral[category] || []).forEach(item => {
-                    if (!allValues.has(item.name)) {
+                    const normalizedName = normalizeNameForDedup(item.name);
+                    // Skip if we've already seen this normalized name
+                    if (!seenNormalized.has(normalizedName)) {
+                        seenNormalized.add(normalizedName);
                         allValues.set(item.name, {});
                     }
                 });
             });
 
             // Build data rows with pct, projection, and index
+            // When looking up items, also check for normalized name matches
             let dataRows = Array.from(allValues.keys()).map(value => {
+                const normalizedValue = normalizeNameForDedup(value);
+                
+                // Helper to find item by exact or normalized name match
+                const findItem = (items) => items.find(i => 
+                    i.name === value || normalizeNameForDedup(i.name) === normalizedValue
+                );
+                
                 return {
                     value: value,
                     pctData: profiles.map(p => {
-                        const item = (p.behavioral[category] || []).find(i => i.name === value);
+                        const item = findItem(p.behavioral[category] || []);
                         return item ? item.pct : 0;
                     }),
                     projData: profiles.map(p => {
-                        const item = (p.behavioral[category] || []).find(i => i.name === value);
+                        const item = findItem(p.behavioral[category] || []);
                         return item ? (item.projection || 0) : 0;
                     }),
                     indexData: profiles.map(p => {
-                        const item = (p.behavioral[category] || []).find(i => i.name === value);
+                        const item = findItem(p.behavioral[category] || []);
                         return item ? (item.index || 0) : 0;
                     }),
                     genPopPct: (() => {
                         // Get gen pop % from first profile that has this item
                         for (const p of profiles) {
-                            const item = (p.behavioral[category] || []).find(i => i.name === value);
+                            const item = findItem(p.behavioral[category] || []);
                             if (item && item.genPopPct > 0) return item.genPopPct;
                         }
                         return 0;
@@ -35952,26 +36045,41 @@
         }
 
         function renderLocationComparisonRows(profiles, sortByProfileIdx = null, limit = 15, sortType = 'pct') {
-            // Get all locations across all profiles
+            // Get all locations across all profiles, with deduplication
             const allLocations = new Set();
+            const seenNormalized = new Set();
+            
             profiles.forEach(p => {
-                (p.locations || []).forEach(loc => allLocations.add(loc.name));
+                (p.locations || []).forEach(loc => {
+                    const normalizedName = normalizeNameForDedup(loc.name);
+                    if (!seenNormalized.has(normalizedName)) {
+                        seenNormalized.add(normalizedName);
+                        allLocations.add(loc.name);
+                    }
+                });
             });
 
             // Build data rows with pct, projection, and index
             let dataRows = Array.from(allLocations).map(locName => {
+                const normalizedLocName = normalizeNameForDedup(locName);
+                
+                // Helper to find location by exact or normalized name match
+                const findLoc = (locations) => locations.find(l => 
+                    l.name === locName || normalizeNameForDedup(l.name) === normalizedLocName
+                );
+                
                 return {
                     value: locName,
                     pctData: profiles.map(p => {
-                        const loc = (p.locations || []).find(l => l.name === locName);
+                        const loc = findLoc(p.locations || []);
                         return loc ? loc.pct : 0;
                     }),
                     projData: profiles.map(p => {
-                        const loc = (p.locations || []).find(l => l.name === locName);
+                        const loc = findLoc(p.locations || []);
                         return loc ? (loc.projection || 0) : 0;
                     }),
                     indexData: profiles.map(p => {
-                        const loc = (p.locations || []).find(l => l.name === locName);
+                        const loc = findLoc(p.locations || []);
                         return loc ? (loc.index || 0) : 0;
                     })
                 };
