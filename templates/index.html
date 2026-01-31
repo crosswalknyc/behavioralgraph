@@ -27819,18 +27819,19 @@
             // Get gen pop data
             const genPopBehavioral = currentDashboardData.genPopBehavioral || {};
             
-            // Add gen pop and index to items
+            // Add gen pop and index to items, ensuring pct is a number
             items = items.map(item => {
+                const pct = parseFloat(item.pct) || 0;
                 let genPop = 0;
                 if (genPopBehavioral[item.category]) {
-                    genPop = genPopBehavioral[item.category][item.name] || 0;
+                    genPop = parseFloat(genPopBehavioral[item.category][item.name]) || 0;
                 } else if (genPopBehavioral[category]) {
-                    genPop = genPopBehavioral[category][item.name] || 0;
+                    genPop = parseFloat(genPopBehavioral[category][item.name]) || 0;
                 } else if (genPopBehavioral[category.toUpperCase()]) {
-                    genPop = genPopBehavioral[category.toUpperCase()][item.name] || 0;
+                    genPop = parseFloat(genPopBehavioral[category.toUpperCase()][item.name]) || 0;
                 }
-                const index = genPop > 0 ? Math.round((item.pct / genPop) * 100) : 0;
-                return { ...item, genPop, index };
+                const index = genPop > 0 ? Math.round((pct / genPop) * 100) : 0;
+                return { ...item, pct, genPop, index };
             });
             
             // Sort by percentage descending
@@ -27857,12 +27858,14 @@
                                                    item.index >= 120 ? '#84cc16' : 
                                                    item.index >= 100 ? '#eab308' : 
                                                    item.index >= 80 ? '#f97316' : '#ef4444';
+                                const pctStr = (item.pct || 0).toFixed(2);
+                                const genPopStr = (item.genPop || 0).toFixed(2);
                                 return `
                                     <div class="spotlight-item">
                                         <span class="spotlight-rank">${idx + 1}</span>
                                         <span class="spotlight-name">${item.name}</span>
-                                        <span class="spotlight-pct">${item.pct.toFixed(2)}%</span>
-                                        <span class="spotlight-genpop">${item.genPop.toFixed(2)}%</span>
+                                        <span class="spotlight-pct">${pctStr}%</span>
+                                        <span class="spotlight-genpop">${genPopStr}%</span>
                                         <span class="spotlight-index" style="color: ${indexColor};">${item.index}</span>
                                     </div>
                                 `;
@@ -27924,8 +27927,9 @@
                 const sportsCategories = ['SPORTS TEAMS', 'SPORTS LEAGUES', 'SPORTS EVENTS', 'SPORTS ACTIVITIES'];
                 sportsCategories.forEach(sportsCat => {
                     if (behavioral[sportsCat]) {
-                        Object.entries(behavioral[sportsCat]).forEach(([name, pct]) => {
-                            const genPop = (genPopBehavioral[sportsCat] || {})[name] || 0;
+                        Object.entries(behavioral[sportsCat]).forEach(([name, pctVal]) => {
+                            const pct = parseFloat(pctVal) || 0;
+                            const genPop = parseFloat((genPopBehavioral[sportsCat] || {})[name]) || 0;
                             const index = genPop > 0 ? Math.round((pct / genPop) * 100) : 0;
                             items.push({ name, pct, genPop, index, subCategory: sportsCat });
                         });
@@ -27935,8 +27939,9 @@
                 const talentCategories = ['TALENT ACTORS', 'TALENT MUSICIANS', 'TALENT ATHLETES', 'TALENT INFLUENCERS', 'TALENT COMEDIANS', 'TALENT TV PERSONALITIES'];
                 talentCategories.forEach(talentCat => {
                     if (behavioral[talentCat]) {
-                        Object.entries(behavioral[talentCat]).forEach(([name, pct]) => {
-                            const genPop = (genPopBehavioral[talentCat] || {})[name] || 0;
+                        Object.entries(behavioral[talentCat]).forEach(([name, pctVal]) => {
+                            const pct = parseFloat(pctVal) || 0;
+                            const genPop = parseFloat((genPopBehavioral[talentCat] || {})[name]) || 0;
                             const index = genPop > 0 ? Math.round((pct / genPop) * 100) : 0;
                             items.push({ name, pct, genPop, index, subCategory: talentCat });
                         });
@@ -27945,8 +27950,9 @@
             } else {
                 const catData = behavioral[category] || behavioral[category.toUpperCase()] || {};
                 const genPopData = genPopBehavioral[category] || genPopBehavioral[category.toUpperCase()] || {};
-                Object.entries(catData).forEach(([name, pct]) => {
-                    const genPop = genPopData[name] || 0;
+                Object.entries(catData).forEach(([name, pctVal]) => {
+                    const pct = parseFloat(pctVal) || 0;
+                    const genPop = parseFloat(genPopData[name]) || 0;
                     const index = genPop > 0 ? Math.round((pct / genPop) * 100) : 0;
                     items.push({ name, pct, genPop, index });
                 });
@@ -27961,10 +27967,12 @@
             csvContent += '\n';
             
             items.forEach((item, idx) => {
+                const pctStr = (item.pct || 0).toFixed(2);
+                const genPopStr = (item.genPop || 0).toFixed(2);
                 if (item.subCategory) {
-                    csvContent += `${idx + 1},"${item.name}","${item.subCategory}",${item.pct.toFixed(2)},${item.genPop.toFixed(2)},${item.index}\n`;
+                    csvContent += `${idx + 1},"${item.name}","${item.subCategory}",${pctStr},${genPopStr},${item.index}\n`;
                 } else {
-                    csvContent += `${idx + 1},"${item.name}",${item.pct.toFixed(2)},${item.genPop.toFixed(2)},${item.index}\n`;
+                    csvContent += `${idx + 1},"${item.name}",${pctStr},${genPopStr},${item.index}\n`;
                 }
             });
             
