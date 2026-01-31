@@ -7441,6 +7441,26 @@
             color: var(--accent-red);
         }
 
+        /* Gap Analysis Styles */
+        .gap-analysis {
+            padding: 1rem;
+        }
+
+        .gap-header {
+            margin-bottom: 1.5rem;
+        }
+
+        .gap-header h3 {
+            font-size: 1.2rem;
+            color: var(--accent-cyan);
+        }
+
+        .gap-header p {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-top: 0.25rem;
+        }
+
         .radar-chart-container {
             height: 300px;
             margin: 1rem 0;
@@ -11428,6 +11448,7 @@
                     <button class="comp-tab active" onclick="showCompTab('tables')">📊 Side-by-Side</button>
                     <button class="comp-tab" onclick="showCompTab('overlap')">🔄 Overlap Analysis</button>
                     <button class="comp-tab" onclick="showCompTab('benchmark')">📈 Benchmarking</button>
+                    <button class="comp-tab" onclick="showCompTab('gap')">🎯 Gap Analysis</button>
                     <button class="comp-tab" onclick="showCompTab('insights')">💡 Key Insights</button>
                     <button class="comp-action-btn" onclick="generateExecutiveSummary()" title="Generate Executive Summary">📄 Exec Summary</button>
                     <button class="comp-action-btn" onclick="generateKeyInsightBuilder()" title="Generate SWOT Analysis and Key Insights for Primary Brand">🎯 Key Insight Builder</button>
@@ -11517,6 +11538,21 @@
                                     <div id="benchmarkContent">
                                         <div class="comparison-empty">
                                             <p>Run a comparison to see benchmarking data</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Gap Analysis Tab -->
+                            <div id="comp-tab-gap" class="comp-tab-content">
+                                <div class="gap-analysis">
+                                    <div class="gap-header">
+                                        <h3>🎯 Gap Analysis</h3>
+                                        <p>Identify behavioral gaps and opportunities between profiles</p>
+                                    </div>
+                                    <div id="gapContent">
+                                        <div class="comparison-empty">
+                                            <p>Run a comparison to see gap analysis</p>
                                         </div>
                                     </div>
                                 </div>
@@ -35915,6 +35951,8 @@
                 renderOverlapAnalysis(window.comparisonProfilesData);
             } else if (tabName === 'benchmark' && window.comparisonProfilesData) {
                 renderBenchmarkAnalysis(window.comparisonProfilesData);
+            } else if (tabName === 'gap' && window.comparisonProfilesData) {
+                renderGapAnalysis(window.comparisonProfilesData);
             } else if (tabName === 'insights' && window.comparisonProfilesData) {
                 renderComparisonInsights(window.comparisonProfilesData);
             }
@@ -36254,6 +36292,239 @@
             `;
             
             document.getElementById('benchmarkContent').innerHTML = html;
+        }
+        
+        function renderGapAnalysis(profiles) {
+            if (!profiles || profiles.length < 2) {
+                document.getElementById('gapContent').innerHTML = '<div class="comparison-empty"><p>Select at least 2 profiles to see gap analysis</p></div>';
+                return;
+            }
+            
+            // Separate Gen Pop from other profiles
+            const genPopProfile = profiles.find(p => p.name.toUpperCase() === 'GEN POP' || p.name.toUpperCase() === 'GENPOP');
+            const nonGenPopProfiles = profiles.filter(p => p.name.toUpperCase() !== 'GEN POP' && p.name.toUpperCase() !== 'GENPOP');
+            
+            // If we have Gen Pop and at least one other profile, compare against Gen Pop
+            // Otherwise compare profiles against each other
+            const primaryProfile = nonGenPopProfiles[0] || profiles[0];
+            const comparisonProfiles = genPopProfile ? [genPopProfile, ...nonGenPopProfiles.slice(1)] : profiles.slice(1);
+            
+            // Collect all behaviors with their indices across profiles
+            const allBehaviors = {};
+            
+            profiles.forEach(p => {
+                if (p.behavioral) {
+                    Object.entries(p.behavioral).forEach(([cat, items]) => {
+                        if (Array.isArray(items)) {
+                            items.forEach(item => {
+                                if (item && item.name) {
+                                    const key = cat + '|' + item.name;
+                                    if (!allBehaviors[key]) {
+                                        allBehaviors[key] = { 
+                                            name: item.name, 
+                                            category: cat, 
+                                            profileIndices: {}
+                                        };
+                                    }
+                                    allBehaviors[key].profileIndices[p.name] = {
+                                        index: item.index || 100,
+                                        pct: item.pct || item.percentage || 0
+                                    };
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+            
+            // Calculate gaps between primary profile and others
+            const gaps = [];
+            
+            Object.values(allBehaviors).forEach(behavior => {
+                const primaryData = behavior.profileIndices[primaryProfile.name];
+                if (!primaryData) return;
+                
+                comparisonProfiles.forEach(compProfile => {
+                    const compData = behavior.profileIndices[compProfile.name];
+                    if (!compData) return;
+                    
+                    const indexDiff = primaryData.index - compData.index;
+                    const pctDiff = primaryData.pct - compData.pct;
+                    
+                    // Only include significant gaps (index difference > 20)
+                    if (Math.abs(indexDiff) >= 20) {
+                        gaps.push({
+                            name: behavior.name,
+                            category: behavior.category,
+                            primaryIndex: primaryData.index,
+                            compIndex: compData.index,
+                            compProfile: compProfile.name,
+                            indexDiff: indexDiff,
+                            pctDiff: pctDiff,
+                            isOpportunity: indexDiff > 0, // Primary is stronger
+                            isWeakness: indexDiff < 0 // Primary is weaker
+                        });
+                    }
+                });
+            });
+            
+            // Sort by absolute gap size
+            gaps.sort((a, b) => Math.abs(b.indexDiff) - Math.abs(a.indexDiff));
+            
+            // Separate opportunities (primary stronger) and weaknesses (primary weaker)
+            const opportunities = gaps.filter(g => g.isOpportunity).slice(0, 20);
+            const weaknesses = gaps.filter(g => g.isWeakness).slice(0, 20);
+            
+            // Calculate category-level gaps
+            const categoryGaps = {};
+            gaps.forEach(g => {
+                if (!categoryGaps[g.category]) {
+                    categoryGaps[g.category] = { 
+                        category: g.category, 
+                        totalGap: 0, 
+                        count: 0, 
+                        opportunities: 0, 
+                        weaknesses: 0 
+                    };
+                }
+                categoryGaps[g.category].totalGap += g.indexDiff;
+                categoryGaps[g.category].count++;
+                if (g.isOpportunity) categoryGaps[g.category].opportunities++;
+                if (g.isWeakness) categoryGaps[g.category].weaknesses++;
+            });
+            
+            const sortedCategoryGaps = Object.values(categoryGaps)
+                .map(c => ({ ...c, avgGap: Math.round(c.totalGap / c.count) }))
+                .sort((a, b) => Math.abs(b.avgGap) - Math.abs(a.avgGap))
+                .slice(0, 10);
+            
+            // Summary stats
+            const totalOpportunities = opportunities.length;
+            const totalWeaknesses = weaknesses.length;
+            const avgOpportunityGap = opportunities.length > 0 
+                ? Math.round(opportunities.reduce((s, o) => s + o.indexDiff, 0) / opportunities.length) 
+                : 0;
+            const avgWeaknessGap = weaknesses.length > 0 
+                ? Math.round(weaknesses.reduce((s, w) => s + Math.abs(w.indexDiff), 0) / weaknesses.length) 
+                : 0;
+            
+            let html = `
+                <div class="gap-grid" style="display: grid; grid-template-columns: 1fr; gap: 1rem; padding: 1rem;">
+                    <!-- Summary Card -->
+                    <div class="overlap-card" style="grid-column: 1 / -1;">
+                        <h4>📊 Gap Analysis Summary: <span style="color: ${primaryProfile.color};">${primaryProfile.name}</span> vs Others</h4>
+                        <div style="display: flex; gap: 2rem; margin-top: 1rem; flex-wrap: wrap;">
+                            <div style="text-align: center; padding: 1rem; background: var(--bg-dark); border-radius: 8px; min-width: 150px;">
+                                <div style="font-size: 2rem; font-weight: 700; color: var(--accent-lime);">${totalOpportunities}</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Strength Areas</div>
+                                <div style="font-size: 0.7rem; color: var(--accent-lime);">Avg +${avgOpportunityGap} index</div>
+                            </div>
+                            <div style="text-align: center; padding: 1rem; background: var(--bg-dark); border-radius: 8px; min-width: 150px;">
+                                <div style="font-size: 2rem; font-weight: 700; color: var(--accent-red);">${totalWeaknesses}</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Gap Areas</div>
+                                <div style="font-size: 0.7rem; color: var(--accent-red);">Avg -${avgWeaknessGap} index</div>
+                            </div>
+                            <div style="text-align: center; padding: 1rem; background: var(--bg-dark); border-radius: 8px; min-width: 150px;">
+                                <div style="font-size: 2rem; font-weight: 700; color: var(--accent-cyan);">${Object.keys(allBehaviors).length}</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Behaviors Analyzed</div>
+                            </div>
+                            <div style="text-align: center; padding: 1rem; background: var(--bg-dark); border-radius: 8px; min-width: 150px;">
+                                <div style="font-size: 2rem; font-weight: 700; color: ${totalOpportunities > totalWeaknesses ? 'var(--accent-lime)' : 'var(--accent-red)'};">${totalOpportunities > totalWeaknesses ? '+' : ''}${totalOpportunities - totalWeaknesses}</div>
+                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Net Position</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Two Column Layout -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <!-- Strengths Column -->
+                        <div class="overlap-card">
+                            <h4 style="color: var(--accent-lime);">💪 Strengths (${primaryProfile.name} Over-Indexes)</h4>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                                Areas where ${primaryProfile.name} significantly outperforms comparison profiles
+                            </p>
+                            <div class="overlap-list" style="max-height: 450px; overflow-y: auto;">
+                                ${opportunities.length > 0 ? opportunities.map(o => `
+                                    <div class="overlap-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-bottom: 1px solid var(--border-color);">
+                                        <div style="flex: 1;">
+                                            <div style="font-weight: 500;">${o.name}</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${o.category} · vs ${o.compProfile}</div>
+                                        </div>
+                                        <div style="text-align: right;">
+                                            <div style="color: var(--accent-lime); font-weight: 600;">+${o.indexDiff}</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${o.primaryIndex} vs ${o.compIndex}</div>
+                                        </div>
+                                    </div>
+                                `).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem;">No significant strength gaps found</div>'}
+                            </div>
+                        </div>
+                        
+                        <!-- Weaknesses Column -->
+                        <div class="overlap-card">
+                            <h4 style="color: var(--accent-red);">📉 Gaps (${primaryProfile.name} Under-Indexes)</h4>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                                Areas where ${primaryProfile.name} underperforms vs comparison profiles
+                            </p>
+                            <div class="overlap-list" style="max-height: 450px; overflow-y: auto;">
+                                ${weaknesses.length > 0 ? weaknesses.map(w => `
+                                    <div class="overlap-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-bottom: 1px solid var(--border-color);">
+                                        <div style="flex: 1;">
+                                            <div style="font-weight: 500;">${w.name}</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${w.category} · vs ${w.compProfile}</div>
+                                        </div>
+                                        <div style="text-align: right;">
+                                            <div style="color: var(--accent-red); font-weight: 600;">${w.indexDiff}</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${w.primaryIndex} vs ${w.compIndex}</div>
+                                        </div>
+                                    </div>
+                                `).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem;">No significant gap areas found</div>'}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Category Gaps -->
+                    <div class="overlap-card">
+                        <h4>📂 Category-Level Gap Analysis</h4>
+                        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                            Average index difference by category for ${primaryProfile.name}
+                        </p>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem; margin-top: 1rem;">
+                            ${sortedCategoryGaps.map(c => `
+                                <div style="background: var(--bg-dark); padding: 0.75rem; border-radius: 8px; border-left: 3px solid ${c.avgGap >= 0 ? 'var(--accent-lime)' : 'var(--accent-red)'};">
+                                    <div style="font-weight: 600; font-size: 0.85rem; margin-bottom: 0.25rem;">${c.category}</div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span style="font-size: 1.25rem; font-weight: 700; color: ${c.avgGap >= 0 ? 'var(--accent-lime)' : 'var(--accent-red)'};">
+                                            ${c.avgGap >= 0 ? '+' : ''}${c.avgGap}
+                                        </span>
+                                        <span style="font-size: 0.7rem; color: var(--text-secondary);">
+                                            ${c.opportunities}↑ ${c.weaknesses}↓
+                                        </span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <!-- Actionable Insights -->
+                    <div class="overlap-card" style="border-left: 3px solid var(--accent-cyan);">
+                        <h4>💡 Actionable Insights</h4>
+                        <ul style="margin: 1rem 0; padding-left: 1.5rem; line-height: 1.8;">
+                            ${opportunities.length > 0 ? `
+                                <li><strong style="color: var(--accent-lime);">Top Strength:</strong> ${primaryProfile.name} significantly over-indexes on <strong>${opportunities[0].name}</strong> (${opportunities[0].category}) with +${opportunities[0].indexDiff} index advantage.</li>
+                            ` : ''}
+                            ${weaknesses.length > 0 ? `
+                                <li><strong style="color: var(--accent-red);">Biggest Gap:</strong> ${primaryProfile.name} under-indexes on <strong>${weaknesses[0].name}</strong> (${weaknesses[0].category}) with ${weaknesses[0].indexDiff} index gap.</li>
+                            ` : ''}
+                            ${sortedCategoryGaps.length > 0 ? `
+                                <li><strong style="color: var(--accent-cyan);">Category Focus:</strong> ${sortedCategoryGaps[0].avgGap >= 0 ? 'Strongest' : 'Weakest'} category is <strong>${sortedCategoryGaps[0].category}</strong> with ${sortedCategoryGaps[0].avgGap >= 0 ? '+' : ''}${sortedCategoryGaps[0].avgGap} average index.</li>
+                            ` : ''}
+                            <li><strong>Overall Position:</strong> ${primaryProfile.name} has ${totalOpportunities} strength areas vs ${totalWeaknesses} gap areas, indicating a ${totalOpportunities > totalWeaknesses ? '<span style="color: var(--accent-lime);">positive</span>' : totalOpportunities < totalWeaknesses ? '<span style="color: var(--accent-red);">challenging</span>' : 'balanced'} competitive position.</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('gapContent').innerHTML = html;
         }
         
         function renderComparisonInsights(profiles) {
