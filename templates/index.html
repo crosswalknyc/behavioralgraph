@@ -36185,19 +36185,21 @@
                 const genderCount = countDemoValues('gender');
                 html += `
                 <div class="comp-section" id="comp-gender">
-                    <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                        <span style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+                        <span style="display: flex; align-items: center; gap: 0.5rem;">
                             <span style="white-space: nowrap;">Gender (${modeLabel})</span>
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${genderCount} values</span>
-                            <select onchange="setComparisonSectionLimit('demo_gender', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                <option value="15" ${genderLimit == 15 ? 'selected' : ''}>Show Top 15</option>
-                                <option value="25" ${genderLimit == 25 ? 'selected' : ''}>Show Top 25</option>
-                                <option value="50" ${genderLimit == 50 ? 'selected' : ''}>Show Top 50</option>
-                                <option value="All" ${genderLimit === 'All' ? 'selected' : ''}>Show All</option>
+                        </span>
+                        <span style="display: flex; align-items: center; gap: 0.35rem;">
+                            <select onchange="setComparisonSectionLimit('demo_gender', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
+                                <option value="15" ${genderLimit == 15 ? 'selected' : ''}>Top 15</option>
+                                <option value="25" ${genderLimit == 25 ? 'selected' : ''}>Top 25</option>
+                                <option value="50" ${genderLimit == 50 ? 'selected' : ''}>Top 50</option>
+                                <option value="All" ${genderLimit === 'All' ? 'selected' : ''}>All</option>
                             </select>
-                            <select onchange="setComparisonSectionSortType('demo_gender', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                <option value="pct" ${genderSortType === 'pct' ? 'selected' : ''}>Sort by ${displayMode === 'projection' ? '#' : '%'}</option>
-                                <option value="index" ${genderSortType === 'index' ? 'selected' : ''}>Sort by Index</option>
+                            <select onchange="setComparisonSectionSortType('demo_gender', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
+                                <option value="pct" ${genderSortType === 'pct' ? 'selected' : ''}>By ${displayMode === 'projection' ? '#' : '%'}</option>
+                                <option value="index" ${genderSortType === 'index' ? 'selected' : ''}>By Index</option>
                             </select>
                         </span>
                     </div>
@@ -36222,19 +36224,21 @@
                 const ageCount = countDemoValues('age');
                 html += `
                 <div class="comp-section" id="comp-age">
-                    <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                        <span style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+                        <span style="display: flex; align-items: center; gap: 0.5rem;">
                             <span style="white-space: nowrap;">Age (${modeLabel})</span>
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${ageCount} values</span>
-                            <select onchange="setComparisonSectionLimit('demo_age', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                <option value="15" ${ageLimit == 15 ? 'selected' : ''}>Show Top 15</option>
-                                <option value="25" ${ageLimit == 25 ? 'selected' : ''}>Show Top 25</option>
-                                <option value="50" ${ageLimit == 50 ? 'selected' : ''}>Show Top 50</option>
-                                <option value="All" ${ageLimit === 'All' ? 'selected' : ''}>Show All</option>
+                        </span>
+                        <span style="display: flex; align-items: center; gap: 0.35rem;">
+                            <select onchange="setComparisonSectionLimit('demo_age', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
+                                <option value="15" ${ageLimit == 15 ? 'selected' : ''}>Top 15</option>
+                                <option value="25" ${ageLimit == 25 ? 'selected' : ''}>Top 25</option>
+                                <option value="50" ${ageLimit == 50 ? 'selected' : ''}>Top 50</option>
+                                <option value="All" ${ageLimit === 'All' ? 'selected' : ''}>All</option>
                             </select>
-                            <select onchange="setComparisonSectionSortType('demo_age', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                <option value="pct" ${ageSortType === 'pct' ? 'selected' : ''}>Sort by ${displayMode === 'projection' ? '#' : '%'}</option>
-                                <option value="index" ${ageSortType === 'index' ? 'selected' : ''}>Sort by Index</option>
+                            <select onchange="setComparisonSectionSortType('demo_age', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
+                                <option value="pct" ${ageSortType === 'pct' ? 'selected' : ''}>By ${displayMode === 'projection' ? '#' : '%'}</option>
+                                <option value="index" ${ageSortType === 'index' ? 'selected' : ''}>By Index</option>
                             </select>
                         </span>
                     </div>
@@ -36259,19 +36263,21 @@
                 const ethnicityCount = countDemoValues('ethnicity');
                 html += `
                 <div class="comp-section" id="comp-ethnicity">
-                    <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                        <span style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+                        <span style="display: flex; align-items: center; gap: 0.5rem;">
                             <span style="white-space: nowrap;">Ethnicity (${modeLabel})</span>
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${ethnicityCount} values</span>
-                            <select onchange="setComparisonSectionLimit('demo_ethnicity', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                <option value="15" ${ethnicityLimit == 15 ? 'selected' : ''}>Show Top 15</option>
-                                <option value="25" ${ethnicityLimit == 25 ? 'selected' : ''}>Show Top 25</option>
-                                <option value="50" ${ethnicityLimit == 50 ? 'selected' : ''}>Show Top 50</option>
-                                <option value="All" ${ethnicityLimit === 'All' ? 'selected' : ''}>Show All</option>
+                        </span>
+                        <span style="display: flex; align-items: center; gap: 0.35rem;">
+                            <select onchange="setComparisonSectionLimit('demo_ethnicity', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
+                                <option value="15" ${ethnicityLimit == 15 ? 'selected' : ''}>Top 15</option>
+                                <option value="25" ${ethnicityLimit == 25 ? 'selected' : ''}>Top 25</option>
+                                <option value="50" ${ethnicityLimit == 50 ? 'selected' : ''}>Top 50</option>
+                                <option value="All" ${ethnicityLimit === 'All' ? 'selected' : ''}>All</option>
                             </select>
-                            <select onchange="setComparisonSectionSortType('demo_ethnicity', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                <option value="pct" ${ethnicitySortType === 'pct' ? 'selected' : ''}>Sort by ${displayMode === 'projection' ? '#' : '%'}</option>
-                                <option value="index" ${ethnicitySortType === 'index' ? 'selected' : ''}>Sort by Index</option>
+                            <select onchange="setComparisonSectionSortType('demo_ethnicity', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
+                                <option value="pct" ${ethnicitySortType === 'pct' ? 'selected' : ''}>By ${displayMode === 'projection' ? '#' : '%'}</option>
+                                <option value="index" ${ethnicitySortType === 'index' ? 'selected' : ''}>By Index</option>
                             </select>
                         </span>
                     </div>
@@ -36296,19 +36302,21 @@
                 const incomeCount = countDemoValues('income');
                 html += `
                 <div class="comp-section" id="comp-income">
-                    <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                        <span style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+                        <span style="display: flex; align-items: center; gap: 0.5rem;">
                             <span style="white-space: nowrap;">Income (${modeLabel})</span>
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${incomeCount} values</span>
-                            <select onchange="setComparisonSectionLimit('demo_income', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                <option value="15" ${incomeLimit == 15 ? 'selected' : ''}>Show Top 15</option>
-                                <option value="25" ${incomeLimit == 25 ? 'selected' : ''}>Show Top 25</option>
-                                <option value="50" ${incomeLimit == 50 ? 'selected' : ''}>Show Top 50</option>
-                                <option value="All" ${incomeLimit === 'All' ? 'selected' : ''}>Show All</option>
+                        </span>
+                        <span style="display: flex; align-items: center; gap: 0.35rem;">
+                            <select onchange="setComparisonSectionLimit('demo_income', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
+                                <option value="15" ${incomeLimit == 15 ? 'selected' : ''}>Top 15</option>
+                                <option value="25" ${incomeLimit == 25 ? 'selected' : ''}>Top 25</option>
+                                <option value="50" ${incomeLimit == 50 ? 'selected' : ''}>Top 50</option>
+                                <option value="All" ${incomeLimit === 'All' ? 'selected' : ''}>All</option>
                             </select>
-                            <select onchange="setComparisonSectionSortType('demo_income', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                <option value="pct" ${incomeSortType === 'pct' ? 'selected' : ''}>Sort by ${displayMode === 'projection' ? '#' : '%'}</option>
-                                <option value="index" ${incomeSortType === 'index' ? 'selected' : ''}>Sort by Index</option>
+                            <select onchange="setComparisonSectionSortType('demo_income', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
+                                <option value="pct" ${incomeSortType === 'pct' ? 'selected' : ''}>By ${displayMode === 'projection' ? '#' : '%'}</option>
+                                <option value="index" ${incomeSortType === 'index' ? 'selected' : ''}>By Index</option>
                             </select>
                         </span>
                     </div>
@@ -36342,19 +36350,21 @@
                 
                 html += `
                     <div class="comp-section" id="comp-beh-${safeCatId}">
-                        <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                            <span style="display: flex; align-items: center; gap: 0.75rem;">
-                                ${cat}
-                                <span style="font-size: 0.7rem; font-weight: normal;">Index: <span style="color: #10b981;">●</span> &gt;100 Over | <span style="color: #ef4444;">●</span> &lt;100 Under</span>
-                                <select onchange="setComparisonSectionLimit('${catKey}', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                    <option value="15" ${currentLimit == 15 ? 'selected' : ''}>Show Top 15</option>
-                                    <option value="25" ${currentLimit == 25 ? 'selected' : ''}>Show Top 25</option>
-                                    <option value="50" ${currentLimit == 50 ? 'selected' : ''}>Show Top 50</option>
-                                    <option value="All" ${currentLimit === 'All' ? 'selected' : ''}>Show All</option>
+                        <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+                            <span style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="white-space: nowrap;">${cat}</span>
+                                <span style="font-size: 0.65rem; font-weight: normal; opacity: 0.7;">Index: <span style="color: #10b981;">●</span> &gt;100 | <span style="color: #ef4444;">●</span> &lt;100</span>
+                            </span>
+                            <span style="display: flex; align-items: center; gap: 0.35rem;">
+                                <select onchange="setComparisonSectionLimit('${catKey}', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
+                                    <option value="15" ${currentLimit == 15 ? 'selected' : ''}>Top 15</option>
+                                    <option value="25" ${currentLimit == 25 ? 'selected' : ''}>Top 25</option>
+                                    <option value="50" ${currentLimit == 50 ? 'selected' : ''}>Top 50</option>
+                                    <option value="All" ${currentLimit === 'All' ? 'selected' : ''}>All</option>
                                 </select>
-                                <select onchange="setComparisonSectionSortType('${catKey}', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                    <option value="pct" ${currentSortType === 'pct' ? 'selected' : ''}>Sort by ${displayMode === 'projection' ? '#' : '%'}</option>
-                                    <option value="index" ${currentSortType === 'index' ? 'selected' : ''}>Sort by Index</option>
+                                <select onchange="setComparisonSectionSortType('${catKey}', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
+                                    <option value="pct" ${currentSortType === 'pct' ? 'selected' : ''}>By ${displayMode === 'projection' ? '#' : '%'}</option>
+                                    <option value="index" ${currentSortType === 'index' ? 'selected' : ''}>By Index</option>
                                 </select>
                             </span>
                         </div>
@@ -36381,18 +36391,18 @@
                 
                 html += `
                     <div class="comp-section" id="comp-location">
-                        <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                            <span style="display: flex; align-items: center; gap: 0.75rem;">
-                                Locations/DMAs
-                                <select onchange="setComparisonSectionLimit('location', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                    <option value="15" ${locationLimit == 15 ? 'selected' : ''}>Show Top 15</option>
-                                    <option value="25" ${locationLimit == 25 ? 'selected' : ''}>Show Top 25</option>
-                                    <option value="50" ${locationLimit == 50 ? 'selected' : ''}>Show Top 50</option>
-                                    <option value="All" ${locationLimit === 'All' ? 'selected' : ''}>Show All</option>
+                        <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+                            <span style="white-space: nowrap;">Locations/DMAs</span>
+                            <span style="display: flex; align-items: center; gap: 0.35rem;">
+                                <select onchange="setComparisonSectionLimit('location', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
+                                    <option value="15" ${locationLimit == 15 ? 'selected' : ''}>Top 15</option>
+                                    <option value="25" ${locationLimit == 25 ? 'selected' : ''}>Top 25</option>
+                                    <option value="50" ${locationLimit == 50 ? 'selected' : ''}>Top 50</option>
+                                    <option value="All" ${locationLimit === 'All' ? 'selected' : ''}>All</option>
                                 </select>
-                                <select onchange="setComparisonSectionSortType('location', this.value)" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                    <option value="pct" ${locationSortType === 'pct' ? 'selected' : ''}>Sort by ${displayMode === 'projection' ? '#' : '%'}</option>
-                                    <option value="index" ${locationSortType === 'index' ? 'selected' : ''}>Sort by Index</option>
+                                <select onchange="setComparisonSectionSortType('location', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
+                                    <option value="pct" ${locationSortType === 'pct' ? 'selected' : ''}>By ${displayMode === 'projection' ? '#' : '%'}</option>
+                                    <option value="index" ${locationSortType === 'index' ? 'selected' : ''}>By Index</option>
                                 </select>
                             </span>
                         </div>
