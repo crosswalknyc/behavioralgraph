@@ -8271,6 +8271,66 @@
             color: var(--text-secondary);
         }
 
+        /* Data Points Styles */
+        .data-points-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 0.75rem;
+        }
+        
+        .data-point-card {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+            position: relative;
+        }
+        
+        .data-point-card:hover {
+            border-color: var(--accent-cyan);
+        }
+        
+        .data-point-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 0.5rem;
+        }
+        
+        .data-point-title {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+        }
+        
+        .data-point-meta {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+        
+        .data-point-actions {
+            display: flex;
+            gap: 0.25rem;
+        }
+        
+        .data-point-actions button {
+            padding: 0.25rem 0.4rem;
+            font-size: 0.65rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .data-point-preview {
+            background: var(--bg-dark);
+            border-radius: 4px;
+            padding: 0.5rem;
+            font-size: 0.75rem;
+            max-height: 80px;
+            overflow: hidden;
+        }
+
         /* Workspace Deck Builder Styles */
         .workspace-deck-builder {
             height: calc(100vh - 400px);
@@ -10467,9 +10527,12 @@
                         <!-- Demographics Insights Row -->
                         <div class="demo-insights-row" id="demoInsightsRow">
                             <div class="demo-insight-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Demographic Profile Summary">
-                                <h4 class="has-tooltip" data-tooltip="Demographic Profile Summary: Quick overview of this audience's demographic composition including age skew, gender balance, and income level compared to the general population.">
-                                    <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                    <span>🎯 Demographic Profile Summary</span>
+                                <h4 class="has-tooltip" data-tooltip="Demographic Profile Summary: Quick overview of this audience's demographic composition including age skew, gender balance, and income level compared to the general population." style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="display: flex; align-items: center;">
+                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                        <span>🎯 Demographic Profile Summary</span>
+                                    </span>
+                                    <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('demographic-summary')" data-tooltip="Add to Deck" style="margin-left: 0.5rem;">➕</button>
                                 </h4>
                                 <div class="insight-col-header" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
                                     <span class="has-tooltip" data-tooltip="Characteristic: The dominant demographic trait in each category (gender, age, income, ethnicity).">Characteristic</span>
@@ -10482,9 +10545,12 @@
                                 </div>
                             </div>
                             <div class="demo-insight-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Key Differentiators">
-                                <h4 class="has-tooltip" data-tooltip="Key Differentiators vs Gen Pop: Demographic segments where this audience most strongly over-indexes (>1.1x) or under-indexes (<0.8x) compared to the general US population.">
-                                    <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                    <span>📊 Key Differentiators vs Gen Pop</span>
+                                <h4 class="has-tooltip" data-tooltip="Key Differentiators vs Gen Pop: Demographic segments where this audience most strongly over-indexes (>1.1x) or under-indexes (<0.8x) compared to the general US population." style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="display: flex; align-items: center;">
+                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                        <span>📊 Key Differentiators vs Gen Pop</span>
+                                    </span>
+                                    <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('key-differentiators')" data-tooltip="Add to Deck" style="margin-left: 0.5rem;">➕</button>
                                 </h4>
                                 <div class="insight-col-header" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
                                     <span class="has-tooltip" data-tooltip="Segment: A specific demographic group (e.g., 18-24, Female, $100K+).">Segment</span>
@@ -10497,9 +10563,12 @@
                                 </div>
                             </div>
                             <div class="demo-insight-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Targeting Recommendations">
-                                <h4 class="has-tooltip" data-tooltip="Targeting Recommendations: Actionable suggestions for media buying and campaign targeting based on this audience's demographic makeup - age ranges, gender focus, income tiers, etc.">
-                                    <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                    <span>💡 Targeting Recommendations</span>
+                                <h4 class="has-tooltip" data-tooltip="Targeting Recommendations: Actionable suggestions for media buying and campaign targeting based on this audience's demographic makeup - age ranges, gender focus, income tiers, etc." style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="display: flex; align-items: center;">
+                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                        <span>💡 Targeting Recommendations</span>
+                                    </span>
+                                    <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('targeting-recommendations')" data-tooltip="Add to Deck" style="margin-left: 0.5rem;">➕</button>
                                 </h4>
                                 <div class="insight-col-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
                                     <span class="has-tooltip" data-tooltip="Type: The targeting dimension (Gender, Age, Income, etc.).">Type</span>
@@ -10726,9 +10795,12 @@
                 <!-- Behavioral Insights Row -->
                 <div class="behavioral-insights-row" id="behavioralInsightsRow">
                     <div class="behavioral-insight-card highlight" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Behavioral Profile Summary">
-                        <h4 class="has-tooltip" data-tooltip="Behavioral Profile Summary: AI-generated analysis of this audience's lifestyle, interests, habits, and unique characteristics based on their behavioral data.">
-                            <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                            <span>🧠 Behavioral Profile Summary</span>
+                        <h4 class="has-tooltip" data-tooltip="Behavioral Profile Summary: AI-generated analysis of this audience's lifestyle, interests, habits, and unique characteristics based on their behavioral data." style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="display: flex; align-items: center;">
+                                <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                <span>🧠 Behavioral Profile Summary</span>
+                            </span>
+                            <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('behavioral-summary')" data-tooltip="Add to Deck" style="margin-left: 0.5rem;">➕</button>
                         </h4>
                         <div id="behavioralProfileSummary" class="behavioral-insight-content" style="padding: 0.5rem 0;">
                             <div style="font-size: 0.85rem; color: var(--text-secondary);">
@@ -12006,7 +12078,10 @@
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
                                         <span>👤 Audience Snapshot</span>
                                     </h3>
-                                    <span class="data-quality-badge has-tooltip" id="dataQualityBadge" data-tooltip="Data Quality: Based on sample size. High Confidence (10,000+) = statistically reliable. Moderate (1,000-10,000) = directionally accurate. Low (<1,000) = indicative only.">High Confidence</span>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <span class="data-quality-badge has-tooltip" id="dataQualityBadge" data-tooltip="Data Quality: Based on sample size. High Confidence (10,000+) = statistically reliable. Moderate (1,000-10,000) = directionally accurate. Low (<1,000) = indicative only.">High Confidence</span>
+                                        <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('audience-snapshot')" data-tooltip="Add to Deck">➕</button>
+                                    </div>
                                 </div>
                                 <div id="audienceSnapshot" class="audience-snapshot">
                                     <div class="snapshot-loading">Loading audience profile...</div>
@@ -12023,6 +12098,7 @@
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
                                         <span>🧠 Behavioral Profile</span>
                                     </h3>
+                                    <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('behavioral-profile')" data-tooltip="Add to Deck">➕</button>
                                 </div>
                                 <div id="behavioralProfileCard" style="padding: 0.5rem 0;">
                                     <div style="font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem;">
@@ -12049,6 +12125,7 @@
                                             <option value="name-asc">Name A-Z</option>
                                             <option value="name-desc">Name Z-A</option>
                                         </select>
+                                        <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('interest-highlights')" data-tooltip="Add to Deck">➕</button>
                                     </div>
                                 </div>
                                 <div class="differentiator-header" style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem;">
@@ -12077,6 +12154,7 @@
                                             <option value="name-asc">Name A-Z</option>
                                             <option value="name-desc">Name Z-A</option>
                                         </select>
+                                        <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('top-differentiators')" data-tooltip="Add to Deck">➕</button>
                                     </div>
                                 </div>
                                 <p class="card-desc">What makes this audience unique</p>
@@ -12586,57 +12664,25 @@
                         </div>
                         
                         <div class="collab-tabs">
-                            <button class="collab-tab active" onclick="showCollabTab('shared')">📤 Shared Profiles</button>
-                            <button class="collab-tab" onclick="showCollabTab('comments')">💬 Comments</button>
+                            <button class="collab-tab active" onclick="showCollabTab('datapoints')">📦 Data Points</button>
                             <button class="collab-tab" onclick="showCollabTab('decks')">📊 Deck Builder</button>
-                            <button class="collab-tab" onclick="showCollabTab('activity')">📋 Activity Log</button>
-                            <button class="collab-tab" onclick="showCollabTab('notifications')">🔔 Notifications</button>
                         </div>
                         
-                        <div id="collab-tab-shared" class="collab-tab-content active">
-                            <div class="shared-profiles-header">
-                                <h3>Shared Profiles</h3>
-                                <div style="display: flex; gap: 0.5rem;">
-                                    <button class="btn btn-primary btn-small" onclick="shareCurrentProfile()">+ Share Profile</button>
+                        <div id="collab-tab-datapoints" class="collab-tab-content active">
+                            <div class="datapoints-section">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                    <h3>📦 Saved Data Points</h3>
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <button class="btn btn-small btn-secondary" onclick="clearAllDataPoints()">🗑️ Clear All</button>
+                                    </div>
                                 </div>
-                            </div>
-                            <div id="sharedProfilesList" class="shared-profiles-list">
-                                <div class="collab-empty">
-                                    <p>No shared profiles yet</p>
-                                    <p style="font-size: 0.8rem; color: var(--text-secondary);">Click "Share Profile" to share the current profile with your team</p>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div id="collab-tab-comments" class="collab-tab-content">
-                            <div class="comments-section">
-                                <div class="comments-header">
-                                    <h3>Comments & Discussions</h3>
-                                    <select id="commentProfileFilter" onchange="filterComments()">
-                                        <option value="all">All Profiles</option>
-                                    </select>
-                                </div>
-                                <div id="commentsList" class="comments-list">
+                                <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 1rem;">
+                                    Data points you've added using the ➕ button on charts and modules. Use these to build your decks.
+                                </p>
+                                <div id="dataPointsList" class="data-points-list">
                                     <div class="collab-empty">
-                                        <p>No comments yet</p>
-                                        <p style="font-size: 0.8rem; color: var(--text-secondary);">Start a discussion about any profile or insight</p>
-                                    </div>
-                                </div>
-                                <div class="add-comment-form">
-                                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                        <select id="commentTargetProfile" style="flex: 1; padding: 0.4rem; border-radius: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.8rem;">
-                                            <option value="general">General Discussion</option>
-                                        </select>
-                                        <select id="commentMention" style="padding: 0.4rem; border-radius: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.8rem;">
-                                            <option value="">@mention teammate</option>
-                                        </select>
-                                    </div>
-                                    <textarea id="newCommentText" placeholder="Add a comment, question, or insight..." style="min-height: 80px;"></textarea>
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
-                                        <label style="font-size: 0.75rem; color: var(--text-secondary);">
-                                            <input type="checkbox" id="notifyTeamOnComment"> Notify team
-                                        </label>
-                                        <button class="btn btn-primary" onclick="addComment()">Post Comment</button>
+                                        <p>No data points saved yet</p>
+                                        <p style="font-size: 0.8rem; color: var(--text-secondary);">Click the ➕ button on any chart or module to save it here</p>
                                     </div>
                                 </div>
                             </div>
@@ -12684,40 +12730,6 @@
                             </div>
                         </div>
                         
-                        <div id="collab-tab-activity" class="collab-tab-content">
-                            <div class="activity-section">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                    <h3>Activity Log</h3>
-                                    <select id="activityFilter" onchange="filterActivityLog()" style="padding: 0.4rem; border-radius: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.8rem;">
-                                        <option value="all">All Activity</option>
-                                        <option value="shares">Shares</option>
-                                        <option value="comments">Comments</option>
-                                        <option value="exports">Exports</option>
-                                        <option value="views">Views</option>
-                                    </select>
-                                </div>
-                                <div id="activityLog" class="activity-log">
-                                    <div class="collab-empty">
-                                        <p>No activity recorded yet</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div id="collab-tab-notifications" class="collab-tab-content">
-                            <div class="notifications-section">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                    <h3>Notifications</h3>
-                                    <button class="btn btn-small btn-secondary" onclick="showNotificationSettings()">⚙️ Settings</button>
-                                </div>
-                                <div id="notificationsList" class="notifications-list">
-                                    <div class="collab-empty">
-                                        <p>No new notifications</p>
-                                        <p style="font-size: 0.8rem; color: var(--text-secondary);">You'll see notifications here when teammates share profiles, mention you, or comment on shared work.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -28687,9 +28699,183 @@
             
             localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
             
+            // Also save to data points for easy access
+            saveToDataPoints({...item, workspaceId: wsId});
+            
             document.getElementById('deckSelectionModal')?.remove();
             showNotification(`✅ Added "${item.title}" to ${deck.name}`, 'success');
             trackActivity('add_module_to_deck', `${type}:${category}:${deck.name}`);
+        }
+        
+        // Add insight cards (Audience Snapshot, Behavioral Profile, etc.) to deck
+        function addInsightToDeck(insightType) {
+            if (!currentDashboardData || !currentProfileData) {
+                alert('Please select a profile first');
+                return;
+            }
+            
+            // Check if any workspaces or decks exist
+            const wsKeys = Object.keys(workspaces || {});
+            const hasWorkspaces = wsKeys.length > 0;
+            const hasDecks = Object.values(workspaceDecks).some(decks => decks && decks.length > 0);
+            
+            if (!hasWorkspaces || !hasDecks) {
+                showCreateWorkspaceDeckPrompt('insight', insightType);
+                return;
+            }
+            
+            showInsightDeckSelectionPopup(insightType);
+        }
+        
+        function showInsightDeckSelectionPopup(insightType) {
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'deckSelectionModal';
+            
+            // Build workspace and deck options
+            let workspaceOptions = '';
+            Object.entries(workspaces || {}).forEach(([wsId, ws]) => {
+                workspaceOptions += `<option value="${wsId}">${ws.name || wsId}</option>`;
+            });
+            
+            // Get display name for insight type
+            const insightNames = {
+                'audience-snapshot': 'Audience Snapshot',
+                'behavioral-profile': 'Behavioral Profile',
+                'demographic-summary': 'Demographic Profile Summary',
+                'key-differentiators': 'Key Differentiators vs Gen Pop',
+                'targeting-recommendations': 'Targeting Recommendations',
+                'interest-highlights': 'Interest Highlights',
+                'top-differentiators': 'Top Differentiators',
+                'behavioral-summary': 'Behavioral Profile Summary'
+            };
+            const displayName = insightNames[insightType] || insightType;
+            
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 450px;">
+                    <div class="deck-workspace-header">
+                        <h2>➕ Add to Deck</h2>
+                        <button onclick="document.getElementById('deckSelectionModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1.5rem; text-align: left;">
+                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-dark); border-radius: 8px; border-left: 3px solid var(--accent-cyan);">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Adding:</div>
+                            <div style="font-weight: 600;">${currentProfileData?.name || 'Profile'} - ${displayName}</div>
+                        </div>
+                        
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.8rem; color: var(--text-secondary);">SELECT WORKSPACE</label>
+                            <select id="deckSelectWorkspace" onchange="updateDeckOptions()" style="width: 100%; padding: 0.6rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary);">
+                                ${workspaceOptions}
+                            </select>
+                        </div>
+                        
+                        <div style="margin-bottom: 1.5rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.8rem; color: var(--text-secondary);">SELECT DECK</label>
+                            <select id="deckSelectDeck" style="width: 100%; padding: 0.6rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary);">
+                                <option value="">-- Select a deck --</option>
+                            </select>
+                            <button onclick="quickCreateDeck()" style="margin-top: 0.5rem; padding: 0.4rem 0.75rem; font-size: 0.75rem; background: transparent; border: 1px dashed var(--border-color); color: var(--text-secondary); border-radius: 4px; cursor: pointer;">+ Create New Deck</button>
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.75rem;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('deckSelectionModal').remove()" style="flex: 1;">Cancel</button>
+                            <button class="btn btn-primary" onclick="confirmAddInsightToDeck('${insightType}')" style="flex: 1;">Add to Deck</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            // Initialize deck options for first workspace
+            updateDeckOptions();
+        }
+        
+        function confirmAddInsightToDeck(insightType) {
+            const wsId = document.getElementById('deckSelectWorkspace')?.value;
+            const deckId = document.getElementById('deckSelectDeck')?.value;
+            
+            if (!wsId || !deckId) {
+                alert('Please select a workspace and deck');
+                return;
+            }
+            
+            // Find the deck
+            const decks = workspaceDecks[wsId] || [];
+            const deck = decks.find(d => d.id === deckId);
+            if (!deck) {
+                alert('Deck not found');
+                return;
+            }
+            
+            // Create the insight item
+            const item = createInsightItem(insightType);
+            
+            // Add to deck slides
+            if (!deck.slides) deck.slides = [];
+            deck.slides.push(item);
+            deck.updatedAt = new Date().toISOString();
+            
+            localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            
+            document.getElementById('deckSelectionModal')?.remove();
+            showNotification(`✅ Added "${item.title}" to ${deck.name}`, 'success');
+            trackActivity('add_insight_to_deck', `${insightType}:${deck.name}`);
+        }
+        
+        function createInsightItem(insightType) {
+            const item = {
+                id: 'slide_' + Date.now(),
+                type: 'insight',
+                category: insightType,
+                profileName: currentProfileData?.name || 'Profile',
+                profileKey: currentS3Key,
+                dateAdded: new Date().toISOString(),
+                data: null,
+                customTitle: null,
+                customNotes: ''
+            };
+            
+            // Capture content based on insight type
+            if (insightType === 'audience-snapshot') {
+                const snapshotEl = document.getElementById('audienceSnapshot');
+                const takeawaysEl = document.getElementById('audienceTakeaways');
+                item.data = {
+                    html: snapshotEl?.innerHTML || '',
+                    takeaways: takeawaysEl?.innerHTML || ''
+                };
+                item.title = `${item.profileName} - Audience Snapshot`;
+            } else if (insightType === 'behavioral-profile') {
+                const profileEl = document.getElementById('behavioralProfileCard');
+                item.data = { html: profileEl?.innerHTML || '' };
+                item.title = `${item.profileName} - Behavioral Profile`;
+            } else if (insightType === 'demographic-summary') {
+                const summaryEl = document.getElementById('demoProfileSummary');
+                item.data = { html: summaryEl?.innerHTML || '' };
+                item.title = `${item.profileName} - Demographic Profile Summary`;
+            } else if (insightType === 'key-differentiators') {
+                const diffEl = document.getElementById('demoDifferentiators');
+                item.data = { html: diffEl?.innerHTML || '' };
+                item.title = `${item.profileName} - Key Differentiators`;
+            } else if (insightType === 'targeting-recommendations') {
+                const recsEl = document.getElementById('demoTargetingRecs');
+                item.data = { html: recsEl?.innerHTML || '' };
+                item.title = `${item.profileName} - Targeting Recommendations`;
+            } else if (insightType === 'interest-highlights') {
+                const highlightsEl = document.getElementById('interestHighlights');
+                item.data = { html: highlightsEl?.innerHTML || '' };
+                item.title = `${item.profileName} - Interest Highlights`;
+            } else if (insightType === 'top-differentiators') {
+                const topDiffEl = document.getElementById('topDifferentiators');
+                item.data = { html: topDiffEl?.innerHTML || '' };
+                item.title = `${item.profileName} - Top Differentiators`;
+            } else if (insightType === 'behavioral-summary') {
+                const behavioralSummaryEl = document.getElementById('behavioralProfileSummary');
+                item.data = { html: behavioralSummaryEl?.innerHTML || '' };
+                item.title = `${item.profileName} - Behavioral Profile Summary`;
+            }
+            
+            return item;
         }
         
         function createModuleItem(type, category) {
@@ -40905,17 +41091,160 @@
             document.querySelectorAll('.collab-tab-content').forEach(c => c.classList.remove('active'));
             document.getElementById('collab-tab-' + tabName).classList.add('active');
             
-            if (tabName === 'activity') {
-                loadActivityLog();
-            } else if (tabName === 'decks') {
+            if (tabName === 'decks') {
                 initWorkspaceDeckBuilder();
-            } else if (tabName === 'shared') {
-                renderSharedProfiles();
-            } else if (tabName === 'comments') {
-                renderComments();
-            } else if (tabName === 'notifications') {
-                renderNotifications();
+            } else if (tabName === 'datapoints') {
+                renderDataPoints();
             }
+        }
+        
+        // Data Points Management
+        let savedDataPoints = JSON.parse(localStorage.getItem('savedDataPoints') || '[]');
+        
+        function renderDataPoints() {
+            const list = document.getElementById('dataPointsList');
+            if (!list) return;
+            
+            // Filter by current workspace
+            const wsDataPoints = savedDataPoints.filter(dp => dp.workspaceId === currentWorkspace || !dp.workspaceId);
+            
+            if (wsDataPoints.length === 0) {
+                list.innerHTML = `
+                    <div class="collab-empty" style="grid-column: 1 / -1;">
+                        <p>No data points saved yet</p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary);">Click the ➕ button on any chart or module to save it here</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            list.innerHTML = wsDataPoints.map(dp => {
+                const preview = getDataPointPreview(dp);
+                return `
+                    <div class="data-point-card" data-id="${dp.id}">
+                        <div class="data-point-header">
+                            <div>
+                                <div class="data-point-title">${dp.title || dp.category}</div>
+                                <div class="data-point-meta">${dp.profileName} • ${dp.type} • ${new Date(dp.dateAdded).toLocaleDateString()}</div>
+                            </div>
+                            <div class="data-point-actions">
+                                <button onclick="addDataPointToDeck('${dp.id}')" style="background: var(--accent-lime); color: #000;" title="Add to Deck">📊</button>
+                                <button onclick="deleteDataPoint('${dp.id}')" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;" title="Delete">🗑️</button>
+                            </div>
+                        </div>
+                        <div class="data-point-preview">${preview}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function getDataPointPreview(dp) {
+            if (!dp.data) return 'No preview available';
+            
+            if (dp.type === 'demographic' && dp.data.values) {
+                const entries = Object.entries(dp.data.values).slice(0, 3);
+                return entries.map(([k, v]) => `${k}: ${parseFloat(v).toFixed(1)}%`).join(' • ');
+            }
+            
+            if (dp.type === 'behavioral' && dp.data.items) {
+                const entries = Object.entries(dp.data.items).slice(0, 3);
+                return entries.map(([k, v]) => `${k}: ${parseFloat(v).toFixed(1)}%`).join(' • ');
+            }
+            
+            if (dp.type === 'location' && dp.data.locations) {
+                return dp.data.locations.slice(0, 3).map(l => l.name || l.dma).join(' • ');
+            }
+            
+            return 'Data saved';
+        }
+        
+        function addDataPointToDeck(dataPointId) {
+            const dp = savedDataPoints.find(d => d.id === dataPointId);
+            if (!dp) return;
+            
+            // Check if deck exists
+            const wsDecks = workspaceDecks[currentWorkspace] || [];
+            if (wsDecks.length === 0) {
+                if (confirm('No decks in this workspace. Create one now?')) {
+                    createNewWorkspaceDeck();
+                }
+                return;
+            }
+            
+            // Show deck selection
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'addToDeckModal';
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 350px;">
+                    <div class="deck-workspace-header">
+                        <h2>Add to Deck</h2>
+                        <button onclick="document.getElementById('addToDeckModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1rem;">
+                        <p style="margin-bottom: 1rem; font-size: 0.85rem;">Adding: <strong>${dp.title || dp.category}</strong></p>
+                        <select id="selectDeckForDataPoint" style="width: 100%; padding: 0.5rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); margin-bottom: 1rem;">
+                            ${wsDecks.map(d => `<option value="${d.id}">${d.name}</option>`).join('')}
+                        </select>
+                        <button onclick="confirmAddDataPointToDeck('${dataPointId}')" class="btn btn-primary" style="width: 100%;">Add to Deck</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function confirmAddDataPointToDeck(dataPointId) {
+            const dp = savedDataPoints.find(d => d.id === dataPointId);
+            const deckId = document.getElementById('selectDeckForDataPoint')?.value;
+            if (!dp || !deckId) return;
+            
+            const decks = workspaceDecks[currentWorkspace] || [];
+            const deck = decks.find(d => d.id === deckId);
+            if (!deck) return;
+            
+            // Add as slide
+            const slide = {
+                id: 'slide_' + Date.now(),
+                type: dp.type,
+                category: dp.category,
+                title: dp.title || dp.category,
+                profileName: dp.profileName,
+                data: dp.data,
+                dateAdded: new Date().toISOString()
+            };
+            
+            if (!deck.slides) deck.slides = [];
+            deck.slides.push(slide);
+            deck.updatedAt = new Date().toISOString();
+            
+            localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            document.getElementById('addToDeckModal')?.remove();
+            showNotification(`✅ Added to ${deck.name}`, 'success');
+        }
+        
+        function deleteDataPoint(dataPointId) {
+            if (!confirm('Delete this data point?')) return;
+            
+            savedDataPoints = savedDataPoints.filter(dp => dp.id !== dataPointId);
+            localStorage.setItem('savedDataPoints', JSON.stringify(savedDataPoints));
+            renderDataPoints();
+            showNotification('🗑️ Data point deleted', 'success');
+        }
+        
+        function clearAllDataPoints() {
+            if (!confirm('Clear all data points in this workspace? This cannot be undone.')) return;
+            
+            savedDataPoints = savedDataPoints.filter(dp => dp.workspaceId !== currentWorkspace);
+            localStorage.setItem('savedDataPoints', JSON.stringify(savedDataPoints));
+            renderDataPoints();
+            showNotification('🗑️ All data points cleared', 'success');
+        }
+        
+        // Update addModuleToDeck to also save to data points
+        function saveToDataPoints(item) {
+            item.workspaceId = currentWorkspace;
+            savedDataPoints.push(item);
+            localStorage.setItem('savedDataPoints', JSON.stringify(savedDataPoints));
         }
         
         function selectWorkspace(id, element) {

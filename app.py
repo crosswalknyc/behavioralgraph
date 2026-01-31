@@ -3320,8 +3320,10 @@ def api_behavioral_summary():
 
 
 # ============================================================================
-# AI SUMMARY CACHING HELPERS
+# AI SUMMARY CACHING HELPERS - GLOBAL S3 CACHE FOR ALL USERS
 # ============================================================================
+
+AI_CACHE_S3_PREFIX = 'ai-summaries/'  # S3 prefix for cached AI summaries
 
 def generate_cache_key(profile_name, behavioral_data, top_over_indexers):
     """Generate a unique cache key based on profile name and behavioral data signature."""
@@ -3353,7 +3355,27 @@ def generate_cache_key(profile_name, behavioral_data, top_over_indexers):
     return f"{safe_name}_{cache_hash}"
 
 def get_cached_summary(cache_key):
-    """Retrieve a cached summary if it exists and is not expired."""
+    """Retrieve a cached summary from S3 global cache (shared across all users)."""
+    # Try S3 global cache first
+    if s3_client:
+        try:
+            s3_key = f"{AI_CACHE_S3_PREFIX}{cache_key}.json"
+            response = s3_client.get_object(Bucket=METADATA_BUCKET, Key=s3_key)
+            cached = json.loads(response['Body'].read().decode('utf-8'))
+            
+            # Check if cache is expired (90 days for global cache - longer since it's shared)
+            cached_time = datetime.fromisoformat(cached.get('cached_at', '2000-01-01'))
+            if datetime.now() - cached_time < timedelta(days=90):
+                print(f"✅ S3 Global Cache HIT for behavioral summary: {cache_key}")
+                return cached.get('data')
+            else:
+                print(f"⏰ S3 Cache EXPIRED for behavioral summary: {cache_key}")
+        except s3_client.exceptions.NoSuchKey:
+            print(f"📭 S3 Cache MISS for behavioral summary: {cache_key}")
+        except Exception as e:
+            print(f"⚠️ Error reading S3 cache {cache_key}: {e}")
+    
+    # Fallback to local cache
     ensure_cache_dir()
     cache_file = os.path.join(AI_CACHE_DIR, f"{cache_key}.json")
     
@@ -3362,20 +3384,46 @@ def get_cached_summary(cache_key):
             with open(cache_file, 'r') as f:
                 cached = json.load(f)
             
-            # Check if cache is expired (30 days)
+            # Check if cache is expired (30 days for local)
             cached_time = datetime.fromisoformat(cached.get('cached_at', '2000-01-01'))
             if datetime.now() - cached_time < timedelta(days=30):
-                print(f"✅ Cache HIT for behavioral summary: {cache_key}")
+                print(f"✅ Local Cache HIT for behavioral summary: {cache_key}")
+                # Also save to S3 for global sharing
+                save_cached_summary_to_s3(cache_key, cached.get('data'))
                 return cached.get('data')
             else:
-                print(f"⏰ Cache EXPIRED for behavioral summary: {cache_key}")
+                print(f"⏰ Local Cache EXPIRED for behavioral summary: {cache_key}")
         except Exception as e:
-            print(f"⚠️ Error reading cache file {cache_key}: {e}")
+            print(f"⚠️ Error reading local cache file {cache_key}: {e}")
     
     return None
 
+def save_cached_summary_to_s3(cache_key, data):
+    """Save a summary to S3 global cache (shared across all users)."""
+    if not s3_client:
+        return False
+    
+    try:
+        s3_key = f"{AI_CACHE_S3_PREFIX}{cache_key}.json"
+        cache_entry = {
+            'cached_at': datetime.now().isoformat(),
+            'data': data
+        }
+        s3_client.put_object(
+            Bucket=METADATA_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(cache_entry),
+            ContentType='application/json'
+        )
+        print(f"💾 Saved to S3 global cache: {cache_key}")
+        return True
+    except Exception as e:
+        print(f"⚠️ Error saving to S3 cache {cache_key}: {e}")
+        return False
+
 def save_cached_summary(cache_key, data):
-    """Save a summary to the cache."""
+    """Save a summary to both local and S3 global cache."""
+    # Save to local cache first (fast)
     ensure_cache_dir()
     cache_file = os.path.join(AI_CACHE_DIR, f"{cache_key}.json")
     
@@ -3386,9 +3434,12 @@ def save_cached_summary(cache_key, data):
         }
         with open(cache_file, 'w') as f:
             json.dump(cache_entry, f)
-        print(f"💾 Cached behavioral summary: {cache_key}")
+        print(f"💾 Cached behavioral summary locally: {cache_key}")
     except Exception as e:
-        print(f"⚠️ Error saving cache file {cache_key}: {e}")
+        print(f"⚠️ Error saving local cache file {cache_key}: {e}")
+    
+    # Also save to S3 for global sharing across all users
+    save_cached_summary_to_s3(cache_key, data)
 
 
 def generate_behavioral_summary(profile_data):
