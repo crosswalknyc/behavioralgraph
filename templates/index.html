@@ -8622,6 +8622,65 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            min-height: 0;
+        }
+        
+        .slide-editor-empty {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 0;
+            background: var(--bg-dark);
+        }
+        
+        .slide-editor-empty-inner {
+            text-align: center;
+            padding: 3rem;
+            max-width: 400px;
+        }
+        
+        .slide-editor-empty-icon {
+            margin-bottom: 1.5rem;
+            color: var(--text-secondary);
+        }
+        .slide-editor-empty-icon svg {
+            width: 80px;
+            height: 80px;
+            opacity: 0.6;
+        }
+        
+        .slide-editor-empty h3 {
+            margin: 0 0 0.75rem 0;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .slide-editor-empty-desc {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-bottom: 2rem;
+            line-height: 1.5;
+        }
+        
+        .slide-editor-empty .btn-create-deck {
+            padding: 0.875rem 2.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            background: var(--accent-cyan);
+            color: var(--bg-dark);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 240px;
+        }
+        
+        .slide-editor-empty .btn-create-deck:hover {
+            background: #2dd4bf;
+            transform: translateY(-1px);
         }
         
         .slide-editor-toolbar {
@@ -8872,12 +8931,13 @@
             justify-content: center;
             align-items: flex-start;
             padding: 1rem;
-            min-height: 0;
+            min-height: 320px;
         }
         
         .slide-canvas-container {
             width: 100%;
             max-width: 960px;
+            min-height: 360px;
             aspect-ratio: 16/9;
             position: relative;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
@@ -13150,7 +13210,7 @@
                                 <div class="deck-builder-header" id="deckBuilderHeader">
                                     <div class="deck-header-controls" style="flex: 1;">
                                         <h3 style="margin: 0; font-size: 1rem; margin-right: 0.5rem;">📊 Deck Builder</h3>
-                                        <button class="btn btn-primary btn-small" onclick="createNewWorkspaceDeck()" style="white-space: nowrap;">+ New Deck</button>
+                                        <button class="btn btn-primary btn-small" onclick="createNewWorkspaceDeck()" style="white-space: nowrap;">+ NEW DECK</button>
                                         <div id="deckActionButtons" style="display: none; align-items: center; gap: 0.5rem; margin-left: 0.5rem;">
                                             <button class="btn btn-small btn-success" onclick="shareDeckWithTeam()">👥 SHARE</button>
                                             <div class="export-dropdown" style="position: relative;">
@@ -13188,11 +13248,24 @@
                                     <!-- Middle: Slide Editor (deck) -->
                                     <div class="slide-editor-panel" id="slideEditorPanel" tabindex="0" style="grid-column: 2;">
                                         <div class="slide-editor-empty" id="slideEditorEmpty">
-                                            <div style="text-align: center; padding: 3rem;">
-                                                <div style="font-size: 3rem; margin-bottom: 1rem;">📑</div>
-                                                <h3 style="margin-bottom: 0.5rem;">Select or Create a Deck</h3>
-                                                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Choose a deck from the dropdown or create a new one to start building your presentation.</p>
-                                                <button class="btn btn-primary" onclick="createNewWorkspaceDeck()">+ Create New Deck</button>
+                                            <div class="slide-editor-empty-inner">
+                                                <div class="slide-editor-empty-icon">
+                                                    <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                                        <!-- Back document (smaller, behind) -->
+                                                        <path d="M18 16 L18 58 L52 58 L52 16 Z" stroke="currentColor" stroke-width="1.5" fill="none" opacity="0.35"/>
+                                                        <!-- Front document (larger, folded corner) -->
+                                                        <path d="M24 10 L24 62 L58 62 L58 38 L50 30 L50 10 Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                                        <!-- Folded corner fold line -->
+                                                        <path d="M50 30 L50 38 L58 38" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                                        <!-- Document lines -->
+                                                        <rect x="32" y="22" width="18" height="2" rx="1" fill="currentColor" opacity="0.5"/>
+                                                        <rect x="32" y="30" width="14" height="2" rx="1" fill="currentColor" opacity="0.5"/>
+                                                        <rect x="32" y="38" width="16" height="2" rx="1" fill="currentColor" opacity="0.5"/>
+                                                    </svg>
+                                                </div>
+                                                <h3>Select or Create a Deck.</h3>
+                                                <p class="slide-editor-empty-desc">Choose a deck from the dropdown or create a new one to start building your presentation.</p>
+                                                <button class="btn-create-deck" onclick="createNewWorkspaceDeck()">+ CREATE NEW DECK</button>
                                             </div>
                                         </div>
                                         <div class="slide-editor-content" id="slideEditorContent" style="display: none;">
@@ -43624,13 +43697,6 @@
             
             contentEl.innerHTML = `
                 <div class="slide-editor-wrapper">
-                    <!-- Slide Navigation -->
-                    <div class="slide-nav-controls">
-                        <button class="slide-nav-btn" onclick="navigateSlide(-1)" ${currentEditingSlide === 0 ? 'disabled' : ''}>← Previous</button>
-                        <span class="slide-nav-indicator">Slide ${currentEditingSlide + 1} of ${allSlides.length}</span>
-                        <button class="slide-nav-btn" onclick="navigateSlide(1)" ${currentEditingSlide >= allSlides.length - 1 ? 'disabled' : ''}>Next →</button>
-                    </div>
-                    
                     <!-- Slide Toolbar -->
                     <div class="slide-toolbar" id="slideToolbar">
                         <div class="slide-toolbar-group">
@@ -43675,8 +43741,6 @@
                             <button class="toolbar-btn" onclick="analyzeSlideWithAI()" title="Analyze slide data with AI and add key points & takeaways" style="background: var(--accent-cyan); color: var(--bg-dark);">🤖 Analyze with AI</button>
                         </div>
                         <div class="slide-toolbar-group">
-                            <button class="toolbar-btn" onclick="bringToFront()" title="Bring to Front">⬆️</button>
-                            <button class="toolbar-btn" onclick="sendToBack()" title="Send to Back">⬇️</button>
                             <button class="toolbar-btn" onclick="deleteSelectedElement()" title="Delete" style="color: #ef4444;">🗑️</button>
                         </div>
                     </div>
@@ -43835,24 +43899,43 @@
             
             // For module slides (demographic, behavioral, location, chart, affinity, insight, demographics) with data - render the imported data + any elements (e.g. AI analysis)
             const moduleTypes = ['demographic', 'behavioral', 'location', 'chart', 'affinity', 'insight', 'demographics'];
-            if (idx > 0 && slide.data && moduleTypes.includes(slide.type)) {
+            const slideType = (slide.type || '').toLowerCase();
+            const hasModuleData = slide.data && (
+                moduleTypes.includes(slideType) ||
+                (slide.data.values && typeof slide.data.values === 'object') ||
+                (slide.data.items && (Array.isArray(slide.data.items) || typeof slide.data.items === 'object')) ||
+                (slide.data.locations && Array.isArray(slide.data.locations)) ||
+                (slide.data.regions && Array.isArray(slide.data.regions)) ||
+                (slide.data.categories && typeof slide.data.categories === 'object') ||
+                (slide.data.chartImage)
+            );
+            if (idx > 0 && hasModuleData) {
                 const title = slide.customTitle || slide.title || slide.category || 'Slide';
                 const analysisBlock = slide.aiAnalysis ? `<div style="margin-top: 1rem; padding: 1rem; background: rgba(74, 138, 201, 0.1); border-radius: 8px; border-left: 3px solid var(--accent-cyan); font-size: 0.9rem; line-height: 1.5;"><div style="font-size: 0.8rem; font-weight: 600; color: var(--accent-cyan); margin-bottom: 0.5rem;">🤖 AI Key Points & Takeaways</div><div>${slide.aiAnalysis}</div></div>` : '';
-                return `
-                    <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 10%; width: 90%; height: 80%; overflow-y: auto; padding: 0.5rem;">
+                try {
+                    const content = renderSlideContent(slide);
+                    return `
+                    <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 10%; width: 90%; height: 80%; overflow-y: auto; padding: 0.5rem; z-index: 1;">
                         <div class="slide-module-title" style="font-size: 1.5rem; font-weight: 600; color: var(--accent-lime); margin-bottom: 1rem;">${escapeHtml(title)}</div>
-                        ${renderSlideContent(slide)}
+                        ${content}
                         ${analysisBlock}
                     </div>
-                `;
+                    `;
+                } catch (e) {
+                    console.warn('renderSlideContent error:', e);
+                }
             }
             
-            return elements.map(el => {
+            const html = elements.map(el => {
                 if (idx === 0 && el.id === 'title_image' && el.width === 15 && el.x === 50) {
                     el.x = 42.5;
                 }
                 return renderSingleElement(el);
             }).join('');
+            if (!html && idx > 0) {
+                return `<div style="position: absolute; left: 5%; top: 20%; width: 90%; color: var(--text-secondary); font-size: 0.9rem;"><p>No content on this slide. Use the toolbar to add text, images, or shapes.</p></div>`;
+            }
+            return html;
         }
         
         function renderSingleElement(el) {
@@ -44690,8 +44773,9 @@
             if (!slide.data) {
                 return '<p style="color: var(--text-secondary);">No data available for this slide</p>';
             }
+            const slideType = (slide.type || '').toLowerCase();
             
-            if (slide.type === 'demographic') {
+            if (slideType === 'demographic' || (slide.data.values && typeof slide.data.values === 'object' && !slide.data.categories)) {
                 const values = slide.data.values || {};
                 const entries = Object.entries(values).sort((a, b) => b[1] - a[1]).slice(0, 8);
                 return `
@@ -44706,7 +44790,7 @@
                 `;
             }
             
-            if (slide.type === 'behavioral') {
+            if (slideType === 'behavioral') {
                 const items = slide.data.items || [];
                 const entries = Array.isArray(items)
                     ? items.map(i => [i.name, i.pct]).filter(([k]) => k).sort((a, b) => (parseFloat(b[1]) || 0) - (parseFloat(a[1]) || 0)).slice(0, 10)
@@ -44724,7 +44808,7 @@
                 `;
             }
             
-            if (slide.type === 'location') {
+            if (slideType === 'location') {
                 const locations = slide.data.locations || slide.data.regions || [];
                 return `
                     <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
@@ -44737,11 +44821,11 @@
                 `;
             }
             
-            if (slide.type === 'chart' && slide.data.chartImage) {
+            if ((slideType === 'chart' || slide.data.chartImage) && slide.data.chartImage) {
                 return `<img src="${slide.data.chartImage}" style="max-width: 100%; border-radius: 8px;">`;
             }
             
-            if (slide.type === 'affinity' && slide.data.items) {
+            if (slideType === 'affinity' && slide.data.items) {
                 const items = slide.data.items || [];
                 const entries = Array.isArray(items) ? items.slice(0, 12) : [];
                 return `
@@ -44756,7 +44840,7 @@
                 `;
             }
             
-            if (slide.type === 'demographics' && slide.data && slide.data.categories) {
+            if ((slideType === 'demographics' || slide.data.categories) && slide.data && slide.data.categories) {
                 const cats = slide.data.categories || {};
                 return Object.entries(cats).map(([catName, catData]) => {
                     const values = catData.values || {};
