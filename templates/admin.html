@@ -1188,6 +1188,7 @@
             <div class="admin-tabs" style="margin-bottom: 1.5rem; border-bottom: 2px solid var(--border-color);">
                 <button class="admin-tab active" onclick="showSettingsTab('gmail')">📧 Gmail Integration</button>
                 <button class="admin-tab" onclick="showSettingsTab('quickSelects')">⚡ Quick Selects</button>
+                <button class="admin-tab" onclick="showSettingsTab('liveFeatures')">🚀 Live Features</button>
             </div>
             
             <!-- Gmail Integration Tab -->
@@ -1340,6 +1341,113 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Live Features Tab -->
+            <div id="settings-tab-liveFeatures" class="settings-tab-content" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🚀 Live Features</h2>
+                        <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                            Control which Analysis Tools are visible to all users. Unchecked features will only be visible to admins with a red star indicator.
+                        </p>
+                    </div>
+                    
+                    <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 1rem;">
+                        <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="liveFeatureSelectAll" onchange="toggleAllLiveFeatures()">
+                                <span>Select All Features</span>
+                            </label>
+                            <button class="btn btn-small btn-primary" onclick="saveLiveFeatures()">💾 Save Live Features</button>
+                        </div>
+                        
+                        <div id="liveFeaturesGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem;">
+                            <!-- Compare -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="compare" checked onchange="updateLiveFeature('compare', this.checked)">
+                                <span style="font-size: 1.25rem;">⚖️</span>
+                                <span style="font-size: 0.9rem;">Compare</span>
+                            </label>
+                            
+                            <!-- Segment -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="segment" checked onchange="updateLiveFeature('segment', this.checked)">
+                                <span style="font-size: 1.25rem;">🎛️</span>
+                                <span style="font-size: 0.9rem;">Segment</span>
+                            </label>
+                            
+                            <!-- Exec Summary -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="execSummary" checked onchange="updateLiveFeature('execSummary', this.checked)">
+                                <span style="font-size: 1.25rem;">📄</span>
+                                <span style="font-size: 0.9rem;">Exec Summary</span>
+                            </label>
+                            
+                            <!-- Key Insight Builder -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="keyInsightBuilder" checked onchange="updateLiveFeature('keyInsightBuilder', this.checked)">
+                                <span style="font-size: 1.25rem;">🎯</span>
+                                <span style="font-size: 0.9rem;">Key Insight Builder</span>
+                            </label>
+                            
+                            <!-- Ecosystem -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="ecosystem" checked onchange="updateLiveFeature('ecosystem', this.checked)">
+                                <span style="font-size: 1.25rem;">🌐</span>
+                                <span style="font-size: 0.9rem;">Ecosystem</span>
+                            </label>
+                            
+                            <!-- Affinity -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="affinity" checked onchange="updateLiveFeature('affinity', this.checked)">
+                                <span style="font-size: 1.25rem;">🔗</span>
+                                <span style="font-size: 0.9rem;">Affinity</span>
+                            </label>
+                            
+                            <!-- Sponsorship -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="sponsorship" checked onchange="updateLiveFeature('sponsorship', this.checked)">
+                                <span style="font-size: 1.25rem;">💰</span>
+                                <span style="font-size: 0.9rem;">Sponsorship</span>
+                            </label>
+                            
+                            <!-- Media -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="media" checked onchange="updateLiveFeature('media', this.checked)">
+                                <span style="font-size: 1.25rem;">📺</span>
+                                <span style="font-size: 0.9rem;">Media</span>
+                            </label>
+                            
+                            <!-- Content -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="content" checked onchange="updateLiveFeature('content', this.checked)">
+                                <span style="font-size: 1.25rem;">🎬</span>
+                                <span style="font-size: 0.9rem;">Content</span>
+                            </label>
+                            
+                            <!-- Collaborate -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="collaborate" checked onchange="updateLiveFeature('collaborate', this.checked)">
+                                <span style="font-size: 1.25rem;">🤝</span>
+                                <span style="font-size: 0.9rem;">Collaborate</span>
+                            </label>
+                            
+                            <!-- Deck Builder -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="deckBuilder" checked onchange="updateLiveFeature('deckBuilder', this.checked)">
+                                <span style="font-size: 1.25rem;">📊</span>
+                                <span style="font-size: 0.9rem;">Deck Builder</span>
+                            </label>
+                        </div>
+                        
+                        <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(239, 68, 68, 0.1); border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.3);">
+                            <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary);">
+                                <span style="color: #ef4444;">★</span> Features that are not live will show a red star to admins indicating they are "Admin Only" and will be hidden from regular users.
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -2096,6 +2204,10 @@
                 loadQuickSelectProfiles();
                 loadQuickSelectTickers();
             }
+            
+            if (tabName === 'liveFeatures') {
+                loadLiveFeatures();
+            }
         }
         
         // Quick Selects Variables
@@ -2410,6 +2522,110 @@
                 const ticker = t.ticker;
                 return quickSelectTickersData[ticker] !== false; // Include if not explicitly excluded
             });
+        }
+        
+        // ============ LIVE FEATURES ============
+        
+        let liveFeaturesData = {
+            compare: true,
+            segment: true,
+            execSummary: true,
+            keyInsightBuilder: true,
+            ecosystem: true,
+            affinity: true,
+            sponsorship: true,
+            media: true,
+            content: true,
+            collaborate: true,
+            deckBuilder: true
+        };
+        
+        // Load Live Features from server
+        async function loadLiveFeatures() {
+            try {
+                const response = await fetch('/api/admin/live-features', { credentials: 'same-origin' });
+                if (!response.ok) {
+                    // If endpoint doesn't exist yet, use defaults (all live)
+                    return;
+                }
+                
+                const data = await response.json();
+                if (data.success && data.features) {
+                    liveFeaturesData = { ...liveFeaturesData, ...data.features };
+                }
+                
+                // Update checkboxes
+                renderLiveFeaturesCheckboxes();
+            } catch (error) {
+                console.error('Error loading live features:', error);
+            }
+        }
+        
+        // Render Live Features Checkboxes
+        function renderLiveFeaturesCheckboxes() {
+            document.querySelectorAll('.live-feature-checkbox').forEach(checkbox => {
+                const feature = checkbox.dataset.feature;
+                checkbox.checked = liveFeaturesData[feature] !== false;
+            });
+            
+            // Update "Select All" checkbox
+            updateLiveFeatureSelectAll();
+        }
+        
+        // Update individual feature
+        function updateLiveFeature(feature, isLive) {
+            liveFeaturesData[feature] = isLive;
+            updateLiveFeatureSelectAll();
+        }
+        
+        // Update "Select All" checkbox state
+        function updateLiveFeatureSelectAll() {
+            const allCheckboxes = document.querySelectorAll('.live-feature-checkbox');
+            const allChecked = Array.from(allCheckboxes).every(cb => cb.checked);
+            const selectAllCheckbox = document.getElementById('liveFeatureSelectAll');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = allChecked;
+            }
+        }
+        
+        // Toggle all live features
+        function toggleAllLiveFeatures() {
+            const selectAll = document.getElementById('liveFeatureSelectAll');
+            const isChecked = selectAll.checked;
+            
+            document.querySelectorAll('.live-feature-checkbox').forEach(checkbox => {
+                checkbox.checked = isChecked;
+                const feature = checkbox.dataset.feature;
+                liveFeaturesData[feature] = isChecked;
+            });
+        }
+        
+        // Save Live Features to server
+        async function saveLiveFeatures() {
+            try {
+                const response = await fetch('/api/admin/live-features', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ features: liveFeaturesData })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    const errorMsg = data.error || `HTTP ${response.status}: ${response.statusText}`;
+                    throw new Error(errorMsg);
+                }
+                
+                if (data.success) {
+                    alert('✅ Live features saved successfully! Changes will apply to all users on their next page load.');
+                } else {
+                    throw new Error(data.error || 'Unknown error');
+                }
+            } catch (error) {
+                console.error('Error saving live features:', error);
+                alert('❌ Error saving live features: ' + error.message);
+            }
         }
         
         // ============ PROFILE IMAGES ============

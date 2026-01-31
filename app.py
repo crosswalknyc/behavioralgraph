@@ -295,6 +295,7 @@ TICKER_IMAGES_FILE = 'metadata/ticker_images_cache.json'
 TICKER_PROFILES_FILE = 'metadata/ticker_profile_mappings.json'
 SEC_ACTUALS_FILE = 'metadata/hedge_fund_sec_actuals.json'
 QUICK_SELECTS_FILE = 'metadata/admin_quick_selects.json'
+LIVE_FEATURES_FILE = 'metadata/admin_live_features.json'
 
 def ensure_metadata_folder():
     """Ensure the metadata folder exists in S3 by creating empty files if needed."""
@@ -5126,6 +5127,70 @@ def save_quick_selects():
         return jsonify({'success': True})
     except Exception as e:
         print(f"❌ Error saving quick selects: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/live-features', methods=['GET'])
+@requires_auth
+def get_live_features():
+    """Get live features configuration (available to all authenticated users to check visibility)."""
+    try:
+        live_features = load_json_from_s3(LIVE_FEATURES_FILE)
+        return jsonify({
+            'success': True,
+            'features': live_features.get('features', {})
+        })
+    except Exception as e:
+        print(f"❌ Error loading live features: {e}")
+        # Return all features as live by default
+        return jsonify({
+            'success': True,
+            'features': {
+                'compare': True,
+                'segment': True,
+                'execSummary': True,
+                'keyInsightBuilder': True,
+                'ecosystem': True,
+                'affinity': True,
+                'sponsorship': True,
+                'media': True,
+                'content': True,
+                'collaborate': True,
+                'deckBuilder': True
+            }
+        })
+
+
+@app.route('/api/admin/live-features', methods=['POST'])
+@requires_admin
+def save_live_features():
+    """Save live features configuration (admin only)."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        features = data.get('features', {})
+        
+        live_features = {
+            'features': features,
+            'updated_at': datetime.now().isoformat(),
+            'updated_by': session.get('username', 'unknown')
+        }
+        
+        # Check if S3 save was successful
+        success = save_json_to_s3(LIVE_FEATURES_FILE, live_features)
+        if not success:
+            error_msg = 'Failed to save to S3. Check server logs for details.'
+            print(f"❌ {error_msg}")
+            return jsonify({'success': False, 'error': error_msg}), 500
+        
+        print(f"✅ Live features saved by {session.get('username')}: {features}")
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"❌ Error saving live features: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500

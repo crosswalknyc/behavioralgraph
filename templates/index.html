@@ -1752,6 +1752,24 @@
             color: white;
         }
         
+        /* Admin-only star indicator for non-live features */
+        .admin-only-star {
+            color: #ef4444;
+            font-size: 0.7rem;
+            margin-left: 0.25rem;
+            cursor: help;
+            animation: pulse-star 2s infinite;
+        }
+        
+        @keyframes pulse-star {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .tab-btn.tool-tab.admin-only {
+            border: 1px dashed rgba(239, 68, 68, 0.5);
+        }
+        
         /* Tab section labels */
         .tab-section-label {
             font-size: 0.65rem;
@@ -9389,18 +9407,18 @@
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                     <div style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); padding-left: 0.25rem;">Analysis Tools</div>
-                    <div class="dashboard-tabs">
-                        <button class="tab-btn tool-tab has-tooltip" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to competitors and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-tooltip="Key Insight Builder: SWOT analysis and key insights for the primary brand, comparing to competitors and general population." onclick="generateKeyInsightBuilderFromNav()"><span class="tab-icon">🎯</span><span class="tab-label">KEY INSIGHT BUILDER</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-tooltip="Ecosystem: Behavioral ecosystem analysis showing life moments, substitution patterns, cultural signals, emotional engagement, relevance shifts, and white-space opportunities." onclick="showTab('ecosystem')"><span class="tab-icon">🌐</span><span class="tab-label">ECOSYSTEM</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-tooltip="Affinity: Cross-category affinities showing what else this audience engages with across brands and content." onclick="showTab('affinity')"><span class="tab-icon">🔗</span><span class="tab-label">AFFINITY</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-tooltip="Sponsorship: Sponsorship valuation and partnership opportunity analysis for brand collaborations." onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-tooltip="Media: Media consumption patterns including TV, streaming, social media, and digital platform preferences." onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">MEDIA</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-tooltip="Content: Content consumption preferences including genres, formats, and viewing habits." onclick="showTab('content')"><span class="tab-icon">🎬</span><span class="tab-label">CONTENT</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-tooltip="Collaborate: Share insights and collaborate with team members on audience analysis." onclick="showTab('collaboration')"><span class="tab-icon">🤝</span><span class="tab-label">COLLABORATE</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-tooltip="Deck Builder: Create and export presentation decks from your saved insights and charts." onclick="openDeckWorkspace()"><span class="tab-icon">📊</span><span class="tab-label">DECK BUILDER</span></button>
+                    <div class="dashboard-tabs" id="analysisToolsTabs">
+                        <button class="tab-btn tool-tab has-tooltip" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to competitors and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-feature="keyInsightBuilder" data-tooltip="Key Insight Builder: SWOT analysis and key insights for the primary brand, comparing to competitors and general population." onclick="generateKeyInsightBuilderFromNav()"><span class="tab-icon">🎯</span><span class="tab-label">KEY INSIGHT BUILDER</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-feature="ecosystem" data-tooltip="Ecosystem: Behavioral ecosystem analysis showing life moments, substitution patterns, cultural signals, emotional engagement, relevance shifts, and white-space opportunities." onclick="showTab('ecosystem')"><span class="tab-icon">🌐</span><span class="tab-label">ECOSYSTEM</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-feature="affinity" data-tooltip="Affinity: Cross-category affinities showing what else this audience engages with across brands and content." onclick="showTab('affinity')"><span class="tab-icon">🔗</span><span class="tab-label">AFFINITY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-feature="sponsorship" data-tooltip="Sponsorship: Sponsorship valuation and partnership opportunity analysis for brand collaborations." onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-feature="media" data-tooltip="Media: Media consumption patterns including TV, streaming, social media, and digital platform preferences." onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">MEDIA</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-feature="content" data-tooltip="Content: Content consumption preferences including genres, formats, and viewing habits." onclick="showTab('content')"><span class="tab-icon">🎬</span><span class="tab-label">CONTENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Collaborate: Share insights and collaborate with team members on audience analysis." onclick="showTab('collaboration')"><span class="tab-icon">🤝</span><span class="tab-label">COLLABORATE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-feature="deckBuilder" data-tooltip="Deck Builder: Create and export presentation decks from your saved insights and charts." onclick="openDeckWorkspace()"><span class="tab-icon">📊</span><span class="tab-label">DECK BUILDER</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                     </div>
                 </div>
             </div>
@@ -9953,22 +9971,24 @@
                             </h3>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
-                                <select id="locationSortTop" onchange="sortLocationTableBySelect('top', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by Profile, Profile %, or Index" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 80px;">
+                                <select id="locationSortTop" onchange="sortLocationTableBySelect('top', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by column" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 120px;">
                                     <option value="index-desc">Index ↓</option>
                                     <option value="index-asc">Index ↑</option>
-                                    <option value="target-desc">Profile ↓</option>
-                                    <option value="target-asc">Profile ↑</option>
-                                    <option value="rank-asc">Profile ↓</option>
-                                    <option value="rank-desc">Profile ↑</option>
+                                    <option value="rank-asc">DMA Rank ↓</option>
+                                    <option value="rank-desc">DMA Rank ↑</option>
+                                    <option value="profilerank-asc">Profile Rank ↓</option>
+                                    <option value="profilerank-desc">Profile Rank ↑</option>
+                                    <option value="target-desc">Profile % ↓</option>
+                                    <option value="target-asc">Profile % ↑</option>
                                 </select>
                                 <input type="text" id="locationSearchTop" placeholder="🔍 Search..." class="has-tooltip" data-tooltip="Search Over-Indexing DMAs" oninput="filterLocationList('top')" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; width: 100px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                             </div>
                         </div>
                         <div class="location-row header">
-                            <span class="has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)">DMA Rank</span>
+                            <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)">DMA</span>
                             <span>Location</span>
-                            <span id="locationRankHeaderTop" class="has-tooltip" data-tooltip="Profile's ranking for this DMA based on audience concentration">Rank</span>
-                            <span>Profile</span>
+                            <span id="locationRankHeaderTop" class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
+                            <span class="has-tooltip" data-tooltip="Profile percentage">Profile</span>
                             <span>Index</span>
                         </div>
                         <div id="locationList" style="max-height: 500px; overflow-y: auto;"></div>
@@ -9983,22 +10003,24 @@
                             </h3>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
-                                <select id="locationSortBottom" onchange="sortLocationTableBySelect('bottom', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by DMA Rank, Profile %, or Index" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 80px;">
+                                <select id="locationSortBottom" onchange="sortLocationTableBySelect('bottom', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by column" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 120px;">
                                     <option value="index-asc">Index ↑</option>
                                     <option value="index-desc">Index ↓</option>
-                                    <option value="target-desc">Profile ↓</option>
-                                    <option value="target-asc">Profile ↑</option>
                                     <option value="rank-asc">DMA Rank ↓</option>
                                     <option value="rank-desc">DMA Rank ↑</option>
+                                    <option value="profilerank-asc">Profile Rank ↓</option>
+                                    <option value="profilerank-desc">Profile Rank ↑</option>
+                                    <option value="target-desc">Profile % ↓</option>
+                                    <option value="target-asc">Profile % ↑</option>
                                 </select>
                                 <input type="text" id="locationSearchBottom" placeholder="🔍 Search..." class="has-tooltip" data-tooltip="Search Under-Indexing DMAs" oninput="filterLocationList('bottom')" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; width: 100px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                             </div>
                         </div>
                         <div class="location-row header">
-                            <span class="has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)">DMA Rank</span>
+                            <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)">DMA</span>
                             <span>Location</span>
-                            <span id="locationRankHeaderBottom" class="has-tooltip" data-tooltip="Profile's ranking for this DMA based on audience concentration">Rank</span>
-                            <span>Profile</span>
+                            <span id="locationRankHeaderBottom" class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
+                            <span class="has-tooltip" data-tooltip="Profile percentage">Profile</span>
                             <span>Index</span>
                         </div>
                         <div id="locationListBottom" style="max-height: 500px; overflow-y: auto;"></div>
@@ -10016,22 +10038,24 @@
                         </h3>
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                             <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
-                            <select id="locationSortAll" onchange="sortLocationTableBySelect('all', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by DMA Rank, Profile %, or Index" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 80px;">
-                                <option value="percentage-desc">Profile ↓</option>
-                                <option value="percentage-asc">Profile ↑</option>
+                            <select id="locationSortAll" onchange="sortLocationTableBySelect('all', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by column" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 120px;">
+                                <option value="percentage-desc">Profile % ↓</option>
+                                <option value="percentage-asc">Profile % ↑</option>
                                 <option value="index-desc">Index ↓</option>
                                 <option value="index-asc">Index ↑</option>
                                 <option value="rank-asc">DMA Rank ↓</option>
                                 <option value="rank-desc">DMA Rank ↑</option>
+                                <option value="profilerank-asc">Profile Rank ↓</option>
+                                <option value="profilerank-desc">Profile Rank ↑</option>
                             </select>
                             <input type="text" id="locationSearchAll" placeholder="🔍 Search..." class="has-tooltip" data-tooltip="Search All Locations" oninput="filterAllLocations()" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; width: 120px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                         </div>
                     </div>
                     <div class="location-row header">
-                        <span class="has-tooltip" data-tooltip="DMA Market Rank: National ranking by total TV homes (1=largest market)">DMA Rank</span>
+                        <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)">DMA</span>
                         <span>Location</span>
-                        <span id="locationRankHeaderAll" class="has-tooltip" data-tooltip="Profile's ranking for this DMA based on audience concentration">Rank</span>
-                        <span>Profile</span>
+                        <span id="locationRankHeaderAll" class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
+                        <span class="has-tooltip" data-tooltip="Profile percentage">Profile</span>
                         <span>Index</span>
                     </div>
                     <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
@@ -12371,6 +12395,71 @@
         let currentSubscriberData = null;
         let openSubscriberTabs = []; // Array of { id, name, dateRange, data }
         let activeSubscriberTabId = null;
+        
+        // Live Features - controls which Analysis Tools are visible to non-admin users
+        const userRole = '{{ role }}';
+        const isAdmin = userRole === 'admin';
+        let liveFeatures = {
+            compare: true,
+            segment: true,
+            execSummary: true,
+            keyInsightBuilder: true,
+            ecosystem: true,
+            affinity: true,
+            sponsorship: true,
+            media: true,
+            content: true,
+            collaborate: true,
+            deckBuilder: true
+        };
+        
+        // Load live features from server and apply visibility
+        async function loadAndApplyLiveFeatures() {
+            try {
+                const response = await fetch('/api/admin/live-features', { credentials: 'same-origin' });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.features) {
+                        liveFeatures = { ...liveFeatures, ...data.features };
+                    }
+                }
+            } catch (error) {
+                console.log('Could not load live features, using defaults');
+            }
+            
+            // Apply visibility to Analysis Tools
+            applyLiveFeatureVisibility();
+        }
+        
+        // Apply live feature visibility to Analysis Tools tabs
+        function applyLiveFeatureVisibility() {
+            const toolsContainer = document.getElementById('analysisToolsTabs');
+            if (!toolsContainer) return;
+            
+            toolsContainer.querySelectorAll('[data-feature]').forEach(btn => {
+                const feature = btn.dataset.feature;
+                const isLive = liveFeatures[feature] !== false;
+                const star = btn.querySelector('.admin-only-star');
+                
+                if (isLive) {
+                    // Feature is live - show to everyone, hide star
+                    btn.style.display = '';
+                    btn.classList.remove('admin-only');
+                    if (star) star.style.display = 'none';
+                } else {
+                    // Feature is NOT live
+                    if (isAdmin) {
+                        // Admin can see it with red star
+                        btn.style.display = '';
+                        btn.classList.add('admin-only');
+                        if (star) star.style.display = 'inline';
+                    } else {
+                        // Non-admin cannot see it
+                        btn.style.display = 'none';
+                    }
+                }
+            });
+        }
 
         // Load Gen Pop baseline data for all profile comparisons
         async function loadGenPopBaseline() {
@@ -12401,6 +12490,9 @@
             const endDateInput = document.getElementById('end_date');
             if (startDateInput) startDateInput.value = formatDate(thirtyDaysAgo);
             if (endDateInput) endDateInput.value = formatDate(today);
+            
+            // Load live features and apply visibility
+            loadAndApplyLiveFeatures();
             
             // Load Gen Pop baseline data
             loadGenPopBaseline();
@@ -26291,7 +26383,8 @@
                     const diff = rankA - rankB;
                     return topState.direction === 'asc' ? diff : -diff;
                 });
-            } else if (topState.column === 'target') {
+            } else if (topState.column === 'target' || topState.column === 'profilerank') {
+                // Profile Rank is based on profile percentage (higher % = lower rank number)
                 sortedOverIndexing.sort((a, b) => {
                     const diff = b.pct - a.pct;
                     return topState.direction === 'asc' ? -diff : diff;
@@ -26334,7 +26427,8 @@
                     const diff = rankA - rankB;
                     return bottomState.direction === 'asc' ? diff : -diff;
                 });
-            } else if (bottomState.column === 'target') {
+            } else if (bottomState.column === 'target' || bottomState.column === 'profilerank') {
+                // Profile Rank is based on profile percentage (higher % = lower rank number)
                 sortedUnderIndexing.sort((a, b) => {
                     const diff = b.pct - a.pct;
                     return bottomState.direction === 'asc' ? -diff : diff;
@@ -26377,7 +26471,8 @@
                     const diff = rankA - rankB;
                     return allState.direction === 'asc' ? diff : -diff;
                 });
-            } else if (allState.column === 'percentage') {
+            } else if (allState.column === 'percentage' || allState.column === 'profilerank') {
+                // Profile Rank is based on profile percentage (higher % = lower rank number)
                 sortedAll.sort((a, b) => {
                     const diff = b.pct - a.pct;
                     return allState.direction === 'asc' ? -diff : diff;
@@ -26452,7 +26547,8 @@
                     const diff = rankA - rankB;
                     return state.direction === 'asc' ? diff : -diff;
                 });
-            } else if (state.column === 'target' || state.column === 'percentage') {
+            } else if (state.column === 'target' || state.column === 'percentage' || state.column === 'profilerank') {
+                // Profile Rank is based on profile percentage (higher % = lower rank number)
                 sorted.sort((a, b) => {
                     const diff = b.pct - a.pct;
                     return state.direction === 'asc' ? -diff : diff;
