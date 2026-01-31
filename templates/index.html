@@ -11628,12 +11628,6 @@
                         <div id="teamMembersList" class="team-members-list">
                             <div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">Loading team...</div>
                         </div>
-                        
-                        <h3 style="margin-top: 1.5rem;">🔔 Notifications</h3>
-                        <div id="notificationsList" class="notifications-list">
-                            <div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">No new notifications</div>
-                        </div>
-                        <button class="btn btn-small" style="width: 100%; margin-top: 0.5rem;" onclick="showNotificationSettings()">⚙️ Notification Settings</button>
                     </div>
                     
                     <div class="collab-main">
@@ -11642,6 +11636,7 @@
                             <button class="collab-tab" onclick="showCollabTab('comments')">💬 Comments</button>
                             <button class="collab-tab" onclick="showCollabTab('decks')">📊 Shared Decks</button>
                             <button class="collab-tab" onclick="showCollabTab('activity')">📋 Activity Log</button>
+                            <button class="collab-tab" onclick="showCollabTab('notifications')">🔔 Notifications</button>
                         </div>
                         
                         <div id="collab-tab-shared" class="collab-tab-content active">
@@ -11727,6 +11722,21 @@
                                 <div id="activityLog" class="activity-log">
                                     <div class="collab-empty">
                                         <p>No activity recorded yet</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="collab-tab-notifications" class="collab-tab-content">
+                            <div class="notifications-section">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                    <h3>Notifications</h3>
+                                    <button class="btn btn-small btn-secondary" onclick="showNotificationSettings()">⚙️ Settings</button>
+                                </div>
+                                <div id="notificationsList" class="notifications-list">
+                                    <div class="collab-empty">
+                                        <p>No new notifications</p>
+                                        <p style="font-size: 0.8rem; color: var(--text-secondary);">You'll see notifications here when teammates share profiles, mention you, or comment on shared work.</p>
                                     </div>
                                 </div>
                             </div>
@@ -38876,6 +38886,8 @@
                 renderSharedProfiles();
             } else if (tabName === 'comments') {
                 renderComments();
+            } else if (tabName === 'notifications') {
+                renderNotifications();
             }
         }
         
