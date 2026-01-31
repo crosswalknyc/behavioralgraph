@@ -11620,7 +11620,12 @@
                         </div>
                         <button class="btn btn-small" style="width: 100%; margin-top: 0.5rem;" onclick="showCreateWorkspaceModal()">+ New Workspace</button>
                         
-                        <h3 style="margin-top: 1.5rem;">👤 Your Team</h3>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem;">
+                            <h3 style="margin: 0;">👤 Your Team</h3>
+                            {% if role == 'admin' %}
+                            <button class="btn btn-small btn-secondary" onclick="showManageTeamModal()" style="font-size: 0.65rem; padding: 0.25rem 0.5rem;">⚙️ Manage</button>
+                            {% endif %}
+                        </div>
                         <div id="userTeamInfo" class="team-info-box">
                             <div class="team-info-row"><span class="team-label">Company:</span> <span id="userCompany">--</span></div>
                             <div class="team-info-row"><span class="team-label">Department:</span> <span id="userDepartment">--</span></div>
@@ -39483,6 +39488,8 @@
             return icons[action] || '📋';
         }
         
+        let allCompanyUsers = []; // Store all company users for team management
+        
         async function loadWorkspaceData() {
             // Get current user info first
             try {
@@ -39496,7 +39503,21 @@
                         document.getElementById('userCompany').textContent = userData.company || 'Not assigned';
                         document.getElementById('userDepartment').textContent = userData.department || 'Not assigned';
                         
-                        // Load team members from same company/department
+                        // First check for custom team assignments
+                        let customTeam = null;
+                        try {
+                            const teamResponse = await fetch('/api/collab/team-assignments', { credentials: 'same-origin' });
+                            if (teamResponse.ok) {
+                                const teamData = await teamResponse.json();
+                                if (teamData.success && teamData.team_members && teamData.team_members.length > 0) {
+                                    customTeam = teamData.team_members;
+                                }
+                            }
+                        } catch (e) {
+                            console.log('No custom team assignments found');
+                        }
+                        
+                        // Load all users from same company
                         const usersResponse = await fetch('/api/admin/users-list', { credentials: 'same-origin' });
                         if (usersResponse.ok) {
                             const usersData = await usersResponse.json();
@@ -39504,13 +39525,23 @@
                                 const currentCompany = userData.company || '';
                                 const currentDept = userData.department || '';
                                 
-                                // Filter to show teammates (same company)
-                                let teammates = usersData.users.filter(u => 
+                                // Store all company users for team management
+                                allCompanyUsers = usersData.users.filter(u => 
                                     u.username !== userData.username && 
                                     u.company && u.company === currentCompany
                                 );
                                 
-                                // Sort by department match first
+                                let teammates;
+                                
+                                if (customTeam && customTeam.length > 0) {
+                                    // Use custom team assignments
+                                    teammates = allCompanyUsers.filter(u => customTeam.includes(u.username));
+                                } else {
+                                    // Default: show all from same company
+                                    teammates = [...allCompanyUsers];
+                                }
+                                
+                                // Sort by department match first, then alphabetically
                                 teammates.sort((a, b) => {
                                     const aDept = a.department === currentDept ? 0 : 1;
                                     const bDept = b.department === currentDept ? 0 : 1;
@@ -39521,7 +39552,7 @@
                                 
                                 const list = document.getElementById('teamMembersList');
                                 if (teammates.length === 0) {
-                                    list.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">No teammates found. Ask your admin to add team members.</div>';
+                                    list.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">No teammates assigned. Ask your admin to set up your team.</div>';
                                 } else {
                                     list.innerHTML = teammates.map(u => `
                                         <div class="team-member" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.5rem;">
@@ -39530,7 +39561,6 @@
                                                 <span class="team-member-name" style="display: block; font-weight: 600; font-size: 0.85rem;">${u.username}</span>
                                                 <span class="team-member-dept" style="font-size: 0.7rem; color: var(--text-secondary);">${u.department || 'No department'}</span>
                                             </div>
-                                            ${u.department === currentDept ? '<span class="same-team-badge">Same Team</span>' : ''}
                                         </div>
                                     `).join('');
                                 }
@@ -39540,6 +39570,124 @@
                 }
             } catch (e) {
                 console.log('Error loading workspace data:', e);
+            }
+        }
+        
+        // Admin function to manage team assignments
+        async function showManageTeamModal() {
+            // Load current team assignments
+            let currentTeamMembers = [];
+            try {
+                const response = await fetch('/api/collab/team-assignments', { credentials: 'same-origin' });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        currentTeamMembers = data.team_members || [];
+                    }
+                }
+            } catch (e) {
+                console.log('Error loading team assignments');
+            }
+            
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'manageTeamModal';
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 550px;">
+                    <div class="deck-workspace-header">
+                        <h2>👥 Manage Team Members</h2>
+                        <button onclick="document.getElementById('manageTeamModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1rem; text-align: left;">
+                        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+                            Select which users from your company should be on your collaboration team. 
+                            Team members can share profiles, comment, and collaborate on workspaces together.
+                        </p>
+                        
+                        <div style="margin-bottom: 1rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                <label style="font-weight: 600; text-transform: uppercase; font-size: 0.7rem; color: var(--text-secondary);">Company Users</label>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button class="btn btn-small btn-secondary" onclick="selectAllTeamMembers()" style="font-size: 0.65rem;">Select All</button>
+                                    <button class="btn btn-small btn-secondary" onclick="deselectAllTeamMembers()" style="font-size: 0.65rem;">Clear All</button>
+                                </div>
+                            </div>
+                            <div id="teamMembersCheckboxList" style="max-height: 300px; overflow-y: auto; background: var(--bg-input); border-radius: 4px; padding: 0.5rem;">
+                                ${allCompanyUsers.length > 0 ? allCompanyUsers.map(u => `
+                                    <label style="display: flex; align-items: center; justify-content: flex-start; gap: 0.75rem; padding: 0.6rem; cursor: pointer; border-bottom: 1px solid var(--border-color);">
+                                        <input type="checkbox" class="team-member-checkbox" value="${u.username}" ${currentTeamMembers.includes(u.username) ? 'checked' : ''}>
+                                        <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--accent-blue); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.65rem; flex-shrink: 0;">${u.username.substring(0, 2).toUpperCase()}</div>
+                                        <div style="flex: 1; text-align: left;">
+                                            <span style="display: block; font-weight: 600; font-size: 0.85rem;">${u.username}</span>
+                                            <span style="font-size: 0.7rem; color: var(--text-secondary);">${u.department || 'No department'} ${u.role ? '• ' + u.role : ''}</span>
+                                        </div>
+                                    </label>
+                                `).join('') : '<p style="color: var(--text-secondary); font-size: 0.8rem; padding: 1rem; text-align: center;">No other users found in your company.</p>'}
+                            </div>
+                        </div>
+                        
+                        <div style="background: var(--bg-input); border-radius: 4px; padding: 0.75rem; margin-bottom: 1rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem;">
+                                <span>📊</span>
+                                <span><strong id="selectedTeamCount">${currentTeamMembers.length}</strong> team members selected</span>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('manageTeamModal').remove()">Cancel</button>
+                            <button class="btn btn-primary" onclick="saveTeamAssignments()">Save Team</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            // Add event listeners to update count
+            document.querySelectorAll('.team-member-checkbox').forEach(cb => {
+                cb.addEventListener('change', updateSelectedTeamCount);
+            });
+        }
+        
+        function updateSelectedTeamCount() {
+            const count = document.querySelectorAll('.team-member-checkbox:checked').length;
+            const countEl = document.getElementById('selectedTeamCount');
+            if (countEl) countEl.textContent = count;
+        }
+        
+        function selectAllTeamMembers() {
+            document.querySelectorAll('.team-member-checkbox').forEach(cb => cb.checked = true);
+            updateSelectedTeamCount();
+        }
+        
+        function deselectAllTeamMembers() {
+            document.querySelectorAll('.team-member-checkbox').forEach(cb => cb.checked = false);
+            updateSelectedTeamCount();
+        }
+        
+        async function saveTeamAssignments() {
+            const selectedMembers = Array.from(document.querySelectorAll('.team-member-checkbox:checked')).map(cb => cb.value);
+            
+            try {
+                const response = await fetch('/api/collab/team-assignments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ team_members: selectedMembers })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('manageTeamModal')?.remove();
+                    showNotification('✅ Team assignments saved!', 'success');
+                    // Reload workspace data to reflect changes
+                    await loadWorkspaceData();
+                } else {
+                    alert('Error saving team: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Error saving team assignments');
+                console.error(e);
             }
         }
         

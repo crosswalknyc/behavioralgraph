@@ -9388,6 +9388,66 @@ def create_workspace():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@app.route('/api/collab/team-assignments', methods=['GET'])
+@requires_auth
+def get_team_assignments():
+    """Get custom team assignments for user's company."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    company = user.get('company', '')
+    if not company:
+        return jsonify({'success': True, 'team_members': []})
+    
+    try:
+        s3_key = f"{COLLAB_S3_KEY}teams/{company.replace(' ', '_').lower()}.json"
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        team_data = json.loads(response['Body'].read().decode('utf-8'))
+        return jsonify({'success': True, 'team_members': team_data.get('members', [])})
+    except s3_client.exceptions.NoSuchKey:
+        return jsonify({'success': True, 'team_members': []})
+    except Exception as e:
+        return jsonify({'success': True, 'team_members': []})
+
+
+@app.route('/api/collab/team-assignments', methods=['POST'])
+@requires_admin
+def save_team_assignments():
+    """Save custom team assignments for company (admin only)."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    company = user.get('company', '')
+    if not company:
+        return jsonify({'success': False, 'error': 'No company assigned'})
+    
+    try:
+        data = request.get_json()
+        team_members = data.get('team_members', [])
+        
+        team_data = {
+            'company': company,
+            'members': team_members,
+            'updated_by': session.get('username'),
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        s3_key = f"{COLLAB_S3_KEY}teams/{company.replace(' ', '_').lower()}.json"
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(team_data),
+            ContentType='application/json'
+        )
+        
+        return jsonify({'success': True, 'team_members': team_members})
+    except Exception as e:
+        print(f"Save team assignments error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @app.route('/api/collab/comments', methods=['GET'])
 @requires_auth
 def get_comments():
