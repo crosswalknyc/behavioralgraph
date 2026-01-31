@@ -35948,24 +35948,21 @@
             });
             
             if (targetCard) {
+                // Clear any existing search filter in the card first
+                const searchInput = targetCard.querySelector('input[type="text"]');
+                if (searchInput && searchInput.value) {
+                    searchInput.value = '';
+                    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                
                 // Scroll to the card
-                targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                targetCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 
                 // Highlight the card briefly
                 targetCard.classList.add('highlighted');
                 setTimeout(() => {
                     targetCard.classList.remove('highlighted');
                 }, 2000);
-                
-                // If there's a search term, try to find and use the search input in that card
-                if (searchTerm) {
-                    const cardId = targetCard.dataset.category.replace(/[^a-zA-Z0-9]/g, '_');
-                    const searchInput = targetCard.querySelector('input[type="text"]');
-                    if (searchInput) {
-                        searchInput.value = searchTerm;
-                        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    }
-                }
             } else {
                 // If card not found, try to move it to top using the dropdown
                 if (typeof moveCategoryToTop === 'function') {
