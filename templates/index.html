@@ -11449,7 +11449,6 @@
                     <button class="comp-tab" onclick="showCompTab('overlap')">🔄 Overlap Analysis</button>
                     <button class="comp-tab" onclick="showCompTab('benchmark')">📈 Benchmarking</button>
                     <button class="comp-tab" onclick="showCompTab('gap')">🎯 Gap Analysis</button>
-                    <button class="comp-tab" onclick="showCompTab('insights')">💡 Key Insights</button>
                     <button class="comp-action-btn" onclick="generateExecutiveSummary()" title="Generate Executive Summary">📄 Exec Summary</button>
                     <button class="comp-action-btn" onclick="generateKeyInsightBuilder()" title="Generate SWOT Analysis and Key Insights for Primary Brand">🎯 Key Insight Builder</button>
                     <div class="comp-mode-toggle" id="displayModeToggle" onclick="toggleDisplayMode()" title="Click to toggle between percentages and US population numbers">
@@ -11553,21 +11552,6 @@
                                     <div id="gapContent">
                                         <div class="comparison-empty">
                                             <p>Run a comparison to see gap analysis</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Key Insights Tab -->
-                            <div id="comp-tab-insights" class="comp-tab-content">
-                                <div class="key-insights-analysis">
-                                    <div class="insights-header">
-                                        <h3>💡 Key Insights & Action Items</h3>
-                                        <p>AI-generated insights based on comparison data</p>
-                                    </div>
-                                    <div id="compInsightsContent">
-                                        <div class="comparison-empty">
-                                            <p>Run a comparison to generate insights</p>
                                         </div>
                                     </div>
                                 </div>
@@ -35953,8 +35937,6 @@
                 renderBenchmarkAnalysis(window.comparisonProfilesData);
             } else if (tabName === 'gap' && window.comparisonProfilesData) {
                 renderGapAnalysis(window.comparisonProfilesData);
-            } else if (tabName === 'insights' && window.comparisonProfilesData) {
-                renderComparisonInsights(window.comparisonProfilesData);
             }
         }
         
