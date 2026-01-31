@@ -9754,18 +9754,13 @@
                 <!-- Behavioral Insights Row -->
                 <div class="behavioral-insights-row" id="behavioralInsightsRow">
                     <div class="behavioral-insight-card highlight" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Behavioral Profile Summary">
-                        <h4 class="has-tooltip" data-tooltip="Behavioral Profile Summary: Quick overview of this audience's behavioral patterns - total items tracked, over-indexing rate, and most dominant category based on average index scores.">
+                        <h4 class="has-tooltip" data-tooltip="Behavioral Profile Summary: AI-generated analysis of this audience's lifestyle, interests, habits, and unique characteristics based on their behavioral data.">
                             <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                            <span>🎯 Behavioral Profile Summary</span>
+                            <span>🧠 Behavioral Profile Summary</span>
                         </h4>
-                        <div class="insight-col-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
-                            <span class="has-tooltip" data-tooltip="Metric: Key behavioral measurement for this audience's activity patterns.">Metric</span>
-                            <span class="has-tooltip" data-tooltip="Value: The index score or count. Higher = stronger affinity vs Gen Pop.">Value</span>
-                        </div>
-                        <div id="behavioralProfileSummary" class="behavioral-insight-content">
-                            <div class="behavioral-stat-row">
-                                <span class="icon">⏳</span>
-                                <span class="text">Select a profile to view insights</span>
+                        <div id="behavioralProfileSummary" class="behavioral-insight-content" style="padding: 0.5rem 0;">
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                Select a profile to view insights
                             </div>
                         </div>
                     </div>
@@ -21757,66 +21752,17 @@
                 });
             });
             
-            // === PROFILE SUMMARY ===
-            const summaryItems = [];
-            
-            // Find top over-indexing item (exclude items with 100% or near-100% penetration)
-            const validItems = allItems.filter(i => i.pct < 99.5);
-            const topItem = validItems.sort((a, b) => b.index - a.index)[0];
-            if (topItem) {
-                summaryItems.push({
-                    icon: '🔥',
-                    text: `Strongest signal: <strong style="color: var(--accent-lime);">${topItem.name}</strong> (${topItem.category}) <span style="font-size: 0.75rem; color: var(--text-secondary);">${topItem.pct.toFixed(2)}% | GP: ${topItem.genPop.toFixed(2)}%</span>`,
-                    value: topItem.index,
-                    valueClass: 'high',
-                    tooltip: `Strongest Signal: The single item where this audience most over-indexes vs Gen Pop. ${topItem.name} has an index of ${formatIndex(topItem.index)} (Profile: ${topItem.pct.toFixed(2)}%, Gen Pop: ${topItem.genPop.toFixed(2)}%), meaning this audience is ${(topItem.index / 100).toFixed(2)}x more likely to engage with it than the average American.`
-                });
-            }
-            
-            // Count high indexers (150+)
-            const highIndexers = allItems.filter(i => i.index >= 150).length;
-            const veryHighIndexers = allItems.filter(i => i.index >= 200).length;
-            summaryItems.push({
-                icon: '📈',
-                text: `<strong style="color: var(--accent-lime);">${highIndexers}</strong> items 1.5x+, <strong style="color: #10b981;">${veryHighIndexers}</strong> at 2.0x+`,
-                value: '',
-                valueClass: '',
-                tooltip: `High Indexers Count: ${highIndexers} items have an index of 1.5x or higher (strong over-indexers), and ${veryHighIndexers} items are at 2.0x+ (very strong). More high indexers = more distinctive audience profile with clear targeting opportunities.`
-            });
-            
-            // Find category with most high indexers
-            const catHighIndexers = {};
-            allItems.filter(i => i.index >= 150).forEach(i => {
-                catHighIndexers[i.category] = (catHighIndexers[i.category] || 0) + 1;
-            });
-            const topCatForHigh = Object.entries(catHighIndexers).sort((a, b) => b[1] - a[1])[0];
-            if (topCatForHigh) {
-                summaryItems.push({
-                    icon: '🎯',
-                    text: `Most distinctive in: <strong style="color: var(--accent-lime);">${topCatForHigh[0]}</strong>`,
-                    value: `${topCatForHigh[1]}`,
-                    valueClass: 'high',
-                    tooltip: `Most Distinctive Category: ${topCatForHigh[0]} has the most items where this audience strongly over-indexes (${topCatForHigh[1]} items at 1.5x+). This is the category that most defines this audience's unique interests vs. Gen Pop.`
-                });
-            }
-            
-            // Average index across all
-            const avgIndex = allItems.length > 0 ? Math.round(allItems.reduce((s, i) => s + i.index, 0) / allItems.length) : 100;
-            summaryItems.push({
-                icon: '📊',
-                text: `<strong style="color: var(--accent-lime);">${allItems.length}</strong> total signals, avg: <strong style="color: ${avgIndex > 110 ? '#10b981' : avgIndex < 90 ? '#ef4444' : 'var(--text-primary)'}">${formatIndex(avgIndex)}</strong>`,
-                value: '',
-                valueClass: '',
-                tooltip: `Total Signals: ${allItems.length.toLocaleString()} behavioral data points tracked for this audience. Average index of ${formatIndex(avgIndex)} across all items. ${avgIndex > 110 ? 'This audience has distinctly different behaviors than Gen Pop.' : avgIndex > 100 ? 'Slightly above average distinctiveness.' : 'Similar to Gen Pop overall.'}`
-            });
-            
-            document.getElementById('behavioralProfileSummary').innerHTML = summaryItems.map(i => `
-                <div class="behavioral-stat-row has-tooltip" data-tooltip="${i.tooltip || ''}">
-                    <span class="icon">${i.icon}</span>
-                    <span class="text">${i.text}</span>
-                    ${i.value ? `<span class="value ${i.valueClass}">${i.value}</span>` : ''}
+            // === PROFILE SUMMARY - AI Generated ===
+            // Show loading state
+            document.getElementById('behavioralProfileSummary').innerHTML = `
+                <div style="font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="loading-spinner" style="width: 14px; height: 14px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                    Analyzing behavioral patterns...
                 </div>
-            `).join('');
+            `;
+            
+            // Fetch AI-generated behavioral summary for this card
+            fetchBehavioralProfileSummary(data, allItems);
             
             // === TOP CATEGORIES ===
             const categoryStats = {};
@@ -24020,6 +23966,60 @@
             } catch (err) {
                 console.error('Error fetching behavioral summary:', err);
                 behavioralCard.innerHTML = `<div style="color: var(--text-secondary); font-style: italic; font-size: 0.85rem;">Behavioral insights unavailable</div>`;
+            }
+        }
+        
+        // Fetch and display behavioral profile summary in the Behavioral tab card
+        async function fetchBehavioralProfileSummary(data, allItems) {
+            const summaryCard = document.getElementById('behavioralProfileSummary');
+            if (!summaryCard) return;
+            
+            const profileName = currentDashboardData?.brandName || 'This audience';
+            
+            // Build top over-indexers from allItems for the API
+            const topOverIndexers = allItems
+                .filter(i => i.pct < 99.5)
+                .sort((a, b) => b.index - a.index)
+                .slice(0, 15)
+                .map(i => ({
+                    name: i.name,
+                    category: i.category,
+                    pct: i.pct,
+                    genPop: i.genPop,
+                    index: i.index
+                }));
+            
+            try {
+                const profileData = {
+                    profileName: profileName,
+                    demographics: data?.demographics || {},
+                    demographicsIndex: data?.demographicsIndex || {},
+                    demographicsGenPop: data?.demographicsGenPop || {},
+                    behavioral: data?.behavioral || {},
+                    behavioralIndex: data?.behavioralIndex || {},
+                    topOverIndexers: topOverIndexers
+                };
+                
+                const response = await fetch('/api/ai/behavioral-summary', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(profileData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.bullets && result.bullets.length > 0) {
+                    summaryCard.innerHTML = `
+                        <ul style="margin: 0; padding-left: 1.25rem; list-style-type: disc;">
+                            ${result.bullets.map(b => `<li style="margin-bottom: 0.5rem; color: var(--text-primary); line-height: 1.6; font-size: 0.85rem;">${b}</li>`).join('')}
+                        </ul>
+                    `;
+                } else if (result.error) {
+                    summaryCard.innerHTML = `<div style="color: var(--text-secondary); font-style: italic; font-size: 0.85rem;">Unable to generate behavioral insights</div>`;
+                }
+            } catch (err) {
+                console.error('Error fetching behavioral profile summary:', err);
+                summaryCard.innerHTML = `<div style="color: var(--text-secondary); font-style: italic; font-size: 0.85rem;">Behavioral insights unavailable</div>`;
             }
         }
         
