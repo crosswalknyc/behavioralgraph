@@ -11591,14 +11591,15 @@
             <div id="tab-collaboration" class="tab-content">
                 <div class="collab-container">
                     <div class="collab-sidebar">
-                        <h3>📁 Shared Workspaces</h3>
+                        <h3>📁 Workspaces</h3>
                         <div id="workspaceList" class="workspace-list">
-                            <div class="workspace-item active" onclick="selectWorkspace('default')">
+                            <div class="workspace-item active" data-id="default" onclick="selectWorkspace('default', this)">
                                 <span class="workspace-icon">🏠</span>
                                 <span class="workspace-name">My Workspace</span>
+                                <span class="workspace-count" id="ws-count-default">0</span>
                             </div>
                         </div>
-                        <button class="btn btn-small" style="width: 100%; margin-top: 0.5rem;" onclick="createWorkspace()">+ New Workspace</button>
+                        <button class="btn btn-small" style="width: 100%; margin-top: 0.5rem;" onclick="showCreateWorkspaceModal()">+ New Workspace</button>
                         
                         <h3 style="margin-top: 1.5rem;">👤 Your Team</h3>
                         <div id="userTeamInfo" class="team-info-box">
@@ -11608,20 +11609,32 @@
                         <div id="teamMembersList" class="team-members-list">
                             <div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">Loading team...</div>
                         </div>
-                        <p style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.5rem;">Teams are managed by administrators</p>
+                        
+                        <h3 style="margin-top: 1.5rem;">🔔 Notifications</h3>
+                        <div id="notificationsList" class="notifications-list">
+                            <div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">No new notifications</div>
+                        </div>
+                        <button class="btn btn-small" style="width: 100%; margin-top: 0.5rem;" onclick="showNotificationSettings()">⚙️ Notification Settings</button>
                     </div>
                     
                     <div class="collab-main">
                         <div class="collab-tabs">
                             <button class="collab-tab active" onclick="showCollabTab('shared')">📤 Shared Profiles</button>
                             <button class="collab-tab" onclick="showCollabTab('comments')">💬 Comments</button>
+                            <button class="collab-tab" onclick="showCollabTab('decks')">📊 Shared Decks</button>
                             <button class="collab-tab" onclick="showCollabTab('activity')">📋 Activity Log</button>
                         </div>
                         
                         <div id="collab-tab-shared" class="collab-tab-content active">
                             <div class="shared-profiles-header">
                                 <h3>Shared Profiles</h3>
-                                <button class="btn btn-primary btn-small" onclick="shareCurrentProfile()">+ Share Profile</button>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <select id="shareWithSelect" style="padding: 0.4rem; border-radius: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.8rem;">
+                                        <option value="workspace">Share to Workspace</option>
+                                        <option value="team">Share with Team</option>
+                                    </select>
+                                    <button class="btn btn-primary btn-small" onclick="shareCurrentProfile()">+ Share Profile</button>
+                                </div>
                             </div>
                             <div id="sharedProfilesList" class="shared-profiles-list">
                                 <div class="collab-empty">
@@ -11634,7 +11647,7 @@
                         <div id="collab-tab-comments" class="collab-tab-content">
                             <div class="comments-section">
                                 <div class="comments-header">
-                                    <h3>Comments & Annotations</h3>
+                                    <h3>Comments & Discussions</h3>
                                     <select id="commentProfileFilter" onchange="filterComments()">
                                         <option value="all">All Profiles</option>
                                     </select>
@@ -11642,19 +11655,56 @@
                                 <div id="commentsList" class="comments-list">
                                     <div class="collab-empty">
                                         <p>No comments yet</p>
+                                        <p style="font-size: 0.8rem; color: var(--text-secondary);">Start a discussion about any profile or insight</p>
                                     </div>
                                 </div>
                                 <div class="add-comment-form">
-                                    <textarea id="newCommentText" placeholder="Add a comment or annotation..."></textarea>
-                                    <button class="btn btn-primary" onclick="addComment()">Post Comment</button>
+                                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                        <select id="commentTargetProfile" style="flex: 1; padding: 0.4rem; border-radius: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.8rem;">
+                                            <option value="general">General Discussion</option>
+                                        </select>
+                                        <select id="commentMention" style="padding: 0.4rem; border-radius: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.8rem;">
+                                            <option value="">@mention teammate</option>
+                                        </select>
+                                    </div>
+                                    <textarea id="newCommentText" placeholder="Add a comment, question, or insight..." style="min-height: 80px;"></textarea>
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
+                                        <label style="font-size: 0.75rem; color: var(--text-secondary);">
+                                            <input type="checkbox" id="notifyTeamOnComment"> Notify team
+                                        </label>
+                                        <button class="btn btn-primary" onclick="addComment()">Post Comment</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="collab-tab-decks" class="collab-tab-content">
+                            <div class="shared-decks-section">
+                                <div class="shared-decks-header">
+                                    <h3>Shared Decks & Presentations</h3>
+                                    <button class="btn btn-primary btn-small" onclick="openDeckWorkspace()">📊 Open Deck Builder</button>
+                                </div>
+                                <div id="sharedDecksList" class="shared-decks-list">
+                                    <div class="collab-empty">
+                                        <p>No shared decks yet</p>
+                                        <p style="font-size: 0.8rem; color: var(--text-secondary);">Create and share presentation decks with your team</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         
                         <div id="collab-tab-activity" class="collab-tab-content">
                             <div class="activity-section">
-                                <h3>Activity Log</h3>
-                                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Track who viewed, shared, and exported profiles</p>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                    <h3>Activity Log</h3>
+                                    <select id="activityFilter" onchange="filterActivityLog()" style="padding: 0.4rem; border-radius: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.8rem;">
+                                        <option value="all">All Activity</option>
+                                        <option value="shares">Shares</option>
+                                        <option value="comments">Comments</option>
+                                        <option value="exports">Exports</option>
+                                        <option value="views">Views</option>
+                                    </select>
+                                </div>
                                 <div id="activityLog" class="activity-log">
                                     <div class="collab-empty">
                                         <p>No activity recorded yet</p>
@@ -27756,10 +27806,18 @@
                     </div>
                     
                     <div class="deck-workspace-actions" style="border-top: 1px solid var(--border-color); padding-top: 1rem;">
-                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
                             <button class="btn btn-secondary" onclick="clearDeckWorkspace()">🗑️ Clear Session</button>
-                            <button class="btn btn-secondary" onclick="exportDeckAsPDF()">📄 Export PDF</button>
-                            <button class="btn btn-secondary" onclick="exportDeckAsPPT()">📊 Export CSV</button>
+                            <div class="export-dropdown" style="position: relative;">
+                                <button class="btn btn-secondary" onclick="toggleExportDropdown()" id="exportDropdownBtn">📥 Export ▾</button>
+                                <div id="deckExportDropdown" class="export-dropdown-menu" style="display: none; position: absolute; bottom: 100%; left: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 200px; z-index: 1000; margin-bottom: 0.5rem;">
+                                    <a onclick="exportDeckAsPDF()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">📄 PDF Report</a>
+                                    <a onclick="exportDeckAsCSV()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">📊 CSV Data</a>
+                                    <a onclick="exportToGoogleSlides()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">📑 Google Slides</a>
+                                    <a onclick="exportToPowerPoint()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">📊 PowerPoint</a>
+                                    <a onclick="exportToKeynote()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">🍎 Keynote</a>
+                                </div>
+                            </div>
                         </div>
                         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                             ${canvaConnected ? 
@@ -28450,6 +28508,239 @@
             link.click();
             
             showNotification('✅ Deck exported as CSV! Import into Google Sheets or Excel to create charts.', 'success');
+        }
+        
+        // Alias for the old function name
+        function exportDeckAsPPT() {
+            exportDeckAsCSV();
+        }
+        
+        function toggleExportDropdown() {
+            const dropdown = document.getElementById('deckExportDropdown');
+            if (dropdown) {
+                dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            const dropdown = document.getElementById('deckExportDropdown');
+            const btn = document.getElementById('exportDropdownBtn');
+            if (dropdown && btn && !btn.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+        
+        async function exportToGoogleSlides() {
+            const items = currentDeckData?.slides || deckWorkspaceItems;
+            if (items.length === 0) {
+                alert('No items in deck. Add items first using the ➕ buttons on charts and tabs.');
+                return;
+            }
+            
+            trackActivity('export_google_slides', items.length);
+            
+            // Generate HTML that can be copied to Google Slides
+            let html = `
+                <html>
+                <head>
+                    <style>
+                        body { font-family: Arial, sans-serif; }
+                        .slide { page-break-after: always; padding: 40px; }
+                        .slide-title { font-size: 28px; font-weight: bold; margin-bottom: 20px; color: #1a1a2e; }
+                        .slide-subtitle { font-size: 16px; color: #666; margin-bottom: 30px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+                        th { background: #f5f5f5; font-weight: bold; }
+                        .highlight { background: #e8f5e9; }
+                    </style>
+                </head>
+                <body>
+                    <div class="slide">
+                        <div class="slide-title">CROSSWALK Audience Analysis</div>
+                        <div class="slide-subtitle">Generated: ${new Date().toLocaleString()}</div>
+                        <p>Deck contains ${items.length} slides</p>
+                    </div>
+            `;
+            
+            items.forEach((item, idx) => {
+                html += `
+                    <div class="slide">
+                        <div class="slide-title">${item.title || item.category || 'Slide ' + (idx + 1)}</div>
+                        <div class="slide-subtitle">${item.profileName || ''}</div>
+                `;
+                
+                if (item.data) {
+                    html += '<table><tr><th>Item</th><th>Profile %</th><th>Gen Pop %</th><th>Index</th></tr>';
+                    
+                    if (item.type === 'demographic' && item.data.values) {
+                        Object.entries(item.data.values).slice(0, 10).forEach(([k, v]) => {
+                            const genPop = item.data.genPop?.[k] || 0;
+                            const index = item.data.index?.[k] || 100;
+                            const highlight = index >= 120 ? 'class="highlight"' : '';
+                            html += `<tr ${highlight}><td>${k}</td><td>${typeof v === 'number' ? v.toFixed(2) : v}%</td><td>${genPop.toFixed(2)}%</td><td>${index}</td></tr>`;
+                        });
+                    } else if (item.data.items) {
+                        item.data.items.slice(0, 10).forEach(i => {
+                            const highlight = (i.index || 100) >= 120 ? 'class="highlight"' : '';
+                            html += `<tr ${highlight}><td>${i.name}</td><td>${i.pct?.toFixed(2) || 0}%</td><td>${i.genPopPct?.toFixed(2) || 0}%</td><td>${i.index || 100}</td></tr>`;
+                        });
+                    }
+                    
+                    html += '</table>';
+                }
+                
+                html += '</div>';
+            });
+            
+            html += '</body></html>';
+            
+            // Open in new window for easy copy/paste to Google Slides
+            const win = window.open('', '_blank');
+            win.document.write(html);
+            win.document.close();
+            
+            showNotification('✅ Opened in new tab! Copy content to Google Slides or print to PDF.', 'success');
+            document.getElementById('deckExportDropdown').style.display = 'none';
+        }
+        
+        async function exportToPowerPoint() {
+            const items = currentDeckData?.slides || deckWorkspaceItems;
+            if (items.length === 0) {
+                alert('No items in deck. Add items first using the ➕ buttons on charts and tabs.');
+                return;
+            }
+            
+            trackActivity('export_powerpoint', items.length);
+            
+            // For PowerPoint, we'll generate an XML-based PPTX structure
+            // Since we can't create actual PPTX in browser without a library,
+            // we'll create an HTML file that can be opened in PowerPoint
+            
+            let content = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<style>
+    body { font-family: Calibri, Arial, sans-serif; }
+    .slide { page-break-after: always; padding: 50px; min-height: 500px; }
+    h1 { font-size: 32px; color: #2c3e50; }
+    h2 { font-size: 24px; color: #34495e; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #3498db; color: white; padding: 12px; }
+    td { padding: 10px; border-bottom: 1px solid #ecf0f1; }
+</style>
+</head>
+<body>
+`;
+            
+            // Title slide
+            content += `<div class="slide"><h1>CROSSWALK Audience Analysis</h1><h2>${new Date().toLocaleDateString()}</h2><p>${items.length} slides</p></div>`;
+            
+            items.forEach((item, idx) => {
+                content += `<div class="slide"><h1>${item.title || item.category || 'Slide ' + (idx + 1)}</h1><h2>${item.profileName || ''}</h2>`;
+                
+                if (item.data) {
+                    content += '<table><tr><th>Item</th><th>Profile</th><th>Gen Pop</th><th>Index</th></tr>';
+                    
+                    if (item.type === 'demographic' && item.data.values) {
+                        Object.entries(item.data.values).slice(0, 8).forEach(([k, v]) => {
+                            content += `<tr><td>${k}</td><td>${typeof v === 'number' ? v.toFixed(1) : v}%</td><td>${(item.data.genPop?.[k] || 0).toFixed(1)}%</td><td>${item.data.index?.[k] || 100}</td></tr>`;
+                        });
+                    } else if (item.data.items) {
+                        item.data.items.slice(0, 8).forEach(i => {
+                            content += `<tr><td>${i.name}</td><td>${i.pct?.toFixed(1) || 0}%</td><td>${i.genPopPct?.toFixed(1) || 0}%</td><td>${i.index || 100}</td></tr>`;
+                        });
+                    }
+                    content += '</table>';
+                }
+                content += '</div>';
+            });
+            
+            content += '</body></html>';
+            
+            const blob = new Blob([content], { type: 'application/vnd.ms-powerpoint' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Crosswalk_Deck_${new Date().toISOString().split('T')[0]}.ppt`;
+            link.click();
+            
+            showNotification('✅ PowerPoint file downloaded! Open in PowerPoint to edit.', 'success');
+            document.getElementById('deckExportDropdown').style.display = 'none';
+        }
+        
+        async function exportToKeynote() {
+            const items = currentDeckData?.slides || deckWorkspaceItems;
+            if (items.length === 0) {
+                alert('No items in deck. Add items first using the ➕ buttons on charts and tabs.');
+                return;
+            }
+            
+            trackActivity('export_keynote', items.length);
+            
+            // Keynote can open HTML files, so we'll create a styled HTML
+            let html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page { size: 1024px 768px; margin: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; margin: 0; padding: 0; background: #fff; }
+        .slide { width: 1024px; height: 768px; padding: 60px; box-sizing: border-box; page-break-after: always; position: relative; }
+        .slide-title { font-size: 48px; font-weight: 600; color: #1d1d1f; margin-bottom: 10px; }
+        .slide-subtitle { font-size: 24px; color: #86868b; margin-bottom: 40px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: linear-gradient(180deg, #0071e3, #0077ed); color: white; padding: 15px; font-size: 16px; text-align: left; }
+        td { padding: 12px 15px; border-bottom: 1px solid #e5e5e5; font-size: 18px; }
+        tr:nth-child(even) { background: #f5f5f7; }
+        .footer { position: absolute; bottom: 30px; left: 60px; font-size: 14px; color: #86868b; }
+    </style>
+</head>
+<body>
+    <div class="slide">
+        <div class="slide-title">CROSSWALK</div>
+        <div class="slide-subtitle">Audience Analysis Deck</div>
+        <p style="font-size: 20px; color: #1d1d1f;">${items.length} slides • Generated ${new Date().toLocaleDateString()}</p>
+        <div class="footer">Powered by Crosswalk</div>
+    </div>
+`;
+            
+            items.forEach((item, idx) => {
+                html += `
+    <div class="slide">
+        <div class="slide-title">${item.title || item.category || 'Insights'}</div>
+        <div class="slide-subtitle">${item.profileName || ''}</div>
+`;
+                
+                if (item.data) {
+                    html += '<table><tr><th>Item</th><th>Profile</th><th>Gen Pop</th><th>Index</th></tr>';
+                    
+                    if (item.type === 'demographic' && item.data.values) {
+                        Object.entries(item.data.values).slice(0, 6).forEach(([k, v]) => {
+                            html += `<tr><td>${k}</td><td>${typeof v === 'number' ? v.toFixed(1) : v}%</td><td>${(item.data.genPop?.[k] || 0).toFixed(1)}%</td><td>${item.data.index?.[k] || 100}</td></tr>`;
+                        });
+                    } else if (item.data.items) {
+                        item.data.items.slice(0, 6).forEach(i => {
+                            html += `<tr><td>${i.name}</td><td>${i.pct?.toFixed(1) || 0}%</td><td>${i.genPopPct?.toFixed(1) || 0}%</td><td>${i.index || 100}</td></tr>`;
+                        });
+                    }
+                    html += '</table>';
+                }
+                
+                html += `<div class="footer">Slide ${idx + 2} of ${items.length + 1}</div></div>`;
+            });
+            
+            html += '</body></html>';
+            
+            const blob = new Blob([html], { type: 'text/html' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Crosswalk_Deck_${new Date().toISOString().split('T')[0]}.html`;
+            link.click();
+            
+            showNotification('✅ HTML file downloaded! Open in Keynote (File > Open) to import.', 'success');
+            document.getElementById('deckExportDropdown').style.display = 'none';
         }
         
         function updateDeckCount() {
@@ -38551,11 +38842,14 @@
         // ============================================================================
         
         let currentWorkspace = 'default';
-        let workspaceData = {
-            shared: [],
-            comments: [],
-            activity: []
+        let workspaces = JSON.parse(localStorage.getItem('collabWorkspaces') || '{"default": {"name": "My Workspace", "profiles": [], "members": []}}');
+        let collabData = {
+            shared: JSON.parse(localStorage.getItem('collabSharedProfiles') || '[]'),
+            comments: JSON.parse(localStorage.getItem('collabComments') || '[]'),
+            notifications: JSON.parse(localStorage.getItem('collabNotifications') || '[]')
         };
+        let currentUsername = '{{ username }}';
+        let collabTeamMembers = [];
         
         function showCollabTab(tabName) {
             document.querySelectorAll('.collab-tab').forEach(t => t.classList.remove('active'));
@@ -38565,71 +38859,220 @@
             
             if (tabName === 'activity') {
                 loadActivityLog();
+            } else if (tabName === 'decks') {
+                loadSharedDecks();
+            } else if (tabName === 'shared') {
+                renderSharedProfiles();
+            } else if (tabName === 'comments') {
+                renderComments();
             }
         }
         
-        function selectWorkspace(id) {
+        function selectWorkspace(id, element) {
             currentWorkspace = id;
             document.querySelectorAll('.workspace-item').forEach(w => w.classList.remove('active'));
-            event.currentTarget.classList.add('active');
+            if (element) element.classList.add('active');
+            renderSharedProfiles();
             loadWorkspaceData();
         }
         
-        function createWorkspace() {
-            const name = prompt('Enter workspace name:');
-            if (name && name.trim()) {
-                const id = 'ws_' + Date.now();
-                const html = `
-                    <div class="workspace-item" onclick="selectWorkspace('${id}')">
-                        <span class="workspace-icon">📁</span>
-                        <span class="workspace-name">${name}</span>
+        function showCreateWorkspaceModal() {
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'createWorkspaceModal';
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 450px;">
+                    <div class="deck-workspace-header">
+                        <h2>📁 Create New Workspace</h2>
+                        <button onclick="document.getElementById('createWorkspaceModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
                     </div>
-                `;
-                document.getElementById('workspaceList').insertAdjacentHTML('beforeend', html);
-                alert('Workspace "' + name + '" created!');
-            }
+                    <div style="padding: 1rem;">
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Workspace Name</label>
+                            <input type="text" id="newWorkspaceName" placeholder="e.g., Q1 Campaign Analysis" style="width: 100%; padding: 0.5rem; border-radius: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary);">
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Add Team Members</label>
+                            <div id="workspaceMembersList" style="max-height: 200px; overflow-y: auto; background: var(--bg-input); border-radius: 4px; padding: 0.5rem;">
+                                ${collabTeamMembers.length > 0 ? collabTeamMembers.map(m => `
+                                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
+                                        <input type="checkbox" class="workspace-member-cb" value="${m.username}">
+                                        <span>${m.username}</span>
+                                        <span style="font-size: 0.7rem; color: var(--text-secondary);">${m.department || ''}</span>
+                                    </label>
+                                `).join('') : '<p style="color: var(--text-secondary); font-size: 0.8rem;">No team members available</p>'}
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Description (optional)</label>
+                            <textarea id="newWorkspaceDesc" placeholder="What is this workspace for?" style="width: 100%; padding: 0.5rem; border-radius: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); min-height: 60px;"></textarea>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('createWorkspaceModal').remove()">Cancel</button>
+                            <button class="btn btn-primary" onclick="createWorkspace()">Create Workspace</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
         }
         
-        function shareCurrentProfile() {
+        function createWorkspace() {
+            const name = document.getElementById('newWorkspaceName').value.trim();
+            if (!name) {
+                alert('Please enter a workspace name');
+                return;
+            }
+            
+            const members = Array.from(document.querySelectorAll('.workspace-member-cb:checked')).map(cb => cb.value);
+            const desc = document.getElementById('newWorkspaceDesc')?.value.trim() || '';
+            
+            const id = 'ws_' + Date.now();
+            workspaces[id] = {
+                name: name,
+                description: desc,
+                profiles: [],
+                members: members,
+                createdBy: currentUsername,
+                createdAt: new Date().toISOString()
+            };
+            
+            localStorage.setItem('collabWorkspaces', JSON.stringify(workspaces));
+            
+            // Add to workspace list
+            const html = `
+                <div class="workspace-item" data-id="${id}" onclick="selectWorkspace('${id}', this)">
+                    <span class="workspace-icon">📁</span>
+                    <span class="workspace-name">${name}</span>
+                    <span class="workspace-count" id="ws-count-${id}">0</span>
+                </div>
+            `;
+            document.getElementById('workspaceList').insertAdjacentHTML('beforeend', html);
+            document.getElementById('createWorkspaceModal')?.remove();
+            
+            // Send notification to added members
+            if (members.length > 0) {
+                addNotification({
+                    type: 'workspace_invite',
+                    message: `${currentUsername} added you to workspace "${name}"`,
+                    recipients: members,
+                    workspaceId: id
+                });
+            }
+            
+            showNotification(`✅ Workspace "${name}" created!`, 'success');
+        }
+        
+        async function shareCurrentProfile() {
             if (!currentProfileData && !currentS3Key) {
                 alert('Please select a profile to share.');
                 return;
             }
             
             const profileName = currentProfileData?.name || currentS3Key || 'Unknown Profile';
-            const html = `
+            const shareType = document.getElementById('shareWithSelect')?.value || 'workspace';
+            
+            const sharedProfile = {
+                id: 'sp_' + Date.now(),
+                profileKey: currentS3Key,
+                profileName: profileName,
+                sharedBy: currentUsername,
+                sharedAt: new Date().toISOString(),
+                workspace: shareType === 'workspace' ? currentWorkspace : 'team',
+                comments: []
+            };
+            
+            collabData.shared.unshift(sharedProfile);
+            localStorage.setItem('collabSharedProfiles', JSON.stringify(collabData.shared));
+            
+            // Save to backend
+            try {
+                await fetch('/api/collab/share-profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(sharedProfile)
+                });
+            } catch (e) {
+                console.log('Backend share failed, using local storage');
+            }
+            
+            // Update workspace count
+            const countEl = document.getElementById(`ws-count-${currentWorkspace}`);
+            if (countEl) {
+                countEl.textContent = parseInt(countEl.textContent || 0) + 1;
+            }
+            
+            // Add notification
+            const wsMembers = workspaces[currentWorkspace]?.members || [];
+            if (wsMembers.length > 0) {
+                addNotification({
+                    type: 'profile_shared',
+                    message: `${currentUsername} shared "${profileName}"`,
+                    recipients: wsMembers,
+                    profileKey: currentS3Key
+                });
+            }
+            
+            renderSharedProfiles();
+            trackActivity('shared_profile', profileName);
+            showNotification(`✅ Profile shared with ${shareType === 'workspace' ? 'workspace' : 'team'}!`, 'success');
+        }
+        
+        function renderSharedProfiles() {
+            const list = document.getElementById('sharedProfilesList');
+            const wsProfiles = collabData.shared.filter(p => 
+                p.workspace === currentWorkspace || p.workspace === 'team'
+            );
+            
+            if (wsProfiles.length === 0) {
+                list.innerHTML = `
+                    <div class="collab-empty">
+                        <p>No shared profiles yet</p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary);">Click "Share Profile" to share the current profile with your team</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            list.innerHTML = wsProfiles.map(p => `
                 <div class="shared-profile-item">
                     <div class="shared-profile-info">
-                        <h4>${profileName}</h4>
-                        <p>Shared by {{ username }} • ${new Date().toLocaleDateString()}</p>
+                        <h4>${p.profileName}</h4>
+                        <p>Shared by ${p.sharedBy} • ${new Date(p.sharedAt).toLocaleDateString()}</p>
+                        ${p.comments?.length > 0 ? `<span style="font-size: 0.7rem; color: var(--accent-blue);">💬 ${p.comments.length} comments</span>` : ''}
                     </div>
                     <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-small" onclick="viewSharedProfile('${currentS3Key}')">View</button>
+                        <button class="btn btn-small" onclick="viewSharedProfile('${p.profileKey}')">View</button>
+                        <button class="btn btn-small btn-secondary" onclick="commentOnSharedProfile('${p.id}')">💬</button>
                     </div>
                 </div>
-            `;
-            
-            const list = document.getElementById('sharedProfilesList');
-            if (list.querySelector('.collab-empty')) {
-                list.innerHTML = '';
-            }
-            list.insertAdjacentHTML('afterbegin', html);
-            
-            // Track activity
-            workspaceData.activity.unshift({
-                action: 'shared',
-                user: '{{ username }}',
-                profile: profileName,
-                time: new Date().toISOString()
-            });
-            
-            alert('Profile shared with workspace!');
+            `).join('');
         }
         
         function viewSharedProfile(key) {
             if (key) {
                 loadExistingResultToCompare(key);
+                trackActivity('viewed_shared_profile', key);
             }
+        }
+        
+        function commentOnSharedProfile(profileId) {
+            const profile = collabData.shared.find(p => p.id === profileId);
+            if (!profile) return;
+            
+            const comment = prompt('Add a comment:');
+            if (!comment || !comment.trim()) return;
+            
+            if (!profile.comments) profile.comments = [];
+            profile.comments.push({
+                author: currentUsername,
+                text: comment.trim(),
+                time: new Date().toISOString()
+            });
+            
+            localStorage.setItem('collabSharedProfiles', JSON.stringify(collabData.shared));
+            renderSharedProfiles();
         }
         
         function addComment() {
@@ -38639,48 +39082,342 @@
                 return;
             }
             
+            const targetProfile = document.getElementById('commentTargetProfile')?.value || 'general';
+            const mention = document.getElementById('commentMention')?.value || '';
+            const notifyTeam = document.getElementById('notifyTeamOnComment')?.checked || false;
+            
             const comment = {
-                author: '{{ username }}',
+                id: 'c_' + Date.now(),
+                author: currentUsername,
                 text: text,
                 time: new Date().toISOString(),
-                profile: currentProfileData?.name || 'General'
+                profile: targetProfile === 'general' ? 'General Discussion' : targetProfile,
+                profileKey: targetProfile !== 'general' ? currentS3Key : null,
+                mention: mention,
+                workspace: currentWorkspace,
+                replies: []
             };
             
-            workspaceData.comments.unshift(comment);
+            collabData.comments.unshift(comment);
+            localStorage.setItem('collabComments', JSON.stringify(collabData.comments));
             
-            const html = `
-                <div class="comment-item">
-                    <div class="comment-header">
-                        <span class="comment-author">${comment.author}</span>
-                        <span class="comment-time">${new Date(comment.time).toLocaleString()}</span>
+            // Send notification if mentioned or notify team checked
+            if (mention) {
+                addNotification({
+                    type: 'mention',
+                    message: `${currentUsername} mentioned you in a comment`,
+                    recipients: [mention],
+                    commentId: comment.id
+                });
+            }
+            
+            if (notifyTeam) {
+                const wsMembers = workspaces[currentWorkspace]?.members || [];
+                if (wsMembers.length > 0) {
+                    addNotification({
+                        type: 'new_comment',
+                        message: `${currentUsername} posted a comment`,
+                        recipients: wsMembers.filter(m => m !== currentUsername),
+                        commentId: comment.id
+                    });
+                }
+            }
+            
+            renderComments();
+            document.getElementById('newCommentText').value = '';
+            trackActivity('posted_comment', comment.profile);
+        }
+        
+        function renderComments() {
+            const list = document.getElementById('commentsList');
+            const filter = document.getElementById('commentProfileFilter')?.value || 'all';
+            
+            let comments = collabData.comments.filter(c => c.workspace === currentWorkspace || c.workspace === 'default');
+            if (filter !== 'all') {
+                comments = comments.filter(c => c.profile === filter);
+            }
+            
+            if (comments.length === 0) {
+                list.innerHTML = `
+                    <div class="collab-empty">
+                        <p>No comments yet</p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary);">Start a discussion about any profile or insight</p>
                     </div>
-                    <div class="comment-text">${comment.text}</div>
-                    <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                        Re: ${comment.profile}
+                `;
+                return;
+            }
+            
+            list.innerHTML = comments.map(c => `
+                <div class="comment-item" data-id="${c.id}">
+                    <div class="comment-header">
+                        <span class="comment-author">${c.author}</span>
+                        <span class="comment-time">${new Date(c.time).toLocaleString()}</span>
+                    </div>
+                    <div class="comment-text">${c.text}</div>
+                    <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem; display: flex; justify-content: space-between; align-items: center;">
+                        <span>Re: ${c.profile}${c.mention ? ` • @${c.mention}` : ''}</span>
+                        <button onclick="replyToComment('${c.id}')" style="background: none; border: none; color: var(--accent-blue); cursor: pointer; font-size: 0.7rem;">Reply</button>
+                    </div>
+                    ${c.replies?.length > 0 ? `
+                        <div class="comment-replies" style="margin-left: 1rem; margin-top: 0.5rem; border-left: 2px solid var(--border-color); padding-left: 0.75rem;">
+                            ${c.replies.map(r => `
+                                <div class="comment-reply" style="margin-bottom: 0.5rem;">
+                                    <span style="font-weight: 600; font-size: 0.75rem;">${r.author}</span>
+                                    <span style="font-size: 0.65rem; color: var(--text-secondary);"> • ${new Date(r.time).toLocaleString()}</span>
+                                    <p style="margin: 0.25rem 0 0 0; font-size: 0.8rem;">${r.text}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+        
+        function replyToComment(commentId) {
+            const comment = collabData.comments.find(c => c.id === commentId);
+            if (!comment) return;
+            
+            const reply = prompt('Your reply:');
+            if (!reply || !reply.trim()) return;
+            
+            if (!comment.replies) comment.replies = [];
+            comment.replies.push({
+                author: currentUsername,
+                text: reply.trim(),
+                time: new Date().toISOString()
+            });
+            
+            localStorage.setItem('collabComments', JSON.stringify(collabData.comments));
+            renderComments();
+            
+            // Notify original author
+            if (comment.author !== currentUsername) {
+                addNotification({
+                    type: 'reply',
+                    message: `${currentUsername} replied to your comment`,
+                    recipients: [comment.author],
+                    commentId: commentId
+                });
+            }
+        }
+        
+        function addNotification(notification) {
+            notification.id = 'n_' + Date.now();
+            notification.createdAt = new Date().toISOString();
+            notification.read = false;
+            
+            collabData.notifications.unshift(notification);
+            localStorage.setItem('collabNotifications', JSON.stringify(collabData.notifications));
+            
+            // Try to send to backend for real-time delivery
+            try {
+                fetch('/api/collab/notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(notification)
+                });
+            } catch (e) {
+                console.log('Backend notification failed');
+            }
+            
+            renderNotifications();
+        }
+        
+        function renderNotifications() {
+            const list = document.getElementById('notificationsList');
+            if (!list) return;
+            
+            const myNotifications = collabData.notifications.filter(n => 
+                n.recipients?.includes(currentUsername) && !n.read
+            ).slice(0, 5);
+            
+            if (myNotifications.length === 0) {
+                list.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">No new notifications</div>';
+                return;
+            }
+            
+            list.innerHTML = myNotifications.map(n => `
+                <div class="notification-item" style="padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.5rem; font-size: 0.8rem; cursor: pointer;" onclick="markNotificationRead('${n.id}')">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span>${getNotificationIcon(n.type)}</span>
+                        <span>${n.message}</span>
+                    </div>
+                    <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.25rem;">${new Date(n.createdAt).toLocaleString()}</div>
+                </div>
+            `).join('');
+        }
+        
+        function getNotificationIcon(type) {
+            const icons = {
+                'workspace_invite': '📁',
+                'profile_shared': '📤',
+                'mention': '@',
+                'new_comment': '💬',
+                'reply': '↩️',
+                'deck_shared': '📊'
+            };
+            return icons[type] || '🔔';
+        }
+        
+        function markNotificationRead(notificationId) {
+            const notification = collabData.notifications.find(n => n.id === notificationId);
+            if (notification) {
+                notification.read = true;
+                localStorage.setItem('collabNotifications', JSON.stringify(collabData.notifications));
+                renderNotifications();
+            }
+        }
+        
+        function showNotificationSettings() {
+            const settings = JSON.parse(localStorage.getItem('notificationSettings') || '{"shares": true, "comments": true, "mentions": true, "decks": true}');
+            
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'notificationSettingsModal';
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 400px;">
+                    <div class="deck-workspace-header">
+                        <h2>🔔 Notification Settings</h2>
+                        <button onclick="document.getElementById('notificationSettingsModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1rem;">
+                        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Choose which notifications you want to receive:</p>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="notif-shares" ${settings.shares ? 'checked' : ''}>
+                            <span>📤 When someone shares a profile</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="notif-comments" ${settings.comments ? 'checked' : ''}>
+                            <span>💬 New comments in my workspaces</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="notif-mentions" ${settings.mentions ? 'checked' : ''}>
+                            <span>@ When I'm mentioned</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="notif-decks" ${settings.decks ? 'checked' : ''}>
+                            <span>📊 Deck shares and updates</span>
+                        </label>
+                        <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('notificationSettingsModal').remove()">Cancel</button>
+                            <button class="btn btn-primary" onclick="saveNotificationSettings()">Save Settings</button>
+                        </div>
                     </div>
                 </div>
             `;
+            document.body.appendChild(modal);
+        }
+        
+        function saveNotificationSettings() {
+            const settings = {
+                shares: document.getElementById('notif-shares')?.checked || false,
+                comments: document.getElementById('notif-comments')?.checked || false,
+                mentions: document.getElementById('notif-mentions')?.checked || false,
+                decks: document.getElementById('notif-decks')?.checked || false
+            };
+            localStorage.setItem('notificationSettings', JSON.stringify(settings));
+            document.getElementById('notificationSettingsModal')?.remove();
+            showNotification('✅ Notification settings saved!', 'success');
+        }
+        
+        async function loadSharedDecks() {
+            const list = document.getElementById('sharedDecksList');
             
-            const list = document.getElementById('commentsList');
-            if (list.querySelector('.collab-empty')) {
-                list.innerHTML = '';
+            try {
+                const response = await fetch('/api/decks', { credentials: 'same-origin' });
+                const data = await response.json();
+                
+                if (data.success && data.decks?.length > 0) {
+                    const sharedDecks = data.decks.filter(d => d.is_team_deck || !d.is_mine);
+                    
+                    if (sharedDecks.length === 0) {
+                        list.innerHTML = `
+                            <div class="collab-empty">
+                                <p>No shared decks yet</p>
+                                <p style="font-size: 0.8rem; color: var(--text-secondary);">Create and share presentation decks with your team</p>
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    list.innerHTML = sharedDecks.map(d => `
+                        <div class="shared-deck-item" style="background: var(--bg-input); border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem; border: 1px solid var(--border-color);">
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <div>
+                                    <h4 style="margin: 0 0 0.25rem 0;">${d.name}</h4>
+                                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin: 0;">
+                                        ${d.slides_count || 0} slides • ${d.is_team_deck ? '👥 Team Deck' : `Shared by ${d.owner}`}
+                                    </p>
+                                </div>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button class="btn btn-small" onclick="openDeckForEdit('${d.id}')">Open</button>
+                                    <button class="btn btn-small btn-secondary" onclick="duplicateDeckFromCollab('${d.id}')">📋 Copy</button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    list.innerHTML = `
+                        <div class="collab-empty">
+                            <p>No shared decks yet</p>
+                            <p style="font-size: 0.8rem; color: var(--text-secondary);">Create and share presentation decks with your team</p>
+                        </div>
+                    `;
+                }
+            } catch (e) {
+                list.innerHTML = '<div class="collab-empty"><p>Could not load shared decks</p></div>';
             }
-            list.insertAdjacentHTML('afterbegin', html);
-            
-            document.getElementById('newCommentText').value = '';
+        }
+        
+        async function openDeckForEdit(deckId) {
+            await openDeckWorkspace();
+            setTimeout(() => loadDeck(deckId), 500);
+        }
+        
+        async function duplicateDeckFromCollab(deckId) {
+            try {
+                const response = await fetch(`/api/decks/${deckId}/duplicate`, { method: 'POST', credentials: 'same-origin' });
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('✅ Deck copied to your decks!', 'success');
+                    loadSharedDecks();
+                }
+            } catch (e) {
+                alert('Error copying deck');
+            }
+        }
+        
+        function filterActivityLog() {
+            loadActivityLog();
         }
         
         function loadActivityLog() {
             const log = document.getElementById('activityLog');
+            const filter = document.getElementById('activityFilter')?.value || 'all';
             
             // Fetch from backend
             fetch('/api/admin/activity-log?limit=50', { credentials: 'same-origin' }).then(r => r.json()).then(data => {
-                if (data.activities && data.activities.length > 0) {
-                    log.innerHTML = data.activities.map(a => `
+                let activities = data.activities || [];
+                
+                // Apply filter
+                if (filter !== 'all') {
+                    const filterMap = {
+                        'shares': ['shared_profile', 'shared'],
+                        'comments': ['posted_comment', 'comment'],
+                        'exports': ['export_data', 'export_module_csv', 'export_module_png'],
+                        'views': ['view_profile', 'viewed_shared_profile']
+                    };
+                    const filterActions = filterMap[filter] || [];
+                    activities = activities.filter(a => filterActions.some(f => a.action?.includes(f)));
+                }
+                
+                if (activities.length > 0) {
+                    log.innerHTML = activities.map(a => `
                         <div class="activity-item">
                             <div class="activity-icon">${getActivityIcon(a.action)}</div>
                             <div class="activity-content">
-                                <p><strong>${a.user || 'Unknown'}</strong> ${a.action.replace(/_/g, ' ')}</p>
+                                <p><strong>${a.user || 'Unknown'}</strong> ${formatActivityAction(a.action)} ${a.details ? `<span style="color: var(--text-secondary);">${a.details}</span>` : ''}</p>
                                 <span class="activity-time">${new Date(a.timestamp).toLocaleString()}</span>
                             </div>
                         </div>
@@ -38693,14 +39430,32 @@
             });
         }
         
+        function formatActivityAction(action) {
+            const actionMap = {
+                'view_profile': 'viewed a profile',
+                'export_data': 'exported data',
+                'run_analysis': 'ran an analysis',
+                'shared_profile': 'shared a profile',
+                'shared': 'shared content',
+                'login': 'logged in',
+                'posted_comment': 'posted a comment',
+                'comparison': 'ran a comparison',
+                'add_module_to_deck': 'added to deck'
+            };
+            return actionMap[action] || action?.replace(/_/g, ' ') || 'performed an action';
+        }
+        
         function getActivityIcon(action) {
             const icons = {
                 'view_profile': '👁️',
                 'export_data': '📥',
                 'run_analysis': '🔬',
+                'shared_profile': '📤',
                 'shared': '📤',
                 'login': '🔐',
-                'comment': '💬'
+                'posted_comment': '💬',
+                'comparison': '📊',
+                'add_module_to_deck': '➕'
             };
             return icons[action] || '📋';
         }
@@ -38712,6 +39467,8 @@
                 if (userResponse.ok) {
                     const userData = await userResponse.json();
                     if (userData.success) {
+                        currentUsername = userData.username;
+                        
                         // Display user's company and department
                         document.getElementById('userCompany').textContent = userData.company || 'Not assigned';
                         document.getElementById('userDepartment').textContent = userData.department || 'Not assigned';
@@ -38724,7 +39481,7 @@
                                 const currentCompany = userData.company || '';
                                 const currentDept = userData.department || '';
                                 
-                                // Filter to show teammates (same company AND department)
+                                // Filter to show teammates (same company)
                                 let teammates = usersData.users.filter(u => 
                                     u.username !== userData.username && 
                                     u.company && u.company === currentCompany
@@ -38737,16 +39494,18 @@
                                     return aDept - bDept || a.username.localeCompare(b.username);
                                 });
                                 
+                                collabTeamMembers = teammates;
+                                
                                 const list = document.getElementById('teamMembersList');
                                 if (teammates.length === 0) {
-                                    list.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">No teammates found</div>';
+                                    list.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">No teammates found. Ask your admin to add team members.</div>';
                                 } else {
                                     list.innerHTML = teammates.map(u => `
-                                        <div class="team-member">
-                                            <div class="team-member-avatar">${u.username.substring(0, 2).toUpperCase()}</div>
-                                            <div class="team-member-info">
-                                                <span class="team-member-name">${u.username}</span>
-                                                <span class="team-member-dept">${u.department || ''}</span>
+                                        <div class="team-member" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.5rem;">
+                                            <div class="team-member-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: var(--accent-blue); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.7rem;">${u.username.substring(0, 2).toUpperCase()}</div>
+                                            <div class="team-member-info" style="flex: 1;">
+                                                <span class="team-member-name" style="display: block; font-weight: 600; font-size: 0.85rem;">${u.username}</span>
+                                                <span class="team-member-dept" style="font-size: 0.7rem; color: var(--text-secondary);">${u.department || 'No department'}</span>
                                             </div>
                                             ${u.department === currentDept ? '<span class="same-team-badge">Same Team</span>' : ''}
                                         </div>
@@ -38764,6 +39523,40 @@
         // Initialize collaboration when tab is shown
         function initCollaboration() {
             loadWorkspaceData();
+            renderSharedProfiles();
+            renderComments();
+            renderNotifications();
+            
+            // Populate comment mention dropdown with team members
+            setTimeout(() => {
+                const mentionSelect = document.getElementById('commentMention');
+                if (mentionSelect && collabTeamMembers.length > 0) {
+                    mentionSelect.innerHTML = '<option value="">@mention teammate</option>' + 
+                        collabTeamMembers.map(m => `<option value="${m.username}">@${m.username}</option>`).join('');
+                }
+                
+                // Populate profile filter with shared profiles
+                const profileFilter = document.getElementById('commentProfileFilter');
+                const targetProfile = document.getElementById('commentTargetProfile');
+                if (profileFilter && collabData.shared.length > 0) {
+                    const profiles = [...new Set(collabData.shared.map(p => p.profileName))];
+                    profileFilter.innerHTML = '<option value="all">All Profiles</option>' + 
+                        profiles.map(p => `<option value="${p}">${p}</option>`).join('');
+                    
+                    if (targetProfile) {
+                        targetProfile.innerHTML = '<option value="general">General Discussion</option>' + 
+                            profiles.map(p => `<option value="${p}">${p}</option>`).join('');
+                    }
+                }
+                
+                // Add current profile to target dropdown if loaded
+                if (targetProfile && currentProfileData?.name) {
+                    const optExists = Array.from(targetProfile.options).some(o => o.value === currentProfileData.name);
+                    if (!optExists) {
+                        targetProfile.insertAdjacentHTML('beforeend', `<option value="${currentProfileData.name}">${currentProfileData.name} (current)</option>`);
+                    }
+                }
+            }, 1000);
         }
 
         async function refreshCache(fullRefresh = false) {

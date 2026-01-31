@@ -9168,6 +9168,303 @@ def get_team_members():
 
 
 # ============================================================================
+# COLLABORATION API ENDPOINTS
+# ============================================================================
+
+COLLAB_S3_KEY = 'system/collaboration/'
+
+@app.route('/api/collab/share-profile', methods=['POST'])
+@requires_auth
+def share_profile():
+    """Share a profile with workspace or team."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        data = request.get_json()
+        username = session.get('username')
+        company = user.get('company', '')
+        
+        share_data = {
+            'id': data.get('id', f"sp_{int(datetime.now().timestamp())}"),
+            'profileKey': data.get('profileKey'),
+            'profileName': data.get('profileName'),
+            'sharedBy': username,
+            'sharedAt': datetime.now().isoformat(),
+            'workspace': data.get('workspace', 'default'),
+            'company': company,
+            'comments': []
+        }
+        
+        # Save to S3
+        s3_key = f"{COLLAB_S3_KEY}shares/{share_data['id']}.json"
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(share_data),
+            ContentType='application/json'
+        )
+        
+        # Track activity
+        track_user_activity(username, 'shared_profile', share_data['profileName'])
+        
+        return jsonify({'success': True, 'share': share_data})
+    except Exception as e:
+        print(f"Share profile error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/collab/shared-profiles')
+@requires_auth
+def get_shared_profiles():
+    """Get shared profiles for user's company."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    company = user.get('company', '')
+    
+    try:
+        shares = []
+        prefix = f"{COLLAB_S3_KEY}shares/"
+        
+        paginator = s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for obj in page.get('Contents', []):
+                try:
+                    response = s3_client.get_object(Bucket=S3_BUCKET, Key=obj['Key'])
+                    share = json.loads(response['Body'].read().decode('utf-8'))
+                    # Only return shares from same company
+                    if share.get('company', '') == company:
+                        shares.append(share)
+                except:
+                    continue
+        
+        # Sort by date descending
+        shares.sort(key=lambda x: x.get('sharedAt', ''), reverse=True)
+        
+        return jsonify({'success': True, 'shares': shares})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'shares': []})
+
+
+@app.route('/api/collab/notification', methods=['POST'])
+@requires_auth
+def send_notification():
+    """Send a notification to team members."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        data = request.get_json()
+        notification = {
+            'id': f"n_{int(datetime.now().timestamp())}",
+            'type': data.get('type', 'general'),
+            'message': data.get('message', ''),
+            'recipients': data.get('recipients', []),
+            'sender': session.get('username'),
+            'createdAt': datetime.now().isoformat(),
+            'read': False,
+            'data': data.get('data', {})
+        }
+        
+        # Save notification
+        s3_key = f"{COLLAB_S3_KEY}notifications/{notification['id']}.json"
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(notification),
+            ContentType='application/json'
+        )
+        
+        return jsonify({'success': True, 'notification': notification})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/collab/notifications')
+@requires_auth
+def get_notifications():
+    """Get notifications for current user."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    username = session.get('username')
+    
+    try:
+        notifications = []
+        prefix = f"{COLLAB_S3_KEY}notifications/"
+        
+        paginator = s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for obj in page.get('Contents', []):
+                try:
+                    response = s3_client.get_object(Bucket=S3_BUCKET, Key=obj['Key'])
+                    notif = json.loads(response['Body'].read().decode('utf-8'))
+                    # Only return notifications for this user
+                    if username in notif.get('recipients', []):
+                        notifications.append(notif)
+                except:
+                    continue
+        
+        # Sort by date descending
+        notifications.sort(key=lambda x: x.get('createdAt', ''), reverse=True)
+        
+        return jsonify({'success': True, 'notifications': notifications[:50]})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'notifications': []})
+
+
+@app.route('/api/collab/workspaces', methods=['GET'])
+@requires_auth
+def get_workspaces():
+    """Get workspaces for user's company."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    username = session.get('username')
+    company = user.get('company', '')
+    
+    try:
+        workspaces = []
+        prefix = f"{COLLAB_S3_KEY}workspaces/"
+        
+        paginator = s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for obj in page.get('Contents', []):
+                try:
+                    response = s3_client.get_object(Bucket=S3_BUCKET, Key=obj['Key'])
+                    ws = json.loads(response['Body'].read().decode('utf-8'))
+                    # Return workspaces user has access to
+                    if ws.get('company', '') == company or username in ws.get('members', []) or ws.get('createdBy') == username:
+                        workspaces.append(ws)
+                except:
+                    continue
+        
+        return jsonify({'success': True, 'workspaces': workspaces})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'workspaces': []})
+
+
+@app.route('/api/collab/workspaces', methods=['POST'])
+@requires_auth
+def create_workspace():
+    """Create a new workspace."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        data = request.get_json()
+        username = session.get('username')
+        company = user.get('company', '')
+        
+        workspace = {
+            'id': f"ws_{int(datetime.now().timestamp())}",
+            'name': data.get('name', 'New Workspace'),
+            'description': data.get('description', ''),
+            'members': data.get('members', []),
+            'createdBy': username,
+            'createdAt': datetime.now().isoformat(),
+            'company': company,
+            'profiles': []
+        }
+        
+        # Save workspace
+        s3_key = f"{COLLAB_S3_KEY}workspaces/{workspace['id']}.json"
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(workspace),
+            ContentType='application/json'
+        )
+        
+        return jsonify({'success': True, 'workspace': workspace})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/collab/comments', methods=['GET'])
+@requires_auth
+def get_comments():
+    """Get comments for user's workspaces."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    company = user.get('company', '')
+    
+    try:
+        comments = []
+        prefix = f"{COLLAB_S3_KEY}comments/"
+        
+        paginator = s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for obj in page.get('Contents', []):
+                try:
+                    response = s3_client.get_object(Bucket=S3_BUCKET, Key=obj['Key'])
+                    comment = json.loads(response['Body'].read().decode('utf-8'))
+                    if comment.get('company', '') == company:
+                        comments.append(comment)
+                except:
+                    continue
+        
+        # Sort by date descending
+        comments.sort(key=lambda x: x.get('time', ''), reverse=True)
+        
+        return jsonify({'success': True, 'comments': comments[:100]})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'comments': []})
+
+
+@app.route('/api/collab/comments', methods=['POST'])
+@requires_auth
+def post_comment():
+    """Post a new comment."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        data = request.get_json()
+        username = session.get('username')
+        company = user.get('company', '')
+        
+        comment = {
+            'id': f"c_{int(datetime.now().timestamp())}",
+            'author': username,
+            'text': data.get('text', ''),
+            'time': datetime.now().isoformat(),
+            'profile': data.get('profile', 'General'),
+            'profileKey': data.get('profileKey'),
+            'workspace': data.get('workspace', 'default'),
+            'company': company,
+            'mention': data.get('mention'),
+            'replies': []
+        }
+        
+        # Save comment
+        s3_key = f"{COLLAB_S3_KEY}comments/{comment['id']}.json"
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(comment),
+            ContentType='application/json'
+        )
+        
+        # Track activity
+        track_user_activity(username, 'posted_comment', comment['profile'])
+        
+        return jsonify({'success': True, 'comment': comment})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
 # ATTRIBUTION IQ ENDPOINTS
 # ============================================================================
 
