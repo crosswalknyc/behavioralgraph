@@ -2888,7 +2888,8 @@ def get_user_info():
         'credits': user.get('credits', 0),
         'credits_used': user.get('credits_used', 0),
         'allowed_categories': user.get('allowed_categories', ['*']),
-        'allowed_runs': user.get('allowed_runs', ['*'])
+        'allowed_runs': user.get('allowed_runs', ['*']),
+        'collab_team': user.get('collab_team', [])
     })
 
 # ============================================================================
