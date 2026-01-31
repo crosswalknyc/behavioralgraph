@@ -8837,6 +8837,7 @@ def get_user_decks():
         return jsonify({'success': False, 'error': 'Not logged in'})
     
     username = session.get('username')
+    user_email = user.get('email', '').lower()
     company = user.get('company', '')
     
     try:
@@ -8851,15 +8852,24 @@ def get_user_decks():
                         response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
                         deck_data = json.loads(response['Body'].read().decode('utf-8'))
                         
-                        # Show if owned by user, shared with user, or same company
+                        # Show if owned by user, shared with user, collaborator, or same company
                         owner = deck_data.get('owner', '')
                         shared_with = deck_data.get('shared_with', [])
+                        collaborators = deck_data.get('collaborators', [])
                         deck_company = deck_data.get('company', '')
                         is_team_deck = deck_data.get('is_team_deck', False)
+                        
+                        # Check if user is a collaborator
+                        is_collaborator = any(
+                            c.get('user_id') == username or 
+                            c.get('email', '').lower() == user_email 
+                            for c in collaborators
+                        )
                         
                         can_view = (
                             owner == username or
                             username in shared_with or
+                            is_collaborator or
                             (is_team_deck and deck_company == company)
                         )
                         
@@ -8870,10 +8880,12 @@ def get_user_decks():
                                 'owner': owner,
                                 'is_mine': owner == username,
                                 'is_team_deck': is_team_deck,
+                                'is_collaborator': is_collaborator,
                                 'slides_count': len(deck_data.get('slides', [])),
                                 'created_at': deck_data.get('created_at'),
                                 'updated_at': deck_data.get('updated_at'),
-                                'shared_with': shared_with
+                                'shared_with': shared_with,
+                                'collaborators': collaborators
                             })
                     except:
                         continue
@@ -9128,6 +9140,138 @@ def duplicate_deck(deck_id):
         )
         
         return jsonify({'success': True, 'deck': new_deck})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
+# DECK COLLABORATORS API
+# ============================================================================
+
+@app.route('/api/decks/<deck_id>/collaborators', methods=['GET'])
+@requires_auth
+def get_deck_collaborators(deck_id):
+    """Get collaborators for a deck."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        deck = json.loads(response['Body'].read().decode('utf-8'))
+        
+        collaborators = deck.get('collaborators', [])
+        return jsonify({'success': True, 'collaborators': collaborators})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/decks/<deck_id>/collaborators', methods=['POST'])
+@requires_auth
+def add_deck_collaborator(deck_id):
+    """Add a collaborator to a deck."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        data = request.get_json()
+        email = data.get('email', '').strip().lower()
+        user_id = data.get('user_id', '')
+        name = data.get('name', '')
+        role = data.get('role', 'editor')  # editor or viewer
+        
+        if not email and not user_id:
+            return jsonify({'success': False, 'error': 'Email or user_id required'})
+        
+        # Get existing deck
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        deck = json.loads(response['Body'].read().decode('utf-8'))
+        
+        # Check ownership
+        username = session.get('username')
+        if deck.get('owner') != username:
+            # Check if user is a collaborator with edit rights
+            collaborators = deck.get('collaborators', [])
+            is_editor = any(c.get('user_id') == username and c.get('role') == 'editor' for c in collaborators)
+            if not is_editor:
+                return jsonify({'success': False, 'error': 'Only the owner or editors can add collaborators'})
+        
+        # Initialize collaborators list if needed
+        if 'collaborators' not in deck:
+            deck['collaborators'] = []
+        
+        # Check if already a collaborator
+        existing = next((c for c in deck['collaborators'] if c.get('email') == email or c.get('user_id') == user_id), None)
+        if existing:
+            return jsonify({'success': False, 'error': 'User is already a collaborator'})
+        
+        # Add new collaborator
+        new_collaborator = {
+            'user_id': user_id or email,
+            'email': email,
+            'name': name,
+            'role': role,
+            'added_at': datetime.now().isoformat(),
+            'added_by': username
+        }
+        deck['collaborators'].append(new_collaborator)
+        deck['updated_at'] = datetime.now().isoformat()
+        
+        # Save updated deck
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(deck),
+            ContentType='application/json'
+        )
+        
+        # TODO: Send email notification to the collaborator
+        
+        return jsonify({'success': True, 'collaborator': new_collaborator, 'deck': deck})
+    except s3_client.exceptions.NoSuchKey:
+        return jsonify({'success': False, 'error': 'Deck not found'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/decks/<deck_id>/collaborators/<collaborator_id>', methods=['DELETE'])
+@requires_auth
+def remove_deck_collaborator(deck_id, collaborator_id):
+    """Remove a collaborator from a deck."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        # Get existing deck
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        deck = json.loads(response['Body'].read().decode('utf-8'))
+        
+        # Check ownership
+        username = session.get('username')
+        if deck.get('owner') != username:
+            return jsonify({'success': False, 'error': 'Only the owner can remove collaborators'})
+        
+        # Remove collaborator
+        collaborators = deck.get('collaborators', [])
+        deck['collaborators'] = [c for c in collaborators if c.get('user_id') != collaborator_id and c.get('email') != collaborator_id]
+        deck['updated_at'] = datetime.now().isoformat()
+        
+        # Save updated deck
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(deck),
+            ContentType='application/json'
+        )
+        
+        return jsonify({'success': True, 'deck': deck})
+    except s3_client.exceptions.NoSuchKey:
+        return jsonify({'success': False, 'error': 'Deck not found'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 

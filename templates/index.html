@@ -29521,11 +29521,18 @@
                         padding: 0.6rem;
                         cursor: pointer;
                         transition: all 0.2s;
+                        display: flex;
+                        align-items: center;
+                        gap: 0.5rem;
                     }
                     .saved-deck-item:hover { border-color: var(--accent-blue); }
+                    .saved-deck-item:hover .deck-actions { opacity: 1; }
                     .saved-deck-item.active { border-color: var(--accent-lime); background: rgba(200, 230, 0, 0.1); }
                     .saved-deck-item .deck-name { font-weight: 600; font-size: 0.85rem; margin-bottom: 0.25rem; }
-                    .saved-deck-item .deck-meta { font-size: 0.7rem; color: var(--text-secondary); display: flex; gap: 0.5rem; }
+                    .saved-deck-item .deck-meta { font-size: 0.7rem; color: var(--text-secondary); display: flex; gap: 0.5rem; flex-wrap: wrap; }
+                    .saved-deck-item .deck-actions { opacity: 0; transition: opacity 0.2s; display: flex; gap: 2px; }
+                    .saved-deck-item .deck-action-btn:hover { background: rgba(255,255,255,0.1); }
+                    .saved-deck-item .deck-name-input:hover { background: rgba(255,255,255,0.05); }
                     .deck-editor-panel {
                         background: var(--bg-card);
                         border-radius: 8px;
@@ -29655,15 +29662,256 @@
             }
             
             return savedDecks.map(deck => `
-                <div class="saved-deck-item ${currentDeckId === deck.id ? 'active' : ''}" onclick="loadDeck('${deck.id}')">
-                    <div class="deck-name">${deck.name}</div>
-                    <div class="deck-meta">
-                        <span>${deck.slides_count} slides</span>
-                        ${deck.is_team_deck ? '<span class="team-badge">👥 Team</span>' : ''}
-                        ${!deck.is_mine ? '<span style="color: #a855f7;">Shared</span>' : ''}
+                <div class="saved-deck-item ${currentDeckId === deck.id ? 'active' : ''}" data-deck-id="${deck.id}">
+                    <div style="flex: 1; min-width: 0;" onclick="loadDeck('${deck.id}')">
+                        <input type="text" class="deck-name-input" value="${deck.name}" 
+                               onclick="event.stopPropagation()" 
+                               onchange="renameDeckInline('${deck.id}', this.value)"
+                               onkeydown="if(event.key==='Enter'){this.blur();}"
+                               style="font-size: 0.85rem; font-weight: 500; background: transparent; border: none; color: var(--text-primary); width: 100%; padding: 2px 4px; border-radius: 4px; cursor: text;"
+                               onfocus="this.style.background='rgba(255,255,255,0.1)'; this.style.outline='1px solid var(--accent-color)';"
+                               onblur="this.style.background='transparent'; this.style.outline='none';">
+                        <div class="deck-meta">
+                            <span>${deck.slides_count} slides</span>
+                            ${deck.is_team_deck ? '<span class="team-badge">👥 Team</span>' : ''}
+                            ${!deck.is_mine ? '<span style="color: #a855f7;">Shared</span>' : ''}
+                            ${deck.collaborators?.length > 0 ? `<span style="color: #22c55e;">👥 ${deck.collaborators.length}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="deck-actions" style="display: flex; gap: 4px; align-items: center;">
+                        <button class="deck-action-btn" onclick="event.stopPropagation(); openDeckCollaborateModal('${deck.id}', '${deck.name.replace(/'/g, "\\'")}')" title="Invite collaborators" style="background: none; border: none; cursor: pointer; padding: 4px; border-radius: 4px; color: var(--text-secondary); font-size: 1rem;">👥</button>
+                        <button class="deck-action-btn" onclick="event.stopPropagation(); deleteDeck('${deck.id}')" title="Delete deck" style="background: none; border: none; cursor: pointer; padding: 4px; border-radius: 4px; color: var(--text-secondary); font-size: 1rem;">🗑️</button>
                     </div>
                 </div>
             `).join('');
+        }
+        
+        async function renameDeckInline(deckId, newName) {
+            if (!newName.trim()) return;
+            
+            try {
+                const response = await fetch(`/api/decks/${deckId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName.trim() })
+                });
+                
+                if (response.ok) {
+                    // Update local data
+                    const deck = savedDecks.find(d => d.id === deckId);
+                    if (deck) deck.name = newName.trim();
+                    if (currentDeckData && currentDeckData.id === deckId) {
+                        currentDeckData.name = newName.trim();
+                    }
+                    showNotification('✅ Deck renamed', 'success');
+                }
+            } catch (e) {
+                console.error('Error renaming deck:', e);
+                showNotification('❌ Failed to rename deck', 'error');
+            }
+        }
+        
+        function openDeckCollaborateModal(deckId, deckName) {
+            const deck = savedDecks.find(d => d.id === deckId);
+            const collaborators = deck?.collaborators || [];
+            
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'deckCollaborateModal';
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 450px;">
+                    <div class="deck-workspace-header">
+                        <h2>👥 Collaborate on "${deckName}"</h2>
+                        <button onclick="document.getElementById('deckCollaborateModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1rem;">
+                        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Invite team members to collaborate on this deck. They'll be able to view and edit slides.</p>
+                        
+                        <div style="margin-bottom: 1rem;">
+                            <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.5rem;">Invite by email</label>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="email" id="collaboratorEmail" placeholder="colleague@company.com" 
+                                       style="flex: 1; padding: 0.5rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                <button class="btn btn-primary btn-small" onclick="inviteDeckCollaborator('${deckId}')">Invite</button>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 1rem;">
+                            <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.5rem;">Or select from your workspace</label>
+                            <div id="workspaceUsersList" style="max-height: 150px; overflow-y: auto; background: var(--bg-tertiary); border-radius: 6px; padding: 0.5rem;">
+                                <div style="color: var(--text-secondary); font-size: 0.8rem; text-align: center; padding: 1rem;">Loading workspace members...</div>
+                            </div>
+                        </div>
+                        
+                        <div style="border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                            <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.5rem;">Current Collaborators (${collaborators.length})</label>
+                            <div id="currentCollaboratorsList" style="max-height: 120px; overflow-y: auto;">
+                                ${collaborators.length === 0 ? 
+                                    '<div style="color: var(--text-secondary); font-size: 0.8rem; text-align: center; padding: 0.5rem;">No collaborators yet</div>' :
+                                    collaborators.map(c => `
+                                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 6px; margin-bottom: 0.25rem;">
+                                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                <div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: white;">${(c.name || c.email || '?')[0].toUpperCase()}</div>
+                                                <div>
+                                                    <div style="font-size: 0.8rem; color: var(--text-primary);">${c.name || c.email}</div>
+                                                    <div style="font-size: 0.65rem; color: var(--text-secondary);">${c.role || 'Editor'}</div>
+                                                </div>
+                                            </div>
+                                            <button onclick="removeDeckCollaborator('${deckId}', '${c.user_id || c.email}')" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 0.8rem;">Remove</button>
+                                        </div>
+                                    `).join('')
+                                }
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('deckCollaborateModal').remove()">Done</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            // Load workspace users
+            loadWorkspaceUsersForDeck(deckId);
+        }
+        
+        async function loadWorkspaceUsersForDeck(deckId) {
+            const container = document.getElementById('workspaceUsersList');
+            try {
+                const response = await fetch('/api/workspace/users');
+                if (response.ok) {
+                    const data = await response.json();
+                    const users = data.users || [];
+                    const deck = savedDecks.find(d => d.id === deckId);
+                    const collaboratorIds = (deck?.collaborators || []).map(c => c.user_id || c.email);
+                    
+                    if (users.length === 0) {
+                        container.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.8rem; text-align: center; padding: 1rem;">No other users in workspace</div>';
+                        return;
+                    }
+                    
+                    // Filter out current user and existing collaborators
+                    const availableUsers = users.filter(u => u.user_id !== currentUser?.user_id && !collaboratorIds.includes(u.user_id));
+                    
+                    if (availableUsers.length === 0) {
+                        container.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.8rem; text-align: center; padding: 1rem;">All workspace members already added</div>';
+                        return;
+                    }
+                    
+                    container.innerHTML = availableUsers.map(user => `
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem; border-radius: 6px; cursor: pointer; transition: background 0.2s;" 
+                             onmouseover="this.style.background='rgba(255,255,255,0.05)'" 
+                             onmouseout="this.style.background='transparent'">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: white;">${(user.name || user.email || '?')[0].toUpperCase()}</div>
+                                <div>
+                                    <div style="font-size: 0.8rem; color: var(--text-primary);">${user.name || user.email}</div>
+                                    <div style="font-size: 0.65rem; color: var(--text-secondary);">${user.email}</div>
+                                </div>
+                            </div>
+                            <button class="btn btn-small btn-primary" onclick="addDeckCollaboratorFromWorkspace('${deckId}', '${user.user_id}', '${user.email}', '${(user.name || '').replace(/'/g, "\\'")}')">Add</button>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.8rem; text-align: center; padding: 1rem;">Could not load workspace members</div>';
+                }
+            } catch (e) {
+                console.error('Error loading workspace users:', e);
+                container.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.8rem; text-align: center; padding: 1rem;">Error loading members</div>';
+            }
+        }
+        
+        async function inviteDeckCollaborator(deckId) {
+            const emailInput = document.getElementById('collaboratorEmail');
+            const email = emailInput?.value?.trim();
+            
+            if (!email) {
+                showNotification('⚠️ Please enter an email address', 'warning');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/decks/${deckId}/collaborators`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email })
+                });
+                
+                if (response.ok) {
+                    showNotification('✅ Invitation sent!', 'success');
+                    emailInput.value = '';
+                    // Refresh the deck data
+                    await loadSavedDecks();
+                    // Refresh the modal
+                    const deck = savedDecks.find(d => d.id === deckId);
+                    if (deck) {
+                        document.getElementById('deckCollaborateModal')?.remove();
+                        openDeckCollaborateModal(deckId, deck.name);
+                    }
+                } else {
+                    const data = await response.json();
+                    showNotification(`❌ ${data.error || 'Failed to invite'}`, 'error');
+                }
+            } catch (e) {
+                console.error('Error inviting collaborator:', e);
+                showNotification('❌ Failed to send invitation', 'error');
+            }
+        }
+        
+        async function addDeckCollaboratorFromWorkspace(deckId, userId, email, name) {
+            try {
+                const response = await fetch(`/api/decks/${deckId}/collaborators`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, email: email, name: name })
+                });
+                
+                if (response.ok) {
+                    showNotification(`✅ Added ${name || email} as collaborator`, 'success');
+                    // Refresh
+                    await loadSavedDecks();
+                    document.getElementById('savedDecksList').innerHTML = renderSavedDecksList();
+                    const deck = savedDecks.find(d => d.id === deckId);
+                    if (deck) {
+                        document.getElementById('deckCollaborateModal')?.remove();
+                        openDeckCollaborateModal(deckId, deck.name);
+                    }
+                } else {
+                    const data = await response.json();
+                    showNotification(`❌ ${data.error || 'Failed to add'}`, 'error');
+                }
+            } catch (e) {
+                console.error('Error adding collaborator:', e);
+                showNotification('❌ Failed to add collaborator', 'error');
+            }
+        }
+        
+        async function removeDeckCollaborator(deckId, userIdOrEmail) {
+            if (!confirm('Remove this collaborator?')) return;
+            
+            try {
+                const response = await fetch(`/api/decks/${deckId}/collaborators/${encodeURIComponent(userIdOrEmail)}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    showNotification('✅ Collaborator removed', 'success');
+                    // Refresh
+                    await loadSavedDecks();
+                    document.getElementById('savedDecksList').innerHTML = renderSavedDecksList();
+                    const deck = savedDecks.find(d => d.id === deckId);
+                    if (deck) {
+                        document.getElementById('deckCollaborateModal')?.remove();
+                        openDeckCollaborateModal(deckId, deck.name);
+                    }
+                } else {
+                    showNotification('❌ Failed to remove collaborator', 'error');
+                }
+            } catch (e) {
+                console.error('Error removing collaborator:', e);
+                showNotification('❌ Failed to remove collaborator', 'error');
+            }
         }
         
         function renderDeckEmptyState() {
