@@ -9823,10 +9823,10 @@
                         <div class="top-cat-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.25rem; font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">
                             <span style="flex: 1; text-align: left;">Category</span>
                             <span style="display: flex; gap: 0.5rem;">
-                                <span class="has-tooltip" data-tooltip="Profile %: Average percentage of this audience engaging with items in this category." style="min-width: 55px; text-align: right;">Profile</span>
-                                <span class="has-tooltip" data-tooltip="Gen Pop %: Average percentage of general population engaging with items in this category." style="min-width: 50px; text-align: right;">GP</span>
-                                <span class="has-tooltip" data-tooltip="Avg Index: Average index across all items in this category. 1.0x = same as Gen Pop, 2.0x = 2x more likely than Gen Pop." style="min-width: 50px; text-align: right;">Index</span>
-                                <span class="has-tooltip" data-tooltip="Hot Count: Number of items in this category with index above 1.5x (strong over-indexers)." style="min-width: 40px; text-align: right;">Hot 🔥</span>
+                                <span class="has-tooltip" data-tooltip="Profile %: Average percentage of this audience engaging with items in this category." style="min-width: 55px; text-align: left;">Profile</span>
+                                <span class="has-tooltip" data-tooltip="Gen Pop %: Average percentage of general population engaging with items in this category." style="min-width: 50px; text-align: left;">GP</span>
+                                <span class="has-tooltip" data-tooltip="Avg Index: Average index across all items in this category. 1.0x = same as Gen Pop, 2.0x = 2x more likely than Gen Pop." style="min-width: 50px; text-align: left;">Index</span>
+                                <span class="has-tooltip" data-tooltip="Hot Count: Number of items in this category with index above 1.5x (strong over-indexers)." style="min-width: 40px; text-align: left;">Hot 🔥</span>
                             </span>
                         </div>
                         <div id="behavioralTopCategories" class="behavioral-insight-content">
@@ -21953,7 +21953,11 @@
                     ? items.reduce((s, i) => s + (i.genPopPct || i.genPop || i.gen_pop || 0), 0) / items.length
                     : 0;
                 const highCount = items.filter(i => (i.index || 100) >= 150).length;
-                categoryStats[cat] = { avgIndex: avgIdx, avgPct: avgPct, avgGenPop: avgGenPop, count: items.length, highCount };
+                // Get top 5 items by index for tooltip
+                const top5Items = [...items]
+                    .sort((a, b) => (b.index || 100) - (a.index || 100))
+                    .slice(0, 5);
+                categoryStats[cat] = { avgIndex: avgIdx, avgPct: avgPct, avgGenPop: avgGenPop, count: items.length, highCount, top5Items };
             });
             
             const topCategories = Object.entries(categoryStats)
@@ -21971,14 +21975,22 @@
                     : (isProjectionCats 
                         ? formatNumber(Math.round((stats.avgGenPop / 100) * US_POP_CATS))
                         : stats.avgGenPop.toFixed(2) + '%');
+                // Build top 5 items tooltip
+                const top5Tooltip = stats.top5Items.map((item, idx) => {
+                    const itemName = item.name || item.brand || 'Unknown';
+                    const itemPct = (item.pct || item.percentage || 0).toFixed(2);
+                    const itemGP = (item.genPopPct || item.genPop || item.gen_pop || 0);
+                    const itemGPDisplay = itemGP < 0.01 ? 'N/A' : itemGP.toFixed(2) + '%';
+                    return `${idx + 1}. ${itemName}: ${itemPct}% (GP: ${itemGPDisplay})`;
+                }).join(' | ');
                 return `
-                <div class="behavioral-top-cat has-tooltip" data-tooltip="${cat}: ${stats.count} items tracked, avg profile ${stats.avgPct.toFixed(2)}%, avg Gen Pop ${stats.avgGenPop < 0.01 ? 'N/A' : stats.avgGenPop.toFixed(2) + '%'}, avg index ${formatIndex(stats.avgIndex)}, ${stats.highCount} strong over-indexers (>1.5x).">
+                <div class="behavioral-top-cat" style="cursor: pointer;" onclick="jumpToBehavioralCategory('${cat}')" title="Top 5: ${top5Tooltip}">
                     <span class="cat-name" style="flex: 1; text-align: left;">${cat}</span>
                     <span class="cat-stats">
-                        <span class="cat-pct" style="color: var(--accent-lime); min-width: 55px; text-align: right;">${profileDisplay}</span>
-                        <span class="cat-gp" style="color: var(--text-secondary); min-width: 50px; text-align: right;">${gpDisplay}</span>
-                        <span class="cat-idx" style="color: ${stats.avgIndex >= 100 ? '#10b981' : '#ef4444'}; min-width: 50px; text-align: right;">${formatIndex(stats.avgIndex)}</span>
-                        <span class="cat-high" style="min-width: 40px; text-align: right;">${stats.highCount > 0 ? stats.highCount + '🔥' : '-'}</span>
+                        <span class="cat-pct" style="color: var(--accent-lime); min-width: 55px; text-align: left;">${profileDisplay}</span>
+                        <span class="cat-gp" style="color: var(--text-secondary); min-width: 50px; text-align: left;">${gpDisplay}</span>
+                        <span class="cat-idx" style="color: ${stats.avgIndex >= 100 ? '#10b981' : '#ef4444'}; min-width: 50px; text-align: left;">${formatIndex(stats.avgIndex)}</span>
+                        <span class="cat-high" style="min-width: 40px; text-align: left;">${stats.highCount > 0 ? stats.highCount + '🔥' : '-'}</span>
                     </span>
                 </div>
             `}).join('') || '<p style="color: var(--text-secondary);">No data available</p>';
@@ -22055,7 +22067,9 @@
                 activations.push({
                     icon: '🏬',
                     text: `<strong>Big Box:</strong> ${bigBoxMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(bigBoxMatches[0])}</span>`,
-                    tooltip: `Big Box Retail: This audience shops at ${bigBoxMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider in-store activations, endcap displays, or retail media network ads.`
+                    tooltip: `Big Box Retail: This audience shops at ${bigBoxMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider in-store activations, endcap displays, or retail media network ads.`,
+                    category: bigBoxMatches[0].category,
+                    searchTerm: bigBoxMatches[0].name
                 });
             }
             
@@ -22067,7 +22081,9 @@
                 activations.push({
                     icon: '👔',
                     text: `<strong>Dept Store:</strong> ${deptMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(deptMatches[0])}</span>`,
-                    tooltip: `Department Stores: This audience shops at ${deptMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider premium placement, store events, or loyalty program partnerships.`
+                    tooltip: `Department Stores: This audience shops at ${deptMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider premium placement, store events, or loyalty program partnerships.`,
+                    category: deptMatches[0].category,
+                    searchTerm: deptMatches[0].name
                 });
             }
             
@@ -22079,7 +22095,9 @@
                 activations.push({
                     icon: '🛒',
                     text: `<strong>E-commerce:</strong> ${ecomMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(ecomMatches[0])}</span>`,
-                    tooltip: `E-commerce: This audience shops online at ${ecomMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider sponsored products, display ads, or marketplace partnerships.`
+                    tooltip: `E-commerce: This audience shops online at ${ecomMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider sponsored products, display ads, or marketplace partnerships.`,
+                    category: ecomMatches[0].category,
+                    searchTerm: ecomMatches[0].name
                 });
             }
             
@@ -22091,7 +22109,9 @@
                 activations.push({
                     icon: '🥬',
                     text: `<strong>Grocery:</strong> ${groceryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(groceryMatches[0])}</span>`,
-                    tooltip: `Grocery: This audience shops at ${groceryMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider in-store sampling, circular ads, or loyalty card targeting.`
+                    tooltip: `Grocery: This audience shops at ${groceryMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider in-store sampling, circular ads, or loyalty card targeting.`,
+                    category: groceryMatches[0].category,
+                    searchTerm: groceryMatches[0].name
                 });
             }
             
@@ -22105,7 +22125,9 @@
                 activations.push({
                     icon: '🔍',
                     text: `<strong>Search:</strong> ${searchMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(searchMatches[0])}</span>`,
-                    tooltip: `Search Engines: This audience uses ${searchMatches.map(b => formatActivationTooltip(b)).join('; ')}. Prioritize SEM/PPC campaigns on these platforms for maximum reach.`
+                    tooltip: `Search Engines: This audience uses ${searchMatches.map(b => formatActivationTooltip(b)).join('; ')}. Prioritize SEM/PPC campaigns on these platforms for maximum reach.`,
+                    category: searchMatches[0].category,
+                    searchTerm: searchMatches[0].name
                 });
             }
             
@@ -22123,7 +22145,9 @@
                 activations.push({
                     icon: '🍔',
                     text: `<strong>Food Delivery:</strong> ${foodDeliveryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(foodDeliveryMatches[0])}</span>`,
-                    tooltip: `Food Delivery: This audience uses ${foodDeliveryMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider sponsored placements, promo code partnerships, or in-app advertising.`
+                    tooltip: `Food Delivery: This audience uses ${foodDeliveryMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider sponsored placements, promo code partnerships, or in-app advertising.`,
+                    category: foodDeliveryMatches[0].category,
+                    searchTerm: foodDeliveryMatches[0].name
                 });
             }
             
@@ -22135,6 +22159,8 @@
                 activations.push({
                     icon: '🚗',
                     text: `<strong>Rideshare:</strong> ${rideshareMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(rideshareMatches[0])}</span>`,
+                    category: rideshareMatches[0].category,
+                    searchTerm: rideshareMatches[0].name,
                     tooltip: `Rideshare: This audience uses ${rideshareMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider in-app ads, promo partnerships, or event transportation sponsorships.`
                 });
             }
@@ -22215,7 +22241,9 @@
                 activations.push({
                     icon: '🍔',
                     text: `<strong>QSR Burger:</strong> ${burgerMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${burgerMatches[0].pct.toFixed(2)}% | GP: ${burgerMatches[0].genPop.toFixed(2)}% | ${formatIndex(burgerMatches[0].index)})</span>`,
-                    tooltip: `QSR Burgers: This audience dines at ${burgerMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, app partnerships, or sponsorship activations.`
+                    tooltip: `QSR Burgers: This audience dines at ${burgerMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, app partnerships, or sponsorship activations.`,
+                    category: burgerMatches[0].category,
+                    searchTerm: burgerMatches[0].name
                 });
             }
             
@@ -22227,7 +22255,9 @@
                 activations.push({
                     icon: '🍗',
                     text: `<strong>QSR Chicken:</strong> ${chickenMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${chickenMatches[0].pct.toFixed(2)}% | GP: ${chickenMatches[0].genPop.toFixed(2)}% | ${formatIndex(chickenMatches[0].index)})</span>`,
-                    tooltip: `QSR Chicken: This audience dines at ${chickenMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, app partnerships, or sponsorship activations.`
+                    tooltip: `QSR Chicken: This audience dines at ${chickenMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, app partnerships, or sponsorship activations.`,
+                    category: chickenMatches[0].category,
+                    searchTerm: chickenMatches[0].name
                 });
             }
             
@@ -22239,7 +22269,9 @@
                 activations.push({
                     icon: '🍕',
                     text: `<strong>QSR Pizza:</strong> ${pizzaMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${pizzaMatches[0].pct.toFixed(2)}% | GP: ${pizzaMatches[0].genPop.toFixed(2)}% | ${formatIndex(pizzaMatches[0].index)})</span>`,
-                    tooltip: `QSR Pizza: This audience orders from ${pizzaMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider delivery app partnerships, box toppers, or loyalty program integrations.`
+                    tooltip: `QSR Pizza: This audience orders from ${pizzaMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider delivery app partnerships, box toppers, or loyalty program integrations.`,
+                    category: pizzaMatches[0].category,
+                    searchTerm: pizzaMatches[0].name
                 });
             }
             
@@ -22251,7 +22283,9 @@
                 activations.push({
                     icon: '🌮',
                     text: `<strong>QSR Mexican:</strong> ${mexicanMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${mexicanMatches[0].pct.toFixed(2)}% | GP: ${mexicanMatches[0].genPop.toFixed(2)}% | ${formatIndex(mexicanMatches[0].index)})</span>`,
-                    tooltip: `QSR Mexican: This audience dines at ${mexicanMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, catering partnerships, or app integrations.`
+                    tooltip: `QSR Mexican: This audience dines at ${mexicanMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, catering partnerships, or app integrations.`,
+                    category: mexicanMatches[0].category,
+                    searchTerm: mexicanMatches[0].name
                 });
             }
             
@@ -22263,7 +22297,9 @@
                 activations.push({
                     icon: '🥪',
                     text: `<strong>QSR Subs:</strong> ${sandwichMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${sandwichMatches[0].pct.toFixed(2)}% | GP: ${sandwichMatches[0].genPop.toFixed(2)}% | ${formatIndex(sandwichMatches[0].index)})</span>`,
-                    tooltip: `QSR Sandwiches: This audience dines at ${sandwichMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider catering partnerships, loyalty programs, or delivery promotions.`
+                    tooltip: `QSR Sandwiches: This audience dines at ${sandwichMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider catering partnerships, loyalty programs, or delivery promotions.`,
+                    category: sandwichMatches[0].category,
+                    searchTerm: sandwichMatches[0].name
                 });
             }
             
@@ -22275,7 +22311,9 @@
                 activations.push({
                     icon: '☕',
                     text: `<strong>Coffee/Cafe:</strong> ${coffeeMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${coffeeMatches[0].pct.toFixed(2)}% | GP: ${coffeeMatches[0].genPop.toFixed(2)}% | ${formatIndex(coffeeMatches[0].index)})</span>`,
-                    tooltip: `Coffee/Cafe: This audience frequents ${coffeeMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider morning daypart targeting, rewards program partnerships, or in-store activations.`
+                    tooltip: `Coffee/Cafe: This audience frequents ${coffeeMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider morning daypart targeting, rewards program partnerships, or in-store activations.`,
+                    category: coffeeMatches[0].category,
+                    searchTerm: coffeeMatches[0].name
                 });
             }
             
@@ -22287,7 +22325,9 @@
                 activations.push({
                     icon: '🥡',
                     text: `<strong>Asian QSR:</strong> ${asianMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${asianMatches[0].pct.toFixed(2)}% | GP: ${asianMatches[0].genPop.toFixed(2)}% | ${formatIndex(asianMatches[0].index)})</span>`,
-                    tooltip: `Asian QSR: This audience dines at ${asianMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider delivery partnerships, cultural event sponsorships, or app promotions.`
+                    tooltip: `Asian QSR: This audience dines at ${asianMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider delivery partnerships, cultural event sponsorships, or app promotions.`,
+                    category: asianMatches[0].category,
+                    searchTerm: asianMatches[0].name
                 });
             }
             
@@ -22297,6 +22337,8 @@
             ).sort((a, b) => b.index - a.index).slice(0, 2);
             if (casualMatches.length > 0) {
                 activations.push({
+                    category: casualMatches[0].category,
+                    searchTerm: casualMatches[0].name,
                     icon: '🍽️',
                     text: `<strong>Casual Dining:</strong> ${casualMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${casualMatches[0].pct.toFixed(2)}% | GP: ${casualMatches[0].genPop.toFixed(2)}% | ${formatIndex(casualMatches[0].index)})</span>`,
                     tooltip: `Casual Dining: This audience dines at ${casualMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider gift card partnerships, event hosting, or loyalty program integrations.`
@@ -22385,7 +22427,7 @@
             }
             
             document.getElementById('behavioralActivations').innerHTML = activations.slice(0, 15).map(a => `
-                <div class="behavioral-activation-item has-tooltip" data-tooltip="${a.tooltip || ''}">
+                <div class="behavioral-activation-item has-tooltip" data-tooltip="${a.tooltip || ''}" style="cursor: pointer;" onclick="jumpToBrandCategory('${a.category || ''}', '${a.searchTerm || ''}')">
                     <span class="icon">${a.icon}</span>
                     <span class="text">${a.text}</span>
                 </div>
@@ -35490,6 +35532,66 @@
             
             // Reset dropdown
             document.getElementById('compJumpToSelect').value = '';
+        }
+        
+        // Jump to behavioral category in the interests section
+        function jumpToBehavioralCategory(categoryName) {
+            // First, set the category filter in the All Interests section
+            const categorySelect = document.getElementById('interestsCategorySelect');
+            if (categorySelect) {
+                // Find the matching option (case-insensitive)
+                const options = Array.from(categorySelect.options);
+                const matchingOption = options.find(opt => 
+                    opt.value.toLowerCase() === categoryName.toLowerCase() ||
+                    opt.text.toLowerCase() === categoryName.toLowerCase()
+                );
+                if (matchingOption) {
+                    categorySelect.value = matchingOption.value;
+                    // Trigger the filter
+                    if (typeof filterInterests === 'function') {
+                        filterInterests();
+                    }
+                }
+            }
+            
+            // Scroll to the All Interests section
+            const interestsSection = document.querySelector('.interests-list-section');
+            if (interestsSection) {
+                interestsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+        
+        // Jump to brand/item in the interests section from Top Performing Brands
+        function jumpToBrandCategory(category, searchTerm) {
+            // Set the category filter if provided
+            const categorySelect = document.getElementById('interestsCategorySelect');
+            if (categorySelect && category) {
+                const options = Array.from(categorySelect.options);
+                const matchingOption = options.find(opt => 
+                    opt.value.toLowerCase() === category.toLowerCase() ||
+                    opt.text.toLowerCase() === category.toLowerCase()
+                );
+                if (matchingOption) {
+                    categorySelect.value = matchingOption.value;
+                }
+            }
+            
+            // Set the search term to find the specific brand
+            const searchInput = document.getElementById('interestsSearchInput');
+            if (searchInput && searchTerm) {
+                searchInput.value = searchTerm;
+            }
+            
+            // Trigger the filter
+            if (typeof filterInterests === 'function') {
+                filterInterests();
+            }
+            
+            // Scroll to the All Interests section
+            const interestsSection = document.querySelector('.interests-list-section');
+            if (interestsSection) {
+                interestsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
         }
 
         function toggleDisplayMode() {
