@@ -8358,6 +8358,34 @@
             border-bottom: 1px solid var(--border-color);
         }
         
+        /* Top toolbar for deck title, export, share, trash - positioned at very top */
+        .slide-editor-top-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30, 41, 59, 0.95) 100%);
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+        
+        .slide-editor-top-toolbar .slide-editor-toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .slide-editor-top-toolbar .slide-editor-toolbar-right {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .slide-editor-top-toolbar .btn {
+            font-size: 0.75rem;
+            padding: 0.4rem 0.75rem;
+        }
+        
         .slide-editor-toolbar-left {
             display: flex;
             align-items: center;
@@ -41930,6 +41958,23 @@
             const name = prompt('Enter deck name:', 'New Presentation');
             if (!name) return;
             
+            // Get the current profile image as the default deck image
+            let defaultImage = null;
+            if (currentProfileData?.name) {
+                const cacheKey = currentProfileData.name.toLowerCase().trim();
+                const cachedUrl = profileImageCache[cacheKey];
+                if (cachedUrl && cachedUrl !== 'none') {
+                    defaultImage = cachedUrl;
+                }
+            }
+            // Fallback: try to get from the visible profile image element
+            if (!defaultImage) {
+                const profileImg = document.querySelector('#dashProfileImage img');
+                if (profileImg && profileImg.src && !profileImg.src.endsWith('/')) {
+                    defaultImage = profileImg.src;
+                }
+            }
+            
             const newDeck = {
                 id: 'deck_' + Date.now(),
                 name: name,
@@ -41938,7 +41983,7 @@
                 titleSlide: {
                     title: currentProfileData?.name || 'Audience Profile',
                     subtitle: 'Powered by Crosswalk IQ',
-                    image: null
+                    image: defaultImage
                 },
                 createdBy: currentUsername,
                 createdAt: new Date().toISOString(),
@@ -41987,15 +42032,16 @@
             const currentSlide = allSlides[currentEditingSlide] || allSlides[0];
             
             contentEl.innerHTML = `
-                <div class="slide-editor-toolbar">
+                <!-- Top Toolbar: Title, Export, Share, Trash -->
+                <div class="slide-editor-top-toolbar">
                     <div class="slide-editor-toolbar-left">
                         <input type="text" value="${deck.name}" onchange="updateDeckNameInEditor(this.value)" 
-                               style="font-size: 1rem; font-weight: 600; background: transparent; border: none; color: var(--text-primary); width: 200px;">
-                        <span style="font-size: 0.75rem; color: var(--text-secondary);">${allSlides.length} slides</span>
+                               style="font-size: 1.1rem; font-weight: 600; background: transparent; border: none; color: var(--text-primary); width: 250px;" placeholder="Deck Title">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); margin-left: 0.5rem;">${allSlides.length} slides</span>
                     </div>
                     <div class="slide-editor-toolbar-right">
                         <div class="export-dropdown" style="position: relative;">
-                            <button class="btn btn-small btn-secondary" onclick="toggleDeckExportMenu()">📥 Export ▾</button>
+                            <button class="btn btn-small btn-secondary" onclick="toggleDeckExportMenu()">📥 EXPORT ▾</button>
                             <div id="deckExportMenu" class="export-dropdown-menu" style="display: none; position: absolute; top: 100%; right: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 180px; z-index: 1000; margin-top: 0.25rem;">
                                 <a onclick="exportDeckToPDF()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">📄 PDF</a>
                                 <a onclick="exportDeckToGoogleSlides()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">📑 Google Slides</a>
@@ -42003,8 +42049,8 @@
                                 <a onclick="exportDeckToKeynote()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">🍎 Keynote</a>
                             </div>
                         </div>
-                        <button class="btn btn-small btn-primary" onclick="shareDeckWithTeam()">👥 Share</button>
-                        <button class="btn btn-small btn-danger" onclick="deleteDeckFromEditor()" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">🗑️</button>
+                        <button class="btn btn-small btn-primary" onclick="shareDeckWithTeam()">👥 SHARE</button>
+                        <button class="btn btn-small btn-danger" onclick="deleteDeckFromEditor()" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;" title="Delete Deck">🗑️</button>
                     </div>
                 </div>
                 
@@ -42844,7 +42890,7 @@
                                             ? `<img src="${u.profile_picture}" alt="${displayName}">`
                                             : `<div style="width: 100%; height: 100%; border-radius: 50%; background: var(--accent-blue); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.7rem; color: white;">${u.username.substring(0, 2).toUpperCase()}</div>`;
                                         return `
-                                            <div class="team-member" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.5rem; background: var(--bg-input); border-radius: 6px; margin-bottom: 0.5rem; border: 1px solid var(--border-color);">
+                                            <div class="team-member" onclick="openChatWith('${u.username}')" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.5rem; background: var(--bg-input); border-radius: 6px; margin-bottom: 0.5rem; border: 1px solid var(--border-color); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-cyan)'; this.style.background='rgba(0, 217, 255, 0.1)';" onmouseout="this.style.borderColor='var(--border-color)'; this.style.background='var(--bg-input)';">
                                                 <div class="team-member-avatar" style="width: 36px; height: 36px; border-radius: 50%; overflow: hidden; flex-shrink: 0;">
                                                     ${avatarHtml}
                                                 </div>
@@ -42852,6 +42898,7 @@
                                                     <span class="team-member-name" style="display: block; font-weight: 600; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</span>
                                                     <span class="team-member-dept" style="font-size: 0.7rem; color: var(--text-secondary);">${u.department || 'No department'}</span>
                                                 </div>
+                                                <span style="font-size: 0.8rem; color: var(--accent-cyan);" title="Click to chat">💬</span>
                                             </div>
                                         `;
                                     }).join('');
@@ -43097,6 +43144,299 @@
                 alert('Failed to remove: ' + e.message);
             }
         }
+        
+        // ============================================================================
+        // TEAM CHAT WIDGET
+        // ============================================================================
+        
+        let chatConversations = JSON.parse(localStorage.getItem('chatConversations') || '{}');
+        let currentChatConversation = null;
+        let chatUnreadCount = 0;
+        
+        function toggleChatWindow() {
+            const window = document.getElementById('chatWindow');
+            const btn = document.getElementById('chatWidgetBtn');
+            
+            if (window.classList.contains('open')) {
+                window.classList.remove('open');
+            } else {
+                window.classList.add('open');
+                btn.classList.remove('has-notification');
+                loadChatContacts();
+            }
+        }
+        
+        function loadChatContacts() {
+            const list = document.getElementById('chatContactsList');
+            if (!list) return;
+            
+            if (collabTeamMembers.length === 0) {
+                list.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.8rem;">No team members yet. Go to Workspace tab to load your team.</div>';
+                return;
+            }
+            
+            list.innerHTML = collabTeamMembers.map(m => {
+                const displayName = m.first_name && m.last_name ? `${m.first_name} ${m.last_name}` : m.username;
+                const convoId = getConversationId([currentUsername, m.username]);
+                const convo = chatConversations[convoId];
+                const lastMsg = convo?.messages?.[convo.messages.length - 1];
+                const unread = convo?.unread?.[currentUsername] || 0;
+                const avatarHtml = m.profile_picture 
+                    ? `<img src="${m.profile_picture}" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;">`
+                    : `<div style="width: 36px; height: 36px; border-radius: 50%; background: var(--accent-blue); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.7rem; color: white;">${m.username.substring(0, 2).toUpperCase()}</div>`;
+                
+                return `
+                    <div class="chat-contact-item" onclick="openChatWith('${m.username}')">
+                        <div class="chat-contact-avatar">${avatarHtml}</div>
+                        <div class="chat-contact-info">
+                            <div class="chat-contact-name">${displayName}</div>
+                            <div class="chat-contact-preview">${lastMsg ? lastMsg.text.substring(0, 30) + (lastMsg.text.length > 30 ? '...' : '') : 'No messages yet'}</div>
+                        </div>
+                        ${unread > 0 ? `<span class="chat-contact-unread">${unread}</span>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function filterChatContacts(searchTerm) {
+            const term = searchTerm.toLowerCase().trim();
+            document.querySelectorAll('.chat-contact-item').forEach(item => {
+                const name = item.querySelector('.chat-contact-name')?.textContent.toLowerCase() || '';
+                item.style.display = !term || name.includes(term) ? 'flex' : 'none';
+            });
+        }
+        
+        function getConversationId(participants) {
+            return participants.sort().join('_');
+        }
+        
+        function openChatWith(username) {
+            const convoId = getConversationId([currentUsername, username]);
+            currentChatConversation = {
+                id: convoId,
+                participants: [currentUsername, username],
+                isGroup: false
+            };
+            
+            // Initialize conversation if doesn't exist
+            if (!chatConversations[convoId]) {
+                chatConversations[convoId] = {
+                    participants: [currentUsername, username],
+                    messages: [],
+                    unread: {}
+                };
+            }
+            
+            // Clear unread for current user
+            chatConversations[convoId].unread[currentUsername] = 0;
+            localStorage.setItem('chatConversations', JSON.stringify(chatConversations));
+            
+            // Find display name
+            const member = collabTeamMembers.find(m => m.username === username);
+            const displayName = member ? (member.first_name && member.last_name ? `${member.first_name} ${member.last_name}` : member.username) : username;
+            
+            // Switch to conversation view
+            document.getElementById('chatContactsView').style.display = 'none';
+            document.getElementById('chatConversationView').style.display = 'flex';
+            document.getElementById('chatConvoName').textContent = displayName;
+            
+            renderChatMessages();
+            updateChatUnreadBadge();
+            
+            // Focus input
+            document.getElementById('chatMessageInput')?.focus();
+        }
+        
+        function backToChatContacts() {
+            currentChatConversation = null;
+            document.getElementById('chatContactsView').style.display = 'flex';
+            document.getElementById('chatConversationView').style.display = 'none';
+            loadChatContacts();
+        }
+        
+        function renderChatMessages() {
+            const container = document.getElementById('chatMessages');
+            if (!container || !currentChatConversation) return;
+            
+            const convo = chatConversations[currentChatConversation.id];
+            const messages = convo?.messages || [];
+            
+            if (messages.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary); font-size: 0.8rem;">No messages yet. Start the conversation!</div>';
+                return;
+            }
+            
+            container.innerHTML = messages.map(msg => {
+                const isMe = msg.sender === currentUsername;
+                const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                return `
+                    <div class="chat-message ${isMe ? 'sent' : 'received'}">
+                        <div class="chat-message-content">${msg.text}</div>
+                        <div class="chat-message-time">${time}</div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Scroll to bottom
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function handleChatKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendChatMessage();
+            }
+        }
+        
+        function sendChatMessage() {
+            const input = document.getElementById('chatMessageInput');
+            const text = input?.value.trim();
+            
+            if (!text || !currentChatConversation) return;
+            
+            const convoId = currentChatConversation.id;
+            
+            if (!chatConversations[convoId]) {
+                chatConversations[convoId] = {
+                    participants: currentChatConversation.participants,
+                    messages: [],
+                    unread: {}
+                };
+            }
+            
+            const message = {
+                id: 'msg_' + Date.now(),
+                sender: currentUsername,
+                text: text,
+                timestamp: new Date().toISOString()
+            };
+            
+            chatConversations[convoId].messages.push(message);
+            
+            // Mark as unread for other participants
+            currentChatConversation.participants.forEach(p => {
+                if (p !== currentUsername) {
+                    chatConversations[convoId].unread[p] = (chatConversations[convoId].unread[p] || 0) + 1;
+                }
+            });
+            
+            localStorage.setItem('chatConversations', JSON.stringify(chatConversations));
+            
+            input.value = '';
+            renderChatMessages();
+        }
+        
+        function startNewGroupChat() {
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'groupChatModal';
+            
+            const memberOptions = collabTeamMembers.map(m => {
+                const displayName = m.first_name && m.last_name ? `${m.first_name} ${m.last_name}` : m.username;
+                return `
+                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" class="group-chat-member" value="${m.username}">
+                        <span>${displayName}</span>
+                    </label>
+                `;
+            }).join('');
+            
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 350px;">
+                    <div class="deck-workspace-header">
+                        <h2>👥 New Group Chat</h2>
+                        <button onclick="document.getElementById('groupChatModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1rem;">
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Group Name</label>
+                            <input type="text" id="groupChatName" placeholder="e.g., Project Team" style="width: 100%; padding: 0.5rem; border-radius: 4px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary);">
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Select Members</label>
+                            <div style="max-height: 200px; overflow-y: auto; background: var(--bg-input); border-radius: 4px; padding: 0.5rem;">
+                                ${memberOptions || '<p style="color: var(--text-secondary);">No team members</p>'}
+                            </div>
+                        </div>
+                        <button onclick="createGroupChat()" class="btn btn-primary" style="width: 100%;">Create Group</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function createGroupChat() {
+            const name = document.getElementById('groupChatName')?.value.trim() || 'Group Chat';
+            const members = Array.from(document.querySelectorAll('.group-chat-member:checked')).map(cb => cb.value);
+            
+            if (members.length === 0) {
+                alert('Please select at least one member');
+                return;
+            }
+            
+            members.push(currentUsername);
+            const convoId = 'group_' + Date.now();
+            
+            chatConversations[convoId] = {
+                id: convoId,
+                name: name,
+                participants: members,
+                isGroup: true,
+                messages: [],
+                unread: {}
+            };
+            
+            localStorage.setItem('chatConversations', JSON.stringify(chatConversations));
+            document.getElementById('groupChatModal')?.remove();
+            
+            currentChatConversation = {
+                id: convoId,
+                participants: members,
+                isGroup: true,
+                name: name
+            };
+            
+            document.getElementById('chatContactsView').style.display = 'none';
+            document.getElementById('chatConversationView').style.display = 'flex';
+            document.getElementById('chatConvoName').textContent = name;
+            
+            renderChatMessages();
+            showNotification('✅ Group chat created!', 'success');
+        }
+        
+        function updateChatUnreadBadge() {
+            let total = 0;
+            Object.values(chatConversations).forEach(convo => {
+                total += convo.unread?.[currentUsername] || 0;
+            });
+            
+            const badge = document.getElementById('chatUnreadBadge');
+            if (badge) {
+                badge.textContent = total;
+                badge.style.display = total > 0 ? 'flex' : 'none';
+            }
+            chatUnreadCount = total;
+        }
+        
+        function flashChatNotification() {
+            const btn = document.getElementById('chatWidgetBtn');
+            if (btn && !document.getElementById('chatWindow')?.classList.contains('open')) {
+                btn.classList.add('has-notification');
+            }
+        }
+        
+        // Initialize chat on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            updateChatUnreadBadge();
+            
+            // Check for new messages periodically (simulated - in real app would use WebSocket)
+            setInterval(() => {
+                updateChatUnreadBadge();
+            }, 5000);
+        });
+        
+        // Make openChatWith available for team member clicks
+        window.openChatWith = openChatWith;
     </script>
     
     <!-- Profile Picture Upload Modal -->
