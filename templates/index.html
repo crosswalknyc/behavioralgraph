@@ -7707,16 +7707,16 @@
         /* Collaboration Hub Styles */
         .collab-container {
             display: grid;
-            grid-template-columns: 250px 1fr;
+            grid-template-columns: 1fr;
             gap: 1rem;
             min-height: 70vh;
         }
 
         .collab-sidebar {
+            display: none;
             background: var(--bg-card);
             border-radius: 8px;
             padding: 1rem;
-            display: flex;
             flex-direction: column;
             height: 100%;
         }
@@ -7859,10 +7859,13 @@
            ============================================ */
         .chat-widget {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 99999;
+            bottom: 50px;
+            right: 24px;
+            z-index: 999999;
             font-family: inherit;
+            pointer-events: auto;
+            display: flex !important;
+            visibility: visible !important;
         }
         
         .chat-widget-btn {
@@ -13177,31 +13180,6 @@
                                 <option value="">Select Deck...</option>
                             </select>
                             <button onclick="showWorkspaceActions()" class="btn btn-small btn-secondary" style="padding: 0.4rem 0.6rem; font-size: 0.75rem;">⚙️</button>
-                        </div>
-                        
-                        <div class="collab-tabs">
-                            <button class="collab-tab" onclick="showCollabTab('datapoints')">📦 Data Points</button>
-                            <button class="collab-tab active" onclick="showCollabTab('decks')">📊 Deck Builder</button>
-                        </div>
-                        
-                        <div id="collab-tab-datapoints" class="collab-tab-content">
-                            <div class="datapoints-section">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                    <h3>📦 Saved Data Points</h3>
-                                    <div style="display: flex; gap: 0.5rem;">
-                                        <button class="btn btn-small btn-secondary" onclick="clearAllDataPoints()">🗑️ Clear All</button>
-                                    </div>
-                                </div>
-                                <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 1rem;">
-                                    Data points you've added using the ➕ button on charts and modules. Use these to build your decks.
-                                </p>
-                                <div id="dataPointsList" class="data-points-list">
-                                    <div class="collab-empty">
-                                        <p>No data points saved yet</p>
-                                        <p style="font-size: 0.8rem; color: var(--text-secondary);">Click the ➕ button on any chart or module to save it here</p>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                         
                         <div id="collab-tab-decks" class="collab-tab-content active">
@@ -38500,7 +38478,10 @@
                 
                 <!-- Summary Data -->
                 <div class="comp-section" id="comp-summary">
-                    <div class="comp-section-title">Comparison Data</div>
+                    <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Comparison Data</span>
+                        <button class="btn btn-small btn-primary" onclick="addComparisonModuleToDeck('summary')" title="Add this comparison to deck" style="font-size: 0.7rem; padding: 0.3rem 0.6rem;">➕ Add to Deck</button>
+                    </div>
                     <table class="comp-table">
                         <thead>
                             <tr>
@@ -38553,6 +38534,7 @@
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${genderCount} values</span>
                         </span>
                         <span style="display: flex; align-items: center; gap: 0.35rem;">
+                            <button class="btn btn-small btn-primary" onclick="addComparisonModuleToDeck('gender')" title="Add this comparison to deck" style="font-size: 0.7rem; padding: 0.3rem 0.6rem;">➕ Add to Deck</button>
                             <select onchange="setComparisonSectionLimit('demo_gender', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                 <option value="15" ${genderLimit == 15 ? 'selected' : ''}>Top 15</option>
                                 <option value="25" ${genderLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -38592,6 +38574,7 @@
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${ageCount} values</span>
                         </span>
                         <span style="display: flex; align-items: center; gap: 0.35rem;">
+                            <button class="btn btn-small btn-primary" onclick="addComparisonModuleToDeck('age')" title="Add this comparison to deck" style="font-size: 0.7rem; padding: 0.3rem 0.6rem;">➕ Add to Deck</button>
                             <select onchange="setComparisonSectionLimit('demo_age', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                 <option value="15" ${ageLimit == 15 ? 'selected' : ''}>Top 15</option>
                                 <option value="25" ${ageLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -38631,6 +38614,7 @@
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${ethnicityCount} values</span>
                         </span>
                         <span style="display: flex; align-items: center; gap: 0.35rem;">
+                            <button class="btn btn-small btn-primary" onclick="addComparisonModuleToDeck('ethnicity')" title="Add this comparison to deck" style="font-size: 0.7rem; padding: 0.3rem 0.6rem;">➕ Add to Deck</button>
                             <select onchange="setComparisonSectionLimit('demo_ethnicity', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                 <option value="15" ${ethnicityLimit == 15 ? 'selected' : ''}>Top 15</option>
                                 <option value="25" ${ethnicityLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -38670,6 +38654,7 @@
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${incomeCount} values</span>
                         </span>
                         <span style="display: flex; align-items: center; gap: 0.35rem;">
+                            <button class="btn btn-small btn-primary" onclick="addComparisonModuleToDeck('income')" title="Add this comparison to deck" style="font-size: 0.7rem; padding: 0.3rem 0.6rem;">➕ Add to Deck</button>
                             <select onchange="setComparisonSectionLimit('demo_income', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                 <option value="15" ${incomeLimit == 15 ? 'selected' : ''}>Top 15</option>
                                 <option value="25" ${incomeLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -38718,6 +38703,7 @@
                                 <span style="font-size: 0.65rem; font-weight: normal; opacity: 0.7;">Index: <span style="color: #10b981;">●</span> &gt;100 | <span style="color: #ef4444;">●</span> &lt;100</span>
                             </span>
                             <span style="display: flex; align-items: center; gap: 0.35rem;">
+                                <button class="btn btn-small btn-primary" onclick="addComparisonModuleToDeck('behavioral_${safeCatId}')" title="Add this comparison to deck" style="font-size: 0.7rem; padding: 0.3rem 0.6rem;">➕ Add to Deck</button>
                                 <select onchange="setComparisonSectionLimit('${catKey}', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                     <option value="15" ${currentLimit == 15 ? 'selected' : ''}>Top 15</option>
                                     <option value="25" ${currentLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -38756,6 +38742,7 @@
                         <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
                             <span style="white-space: nowrap;">Locations/DMAs</span>
                             <span style="display: flex; align-items: center; gap: 0.35rem;">
+                                <button class="btn btn-small btn-primary" onclick="addComparisonModuleToDeck('location')" title="Add this comparison to deck" style="font-size: 0.7rem; padding: 0.3rem 0.6rem;">➕ Add to Deck</button>
                                 <select onchange="setComparisonSectionLimit('location', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                     <option value="15" ${locationLimit == 15 ? 'selected' : ''}>Top 15</option>
                                     <option value="25" ${locationLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -40407,6 +40394,51 @@
             `;
             
             document.getElementById('compInsightsContent').innerHTML = html;
+        }
+        
+        function addComparisonModuleToDeck(moduleType) {
+            if (!currentEditingDeck) {
+                showNotification('⚠️ Please create or select a deck first', 'warning');
+                showTab('collaboration');
+                setTimeout(() => showCollabTab('decks'), 100);
+                return;
+            }
+            
+            const profiles = window.comparisonProfilesData || [];
+            if (profiles.length === 0) {
+                showNotification('⚠️ No comparison data available', 'warning');
+                return;
+            }
+            
+            // Create a slide with comparison data
+            const slide = {
+                id: 'slide_' + Date.now(),
+                type: 'comparison',
+                comparisonType: moduleType,
+                title: `Comparison: ${moduleType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`,
+                data: {
+                    profiles: profiles.map(p => ({
+                        name: p.name,
+                        color: p.color,
+                        sampleSize: p.sampleSize,
+                        projectedUS: p.projectedUS,
+                        medianAge: p.medianAge,
+                        demographics: p.demographics,
+                        behavioral: p.behavioral,
+                        locations: p.locations
+                    })),
+                    moduleType: moduleType,
+                    displayMode: displayMode
+                },
+                notes: '',
+                elements: []
+            };
+            
+            if (!currentEditingDeck.slides) currentEditingDeck.slides = [];
+            currentEditingDeck.slides.push(slide);
+            saveDeckChanges();
+            renderSlideThumbnails();
+            showNotification(`✅ ${slide.title} added to deck!`, 'success');
         }
         
         function findSharedBehaviors(profiles) {
@@ -43741,6 +43773,8 @@
                             <button class="toolbar-btn" onclick="analyzeSlideWithAI()" title="Analyze slide data with AI and add key points & takeaways" style="background: var(--accent-cyan); color: var(--bg-dark);">🤖 Analyze with AI</button>
                         </div>
                         <div class="slide-toolbar-group">
+                            <button class="toolbar-btn" onclick="bringToFront()" title="Bring to Front">⬆️</button>
+                            <button class="toolbar-btn" onclick="sendToBack()" title="Send to Back">⬇️</button>
                             <button class="toolbar-btn" onclick="deleteSelectedElement()" title="Delete" style="color: #ef4444;">🗑️</button>
                         </div>
                     </div>
@@ -43897,8 +43931,8 @@
                 ];
             }
             
-            // For module slides (demographic, behavioral, location, chart, affinity, insight, demographics) with data - render the imported data + any elements (e.g. AI analysis)
-            const moduleTypes = ['demographic', 'behavioral', 'location', 'chart', 'affinity', 'insight', 'demographics'];
+            // For module slides (demographic, behavioral, location, chart, affinity, insight, demographics, comparison) with data - render the imported data + any elements (e.g. AI analysis)
+            const moduleTypes = ['demographic', 'behavioral', 'location', 'chart', 'affinity', 'insight', 'demographics', 'comparison'];
             const slideType = (slide.type || '').toLowerCase();
             const hasModuleData = slide.data && (
                 moduleTypes.includes(slideType) ||
@@ -43907,7 +43941,8 @@
                 (slide.data.locations && Array.isArray(slide.data.locations)) ||
                 (slide.data.regions && Array.isArray(slide.data.regions)) ||
                 (slide.data.categories && typeof slide.data.categories === 'object') ||
-                (slide.data.chartImage)
+                (slide.data.chartImage) ||
+                (slide.data.profiles && Array.isArray(slide.data.profiles))
             );
             if (idx > 0 && hasModuleData) {
                 const title = slide.customTitle || slide.title || slide.category || 'Slide';
@@ -44860,6 +44895,64 @@
                         </div>
                     `;
                 }).join('');
+            }
+            
+            if (slideType === 'comparison' && slide.data && slide.data.profiles) {
+                const profiles = slide.data.profiles || [];
+                const moduleType = slide.data.moduleType || 'summary';
+                const displayMode = slide.data.displayMode || 'percentage';
+                const modeLabel = displayMode === 'projection' ? 'US POP #' : 'US %';
+                
+                if (moduleType === 'summary') {
+                    return `
+                        <table class="comp-table" style="width: 100%; font-size: 0.8rem;">
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Respondents</td>${profiles.map(p => `<td>n=${formatNumber(p.sampleSize)}</td>`).join('')}</tr>
+                                <tr><td>Projected US</td>${profiles.map(p => `<td>${formatNumber(p.projectedUS)}</td>`).join('')}</tr>
+                                <tr><td>Median Age</td>${profiles.map(p => `<td>${p.medianAge > 0 ? p.medianAge.toFixed(2) : '-'}</td>`).join('')}</tr>
+                            </tbody>
+                        </table>
+                    `;
+                } else if (['gender', 'age', 'ethnicity', 'income'].includes(moduleType)) {
+                    const demoKey = moduleType;
+                    const allValues = new Set();
+                    profiles.forEach(p => {
+                        if (p.demographics && p.demographics[demoKey]) {
+                            Object.keys(p.demographics[demoKey]).forEach(v => allValues.add(v));
+                        }
+                    });
+                    const sortedValues = Array.from(allValues).sort();
+                    
+                    return `
+                        <table class="comp-table" style="width: 100%; font-size: 0.75rem;">
+                            <thead>
+                                <tr>
+                                    <th>${moduleType.charAt(0).toUpperCase() + moduleType.slice(1)}</th>
+                                    ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${sortedValues.slice(0, 15).map(val => `
+                                    <tr>
+                                        <td>${val}</td>
+                                        ${profiles.map(p => {
+                                            const pct = p.demographics?.[demoKey]?.[val] || 0;
+                                            return `<td>${pct.toFixed(1)}%</td>`;
+                                        }).join('')}
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                }
+                
+                return '<p style="color: var(--text-secondary);">Comparison data</p>';
             }
             
             return '<p style="color: var(--text-secondary);">Content preview</p>';
