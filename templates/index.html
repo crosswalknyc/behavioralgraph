@@ -13208,11 +13208,11 @@
                     </div>
                     
                     <div class="collab-main">
-                        <!-- Workspace Selector Dropdown -->
-                        <div class="workspace-selector-bar" style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
-                            <label style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">WORKSPACE:</label>
-                            <div class="workspace-dropdown" style="position: relative; flex: 1; max-width: 240px;">
-                                <button id="workspaceDropdownBtn" onclick="toggleWorkspaceDropdown()" style="width: 100%; padding: 0.5rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem;">
+                        <!-- Unified Workspace + Deck Bar -->
+                        <div class="workspace-selector-bar" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); flex-wrap: wrap;">
+                            <label style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">WORKSPACE:</label>
+                            <div class="workspace-dropdown" style="position: relative; max-width: 180px;">
+                                <button id="workspaceDropdownBtn" onclick="toggleWorkspaceDropdown()" style="width: 100%; padding: 0.4rem 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem;">
                                     <span id="activeWorkspaceName">My Workspace</span>
                                     <span>▾</span>
                                 </button>
@@ -13230,44 +13230,37 @@
                                     </div>
                                 </div>
                             </div>
-                            <label style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">DECK:</label>
-                            <select id="deckSelectDropdown" onchange="selectDeckFromDropdown(this.value)" style="min-width: 180px; padding: 0.5rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem;">
+                            <label style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">DECK:</label>
+                            <select id="deckSelectDropdown" onchange="selectDeckFromDropdown(this.value)" style="width: 130px; max-width: 130px; padding: 0.4rem 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.8rem;">
                                 <option value="">Select Deck...</option>
                             </select>
-                            <button onclick="showWorkspaceActions()" class="btn btn-small btn-secondary" style="padding: 0.4rem 0.6rem; font-size: 0.75rem;">⚙️</button>
+                            <button class="btn btn-primary btn-small" onclick="createNewWorkspaceDeck()" style="white-space: nowrap; padding: 0.4rem 0.65rem; font-size: 0.75rem;">+ NEW DECK</button>
+                            <div id="deckActionButtons" style="display: none; align-items: center; gap: 0.35rem; margin-left: 0.25rem;">
+                                <button class="btn btn-small btn-success" onclick="shareDeckWithTeam()" style="padding: 0.35rem 0.5rem; font-size: 0.7rem;">👥 SHARE</button>
+                                <div class="export-dropdown" style="position: relative;">
+                                    <button class="btn btn-small btn-primary" onclick="toggleDeckExportMenu(event)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem;">EXPORT ▾</button>
+                                    <div id="deckExportMenu" class="export-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 180px; z-index: 1000; margin-top: 0.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                                        <a onclick="exportDeckToPDF()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📄 PDF</a>
+                                        <a onclick="exportDeckToGoogleSlides()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📑 Google Slides</a>
+                                        <a onclick="exportDeckToPPT()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📊 PowerPoint</a>
+                                        <a onclick="exportDeckToKeynote()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">🍎 Keynote</a>
+                                        <a onclick="commitDeckToGitHub()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">🐙 Commit to GitHub</a>
+                                    </div>
+                                </div>
+                                <button class="btn btn-small" onclick="archiveCurrentDeck()" title="Archive deck" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: rgba(147, 51, 234, 0.2); color: #a78bfa;">📦</button>
+                                <button class="btn btn-small" onclick="deleteDeckFromEditor()" title="Delete deck" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: rgba(239, 68, 68, 0.2); color: #ef4444;">🗑️</button>
+                            </div>
+                            <div id="deckTitleControls" style="display: none; align-items: center; gap: 0.5rem; padding-left: 0.5rem; margin-left: 0.25rem; border-left: 1px solid var(--border-color);">
+                                <input type="text" id="deckBuilderTitleInput" placeholder="Deck name" 
+                                       style="font-size: 0.85rem; font-weight: 600; background: transparent; border: none; border-bottom: 1px dashed var(--border-color); color: var(--text-primary); width: 120px; padding: 0.2rem 0; height: 28px;"
+                                       onchange="updateDeckNameInEditor(this.value)">
+                                <span id="deckSlideCount" style="font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap;">0 slides</span>
+                            </div>
+                            <button onclick="showWorkspaceActions()" class="btn btn-small btn-secondary" style="padding: 0.35rem 0.5rem; font-size: 0.75rem; margin-left: auto;" title="Workspace settings">⚙️</button>
                         </div>
                         
                         <div id="collab-tab-decks" class="collab-tab-content active">
                             <div class="workspace-deck-builder">
-                                <!-- Header with dropdowns and actions -->
-                                <div class="deck-builder-header" id="deckBuilderHeader">
-                                    <div class="deck-header-controls" style="flex: 1;">
-                                        <h3 style="margin: 0; font-size: 1rem; margin-right: 0.5rem;">📊 Deck Builder</h3>
-                                        <button class="btn btn-primary btn-small" onclick="createNewWorkspaceDeck()" style="white-space: nowrap;">+ NEW DECK</button>
-                                        <div id="deckActionButtons" style="display: none; align-items: center; gap: 0.5rem; margin-left: 0.5rem;">
-                                            <button class="btn btn-small btn-success" onclick="shareDeckWithTeam()">👥 SHARE</button>
-                                            <div class="export-dropdown" style="position: relative;">
-                                                <button class="btn btn-small btn-primary" onclick="toggleDeckExportMenu(event)">🏔️ EXPORT ▾</button>
-                                                <div id="deckExportMenu" class="export-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 180px; z-index: 1000; margin-top: 0.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
-                                                    <a onclick="exportDeckToPDF()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📄 PDF</a>
-                                                    <a onclick="exportDeckToGoogleSlides()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📑 Google Slides</a>
-                                                    <a onclick="exportDeckToPPT()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📊 PowerPoint</a>
-                                                    <a onclick="exportDeckToKeynote()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">🍎 Keynote</a>
-                                                    <a onclick="commitDeckToGitHub()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">🐙 Commit to GitHub</a>
-                                                </div>
-                                            </div>
-                                            <button class="btn btn-small" onclick="archiveCurrentDeck()" title="Archive deck" style="background: rgba(147, 51, 234, 0.2); color: #a78bfa;">📦 Archive</button>
-                                            <button class="btn btn-small" onclick="deleteDeckFromEditor()" title="Delete deck" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">🗑️</button>
-                                        </div>
-                                        <div id="deckTitleControls" style="display: none; align-items: center; gap: 0.5rem; padding-left: 0.75rem; border-left: 1px solid var(--border-color); margin-left: 0.5rem;">
-                                            <input type="text" id="deckBuilderTitleInput" placeholder="Deck name" 
-                                                   style="font-size: 0.9rem; font-weight: 600; background: transparent; border: none; border-bottom: 1px dashed var(--border-color); color: var(--text-primary); width: 140px; padding: 0.25rem; height: 34px;"
-                                                   onchange="updateDeckNameInEditor(this.value)">
-                                            <span id="deckSlideCount" style="font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap;">0 slides</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                
                                 <div class="deck-builder-container" style="grid-template-columns: 200px 1fr 280px;">
                                     <!-- Left: Slide Thumbnails -->
                                     <div class="slide-thumbnails-panel" id="slideThumbnailsPanel" style="grid-column: 1;">
