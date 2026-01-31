@@ -24599,14 +24599,15 @@
             
             const maxPct = Math.max(...sorted.map(i => i.pct), 1);
             
-            // Add header row
+            // Add header row - columns aligned to the right side
             const headerRow = `
-                <div class="interest-header-row" style="display: flex; align-items: center; padding: 0.5rem 0.4rem; border-bottom: 2px solid var(--border-color); font-size: 0.7rem; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; background: rgba(102, 217, 239, 0.05); gap: 0.35rem;">
-                    <span style="width: 22px; text-align: right; flex-shrink: 0;">#</span>
-                    <span style="flex: 1; min-width: 0;">Item</span>
-                    <span style="min-width: 55px; text-align: center; flex-shrink: 0;">${isProjection ? 'US #' : 'Profile'}</span>
-                    <span style="min-width: 55px; text-align: center; flex-shrink: 0;">${isProjection ? 'GP #' : 'Gen Pop'}</span>
-                    <span style="min-width: 45px; text-align: center; flex-shrink: 0;">Index</span>
+                <div class="interest-header-row" style="display: flex; align-items: center; padding: 0.5rem 0.4rem; border-bottom: 2px solid var(--border-color); font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; gap: 0.35rem;">
+                    <span style="width: 18px; flex-shrink: 0;">#</span>
+                    <span style="width: 200px; flex-shrink: 0;">Item</span>
+                    <div style="width: 60px; flex-shrink: 0;"></div>
+                    <span style="min-width: 55px; text-align: left; flex-shrink: 0;">${isProjection ? 'Profile' : 'Profile'}</span>
+                    <span style="min-width: 55px; text-align: left; flex-shrink: 0;">${isProjection ? 'Gen Pop' : 'Gen Pop'}</span>
+                    <span style="min-width: 45px; text-align: left; flex-shrink: 0;">Index</span>
                 </div>
             `;
             
@@ -24634,9 +24635,9 @@
                         <div class="interest-bar-container">
                             <div class="interest-bar" style="width: ${(item.pct / maxPct) * 100}%"></div>
                         </div>
-                        <span class="interest-pct" style="min-width: 55px; text-align: center;">${profileDisplay}</span>
-                        <span class="interest-genpop" style="min-width: 55px; text-align: center; color: var(--text-secondary);">${genPopDisplay}</span>
-                        <span class="interest-index" style="min-width: 45px; text-align: center; color: ${indexColor};">${formatIndex(item.index)}</span>
+                        <span class="interest-pct" style="min-width: 55px; text-align: left;">${profileDisplay}</span>
+                        <span class="interest-genpop" style="min-width: 55px; text-align: left; color: var(--text-secondary);">${genPopDisplay}</span>
+                        <span class="interest-index" style="min-width: 45px; text-align: left; color: ${indexColor};">${formatIndex(item.index)}</span>
                     </div>
                 `;
             }).join('');
@@ -28859,23 +28860,27 @@
             // Render with default sort (index descending)
             renderInterestHighlights('index-desc');
             
-            // Top differentiators - group by category, show top 3 items per category
-            const itemsByCategory = {};
-            allItems.filter(i => i.index > 100).forEach(item => {
-                if (!itemsByCategory[item.category]) {
-                    itemsByCategory[item.category] = [];
+            // Top differentiators - group by SMART category based on item name, show top 5 items per category
+            const itemsBySmartCategory = {};
+            allItems.filter(i => i.index > 120).forEach(item => {
+                // Use smart categorization based on item name instead of raw data category
+                const smartCategory = categorizeInterest(item.name);
+                if (!itemsBySmartCategory[smartCategory]) {
+                    itemsBySmartCategory[smartCategory] = [];
                 }
-                itemsByCategory[item.category].push(item);
+                itemsBySmartCategory[smartCategory].push(item);
             });
             
-            // Sort categories by their top item's index, then sort items within each category
-            const sortedCategories = Object.entries(itemsByCategory)
+            // Sort categories by their average index (not just top item), then sort items within each category
+            const sortedCategories = Object.entries(itemsBySmartCategory)
+                .filter(([cat, items]) => cat !== 'Other' && items.length >= 2) // Exclude "Other" and require at least 2 items
                 .map(([cat, items]) => ({
                     category: cat,
-                    items: items.sort((a, b) => b.index - a.index).slice(0, 3), // Top 3 per category
+                    items: items.sort((a, b) => b.index - a.index).slice(0, 5), // Top 5 per category
+                    avgIndex: Math.round(items.reduce((s, i) => s + i.index, 0) / items.length),
                     topIndex: Math.max(...items.map(i => i.index))
                 }))
-                .sort((a, b) => b.topIndex - a.topIndex)
+                .sort((a, b) => b.avgIndex - a.avgIndex)
                 .slice(0, 8); // Top 8 categories
             
             const US_POP_DIFF = 324700000;
