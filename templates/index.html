@@ -12539,14 +12539,21 @@
                                     <span id="activeWorkspaceName">My Workspace</span>
                                     <span>▾</span>
                                 </button>
-                                <div id="workspaceDropdownMenu" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; margin-top: 0.25rem; z-index: 100; max-height: 250px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                                <div id="workspaceDropdownMenu" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; margin-top: 0.25rem; z-index: 100; max-height: 350px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
                                     <div id="workspaceDropdownList">
                                         <!-- Populated by JS -->
                                     </div>
-                                    <div style="border-top: 1px solid var(--border-color); padding: 0.5rem;">
+                                    <div id="archivedWorkspacesSection" style="display: none; border-top: 1px solid var(--border-color);">
+                                        <div style="padding: 0.5rem 0.75rem; font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; background: var(--bg-dark);">📦 ARCHIVED</div>
+                                        <div id="archivedWorkspacesList"></div>
+                                    </div>
+                                    <div style="border-top: 1px solid var(--border-color); padding: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem;">
                                         <button onclick="showCreateWorkspaceModal(); toggleWorkspaceDropdown();" style="width: 100%; padding: 0.5rem; background: transparent; border: 1px dashed var(--border-color); border-radius: 4px; color: var(--accent-lime); cursor: pointer; font-size: 0.8rem;">+ Create New Workspace</button>
                                     </div>
                                 </div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button onclick="showWorkspaceActions()" class="btn btn-small btn-secondary" style="padding: 0.4rem 0.6rem; font-size: 0.75rem;">⚙️</button>
                             </div>
                         </div>
                         
@@ -40914,12 +40921,17 @@
             }
         }
         
+        // Archived workspaces storage
+        let archivedWorkspaces = JSON.parse(localStorage.getItem('archivedWorkspaces') || '{}');
+        let archivedDecks = JSON.parse(localStorage.getItem('archivedDecks') || '{}');
+        
         function renderWorkspaceDropdown() {
             const list = document.getElementById('workspaceDropdownList');
             if (!list) return;
             
             let html = '';
             Object.entries(workspaces).forEach(([id, ws]) => {
+                if (ws.archived) return; // Skip archived workspaces in main list
                 const isActive = id === currentWorkspace;
                 const icon = id === 'default' ? '🏠' : '📁';
                 html += `
@@ -40932,6 +40944,184 @@
             });
             
             list.innerHTML = html || '<div style="padding: 0.75rem; color: var(--text-secondary); font-size: 0.8rem;">No workspaces</div>';
+            
+            // Render archived workspaces
+            renderArchivedWorkspaces();
+        }
+        
+        function renderArchivedWorkspaces() {
+            const section = document.getElementById('archivedWorkspacesSection');
+            const list = document.getElementById('archivedWorkspacesList');
+            if (!section || !list) return;
+            
+            const archivedItems = Object.entries(archivedWorkspaces);
+            
+            if (archivedItems.length === 0) {
+                section.style.display = 'none';
+                return;
+            }
+            
+            section.style.display = 'block';
+            list.innerHTML = archivedItems.map(([id, ws]) => `
+                <div style="padding: 0.5rem 0.75rem; display: flex; align-items: center; gap: 0.5rem; opacity: 0.7;">
+                    <span>📦</span>
+                    <span style="flex: 1; font-size: 0.8rem; color: var(--text-secondary);">${ws.name || id}</span>
+                    <button onclick="event.stopPropagation(); restoreWorkspace('${id}')" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--accent-blue); color: white; border: none; border-radius: 3px; cursor: pointer;" title="Restore">↩️</button>
+                    <button onclick="event.stopPropagation(); permanentlyDeleteWorkspace('${id}')" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer;" title="Delete Forever">🗑️</button>
+                </div>
+            `).join('');
+        }
+        
+        function showWorkspaceActions() {
+            if (currentWorkspace === 'default') {
+                alert('Cannot modify the default workspace');
+                return;
+            }
+            
+            const ws = workspaces[currentWorkspace];
+            if (!ws) return;
+            
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'workspaceActionsModal';
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 400px;">
+                    <div class="deck-workspace-header">
+                        <h2>⚙️ Workspace Settings</h2>
+                        <button onclick="document.getElementById('workspaceActionsModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1.5rem; text-align: left;">
+                        <div style="margin-bottom: 1.5rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.8rem; color: var(--text-secondary);">Workspace Name</label>
+                            <input type="text" id="editWorkspaceName" value="${ws.name || ''}" style="width: 100%; padding: 0.6rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary);">
+                        </div>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                            <button onclick="saveWorkspaceSettings()" class="btn btn-primary" style="width: 100%;">💾 Save Changes</button>
+                            <button onclick="archiveCurrentWorkspace()" class="btn btn-secondary" style="width: 100%; background: rgba(251, 191, 36, 0.2); color: #fbbf24; border-color: #fbbf24;">📦 Archive Workspace</button>
+                            <button onclick="deleteCurrentWorkspace()" class="btn btn-danger" style="width: 100%; background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: #ef4444;">🗑️ Delete Forever</button>
+                        </div>
+                        
+                        <p style="margin-top: 1rem; font-size: 0.75rem; color: var(--text-secondary);">
+                            <strong>Archive:</strong> Moves workspace to archive folder. Can be restored later.<br>
+                            <strong>Delete:</strong> Permanently removes workspace and all its decks. Cannot be undone.
+                        </p>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function saveWorkspaceSettings() {
+            const newName = document.getElementById('editWorkspaceName')?.value.trim();
+            if (!newName) {
+                alert('Please enter a workspace name');
+                return;
+            }
+            
+            workspaces[currentWorkspace].name = newName;
+            localStorage.setItem('collabWorkspaces', JSON.stringify(workspaces));
+            
+            document.getElementById('activeWorkspaceName').textContent = newName;
+            document.getElementById('workspaceActionsModal')?.remove();
+            showNotification('✅ Workspace updated!', 'success');
+        }
+        
+        function archiveCurrentWorkspace() {
+            if (currentWorkspace === 'default') {
+                alert('Cannot archive the default workspace');
+                return;
+            }
+            
+            if (!confirm(`Archive "${workspaces[currentWorkspace]?.name || currentWorkspace}"? You can restore it later from the archive.`)) {
+                return;
+            }
+            
+            // Move to archived
+            archivedWorkspaces[currentWorkspace] = {
+                ...workspaces[currentWorkspace],
+                archivedAt: new Date().toISOString()
+            };
+            
+            // Also archive associated decks
+            if (workspaceDecks[currentWorkspace]) {
+                archivedDecks[currentWorkspace] = workspaceDecks[currentWorkspace];
+                delete workspaceDecks[currentWorkspace];
+                localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            }
+            
+            delete workspaces[currentWorkspace];
+            
+            localStorage.setItem('collabWorkspaces', JSON.stringify(workspaces));
+            localStorage.setItem('archivedWorkspaces', JSON.stringify(archivedWorkspaces));
+            localStorage.setItem('archivedDecks', JSON.stringify(archivedDecks));
+            
+            document.getElementById('workspaceActionsModal')?.remove();
+            selectWorkspace('default');
+            showNotification('📦 Workspace archived!', 'success');
+        }
+        
+        function deleteCurrentWorkspace() {
+            if (currentWorkspace === 'default') {
+                alert('Cannot delete the default workspace');
+                return;
+            }
+            
+            const wsName = workspaces[currentWorkspace]?.name || currentWorkspace;
+            if (!confirm(`Permanently delete "${wsName}"? This will delete all decks in this workspace. This cannot be undone!`)) {
+                return;
+            }
+            
+            // Delete workspace and its decks
+            delete workspaces[currentWorkspace];
+            delete workspaceDecks[currentWorkspace];
+            
+            localStorage.setItem('collabWorkspaces', JSON.stringify(workspaces));
+            localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            
+            document.getElementById('workspaceActionsModal')?.remove();
+            selectWorkspace('default');
+            showNotification('🗑️ Workspace deleted!', 'success');
+        }
+        
+        function restoreWorkspace(id) {
+            const archived = archivedWorkspaces[id];
+            if (!archived) return;
+            
+            // Restore workspace
+            workspaces[id] = archived;
+            delete workspaces[id].archivedAt;
+            delete archivedWorkspaces[id];
+            
+            // Restore associated decks
+            if (archivedDecks[id]) {
+                workspaceDecks[id] = archivedDecks[id];
+                delete archivedDecks[id];
+                localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+                localStorage.setItem('archivedDecks', JSON.stringify(archivedDecks));
+            }
+            
+            localStorage.setItem('collabWorkspaces', JSON.stringify(workspaces));
+            localStorage.setItem('archivedWorkspaces', JSON.stringify(archivedWorkspaces));
+            
+            renderWorkspaceDropdown();
+            showNotification('✅ Workspace restored!', 'success');
+        }
+        
+        function permanentlyDeleteWorkspace(id) {
+            const wsName = archivedWorkspaces[id]?.name || id;
+            if (!confirm(`Permanently delete "${wsName}" from archive? This cannot be undone!`)) {
+                return;
+            }
+            
+            delete archivedWorkspaces[id];
+            delete archivedDecks[id];
+            
+            localStorage.setItem('archivedWorkspaces', JSON.stringify(archivedWorkspaces));
+            localStorage.setItem('archivedDecks', JSON.stringify(archivedDecks));
+            
+            renderWorkspaceDropdown();
+            showNotification('🗑️ Workspace permanently deleted!', 'success');
         }
         
         // Close dropdown when clicking outside
@@ -41585,13 +41775,155 @@
             
             list.innerHTML = decksToShow.map(d => `
                 <div class="deck-list-item ${currentEditingDeck?.id === d.id ? 'active' : ''}" onclick="openDeckInEditor('${d.workspaceId || currentWorkspace}', '${d.id}')">
-                    <div class="deck-name">${d.name}</div>
-                    <div class="deck-meta">
-                        <span>${d.slides?.length || 0} slides</span>
-                        ${d.workspaceName ? `<span>• ${d.workspaceName}</span>` : ''}
+                    <div style="display: flex; justify-content: space-between; align-items: start;">
+                        <div>
+                            <div class="deck-name">${d.name}</div>
+                            <div class="deck-meta">
+                                <span>${d.slides?.length || 0} slides</span>
+                                ${d.workspaceName ? `<span>• ${d.workspaceName}</span>` : ''}
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 0.25rem;" onclick="event.stopPropagation();">
+                            <button onclick="archiveDeck('${d.workspaceId || currentWorkspace}', '${d.id}')" style="padding: 0.2rem 0.35rem; font-size: 0.6rem; background: rgba(251, 191, 36, 0.2); color: #fbbf24; border: none; border-radius: 3px; cursor: pointer;" title="Archive">📦</button>
+                            <button onclick="deleteDeckPermanently('${d.workspaceId || currentWorkspace}', '${d.id}')" style="padding: 0.2rem 0.35rem; font-size: 0.6rem; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: none; border-radius: 3px; cursor: pointer;" title="Delete">🗑️</button>
+                        </div>
                     </div>
                 </div>
             `).join('');
+            
+            // Show archived decks section if any
+            renderArchivedDecks();
+        }
+        
+        function renderArchivedDecks() {
+            // Check if there's an archived decks section, if not create one
+            let archivedSection = document.getElementById('archivedDecksSection');
+            const list = document.getElementById('workspaceDecksList');
+            if (!list) return;
+            
+            const wsArchivedDecks = archivedDecks[currentWorkspace] || [];
+            
+            if (!archivedSection && wsArchivedDecks.length > 0) {
+                archivedSection = document.createElement('div');
+                archivedSection.id = 'archivedDecksSection';
+                list.parentNode.appendChild(archivedSection);
+            }
+            
+            if (!archivedSection) return;
+            
+            if (wsArchivedDecks.length === 0) {
+                archivedSection.style.display = 'none';
+                return;
+            }
+            
+            archivedSection.style.display = 'block';
+            archivedSection.innerHTML = `
+                <div style="padding: 0.5rem; margin-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                    <div style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">📦 ARCHIVED DECKS</div>
+                    ${wsArchivedDecks.map(d => `
+                        <div style="padding: 0.5rem; background: var(--bg-dark); border-radius: 4px; margin-bottom: 0.25rem; opacity: 0.7; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 0.8rem;">${d.name}</span>
+                            <div style="display: flex; gap: 0.25rem;">
+                                <button onclick="restoreDeck('${currentWorkspace}', '${d.id}')" style="padding: 0.2rem 0.35rem; font-size: 0.6rem; background: var(--accent-blue); color: white; border: none; border-radius: 3px; cursor: pointer;" title="Restore">↩️</button>
+                                <button onclick="deleteDeckForever('${currentWorkspace}', '${d.id}')" style="padding: 0.2rem 0.35rem; font-size: 0.6rem; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer;" title="Delete Forever">🗑️</button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+        
+        function archiveDeck(wsId, deckId) {
+            const decks = workspaceDecks[wsId] || [];
+            const deckIdx = decks.findIndex(d => d.id === deckId);
+            if (deckIdx < 0) return;
+            
+            const deck = decks[deckIdx];
+            if (!confirm(`Archive deck "${deck.name}"?`)) return;
+            
+            // Move to archived
+            if (!archivedDecks[wsId]) archivedDecks[wsId] = [];
+            archivedDecks[wsId].push({
+                ...deck,
+                archivedAt: new Date().toISOString()
+            });
+            
+            // Remove from active
+            decks.splice(deckIdx, 1);
+            workspaceDecks[wsId] = decks;
+            
+            localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            localStorage.setItem('archivedDecks', JSON.stringify(archivedDecks));
+            
+            if (currentEditingDeck?.id === deckId) {
+                currentEditingDeck = null;
+                renderSlideEditor();
+            }
+            
+            renderWorkspaceDecks();
+            showNotification('📦 Deck archived!', 'success');
+        }
+        
+        function deleteDeckPermanently(wsId, deckId) {
+            const decks = workspaceDecks[wsId] || [];
+            const deck = decks.find(d => d.id === deckId);
+            if (!deck) return;
+            
+            if (!confirm(`Permanently delete "${deck.name}"? This cannot be undone!`)) return;
+            
+            const deckIdx = decks.findIndex(d => d.id === deckId);
+            decks.splice(deckIdx, 1);
+            workspaceDecks[wsId] = decks;
+            
+            localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            
+            if (currentEditingDeck?.id === deckId) {
+                currentEditingDeck = null;
+                renderSlideEditor();
+            }
+            
+            renderWorkspaceDecks();
+            showNotification('🗑️ Deck deleted!', 'success');
+        }
+        
+        function restoreDeck(wsId, deckId) {
+            const archived = archivedDecks[wsId] || [];
+            const deckIdx = archived.findIndex(d => d.id === deckId);
+            if (deckIdx < 0) return;
+            
+            const deck = archived[deckIdx];
+            delete deck.archivedAt;
+            
+            // Restore to active
+            if (!workspaceDecks[wsId]) workspaceDecks[wsId] = [];
+            workspaceDecks[wsId].push(deck);
+            
+            // Remove from archived
+            archived.splice(deckIdx, 1);
+            archivedDecks[wsId] = archived;
+            
+            localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            localStorage.setItem('archivedDecks', JSON.stringify(archivedDecks));
+            
+            renderWorkspaceDecks();
+            showNotification('✅ Deck restored!', 'success');
+        }
+        
+        function deleteDeckForever(wsId, deckId) {
+            const archived = archivedDecks[wsId] || [];
+            const deck = archived.find(d => d.id === deckId);
+            if (!deck) return;
+            
+            if (!confirm(`Permanently delete "${deck.name}" from archive? This cannot be undone!`)) return;
+            
+            const deckIdx = archived.findIndex(d => d.id === deckId);
+            archived.splice(deckIdx, 1);
+            archivedDecks[wsId] = archived;
+            
+            localStorage.setItem('archivedDecks', JSON.stringify(archivedDecks));
+            
+            renderWorkspaceDecks();
+            showNotification('🗑️ Deck permanently deleted!', 'success');
         }
         
         function createNewWorkspaceDeck() {
