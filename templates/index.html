@@ -21982,7 +21982,7 @@
                     return `${idx + 1}. ${itemName}: ${itemPct}% (GP: ${itemGPDisplay})`;
                 }).join(' | ');
                 return `
-                <div class="behavioral-top-cat" style="cursor: pointer;" onclick="jumpToBehavioralCategory('${cat}')" title="Top 5: ${top5Tooltip}">
+                <div class="behavioral-top-cat has-tooltip" style="cursor: pointer;" onclick="jumpToBehavioralCategory('${cat}')" data-tooltip="Top 5: ${top5Tooltip}. Click to view all ${cat} items.">
                     <span class="cat-name" style="flex: 1; text-align: left;">${cat}</span>
                     <span class="cat-stats">
                         <span class="cat-pct" style="color: var(--accent-lime); min-width: 55px; text-align: left;">${profileDisplay}</span>
@@ -22424,12 +22424,17 @@
                 });
             }
             
-            document.getElementById('behavioralActivations').innerHTML = activations.slice(0, 15).map(a => `
-                <div class="behavioral-activation-item has-tooltip" data-tooltip="${a.tooltip || ''}" style="cursor: pointer;" onclick="jumpToBrandCategory('${a.category || ''}', '${a.searchTerm || ''}')">
+            document.getElementById('behavioralActivations').innerHTML = activations.slice(0, 15).map(a => {
+                // Escape special characters for onclick attribute
+                const escapedCategory = (a.category || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const escapedSearchTerm = (a.searchTerm || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const escapedTooltip = (a.tooltip || '').replace(/"/g, '&quot;');
+                return `
+                <div class="behavioral-activation-item has-tooltip" data-tooltip="${escapedTooltip}" style="cursor: pointer;" onclick="jumpToBrandCategory('${escapedCategory}', '${escapedSearchTerm}')">
                     <span class="icon">${a.icon}</span>
                     <span class="text">${a.text}</span>
                 </div>
-            `).join('');
+            `}).join('');
         }
         
         // ============================================================================
@@ -35564,62 +35569,78 @@
         
         // Jump to behavioral category in the interests section
         function jumpToBehavioralCategory(categoryName) {
-            // First, set the category filter in the All Interests section
-            const categorySelect = document.getElementById('interestsCategorySelect');
-            if (categorySelect) {
-                // Find the matching option (case-insensitive)
-                const options = Array.from(categorySelect.options);
-                const matchingOption = options.find(opt => 
-                    opt.value.toLowerCase() === categoryName.toLowerCase() ||
-                    opt.text.toLowerCase() === categoryName.toLowerCase()
-                );
-                if (matchingOption) {
-                    categorySelect.value = matchingOption.value;
-                    // Trigger the filter
-                    if (typeof filterInterests === 'function') {
-                        filterInterests();
-                    }
-                }
+            // First, switch to the Interests tab
+            if (typeof showTab === 'function') {
+                showTab('interests');
             }
             
-            // Scroll to the All Interests section
-            const interestsSection = document.querySelector('.interests-list-section');
-            if (interestsSection) {
-                interestsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
+            // Small delay to ensure tab is switched before filtering
+            setTimeout(() => {
+                // Set the category filter in the All Interests section
+                const categorySelect = document.getElementById('interestsCategorySelect');
+                if (categorySelect) {
+                    // Find the matching option (case-insensitive)
+                    const options = Array.from(categorySelect.options);
+                    const matchingOption = options.find(opt => 
+                        opt.value.toLowerCase() === categoryName.toLowerCase() ||
+                        opt.text.toLowerCase() === categoryName.toLowerCase()
+                    );
+                    if (matchingOption) {
+                        categorySelect.value = matchingOption.value;
+                        // Trigger the filter
+                        if (typeof filterInterests === 'function') {
+                            filterInterests();
+                        }
+                    }
+                }
+                
+                // Scroll to the All Interests section
+                const interestsSection = document.querySelector('.interests-list-section');
+                if (interestsSection) {
+                    interestsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 100);
         }
         
         // Jump to brand/item in the interests section from Top Performing Brands
         function jumpToBrandCategory(category, searchTerm) {
-            // Set the category filter if provided
-            const categorySelect = document.getElementById('interestsCategorySelect');
-            if (categorySelect && category) {
-                const options = Array.from(categorySelect.options);
-                const matchingOption = options.find(opt => 
-                    opt.value.toLowerCase() === category.toLowerCase() ||
-                    opt.text.toLowerCase() === category.toLowerCase()
-                );
-                if (matchingOption) {
-                    categorySelect.value = matchingOption.value;
+            // First, switch to the Interests tab
+            if (typeof showTab === 'function') {
+                showTab('interests');
+            }
+            
+            // Small delay to ensure tab is switched before filtering
+            setTimeout(() => {
+                // Set the category filter if provided
+                const categorySelect = document.getElementById('interestsCategorySelect');
+                if (categorySelect && category) {
+                    const options = Array.from(categorySelect.options);
+                    const matchingOption = options.find(opt => 
+                        opt.value.toLowerCase() === category.toLowerCase() ||
+                        opt.text.toLowerCase() === category.toLowerCase()
+                    );
+                    if (matchingOption) {
+                        categorySelect.value = matchingOption.value;
+                    }
                 }
-            }
-            
-            // Set the search term to find the specific brand
-            const searchInput = document.getElementById('interestsSearchInput');
-            if (searchInput && searchTerm) {
-                searchInput.value = searchTerm;
-            }
-            
-            // Trigger the filter
-            if (typeof filterInterests === 'function') {
-                filterInterests();
-            }
-            
-            // Scroll to the All Interests section
-            const interestsSection = document.querySelector('.interests-list-section');
-            if (interestsSection) {
-                interestsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
+                
+                // Set the search term to find the specific brand
+                const searchInput = document.getElementById('interestsSearchInput');
+                if (searchInput && searchTerm) {
+                    searchInput.value = searchTerm;
+                }
+                
+                // Trigger the filter
+                if (typeof filterInterests === 'function') {
+                    filterInterests();
+                }
+                
+                // Scroll to the All Interests section
+                const interestsSection = document.querySelector('.interests-list-section');
+                if (interestsSection) {
+                    interestsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 100);
         }
 
         function toggleDisplayMode() {
