@@ -491,7 +491,7 @@
         #customAnalysisView.active { display: flex; }
         #dashboardView { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
         
-        /* App Footer - Data Source */
+        /* App Footer - Data Source (above modals so always visible) */
         .app-footer {
             position: fixed;
             bottom: 0;
@@ -503,7 +503,7 @@
             display: flex;
             align-items: center;
             gap: 0.75rem;
-            z-index: 100;
+            z-index: 10050; /* Above deck modals (10001) so footer shows on deck pages */
             min-height: 36px;
         }
         .app-footer-logo {
@@ -1992,13 +1992,13 @@
             to { transform: translateX(0); opacity: 1; }
         }
         
-        /* Deck Workspace Modal */
+        /* Deck Workspace Modal - bottom inset so app footer remains visible */
         .deck-workspace-modal {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
-            bottom: 0;
+            bottom: 40px; /* Leave space for app footer */
             background: rgba(0, 0, 0, 0.8);
             display: flex;
             align-items: center;
@@ -2192,6 +2192,7 @@
             overflow-y: auto;
             overflow-x: hidden;
             padding: 0;
+            padding-bottom: 48px; /* Space for fixed app footer */
             text-align: left;
             display: flex;
             flex-direction: column;
@@ -7859,9 +7860,9 @@
            ============================================ */
         .chat-widget {
             position: fixed;
-            bottom: 50px;
+            bottom: 48px; /* Above app footer (36px) */
             right: 24px;
-            z-index: 999999;
+            z-index: 100000; /* Above footer, below modals */
             font-family: inherit;
             pointer-events: auto;
             display: flex !important;
@@ -9188,6 +9189,12 @@
             color: var(--text-secondary);
             margin-bottom: 0.5rem;
         }
+        
+        .editable-demo-box { cursor: pointer; min-width: 80px; min-height: 50px; }
+        .editable-demo-box:hover { box-shadow: 0 0 0 1px var(--accent-lime); }
+        .editable-demo-box.selected { outline: 2px solid var(--accent-lime); outline-offset: 2px; box-shadow: 0 0 0 2px rgba(200,230,0,0.3); resize: both; overflow: auto; }
+        .editable-demo-box.selected .editable-box-toolbar { display: flex !important; }
+        .editable-demo-box .editable-box-label:focus, .editable-demo-box .editable-box-value:focus { outline: none; }
         
         .add-slide-btn {
             margin-top: 0.5rem;
@@ -13211,12 +13218,12 @@
                         <!-- Unified Workspace + Deck Bar -->
                         <div class="workspace-selector-bar" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); flex-wrap: wrap;">
                             <label style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">WORKSPACE:</label>
-                            <div class="workspace-dropdown" style="position: relative; max-width: 180px;">
+                            <div class="workspace-dropdown" style="position: relative; min-width: 280px;">
                                 <button id="workspaceDropdownBtn" onclick="toggleWorkspaceDropdown()" style="width: 100%; padding: 0.4rem 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem;">
                                     <span id="activeWorkspaceName">My Workspace</span>
                                     <span>▾</span>
                                 </button>
-                                <div id="workspaceDropdownMenu" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; margin-top: 0.25rem; z-index: 100; max-height: 350px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                                <div id="workspaceDropdownMenu" style="display: none; position: absolute; top: 100%; left: 0; min-width: 280px; white-space: nowrap; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; margin-top: 0.25rem; z-index: 100; max-height: 350px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
                                     <div id="workspaceDropdownList">
                                         <!-- Populated by JS -->
                                     </div>
@@ -21836,8 +21843,7 @@
             media: '<strong>Media</strong> — Streaming, social, audio preferences and platform usage patterns for this audience.',
             content: '<strong>Content</strong> — Content development insights including talent, genres, and platform opportunities.',
             segmentation: '<strong>Segment</strong> — Build custom audience segments with demographic and behavioral filters.',
-            comparison: '<strong>Compare</strong> — Side-by-side profile comparison with overlap analysis and benchmarking.',
-            collaboration: '<strong>Collaborate</strong> — Team workspace for sharing insights and collaborative analysis.'
+            comparison: '<strong>Compare</strong> — Side-by-side profile comparison with overlap analysis and benchmarking.'
         };
         
         // Tab header titles and descriptions for inline header
@@ -21853,19 +21859,17 @@
             media: { icon: '📺', title: 'Media', desc: 'Media consumption patterns including TV, streaming, social media preferences.' },
             content: { icon: '🎬', title: 'Content', desc: 'Content consumption preferences including genres, formats, and viewing habits.' },
             segmentation: { icon: '🎛️', title: 'Segment Builder', desc: 'Build custom audience segments with demographic and behavioral filters.' },
-            comparison: { icon: '⚖️', title: 'Compare', desc: 'Side-by-side comparison of multiple profiles.' },
-            collaboration: { icon: '🗂️', title: 'Collaborate', desc: 'Share insights and collaborate with team members.' }
+            comparison: { icon: '⚖️', title: 'Compare', desc: 'Side-by-side comparison of multiple profiles.' }
         };
         
         function updateInlineTabHeader(tabName) {
             const header = document.getElementById('inlineTabHeader');
             if (!header) return;
             
-            // Show header for comparison tab (buttons are now in tab bar)
-            // if (tabName === 'comparison') {
-            //     header.style.display = 'none';
-            //     return;
-            // }
+            if (tabName === 'collaboration') {
+                header.style.display = 'none';
+                return;
+            }
             
             header.style.display = 'flex';
             if (TAB_HEADERS[tabName]) {
@@ -44258,6 +44262,67 @@
             }
         }
         
+        let selectedEditableBox = null;
+        function selectEditableBox(event, boxEl) {
+            if (event.target.closest('.editable-box-toolbar')) return;
+            document.querySelectorAll('.editable-demo-box.selected').forEach(b => b.classList.remove('selected'));
+            selectedEditableBox = boxEl;
+            boxEl.classList.add('selected');
+            event.stopPropagation();
+        }
+        document.addEventListener('click', (e) => {
+            if (selectedEditableBox && !e.target.closest('.editable-demo-box')) {
+                selectedEditableBox.classList.remove('selected');
+                selectedEditableBox = null;
+            }
+        });
+        
+        function getCurrentSlideForBoxEdit() {
+            if (!currentEditingDeck) return null;
+            return currentEditingSlide === 0 ? currentEditingDeck.titleSlide : currentEditingDeck.slides[currentEditingSlide - 1];
+        }
+        
+        function saveEditableBoxEdit(labelOrValueEl) {
+            const box = labelOrValueEl.closest('.editable-demo-box');
+            if (!box) return;
+            const slide = getCurrentSlideForBoxEdit();
+            if (!slide?.data) return;
+            const key = box.dataset.key;
+            if (!key) return;
+            if (!slide.data.boxOverrides) slide.data.boxOverrides = {};
+            if (!slide.data.boxOverrides[key]) slide.data.boxOverrides[key] = {};
+            const isLabel = labelOrValueEl.classList.contains('editable-box-label');
+            slide.data.boxOverrides[key][isLabel ? 'label' : 'value'] = labelOrValueEl.textContent.trim();
+            saveDeckChanges();
+        }
+        
+        function updateEditableBoxColor(colorInput, type) {
+            const box = colorInput.closest('.editable-demo-box');
+            if (!box) return;
+            const slide = getCurrentSlideForBoxEdit();
+            if (!slide?.data) return;
+            const key = box.dataset.key;
+            if (!key) return;
+            if (!slide.data.boxOverrides) slide.data.boxOverrides[key] = {};
+            const prop = type === 'bg' ? 'bgColor' : type === 'value' ? 'valueColor' : 'labelColor';
+            slide.data.boxOverrides[key][prop] = colorInput.value;
+            if (type === 'bg') box.style.background = colorInput.value;
+            if (type === 'label') box.querySelector('.editable-box-label').style.color = colorInput.value;
+            if (type === 'value') box.querySelector('.editable-box-value').style.color = colorInput.value;
+            saveDeckChanges();
+        }
+        
+        function resetEditableBox(btn) {
+            const box = btn.closest('.editable-demo-box');
+            if (!box) return;
+            const slide = getCurrentSlideForBoxEdit();
+            if (!slide?.data) return;
+            const key = box.dataset.key;
+            if (key && slide.data.boxOverrides) delete slide.data.boxOverrides[key];
+            saveDeckChanges();
+            renderSlideEditor();
+        }
+        
         function getSlideElement(elementId) {
             if (!currentEditingDeck) return null;
             
@@ -44923,15 +44988,32 @@
             
             if (slideType === 'demographic' || (slide.data.values && typeof slide.data.values === 'object' && !slide.data.categories)) {
                 const values = slide.data.values || {};
+                const overrides = slide.data.boxOverrides || {};
                 const entries = Object.entries(values).sort((a, b) => b[1] - a[1]).slice(0, 8);
                 return `
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
-                        ${entries.map(([key, val]) => `
-                            <div style="background: var(--bg-input); padding: 0.75rem; border-radius: 6px;">
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">${key}</div>
-                                <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-lime);">${parseFloat(val).toFixed(1)}%</div>
+                    <div class="editable-boxes-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                        ${entries.map(([key, val]) => {
+                            const o = overrides[key] || {};
+                            const label = o.label !== undefined ? o.label : key;
+                            const value = o.value !== undefined ? o.value : parseFloat(val).toFixed(1) + '%';
+                            const bg = o.bgColor || 'var(--bg-input)';
+                            const valueColor = o.valueColor || 'var(--accent-lime)';
+                            const labelColor = o.labelColor || 'var(--text-secondary)';
+                            const boxStyle = o.width || o.height ? `min-width: ${o.width || 'auto'}; min-height: ${o.height || 'auto'};` : '';
+                            return `
+                            <div class="editable-demo-box" data-key="${escapeHtml(key)}" data-orig-val="${parseFloat(val).toFixed(1)}"
+                                 style="background: ${bg}; padding: 0.75rem; border-radius: 6px; cursor: pointer; position: relative; transition: box-shadow 0.2s; ${boxStyle}"
+                                 onclick="selectEditableBox(event, this)">
+                                <div class="editable-box-label" contenteditable="true" spellcheck="false" style="font-size: 0.8rem; color: ${labelColor};" onblur="saveEditableBoxEdit(this)">${escapeHtml(label)}</div>
+                                <div class="editable-box-value" contenteditable="true" spellcheck="false" style="font-size: 1.5rem; font-weight: 700; color: ${valueColor};" onblur="saveEditableBoxEdit(this)">${escapeHtml(String(value))}</div>
+                                <div class="editable-box-toolbar" style="display: none; position: absolute; bottom: -42px; left: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem; flex-wrap: wrap; gap: 0.35rem; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.4);" onclick="event.stopPropagation()">
+                                    <input type="color" title="Background color" value="${bg.startsWith('#') ? bg : '#1e293b'}" onchange="updateEditableBoxColor(this, 'bg')" style="width: 24px; height: 24px; border: none; cursor: pointer; padding: 0; border-radius: 4px;">
+                                    <input type="color" title="Value color" value="${valueColor.startsWith('#') ? valueColor : '#c8e600'}" onchange="updateEditableBoxColor(this, 'value')" style="width: 24px; height: 24px; border: none; cursor: pointer; padding: 0; border-radius: 4px;">
+                                    <input type="color" title="Label color" value="${labelColor.startsWith('#') ? labelColor : '#94a3b8'}" onchange="updateEditableBoxColor(this, 'label')" style="width: 24px; height: 24px; border: none; cursor: pointer; padding: 0; border-radius: 4px;">
+                                    <button type="button" onclick="resetEditableBox(this)" title="Reset to original" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-secondary); cursor: pointer;">Reset</button>
+                                </div>
                             </div>
-                        `).join('')}
+                        `}).join('')}
                     </div>
                 `;
             }
@@ -44988,20 +45070,37 @@
             
             if ((slideType === 'demographics' || slide.data.categories) && slide.data && slide.data.categories) {
                 const cats = slide.data.categories || {};
+                const overrides = slide.data.boxOverrides || {};
                 return Object.entries(cats).map(([catName, catData]) => {
                     const values = catData.values || {};
                     const entries = Object.entries(values).sort((a, b) => b[1] - a[1]).slice(0, 6);
                     const label = (catName || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    const catKey = catName + '_';
                     return `
                         <div style="margin-bottom: 1rem;">
                             <div style="font-size: 0.9rem; font-weight: 600; color: var(--accent-cyan); margin-bottom: 0.5rem;">${(label || catName).replace(/</g, '&lt;')}</div>
-                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
-                                ${entries.map(([key, val]) => `
-                                    <div style="padding: 0.5rem; background: var(--bg-input); border-radius: 4px; font-size: 0.8rem;">
-                                        <div style="color: var(--text-secondary);">${(key || '').replace(/</g, '&lt;')}</div>
-                                        <div style="font-weight: 600; color: var(--accent-lime);">${parseFloat(val || 0).toFixed(1)}%</div>
+                            <div class="editable-boxes-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                                ${entries.map(([key, val]) => {
+                                    const o = overrides[catKey + key] || {};
+                                    const l = o.label !== undefined ? o.label : (key || '');
+                                    const v = o.value !== undefined ? o.value : parseFloat(val || 0).toFixed(1) + '%';
+                                    const bg = o.bgColor || 'var(--bg-input)';
+                                    const vc = o.valueColor || 'var(--accent-lime)';
+                                    const lc = o.labelColor || 'var(--text-secondary)';
+                                    return `
+                                    <div class="editable-demo-box" data-key="${escapeHtml(catKey + key)}" data-orig-val="${parseFloat(val || 0).toFixed(1)}"
+                                         style="background: ${bg}; padding: 0.5rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer; position: relative;"
+                                         onclick="selectEditableBox(event, this)">
+                                        <div class="editable-box-label" contenteditable="true" spellcheck="false" style="color: ${lc};" onblur="saveEditableBoxEdit(this)">${escapeHtml(l)}</div>
+                                        <div class="editable-box-value" contenteditable="true" spellcheck="false" style="font-weight: 600; color: ${vc};" onblur="saveEditableBoxEdit(this)">${escapeHtml(String(v))}</div>
+                                        <div class="editable-box-toolbar" style="display: none; position: absolute; bottom: -42px; left: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem; flex-wrap: wrap; gap: 0.35rem; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.4);" onclick="event.stopPropagation()">
+                                            <input type="color" title="Background" value="${bg.startsWith('#') ? bg : '#1e293b'}" onchange="updateEditableBoxColor(this, 'bg')" style="width: 24px; height: 24px; border: none; cursor: pointer; border-radius: 4px;">
+                                            <input type="color" title="Value color" value="${vc.startsWith('#') ? vc : '#c8e600'}" onchange="updateEditableBoxColor(this, 'value')" style="width: 24px; height: 24px; border: none; cursor: pointer; border-radius: 4px;">
+                                            <input type="color" title="Label color" value="${lc.startsWith('#') ? lc : '#94a3b8'}" onchange="updateEditableBoxColor(this, 'label')" style="width: 24px; height: 24px; border: none; cursor: pointer; border-radius: 4px;">
+                                            <button type="button" onclick="resetEditableBox(this)" title="Reset" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-secondary); cursor: pointer;">Reset</button>
+                                        </div>
                                     </div>
-                                `).join('')}
+                                `}).join('')}
                             </div>
                         </div>
                     `;
@@ -45948,10 +46047,10 @@
                                 const currentCompany = userData.company || '';
                                 const currentDept = userData.department || '';
                                 
-                                // Get all company users
+                                // Get all company users (include users with empty company when current user has none)
                                 const allCompanyUsers = usersData.users.filter(u => 
                                     u.username !== userData.username && 
-                                    u.company && u.company === currentCompany
+                                    (u.company || '') === currentCompany
                                 );
                                 
                                 let teammates;
@@ -45972,12 +46071,33 @@
                                 });
                                 
                                 collabTeamMembers = teammates;
-                                
+                            }
+                        }
+                        // Fallback: if no teammates from users-list, try team-members API (e.g. if users-list failed)
+                        if (collabTeamMembers.length === 0) {
+                            try {
+                                const teamRes = await fetch('/api/team-members', { credentials: 'same-origin' });
+                                if (teamRes.ok) {
+                                    const teamData = await teamRes.json();
+                                    if (teamData.success && teamData.members?.length) {
+                                        collabTeamMembers = teamData.members.map(m => ({
+                                            username: m.username,
+                                            department: m.department || '',
+                                            profile_picture: m.profile_picture || '',
+                                            first_name: '',
+                                            last_name: ''
+                                        }));
+                                    }
+                                }
+                            } catch (e) {
+                                console.log('Fallback team-members load failed:', e);
+                            }
+                        }
+                        
+                        if (collabTeamMembers.length > 0) {
                                 const list = document.getElementById('teamMembersList');
-                                if (teammates.length === 0) {
-                                    list.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">No teammates assigned. Ask your admin to set up your team.</div>';
-                                } else {
-                                    list.innerHTML = teammates.map(u => {
+                                if (list) {
+                                    list.innerHTML = collabTeamMembers.map(u => {
                                         const displayName = u.first_name && u.last_name 
                                             ? `${u.first_name} ${u.last_name}` 
                                             : u.username;
@@ -45998,7 +46118,11 @@
                                         `;
                                     }).join('');
                                 }
-                            }
+                        } else {
+                                const list = document.getElementById('teamMembersList');
+                                if (list) {
+                                    list.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">No teammates assigned. Ask your admin to set up your team.</div>';
+                                }
                         }
                     }
                 }
@@ -46754,5 +46878,4 @@
     </footer>
     
 </body>
-</html>
 </html>
