@@ -8369,8 +8369,8 @@
 
         /* Workspace Deck Builder Styles */
         .workspace-deck-builder {
-            height: calc(100vh - 400px);
-            min-height: 500px;
+            height: calc(100vh - 360px);
+            min-height: 520px;
             display: flex;
             flex-direction: column;
         }
@@ -8414,6 +8414,15 @@
             gap: 0.75rem;
             flex: 1;
             min-height: 0;
+        }
+        
+        .deck-builder-container.expanded-view {
+            grid-template-columns: 1fr;
+        }
+        
+        .deck-builder-container.expanded-view .slide-thumbnails-panel,
+        .deck-builder-container.expanded-view .data-points-sidebar {
+            display: none;
         }
         
         .data-points-sidebar {
@@ -8885,13 +8894,14 @@
         .slide-toolbar {
             display: flex;
             gap: 0.5rem;
-            padding: 0.5rem;
-            background: var(--bg-card);
+            padding: 0.6rem;
+            background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30, 41, 59, 0.98) 100%);
             border: 1px solid var(--border-color);
             border-radius: 8px;
             margin-bottom: 0.75rem;
             flex-wrap: wrap;
             justify-content: center;
+            align-items: center;
         }
         
         .slide-toolbar-group {
@@ -8929,25 +8939,81 @@
         
         .slide-canvas-zoom-wrapper {
             flex: 1;
+            min-height: 0;
             overflow: auto;
             display: flex;
             justify-content: center;
-            align-items: flex-start;
-            padding: 1rem;
-            min-height: 320px;
+            align-items: center;
+            padding: 0.75rem;
+            background: var(--bg-dark);
+            width: 100%;
         }
         
         .slide-canvas-container {
-            width: 100%;
-            max-width: 960px;
-            min-height: 360px;
-            aspect-ratio: 16/9;
+            width: 960px;
+            height: 540px;
             position: relative;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             border-radius: 8px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08);
             overflow: hidden;
-            transform-origin: top center;
+            transform-origin: center center;
+            transition: transform 0.2s ease, width 0.2s ease, height 0.2s ease;
+            flex-shrink: 0;
+        }
+        
+        .slide-notes-section {
+            width: 100%;
+            max-width: 960px;
+            margin: 0.75rem auto 0;
+            padding: 0.75rem;
+            background: var(--bg-input);
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            transition: max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease, padding 0.3s ease;
+            overflow: hidden;
+        }
+        
+        .slide-notes-section.hidden {
+            max-height: 0 !important;
+            opacity: 0;
+            margin: 0 !important;
+            padding: 0 0.75rem !important;
+            border-width: 0;
+            pointer-events: none;
+        }
+        
+        .slide-notes-section label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+        
+        .slide-notes-section textarea {
+            width: 100%;
+            min-height: 60px;
+            padding: 0.5rem;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            resize: vertical;
+        }
+        
+        .slide-notes-section textarea:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+        }
+        
+        .slide-notes-chevron {
+            font-size: 0.7rem;
+            opacity: 0.8;
             transition: transform 0.2s ease;
         }
         
@@ -9121,17 +9187,6 @@
             font-size: 0.75rem;
             color: var(--text-secondary);
             margin-bottom: 0.5rem;
-        }
-        
-        .slide-notes-section textarea {
-            width: 100%;
-            min-height: 60px;
-            padding: 0.5rem;
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            color: var(--text-primary);
-            resize: vertical;
         }
         
         .add-slide-btn {
@@ -43100,7 +43155,9 @@
         
         let currentEditingDeck = null;
         let currentEditingSlide = 0;
-        let slideEditorZoom = 100;
+        let slideEditorZoom = 'fit';  // 'fit' = fill area, or 50, 75, 100, 125, 150
+        let speakerNotesVisible = (function(){ try { return localStorage.getItem('deckSpeakerNotesVisible') === '1'; } catch(_){ return false; } })();
+        let deckEditorExpanded = false;   // Expand view = slide fills whole area
         
         function initWorkspaceDeckBuilder() {
             renderWorkspaceDecks();
@@ -43732,13 +43789,15 @@
                     <!-- Slide Toolbar -->
                     <div class="slide-toolbar" id="slideToolbar">
                         <div class="slide-toolbar-group">
-                            <select class="toolbar-btn" onchange="setSlideViewZoom(this.value)" title="Slide view size" style="padding: 0.3rem; min-width: 80px;">
+                            <select class="toolbar-btn" onchange="setSlideViewZoom(this.value)" title="Slide view size" style="padding: 0.3rem; min-width: 90px;">
+                                <option value="fit" ${slideEditorZoom === 'fit' ? 'selected' : ''}>Fit to area</option>
                                 <option value="50" ${slideEditorZoom === 50 ? 'selected' : ''}>50%</option>
                                 <option value="75" ${slideEditorZoom === 75 ? 'selected' : ''}>75%</option>
                                 <option value="100" ${slideEditorZoom === 100 ? 'selected' : ''}>100%</option>
                                 <option value="125" ${slideEditorZoom === 125 ? 'selected' : ''}>125%</option>
                                 <option value="150" ${slideEditorZoom === 150 ? 'selected' : ''}>150%</option>
                             </select>
+                            <button class="toolbar-btn ${deckEditorExpanded ? 'active' : ''}" id="expandSlideBtn" onclick="toggleDeckEditorExpanded()" title="${deckEditorExpanded ? 'Exit expanded view' : 'Expand slide to full area'}">${deckEditorExpanded ? '⊡ Exit expand' : '⊞ Expand'}</button>
                         </div>
                         <div class="slide-toolbar-group">
                             <button class="toolbar-btn" onclick="addSlideElement('text')" title="Add Text">📝 Text</button>
@@ -43773,6 +43832,9 @@
                             <button class="toolbar-btn" onclick="analyzeSlideWithAI()" title="Analyze slide data with AI and add key points & takeaways" style="background: var(--accent-cyan); color: var(--bg-dark);">🤖 Analyze with AI</button>
                         </div>
                         <div class="slide-toolbar-group">
+                            <button class="toolbar-btn ${speakerNotesVisible ? 'active' : ''}" id="toggleNotesBtn" onclick="toggleSpeakerNotes()" title="${speakerNotesVisible ? 'Hide Speaker Notes' : 'Show Speaker Notes'}">📝 ${speakerNotesVisible ? 'Notes' : 'Show notes'}</button>
+                        </div>
+                        <div class="slide-toolbar-group">
                             <button class="toolbar-btn" onclick="bringToFront()" title="Bring to Front">⬆️</button>
                             <button class="toolbar-btn" onclick="sendToBack()" title="Send to Back">⬇️</button>
                             <button class="toolbar-btn" onclick="deleteSelectedElement()" title="Delete" style="color: #ef4444;">🗑️</button>
@@ -43780,21 +43842,24 @@
                     </div>
                     
                     <!-- Slide Canvas -->
-                    <div class="slide-canvas-zoom-wrapper">
+                    <div class="slide-canvas-zoom-wrapper" id="slideCanvasZoomWrapper">
                         <div class="slide-canvas-container" id="slideCanvas"
                              onclick="handleCanvasClick(event)"
                              ondragover="handleSlideCanvasDragOver(event)"
                              ondragleave="handleSlideCanvasDragLeave(event)"
                              ondrop="handleSlideCanvasDrop(event)"
-                             style="transform: scale(${slideEditorZoom / 100});">
+                             style="transform: scale(${getSlideCanvasScale()});">
                             ${renderSlideElements(currentSlide, currentEditingSlide)}
                             <div class="collab-cursors" id="collabCursors"></div>
                         </div>
                     </div>
                     
                     <!-- Speaker Notes -->
-                    <div class="slide-notes-section" style="width: 100%; max-width: 960px;">
-                        <label>Speaker Notes</label>
+                    <div class="slide-notes-section ${speakerNotesVisible ? '' : 'hidden'}" id="slideNotesSection">
+                        <label onclick="toggleSpeakerNotes()" style="cursor: pointer; user-select: none;">
+                            <span>Speaker Notes</span>
+                            <span class="slide-notes-chevron">${speakerNotesVisible ? '▼' : '▶'}</span>
+                        </label>
                         <textarea placeholder="Add notes for this slide..." 
                                   oninput="debouncedUpdateSlideNotes(${currentEditingSlide}, this.value)">${currentSlide.notes || ''}</textarea>
                     </div>
@@ -43833,12 +43898,60 @@
             }
         }
         
-        function setSlideViewZoom(percent) {
-            slideEditorZoom = Math.min(150, Math.max(50, parseInt(percent, 10) || 100));
+        function getSlideCanvasScale() {
+            if (slideEditorZoom === 'fit') {
+                const wrapper = document.getElementById('slideCanvasZoomWrapper');
+                if (!wrapper) return 1;
+                const w = wrapper.clientWidth - 24;
+                const h = wrapper.clientHeight - 24;
+                if (w <= 0 || h <= 0) return 1;
+                return Math.min(w / 960, h / 540);
+            }
+            const pct = typeof slideEditorZoom === 'number' ? slideEditorZoom : parseInt(slideEditorZoom, 10) || 100;
+            return Math.min(1.5, Math.max(0.5, pct / 100));
+        }
+        
+        function updateSlideCanvasScale() {
             const canvas = document.getElementById('slideCanvas');
-            if (canvas) canvas.style.transform = 'scale(' + (slideEditorZoom / 100) + ')';
+            if (canvas) canvas.style.transform = 'scale(' + getSlideCanvasScale() + ')';
+        }
+        
+        function setSlideViewZoom(val) {
+            if (val === 'fit') {
+                slideEditorZoom = 'fit';
+            } else {
+                const pct = parseInt(val, 10) || 100;
+                slideEditorZoom = Math.min(150, Math.max(50, pct));
+            }
+            updateSlideCanvasScale();
             const sel = document.querySelector('#slideToolbar select[onchange*="setSlideViewZoom"]');
             if (sel) sel.value = String(slideEditorZoom);
+        }
+        
+        function toggleDeckEditorExpanded() {
+            deckEditorExpanded = !deckEditorExpanded;
+            const container = document.querySelector('.deck-builder-container');
+            const btn = document.getElementById('expandSlideBtn');
+            if (container) container.classList.toggle('expanded-view', deckEditorExpanded);
+            if (btn) {
+                btn.classList.toggle('active', deckEditorExpanded);
+                btn.title = deckEditorExpanded ? 'Exit expanded view' : 'Expand slide to full area';
+                btn.textContent = deckEditorExpanded ? '⊡ Exit expand' : '⊞ Expand';
+            }
+            setTimeout(updateSlideCanvasScale, 100);
+        }
+        
+        function toggleSpeakerNotes() {
+            speakerNotesVisible = !speakerNotesVisible;
+            try { localStorage.setItem('deckSpeakerNotesVisible', speakerNotesVisible ? '1' : '0'); } catch (_) {}
+            const section = document.getElementById('slideNotesSection');
+            const btn = document.getElementById('toggleNotesBtn');
+            if (section) section.classList.toggle('hidden', !speakerNotesVisible);
+            if (btn) {
+                btn.classList.toggle('active', speakerNotesVisible);
+                btn.title = speakerNotesVisible ? 'Hide Speaker Notes' : 'Show Speaker Notes';
+                btn.textContent = speakerNotesVisible ? '📝 Notes' : '📝 Show notes';
+            }
         }
         
         // Slide element state
@@ -44036,12 +44149,17 @@
         
         function initSlideElements() {
             const canvas = document.getElementById('slideCanvas');
+            const wrapper = document.getElementById('slideCanvasZoomWrapper');
             if (!canvas) return;
             
-            // Mouse move handler for dragging/resizing
             canvas.addEventListener('mousemove', handleElementMouseMove);
             canvas.addEventListener('mouseup', handleElementMouseUp);
             canvas.addEventListener('mouseleave', handleElementMouseUp);
+            
+            if (wrapper && typeof ResizeObserver !== 'undefined') {
+                const ro = new ResizeObserver(() => { if (slideEditorZoom === 'fit') updateSlideCanvasScale(); });
+                ro.observe(wrapper);
+            }
         }
         
         function handleCanvasClick(event) {
@@ -46643,4 +46761,5 @@
     </footer>
     
 </body>
+</html>
 </html>
