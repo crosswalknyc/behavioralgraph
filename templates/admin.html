@@ -3640,17 +3640,10 @@
             const allTickersCheckbox = document.getElementById('allHedgeFundTickers');
             const tickerCheckboxes = document.querySelectorAll('.hedge-fund-ticker-checkbox');
             
-            if (allTickersCheckbox.checked) {
-                // Only check tickers that are in quick selects
-                const quickSelectTickerList = getQuickSelectTickers();
-                const quickSelectTickerSet = new Set(quickSelectTickerList.map(t => t.ticker));
-                
-                tickerCheckboxes.forEach(cb => {
-                    cb.checked = quickSelectTickerSet.has(cb.value);
-                });
-            } else {
-                tickerCheckboxes.forEach(cb => cb.checked = false);
-            }
+            // Check or uncheck ALL tickers based on the "All Tickers" checkbox
+            tickerCheckboxes.forEach(cb => {
+                cb.checked = allTickersCheckbox.checked;
+            });
         }
         
         // Load Hedge Fund Tickers for Access Control
