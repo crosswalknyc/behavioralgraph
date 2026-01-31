@@ -3718,7 +3718,7 @@
             }
             
             section.style.display = 'block';
-            container.innerHTML = '<div style="text-align: center; padding: 1rem; color: var(--text-secondary);">Loading company users...</div>';
+            container.innerHTML = '<div style="text-align: left; padding: 1rem; color: var(--text-secondary);">Loading company users...</div>';
             
             try {
                 const response = await fetch('/api/admin/users');
@@ -3726,33 +3726,50 @@
                 
                 if (data.success) {
                     const currentUsername = document.getElementById('editUsername').value || document.getElementById('newUsername').value;
+                    const companyLower = company.toLowerCase().trim();
+                    
+                    console.log('Loading team members for company:', company);
+                    console.log('Current user being edited:', currentUsername);
+                    console.log('Total users in system:', Object.keys(data.users).length);
                     
                     // Filter users from the same company (excluding the user being edited)
+                    // Use more flexible matching - trim whitespace and compare case-insensitively
                     companyUsersForTeam = Object.entries(data.users)
-                        .filter(([username, user]) => 
-                            user.company && user.company.toLowerCase() === company.toLowerCase() && 
-                            username !== currentUsername
-                        )
+                        .filter(([username, user]) => {
+                            const userCompany = (user.company || '').toLowerCase().trim();
+                            const isMatch = userCompany === companyLower;
+                            const isNotCurrentUser = username !== currentUsername;
+                            
+                            // Debug log for each user
+                            if (userCompany && userCompany.includes(companyLower.substring(0, 3))) {
+                                console.log(`User ${username}: company="${user.company}", match=${isMatch}, notCurrent=${isNotCurrentUser}`);
+                            }
+                            
+                            return isMatch && isNotCurrentUser;
+                        })
                         .map(([username, user]) => ({
                             username,
                             department: user.department || '',
                             first_name: user.first_name || '',
                             last_name: user.last_name || '',
-                            role: user.role || 'user'
+                            role: user.role || 'user',
+                            email: user.email || ''
                         }));
                     
+                    console.log('Found company users:', companyUsersForTeam.length);
+                    
                     // Get unique departments for the dropdown
-                    const departments = [...new Set(companyUsersForTeam.map(u => u.department).filter(d => d))];
+                    const departments = [...new Set(companyUsersForTeam.map(u => u.department).filter(d => d))].sort();
                     deptSelect.innerHTML = '<option value="">Select by Department...</option>' + 
                         departments.map(d => `<option value="${d}">${d}</option>`).join('');
                     
                     renderTeamMembersList();
                 } else {
-                    container.innerHTML = '<div style="text-align: center; padding: 1rem; color: var(--accent-red);">Error loading users</div>';
+                    container.innerHTML = '<div style="text-align: left; padding: 1rem; color: var(--accent-red);">Error loading users</div>';
                 }
             } catch (e) {
                 console.error('Error loading company users:', e);
-                container.innerHTML = '<div style="text-align: center; padding: 1rem; color: var(--accent-red);">Error loading users</div>';
+                container.innerHTML = '<div style="text-align: left; padding: 1rem; color: var(--accent-red);">Error loading users</div>';
             }
         }
         
