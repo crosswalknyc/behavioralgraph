@@ -3184,7 +3184,7 @@ def generate_behavioral_summary(profile_data):
                 for item in top_5
             ])
         
-        prompt = f"""You are an expert consumer behavior analyst. Based on the following audience data, write 4-6 concise bullet points that describe WHO this person is BEHAVIORALLY - their lifestyle, interests, habits, and what makes them unique.
+        prompt = f"""You are an expert consumer behavior analyst. Based on the following audience data, write 4-6 concise bullet points that describe WHO these panelists are BEHAVIORALLY - their lifestyle, interests, habits, and what makes them unique.
 
 PROFILE: {profile_name}
 
@@ -3198,17 +3198,18 @@ TOP OVER-INDEXING BEHAVIORS (where they most differ from general population):
 {top_indexers_str}
 
 INSTRUCTIONS:
-- Write 4-6 bullet points describing this person's behavioral profile
+- Write 4-6 bullet points describing this audience's behavioral profile
+- IMPORTANT: Start each bullet with "{profile_name} panelists" to frame it as an analysis of observed behavior
 - Focus on LIFESTYLE and BEHAVIORS, not just demographics
 - Be specific about their interests, habits, media consumption, and shopping patterns
 - Highlight what makes them UNIQUE compared to the average person
-- Use vivid, descriptive language that paints a picture of who they are
+- Use analytical language that describes observed patterns (e.g., "{profile_name} panelists show strong affinity for..." or "{profile_name} panelists tend to engage with...")
 - Each bullet should be 1-2 sentences max
-- Start each bullet with an action verb or descriptive phrase
 - Do NOT include demographic stats - focus on behavioral insights
+- Do NOT use recommendation language (avoid "should", "recommend", "consider")
 
 Format: Return ONLY a JSON array of strings, each string being one bullet point. Example:
-["Bullet 1 text here", "Bullet 2 text here", "Bullet 3 text here"]"""
+["{profile_name} panelists show strong engagement with...", "{profile_name} panelists demonstrate a preference for..."]"""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",

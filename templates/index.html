@@ -11051,6 +11051,22 @@
                                 </div>
                             </div>
                             
+                            <!-- Behavioral Profile Card -->
+                            <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Behavioral Profile">
+                                <div class="insight-card-header">
+                                    <h3 class="has-tooltip" data-tooltip="Behavioral Profile: AI-generated analysis of this audience's lifestyle, interests, habits, and unique characteristics based on their behavioral data.">
+                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                        <span>🧠 Behavioral Profile</span>
+                                    </h3>
+                                </div>
+                                <div id="behavioralProfileCard" style="padding: 0.5rem 0;">
+                                    <div style="font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem;">
+                                        <span class="loading-spinner" style="width: 14px; height: 14px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                                        Analyzing behavioral patterns...
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <!-- Demographic Highlights -->
                             <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Demographic Highlights">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
@@ -23947,7 +23963,7 @@
                 }
             }
             
-            // Show initial demographic takeaways immediately
+            // Show demographic takeaways
             if (takeaways.length > 0) {
                 takeawaysContainer.innerHTML = `
                     <div class="audience-takeaways-title">
@@ -23956,27 +23972,26 @@
                     <ul>
                         ${takeaways.map(t => `<li>${t}</li>`).join('')}
                     </ul>
-                    <div id="behavioralSummarySection" style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
-                        <div class="audience-takeaways-title" style="margin-bottom: 0.5rem;">
-                            <span>🧠</span> Behavioral Profile
-                        </div>
-                        <div id="behavioralSummaryContent" style="font-size: 0.85rem; color: var(--text-secondary);">
-                            <span style="display: inline-flex; align-items: center; gap: 0.5rem;">
-                                <span class="loading-spinner" style="width: 14px; height: 14px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: spin 1s linear infinite;"></span>
-                                Generating behavioral insights...
-                            </span>
-                        </div>
-                    </div>
                 `;
                 takeawaysContainer.style.display = 'block';
             } else {
                 takeawaysContainer.style.display = 'none';
             }
             
-            // Now fetch AI-generated behavioral summary
+            // Fetch AI-generated behavioral summary for the separate card
+            fetchBehavioralProfile(data);
+        }
+        
+        // Fetch and display behavioral profile in its own card
+        async function fetchBehavioralProfile(data) {
+            const behavioralCard = document.getElementById('behavioralProfileCard');
+            if (!behavioralCard) return;
+            
+            const profileName = currentDashboardData?.brandName || 'This audience';
+            
             try {
                 const profileData = {
-                    profileName: currentDashboardData?.brandName || 'This audience',
+                    profileName: profileName,
                     demographics: data?.demographics || {},
                     demographicsIndex: data?.demographicsIndex || {},
                     demographicsGenPop: data?.demographicsGenPop || {},
@@ -23992,23 +24007,19 @@
                 });
                 
                 const result = await response.json();
-                const behavioralContent = document.getElementById('behavioralSummaryContent');
                 
                 if (result.bullets && result.bullets.length > 0) {
-                    behavioralContent.innerHTML = `
+                    behavioralCard.innerHTML = `
                         <ul style="margin: 0; padding-left: 1.25rem; list-style-type: disc;">
-                            ${result.bullets.map(b => `<li style="margin-bottom: 0.4rem; color: var(--text-primary); line-height: 1.5;">${b}</li>`).join('')}
+                            ${result.bullets.map(b => `<li style="margin-bottom: 0.5rem; color: var(--text-primary); line-height: 1.6; font-size: 0.9rem;">${b}</li>`).join('')}
                         </ul>
                     `;
                 } else if (result.error) {
-                    behavioralContent.innerHTML = `<span style="color: var(--text-secondary); font-style: italic;">Unable to generate behavioral insights</span>`;
+                    behavioralCard.innerHTML = `<div style="color: var(--text-secondary); font-style: italic; font-size: 0.85rem;">Unable to generate behavioral insights</div>`;
                 }
             } catch (err) {
                 console.error('Error fetching behavioral summary:', err);
-                const behavioralContent = document.getElementById('behavioralSummaryContent');
-                if (behavioralContent) {
-                    behavioralContent.innerHTML = `<span style="color: var(--text-secondary); font-style: italic;">Behavioral insights unavailable</span>`;
-                }
+                behavioralCard.innerHTML = `<div style="color: var(--text-secondary); font-style: italic; font-size: 0.85rem;">Behavioral insights unavailable</div>`;
             }
         }
         
