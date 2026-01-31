@@ -22,6 +22,12 @@ from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, render_template, request, jsonify, send_file, Response, redirect, url_for, session
 from flask_cors import CORS
+
+try:
+    from flask_socketio import SocketIO, emit, join_room, leave_room
+    SOCKETIO_AVAILABLE = True
+except ImportError:
+    SOCKETIO_AVAILABLE = False
 import pandas as pd
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
@@ -56,6 +62,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 CORS(app)
+
+# WebSocket support for real-time deck collaboration
+if SOCKETIO_AVAILABLE:
+    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+else:
+    socketio = None
 
 # Health check endpoints - register early so they're available immediately
 # These MUST be registered before any heavy imports or initialization
@@ -8952,24 +8964,31 @@ def get_deck(deck_id):
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
         deck = json.loads(response['Body'].read().decode('utf-8'))
         
-        # Check permission
+        # Check permission (owner, shared_with, collaborator, or team)
         username = session.get('username')
+        user_email = user.get('email', '').lower()
         company = user.get('company', '')
         owner = deck.get('owner', '')
         shared_with = deck.get('shared_with', [])
+        collaborators = deck.get('collaborators', [])
         deck_company = deck.get('company', '')
         is_team_deck = deck.get('is_team_deck', False)
+        is_collaborator = any(
+            c.get('user_id') == username or c.get('email', '').lower() == user_email
+            for c in collaborators
+        )
         
         can_view = (
             owner == username or
             username in shared_with or
+            is_collaborator or
             (is_team_deck and deck_company == company)
         )
         
         if not can_view:
             return jsonify({'success': False, 'error': 'Permission denied'})
         
-        deck['can_edit'] = owner == username or username in shared_with
+        deck['can_edit'] = owner == username or username in shared_with or is_collaborator
         
         return jsonify({'success': True, 'deck': deck})
     except s3_client.exceptions.NoSuchKey:
@@ -8993,23 +9012,31 @@ def update_deck(deck_id):
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
         deck = json.loads(response['Body'].read().decode('utf-8'))
         
-        # Check permission
+        # Check permission (owner, shared_with, or collaborator with edit role)
         username = session.get('username')
+        user_email = user.get('email', '').lower()
         owner = deck.get('owner', '')
         shared_with = deck.get('shared_with', [])
+        collaborators = deck.get('collaborators', [])
+        is_collaborator = any(
+            c.get('user_id') == username or c.get('email', '').lower() == user_email
+            for c in collaborators
+        )
         
-        can_edit = owner == username or username in shared_with
+        can_edit = owner == username or username in shared_with or is_collaborator
         if not can_edit:
             return jsonify({'success': False, 'error': 'Permission denied'})
         
         # Update deck
-        data = request.get_json()
+        data = request.get_json() or {}
         if 'name' in data:
             deck['name'] = data['name']
         if 'description' in data:
             deck['description'] = data['description']
         if 'slides' in data:
             deck['slides'] = data['slides']
+        if 'titleSlide' in data:
+            deck['titleSlide'] = data['titleSlide']
         if 'is_team_deck' in data and owner == username:
             deck['is_team_deck'] = data['is_team_deck']
         if 'shared_with' in data and owner == username:
@@ -9274,6 +9301,183 @@ def remove_deck_collaborator(deck_id, collaborator_id):
         return jsonify({'success': False, 'error': 'Deck not found'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
+# DECK SYNC (Workspace -> S3 for real-time collaboration)
+# ============================================================================
+
+@app.route('/api/decks/sync', methods=['POST'])
+@requires_auth
+def sync_workspace_deck():
+    """Sync a workspace deck to S3 so it can be shared and collaborated on in real-time."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+
+    try:
+        data = request.get_json()
+        deck = data.get('deck', {})
+        deck_id = deck.get('id') or deck.get('serverDeckId') or str(uuid.uuid4())
+        is_new = not deck.get('serverDeckId')
+
+        # Use UUID for S3-backed decks (not deck_timestamp)
+        if deck_id.startswith('deck_'):
+            deck_id = str(uuid.uuid4())
+
+        now = datetime.now().isoformat()
+        username = session.get('username')
+
+        deck_data = {
+            'id': deck_id,
+            'name': deck.get('name', 'Untitled Deck'),
+            'description': deck.get('description', ''),
+            'owner': deck.get('owner') or username,
+            'company': user.get('company', ''),
+            'is_team_deck': deck.get('is_team_deck', False),
+            'shared_with': deck.get('shared_with', []),
+            'collaborators': deck.get('collaborators', []),
+            'slides': deck.get('slides', []),
+            'titleSlide': deck.get('titleSlide', {}),
+            'template': deck.get('template', 'default'),
+            'created_at': deck.get('created_at') or now,
+            'updated_at': now,
+            'last_editor': username,
+        }
+
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(deck_data),
+            ContentType='application/json'
+        )
+
+        return jsonify({
+            'success': True,
+            'deck': deck_data,
+            'serverDeckId': deck_id,
+            'is_new': is_new
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
+# DECK COMMIT TO GITHUB
+# ============================================================================
+
+@app.route('/api/decks/<deck_id>/commit-github', methods=['POST'])
+@requires_auth
+def commit_deck_to_github(deck_id):
+    """Commit deck to the behavioral graph GitHub repository."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+
+    try:
+        data = request.get_json() or {}
+        repo_name = data.get('repo', os.environ.get('GITHUB_REPO', 'behavioral-graph/decks'))
+        branch = data.get('branch', 'main')
+        file_path = data.get('path', f'decks/{deck_id}.json')
+
+        github_token = os.environ.get('GITHUB_TOKEN')
+        if not github_token:
+            return jsonify({
+                'success': False,
+                'error': 'GitHub integration not configured. Set GITHUB_TOKEN and GITHUB_REPO environment variables.'
+            })
+
+        # Get deck data - try S3 first
+        try:
+            s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+            deck_data = json.loads(response['Body'].read().decode('utf-8'))
+        except Exception:
+            return jsonify({'success': False, 'error': 'Deck not found in cloud. Sync deck first by sharing it.'})
+
+        try:
+            from github import Github
+            g = Github(github_token)
+            repo = g.get_repo(repo_name)
+
+            content = json.dumps(deck_data, indent=2)
+            try:
+                existing = repo.get_contents(file_path, ref=branch)
+                repo.update_file(file_path, f'Update deck: {deck_data.get("name", "Untitled")}', content, existing.sha, branch=branch)
+                message = f'Updated {file_path}'
+            except Exception:
+                repo.create_file(file_path, f'Add deck: {deck_data.get("name", "Untitled")}', content, branch=branch)
+                message = f'Created {file_path}'
+
+            return jsonify({
+                'success': True,
+                'message': message,
+                'file_path': file_path,
+                'repo': repo_name,
+                'branch': branch
+            })
+        except ImportError:
+            return jsonify({
+                'success': False,
+                'error': 'PyGithub not installed. Run: pip install PyGithub'
+            })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
+# DECK REAL-TIME COLLABORATION (WebSocket)
+# ============================================================================
+
+if SOCKETIO_AVAILABLE and socketio:
+    @socketio.on('join_deck')
+    def handle_join_deck(data):
+        """Join a deck collaboration room."""
+        deck_id = data.get('deck_id')
+        user = data.get('user', 'Anonymous')
+        color = data.get('color', '#c8e600')
+        if deck_id:
+            join_room(f'deck_{deck_id}')
+            emit('user_joined', {'user': user, 'color': color}, room=f'deck_{deck_id}', include_self=False)
+            emit('joined', {'deck_id': deck_id})
+
+    @socketio.on('leave_deck')
+    def handle_leave_deck(data):
+        """Leave a deck collaboration room."""
+        deck_id = data.get('deck_id')
+        user = data.get('user', 'Anonymous')
+        if deck_id:
+            leave_room(f'deck_{deck_id}')
+            emit('user_left', {'user': user}, room=f'deck_{deck_id}')
+
+    @socketio.on('slide_update')
+    def handle_slide_update(data):
+        """Broadcast slide update to other collaborators."""
+        deck_id = data.get('deck_id')
+        slide_idx = data.get('slide_idx')
+        slide_data = data.get('slide_data')
+        user = data.get('user', 'Anonymous')
+        if deck_id and slide_data is not None:
+            emit('slide_update', {
+                'deckId': deck_id,
+                'slideIdx': slide_idx,
+                'slideData': slide_data,
+                'user': user
+            }, room=f'deck_{deck_id}', include_self=False)
+
+    @socketio.on('cursor')
+    def handle_cursor(data):
+        """Broadcast cursor position to other collaborators."""
+        deck_id = data.get('deck_id')
+        x = data.get('x', 0)
+        y = data.get('y', 0)
+        user = data.get('user', 'Anonymous')
+        color = data.get('color', '#c8e600')
+        if deck_id:
+            emit('cursor', {'user': user, 'x': x, 'y': y, 'color': color}, room=f'deck_{deck_id}', include_self=False)
 
 
 # ============================================================================
@@ -10885,4 +11089,7 @@ print("=" * 60)
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    if SOCKETIO_AVAILABLE and socketio:
+        socketio.run(app, host='0.0.0.0', port=port, debug=debug)
+    else:
+        app.run(host='0.0.0.0', port=port, debug=debug)

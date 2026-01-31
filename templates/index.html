@@ -7,6 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <style>
         :root {
             --bg-dark: #0a1929;
@@ -8348,9 +8349,33 @@
             border-bottom: 1px solid var(--border-color);
         }
         
+        .deck-header-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        
+        .deck-header-controls select,
+        .deck-header-controls .btn,
+        .deck-header-controls button {
+            height: 34px !important;
+            min-height: 34px !important;
+            line-height: 1 !important;
+            padding: 0 0.75rem !important;
+            font-size: 0.8rem !important;
+            box-sizing: border-box;
+        }
+        
+        .deck-header-controls .btn-small,
+        .deck-header-controls button[title] {
+            padding: 0 0.5rem !important;
+            min-width: 34px;
+        }
+        
         .deck-builder-container {
             display: grid;
-            grid-template-columns: 250px 180px 1fr;
+            grid-template-columns: 200px 1fr 280px;
             gap: 0.75rem;
             flex: 1;
             min-height: 0;
@@ -8709,6 +8734,197 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+        }
+        
+        /* Full Slide Editor Styles */
+        .slide-editor-wrapper {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+        
+        .slide-nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        .slide-nav-btn {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.5rem 1rem;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        
+        .slide-nav-btn:hover:not(:disabled) {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+        
+        .slide-nav-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        
+        .slide-nav-indicator {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        
+        .slide-toolbar {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .slide-toolbar-group {
+            display: flex;
+            gap: 0.25rem;
+            padding-right: 0.5rem;
+            border-right: 1px solid var(--border-color);
+        }
+        
+        .slide-toolbar-group:last-child {
+            border-right: none;
+            padding-right: 0;
+        }
+        
+        .toolbar-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            padding: 0.4rem 0.6rem;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.15s;
+        }
+        
+        .toolbar-btn:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: var(--border-color);
+        }
+        
+        .toolbar-btn.active {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+        
+        .slide-canvas-container {
+            width: 100%;
+            max-width: 960px;
+            aspect-ratio: 16/9;
+            position: relative;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .slide-element {
+            position: absolute;
+            cursor: move;
+            user-select: none;
+            min-width: 50px;
+            min-height: 30px;
+        }
+        
+        .slide-element.selected {
+            outline: 2px solid var(--accent-lime);
+            outline-offset: 2px;
+        }
+        
+        .slide-element.text-element {
+            padding: 0.5rem;
+            background: transparent;
+        }
+        
+        .slide-element.text-element .text-content {
+            outline: none;
+            min-height: 1em;
+            color: white;
+        }
+        
+        .slide-element.text-element.editing {
+            cursor: text;
+        }
+        
+        .slide-element.image-element {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .slide-element.image-element img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        
+        .slide-element.shape-element {
+            background: var(--accent-blue);
+            border-radius: 4px;
+        }
+        
+        .element-resize-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: white;
+            border: 1px solid var(--accent-lime);
+            border-radius: 2px;
+        }
+        
+        .element-resize-handle.nw { top: -5px; left: -5px; cursor: nw-resize; }
+        .element-resize-handle.ne { top: -5px; right: -5px; cursor: ne-resize; }
+        .element-resize-handle.sw { bottom: -5px; left: -5px; cursor: sw-resize; }
+        .element-resize-handle.se { bottom: -5px; right: -5px; cursor: se-resize; }
+        
+        .collab-cursors {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        
+        .collab-cursor {
+            position: absolute;
+            pointer-events: none;
+            transition: all 0.1s ease-out;
+        }
+        
+        .collab-cursor-pointer {
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-bottom: 10px solid;
+        }
+        
+        .collab-cursor-label {
+            font-size: 0.65rem;
+            padding: 0.15rem 0.35rem;
+            border-radius: 3px;
+            color: white;
+            white-space: nowrap;
+            margin-left: 8px;
+            margin-top: -2px;
         }
         
         .slide-preview {
@@ -10617,7 +10833,7 @@
                         <button class="tab-btn tool-tab has-tooltip" data-feature="sponsorship" data-tooltip="Sponsorship: Sponsorship valuation and partnership opportunity analysis for brand collaborations." onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-feature="media" data-tooltip="Media: Media consumption patterns including TV, streaming, social media, and digital platform preferences." onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">MEDIA</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-feature="content" data-tooltip="Content: Content consumption preferences including genres, formats, and viewing habits." onclick="showTab('content')"><span class="tab-icon">🎬</span><span class="tab-label">CONTENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Workspace: Collaborate with team members, share profiles, build presentation decks, and manage workspaces." onclick="showTab('collaboration')"><span class="tab-icon">🤝</span><span class="tab-label">WORKSPACE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Workspace: Collaborate with team members, share profiles, build presentation decks, and manage workspaces." onclick="showTab('collaboration')"><span class="tab-icon">🗂️</span><span class="tab-label">WORKSPACE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                     </div>
                 </div>
             </div>
@@ -12875,57 +13091,44 @@
                             <div class="workspace-deck-builder">
                                 <!-- Header with dropdowns and actions -->
                                 <div class="deck-builder-header" id="deckBuilderHeader">
-                                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                                        <h3 style="margin: 0; font-size: 1rem;">📊 Deck Builder</h3>
-                                        <select id="deckWorkspaceFilter" onchange="filterWorkspaceDecks()" style="padding: 0.4rem 0.75rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.8rem;">
+                                    <div class="deck-header-controls" style="flex: 1;">
+                                        <h3 style="margin: 0; font-size: 1rem; margin-right: 0.5rem;">📊 Deck Builder</h3>
+                                        <select id="deckWorkspaceFilter" onchange="filterWorkspaceDecks()" style="border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); min-width: 160px;">
                                             <option value="current">Current Workspace</option>
                                             <option value="all">All Workspaces</option>
+                                            <option value="shared">Shared with Me (Cloud)</option>
                                         </select>
-                                        <select id="deckSelectDropdown" onchange="selectDeckFromDropdown(this.value)" style="padding: 0.4rem 0.75rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.8rem; min-width: 150px;">
+                                        <select id="deckSelectDropdown" onchange="selectDeckFromDropdown(this.value)" style="border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); min-width: 150px;">
                                             <option value="">Select Deck...</option>
                                         </select>
                                         <button class="btn btn-primary btn-small" onclick="createNewWorkspaceDeck()" style="white-space: nowrap;">+ New Deck</button>
-                                        <div id="deckTitleControls" style="display: none; align-items: center; gap: 0.5rem; padding-left: 0.75rem; border-left: 1px solid var(--border-color);">
-                                            <input type="text" id="deckBuilderTitleInput" placeholder="Deck name" 
-                                                   style="font-size: 0.9rem; font-weight: 600; background: transparent; border: none; border-bottom: 1px dashed var(--border-color); color: var(--text-primary); width: 140px; padding: 0.25rem;"
-                                                   onchange="updateDeckNameInEditor(this.value)">
-                                            <span id="deckSlideCount" style="font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap;">0 slides</span>
-                                        </div>
-                                    </div>
-                                    <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                        <div id="deckActionButtons" style="display: none; align-items: center; gap: 0.5rem;">
+                                        <div id="deckActionButtons" style="display: none; align-items: center; gap: 0.5rem; margin-left: 0.5rem;">
+                                            <button class="btn btn-small btn-success" onclick="shareDeckWithTeam()">👥 SHARE</button>
                                             <div class="export-dropdown" style="position: relative;">
-                                                <button class="btn btn-small btn-primary" onclick="toggleDeckExportMenu(event)" style="display: flex; align-items: center; gap: 0.25rem;">🏔️ EXPORT ▾</button>
-                                                <div id="deckExportMenu" class="export-dropdown-menu" style="display: none; position: absolute; top: 100%; right: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 180px; z-index: 1000; margin-top: 0.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                                                <button class="btn btn-small btn-primary" onclick="toggleDeckExportMenu(event)">🏔️ EXPORT ▾</button>
+                                                <div id="deckExportMenu" class="export-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 180px; z-index: 1000; margin-top: 0.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
                                                     <a onclick="exportDeckToPDF()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📄 PDF</a>
                                                     <a onclick="exportDeckToGoogleSlides()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📑 Google Slides</a>
                                                     <a onclick="exportDeckToPPT()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📊 PowerPoint</a>
                                                     <a onclick="exportDeckToKeynote()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">🍎 Keynote</a>
+                                                    <a onclick="commitDeckToGitHub()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">🐙 Commit to GitHub</a>
                                                 </div>
                                             </div>
-                                            <button class="btn btn-small btn-success" onclick="shareDeckWithTeam()" style="display: flex; align-items: center; gap: 0.25rem;">👥 SHARE</button>
-                                            <button class="btn btn-small" onclick="deleteDeckFromEditor()" title="Delete deck" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 0.35rem 0.5rem;">🗑️</button>
+                                            <button class="btn btn-small" onclick="archiveCurrentDeck()" title="Archive deck" style="background: rgba(147, 51, 234, 0.2); color: #a78bfa;">📦 Archive</button>
+                                            <button class="btn btn-small" onclick="deleteDeckFromEditor()" title="Delete deck" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">🗑️</button>
+                                        </div>
+                                        <div id="deckTitleControls" style="display: none; align-items: center; gap: 0.5rem; padding-left: 0.75rem; border-left: 1px solid var(--border-color); margin-left: 0.5rem;">
+                                            <input type="text" id="deckBuilderTitleInput" placeholder="Deck name" 
+                                                   style="font-size: 0.9rem; font-weight: 600; background: transparent; border: none; border-bottom: 1px dashed var(--border-color); color: var(--text-primary); width: 140px; padding: 0.25rem; height: 34px;"
+                                                   onchange="updateDeckNameInEditor(this.value)">
+                                            <span id="deckSlideCount" style="font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap;">0 slides</span>
                                         </div>
                                     </div>
                                 </div>
                                 
-                                <div class="deck-builder-container" style="grid-template-columns: 280px 200px 1fr;">
-                                    <!-- Left: Data Points (draggable to slides) -->
-                                    <div class="data-points-sidebar" id="dataPointsSidebar">
-                                        <div style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                                            <h4 style="margin: 0; font-size: 0.8rem; color: var(--text-secondary);">📦 Data Points</h4>
-                                            <button class="btn btn-small" onclick="clearAllDataPoints()" style="font-size: 0.65rem; padding: 0.2rem 0.4rem; background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary);">Clear</button>
-                                        </div>
-                                        <div class="data-points-drag-list" id="dataPointsDragList" style="padding: 0.5rem; overflow-y: auto; flex: 1;">
-                                            <div class="collab-empty" style="padding: 1rem; text-align: center;">
-                                                <p style="font-size: 0.75rem; margin: 0;">No data points</p>
-                                                <p style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.25rem;">Add using ➕ on charts</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Middle: Slide Thumbnails -->
-                                    <div class="slide-thumbnails-panel" id="slideThumbnailsPanel">
+                                <div class="deck-builder-container" style="grid-template-columns: 200px 1fr 280px;">
+                                    <!-- Left: Slide Thumbnails -->
+                                    <div class="slide-thumbnails-panel" id="slideThumbnailsPanel" style="grid-column: 1;">
                                         <div id="slideThumbnailsList" style="padding: 0.5rem; overflow-y: auto; flex: 1;">
                                             <div class="collab-empty" style="padding: 1rem; text-align: center;">
                                                 <p style="font-size: 0.75rem;">Select a deck</p>
@@ -12933,8 +13136,8 @@
                                         </div>
                                     </div>
                                     
-                                    <!-- Right: Slide Editor -->
-                                    <div class="slide-editor-panel" id="slideEditorPanel" tabindex="0">
+                                    <!-- Middle: Slide Editor (deck) -->
+                                    <div class="slide-editor-panel" id="slideEditorPanel" tabindex="0" style="grid-column: 2;">
                                         <div class="slide-editor-empty" id="slideEditorEmpty">
                                             <div style="text-align: center; padding: 3rem;">
                                                 <div style="font-size: 3rem; margin-bottom: 1rem;">📑</div>
@@ -12945,6 +13148,20 @@
                                         </div>
                                         <div class="slide-editor-content" id="slideEditorContent" style="display: none;">
                                             <!-- Populated by JavaScript -->
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Right: Data Points (draggable to slides) -->
+                                    <div class="data-points-sidebar" id="dataPointsSidebar" style="grid-column: 3;">
+                                        <div style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                                            <h4 style="margin: 0; font-size: 0.8rem; color: var(--text-secondary);">📦 Data Points</h4>
+                                            <button class="btn btn-small" onclick="clearAllDataPoints()" style="font-size: 0.65rem; padding: 0.2rem 0.4rem; background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary);">Clear</button>
+                                        </div>
+                                        <div class="data-points-drag-list" id="dataPointsDragList" style="padding: 0.5rem; overflow-y: auto; flex: 1;">
+                                            <div class="collab-empty" style="padding: 1rem; text-align: center;">
+                                                <p style="font-size: 0.75rem; margin: 0;">No data points</p>
+                                                <p style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.25rem;">Add using ➕ on charts</p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -21487,7 +21704,7 @@
             content: { icon: '🎬', title: 'Content', desc: 'Content consumption preferences including genres, formats, and viewing habits.' },
             segmentation: { icon: '🎛️', title: 'Segment Builder', desc: 'Build custom audience segments with demographic and behavioral filters.' },
             comparison: { icon: '⚖️', title: 'Compare', desc: 'Side-by-side comparison of multiple profiles.' },
-            collaboration: { icon: '🤝', title: 'Collaborate', desc: 'Share insights and collaborate with team members.' }
+            collaboration: { icon: '🗂️', title: 'Collaborate', desc: 'Share insights and collaborate with team members.' }
         };
         
         function updateInlineTabHeader(tabName) {
@@ -42598,15 +42815,34 @@
             renderSlideThumbnails();
         }
         
-        function renderDeckDropdown() {
+        let cloudDecks = [];
+        
+        async function renderDeckDropdown() {
             const dropdown = document.getElementById('deckSelectDropdown');
             if (!dropdown) return;
             
             const filter = document.getElementById('deckWorkspaceFilter')?.value || 'current';
             let decksToShow = [];
             
-            if (filter === 'current') {
-                decksToShow = workspaceDecks[currentWorkspace] || [];
+            if (filter === 'shared') {
+                try {
+                    const res = await fetch('/api/decks', { credentials: 'same-origin' });
+                    const data = await res.json();
+                    cloudDecks = data.decks || [];
+                    decksToShow = cloudDecks.map(d => ({
+                        ...d,
+                        id: d.id,
+                        workspaceId: 'cloud',
+                        workspaceName: 'Cloud',
+                        serverDeckId: d.id,
+                        slides: d.slides_count !== undefined ? [] : (d.slides || []),
+                        titleSlide: d.titleSlide || {}
+                    }));
+                } catch (e) {
+                    cloudDecks = [];
+                }
+            } else if (filter === 'current') {
+                decksToShow = (workspaceDecks[currentWorkspace] || []).map(d => ({ ...d, workspaceName: workspaces[currentWorkspace]?.name || currentWorkspace, workspaceId: currentWorkspace }));
             } else {
                 Object.entries(workspaceDecks).forEach(([wsId, decks]) => {
                     const wsName = workspaces[wsId]?.name || wsId;
@@ -42619,14 +42855,14 @@
             dropdown.innerHTML = `
                 <option value="">Select Deck...</option>
                 ${decksToShow.map(d => `
-                    <option value="${d.workspaceId || currentWorkspace}|${d.id}" ${currentEditingDeck?.id === d.id ? 'selected' : ''}>
-                        ${d.name} (${d.slides?.length || 0})${d.workspaceName ? ` - ${d.workspaceName}` : ''}
+                    <option value="${d.workspaceId || currentWorkspace}|${d.id}" ${currentEditingDeck?.id === d.id || currentEditingDeck?.serverDeckId === d.id ? 'selected' : ''}>
+                        ${d.name} (${d.slides?.length ?? d.slides_count ?? 0})${d.workspaceName ? ` - ${d.workspaceName}` : ''}
                     </option>
                 `).join('')}
             `;
         }
         
-        function selectDeckFromDropdown(value) {
+        async function selectDeckFromDropdown(value) {
             if (!value) {
                 currentEditingDeck = null;
                 currentEditingSlide = 0;
@@ -42635,7 +42871,30 @@
             }
             
             const [wsId, deckId] = value.split('|');
-            openDeckInEditor(wsId, deckId);
+            if (wsId === 'cloud') {
+                try {
+                    const res = await fetch(`/api/decks/${deckId}`, { credentials: 'same-origin' });
+                    const data = await res.json();
+                    if (data.success && data.deck) {
+                        const deck = data.deck;
+                        deck.workspaceId = 'cloud';
+                        deck.serverDeckId = deck.id;
+                        if (!deck.titleSlide) deck.titleSlide = { title: 'Presentation', subtitle: '' };
+                        if (!deck.slides) deck.slides = [];
+                        currentEditingDeck = deck;
+                        currentEditingSlide = 0;
+                        renderWorkspaceDecks();
+                        renderSlideEditor();
+                        initDeckCollaboration();
+                    } else {
+                        showNotification(data.error || 'Failed to load deck', 'error');
+                    }
+                } catch (e) {
+                    showNotification('Failed to load deck', 'error');
+                }
+            } else {
+                openDeckInEditor(wsId, deckId);
+            }
         }
         
         function renderDataPointsPanel() {
@@ -42878,6 +43137,40 @@
             }
         });
         
+        // Mouse wheel scroll navigation between slides
+        document.addEventListener('DOMContentLoaded', function() {
+            const slidePanel = document.getElementById('slideEditorPanel');
+            if (slidePanel) {
+                slidePanel.addEventListener('wheel', function(e) {
+                    if (!currentEditingDeck) return;
+                    // Only navigate when not over a contenteditable or input (so typing works)
+                    const target = e.target;
+                    if (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
+                    
+                    const allSlides = [{ type: 'title' }, ...(currentEditingDeck.slides || [])];
+                    if (e.deltaY > 0 && currentEditingSlide < allSlides.length - 1) {
+                        e.preventDefault();
+                        currentEditingSlide++;
+                        renderSlideEditor();
+                        renderSlideThumbnails();
+                        scrollThumbnailIntoView(currentEditingSlide);
+                    } else if (e.deltaY < 0 && currentEditingSlide > 0) {
+                        e.preventDefault();
+                        currentEditingSlide--;
+                        renderSlideEditor();
+                        renderSlideThumbnails();
+                        scrollThumbnailIntoView(currentEditingSlide);
+                    }
+                }, { passive: false });
+            }
+        });
+        
+        function scrollThumbnailIntoView(slideIdx) {
+            const thumbs = document.querySelectorAll('.slide-thumb-item');
+            const thumb = thumbs[slideIdx];
+            if (thumb) thumb.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+        
         function renderArchivedDecks() {
             // Check if there's an archived decks section, if not create one
             let archivedSection = document.getElementById('archivedDecksSection');
@@ -43055,6 +43348,7 @@
         }
         
         function openDeckInEditor(wsId, deckId) {
+            leaveDeckCollaboration();
             const decks = workspaceDecks[wsId] || [];
             const deck = decks.find(d => d.id === deckId);
             if (!deck) {
@@ -43067,6 +43361,7 @@
             
             renderWorkspaceDecks();
             renderSlideEditor();
+            initDeckCollaboration();
         }
         
         function renderSlideEditor() {
@@ -43110,90 +43405,767 @@
             }
             
             contentEl.innerHTML = `
-                <div class="slide-canvas-full" 
-                     ondragover="handleSlideCanvasDragOver(event)"
-                     ondragleave="handleSlideCanvasDragLeave(event)"
-                     ondrop="handleSlideCanvasDrop(event)">
-                    ${renderCurrentSlideEditable(currentSlide, currentEditingSlide)}
+                <div class="slide-editor-wrapper">
+                    <!-- Slide Navigation -->
+                    <div class="slide-nav-controls">
+                        <button class="slide-nav-btn" onclick="navigateSlide(-1)" ${currentEditingSlide === 0 ? 'disabled' : ''}>← Previous</button>
+                        <span class="slide-nav-indicator">Slide ${currentEditingSlide + 1} of ${allSlides.length}</span>
+                        <button class="slide-nav-btn" onclick="navigateSlide(1)" ${currentEditingSlide >= allSlides.length - 1 ? 'disabled' : ''}>Next →</button>
+                    </div>
                     
-                    <div class="slide-notes-section">
+                    <!-- Slide Toolbar -->
+                    <div class="slide-toolbar" id="slideToolbar">
+                        <div class="slide-toolbar-group">
+                            <button class="toolbar-btn" onclick="addSlideElement('text')" title="Add Text">📝 Text</button>
+                            <button class="toolbar-btn" onclick="addSlideElement('image')" title="Add Image (upload)">🖼️ Image</button>
+                            <button class="toolbar-btn" onclick="addSlideElement('imageUrl')" title="Add Image from URL">🔗 Image URL</button>
+                            <button class="toolbar-btn" onclick="addSlideElement('shape')" title="Add Shape">⬛ Shape</button>
+                        </div>
+                        <div class="slide-toolbar-group">
+                            <button class="toolbar-btn" onclick="formatText('bold')" title="Bold"><b>B</b></button>
+                            <button class="toolbar-btn" onclick="formatText('italic')" title="Italic"><i>I</i></button>
+                            <button class="toolbar-btn" onclick="formatText('underline')" title="Underline"><u>U</u></button>
+                            <button class="toolbar-btn" onclick="formatText('insertUnorderedList')" title="Bullet List">• List</button>
+                            <button class="toolbar-btn" onclick="formatText('insertOrderedList')" title="Numbered List">1. List</button>
+                        </div>
+                        <div class="slide-toolbar-group">
+                            <select class="toolbar-btn" onchange="setFontSize(this.value)" style="padding: 0.3rem;">
+                                <option value="14">14px</option>
+                                <option value="18">18px</option>
+                                <option value="24" selected>24px</option>
+                                <option value="32">32px</option>
+                                <option value="48">48px</option>
+                                <option value="64">64px</option>
+                            </select>
+                            <input type="color" class="toolbar-btn" onchange="setTextColor(this.value)" value="#ffffff" title="Text Color" style="width: 32px; height: 28px; padding: 2px;">
+                        </div>
+                        <div class="slide-toolbar-group">
+                            <button class="toolbar-btn" onclick="alignElement('left')" title="Align Left">⬅</button>
+                            <button class="toolbar-btn" onclick="alignElement('center')" title="Align Center">⬌</button>
+                            <button class="toolbar-btn" onclick="alignElement('right')" title="Align Right">➡</button>
+                        </div>
+                        <div class="slide-toolbar-group">
+                            <button class="toolbar-btn" onclick="bringToFront()" title="Bring to Front">⬆️</button>
+                            <button class="toolbar-btn" onclick="sendToBack()" title="Send to Back">⬇️</button>
+                            <button class="toolbar-btn" onclick="deleteSelectedElement()" title="Delete" style="color: #ef4444;">🗑️</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Slide Canvas -->
+                    <div class="slide-canvas-container" id="slideCanvas"
+                         onclick="handleCanvasClick(event)"
+                         ondragover="handleSlideCanvasDragOver(event)"
+                         ondragleave="handleSlideCanvasDragLeave(event)"
+                         ondrop="handleSlideCanvasDrop(event)">
+                        ${renderSlideElements(currentSlide, currentEditingSlide)}
+                        <div class="collab-cursors" id="collabCursors"></div>
+                    </div>
+                    
+                    <!-- Speaker Notes -->
+                    <div class="slide-notes-section" style="width: 100%; max-width: 960px;">
                         <label>Speaker Notes</label>
                         <textarea placeholder="Add notes for this slide..." 
-                                  onchange="updateSlideNotes(${currentEditingSlide}, this.value)">${currentSlide.notes || ''}</textarea>
+                                  oninput="debouncedUpdateSlideNotes(${currentEditingSlide}, this.value)">${currentSlide.notes || ''}</textarea>
                     </div>
                 </div>
             `;
+            
+            // Initialize slide elements
+            initSlideElements();
             
             // Focus the panel for keyboard navigation
             const panel = document.getElementById('slideEditorPanel');
             if (panel) panel.focus();
         }
         
-        function renderCurrentSlideEditable(slide, idx) {
-            if (idx === 0 || slide.type === 'title') {
-                // Title slide - use profile image if available
+        function navigateSlide(direction) {
+            const allSlides = [{ type: 'title' }, ...(currentEditingDeck?.slides || [])];
+            const newIdx = currentEditingSlide + direction;
+            if (newIdx >= 0 && newIdx < allSlides.length) {
+                currentEditingSlide = newIdx;
+                renderSlideEditor();
+            }
+        }
+        
+        // Slide element state
+        let selectedElementId = null;
+        let isDraggingElement = false;
+        let isResizingElement = false;
+        let dragStartPos = { x: 0, y: 0 };
+        let elementStartPos = { x: 0, y: 0 };
+        
+        function renderSlideElements(slide, idx) {
+            // Get elements from slide or create defaults for title slide
+            let elements = slide.elements || [];
+            
+            // For title slide, create default elements if none exist
+            if ((idx === 0 || slide.type === 'title') && elements.length === 0) {
                 const profileImage = slide.image || currentProfileData?.image || null;
+                elements = [
+                    profileImage ? {
+                        id: 'title_image',
+                        type: 'image',
+                        x: 50, y: 5,
+                        width: 15, height: 25,
+                        src: profileImage,
+                        locked: false
+                    } : null,
+                    {
+                        id: 'title_text',
+                        type: 'text',
+                        x: 10, y: profileImage ? 35 : 30,
+                        width: 80, height: 20,
+                        content: slide.title || 'Presentation Title',
+                        fontSize: 48,
+                        fontWeight: 'bold',
+                        color: '#ffffff',
+                        align: 'center'
+                    },
+                    {
+                        id: 'subtitle_text',
+                        type: 'text',
+                        x: 15, y: profileImage ? 55 : 50,
+                        width: 70, height: 10,
+                        content: slide.subtitle || 'Powered by Crosswalk IQ',
+                        fontSize: 24,
+                        color: '#94a3b8',
+                        align: 'center'
+                    }
+                ].filter(Boolean);
+            }
+            
+            // For content slides with contentItems but no elements, convert them
+            if (idx > 0 && elements.length === 0 && slide.contentItems?.length > 0) {
+                elements = [
+                    {
+                        id: 'slide_title',
+                        type: 'text',
+                        x: 5, y: 3,
+                        width: 90, height: 12,
+                        content: slide.customTitle || slide.title || 'Slide Title',
+                        fontSize: 36,
+                        fontWeight: 'bold',
+                        color: '#c8e600',
+                        align: 'left'
+                    },
+                    ...slide.contentItems.map((item, i) => ({
+                        id: 'content_' + i,
+                        type: 'text',
+                        x: 5, y: 18 + (i * 18),
+                        width: 90, height: 15,
+                        content: `${item.title || 'Content'}\n${item.profileName || ''} • ${item.type || ''}`,
+                        fontSize: 18,
+                        color: '#ffffff',
+                        align: 'left',
+                        background: 'rgba(255,255,255,0.05)',
+                        padding: 10,
+                        borderRadius: 8
+                    }))
+                ];
+            }
+            
+            return elements.map(el => renderSingleElement(el)).join('');
+        }
+        
+        function renderSingleElement(el) {
+            const isSelected = selectedElementId === el.id;
+            const resizeHandles = isSelected ? `
+                <div class="element-resize-handle nw" data-handle="nw"></div>
+                <div class="element-resize-handle ne" data-handle="ne"></div>
+                <div class="element-resize-handle sw" data-handle="sw"></div>
+                <div class="element-resize-handle se" data-handle="se"></div>
+            ` : '';
+            
+            const baseStyle = `
+                left: ${el.x}%;
+                top: ${el.y}%;
+                width: ${el.width}%;
+                height: ${el.height}%;
+                ${el.background ? `background: ${el.background};` : ''}
+                ${el.padding ? `padding: ${el.padding}px;` : ''}
+                ${el.borderRadius ? `border-radius: ${el.borderRadius}px;` : ''}
+            `;
+            
+            if (el.type === 'text') {
                 return `
-                    <div class="slide-preview title-slide">
-                        <div style="margin-bottom: 2rem;">
-                            ${profileImage ? `
-                                <img src="${profileImage}" style="max-width: 150px; max-height: 150px; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3); object-fit: contain; background: white; padding: 0.5rem;">
-                            ` : ''}
-                        </div>
-                        <input type="text" class="slide-title-input" value="${slide.title || 'Presentation Title'}" 
-                               onchange="updateTitleSlide('title', this.value)" placeholder="Presentation Title">
-                        <input type="text" class="slide-subtitle-input" value="${slide.subtitle || ''}" 
-                               onchange="updateTitleSlide('subtitle', this.value)" placeholder="Subtitle or description">
+                    <div class="slide-element text-element ${isSelected ? 'selected' : ''}" 
+                         data-element-id="${el.id}"
+                         style="${baseStyle}"
+                         onmousedown="startElementDrag(event, '${el.id}')"
+                         ondblclick="startTextEdit(event, '${el.id}')">
+                        <div class="text-content" 
+                             style="font-size: ${el.fontSize || 24}px; 
+                                    font-weight: ${el.fontWeight || 'normal'}; 
+                                    color: ${el.color || '#ffffff'};
+                                    text-align: ${el.align || 'left'};
+                                    white-space: pre-wrap;"
+                             ${isSelected ? 'contenteditable="true"' : ''}
+                             onblur="saveTextContent(event, '${el.id}')"
+                             onkeydown="handleTextKeydown(event)">${el.content || ''}</div>
+                        ${resizeHandles}
+                    </div>
+                `;
+            } else if (el.type === 'image') {
+                return `
+                    <div class="slide-element image-element ${isSelected ? 'selected' : ''}"
+                         data-element-id="${el.id}"
+                         style="${baseStyle}"
+                         onmousedown="startElementDrag(event, '${el.id}')">
+                        <img src="${el.src}" style="border-radius: ${el.borderRadius || 8}px; background: white; padding: 0.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                        ${resizeHandles}
+                    </div>
+                `;
+            } else if (el.type === 'shape') {
+                return `
+                    <div class="slide-element shape-element ${isSelected ? 'selected' : ''}"
+                         data-element-id="${el.id}"
+                         style="${baseStyle} background: ${el.fill || '#4a8ac9'}; border-radius: ${el.borderRadius || 4}px;"
+                         onmousedown="startElementDrag(event, '${el.id}')">
+                        ${resizeHandles}
                     </div>
                 `;
             }
+            return '';
+        }
+        
+        function initSlideElements() {
+            const canvas = document.getElementById('slideCanvas');
+            if (!canvas) return;
             
-            // Content slide with editable items
-            const contentItems = slide.contentItems || [];
-            return `
-                <div class="slide-preview content-slide">
-                    <div style="margin-bottom: 1rem;">
-                        <input type="text" class="slide-title-input" value="${slide.customTitle || slide.title || 'Slide Title'}" 
-                               onchange="updateSlideTitle(${idx}, this.value)" placeholder="Slide Title"
-                               style="font-size: 1.5rem; width: 100%; text-align: center;">
-                    </div>
+            // Mouse move handler for dragging/resizing
+            canvas.addEventListener('mousemove', handleElementMouseMove);
+            canvas.addEventListener('mouseup', handleElementMouseUp);
+            canvas.addEventListener('mouseleave', handleElementMouseUp);
+        }
+        
+        function handleCanvasClick(event) {
+            // Deselect if clicking on canvas background
+            if (event.target.id === 'slideCanvas' || event.target.classList.contains('slide-canvas-container')) {
+                selectedElementId = null;
+                renderSlideEditor();
+            }
+        }
+        
+        function startElementDrag(event, elementId) {
+            event.stopPropagation();
+            
+            // Check if clicking on resize handle
+            if (event.target.classList.contains('element-resize-handle')) {
+                startElementResize(event, elementId, event.target.dataset.handle);
+                return;
+            }
+            
+            selectedElementId = elementId;
+            isDraggingElement = true;
+            
+            const canvas = document.getElementById('slideCanvas');
+            const rect = canvas.getBoundingClientRect();
+            
+            dragStartPos = {
+                x: event.clientX,
+                y: event.clientY
+            };
+            
+            // Get current element position
+            const el = getSlideElement(elementId);
+            if (el) {
+                elementStartPos = { x: el.x, y: el.y };
+            }
+            
+            // Re-render to show selection
+            renderSlideEditor();
+        }
+        
+        function startElementResize(event, elementId, handle) {
+            event.stopPropagation();
+            isResizingElement = true;
+            selectedElementId = elementId;
+            
+            dragStartPos = {
+                x: event.clientX,
+                y: event.clientY
+            };
+            
+            const el = getSlideElement(elementId);
+            if (el) {
+                elementStartPos = { x: el.x, y: el.y, width: el.width, height: el.height, handle };
+            }
+        }
+        
+        function handleElementMouseMove(event) {
+            if (!isDraggingElement && !isResizingElement) return;
+            
+            const canvas = document.getElementById('slideCanvas');
+            const rect = canvas.getBoundingClientRect();
+            
+            const deltaX = ((event.clientX - dragStartPos.x) / rect.width) * 100;
+            const deltaY = ((event.clientY - dragStartPos.y) / rect.height) * 100;
+            
+            if (isDraggingElement) {
+                updateElementPosition(selectedElementId, 
+                    elementStartPos.x + deltaX,
+                    elementStartPos.y + deltaY
+                );
+            } else if (isResizingElement) {
+                const handle = elementStartPos.handle;
+                let newX = elementStartPos.x;
+                let newY = elementStartPos.y;
+                let newWidth = elementStartPos.width;
+                let newHeight = elementStartPos.height;
+                
+                if (handle.includes('e')) {
+                    newWidth = elementStartPos.width + deltaX;
+                }
+                if (handle.includes('w')) {
+                    newX = elementStartPos.x + deltaX;
+                    newWidth = elementStartPos.width - deltaX;
+                }
+                if (handle.includes('s')) {
+                    newHeight = elementStartPos.height + deltaY;
+                }
+                if (handle.includes('n')) {
+                    newY = elementStartPos.y + deltaY;
+                    newHeight = elementStartPos.height - deltaY;
+                }
+                
+                updateElementSize(selectedElementId, newX, newY, Math.max(5, newWidth), Math.max(5, newHeight));
+            }
+        }
+        
+        function handleElementMouseUp(event) {
+            if (isDraggingElement || isResizingElement) {
+                isDraggingElement = false;
+                isResizingElement = false;
+                saveDeckChanges();
+                broadcastSlideChange();
+            }
+        }
+        
+        function getSlideElement(elementId) {
+            if (!currentEditingDeck) return null;
+            
+            const slide = currentEditingSlide === 0 
+                ? currentEditingDeck.titleSlide 
+                : currentEditingDeck.slides[currentEditingSlide - 1];
+            
+            if (!slide?.elements) return null;
+            return slide.elements.find(el => el.id === elementId);
+        }
+        
+        function updateElementPosition(elementId, x, y) {
+            const el = getSlideElement(elementId);
+            if (el) {
+                el.x = Math.max(0, Math.min(100 - el.width, x));
+                el.y = Math.max(0, Math.min(100 - el.height, y));
+                
+                // Update DOM directly for smooth dragging
+                const domEl = document.querySelector(`[data-element-id="${elementId}"]`);
+                if (domEl) {
+                    domEl.style.left = el.x + '%';
+                    domEl.style.top = el.y + '%';
+                }
+            }
+        }
+        
+        function updateElementSize(elementId, x, y, width, height) {
+            const el = getSlideElement(elementId);
+            if (el) {
+                el.x = x;
+                el.y = y;
+                el.width = width;
+                el.height = height;
+                
+                const domEl = document.querySelector(`[data-element-id="${elementId}"]`);
+                if (domEl) {
+                    domEl.style.left = x + '%';
+                    domEl.style.top = y + '%';
+                    domEl.style.width = width + '%';
+                    domEl.style.height = height + '%';
+                }
+            }
+        }
+        
+        function startTextEdit(event, elementId) {
+            event.stopPropagation();
+            selectedElementId = elementId;
+            renderSlideEditor();
+            
+            // Focus the contenteditable
+            setTimeout(() => {
+                const textEl = document.querySelector(`[data-element-id="${elementId}"] .text-content`);
+                if (textEl) {
+                    textEl.focus();
+                    // Select all text
+                    const range = document.createRange();
+                    range.selectNodeContents(textEl);
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                }
+            }, 50);
+        }
+        
+        function saveTextContent(event, elementId) {
+            const el = getSlideElement(elementId);
+            if (el) {
+                // Use innerHTML to preserve formatting (bold, italic, lists, etc.)
+                el.content = event.target.innerHTML;
+                saveDeckChanges();
+                broadcastSlideChange();
+            }
+        }
+        
+        function handleTextKeydown(event) {
+            if (event.key === 'Escape') {
+                event.target.blur();
+            }
+            // Allow normal text editing
+            event.stopPropagation();
+        }
+        
+        function addSlideElement(type) {
+            if (!currentEditingDeck) return;
+            
+            const slide = currentEditingSlide === 0 
+                ? currentEditingDeck.titleSlide 
+                : currentEditingDeck.slides[currentEditingSlide - 1];
+            
+            if (!slide) return;
+            if (!slide.elements) slide.elements = [];
+            
+            const newId = 'el_' + Date.now();
+            let newElement;
+            
+            if (type === 'text') {
+                newElement = {
+                    id: newId,
+                    type: 'text',
+                    x: 20, y: 40,
+                    width: 60, height: 15,
+                    content: 'Double-click to edit text',
+                    fontSize: 24,
+                    color: '#ffffff',
+                    align: 'center'
+                };
+            } else if (type === 'image') {
+                // Open file picker
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*';
+                input.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                            slide.elements.push({
+                                id: newId,
+                                type: 'image',
+                                x: 30, y: 30,
+                                width: 40, height: 40,
+                                src: ev.target.result,
+                                borderRadius: 8
+                            });
+                            saveDeckChanges();
+                            renderSlideEditor();
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                };
+                input.click();
+                return;
+            } else if (type === 'imageUrl') {
+                const url = prompt('Enter image URL:', 'https://');
+                if (url && url !== 'https://') {
+                    slide.elements.push({
+                        id: newId,
+                        type: 'image',
+                        x: 30, y: 30,
+                        width: 40, height: 40,
+                        src: url,
+                        borderRadius: 8
+                    });
+                    selectedElementId = newId;
+                    saveDeckChanges();
+                    renderSlideEditor();
+                }
+                return;
+            } else if (type === 'shape') {
+                newElement = {
+                    id: newId,
+                    type: 'shape',
+                    x: 35, y: 35,
+                    width: 30, height: 30,
+                    fill: '#4a8ac9',
+                    borderRadius: 4
+                };
+            }
+            
+            if (newElement) {
+                slide.elements.push(newElement);
+                selectedElementId = newId;
+                saveDeckChanges();
+                renderSlideEditor();
+            }
+        }
+        
+        function formatText(format) {
+            // Focus selected text element first so execCommand works on it
+            if (selectedElementId) {
+                const textEl = document.querySelector(`[data-element-id="${selectedElementId}"] .text-content`);
+                if (textEl && textEl.isContentEditable) {
+                    textEl.focus();
+                    // If no selection, select all text
+                    if (!window.getSelection().toString()) {
+                        const range = document.createRange();
+                        range.selectNodeContents(textEl);
+                        window.getSelection().removeAllRanges();
+                        window.getSelection().addRange(range);
+                    }
+                }
+            }
+            document.execCommand(format, false, null);
+            // Save content (including HTML formatting) to element
+            if (selectedElementId) {
+                const el = getSlideElement(selectedElementId);
+                const textEl = document.querySelector(`[data-element-id="${selectedElementId}"] .text-content`);
+                if (el && el.type === 'text' && textEl) {
+                    el.content = textEl.innerHTML;
+                    saveDeckChanges();
+                    broadcastSlideChange();
+                }
+            }
+        }
+        
+        function setFontSize(size) {
+            const el = getSlideElement(selectedElementId);
+            if (el && el.type === 'text') {
+                el.fontSize = parseInt(size);
+                saveDeckChanges();
+                renderSlideEditor();
+            }
+        }
+        
+        function setTextColor(color) {
+            const el = getSlideElement(selectedElementId);
+            if (el && el.type === 'text') {
+                el.color = color;
+                saveDeckChanges();
+                renderSlideEditor();
+            }
+        }
+        
+        function alignElement(alignment) {
+            const el = getSlideElement(selectedElementId);
+            if (el && el.type === 'text') {
+                el.align = alignment;
+                saveDeckChanges();
+                renderSlideEditor();
+            }
+        }
+        
+        function bringToFront() {
+            if (!selectedElementId || !currentEditingDeck) return;
+            
+            const slide = currentEditingSlide === 0 
+                ? currentEditingDeck.titleSlide 
+                : currentEditingDeck.slides[currentEditingSlide - 1];
+            
+            if (!slide?.elements) return;
+            
+            const idx = slide.elements.findIndex(el => el.id === selectedElementId);
+            if (idx >= 0 && idx < slide.elements.length - 1) {
+                const el = slide.elements.splice(idx, 1)[0];
+                slide.elements.push(el);
+                saveDeckChanges();
+                renderSlideEditor();
+            }
+        }
+        
+        function sendToBack() {
+            if (!selectedElementId || !currentEditingDeck) return;
+            
+            const slide = currentEditingSlide === 0 
+                ? currentEditingDeck.titleSlide 
+                : currentEditingDeck.slides[currentEditingSlide - 1];
+            
+            if (!slide?.elements) return;
+            
+            const idx = slide.elements.findIndex(el => el.id === selectedElementId);
+            if (idx > 0) {
+                const el = slide.elements.splice(idx, 1)[0];
+                slide.elements.unshift(el);
+                saveDeckChanges();
+                renderSlideEditor();
+            }
+        }
+        
+        function deleteSelectedElement() {
+            if (!selectedElementId || !currentEditingDeck) return;
+            
+            const slide = currentEditingSlide === 0 
+                ? currentEditingDeck.titleSlide 
+                : currentEditingDeck.slides[currentEditingSlide - 1];
+            
+            if (!slide?.elements) return;
+            
+            slide.elements = slide.elements.filter(el => el.id !== selectedElementId);
+            selectedElementId = null;
+            saveDeckChanges();
+            renderSlideEditor();
+        }
+        
+        // ============================================================================
+        // REAL-TIME COLLABORATION (Socket.IO)
+        // ============================================================================
+        
+        let collabSocket = null;
+        let collabUsers = {};
+        let myCollabColor = '#' + Math.floor(Math.random()*16777215).toString(16);
+        
+        function initDeckCollaboration() {
+            if (!currentEditingDeck) return;
+            const deckId = currentEditingDeck.serverDeckId || currentEditingDeck.id;
+            
+            try {
+                if (typeof io !== 'undefined') {
+                    collabSocket = io({ path: '/socket.io' });
                     
-                    <div class="slide-content-items" id="slideContentItems">
-                        ${contentItems.length === 0 ? `
-                            <div class="slide-drop-placeholder" style="padding: 2rem; text-align: center; border: 2px dashed var(--border-color); border-radius: 8px; color: var(--text-secondary);">
-                                <p style="margin: 0;">📦 Drag data points here</p>
-                                <p style="font-size: 0.75rem; margin-top: 0.5rem;">Or use the data points panel on the left</p>
-                            </div>
-                        ` : contentItems.map((item, itemIdx) => `
-                            <div class="slide-content-item" data-item-idx="${itemIdx}">
-                                <div class="content-item-actions">
-                                    <button onclick="editContentItem(${idx}, ${itemIdx})" title="Edit">✏️</button>
-                                    <button onclick="moveContentItem(${idx}, ${itemIdx}, -1)" title="Move up">↑</button>
-                                    <button onclick="moveContentItem(${idx}, ${itemIdx}, 1)" title="Move down">↓</button>
-                                    <button onclick="deleteContentItem(${idx}, ${itemIdx})" title="Delete" style="color: #ef4444;">✕</button>
-                                </div>
-                                <div class="content-item-header" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                    <span style="font-size: 1.2rem;">${getDataPointIcon(item.type)}</span>
-                                    <input type="text" value="${item.title || 'Content'}" 
-                                           onchange="updateContentItemTitle(${idx}, ${itemIdx}, this.value)"
-                                           style="font-weight: 600; font-size: 0.9rem; background: transparent; border: none; border-bottom: 1px dashed var(--border-color); color: var(--text-primary); flex: 1;">
-                                </div>
-                                <div class="content-item-body" style="font-size: 0.8rem; color: var(--text-secondary);">
-                                    ${item.profileName ? `<span>${item.profileName}</span>` : ''}
-                                    ${item.type ? `<span> • ${item.type}</span>` : ''}
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
+                    collabSocket.on('connect', () => {
+                        console.log('🔗 Collaboration connected');
+                        collabSocket.emit('join_deck', {
+                            deck_id: deckId,
+                            user: currentUsername || 'Anonymous',
+                            color: myCollabColor
+                        });
+                    });
                     
-                    <div class="slide-drop-zone" style="margin-top: 1rem;"
-                         ondragover="handleSlideDropZoneDragOver(event)"
-                         ondragleave="handleSlideDropZoneDragLeave(event)"
-                         ondrop="handleContentDropZoneDrop(event, ${idx})">
-                        + Drop data point to add
-                    </div>
-                </div>
-            `;
+                    collabSocket.on('slide_update', (data) => handleCollabMessage({ ...data, type: 'slide_update' }));
+                    collabSocket.on('cursor', (data) => handleCollabMessage({ ...data, type: 'cursor' }));
+                    collabSocket.on('user_joined', (data) => handleCollabMessage({ ...data, type: 'user_joined' }));
+                    collabSocket.on('user_left', (data) => handleCollabMessage({ ...data, type: 'user_left' }));
+                    
+                    collabSocket.on('disconnect', () => {
+                        console.log('🔌 Collaboration disconnected');
+                        collabSocket = null;
+                    });
+                }
+            } catch (e) {
+                console.log('Collaboration not available:', e);
+            }
+        }
+        
+        function leaveDeckCollaboration() {
+            if (collabSocket && currentEditingDeck) {
+                const deckId = currentEditingDeck.serverDeckId || currentEditingDeck.id;
+                collabSocket.emit('leave_deck', { deck_id: deckId, user: currentUsername });
+            }
+            collabSocket = null;
+        }
+        
+        function handleCollabMessage(data) {
+            switch (data.type) {
+                case 'cursor':
+                    updateCollabCursor(data.user, data.x, data.y, data.color);
+                    break;
+                case 'slide_update':
+                    // Another user updated the slide
+                    if (data.user !== currentUsername) {
+                        const myDeckId = currentEditingDeck?.serverDeckId || currentEditingDeck?.id;
+                        if (currentEditingDeck && (data.deckId === myDeckId || data.deckId === currentEditingDeck.id)) {
+                            // Update local data
+                            if (data.slideIdx === 0) {
+                                currentEditingDeck.titleSlide = data.slideData;
+                            } else {
+                                currentEditingDeck.slides[data.slideIdx - 1] = data.slideData;
+                            }
+                            renderSlideEditor();
+                            showNotification(`📝 ${data.user} made changes`, 'info');
+                        }
+                    }
+                    break;
+                case 'user_joined':
+                    collabUsers[data.user] = { color: data.color };
+                    showNotification(`👋 ${data.user} joined`, 'info');
+                    break;
+                case 'user_left':
+                    delete collabUsers[data.user];
+                    removeCollabCursor(data.user);
+                    break;
+            }
+        }
+        
+        function updateCollabCursor(user, x, y, color) {
+            const container = document.getElementById('collabCursors');
+            if (!container) return;
+            
+            let cursor = document.getElementById(`cursor-${user}`);
+            if (!cursor) {
+                cursor = document.createElement('div');
+                cursor.id = `cursor-${user}`;
+                cursor.className = 'collab-cursor';
+                cursor.innerHTML = `
+                    <div class="collab-cursor-pointer" style="border-bottom-color: ${color};"></div>
+                    <div class="collab-cursor-label" style="background: ${color};">${user}</div>
+                `;
+                container.appendChild(cursor);
+            }
+            
+            cursor.style.left = x + '%';
+            cursor.style.top = y + '%';
+        }
+        
+        function removeCollabCursor(user) {
+            const cursor = document.getElementById(`cursor-${user}`);
+            if (cursor) cursor.remove();
+        }
+        
+        function broadcastSlideChange() {
+            if (!collabSocket || !collabSocket.connected) return;
+            
+            const deckId = currentEditingDeck.serverDeckId || currentEditingDeck.id;
+            const slide = currentEditingSlide === 0 
+                ? currentEditingDeck.titleSlide 
+                : currentEditingDeck.slides[currentEditingSlide - 1];
+            
+            collabSocket.emit('slide_update', {
+                deck_id: deckId,
+                user: currentUsername || 'Anonymous',
+                slide_idx: currentEditingSlide,
+                slide_data: slide
+            });
+        }
+        
+        function broadcastCursorPosition(event) {
+            if (!collabSocket || !collabSocket.connected) return;
+            
+            const deckId = currentEditingDeck?.serverDeckId || currentEditingDeck?.id;
+            if (!deckId) return;
+            
+            const canvas = document.getElementById('slideCanvas');
+            if (!canvas) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = ((event.clientX - rect.left) / rect.width) * 100;
+            const y = ((event.clientY - rect.top) / rect.height) * 100;
+            
+            collabSocket.emit('cursor', {
+                deck_id: deckId,
+                user: currentUsername || 'Anonymous',
+                x: x, y: y,
+                color: myCollabColor
+            });
+        }
+        
+        // Track cursor for collaboration
+        document.addEventListener('mousemove', (e) => {
+            if (document.getElementById('slideCanvas')?.contains(e.target)) {
+                broadcastCursorPosition(e);
+            }
+        });
+        
+        function renderCurrentSlideEditable(slide, idx) {
+            // Legacy function - redirect to new renderer
+            return renderSlideElements(slide, idx);
         }
         
         function handleSlideCanvasDragOver(event) {
@@ -43434,9 +44406,16 @@
             }
         }
         
+        let slideNotesDebounceTimer = null;
+        function debouncedUpdateSlideNotes(idx, value) {
+            clearTimeout(slideNotesDebounceTimer);
+            slideNotesDebounceTimer = setTimeout(() => updateSlideNotes(idx, value), 300);
+        }
+        
         function updateSlideNotes(idx, value) {
             if (!currentEditingDeck) return;
             if (idx === 0) {
+                if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
                 currentEditingDeck.titleSlide.notes = value;
             } else {
                 const slideIdx = idx - 1;
@@ -43459,12 +44438,29 @@
             currentEditingDeck.updatedAt = new Date().toISOString();
             
             const wsId = currentEditingDeck.workspaceId || currentWorkspace;
-            const decks = workspaceDecks[wsId] || [];
-            const idx = decks.findIndex(d => d.id === currentEditingDeck.id);
-            if (idx >= 0) {
-                decks[idx] = currentEditingDeck;
-                workspaceDecks[wsId] = decks;
-                localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            
+            if (wsId === 'cloud' && currentEditingDeck.serverDeckId) {
+                // Cloud deck: sync to S3
+                fetch(`/api/decks/${currentEditingDeck.serverDeckId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: currentEditingDeck.name,
+                        description: currentEditingDeck.description,
+                        slides: currentEditingDeck.slides,
+                        titleSlide: currentEditingDeck.titleSlide,
+                        template: currentEditingDeck.template
+                    }),
+                    credentials: 'same-origin'
+                }).catch(e => console.warn('Cloud save failed:', e));
+            } else {
+                const decks = workspaceDecks[wsId] || [];
+                const idx = decks.findIndex(d => d.id === currentEditingDeck.id);
+                if (idx >= 0) {
+                    decks[idx] = currentEditingDeck;
+                    workspaceDecks[wsId] = decks;
+                    localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+                }
             }
         }
         
@@ -43494,6 +44490,20 @@
             if (currentEditingSlide >= idx) {
                 currentEditingSlide = Math.max(0, currentEditingSlide - 1);
             }
+            renderSlideEditor();
+        }
+        
+        function archiveCurrentDeck() {
+            if (!currentEditingDeck) return;
+            const wsId = currentEditingDeck.workspaceId || currentWorkspace;
+            if (wsId === 'cloud') {
+                showNotification('Cloud decks cannot be archived from here. Use the Share menu to manage access.', 'info');
+                return;
+            }
+            archiveDeck(wsId, currentEditingDeck.id);
+            currentEditingDeck = null;
+            currentEditingSlide = 0;
+            renderWorkspaceDecks();
             renderSlideEditor();
         }
         
@@ -43889,6 +44899,52 @@
             showNotification('🍎 Keynote data exported!', 'success');
         }
         
+        async function commitDeckToGitHub() {
+            toggleDeckExportMenu();
+            if (!currentEditingDeck) return;
+            
+            const deckId = currentEditingDeck.serverDeckId || currentEditingDeck.id;
+            
+            // Deck must be synced to cloud first (happens when you share it)
+            if (!currentEditingDeck.serverDeckId) {
+                showNotification('📤 Syncing deck to cloud first...', 'info');
+                try {
+                    const syncRes = await fetch('/api/decks/sync', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ deck: currentEditingDeck }),
+                        credentials: 'same-origin'
+                    });
+                    const syncData = await syncRes.json();
+                    if (syncData.success && syncData.serverDeckId) {
+                        currentEditingDeck.serverDeckId = syncData.serverDeckId;
+                        saveDeckChanges();
+                    }
+                } catch (e) {
+                    showNotification('❌ Sync failed. Please share the deck first.', 'error');
+                    return;
+                }
+            }
+            
+            try {
+                showNotification('🐙 Committing to GitHub...', 'info');
+                const res = await fetch(`/api/decks/${currentEditingDeck.serverDeckId}/commit-github`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showNotification(`✅ ${data.message}`, 'success');
+                } else {
+                    showNotification(data.error || 'Commit failed', 'error');
+                }
+            } catch (e) {
+                showNotification('❌ GitHub commit failed: ' + (e.message || 'Unknown error'), 'error');
+            }
+        }
+        
         function shareDeckWithTeam() {
             if (!currentEditingDeck) return;
             
@@ -43924,22 +44980,40 @@
             document.body.appendChild(modal);
         }
         
-        function confirmShareDeck() {
+        async function confirmShareDeck() {
             const members = Array.from(document.querySelectorAll('.share-deck-member:checked')).map(cb => cb.value);
             if (members.length === 0) {
                 alert('Please select at least one team member');
                 return;
             }
             
-            // Mark deck as shared
             if (currentEditingDeck) {
                 currentEditingDeck.sharedWith = members;
                 currentEditingDeck.isShared = true;
                 saveDeckChanges();
+                
+                // Sync to S3 for real-time collaboration so others can load and edit
+                try {
+                    const res = await fetch('/api/decks/sync', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ deck: currentEditingDeck }),
+                        credentials: 'same-origin'
+                    });
+                    const data = await res.json();
+                    if (data.success && data.serverDeckId) {
+                        currentEditingDeck.serverDeckId = data.serverDeckId;
+                        saveDeckChanges();
+                        leaveDeckCollaboration();
+                        initDeckCollaboration();
+                    }
+                } catch (e) {
+                    console.warn('Deck sync to cloud failed:', e);
+                }
             }
             
             document.getElementById('shareDeckModal')?.remove();
-            showNotification(`✅ Deck shared with ${members.length} team member(s)`, 'success');
+            showNotification(`✅ Deck shared with ${members.length} team member(s) - real-time collab enabled`, 'success');
             
             // Add notification for shared members
             addNotification({
