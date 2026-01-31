@@ -858,7 +858,7 @@ def load_users():
         "users": {
             "admin": {
                 "password_hash": hash_password("midgenow!2"),
-                "role": "admin",
+                "role": "super_admin",
                 "credits": -1,
                 "credits_used": 0,
                 "created_at": datetime.now().isoformat(),
@@ -916,7 +916,7 @@ def init_users():
     if 'admin' not in data['users']:
         data['users']['admin'] = {
             "password_hash": hash_password("midgenow!2"),
-            "role": "admin",
+            "role": "super_admin",
             "credits": -1,
             "credits_used": 0,
             "created_at": datetime.now().isoformat(),
@@ -2901,8 +2901,9 @@ def get_user_info():
 def index():
     user = get_current_user()
     role = user.get('role', 'user') if user else 'user'
-    # Admins always have access to all dashboards and modules
-    if role == 'admin':
+    # Super admins always have access to all dashboards and modules
+    # Regular admins now need module access enabled like other users
+    if role == 'super_admin':
         has_profile_iq = True
         has_subscriber_iq = True
         has_hedge_fund_iq = True

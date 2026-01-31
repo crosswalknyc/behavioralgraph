@@ -429,6 +429,7 @@
             font-weight: 600;
             text-transform: uppercase;
         }
+        .user-role-badge.super_admin { background: rgba(255, 99, 132, 0.2); color: #ff6384; }
         .user-role-badge.admin { background: rgba(174, 129, 255, 0.2); color: #ae81ff; }
         .user-role-badge.enterprise { background: rgba(253, 151, 31, 0.2); color: #fd971f; }
         .user-role-badge.user { background: rgba(90, 154, 217, 0.2); color: var(--accent-blue); }
@@ -8392,10 +8393,10 @@
                     <button class="view-btn {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</button>
                     <button class="view-btn {% if not has_hedge_fund_iq_access %}disabled{% endif %}" id="hedgeFundIQTab" {% if not has_hedge_fund_iq_access %}disabled{% endif %}>📈 Hedge Fund IQ</button>
                     <button class="view-btn" id="dashboardViewBtn" style="display: none;">📊 Dashboard</button>
-                    {% if role == 'admin' or role == 'enterprise' or has_analysis_iq_access %}
+                    {% if role == 'super_admin' or role == 'admin' or role == 'enterprise' or has_analysis_iq_access %}
                     <button class="view-btn" id="customAnalysisBtn">🔧 Analysis IQ</button>
                     {% endif %}
-                    {% if role == 'admin' %}
+                    {% if role == 'super_admin' or role == 'admin' %}
                     <a href="/admin" class="view-btn" id="adminViewBtn">🔐 Admin</a>
                     {% endif %}
                 </div>
@@ -8712,37 +8713,37 @@
             <!-- Custom Analysis Tabs - At the top -->
             <div class="custom-analysis-tabs-container">
                 <div class="custom-analysis-tabs">
-                    {% if 'profile_analysis' in analysis_iq_modules or role == 'admin' %}
+                    {% if 'profile_analysis' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab active" onclick="switchCustomAnalysisTab('profile-iq')" id="customAnalysisTabProfileIQ">
                         🎯 Profile Analysis
                     </button>
                     {% endif %}
-                    {% if 'talent_search' in analysis_iq_modules or role == 'admin' %}
+                    {% if 'talent_search' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-search')" id="customAnalysisTabTalentSearch">
                         🔍 Talent Search IQ
                     </button>
                     {% endif %}
-                    {% if 'talent_theater' in analysis_iq_modules or role == 'admin' %}
+                    {% if 'talent_theater' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('talent-theater')" id="customAnalysisTabTalentTheater">
                         🎭 Talent Ticket Sale IQ
                     </button>
                     {% endif %}
-                    {% if 'svod' in analysis_iq_modules or role == 'admin' %}
+                    {% if 'svod' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('svod-acquisition')" id="customAnalysisTabSVODAcquisition">
                         📺 SVOD Acquisition IQ
                     </button>
                     {% endif %}
-                    {% if 'campaign' in analysis_iq_modules or role == 'admin' %}
+                    {% if 'campaign' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('campaign-roi')" id="customAnalysisTabCampaignROI">
                         💰 Campaign ROI IQ
                     </button>
                     {% endif %}
-                    {% if 'cross_show' in analysis_iq_modules or role == 'admin' %}
+                    {% if 'cross_show' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('cross-show')" id="customAnalysisTabCrossShow">
                         📺 Cross Show Watching
                     </button>
                     {% endif %}
-                    {% if 'watch_time' in analysis_iq_modules or role == 'admin' %}
+                    {% if 'watch_time' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('watch-time')" id="customAnalysisTabWatchTime">
                         ⏱️ Watch Time IQ
                     </button>
@@ -12672,7 +12673,8 @@
         
         // Live Features - controls which Analysis Tools are visible to non-admin users
         const userRole = '{{ role }}';
-        const isAdmin = userRole === 'admin';
+        const isSuperAdmin = userRole === 'super_admin';
+        const isAdmin = userRole === 'admin' || userRole === 'super_admin';
         let liveFeatures = {
             compare: true,
             segment: true,
@@ -37527,7 +37529,9 @@
                             name: behavior.name,
                             category: behavior.category,
                             primaryIndex: primaryData.index,
+                            primaryPct: primaryData.pct,
                             compIndex: compData.index,
+                            compPct: compData.pct,
                             compProfile: compProfile.name,
                             indexDiff: indexDiff,
                             pctDiff: pctDiff,
@@ -37542,8 +37546,8 @@
             gaps.sort((a, b) => Math.abs(b.indexDiff) - Math.abs(a.indexDiff));
             
             // Separate opportunities (primary stronger) and weaknesses (primary weaker)
-            const opportunities = gaps.filter(g => g.isOpportunity).slice(0, 20);
-            const weaknesses = gaps.filter(g => g.isWeakness).slice(0, 20);
+            const opportunities = gaps.filter(g => g.isOpportunity).slice(0, 25);
+            const weaknesses = gaps.filter(g => g.isWeakness).slice(0, 25);
             
             // Calculate category-level gaps
             const categoryGaps = {};
@@ -37554,19 +37558,25 @@
                         totalGap: 0, 
                         count: 0, 
                         opportunities: 0, 
-                        weaknesses: 0 
+                        weaknesses: 0,
+                        topItems: []
                     };
                 }
                 categoryGaps[g.category].totalGap += g.indexDiff;
                 categoryGaps[g.category].count++;
                 if (g.isOpportunity) categoryGaps[g.category].opportunities++;
                 if (g.isWeakness) categoryGaps[g.category].weaknesses++;
+                categoryGaps[g.category].topItems.push(g);
             });
             
             const sortedCategoryGaps = Object.values(categoryGaps)
-                .map(c => ({ ...c, avgGap: Math.round(c.totalGap / c.count) }))
+                .map(c => ({ 
+                    ...c, 
+                    avgGap: Math.round(c.totalGap / c.count),
+                    topItems: c.topItems.sort((a, b) => Math.abs(b.indexDiff) - Math.abs(a.indexDiff)).slice(0, 5)
+                }))
                 .sort((a, b) => Math.abs(b.avgGap) - Math.abs(a.avgGap))
-                .slice(0, 10);
+                .slice(0, 12);
             
             // Summary stats
             const totalOpportunities = opportunities.length;
@@ -37578,29 +37588,48 @@
                 ? Math.round(weaknesses.reduce((s, w) => s + Math.abs(w.indexDiff), 0) / weaknesses.length) 
                 : 0;
             
+            // Helper function to create tooltip content
+            const createGapTooltip = (item, isPrimary) => {
+                const primaryLabel = primaryProfile.name;
+                return `${item.name}&#10;&#10;${primaryLabel}: ${(item.primaryPct || 0).toFixed(2)}% (Index: ${item.primaryIndex})&#10;${item.compProfile}: ${(item.compPct || 0).toFixed(2)}% (Index: ${item.compIndex})&#10;&#10;Gap: ${item.indexDiff > 0 ? '+' : ''}${item.indexDiff} index points`;
+            };
+            
+            // Helper function to create category tooltip
+            const createCategoryTooltip = (cat) => {
+                const topItemsText = cat.topItems.map(i => `${i.name}: ${i.indexDiff > 0 ? '+' : ''}${i.indexDiff}`).join('&#10;');
+                return `${cat.category}&#10;&#10;Avg Gap: ${cat.avgGap > 0 ? '+' : ''}${cat.avgGap}&#10;Strengths: ${cat.opportunities} | Gaps: ${cat.weaknesses}&#10;&#10;Top Items:&#10;${topItemsText}`;
+            };
+            
             let html = `
                 <div class="gap-grid" style="display: grid; grid-template-columns: 1fr; gap: 1rem; padding: 1rem;">
                     <!-- Summary Card -->
                     <div class="overlap-card" style="grid-column: 1 / -1;">
-                        <h4>📊 Gap Analysis Summary: <span style="color: ${primaryProfile.color};">${primaryProfile.name}</span> vs Others</h4>
-                        <div style="display: flex; gap: 2rem; margin-top: 1rem; flex-wrap: wrap;">
-                            <div style="text-align: center; padding: 1rem; background: var(--bg-dark); border-radius: 8px; min-width: 150px;">
-                                <div style="font-size: 2rem; font-weight: 700; color: var(--accent-lime);">${totalOpportunities}</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Strength Areas</div>
-                                <div style="font-size: 0.7rem; color: var(--accent-lime);">Avg +${avgOpportunityGap} index</div>
+                        <h4 class="has-tooltip" data-tooltip="Comprehensive gap analysis comparing ${primaryProfile.name} against ${comparisonProfiles.map(p => p.name).join(', ')}">📊 Gap Analysis Summary: <span style="color: ${primaryProfile.color};">${primaryProfile.name}</span> vs Others</h4>
+                        <div style="display: flex; gap: 1.5rem; margin-top: 1rem; flex-wrap: wrap;">
+                            <div class="has-tooltip" data-tooltip="Areas where ${primaryProfile.name} significantly outperforms the comparison profiles. Higher is better - these are competitive advantages." style="text-align: center; padding: 1rem 1.5rem; background: var(--bg-dark); border-radius: 8px; min-width: 160px; cursor: help; border: 1px solid var(--border-color);">
+                                <div style="font-size: 2.5rem; font-weight: 700; color: var(--accent-lime);">${totalOpportunities}</div>
+                                <div style="font-size: 0.85rem; color: var(--text-primary); font-weight: 600;">Strength Areas</div>
+                                <div style="font-size: 0.75rem; color: var(--accent-lime); margin-top: 0.25rem;">Avg +${avgOpportunityGap} index</div>
                             </div>
-                            <div style="text-align: center; padding: 1rem; background: var(--bg-dark); border-radius: 8px; min-width: 150px;">
-                                <div style="font-size: 2rem; font-weight: 700; color: var(--accent-red);">${totalWeaknesses}</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Gap Areas</div>
-                                <div style="font-size: 0.7rem; color: var(--accent-red);">Avg -${avgWeaknessGap} index</div>
+                            <div class="has-tooltip" data-tooltip="Areas where ${primaryProfile.name} underperforms vs comparison profiles. These represent opportunities for improvement or targeting gaps." style="text-align: center; padding: 1rem 1.5rem; background: var(--bg-dark); border-radius: 8px; min-width: 160px; cursor: help; border: 1px solid var(--border-color);">
+                                <div style="font-size: 2.5rem; font-weight: 700; color: var(--accent-red);">${totalWeaknesses}</div>
+                                <div style="font-size: 0.85rem; color: var(--text-primary); font-weight: 600;">Gap Areas</div>
+                                <div style="font-size: 0.75rem; color: var(--accent-red); margin-top: 0.25rem;">Avg -${avgWeaknessGap} index</div>
                             </div>
-                            <div style="text-align: center; padding: 1rem; background: var(--bg-dark); border-radius: 8px; min-width: 150px;">
-                                <div style="font-size: 2rem; font-weight: 700; color: var(--accent-cyan);">${Object.keys(allBehaviors).length}</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Behaviors Analyzed</div>
+                            <div class="has-tooltip" data-tooltip="Total number of behavioral attributes analyzed across all categories. More behaviors = more comprehensive analysis." style="text-align: center; padding: 1rem 1.5rem; background: var(--bg-dark); border-radius: 8px; min-width: 160px; cursor: help; border: 1px solid var(--border-color);">
+                                <div style="font-size: 2.5rem; font-weight: 700; color: var(--accent-cyan);">${Object.keys(allBehaviors).length}</div>
+                                <div style="font-size: 0.85rem; color: var(--text-primary); font-weight: 600;">Behaviors Analyzed</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">${Object.keys(categoryGaps).length} categories</div>
                             </div>
-                            <div style="text-align: center; padding: 1rem; background: var(--bg-dark); border-radius: 8px; min-width: 150px;">
-                                <div style="font-size: 2rem; font-weight: 700; color: ${totalOpportunities > totalWeaknesses ? 'var(--accent-lime)' : 'var(--accent-red)'};">${totalOpportunities > totalWeaknesses ? '+' : ''}${totalOpportunities - totalWeaknesses}</div>
-                                <div style="font-size: 0.8rem; color: var(--text-secondary);">Net Position</div>
+                            <div class="has-tooltip" data-tooltip="Net competitive position: Strengths minus Gaps. Positive = overall stronger position, Negative = more gaps than strengths." style="text-align: center; padding: 1rem 1.5rem; background: var(--bg-dark); border-radius: 8px; min-width: 160px; cursor: help; border: 1px solid var(--border-color);">
+                                <div style="font-size: 2.5rem; font-weight: 700; color: ${totalOpportunities > totalWeaknesses ? 'var(--accent-lime)' : totalOpportunities < totalWeaknesses ? 'var(--accent-red)' : 'var(--accent-cyan)'};">${totalOpportunities > totalWeaknesses ? '+' : ''}${totalOpportunities - totalWeaknesses}</div>
+                                <div style="font-size: 0.85rem; color: var(--text-primary); font-weight: 600;">Net Position</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">${totalOpportunities > totalWeaknesses ? 'Favorable' : totalOpportunities < totalWeaknesses ? 'Challenging' : 'Balanced'}</div>
+                            </div>
+                            <div class="has-tooltip" data-tooltip="Competitive Score: Calculated as (Strengths - Gaps) / Total * 100. Score above 0 indicates competitive advantage." style="text-align: center; padding: 1rem 1.5rem; background: var(--bg-dark); border-radius: 8px; min-width: 160px; cursor: help; border: 1px solid var(--border-color);">
+                                <div style="font-size: 2.5rem; font-weight: 700; color: ${(totalOpportunities - totalWeaknesses) >= 0 ? 'var(--accent-lime)' : 'var(--accent-red)'};">${totalOpportunities + totalWeaknesses > 0 ? Math.round(((totalOpportunities - totalWeaknesses) / (totalOpportunities + totalWeaknesses)) * 100) : 0}%</div>
+                                <div style="font-size: 0.85rem; color: var(--text-primary); font-weight: 600;">Competitive Score</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">vs comparison set</div>
                             </div>
                         </div>
                     </div>
@@ -37609,20 +37638,29 @@
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                         <!-- Strengths Column -->
                         <div class="overlap-card">
-                            <h4 style="color: var(--accent-lime);">💪 Strengths (${primaryProfile.name} Over-Indexes)</h4>
+                            <h4 style="color: var(--accent-lime);" class="has-tooltip" data-tooltip="Behaviors where ${primaryProfile.name} has a significantly higher index than comparison profiles. These are areas of competitive advantage.">💪 Strengths (${primaryProfile.name} Over-Indexes)</h4>
                             <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-                                Areas where ${primaryProfile.name} significantly outperforms comparison profiles
+                                Areas where ${primaryProfile.name} significantly outperforms comparison profiles (index gap ≥ 20)
                             </p>
-                            <div class="overlap-list" style="max-height: 450px; overflow-y: auto;">
-                                ${opportunities.length > 0 ? opportunities.map(o => `
-                                    <div class="overlap-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-bottom: 1px solid var(--border-color);">
-                                        <div style="flex: 1;">
-                                            <div style="font-weight: 500;">${o.name}</div>
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${o.category} · vs ${o.compProfile}</div>
+                            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                <select id="gapStrengthSort" onchange="sortGapList('strengths', this.value)" style="padding: 0.3rem 0.5rem; font-size: 0.7rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="gap">Sort by Gap</option>
+                                    <option value="index">Sort by Index</option>
+                                    <option value="alpha">Sort A-Z</option>
+                                </select>
+                                <span style="font-size: 0.7rem; color: var(--text-secondary); align-self: center;">Showing top ${opportunities.length}</span>
+                            </div>
+                            <div class="overlap-list" id="gapStrengthsList" style="max-height: 500px; overflow-y: auto;">
+                                ${opportunities.length > 0 ? opportunities.map((o, idx) => `
+                                    <div class="overlap-item has-tooltip" data-tooltip="${createGapTooltip(o, true)}" style="display: grid; grid-template-columns: 30px 1fr 80px; gap: 0.5rem; align-items: center; padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--border-color); cursor: help;" data-gap="${o.indexDiff}" data-index="${o.primaryIndex}" data-name="${o.name}">
+                                        <span style="font-size: 0.7rem; color: var(--text-secondary); text-align: center;">${idx + 1}</span>
+                                        <div>
+                                            <div style="font-weight: 500; font-size: 0.85rem;">${o.name}</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${o.category}</div>
                                         </div>
                                         <div style="text-align: right;">
-                                            <div style="color: var(--accent-lime); font-weight: 600;">+${o.indexDiff}</div>
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${o.primaryIndex} vs ${o.compIndex}</div>
+                                            <div style="color: var(--accent-lime); font-weight: 700; font-size: 1rem;">+${o.indexDiff}</div>
+                                            <div style="font-size: 0.65rem; color: var(--text-secondary);">${o.primaryIndex} vs ${o.compIndex}</div>
                                         </div>
                                     </div>
                                 `).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem;">No significant strength gaps found</div>'}
@@ -37631,20 +37669,29 @@
                         
                         <!-- Weaknesses Column -->
                         <div class="overlap-card">
-                            <h4 style="color: var(--accent-red);">📉 Gaps (${primaryProfile.name} Under-Indexes)</h4>
+                            <h4 style="color: var(--accent-red);" class="has-tooltip" data-tooltip="Behaviors where ${primaryProfile.name} has a significantly lower index than comparison profiles. These represent opportunities for growth or targeting.">📉 Gaps (${primaryProfile.name} Under-Indexes)</h4>
                             <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-                                Areas where ${primaryProfile.name} underperforms vs comparison profiles
+                                Areas where ${primaryProfile.name} underperforms vs comparison profiles (index gap ≥ 20)
                             </p>
-                            <div class="overlap-list" style="max-height: 450px; overflow-y: auto;">
-                                ${weaknesses.length > 0 ? weaknesses.map(w => `
-                                    <div class="overlap-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-bottom: 1px solid var(--border-color);">
-                                        <div style="flex: 1;">
-                                            <div style="font-weight: 500;">${w.name}</div>
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${w.category} · vs ${w.compProfile}</div>
+                            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                <select id="gapWeaknessSort" onchange="sortGapList('weaknesses', this.value)" style="padding: 0.3rem 0.5rem; font-size: 0.7rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    <option value="gap">Sort by Gap</option>
+                                    <option value="index">Sort by Index</option>
+                                    <option value="alpha">Sort A-Z</option>
+                                </select>
+                                <span style="font-size: 0.7rem; color: var(--text-secondary); align-self: center;">Showing top ${weaknesses.length}</span>
+                            </div>
+                            <div class="overlap-list" id="gapWeaknessesList" style="max-height: 500px; overflow-y: auto;">
+                                ${weaknesses.length > 0 ? weaknesses.map((w, idx) => `
+                                    <div class="overlap-item has-tooltip" data-tooltip="${createGapTooltip(w, false)}" style="display: grid; grid-template-columns: 30px 1fr 80px; gap: 0.5rem; align-items: center; padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--border-color); cursor: help;" data-gap="${Math.abs(w.indexDiff)}" data-index="${w.primaryIndex}" data-name="${w.name}">
+                                        <span style="font-size: 0.7rem; color: var(--text-secondary); text-align: center;">${idx + 1}</span>
+                                        <div>
+                                            <div style="font-weight: 500; font-size: 0.85rem;">${w.name}</div>
+                                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${w.category}</div>
                                         </div>
                                         <div style="text-align: right;">
-                                            <div style="color: var(--accent-red); font-weight: 600;">${w.indexDiff}</div>
-                                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${w.primaryIndex} vs ${w.compIndex}</div>
+                                            <div style="color: var(--accent-red); font-weight: 700; font-size: 1rem;">${w.indexDiff}</div>
+                                            <div style="font-size: 0.65rem; color: var(--text-secondary);">${w.primaryIndex} vs ${w.compIndex}</div>
                                         </div>
                                     </div>
                                 `).join('') : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 1rem;">No significant gap areas found</div>'}
@@ -37654,47 +37701,166 @@
                     
                     <!-- Category Gaps -->
                     <div class="overlap-card">
-                        <h4>📂 Category-Level Gap Analysis</h4>
+                        <h4 class="has-tooltip" data-tooltip="Aggregated gap analysis by category. Shows average index difference and breakdown of strengths vs gaps within each category.">📂 Category-Level Gap Analysis</h4>
                         <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
-                            Average index difference by category for ${primaryProfile.name}
+                            Average index difference by category for ${primaryProfile.name}. Hover over each category for top items.
                         </p>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem; margin-top: 1rem;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem; margin-top: 1rem;">
                             ${sortedCategoryGaps.map(c => `
-                                <div style="background: var(--bg-dark); padding: 0.75rem; border-radius: 8px; border-left: 3px solid ${c.avgGap >= 0 ? 'var(--accent-lime)' : 'var(--accent-red)'};">
-                                    <div style="font-weight: 600; font-size: 0.85rem; margin-bottom: 0.25rem;">${c.category}</div>
+                                <div class="has-tooltip" data-tooltip="${createCategoryTooltip(c)}" style="background: var(--bg-dark); padding: 0.85rem; border-radius: 8px; border-left: 4px solid ${c.avgGap >= 0 ? 'var(--accent-lime)' : 'var(--accent-red)'}; cursor: help; transition: transform 0.2s; border: 1px solid var(--border-color);" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                                    <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 0.35rem; color: var(--text-primary);">${c.category}</div>
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <span style="font-size: 1.25rem; font-weight: 700; color: ${c.avgGap >= 0 ? 'var(--accent-lime)' : 'var(--accent-red)'};">
+                                        <span style="font-size: 1.5rem; font-weight: 700; color: ${c.avgGap >= 0 ? 'var(--accent-lime)' : 'var(--accent-red)'};">
                                             ${c.avgGap >= 0 ? '+' : ''}${c.avgGap}
                                         </span>
-                                        <span style="font-size: 0.7rem; color: var(--text-secondary);">
-                                            ${c.opportunities}↑ ${c.weaknesses}↓
-                                        </span>
+                                        <div style="text-align: right;">
+                                            <div style="font-size: 0.75rem;">
+                                                <span style="color: var(--accent-lime);">${c.opportunities}↑</span>
+                                                <span style="color: var(--text-secondary); margin: 0 0.25rem;">|</span>
+                                                <span style="color: var(--accent-red);">${c.weaknesses}↓</span>
+                                            </div>
+                                            <div style="font-size: 0.65rem; color: var(--text-secondary);">${c.count} items</div>
+                                        </div>
+                                    </div>
+                                    <div style="margin-top: 0.5rem; height: 4px; background: var(--bg-input); border-radius: 2px; overflow: hidden;">
+                                        <div style="height: 100%; width: ${c.count > 0 ? Math.round((c.opportunities / c.count) * 100) : 0}%; background: var(--accent-lime);"></div>
                                     </div>
                                 </div>
                             `).join('')}
                         </div>
                     </div>
                     
-                    <!-- Actionable Insights -->
-                    <div class="overlap-card" style="border-left: 3px solid var(--accent-cyan);">
-                        <h4>💡 Actionable Insights</h4>
-                        <ul style="margin: 1rem 0; padding-left: 1.5rem; line-height: 1.8;">
-                            ${opportunities.length > 0 ? `
-                                <li><strong style="color: var(--accent-lime);">Top Strength:</strong> ${primaryProfile.name} significantly over-indexes on <strong>${opportunities[0].name}</strong> (${opportunities[0].category}) with +${opportunities[0].indexDiff} index advantage.</li>
-                            ` : ''}
-                            ${weaknesses.length > 0 ? `
-                                <li><strong style="color: var(--accent-red);">Biggest Gap:</strong> ${primaryProfile.name} under-indexes on <strong>${weaknesses[0].name}</strong> (${weaknesses[0].category}) with ${weaknesses[0].indexDiff} index gap.</li>
-                            ` : ''}
-                            ${sortedCategoryGaps.length > 0 ? `
-                                <li><strong style="color: var(--accent-cyan);">Category Focus:</strong> ${sortedCategoryGaps[0].avgGap >= 0 ? 'Strongest' : 'Weakest'} category is <strong>${sortedCategoryGaps[0].category}</strong> with ${sortedCategoryGaps[0].avgGap >= 0 ? '+' : ''}${sortedCategoryGaps[0].avgGap} average index.</li>
-                            ` : ''}
-                            <li><strong>Overall Position:</strong> ${primaryProfile.name} has ${totalOpportunities} strength areas vs ${totalWeaknesses} gap areas, indicating a ${totalOpportunities > totalWeaknesses ? '<span style="color: var(--accent-lime);">positive</span>' : totalOpportunities < totalWeaknesses ? '<span style="color: var(--accent-red);">challenging</span>' : 'balanced'} competitive position.</li>
-                        </ul>
+                    <!-- Strategic Recommendations -->
+                    <div class="overlap-card" style="border-left: 4px solid var(--accent-cyan);">
+                        <h4 class="has-tooltip" data-tooltip="AI-generated strategic recommendations based on the gap analysis results.">💡 Strategic Recommendations</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                            <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px;">
+                                <h5 style="color: var(--accent-lime); margin-bottom: 0.5rem; font-size: 0.9rem;">🎯 Leverage Strengths</h5>
+                                <ul style="margin: 0; padding-left: 1.25rem; line-height: 1.7; font-size: 0.85rem;">
+                                    ${opportunities.slice(0, 3).map(o => `
+                                        <li class="has-tooltip" data-tooltip="${createGapTooltip(o, true)}" style="cursor: help;"><strong>${o.name}</strong> (+${o.indexDiff}) - ${o.category}</li>
+                                    `).join('')}
+                                    ${opportunities.length === 0 ? '<li style="color: var(--text-secondary);">No significant strengths identified</li>' : ''}
+                                </ul>
+                            </div>
+                            <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px;">
+                                <h5 style="color: var(--accent-red); margin-bottom: 0.5rem; font-size: 0.9rem;">🔧 Address Gaps</h5>
+                                <ul style="margin: 0; padding-left: 1.25rem; line-height: 1.7; font-size: 0.85rem;">
+                                    ${weaknesses.slice(0, 3).map(w => `
+                                        <li class="has-tooltip" data-tooltip="${createGapTooltip(w, false)}" style="cursor: help;"><strong>${w.name}</strong> (${w.indexDiff}) - ${w.category}</li>
+                                    `).join('')}
+                                    ${weaknesses.length === 0 ? '<li style="color: var(--text-secondary);">No significant gaps identified</li>' : ''}
+                                </ul>
+                            </div>
+                        </div>
+                        <div style="margin-top: 1rem; padding: 1rem; background: rgba(102, 217, 239, 0.1); border-radius: 8px; border: 1px solid rgba(102, 217, 239, 0.3);">
+                            <h5 style="color: var(--accent-cyan); margin-bottom: 0.5rem; font-size: 0.9rem;">📊 Executive Summary</h5>
+                            <p style="font-size: 0.85rem; line-height: 1.6; margin: 0;">
+                                ${primaryProfile.name} shows <strong style="color: ${totalOpportunities > totalWeaknesses ? 'var(--accent-lime)' : 'var(--accent-red)'};">${totalOpportunities > totalWeaknesses ? 'competitive strength' : totalOpportunities < totalWeaknesses ? 'growth opportunities' : 'balanced positioning'}</strong> 
+                                with ${totalOpportunities} areas of over-indexing vs ${totalWeaknesses} gaps.
+                                ${sortedCategoryGaps.length > 0 ? `The strongest category is <strong>${sortedCategoryGaps.filter(c => c.avgGap > 0)[0]?.category || 'N/A'}</strong>` : ''}
+                                ${sortedCategoryGaps.filter(c => c.avgGap < 0).length > 0 ? `, while <strong>${sortedCategoryGaps.filter(c => c.avgGap < 0)[0]?.category}</strong> presents the biggest opportunity for improvement.` : '.'}
+                                ${opportunities.length > 0 ? ` Key differentiator: <strong>${opportunities[0].name}</strong> with +${opportunities[0].indexDiff} index advantage.` : ''}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Export Actions -->
+                    <div class="overlap-card" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem;">
+                        <span style="font-size: 0.85rem; color: var(--text-secondary);">Export Gap Analysis</span>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="module-btn csv-btn has-tooltip" data-tooltip="Export gap analysis data as CSV file" onclick="exportGapAnalysisCSV()">CSV</button>
+                            <button class="module-btn deck-btn has-tooltip" data-tooltip="Add gap analysis to your presentation deck" onclick="addModuleToDeck('comparison', 'Gap Analysis')">Add to Deck</button>
+                        </div>
                     </div>
                 </div>
             `;
             
             document.getElementById('gapContent').innerHTML = html;
+        }
+        
+        // Sort gap lists
+        function sortGapList(listType, sortBy) {
+            const listId = listType === 'strengths' ? 'gapStrengthsList' : 'gapWeaknessesList';
+            const list = document.getElementById(listId);
+            if (!list) return;
+            
+            const items = Array.from(list.querySelectorAll('.overlap-item'));
+            
+            items.sort((a, b) => {
+                if (sortBy === 'gap') {
+                    return parseFloat(b.dataset.gap) - parseFloat(a.dataset.gap);
+                } else if (sortBy === 'index') {
+                    return parseFloat(b.dataset.index) - parseFloat(a.dataset.index);
+                } else if (sortBy === 'alpha') {
+                    return a.dataset.name.localeCompare(b.dataset.name);
+                }
+                return 0;
+            });
+            
+            // Re-number and re-append
+            items.forEach((item, idx) => {
+                const rankSpan = item.querySelector('span:first-child');
+                if (rankSpan) rankSpan.textContent = idx + 1;
+                list.appendChild(item);
+            });
+        }
+        
+        // Export gap analysis as CSV
+        function exportGapAnalysisCSV() {
+            if (!window.comparisonProfilesData || window.comparisonProfilesData.length < 2) {
+                alert('No gap analysis data to export');
+                return;
+            }
+            
+            const profiles = window.comparisonProfilesData;
+            const primaryProfile = profiles.find(p => p.name.toUpperCase() !== 'GEN POP' && p.name.toUpperCase() !== 'GENPOP') || profiles[0];
+            
+            let csv = 'Type,Item,Category,Primary Index,Comparison Index,Gap,Comparison Profile\n';
+            
+            // Collect gaps (reuse logic from render function)
+            const allBehaviors = {};
+            profiles.forEach(p => {
+                if (p.behavioral) {
+                    Object.entries(p.behavioral).forEach(([cat, items]) => {
+                        if (Array.isArray(items)) {
+                            items.forEach(item => {
+                                if (item && item.name) {
+                                    const key = cat + '|' + item.name;
+                                    if (!allBehaviors[key]) {
+                                        allBehaviors[key] = { name: item.name, category: cat, profileIndices: {} };
+                                    }
+                                    allBehaviors[key].profileIndices[p.name] = { index: item.index || 100 };
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+            
+            const comparisonProfiles = profiles.filter(p => p.name !== primaryProfile.name);
+            
+            Object.values(allBehaviors).forEach(behavior => {
+                const primaryData = behavior.profileIndices[primaryProfile.name];
+                if (!primaryData) return;
+                
+                comparisonProfiles.forEach(compProfile => {
+                    const compData = behavior.profileIndices[compProfile.name];
+                    if (!compData) return;
+                    
+                    const indexDiff = primaryData.index - compData.index;
+                    if (Math.abs(indexDiff) >= 20) {
+                        const type = indexDiff > 0 ? 'Strength' : 'Gap';
+                        csv += `${type},"${behavior.name}","${behavior.category}",${primaryData.index},${compData.index},${indexDiff},"${compProfile.name}"\n`;
+                    }
+                });
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `gap_analysis_${primaryProfile.name.replace(/[^a-zA-Z0-9]/g, '_')}.csv`;
+            link.click();
         }
         
         function renderComparisonInsights(profiles) {
