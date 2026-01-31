@@ -2868,7 +2868,8 @@ def get_users_list():
                 'department': user.get('department', ''),
                 'first_name': user.get('first_name', ''),
                 'last_name': user.get('last_name', ''),
-                'profile_picture': user.get('profile_picture', '')
+                'profile_picture': user.get('profile_picture', ''),
+                'email': user.get('email', '')
             })
         return jsonify({'success': True, 'users': users})
     except Exception as e:
@@ -3012,6 +3013,134 @@ This request was sent from the Crosswalk IQ dashboard.
             'error': str(e),
             'fallback_message': 'Please contact Liz Huszarik directly at liz@crosswalknyc.com or call +1 (818) 231-2610'
         }), 500
+
+
+@app.route('/api/collaboration/send-workspace-invite', methods=['POST'])
+@requires_auth
+def send_workspace_invite():
+    """Send email notifications when users are added to a workspace."""
+    try:
+        data = request.json or {}
+        workspace_name = data.get('workspace_name', 'New Workspace')
+        workspace_id = data.get('workspace_id', '')
+        members = data.get('members', [])  # List of {username, email}
+        invited_by = data.get('invited_by', session.get('username', 'Someone'))
+        description = data.get('description', '')
+        
+        if not members:
+            return jsonify({'success': False, 'error': 'No members to notify'})
+        
+        app_url = os.environ.get('APP_URL', 'https://behavioralgraph.onrender.com')
+        
+        sent_count = 0
+        failed_count = 0
+        
+        for member in members:
+            email = member.get('email')
+            username = member.get('username', 'User')
+            
+            if not email:
+                continue
+            
+            subject = f"📁 {invited_by} added you to a workspace - {workspace_name}"
+            
+            html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 20px; }}
+        .container {{ max-width: 600px; margin: 0 auto; background: #16213e; border-radius: 12px; padding: 30px; }}
+        .header {{ text-align: center; margin-bottom: 30px; }}
+        .header h1 {{ color: #00d9ff; margin: 0; font-size: 24px; }}
+        .content {{ line-height: 1.8; }}
+        .workspace-card {{ background: #1a1a2e; border-radius: 8px; padding: 20px; margin: 20px 0; border-left: 4px solid #a6e22e; }}
+        .workspace-name {{ font-size: 20px; font-weight: bold; color: #a6e22e; margin-bottom: 10px; }}
+        .workspace-desc {{ color: #888; font-size: 14px; }}
+        .btn {{ display: inline-block; background: #a6e22e; color: #000; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 20px; }}
+        .footer {{ margin-top: 30px; padding-top: 20px; border-top: 1px solid #333; text-align: center; color: #666; font-size: 12px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📁 You've been added to a workspace!</h1>
+        </div>
+        <div class="content">
+            <p>Hi {username},</p>
+            <p><strong>{invited_by}</strong> has added you to a new collaborative workspace in Crosswalk IQ:</p>
+            
+            <div class="workspace-card">
+                <div class="workspace-name">{workspace_name}</div>
+                {f'<div class="workspace-desc">{description}</div>' if description else ''}
+            </div>
+            
+            <p>In this workspace, you can:</p>
+            <ul>
+                <li>Share and view audience profiles</li>
+                <li>Collaborate with team members</li>
+                <li>Leave comments and feedback</li>
+                <li>Build presentations together</li>
+            </ul>
+            
+            <center>
+                <a href="{app_url}" class="btn">Open Crosswalk IQ</a>
+            </center>
+        </div>
+        <div class="footer">
+            <p>This email was sent from Crosswalk IQ</p>
+            <p>© Crosswalk NYC</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+            
+            text_content = f"""
+You've been added to a workspace!
+
+Hi {username},
+
+{invited_by} has added you to a new collaborative workspace in Crosswalk IQ:
+
+Workspace: {workspace_name}
+{f'Description: {description}' if description else ''}
+
+In this workspace, you can:
+- Share and view audience profiles
+- Collaborate with team members
+- Leave comments and feedback
+- Build presentations together
+
+Open Crosswalk IQ: {app_url}
+
+---
+This email was sent from Crosswalk IQ
+© Crosswalk NYC
+"""
+            
+            try:
+                success, message = send_email_via_gmail(email, subject, html_content, text_content)
+                if success:
+                    sent_count += 1
+                    print(f"✅ Workspace invite sent to {email}")
+                else:
+                    failed_count += 1
+                    print(f"❌ Failed to send workspace invite to {email}: {message}")
+            except Exception as e:
+                failed_count += 1
+                print(f"❌ Error sending to {email}: {e}")
+        
+        return jsonify({
+            'success': True,
+            'sent': sent_count,
+            'failed': failed_count,
+            'message': f'Sent {sent_count} invitation(s)'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error sending workspace invites: {e}")
+        return jsonify({'success': False, 'error': str(e)})
 
 
 @app.route('/api/health')
