@@ -3245,10 +3245,21 @@
             text-transform: uppercase;
         }
         
+        .interest-header-row span:nth-child(1),
+        .interest-header-row span:nth-child(2) {
+            text-align: left;
+        }
+        
+        .interest-header-row span:nth-child(3),
+        .interest-header-row span:nth-child(4),
+        .interest-header-row span:nth-child(5) {
+            text-align: right;
+        }
+        
         .interest-rank {
             font-size: 0.7rem;
             color: var(--accent-blue);
-            text-align: center;
+            text-align: left;
         }
         
         .interest-name {
@@ -3256,6 +3267,7 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            text-align: left;
         }
         
         .interest-pct,
@@ -3289,7 +3301,7 @@
             font-size: 0.65rem;
             font-weight: 700;
             min-width: 36px;
-            text-align: center;
+            text-align: right;
             padding: 1px 4px;
             border-radius: 3px;
             background: rgba(0, 0, 0, 0.3);
