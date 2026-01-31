@@ -12690,14 +12690,35 @@
                         
                         <div id="collab-tab-decks" class="collab-tab-content">
                             <div class="workspace-deck-builder">
-                                <div class="deck-builder-header">
-                                    <h3>📊 Deck Builder</h3>
+                                <div class="deck-builder-header" id="deckBuilderHeader">
+                                    <div style="display: flex; align-items: center; gap: 1rem;">
+                                        <h3 style="margin: 0;">📊 Deck Builder</h3>
+                                        <div id="deckTitleControls" style="display: none; align-items: center; gap: 0.75rem; padding-left: 1rem; border-left: 1px solid var(--border-color);">
+                                            <input type="text" id="deckBuilderTitleInput" placeholder="Deck name" 
+                                                   style="font-size: 1rem; font-weight: 600; background: transparent; border: none; color: var(--text-primary); width: 150px;"
+                                                   onchange="updateDeckNameInEditor(this.value)">
+                                            <span id="deckSlideCount" style="font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap;">0 slides</span>
+                                        </div>
+                                    </div>
                                     <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                        <div id="deckActionButtons" style="display: none; align-items: center; gap: 0.5rem;">
+                                            <div class="export-dropdown" style="position: relative;">
+                                                <button class="btn btn-small btn-primary" onclick="toggleDeckExportMenu(event)" style="display: flex; align-items: center; gap: 0.25rem;">🏔️ EXPORT ▾</button>
+                                                <div id="deckExportMenu" class="export-dropdown-menu" style="display: none; position: absolute; top: 100%; right: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 180px; z-index: 1000; margin-top: 0.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                                                    <a onclick="exportDeckToPDF()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📄 PDF</a>
+                                                    <a onclick="exportDeckToGoogleSlides()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📑 Google Slides</a>
+                                                    <a onclick="exportDeckToPPT()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📊 PowerPoint</a>
+                                                    <a onclick="exportDeckToKeynote()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">🍎 Keynote</a>
+                                                </div>
+                                            </div>
+                                            <button class="btn btn-small btn-success" onclick="shareDeckWithTeam()" style="display: flex; align-items: center; gap: 0.25rem;">👥 SHARE</button>
+                                            <button class="btn btn-small" onclick="deleteDeckFromEditor()" title="Delete deck" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 0.35rem 0.5rem;">🗑️</button>
+                                        </div>
                                         <select id="deckWorkspaceFilter" onchange="filterWorkspaceDecks()" style="padding: 0.4rem 0.75rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.8rem;">
                                             <option value="current">Current Workspace</option>
                                             <option value="all">All Workspaces</option>
                                         </select>
-                                        <button class="btn btn-primary btn-small" onclick="createNewWorkspaceDeck()">+ New Deck</button>
+                                        <button class="btn btn-primary btn-small" onclick="createNewWorkspaceDeck()" style="white-space: nowrap;">+ New Deck</button>
                                     </div>
                                 </div>
                                 
@@ -29928,19 +29949,37 @@
             if (!currentDeckData) return renderDeckEmptyState();
             
             const slides = currentDeckData.slides || [];
+            const canvaConnected = localStorage.getItem('canvaConnected') === 'true';
             return `
-                <div class="deck-editor-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <div>
+                <div class="deck-editor-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
                         <input type="text" id="deckNameInput" value="${currentDeckData.name || 'Untitled Deck'}" 
-                               style="font-size: 1.1rem; font-weight: 600; background: transparent; border: none; color: var(--text-primary); width: 200px;"
+                               style="font-size: 1.1rem; font-weight: 600; background: transparent; border: none; color: var(--text-primary); width: 180px;"
                                onchange="updateDeckName(this.value)">
-                        <div style="font-size: 0.7rem; color: var(--text-secondary);">
-                            ${currentDeckData.slides?.length || 0} slides • Last updated ${currentDeckData.updated_at ? new Date(currentDeckData.updated_at).toLocaleDateString() : 'never'}
-                        </div>
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap;">
+                            ${currentDeckData.slides?.length || 0} slides
+                        </span>
                     </div>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-small btn-secondary" onclick="duplicateDeck('${currentDeckData.id}')">📋 Duplicate</button>
-                        <button class="btn btn-small btn-danger" onclick="deleteDeck('${currentDeckData.id}')" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">🗑️ Delete</button>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <div class="export-dropdown" style="position: relative;">
+                            <button class="btn btn-small btn-primary" onclick="toggleDeckEditorExport(event)" style="display: flex; align-items: center; gap: 0.25rem;">
+                                🏔️ EXPORT ▾
+                            </button>
+                            <div id="deckEditorExportDropdown" class="export-dropdown-menu" style="display: none; position: absolute; top: 100%; right: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 180px; z-index: 1000; margin-top: 0.25rem;">
+                                <a onclick="exportDeckAsPDF()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📄 PDF Report</a>
+                                <a onclick="exportDeckAsCSV()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📊 CSV Data</a>
+                                <a onclick="exportToGoogleSlides()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📑 Google Slides</a>
+                                <a onclick="exportToPowerPoint()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📊 PowerPoint</a>
+                                ${canvaConnected ? 
+                                    '<a onclick="exportToCanva()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: #00c4cc; text-decoration: none; font-size: 0.8rem;">🎨 Open in Canva</a>' : 
+                                    '<a onclick="connectCanva()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-secondary); text-decoration: none; font-size: 0.8rem;">🔗 Connect Canva</a>'
+                                }
+                            </div>
+                        </div>
+                        <button class="btn btn-small btn-success" onclick="shareDeckModal()" style="display: flex; align-items: center; gap: 0.25rem;">
+                            👥 SHARE
+                        </button>
+                        <button class="btn btn-small" onclick="deleteDeck('${currentDeckData.id}')" title="Delete deck" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 0.35rem 0.5rem;">🗑️</button>
                     </div>
                 </div>
                 
@@ -42594,10 +42633,17 @@
         function renderSlideEditor() {
             const emptyEl = document.getElementById('slideEditorEmpty');
             const contentEl = document.getElementById('slideEditorContent');
+            const titleControls = document.getElementById('deckTitleControls');
+            const actionButtons = document.getElementById('deckActionButtons');
+            const titleInput = document.getElementById('deckBuilderTitleInput');
+            const slideCount = document.getElementById('deckSlideCount');
             
             if (!currentEditingDeck) {
                 if (emptyEl) emptyEl.style.display = 'block';
                 if (contentEl) contentEl.style.display = 'none';
+                // Hide header controls when no deck selected
+                if (titleControls) titleControls.style.display = 'none';
+                if (actionButtons) actionButtons.style.display = 'none';
                 return;
             }
             
@@ -42608,29 +42654,13 @@
             const allSlides = [{ type: 'title', ...deck.titleSlide }, ...(deck.slides || [])];
             const currentSlide = allSlides[currentEditingSlide] || allSlides[0];
             
+            // Update header controls
+            if (titleControls) titleControls.style.display = 'flex';
+            if (actionButtons) actionButtons.style.display = 'flex';
+            if (titleInput) titleInput.value = deck.name || 'Untitled Deck';
+            if (slideCount) slideCount.textContent = `${allSlides.length} slides`;
+            
             contentEl.innerHTML = `
-                <!-- Top Toolbar: Title, Export, Share, Trash -->
-                <div class="slide-editor-top-toolbar">
-                    <div class="slide-editor-toolbar-left">
-                        <input type="text" value="${deck.name}" onchange="updateDeckNameInEditor(this.value)" 
-                               style="font-size: 1.1rem; font-weight: 600; background: transparent; border: none; color: var(--text-primary); width: 250px;" placeholder="Deck Title">
-                        <span style="font-size: 0.75rem; color: var(--text-secondary); margin-left: 0.5rem;">${allSlides.length} slides</span>
-                    </div>
-                    <div class="slide-editor-toolbar-right">
-                        <div class="export-dropdown" style="position: relative;">
-                            <button class="btn btn-small btn-secondary" onclick="toggleDeckExportMenu()">📥 EXPORT ▾</button>
-                            <div id="deckExportMenu" class="export-dropdown-menu" style="display: none; position: absolute; top: 100%; right: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 180px; z-index: 1000; margin-top: 0.25rem;">
-                                <a onclick="exportDeckToPDF()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">📄 PDF</a>
-                                <a onclick="exportDeckToGoogleSlides()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">📑 Google Slides</a>
-                                <a onclick="exportDeckToPPT()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">📊 PowerPoint (.pptx)</a>
-                                <a onclick="exportDeckToKeynote()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">🍎 Keynote</a>
-                            </div>
-                        </div>
-                        <button class="btn btn-small btn-primary" onclick="shareDeckWithTeam()">👥 SHARE</button>
-                        <button class="btn btn-small btn-danger" onclick="deleteDeckFromEditor()" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;" title="Delete Deck">🗑️</button>
-                    </div>
-                </div>
-                
                 <div class="slide-editor-body">
                     <div class="slide-thumbnails">
                         ${allSlides.map((slide, idx) => `
@@ -43086,12 +43116,24 @@
             event.dataTransfer.setData('moduleCategory', category);
         }
         
-        function toggleDeckExportMenu() {
+        function toggleDeckExportMenu(event) {
+            if (event) event.stopPropagation();
             const menu = document.getElementById('deckExportMenu');
             if (menu) {
                 menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
             }
         }
+        
+        // Close export menu when clicking outside
+        document.addEventListener('click', function(e) {
+            const menu = document.getElementById('deckExportMenu');
+            if (menu && menu.style.display === 'block') {
+                const exportBtn = e.target.closest('[onclick*="toggleDeckExportMenu"]');
+                if (!exportBtn && !menu.contains(e.target)) {
+                    menu.style.display = 'none';
+                }
+            }
+        });
         
         // Export functions
         async function exportDeckToPDF() {
