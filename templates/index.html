@@ -41985,18 +41985,22 @@
             list.innerHTML = wsDataPoints.map(dp => {
                 const preview = getDataPointPreview(dp);
                 return `
-                    <div class="data-point-card" data-id="${dp.id}">
+                    <div class="data-point-card" data-id="${dp.id}" draggable="true"
+                         ondragstart="handleDataPointCardDragStart(event, '${dp.id}')"
+                         ondragend="handleDataPointCardDragEnd(event)"
+                         style="cursor: grab;">
                         <div class="data-point-header">
                             <div>
                                 <div class="data-point-title">${dp.title || dp.category}</div>
                                 <div class="data-point-meta">${dp.profileName} • ${dp.type} • ${new Date(dp.dateAdded).toLocaleDateString()}</div>
                             </div>
                             <div class="data-point-actions">
-                                <button onclick="addDataPointToDeck('${dp.id}')" style="background: var(--accent-lime); color: #000;" title="Add to Deck">📊</button>
-                                <button onclick="deleteDataPoint('${dp.id}')" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;" title="Delete">🗑️</button>
+                                <button onclick="event.stopPropagation(); addDataPointToDeck('${dp.id}')" style="background: var(--accent-lime); color: #000;" title="Add to Deck">📊</button>
+                                <button onclick="event.stopPropagation(); deleteDataPoint('${dp.id}')" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;" title="Delete">🗑️</button>
                             </div>
                         </div>
                         <div class="data-point-preview">${preview}</div>
+                        <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.25rem;">Drag to slide or deck</div>
                     </div>
                 `;
             }).join('');
@@ -43105,11 +43109,26 @@
         }
         
         function handleDataPointDragStart(event, idx) {
-            event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'datapoint', idx: idx }));
+            const dataPoints = JSON.parse(localStorage.getItem('savedDataPoints') || '[]');
+            const dp = dataPoints[idx];
+            const id = dp ? dp.id : null;
+            event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'datapoint', idx: idx, id: id }));
+            event.dataTransfer.effectAllowed = 'copy';
             event.target.classList.add('dragging');
         }
         
         function handleDataPointDragEnd(event) {
+            event.target.classList.remove('dragging');
+        }
+        
+        function handleDataPointCardDragStart(event, id) {
+            event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'datapoint', id: id }));
+            event.dataTransfer.effectAllowed = 'copy';
+            event.target.classList.add('dragging');
+            event.stopPropagation();
+        }
+        
+        function handleDataPointCardDragEnd(event) {
             event.target.classList.remove('dragging');
         }
         
@@ -43177,7 +43196,7 @@
             try {
                 const data = JSON.parse(event.dataTransfer.getData('text/plain'));
                 if (data.type === 'datapoint') {
-                    addDataPointToSlide(data.idx, slideIdx);
+                    addDataPointToSlide(data, slideIdx);
                 }
             } catch (e) {
                 console.error('Drop error:', e);
@@ -43200,19 +43219,30 @@
             try {
                 const data = JSON.parse(event.dataTransfer.getData('text/plain'));
                 if (data.type === 'datapoint') {
-                    addDataPointAsNewSlide(data.idx);
+                    addDataPointAsNewSlide(data);
                 }
             } catch (e) {
                 console.error('Drop error:', e);
             }
         }
         
-        function addDataPointToSlide(dpIdx, slideIdx) {
+        function resolveDataPoint(data) {
+            const dataPoints = JSON.parse(localStorage.getItem('savedDataPoints') || '[]');
+            if (data.id != null) return dataPoints.find(d => d.id === data.id);
+            if (data.idx != null) return dataPoints[data.idx];
+            return null;
+        }
+        
+        function addDataPointToSlide(dpData, slideIdx) {
             if (!currentEditingDeck || slideIdx === 0) return; // Can't add to title slide
             
-            const dataPoints = JSON.parse(localStorage.getItem('savedDataPoints') || '[]');
-            const dp = dataPoints[dpIdx];
-            if (!dp) return;
+            const dp = typeof dpData === 'object' ? resolveDataPoint(dpData) : null;
+            if (!dp) {
+                const dataPoints = JSON.parse(localStorage.getItem('savedDataPoints') || '[]');
+                const byIdx = dataPoints[dpData];
+                if (byIdx) return addDataPointToSlide({ idx: dpData }, slideIdx);
+                return;
+            }
             
             const realSlideIdx = slideIdx - 1; // Account for title slide
             if (!currentEditingDeck.slides[realSlideIdx]) return;
@@ -43236,12 +43266,16 @@
             showNotification('✅ Added to slide', 'success');
         }
         
-        function addDataPointAsNewSlide(dpIdx) {
+        function addDataPointAsNewSlide(dpData) {
             if (!currentEditingDeck) return;
             
-            const dataPoints = JSON.parse(localStorage.getItem('savedDataPoints') || '[]');
-            const dp = dataPoints[dpIdx];
-            if (!dp) return;
+            const dp = typeof dpData === 'object' ? resolveDataPoint(dpData) : null;
+            if (!dp) {
+                const dataPoints = JSON.parse(localStorage.getItem('savedDataPoints') || '[]');
+                const byIdx = dataPoints[dpData];
+                if (byIdx) return addDataPointAsNewSlide({ idx: dpData });
+                return;
+            }
             
             // Create new slide with this data point
             const newSlide = {
@@ -44490,7 +44524,7 @@
             try {
                 const data = JSON.parse(event.dataTransfer.getData('text/plain'));
                 if (data.type === 'datapoint') {
-                    addDataPointToSlide(data.idx, currentEditingSlide);
+                    addDataPointToSlide(data, currentEditingSlide);
                 }
             } catch (e) {
                 console.error('Drop error:', e);
@@ -44505,7 +44539,7 @@
             try {
                 const data = JSON.parse(event.dataTransfer.getData('text/plain'));
                 if (data.type === 'datapoint') {
-                    addDataPointToSlide(data.idx, slideIdx);
+                    addDataPointToSlide(data, slideIdx);
                 }
             } catch (e) {
                 console.error('Drop error:', e);
