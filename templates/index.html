@@ -37296,21 +37296,40 @@
             document.getElementById('overlapContent').innerHTML = html;
         }
         
+        // Store benchmark data globally for category deep dive
+        let benchmarkData = null;
+        let benchmarkCategoryData = {};
+        
         function renderBenchmarkAnalysis(profiles) {
             if (!profiles || profiles.length < 1) {
                 document.getElementById('benchmarkContent').innerHTML = '<div class="comparison-empty"><p>Run a comparison to see benchmarking data</p></div>';
                 return;
             }
             
+            // Collect ALL behavioral data including items with index < 100
+            // We need to look at the raw data, not just filtered items
+            benchmarkCategoryData = {};
+            
             // Calculate aggregate metrics for each profile
             const benchmarks = profiles.map(p => {
                 const allItems = [];
+                const categoryItems = {};
+                
                 if (p.behavioral) {
-                    Object.values(p.behavioral).forEach(items => {
+                    Object.entries(p.behavioral).forEach(([cat, items]) => {
+                        if (!categoryItems[cat]) categoryItems[cat] = [];
                         if (Array.isArray(items)) {
                             items.forEach(item => {
-                                if (item && typeof item.index === 'number') {
-                                    allItems.push(item);
+                                if (item && item.name) {
+                                    const idx = typeof item.index === 'number' ? item.index : 100;
+                                    const itemData = { ...item, index: idx, category: cat };
+                                    allItems.push(itemData);
+                                    categoryItems[cat].push(itemData);
+                                    
+                                    // Store for category deep dive
+                                    if (!benchmarkCategoryData[cat]) benchmarkCategoryData[cat] = {};
+                                    if (!benchmarkCategoryData[cat][p.name]) benchmarkCategoryData[cat][p.name] = [];
+                                    benchmarkCategoryData[cat][p.name].push(itemData);
                                 }
                             });
                         }
@@ -37320,18 +37339,40 @@
                 // Check if this is Gen Pop (baseline profile)
                 const isGenPop = p.name.toUpperCase() === 'GEN POP' || p.name.toUpperCase() === 'GENPOP';
                 
-                const avgIndex = allItems.length ? Math.round(allItems.reduce((sum, i) => sum + (i.index || 100), 0) / allItems.length) : (isGenPop ? 100 : 0);
-                const overIndexCount = allItems.filter(i => (i.index || 100) > 100).length;
-                const underIndexCount = allItems.filter(i => (i.index || 100) < 100).length;
-                const strongOverIndex = allItems.filter(i => (i.index || 100) >= 200).length;
-                const veryStrongOverIndex = allItems.filter(i => (i.index || 100) >= 300).length;
-                const moderateOverIndex = allItems.filter(i => (i.index || 100) >= 150 && (i.index || 100) < 200).length;
+                // Calculate metrics - use actual index values
+                const avgIndex = allItems.length ? Math.round(allItems.reduce((sum, i) => sum + i.index, 0) / allItems.length) : (isGenPop ? 100 : 0);
+                const medianIndex = allItems.length ? allItems.sort((a, b) => a.index - b.index)[Math.floor(allItems.length / 2)].index : 100;
+                const overIndexCount = allItems.filter(i => i.index > 100).length;
+                const underIndexCount = allItems.filter(i => i.index < 100).length;
+                const atIndexCount = allItems.filter(i => i.index === 100).length;
+                const strongOverIndex = allItems.filter(i => i.index >= 200).length;
+                const veryStrongOverIndex = allItems.filter(i => i.index >= 300).length;
+                const moderateOverIndex = allItems.filter(i => i.index >= 150 && i.index < 200).length;
+                const lightOverIndex = allItems.filter(i => i.index > 100 && i.index < 150).length;
+                const lightUnderIndex = allItems.filter(i => i.index >= 50 && i.index < 100).length;
+                const strongUnderIndex = allItems.filter(i => i.index < 50).length;
                 
-                // Find top over-indexing items
-                const topItems = [...allItems]
-                    .filter(i => (i.index || 100) > 100)
-                    .sort((a, b) => (b.index || 100) - (a.index || 100))
-                    .slice(0, 5);
+                // Calculate index distribution for histogram
+                const indexDistribution = {
+                    '0-49': allItems.filter(i => i.index < 50).length,
+                    '50-99': allItems.filter(i => i.index >= 50 && i.index < 100).length,
+                    '100-149': allItems.filter(i => i.index >= 100 && i.index < 150).length,
+                    '150-199': allItems.filter(i => i.index >= 150 && i.index < 200).length,
+                    '200-299': allItems.filter(i => i.index >= 200 && i.index < 300).length,
+                    '300+': allItems.filter(i => i.index >= 300).length
+                };
+                
+                // Calculate category-level metrics
+                const categoryMetrics = Object.entries(categoryItems).map(([cat, items]) => {
+                    const catAvg = items.length ? Math.round(items.reduce((s, i) => s + i.index, 0) / items.length) : 100;
+                    const catOver = items.filter(i => i.index > 100).length;
+                    const catUnder = items.filter(i => i.index < 100).length;
+                    return { category: cat, avgIndex: catAvg, overCount: catOver, underCount: catUnder, total: items.length };
+                }).sort((a, b) => b.avgIndex - a.avgIndex);
+                
+                // Find top over-indexing and under-indexing items
+                const topOverItems = [...allItems].filter(i => i.index > 100).sort((a, b) => b.index - a.index).slice(0, 10);
+                const topUnderItems = [...allItems].filter(i => i.index < 100).sort((a, b) => a.index - b.index).slice(0, 10);
                 
                 return {
                     name: p.name,
@@ -37339,131 +37380,432 @@
                     sampleSize: p.sampleSize || 0,
                     projectedUS: p.projectedUS || 0,
                     avgIndex,
+                    medianIndex,
                     overIndexCount,
                     underIndexCount,
+                    atIndexCount,
                     strongOverIndex,
                     veryStrongOverIndex,
                     moderateOverIndex,
+                    lightOverIndex,
+                    lightUnderIndex,
+                    strongUnderIndex,
                     totalBehaviors: allItems.length,
-                    topItems,
-                    isGenPop
+                    topOverItems,
+                    topUnderItems,
+                    indexDistribution,
+                    categoryMetrics,
+                    isGenPop,
+                    allItems
                 };
             });
             
+            // Store globally for deep dive
+            benchmarkData = benchmarks;
+            
             // Find the profile with highest avg index (excluding Gen Pop)
-            const topPerformer = benchmarks
-                .filter(b => !b.isGenPop)
-                .sort((a, b) => b.avgIndex - a.avgIndex)[0];
+            const topPerformer = benchmarks.filter(b => !b.isGenPop).sort((a, b) => b.avgIndex - a.avgIndex)[0];
+            const worstPerformer = benchmarks.filter(b => !b.isGenPop).sort((a, b) => a.avgIndex - b.avgIndex)[0];
+            
+            // Get all unique categories
+            const allCategories = [...new Set(benchmarks.flatMap(b => b.categoryMetrics.map(c => c.category)))].sort();
             
             let html = `
-                <div class="benchmark-grid">
+                <!-- Controls Row -->
+                <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center;">
+                    <div class="has-tooltip" data-tooltip="Select a category to see detailed comparison and gap analysis for that specific behavioral category.">
+                        <label style="font-size: 0.8rem; color: var(--text-secondary); margin-right: 0.5rem;">Category Deep Dive:</label>
+                        <select id="benchmarkCategorySelect" onchange="renderCategoryDeepDive(this.value)" style="padding: 0.4rem 0.6rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); min-width: 200px;">
+                            <option value="">Select a category...</option>
+                            ${allCategories.map(cat => `<option value="${cat}">${cat}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="module-btn csv-btn has-tooltip" data-tooltip="Export benchmarking data as CSV" onclick="exportBenchmarkCSV()">Export CSV</button>
+                        <button class="module-btn deck-btn has-tooltip" data-tooltip="Add benchmarking to presentation deck" onclick="addModuleToDeck('comparison', 'Benchmarking')">Add to Deck</button>
+                    </div>
+                </div>
+                
+                <!-- Summary Cards Grid -->
+                <div class="benchmark-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
                     ${benchmarks.map(b => `
-                        <div class="overlap-card" style="${b.isGenPop ? 'opacity: 0.8;' : ''}">
-                            <h4 style="color: ${b.color};">${b.name} ${b.isGenPop ? '<span style="font-size: 0.7rem; color: var(--text-secondary);">(Baseline)</span>' : ''}</h4>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
-                                <div>
-                                    <div class="benchmark-value ${b.avgIndex >= 100 ? 'positive' : 'negative'}">${b.avgIndex || 100}</div>
-                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Avg Index</div>
+                        <div class="overlap-card has-tooltip" data-tooltip="${b.name}: ${b.totalBehaviors} behaviors analyzed. Avg Index: ${b.avgIndex}. Over-indexing: ${b.overIndexCount}. Under-indexing: ${b.underIndexCount}." style="${b.isGenPop ? 'opacity: 0.85; border: 1px dashed var(--border-color);' : 'border: 1px solid var(--border-color);'}">
+                            <h4 style="color: ${b.color}; display: flex; justify-content: space-between; align-items: center;">
+                                <span>${b.name}</span>
+                                ${b.isGenPop ? '<span style="font-size: 0.65rem; background: var(--bg-input); padding: 0.2rem 0.4rem; border-radius: 4px; color: var(--text-secondary);">Baseline</span>' : ''}
+                            </h4>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.75rem;">
+                                <div class="has-tooltip" data-tooltip="Average index across all ${b.totalBehaviors} behavioral items. 100 = same as general population.">
+                                    <div class="benchmark-value ${b.avgIndex >= 100 ? 'positive' : 'negative'}" style="font-size: 1.75rem;">${b.avgIndex || 100}</div>
+                                    <div style="font-size: 0.7rem; color: var(--text-secondary);">Avg Index</div>
                                 </div>
-                                <div>
-                                    <div class="benchmark-value" style="color: var(--accent-cyan);">${formatNumber(b.sampleSize)}</div>
-                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Sample Size</div>
+                                <div class="has-tooltip" data-tooltip="Sample size used for this profile's analysis.">
+                                    <div class="benchmark-value" style="color: var(--accent-cyan); font-size: 1.75rem;">${formatNumber(b.sampleSize)}</div>
+                                    <div style="font-size: 0.7rem; color: var(--text-secondary);">Sample Size</div>
                                 </div>
-                                <div>
-                                    <div class="benchmark-value positive">+${b.overIndexCount || 0}</div>
-                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Over-Indexing (100+)</div>
+                                <div class="has-tooltip" data-tooltip="${b.overIndexCount} behaviors with index > 100, meaning this audience over-indexes on these compared to general population.">
+                                    <div class="benchmark-value positive" style="font-size: 1.5rem;">+${b.overIndexCount || 0}</div>
+                                    <div style="font-size: 0.7rem; color: var(--text-secondary);">Over-Indexing</div>
                                 </div>
-                                <div>
-                                    <div class="benchmark-value negative">${b.underIndexCount || 0}</div>
-                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Under-Indexing</div>
-                                </div>
-                            </div>
-                            <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
-                                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.5rem;">
-                                    <span>Moderate Over-Index (150-199)</span>
-                                    <span style="color: var(--accent-cyan); font-weight: 600;">${b.moderateOverIndex || 0}</span>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.5rem;">
-                                    <span>Strong Over-Index (200-299)</span>
-                                    <span style="color: var(--accent-lime); font-weight: 600;">${b.strongOverIndex || 0}</span>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
-                                    <span>Very Strong Over-Index (300+)</span>
-                                    <span style="color: #f59e0b; font-weight: 600;">${b.veryStrongOverIndex || 0}</span>
+                                <div class="has-tooltip" data-tooltip="${b.underIndexCount} behaviors with index < 100, meaning this audience under-indexes on these compared to general population.">
+                                    <div class="benchmark-value negative" style="font-size: 1.5rem;">${b.underIndexCount || 0}</div>
+                                    <div style="font-size: 0.7rem; color: var(--text-secondary);">Under-Indexing</div>
                                 </div>
                             </div>
-                            ${!b.isGenPop && b.topItems.length > 0 ? `
-                                <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
-                                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Top Over-Indexers:</div>
-                                    ${b.topItems.slice(0, 3).map(item => `
-                                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; padding: 0.25rem 0;">
-                                            <span style="color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;">${item.name}</span>
-                                            <span style="color: var(--accent-lime); font-weight: 600;">${item.index}</span>
+                            
+                            <!-- Index Distribution Mini Bar -->
+                            <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+                                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Index Distribution:</div>
+                                <div style="display: flex; height: 20px; border-radius: 4px; overflow: hidden; background: var(--bg-dark);">
+                                    ${b.indexDistribution['0-49'] > 0 ? `<div class="has-tooltip" data-tooltip="Strong Under-Index (0-49): ${b.indexDistribution['0-49']} items" style="width: ${(b.indexDistribution['0-49'] / b.totalBehaviors) * 100}%; background: #ef4444;"></div>` : ''}
+                                    ${b.indexDistribution['50-99'] > 0 ? `<div class="has-tooltip" data-tooltip="Under-Index (50-99): ${b.indexDistribution['50-99']} items" style="width: ${(b.indexDistribution['50-99'] / b.totalBehaviors) * 100}%; background: #f97316;"></div>` : ''}
+                                    ${b.indexDistribution['100-149'] > 0 ? `<div class="has-tooltip" data-tooltip="Light Over-Index (100-149): ${b.indexDistribution['100-149']} items" style="width: ${(b.indexDistribution['100-149'] / b.totalBehaviors) * 100}%; background: #eab308;"></div>` : ''}
+                                    ${b.indexDistribution['150-199'] > 0 ? `<div class="has-tooltip" data-tooltip="Moderate Over-Index (150-199): ${b.indexDistribution['150-199']} items" style="width: ${(b.indexDistribution['150-199'] / b.totalBehaviors) * 100}%; background: #84cc16;"></div>` : ''}
+                                    ${b.indexDistribution['200-299'] > 0 ? `<div class="has-tooltip" data-tooltip="Strong Over-Index (200-299): ${b.indexDistribution['200-299']} items" style="width: ${(b.indexDistribution['200-299'] / b.totalBehaviors) * 100}%; background: #22c55e;"></div>` : ''}
+                                    ${b.indexDistribution['300+'] > 0 ? `<div class="has-tooltip" data-tooltip="Very Strong Over-Index (300+): ${b.indexDistribution['300+']} items" style="width: ${(b.indexDistribution['300+'] / b.totalBehaviors) * 100}%; background: #10b981;"></div>` : ''}
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                    <span>Under</span>
+                                    <span>Over</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Breakdown -->
+                            <div style="margin-top: 0.5rem; font-size: 0.75rem;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem;">
+                                    <div class="has-tooltip" data-tooltip="Behaviors with index 300+">
+                                        <span style="color: var(--text-secondary);">300+:</span>
+                                        <span style="color: #10b981; font-weight: 600;">${b.veryStrongOverIndex}</span>
+                                    </div>
+                                    <div class="has-tooltip" data-tooltip="Behaviors with index 200-299">
+                                        <span style="color: var(--text-secondary);">200-299:</span>
+                                        <span style="color: #22c55e; font-weight: 600;">${b.strongOverIndex - b.veryStrongOverIndex}</span>
+                                    </div>
+                                    <div class="has-tooltip" data-tooltip="Behaviors with index 150-199">
+                                        <span style="color: var(--text-secondary);">150-199:</span>
+                                        <span style="color: #84cc16; font-weight: 600;">${b.moderateOverIndex}</span>
+                                    </div>
+                                    <div class="has-tooltip" data-tooltip="Behaviors with index 100-149">
+                                        <span style="color: var(--text-secondary);">100-149:</span>
+                                        <span style="color: #eab308; font-weight: 600;">${b.lightOverIndex}</span>
+                                    </div>
+                                    <div class="has-tooltip" data-tooltip="Behaviors with index 50-99">
+                                        <span style="color: var(--text-secondary);">50-99:</span>
+                                        <span style="color: #f97316; font-weight: 600;">${b.lightUnderIndex}</span>
+                                    </div>
+                                    <div class="has-tooltip" data-tooltip="Behaviors with index below 50">
+                                        <span style="color: var(--text-secondary);">&lt;50:</span>
+                                        <span style="color: #ef4444; font-weight: 600;">${b.strongUnderIndex}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            ${!b.isGenPop ? `
+                                <!-- Top Items -->
+                                <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                        <div>
+                                            <div style="font-size: 0.7rem; color: var(--accent-lime); margin-bottom: 0.25rem;">Top Over-Indexers:</div>
+                                            ${b.topOverItems.slice(0, 3).map(item => `
+                                                <div class="has-tooltip" data-tooltip="${item.name} (${item.category}): Index ${item.index}" style="display: flex; justify-content: space-between; font-size: 0.7rem; padding: 0.15rem 0;">
+                                                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 75%;">${item.name}</span>
+                                                    <span style="color: var(--accent-lime); font-weight: 600;">${item.index}</span>
+                                                </div>
+                                            `).join('')}
                                         </div>
-                                    `).join('')}
+                                        <div>
+                                            <div style="font-size: 0.7rem; color: var(--accent-red); margin-bottom: 0.25rem;">Top Under-Indexers:</div>
+                                            ${b.topUnderItems.slice(0, 3).map(item => `
+                                                <div class="has-tooltip" data-tooltip="${item.name} (${item.category}): Index ${item.index}" style="display: flex; justify-content: space-between; font-size: 0.7rem; padding: 0.15rem 0;">
+                                                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 75%;">${item.name}</span>
+                                                    <span style="color: var(--accent-red); font-weight: 600;">${item.index}</span>
+                                                </div>
+                                            `).join('') || '<div style="font-size: 0.65rem; color: var(--text-secondary);">None found</div>'}
+                                        </div>
+                                    </div>
                                 </div>
                             ` : ''}
                         </div>
                     `).join('')}
                 </div>
                 
+                <!-- Interactive Comparison Table -->
                 <div class="overlap-card" style="margin-top: 1rem;">
-                    <h4>📈 Comparative Metrics</h4>
-                    <table class="comp-table" style="width: 100%; margin-top: 1rem;">
-                        <thead>
-                            <tr>
-                                <th>Metric</th>
-                                ${benchmarks.map(b => `<th style="color: ${b.color};">${b.name.length > 12 ? b.name.substring(0, 12) + '...' : b.name}</th>`).join('')}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Average Index</td>
-                                ${benchmarks.map(b => `<td style="color: ${b.avgIndex >= 100 ? 'var(--accent-green)' : 'var(--accent-red)'}; font-weight: 600;">${b.avgIndex || 100}</td>`).join('')}
-                            </tr>
-                            <tr>
-                                <td>Behaviors Analyzed</td>
-                                ${benchmarks.map(b => `<td>${b.totalBehaviors || 0}</td>`).join('')}
-                            </tr>
-                            <tr>
-                                <td>Over-Indexing (100+)</td>
-                                ${benchmarks.map(b => `<td style="color: var(--accent-green);">${b.overIndexCount || 0}</td>`).join('')}
-                            </tr>
-                            <tr>
-                                <td>Strong Over-Index (200+)</td>
-                                ${benchmarks.map(b => `<td style="color: var(--accent-lime);">${b.strongOverIndex || 0}</td>`).join('')}
-                            </tr>
-                            <tr>
-                                <td>Over vs Under Ratio</td>
-                                ${benchmarks.map(b => {
-                                    if (b.isGenPop) return `<td style="color: var(--text-secondary);">N/A</td>`;
-                                    const ratio = b.underIndexCount > 0 ? (b.overIndexCount / b.underIndexCount).toFixed(1) : (b.overIndexCount > 0 ? '∞' : '0');
-                                    const ratioNum = b.underIndexCount > 0 ? (b.overIndexCount / b.underIndexCount) : b.overIndexCount;
-                                    return `<td style="color: ${ratioNum >= 1 ? 'var(--accent-green)' : 'var(--accent-red)'};">${ratio}:1</td>`;
-                                }).join('')}
-                            </tr>
-                            <tr>
-                                <td>Projected US Population</td>
-                                ${benchmarks.map(b => `<td>${formatNumber(b.projectedUS || 0)}</td>`).join('')}
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <h4>📈 Comparative Metrics</h4>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="module-btn has-tooltip" data-tooltip="Sort by Average Index" onclick="sortBenchmarkTable('avgIndex')" style="font-size: 0.7rem;">Sort: Avg Index</button>
+                            <button class="module-btn has-tooltip" data-tooltip="Sort by Over-Index Count" onclick="sortBenchmarkTable('overCount')" style="font-size: 0.7rem;">Sort: Over Count</button>
+                        </div>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table class="comp-table" id="benchmarkCompTable" style="width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th style="cursor: pointer; text-align: left;" onclick="sortBenchmarkTable('metric')">Metric ↕</th>
+                                    ${benchmarks.map(b => `<th style="color: ${b.color}; cursor: pointer;" onclick="sortBenchmarkTableByProfile('${b.name}')">${b.name.length > 15 ? b.name.substring(0, 15) + '...' : b.name} ↕</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="has-tooltip" data-tooltip="Average index across all behavioral items. Higher = more differentiated from general population.">
+                                    <td style="font-weight: 600;">Average Index</td>
+                                    ${benchmarks.map(b => `<td style="color: ${b.avgIndex >= 100 ? 'var(--accent-lime)' : 'var(--accent-red)'}; font-weight: 700; font-size: 1.1rem;">${b.avgIndex || 100}</td>`).join('')}
+                                </tr>
+                                <tr class="has-tooltip" data-tooltip="Median index value - the middle value when all indices are sorted.">
+                                    <td>Median Index</td>
+                                    ${benchmarks.map(b => `<td style="color: ${b.medianIndex >= 100 ? 'var(--accent-lime)' : 'var(--accent-red)'};">${b.medianIndex || 100}</td>`).join('')}
+                                </tr>
+                                <tr class="has-tooltip" data-tooltip="Total number of behavioral attributes analyzed for this profile.">
+                                    <td>Behaviors Analyzed</td>
+                                    ${benchmarks.map(b => `<td>${b.totalBehaviors || 0}</td>`).join('')}
+                                </tr>
+                                <tr class="has-tooltip" data-tooltip="Number of behaviors where this audience over-indexes (index > 100) compared to general population.">
+                                    <td>Over-Indexing (>100)</td>
+                                    ${benchmarks.map(b => `<td style="color: var(--accent-lime);">${b.overIndexCount || 0}</td>`).join('')}
+                                </tr>
+                                <tr class="has-tooltip" data-tooltip="Number of behaviors where this audience under-indexes (index < 100) compared to general population.">
+                                    <td>Under-Indexing (<100)</td>
+                                    ${benchmarks.map(b => `<td style="color: var(--accent-red);">${b.underIndexCount || 0}</td>`).join('')}
+                                </tr>
+                                <tr class="has-tooltip" data-tooltip="Number of behaviors with index 200 or higher - strong differentiation.">
+                                    <td>Strong Over-Index (200+)</td>
+                                    ${benchmarks.map(b => `<td style="color: #22c55e; font-weight: 600;">${b.strongOverIndex || 0}</td>`).join('')}
+                                </tr>
+                                <tr class="has-tooltip" data-tooltip="Number of behaviors with index 300 or higher - very strong differentiation.">
+                                    <td>Very Strong (300+)</td>
+                                    ${benchmarks.map(b => `<td style="color: #10b981; font-weight: 600;">${b.veryStrongOverIndex || 0}</td>`).join('')}
+                                </tr>
+                                <tr class="has-tooltip" data-tooltip="Ratio of over-indexing to under-indexing behaviors. Higher = more positive differentiation.">
+                                    <td>Over/Under Ratio</td>
+                                    ${benchmarks.map(b => {
+                                        if (b.isGenPop) return `<td style="color: var(--text-secondary);">N/A</td>`;
+                                        const ratio = b.underIndexCount > 0 ? (b.overIndexCount / b.underIndexCount).toFixed(1) : (b.overIndexCount > 0 ? '∞' : '1.0');
+                                        const ratioNum = b.underIndexCount > 0 ? (b.overIndexCount / b.underIndexCount) : b.overIndexCount;
+                                        return `<td style="color: ${ratioNum >= 1 ? 'var(--accent-lime)' : 'var(--accent-red)'}; font-weight: 600;">${ratio}:1</td>`;
+                                    }).join('')}
+                                </tr>
+                                <tr class="has-tooltip" data-tooltip="Percentage of behaviors that over-index.">
+                                    <td>Over-Index %</td>
+                                    ${benchmarks.map(b => {
+                                        const pct = b.totalBehaviors > 0 ? Math.round((b.overIndexCount / b.totalBehaviors) * 100) : 0;
+                                        return `<td style="color: ${pct >= 50 ? 'var(--accent-lime)' : 'var(--accent-red)'};">${pct}%</td>`;
+                                    }).join('')}
+                                </tr>
+                                <tr class="has-tooltip" data-tooltip="Projected US population for this audience segment.">
+                                    <td>Projected US Pop</td>
+                                    ${benchmarks.map(b => `<td>${formatNumber(b.projectedUS || 0)}</td>`).join('')}
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
                 
-                ${topPerformer ? `
-                <div class="overlap-card" style="margin-top: 1rem; border-left: 3px solid ${topPerformer.color};">
-                    <h4>🏆 Top Performer: <span style="color: ${topPerformer.color};">${topPerformer.name}</span></h4>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem;">
-                        With an average index of <strong style="color: var(--accent-lime);">${topPerformer.avgIndex}</strong>, 
-                        ${topPerformer.name} shows the strongest behavioral differentiation with 
-                        <strong style="color: var(--accent-lime);">${topPerformer.strongOverIndex}</strong> behaviors at 200+ index
-                        and <strong style="color: #f59e0b;">${topPerformer.veryStrongOverIndex}</strong> at 300+.
-                    </p>
+                <!-- Category Performance Chart -->
+                <div class="overlap-card" style="margin-top: 1rem;">
+                    <h4 class="has-tooltip" data-tooltip="Average index by category for each profile. Click a category to see detailed breakdown.">📊 Category Performance Comparison</h4>
+                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 1rem;">Click any category bar to deep dive into that category</p>
+                    <div id="categoryBarChart" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 400px; overflow-y: auto;">
+                        ${allCategories.slice(0, 15).map(cat => {
+                            const catData = benchmarks.map(b => {
+                                const catMetric = b.categoryMetrics.find(c => c.category === cat);
+                                return { name: b.name, color: b.color, avgIndex: catMetric ? catMetric.avgIndex : 100, isGenPop: b.isGenPop };
+                            });
+                            const maxIndex = Math.max(...catData.map(d => d.avgIndex), 200);
+                            return `
+                                <div class="category-bar-row has-tooltip" data-tooltip="Click to deep dive into ${cat}" onclick="document.getElementById('benchmarkCategorySelect').value='${cat}'; renderCategoryDeepDive('${cat}');" style="cursor: pointer; padding: 0.5rem; background: var(--bg-dark); border-radius: 6px; transition: background 0.2s;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='var(--bg-dark)'">
+                                    <div style="font-size: 0.75rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--text-primary);">${cat}</div>
+                                    <div style="display: flex; gap: 0.25rem; align-items: center;">
+                                        ${catData.filter(d => !d.isGenPop).map(d => `
+                                            <div style="flex: 1; position: relative;">
+                                                <div style="height: 18px; background: ${d.color}30; border-radius: 3px; overflow: hidden;">
+                                                    <div style="height: 100%; width: ${Math.min((d.avgIndex / maxIndex) * 100, 100)}%; background: ${d.color}; transition: width 0.3s;"></div>
+                                                </div>
+                                                <span style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: ${d.avgIndex >= 100 ? 'var(--accent-lime)' : 'var(--accent-red)'};">${d.avgIndex}</span>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    <div style="display: flex; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap;">
+                        ${benchmarks.filter(b => !b.isGenPop).map(b => `
+                            <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.7rem;">
+                                <div style="width: 12px; height: 12px; background: ${b.color}; border-radius: 2px;"></div>
+                                <span>${b.name}</span>
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>
-                ` : ''}
+                
+                <!-- Category Deep Dive Container -->
+                <div id="categoryDeepDiveContainer" style="display: none; margin-top: 1rem;"></div>
+                
+                <!-- Top Performer & Insights -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                    ${topPerformer ? `
+                    <div class="overlap-card" style="border-left: 4px solid ${topPerformer.color};">
+                        <h4>🏆 Top Performer: <span style="color: ${topPerformer.color};">${topPerformer.name}</span></h4>
+                        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem; line-height: 1.6;">
+                            With an average index of <strong style="color: var(--accent-lime);">${topPerformer.avgIndex}</strong> 
+                            and <strong style="color: var(--accent-lime);">${topPerformer.overIndexCount}</strong> over-indexing behaviors,
+                            ${topPerformer.name} shows the strongest differentiation.
+                            <br><br>
+                            <strong>Key strengths:</strong> ${topPerformer.topOverItems.slice(0, 3).map(i => i.name).join(', ')}
+                        </p>
+                    </div>
+                    ` : '<div></div>'}
+                    
+                    ${worstPerformer && worstPerformer.name !== topPerformer?.name ? `
+                    <div class="overlap-card" style="border-left: 4px solid var(--accent-red);">
+                        <h4>📉 Lowest Differentiation: <span style="color: ${worstPerformer.color};">${worstPerformer.name}</span></h4>
+                        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.5rem; line-height: 1.6;">
+                            With an average index of <strong style="color: ${worstPerformer.avgIndex >= 100 ? 'var(--accent-lime)' : 'var(--accent-red)'};">${worstPerformer.avgIndex}</strong>
+                            and <strong style="color: var(--accent-red);">${worstPerformer.underIndexCount}</strong> under-indexing behaviors.
+                            <br><br>
+                            <strong>Areas to address:</strong> ${worstPerformer.topUnderItems.slice(0, 3).map(i => i.name).join(', ') || 'N/A'}
+                        </p>
+                    </div>
+                    ` : '<div></div>'}
+                </div>
             `;
             
             document.getElementById('benchmarkContent').innerHTML = html;
+        }
+        
+        // Category Deep Dive function
+        function renderCategoryDeepDive(category) {
+            const container = document.getElementById('categoryDeepDiveContainer');
+            if (!category || !benchmarkData) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            container.style.display = 'block';
+            
+            // Get items for this category from all profiles
+            const categoryItems = {};
+            const allItemNames = new Set();
+            
+            benchmarkData.forEach(b => {
+                const catMetric = b.categoryMetrics.find(c => c.category === category);
+                if (catMetric) {
+                    categoryItems[b.name] = {
+                        color: b.color,
+                        items: b.allItems.filter(i => i.category === category),
+                        avgIndex: catMetric.avgIndex,
+                        overCount: catMetric.overCount,
+                        underCount: catMetric.underCount,
+                        isGenPop: b.isGenPop
+                    };
+                    b.allItems.filter(i => i.category === category).forEach(i => allItemNames.add(i.name));
+                }
+            });
+            
+            // Build comparison table for this category
+            const itemsArray = Array.from(allItemNames).map(name => {
+                const row = { name };
+                Object.entries(categoryItems).forEach(([profileName, data]) => {
+                    const item = data.items.find(i => i.name === name);
+                    row[profileName] = item ? item.index : null;
+                    row[profileName + '_color'] = data.color;
+                });
+                return row;
+            }).sort((a, b) => {
+                // Sort by first non-GenPop profile's index
+                const firstProfile = Object.keys(categoryItems).find(k => !categoryItems[k].isGenPop);
+                return (b[firstProfile] || 0) - (a[firstProfile] || 0);
+            });
+            
+            const profileNames = Object.keys(categoryItems).filter(k => !categoryItems[k].isGenPop);
+            
+            let html = `
+                <div class="overlap-card" style="border: 2px solid var(--accent-cyan);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h4>🔍 Deep Dive: ${category}</h4>
+                        <button class="module-btn" onclick="document.getElementById('categoryDeepDiveContainer').style.display='none'; document.getElementById('benchmarkCategorySelect').value='';" style="font-size: 0.75rem;">✕ Close</button>
+                    </div>
+                    
+                    <!-- Category Summary -->
+                    <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                        ${Object.entries(categoryItems).filter(([k, v]) => !v.isGenPop).map(([name, data]) => `
+                            <div style="background: var(--bg-dark); padding: 0.75rem; border-radius: 8px; border-left: 3px solid ${data.color}; min-width: 150px;">
+                                <div style="font-weight: 600; color: ${data.color}; font-size: 0.85rem;">${name}</div>
+                                <div style="font-size: 1.5rem; font-weight: 700; color: ${data.avgIndex >= 100 ? 'var(--accent-lime)' : 'var(--accent-red)'};">${data.avgIndex}</div>
+                                <div style="font-size: 0.7rem; color: var(--text-secondary);">
+                                    <span style="color: var(--accent-lime);">${data.overCount}↑</span> 
+                                    <span style="color: var(--accent-red);">${data.underCount}↓</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <!-- Items Table -->
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        <table class="comp-table" style="width: 100%; font-size: 0.8rem;">
+                            <thead style="position: sticky; top: 0; background: var(--bg-card);">
+                                <tr>
+                                    <th style="text-align: left; min-width: 200px;">Item</th>
+                                    ${profileNames.map(name => `<th style="color: ${categoryItems[name].color};">${name}</th>`).join('')}
+                                    <th>Gap</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${itemsArray.slice(0, 50).map(row => {
+                                    const indices = profileNames.map(p => row[p]).filter(v => v !== null);
+                                    const gap = indices.length >= 2 ? Math.max(...indices) - Math.min(...indices) : 0;
+                                    return `
+                                        <tr>
+                                            <td style="text-align: left; font-weight: 500;">${row.name}</td>
+                                            ${profileNames.map(name => {
+                                                const val = row[name];
+                                                if (val === null) return '<td style="color: var(--text-secondary);">-</td>';
+                                                const color = val >= 150 ? 'var(--accent-lime)' : val >= 100 ? '#eab308' : 'var(--accent-red)';
+                                                return `<td style="color: ${color}; font-weight: 600;">${val}</td>`;
+                                            }).join('')}
+                                            <td style="color: ${gap >= 50 ? 'var(--accent-cyan)' : 'var(--text-secondary)'}; font-weight: ${gap >= 50 ? '600' : '400'};">${gap > 0 ? '±' + gap : '-'}</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div style="margin-top: 0.75rem; font-size: 0.75rem; color: var(--text-secondary);">
+                        Showing ${Math.min(itemsArray.length, 50)} of ${itemsArray.length} items in ${category}
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+            container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        // Export benchmark data as CSV
+        function exportBenchmarkCSV() {
+            if (!benchmarkData) {
+                alert('No benchmark data to export');
+                return;
+            }
+            
+            let csv = 'Profile,Avg Index,Median Index,Total Behaviors,Over-Indexing,Under-Indexing,Strong Over (200+),Very Strong (300+),Sample Size\n';
+            
+            benchmarkData.forEach(b => {
+                csv += `"${b.name}",${b.avgIndex},${b.medianIndex},${b.totalBehaviors},${b.overIndexCount},${b.underIndexCount},${b.strongOverIndex},${b.veryStrongOverIndex},${b.sampleSize}\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'benchmark_comparison.csv';
+            link.click();
+        }
+        
+        // Sort benchmark table
+        function sortBenchmarkTable(sortBy) {
+            // This would require re-rendering with sorted data
+            // For now, just show a message
+            console.log('Sorting by:', sortBy);
         }
         
         function renderGapAnalysis(profiles) {
