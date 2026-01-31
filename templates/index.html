@@ -4694,35 +4694,35 @@
             gap: 0.4rem;
         }
         .differentiator-grouped-item {
-            display: grid;
-            grid-template-columns: 1fr auto auto auto;
-            gap: 0.75rem;
+            display: flex;
             align-items: center;
-            padding: 0.4rem 0;
+            padding: 0.4rem 0.5rem;
             font-size: 0.8rem;
         }
         .differentiator-grouped-item:not(:last-child) {
             border-bottom: 1px solid rgba(255,255,255,0.05);
         }
         .differentiator-grouped-name {
+            flex: 1;
             color: var(--text-primary);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            text-align: left;
         }
         .differentiator-grouped-pct {
             color: var(--accent-blue);
-            min-width: 55px;
+            min-width: 60px;
             text-align: right;
         }
         .differentiator-grouped-gp {
             color: var(--text-secondary);
-            min-width: 55px;
+            min-width: 60px;
             text-align: right;
         }
         .differentiator-grouped-index {
             font-weight: 600;
-            min-width: 55px;
+            min-width: 65px;
             text-align: right;
             padding: 0.15rem 0.4rem;
             border-radius: 4px;
@@ -11112,10 +11112,23 @@
                             
                             <!-- Top Differentiators -->
                             <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Top Differentiators">
-                                <h3 class="has-tooltip" data-tooltip="Top Differentiators: The highest-indexing items grouped by category. Shows what truly sets this audience apart from the general population across diverse interests.">
-                                    <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                    <span>🔥 Top Differentiators</span>
-                                </h3>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <h3 class="has-tooltip" data-tooltip="Top Differentiators: The highest-indexing items grouped by category. Shows what truly sets this audience apart from the general population across diverse interests." style="margin: 0;">
+                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                        <span>🔥 Top Differentiators</span>
+                                    </h3>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <span style="font-size: 0.7rem; color: var(--text-secondary);">Sort:</span>
+                                        <select id="topDifferentiatorsSortSelect" onchange="sortTopDifferentiators(this.value)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 100px;">
+                                            <option value="index-desc">Index ↓</option>
+                                            <option value="index-asc">Index ↑</option>
+                                            <option value="profile-desc">Profile % ↓</option>
+                                            <option value="profile-asc">Profile % ↑</option>
+                                            <option value="name-asc">Name A-Z</option>
+                                            <option value="name-desc">Name Z-A</option>
+                                        </select>
+                                    </div>
+                                </div>
                                 <p class="card-desc">What makes this audience unique</p>
                                 <div id="topDifferentiators" class="differentiator-list-grouped"></div>
                             </div>
@@ -23835,6 +23848,101 @@
             if (dropdown) dropdown.value = sortValue;
         }
         
+        // Top Differentiators sort state
+        let topDifferentiatorsSortState = 'index-desc';
+        
+        // Sort and render top differentiators
+        function sortTopDifferentiators(sortValue) {
+            topDifferentiatorsSortState = sortValue;
+            renderTopDifferentiators(sortValue);
+        }
+        
+        // Render top differentiators with sorting
+        function renderTopDifferentiators(sortValue) {
+            const container = document.getElementById('topDifferentiators');
+            if (!container || !window.topDifferentiatorsData) return;
+            
+            const US_POP_DIFF = 324700000;
+            const isProjectionDiff = dashDisplayMode === 'projection';
+            const [column, direction] = sortValue.split('-');
+            
+            // Sort items within each category based on sort value
+            const sortedCategories = window.topDifferentiatorsData.map(catGroup => {
+                let sortedItems = [...catGroup.items];
+                
+                sortedItems.sort((a, b) => {
+                    let diff = 0;
+                    switch (column) {
+                        case 'index':
+                            diff = b.index - a.index;
+                            break;
+                        case 'profile':
+                            diff = b.pct - a.pct;
+                            break;
+                        case 'name':
+                            diff = a.name.localeCompare(b.name);
+                            break;
+                    }
+                    return direction === 'asc' ? -diff : diff;
+                });
+                
+                return {
+                    ...catGroup,
+                    items: sortedItems.slice(0, 5) // Top 5 per category
+                };
+            });
+            
+            // Sort categories by their average index
+            sortedCategories.sort((a, b) => b.avgIndex - a.avgIndex);
+            
+            // Take top 8 categories
+            const topCategories = sortedCategories.slice(0, 8);
+            
+            container.innerHTML = topCategories.map(catGroup => {
+                const itemsHtml = catGroup.items.map(item => {
+                    const profilePct = item.pct || 0;
+                    const genPopPct = item.genPopPct || 0;
+                    const profileDisplay = isProjectionDiff 
+                        ? formatNumber(Math.round((profilePct / 100) * US_POP_DIFF))
+                        : profilePct.toFixed(2) + '%';
+                    const genPopDisplay = isProjectionDiff 
+                        ? formatNumber(Math.round((genPopPct / 100) * US_POP_DIFF))
+                        : genPopPct.toFixed(2) + '%';
+                    const indexClass = item.index >= 100 ? 'high' : 'low';
+                    return `
+                        <div class="differentiator-grouped-item">
+                            <span class="differentiator-grouped-name">${item.name}</span>
+                            <span class="differentiator-grouped-pct">${profileDisplay}</span>
+                            <span class="differentiator-grouped-gp">${genPopDisplay}</span>
+                            <span class="differentiator-grouped-index ${indexClass}">${formatIndex(item.index)}</span>
+                        </div>
+                    `;
+                }).join('');
+                
+                return `
+                    <div class="differentiator-category-group">
+                        <div class="differentiator-category-header">
+                            <span class="differentiator-category-name">${catGroup.category}</span>
+                            <span class="differentiator-category-count">${catGroup.items.length} items</span>
+                        </div>
+                        <div class="differentiator-column-headers" style="display: flex; align-items: center; padding: 0.25rem 0.5rem; font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; border-bottom: 1px solid var(--border-color);">
+                            <span style="flex: 1; text-align: left;">Item</span>
+                            <span style="min-width: 60px; text-align: right;">Profile</span>
+                            <span style="min-width: 60px; text-align: right;">Gen Pop</span>
+                            <span style="min-width: 65px; text-align: right;">Index</span>
+                        </div>
+                        <div class="differentiator-category-items">
+                            ${itemsHtml}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Update dropdown to match current sort
+            const dropdown = document.getElementById('topDifferentiatorsSortSelect');
+            if (dropdown) dropdown.value = sortValue;
+        }
+        
         // Generate audience vs Gen Pop takeaways with AI behavioral summary
         async function generateAudienceTakeaways(demoInsights, data) {
             const takeawaysContainer = document.getElementById('audienceTakeaways');
@@ -28975,54 +29083,18 @@
                 itemsBySmartCategory[smartCategory].push(item);
             });
             
-            // Sort categories by their average index (not just top item), then sort items within each category
-            const sortedCategories = Object.entries(itemsBySmartCategory)
+            // Build category data and store globally for sorting
+            window.topDifferentiatorsData = Object.entries(itemsBySmartCategory)
                 .filter(([cat, items]) => cat !== 'Other' && items.length >= 2) // Exclude "Other" and require at least 2 items
                 .map(([cat, items]) => ({
                     category: cat,
-                    items: items.sort((a, b) => b.index - a.index).slice(0, 5), // Top 5 per category
+                    items: items,
                     avgIndex: Math.round(items.reduce((s, i) => s + i.index, 0) / items.length),
                     topIndex: Math.max(...items.map(i => i.index))
-                }))
-                .sort((a, b) => b.avgIndex - a.avgIndex)
-                .slice(0, 8); // Top 8 categories
+                }));
             
-            const US_POP_DIFF = 324700000;
-            const isProjectionDiff = dashDisplayMode === 'projection';
-            
-            document.getElementById('topDifferentiators').innerHTML = sortedCategories.map(catGroup => {
-                const itemsHtml = catGroup.items.map(item => {
-                    const profilePct = item.pct || 0;
-                    const genPopPct = item.genPopPct || 0;
-                    const profileDisplay = isProjectionDiff 
-                        ? formatNumber(Math.round((profilePct / 100) * US_POP_DIFF))
-                        : profilePct.toFixed(2) + '%';
-                    const genPopDisplay = isProjectionDiff 
-                        ? formatNumber(Math.round((genPopPct / 100) * US_POP_DIFF))
-                        : genPopPct.toFixed(2) + '%';
-                    const indexClass = item.index >= 100 ? 'high' : 'low';
-                    return `
-                        <div class="differentiator-grouped-item">
-                            <span class="differentiator-grouped-name">${item.name}</span>
-                            <span class="differentiator-grouped-pct">${profileDisplay}</span>
-                            <span class="differentiator-grouped-gp">${genPopDisplay}</span>
-                            <span class="differentiator-grouped-index ${indexClass}">${formatIndex(item.index)}</span>
-                        </div>
-                    `;
-                }).join('');
-                
-                return `
-                    <div class="differentiator-category-group">
-                        <div class="differentiator-category-header">
-                            <span class="differentiator-category-name">${catGroup.category}</span>
-                            <span class="differentiator-category-count">${catGroup.items.length} items</span>
-                        </div>
-                        <div class="differentiator-category-items">
-                            ${itemsHtml}
-                        </div>
-                    </div>
-                `;
-            }).join('');
+            // Render with default sort (index descending)
+            renderTopDifferentiators('index-desc');
             
             
             // ===== BEHAVIORAL DNA TAB =====
