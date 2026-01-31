@@ -10991,12 +10991,12 @@
             <div id="tab-insights" class="tab-content active">
                 <div class="insights-container">
                     <!-- Insights Sub-tabs -->
-                    <div class="insights-tabs">
-                        <button class="insights-tab active" onclick="showInsightsTab('summary')">📋 Summary</button>
-                        <button class="insights-tab" onclick="showInsightsTab('behavioral')">🎯 Behavioral DNA</button>
-                        <button class="insights-tab" onclick="showInsightsTab('media')">📺 Media Patterns</button>
-                        <button class="insights-tab" onclick="showInsightsTab('opportunities')">💰 Opportunities</button>
-                        <button class="insights-tab" onclick="showInsightsTab('activation')">🚀 Activation</button>
+                    <div class="insights-tabs" id="insightsSubTabs">
+                        <button class="insights-tab active" data-feature="insightsSummary" onclick="showInsightsTab('summary')">📋 Summary<span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="insights-tab" data-feature="insightsBehavioral" onclick="showInsightsTab('behavioral')">🧬 Behavioral DNA<span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="insights-tab" data-feature="insightsMedia" onclick="showInsightsTab('media')">📺 Media Patterns<span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="insights-tab" data-feature="insightsOpportunities" onclick="showInsightsTab('opportunities')">💰 Opportunities<span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="insights-tab" data-feature="insightsActivation" onclick="showInsightsTab('activation')">🚀 Activation<span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                     </div>
                     
                     <!-- Summary Tab -->
@@ -12416,7 +12416,13 @@
             media: true,
             content: true,
             collaborate: true,
-            deckBuilder: true
+            deckBuilder: true,
+            // Insights Sub Tabs
+            insightsSummary: true,
+            insightsBehavioral: true,
+            insightsMedia: true,
+            insightsOpportunities: true,
+            insightsActivation: true
         };
         
         // Load live features from server and apply visibility
@@ -12437,34 +12443,57 @@
             applyLiveFeatureVisibility();
         }
         
-        // Apply live feature visibility to Analysis Tools tabs
+        // Apply live feature visibility to Analysis Tools tabs and Insights sub-tabs
         function applyLiveFeatureVisibility() {
+            // Apply to Analysis Tools
             const toolsContainer = document.getElementById('analysisToolsTabs');
-            if (!toolsContainer) return;
+            if (toolsContainer) {
+                toolsContainer.querySelectorAll('[data-feature]').forEach(btn => {
+                    applyFeatureVisibility(btn);
+                });
+            }
             
-            toolsContainer.querySelectorAll('[data-feature]').forEach(btn => {
-                const feature = btn.dataset.feature;
-                const isLive = liveFeatures[feature] !== false;
-                const star = btn.querySelector('.admin-only-star');
+            // Apply to Insights Sub Tabs
+            const insightsSubTabs = document.getElementById('insightsSubTabs');
+            if (insightsSubTabs) {
+                insightsSubTabs.querySelectorAll('[data-feature]').forEach(btn => {
+                    applyFeatureVisibility(btn);
+                });
                 
-                if (isLive) {
-                    // Feature is live - show to everyone, hide star
-                    btn.style.display = '';
-                    btn.classList.remove('admin-only');
-                    if (star) star.style.display = 'none';
-                } else {
-                    // Feature is NOT live
-                    if (isAdmin) {
-                        // Admin can see it with red star
-                        btn.style.display = '';
-                        btn.classList.add('admin-only');
-                        if (star) star.style.display = 'inline';
-                    } else {
-                        // Non-admin cannot see it
-                        btn.style.display = 'none';
+                // If the currently active tab is hidden, switch to the first visible tab
+                const activeTab = insightsSubTabs.querySelector('.insights-tab.active');
+                if (activeTab && activeTab.style.display === 'none') {
+                    const firstVisibleTab = insightsSubTabs.querySelector('.insights-tab:not([style*="display: none"])');
+                    if (firstVisibleTab) {
+                        firstVisibleTab.click();
                     }
                 }
-            });
+            }
+        }
+        
+        // Helper function to apply visibility to a single feature element
+        function applyFeatureVisibility(btn) {
+            const feature = btn.dataset.feature;
+            const isLive = liveFeatures[feature] !== false;
+            const star = btn.querySelector('.admin-only-star');
+            
+            if (isLive) {
+                // Feature is live - show to everyone, hide star
+                btn.style.display = '';
+                btn.classList.remove('admin-only');
+                if (star) star.style.display = 'none';
+            } else {
+                // Feature is NOT live
+                if (isAdmin) {
+                    // Admin can see it with red star
+                    btn.style.display = '';
+                    btn.classList.add('admin-only');
+                    if (star) star.style.display = 'inline';
+                } else {
+                    // Non-admin cannot see it
+                    btn.style.display = 'none';
+                }
+            }
         }
 
         // Load Gen Pop baseline data for all profile comparisons
