@@ -8350,10 +8350,168 @@
         
         .deck-builder-container {
             display: grid;
-            grid-template-columns: 280px 1fr;
-            gap: 1rem;
+            grid-template-columns: 250px 180px 1fr;
+            gap: 0.75rem;
             flex: 1;
             min-height: 0;
+        }
+        
+        .data-points-sidebar {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .data-points-drag-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .data-point-drag-item {
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: grab;
+            font-size: 0.75rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .data-point-drag-item:hover {
+            border-color: var(--accent-blue);
+            background: rgba(74, 138, 201, 0.1);
+        }
+        
+        .data-point-drag-item:active {
+            cursor: grabbing;
+        }
+        
+        .data-point-drag-item.dragging {
+            opacity: 0.5;
+            border-color: var(--accent-lime);
+        }
+        
+        .data-point-drag-item .dp-icon {
+            font-size: 1rem;
+        }
+        
+        .data-point-drag-item .dp-content {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .data-point-drag-item .dp-title {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .data-point-drag-item .dp-meta {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+        }
+        
+        .slide-thumbnails-panel {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .slide-thumb-item {
+            padding: 0.5rem;
+            background: var(--bg-input);
+            border: 2px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 0.5rem;
+            transition: all 0.2s;
+        }
+        
+        .slide-thumb-item:hover {
+            border-color: var(--accent-blue);
+        }
+        
+        .slide-thumb-item.active {
+            border-color: var(--accent-lime);
+            background: rgba(200, 230, 0, 0.1);
+        }
+        
+        .slide-thumb-item .thumb-number {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+        }
+        
+        .slide-thumb-item .thumb-title {
+            font-size: 0.7rem;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .slide-drop-zone {
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+            transition: all 0.2s;
+        }
+        
+        .slide-drop-zone.drag-over {
+            border-color: var(--accent-lime);
+            background: rgba(200, 230, 0, 0.1);
+            color: var(--accent-lime);
+        }
+        
+        .slide-content-item {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            position: relative;
+        }
+        
+        .slide-content-item:hover .content-item-actions {
+            opacity: 1;
+        }
+        
+        .content-item-actions {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            display: flex;
+            gap: 0.25rem;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .content-item-actions button {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 0.25rem 0.4rem;
+            font-size: 0.7rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+        
+        .content-item-actions button:hover {
+            background: var(--bg-input);
+            color: var(--text-primary);
         }
         
         .deck-list-sidebar {
@@ -8538,6 +8696,15 @@
         .slide-canvas {
             flex: 1;
             padding: 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .slide-canvas-full {
+            flex: 1;
+            padding: 1rem;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
@@ -12706,12 +12873,21 @@
                         
                         <div id="collab-tab-decks" class="collab-tab-content">
                             <div class="workspace-deck-builder">
+                                <!-- Header with dropdowns and actions -->
                                 <div class="deck-builder-header" id="deckBuilderHeader">
-                                    <div style="display: flex; align-items: center; gap: 1rem;">
-                                        <h3 style="margin: 0;">📊 Deck Builder</h3>
-                                        <div id="deckTitleControls" style="display: none; align-items: center; gap: 0.75rem; padding-left: 1rem; border-left: 1px solid var(--border-color);">
+                                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                                        <h3 style="margin: 0; font-size: 1rem;">📊 Deck Builder</h3>
+                                        <select id="deckWorkspaceFilter" onchange="filterWorkspaceDecks()" style="padding: 0.4rem 0.75rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.8rem;">
+                                            <option value="current">Current Workspace</option>
+                                            <option value="all">All Workspaces</option>
+                                        </select>
+                                        <select id="deckSelectDropdown" onchange="selectDeckFromDropdown(this.value)" style="padding: 0.4rem 0.75rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.8rem; min-width: 150px;">
+                                            <option value="">Select Deck...</option>
+                                        </select>
+                                        <button class="btn btn-primary btn-small" onclick="createNewWorkspaceDeck()" style="white-space: nowrap;">+ New Deck</button>
+                                        <div id="deckTitleControls" style="display: none; align-items: center; gap: 0.5rem; padding-left: 0.75rem; border-left: 1px solid var(--border-color);">
                                             <input type="text" id="deckBuilderTitleInput" placeholder="Deck name" 
-                                                   style="font-size: 1rem; font-weight: 600; background: transparent; border: none; color: var(--text-primary); width: 150px;"
+                                                   style="font-size: 0.9rem; font-weight: 600; background: transparent; border: none; border-bottom: 1px dashed var(--border-color); color: var(--text-primary); width: 140px; padding: 0.25rem;"
                                                    onchange="updateDeckNameInEditor(this.value)">
                                             <span id="deckSlideCount" style="font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap;">0 slides</span>
                                         </div>
@@ -12730,32 +12906,40 @@
                                             <button class="btn btn-small btn-success" onclick="shareDeckWithTeam()" style="display: flex; align-items: center; gap: 0.25rem;">👥 SHARE</button>
                                             <button class="btn btn-small" onclick="deleteDeckFromEditor()" title="Delete deck" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 0.35rem 0.5rem;">🗑️</button>
                                         </div>
-                                        <select id="deckWorkspaceFilter" onchange="filterWorkspaceDecks()" style="padding: 0.4rem 0.75rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.8rem;">
-                                            <option value="current">Current Workspace</option>
-                                            <option value="all">All Workspaces</option>
-                                        </select>
-                                        <button class="btn btn-primary btn-small" onclick="createNewWorkspaceDeck()" style="white-space: nowrap;">+ New Deck</button>
                                     </div>
                                 </div>
                                 
-                                <div class="deck-builder-container">
-                                    <!-- Left: Deck List -->
-                                    <div class="deck-list-sidebar" id="deckListSidebar">
-                                        <div class="deck-list-items" id="workspaceDecksList">
-                                            <div class="collab-empty" style="padding: 1rem;">
-                                                <p>No decks yet</p>
-                                                <p style="font-size: 0.75rem;">Create a deck to get started</p>
+                                <div class="deck-builder-container" style="grid-template-columns: 280px 200px 1fr;">
+                                    <!-- Left: Data Points (draggable to slides) -->
+                                    <div class="data-points-sidebar" id="dataPointsSidebar">
+                                        <div style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                                            <h4 style="margin: 0; font-size: 0.8rem; color: var(--text-secondary);">📦 Data Points</h4>
+                                            <button class="btn btn-small" onclick="clearAllDataPoints()" style="font-size: 0.65rem; padding: 0.2rem 0.4rem; background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary);">Clear</button>
+                                        </div>
+                                        <div class="data-points-drag-list" id="dataPointsDragList" style="padding: 0.5rem; overflow-y: auto; flex: 1;">
+                                            <div class="collab-empty" style="padding: 1rem; text-align: center;">
+                                                <p style="font-size: 0.75rem; margin: 0;">No data points</p>
+                                                <p style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.25rem;">Add using ➕ on charts</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Middle: Slide Thumbnails -->
+                                    <div class="slide-thumbnails-panel" id="slideThumbnailsPanel">
+                                        <div id="slideThumbnailsList" style="padding: 0.5rem; overflow-y: auto; flex: 1;">
+                                            <div class="collab-empty" style="padding: 1rem; text-align: center;">
+                                                <p style="font-size: 0.75rem;">Select a deck</p>
                                             </div>
                                         </div>
                                     </div>
                                     
                                     <!-- Right: Slide Editor -->
-                                    <div class="slide-editor-panel" id="slideEditorPanel">
+                                    <div class="slide-editor-panel" id="slideEditorPanel" tabindex="0">
                                         <div class="slide-editor-empty" id="slideEditorEmpty">
                                             <div style="text-align: center; padding: 3rem;">
                                                 <div style="font-size: 3rem; margin-bottom: 1rem;">📑</div>
                                                 <h3 style="margin-bottom: 0.5rem;">Select or Create a Deck</h3>
-                                                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Choose a deck from the list or create a new one to start building your presentation.</p>
+                                                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Choose a deck from the dropdown or create a new one to start building your presentation.</p>
                                                 <button class="btn btn-primary" onclick="createNewWorkspaceDeck()">+ Create New Deck</button>
                                             </div>
                                         </div>
@@ -42402,11 +42586,21 @@
         
         function filterWorkspaceDecks() {
             renderWorkspaceDecks();
+            renderDeckDropdown();
         }
         
         function renderWorkspaceDecks() {
-            const list = document.getElementById('workspaceDecksList');
-            if (!list) return;
+            // Update deck dropdown
+            renderDeckDropdown();
+            // Update data points panel
+            renderDataPointsPanel();
+            // Update slide thumbnails
+            renderSlideThumbnails();
+        }
+        
+        function renderDeckDropdown() {
+            const dropdown = document.getElementById('deckSelectDropdown');
+            if (!dropdown) return;
             
             const filter = document.getElementById('deckWorkspaceFilter')?.value || 'current';
             let decksToShow = [];
@@ -42414,46 +42608,275 @@
             if (filter === 'current') {
                 decksToShow = workspaceDecks[currentWorkspace] || [];
             } else {
-                // All workspaces
                 Object.entries(workspaceDecks).forEach(([wsId, decks]) => {
                     const wsName = workspaces[wsId]?.name || wsId;
                     (decks || []).forEach(d => {
-                        decksToShow.push({ ...d, workspaceName: wsName });
+                        decksToShow.push({ ...d, workspaceName: wsName, workspaceId: wsId });
                     });
                 });
             }
             
-            if (decksToShow.length === 0) {
-                list.innerHTML = `
-                    <div class="collab-empty" style="padding: 1rem;">
-                        <p>No decks yet</p>
-                        <p style="font-size: 0.75rem;">Create a deck to get started</p>
+            dropdown.innerHTML = `
+                <option value="">Select Deck...</option>
+                ${decksToShow.map(d => `
+                    <option value="${d.workspaceId || currentWorkspace}|${d.id}" ${currentEditingDeck?.id === d.id ? 'selected' : ''}>
+                        ${d.name} (${d.slides?.length || 0})${d.workspaceName ? ` - ${d.workspaceName}` : ''}
+                    </option>
+                `).join('')}
+            `;
+        }
+        
+        function selectDeckFromDropdown(value) {
+            if (!value) {
+                currentEditingDeck = null;
+                currentEditingSlide = 0;
+                renderSlideEditor();
+                return;
+            }
+            
+            const [wsId, deckId] = value.split('|');
+            openDeckInEditor(wsId, deckId);
+        }
+        
+        function renderDataPointsPanel() {
+            const container = document.getElementById('dataPointsDragList');
+            if (!container) return;
+            
+            // Get data points from localStorage
+            const dataPoints = JSON.parse(localStorage.getItem('savedDataPoints') || '[]');
+            
+            if (dataPoints.length === 0) {
+                container.innerHTML = `
+                    <div class="collab-empty" style="padding: 1rem; text-align: center;">
+                        <p style="font-size: 0.75rem; margin: 0;">No data points</p>
+                        <p style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.25rem;">Add using ➕ on charts</p>
                     </div>
                 `;
                 return;
             }
             
-            list.innerHTML = decksToShow.map(d => `
-                <div class="deck-list-item ${currentEditingDeck?.id === d.id ? 'active' : ''}" onclick="openDeckInEditor('${d.workspaceId || currentWorkspace}', '${d.id}')">
-                    <div style="display: flex; justify-content: space-between; align-items: start;">
-                        <div>
-                            <div class="deck-name">${d.name}</div>
-                            <div class="deck-meta">
-                                <span>${d.slides?.length || 0} slides</span>
-                                ${d.workspaceName ? `<span>• ${d.workspaceName}</span>` : ''}
-                            </div>
-                        </div>
-                        <div style="display: flex; gap: 0.25rem;" onclick="event.stopPropagation();">
-                            <button onclick="archiveDeck('${d.workspaceId || currentWorkspace}', '${d.id}')" style="padding: 0.2rem 0.35rem; font-size: 0.6rem; background: rgba(251, 191, 36, 0.2); color: #fbbf24; border: none; border-radius: 3px; cursor: pointer;" title="Archive">📦</button>
-                            <button onclick="deleteDeckPermanently('${d.workspaceId || currentWorkspace}', '${d.id}')" style="padding: 0.2rem 0.35rem; font-size: 0.6rem; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: none; border-radius: 3px; cursor: pointer;" title="Delete">🗑️</button>
-                        </div>
+            container.innerHTML = dataPoints.map((dp, idx) => `
+                <div class="data-point-drag-item" draggable="true" 
+                     ondragstart="handleDataPointDragStart(event, ${idx})"
+                     ondragend="handleDataPointDragEnd(event)"
+                     data-idx="${idx}">
+                    <span class="dp-icon">${getDataPointIcon(dp.type || dp.category)}</span>
+                    <div class="dp-content">
+                        <div class="dp-title">${dp.title || dp.name || 'Data Point'}</div>
+                        <div class="dp-meta">${dp.profileName || ''} • ${dp.category || dp.type || ''}</div>
                     </div>
+                    <button onclick="event.stopPropagation(); removeDataPoint(${idx})" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 0.7rem;">✕</button>
                 </div>
             `).join('');
-            
-            // Show archived decks section if any
-            renderArchivedDecks();
         }
+        
+        function getDataPointIcon(type) {
+            const icons = {
+                'demographic': '👥',
+                'behavioral': '📈',
+                'interests': '🎯',
+                'location': '📍',
+                'Age': '📊',
+                'Gender': '👫',
+                'Income': '💰',
+                'Heat Map': '🗺️',
+                'default': '📦'
+            };
+            return icons[type] || icons['default'];
+        }
+        
+        function handleDataPointDragStart(event, idx) {
+            event.dataTransfer.setData('text/plain', JSON.stringify({ type: 'datapoint', idx: idx }));
+            event.target.classList.add('dragging');
+        }
+        
+        function handleDataPointDragEnd(event) {
+            event.target.classList.remove('dragging');
+        }
+        
+        function removeDataPoint(idx) {
+            const dataPoints = JSON.parse(localStorage.getItem('savedDataPoints') || '[]');
+            dataPoints.splice(idx, 1);
+            localStorage.setItem('savedDataPoints', JSON.stringify(dataPoints));
+            renderDataPointsPanel();
+            showNotification('📦 Data point removed', 'info');
+        }
+        
+        function renderSlideThumbnails() {
+            const container = document.getElementById('slideThumbnailsList');
+            if (!container) return;
+            
+            if (!currentEditingDeck) {
+                container.innerHTML = `
+                    <div class="collab-empty" style="padding: 1rem; text-align: center;">
+                        <p style="font-size: 0.75rem;">Select a deck</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const deck = currentEditingDeck;
+            const allSlides = [{ type: 'title', ...deck.titleSlide }, ...(deck.slides || [])];
+            
+            container.innerHTML = `
+                ${allSlides.map((slide, idx) => `
+                    <div class="slide-thumb-item ${idx === currentEditingSlide ? 'active' : ''}" 
+                         onclick="selectSlide(${idx})"
+                         ondragover="handleSlideThumbDragOver(event)"
+                         ondragleave="handleSlideThumbDragLeave(event)"
+                         ondrop="handleSlideThumbDrop(event, ${idx})">
+                        <div class="thumb-number">${idx + 1}</div>
+                        <div class="thumb-title">${idx === 0 ? '📑 Title' : (slide.title || slide.customTitle || slide.category || 'Slide')}</div>
+                    </div>
+                `).join('')}
+                <div class="slide-drop-zone" 
+                     ondragover="handleSlideDropZoneDragOver(event)"
+                     ondragleave="handleSlideDropZoneDragLeave(event)"
+                     ondrop="handleSlideDropZoneDrop(event)">
+                    + Drop here to add slide
+                </div>
+                <button class="add-slide-btn" onclick="showAddSlideOptions()" style="width: 100%; padding: 0.5rem; margin-top: 0.5rem; background: var(--bg-input); border: 1px dashed var(--border-color); border-radius: 6px; color: var(--text-secondary); cursor: pointer; font-size: 0.75rem;">+ Add Slide</button>
+            `;
+        }
+        
+        function handleSlideThumbDragOver(event) {
+            event.preventDefault();
+            event.currentTarget.style.borderColor = 'var(--accent-lime)';
+            event.currentTarget.style.background = 'rgba(200, 230, 0, 0.1)';
+        }
+        
+        function handleSlideThumbDragLeave(event) {
+            event.currentTarget.style.borderColor = '';
+            event.currentTarget.style.background = '';
+        }
+        
+        function handleSlideThumbDrop(event, slideIdx) {
+            event.preventDefault();
+            event.currentTarget.style.borderColor = '';
+            event.currentTarget.style.background = '';
+            
+            try {
+                const data = JSON.parse(event.dataTransfer.getData('text/plain'));
+                if (data.type === 'datapoint') {
+                    addDataPointToSlide(data.idx, slideIdx);
+                }
+            } catch (e) {
+                console.error('Drop error:', e);
+            }
+        }
+        
+        function handleSlideDropZoneDragOver(event) {
+            event.preventDefault();
+            event.currentTarget.classList.add('drag-over');
+        }
+        
+        function handleSlideDropZoneDragLeave(event) {
+            event.currentTarget.classList.remove('drag-over');
+        }
+        
+        function handleSlideDropZoneDrop(event) {
+            event.preventDefault();
+            event.currentTarget.classList.remove('drag-over');
+            
+            try {
+                const data = JSON.parse(event.dataTransfer.getData('text/plain'));
+                if (data.type === 'datapoint') {
+                    addDataPointAsNewSlide(data.idx);
+                }
+            } catch (e) {
+                console.error('Drop error:', e);
+            }
+        }
+        
+        function addDataPointToSlide(dpIdx, slideIdx) {
+            if (!currentEditingDeck || slideIdx === 0) return; // Can't add to title slide
+            
+            const dataPoints = JSON.parse(localStorage.getItem('savedDataPoints') || '[]');
+            const dp = dataPoints[dpIdx];
+            if (!dp) return;
+            
+            const realSlideIdx = slideIdx - 1; // Account for title slide
+            if (!currentEditingDeck.slides[realSlideIdx]) return;
+            
+            // Add content item to slide
+            if (!currentEditingDeck.slides[realSlideIdx].contentItems) {
+                currentEditingDeck.slides[realSlideIdx].contentItems = [];
+            }
+            
+            currentEditingDeck.slides[realSlideIdx].contentItems.push({
+                id: 'item_' + Date.now(),
+                type: dp.type || dp.category,
+                title: dp.title || dp.name,
+                data: dp.data,
+                profileName: dp.profileName,
+                addedAt: new Date().toISOString()
+            });
+            
+            saveDeckChanges();
+            renderSlideEditor();
+            showNotification('✅ Added to slide', 'success');
+        }
+        
+        function addDataPointAsNewSlide(dpIdx) {
+            if (!currentEditingDeck) return;
+            
+            const dataPoints = JSON.parse(localStorage.getItem('savedDataPoints') || '[]');
+            const dp = dataPoints[dpIdx];
+            if (!dp) return;
+            
+            // Create new slide with this data point
+            const newSlide = {
+                id: 'slide_' + Date.now(),
+                title: dp.title || dp.name || 'New Slide',
+                category: dp.category || dp.type,
+                profileName: dp.profileName,
+                contentItems: [{
+                    id: 'item_' + Date.now(),
+                    type: dp.type || dp.category,
+                    title: dp.title || dp.name,
+                    data: dp.data,
+                    profileName: dp.profileName,
+                    addedAt: new Date().toISOString()
+                }],
+                notes: ''
+            };
+            
+            if (!currentEditingDeck.slides) currentEditingDeck.slides = [];
+            currentEditingDeck.slides.push(newSlide);
+            
+            saveDeckChanges();
+            currentEditingSlide = currentEditingDeck.slides.length; // Select new slide
+            renderSlideEditor();
+            renderSlideThumbnails();
+            showNotification('✅ New slide created', 'success');
+        }
+        
+        // Keyboard navigation for slides
+        document.addEventListener('keydown', function(e) {
+            const slidePanel = document.getElementById('slideEditorPanel');
+            if (!slidePanel || !currentEditingDeck) return;
+            
+            // Check if we're focused on the slide editor area or its children
+            if (!slidePanel.contains(document.activeElement) && document.activeElement !== slidePanel) return;
+            
+            const allSlides = [{ type: 'title' }, ...(currentEditingDeck.slides || [])];
+            
+            if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                e.preventDefault();
+                if (currentEditingSlide > 0) {
+                    currentEditingSlide--;
+                    renderSlideEditor();
+                    renderSlideThumbnails();
+                }
+            } else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                if (currentEditingSlide < allSlides.length - 1) {
+                    currentEditingSlide++;
+                    renderSlideEditor();
+                    renderSlideThumbnails();
+                }
+            }
+        });
         
         function renderArchivedDecks() {
             // Check if there's an archived decks section, if not create one
@@ -42654,6 +43077,9 @@
             const titleInput = document.getElementById('deckBuilderTitleInput');
             const slideCount = document.getElementById('deckSlideCount');
             
+            // Also update thumbnails panel
+            renderSlideThumbnails();
+            
             if (!currentEditingDeck) {
                 if (emptyEl) emptyEl.style.display = 'block';
                 if (contentEl) contentEl.style.display = 'none';
@@ -42676,52 +43102,192 @@
             if (titleInput) titleInput.value = deck.name || 'Untitled Deck';
             if (slideCount) slideCount.textContent = `${allSlides.length} slides`;
             
+            // Update dropdown selection
+            const dropdown = document.getElementById('deckSelectDropdown');
+            if (dropdown) {
+                const wsId = deck.workspaceId || currentWorkspace;
+                dropdown.value = `${wsId}|${deck.id}`;
+            }
+            
             contentEl.innerHTML = `
-                <div class="slide-editor-body">
-                    <div class="slide-thumbnails">
-                        ${allSlides.map((slide, idx) => `
-                            <div class="slide-thumbnail ${idx === currentEditingSlide ? 'active' : ''}" 
-                                 onclick="selectSlide(${idx})"
-                                 draggable="${idx > 0 ? 'true' : 'false'}"
-                                 ondragstart="handleSlideDragStart(event, ${idx})"
-                                 ondragover="handleSlideDragOver(event)"
-                                 ondrop="handleSlideDrop(event, ${idx})">
-                                <span class="slide-thumbnail-number">${idx + 1}</span>
-                                <div class="slide-thumbnail-content">
-                                    ${idx === 0 ? '📑 Title' : (slide.title || slide.category || 'Slide')}
-                                </div>
-                                ${idx > 0 ? `
-                                    <div class="slide-thumbnail-actions">
-                                        <button onclick="event.stopPropagation(); moveSlideInDeck(${idx}, -1)" title="Move up">↑</button>
-                                        <button onclick="event.stopPropagation(); moveSlideInDeck(${idx}, 1)" title="Move down">↓</button>
-                                        <button onclick="event.stopPropagation(); deleteSlideFromDeck(${idx})" title="Delete">×</button>
-                                    </div>
-                                ` : ''}
-                            </div>
-                        `).join('')}
-                        <button class="add-slide-btn" onclick="showAddSlideOptions()">+ Add Slide</button>
-                    </div>
+                <div class="slide-canvas-full" 
+                     ondragover="handleSlideCanvasDragOver(event)"
+                     ondragleave="handleSlideCanvasDragLeave(event)"
+                     ondrop="handleSlideCanvasDrop(event)">
+                    ${renderCurrentSlideEditable(currentSlide, currentEditingSlide)}
                     
-                    <div class="slide-canvas">
-                        ${renderCurrentSlide(currentSlide, currentEditingSlide)}
-                        
-                        <div class="slide-notes-section">
-                            <label>Speaker Notes</label>
-                            <textarea placeholder="Add notes for this slide..." 
-                                      onchange="updateSlideNotes(${currentEditingSlide}, this.value)">${currentSlide.notes || ''}</textarea>
-                        </div>
-                        
-                        ${currentEditingSlide === 0 ? '' : `
-                            <div class="module-library">
-                                <h4>📦 Available Modules (drag to add)</h4>
-                                <div class="module-library-items" id="moduleLibraryItems">
-                                    ${renderModuleLibrary()}
-                                </div>
-                            </div>
-                        `}
+                    <div class="slide-notes-section">
+                        <label>Speaker Notes</label>
+                        <textarea placeholder="Add notes for this slide..." 
+                                  onchange="updateSlideNotes(${currentEditingSlide}, this.value)">${currentSlide.notes || ''}</textarea>
                     </div>
                 </div>
             `;
+            
+            // Focus the panel for keyboard navigation
+            const panel = document.getElementById('slideEditorPanel');
+            if (panel) panel.focus();
+        }
+        
+        function renderCurrentSlideEditable(slide, idx) {
+            if (idx === 0 || slide.type === 'title') {
+                // Title slide
+                return `
+                    <div class="slide-preview title-slide">
+                        <div style="margin-bottom: 2rem;">
+                            ${slide.image ? `
+                                <img src="${slide.image}" style="max-width: 150px; max-height: 150px; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                            ` : ''}
+                        </div>
+                        <input type="text" class="slide-title-input" value="${slide.title || 'Presentation Title'}" 
+                               onchange="updateTitleSlide('title', this.value)" placeholder="Presentation Title">
+                        <input type="text" class="slide-subtitle-input" value="${slide.subtitle || ''}" 
+                               onchange="updateTitleSlide('subtitle', this.value)" placeholder="Subtitle or description">
+                        <div style="margin-top: 2rem; display: flex; gap: 0.5rem; justify-content: center;">
+                            <button class="btn btn-small btn-secondary" onclick="uploadTitleImage()">🖼️ ${slide.image ? 'Change' : 'Add'} Image</button>
+                            ${slide.image ? `<button class="btn btn-small btn-danger" onclick="removeTitleImage()" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">✕ Remove</button>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Content slide with editable items
+            const contentItems = slide.contentItems || [];
+            return `
+                <div class="slide-preview content-slide">
+                    <div style="margin-bottom: 1rem;">
+                        <input type="text" class="slide-title-input" value="${slide.customTitle || slide.title || 'Slide Title'}" 
+                               onchange="updateSlideTitle(${idx}, this.value)" placeholder="Slide Title"
+                               style="font-size: 1.5rem; width: 100%; text-align: center;">
+                    </div>
+                    
+                    <div class="slide-content-items" id="slideContentItems">
+                        ${contentItems.length === 0 ? `
+                            <div class="slide-drop-placeholder" style="padding: 2rem; text-align: center; border: 2px dashed var(--border-color); border-radius: 8px; color: var(--text-secondary);">
+                                <p style="margin: 0;">📦 Drag data points here</p>
+                                <p style="font-size: 0.75rem; margin-top: 0.5rem;">Or use the data points panel on the left</p>
+                            </div>
+                        ` : contentItems.map((item, itemIdx) => `
+                            <div class="slide-content-item" data-item-idx="${itemIdx}">
+                                <div class="content-item-actions">
+                                    <button onclick="editContentItem(${idx}, ${itemIdx})" title="Edit">✏️</button>
+                                    <button onclick="moveContentItem(${idx}, ${itemIdx}, -1)" title="Move up">↑</button>
+                                    <button onclick="moveContentItem(${idx}, ${itemIdx}, 1)" title="Move down">↓</button>
+                                    <button onclick="deleteContentItem(${idx}, ${itemIdx})" title="Delete" style="color: #ef4444;">✕</button>
+                                </div>
+                                <div class="content-item-header" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                    <span style="font-size: 1.2rem;">${getDataPointIcon(item.type)}</span>
+                                    <input type="text" value="${item.title || 'Content'}" 
+                                           onchange="updateContentItemTitle(${idx}, ${itemIdx}, this.value)"
+                                           style="font-weight: 600; font-size: 0.9rem; background: transparent; border: none; border-bottom: 1px dashed var(--border-color); color: var(--text-primary); flex: 1;">
+                                </div>
+                                <div class="content-item-body" style="font-size: 0.8rem; color: var(--text-secondary);">
+                                    ${item.profileName ? `<span>${item.profileName}</span>` : ''}
+                                    ${item.type ? `<span> • ${item.type}</span>` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <div class="slide-drop-zone" style="margin-top: 1rem;"
+                         ondragover="handleSlideDropZoneDragOver(event)"
+                         ondragleave="handleSlideDropZoneDragLeave(event)"
+                         ondrop="handleContentDropZoneDrop(event, ${idx})">
+                        + Drop data point to add
+                    </div>
+                </div>
+            `;
+        }
+        
+        function handleSlideCanvasDragOver(event) {
+            event.preventDefault();
+        }
+        
+        function handleSlideCanvasDragLeave(event) {
+            // Nothing needed
+        }
+        
+        function handleSlideCanvasDrop(event) {
+            event.preventDefault();
+            if (currentEditingSlide === 0) return; // Can't drop on title slide
+            
+            try {
+                const data = JSON.parse(event.dataTransfer.getData('text/plain'));
+                if (data.type === 'datapoint') {
+                    addDataPointToSlide(data.idx, currentEditingSlide);
+                }
+            } catch (e) {
+                console.error('Drop error:', e);
+            }
+        }
+        
+        function handleContentDropZoneDrop(event, slideIdx) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.classList.remove('drag-over');
+            
+            try {
+                const data = JSON.parse(event.dataTransfer.getData('text/plain'));
+                if (data.type === 'datapoint') {
+                    addDataPointToSlide(data.idx, slideIdx);
+                }
+            } catch (e) {
+                console.error('Drop error:', e);
+            }
+        }
+        
+        function updateContentItemTitle(slideIdx, itemIdx, newTitle) {
+            if (!currentEditingDeck || slideIdx === 0) return;
+            
+            const realSlideIdx = slideIdx - 1;
+            if (currentEditingDeck.slides[realSlideIdx]?.contentItems?.[itemIdx]) {
+                currentEditingDeck.slides[realSlideIdx].contentItems[itemIdx].title = newTitle;
+                saveDeckChanges();
+            }
+        }
+        
+        function editContentItem(slideIdx, itemIdx) {
+            if (!currentEditingDeck || slideIdx === 0) return;
+            
+            const realSlideIdx = slideIdx - 1;
+            const item = currentEditingDeck.slides[realSlideIdx]?.contentItems?.[itemIdx];
+            if (!item) return;
+            
+            const newTitle = prompt('Edit content title:', item.title || '');
+            if (newTitle !== null) {
+                item.title = newTitle;
+                saveDeckChanges();
+                renderSlideEditor();
+            }
+        }
+        
+        function moveContentItem(slideIdx, itemIdx, direction) {
+            if (!currentEditingDeck || slideIdx === 0) return;
+            
+            const realSlideIdx = slideIdx - 1;
+            const items = currentEditingDeck.slides[realSlideIdx]?.contentItems;
+            if (!items || items.length < 2) return;
+            
+            const newIdx = itemIdx + direction;
+            if (newIdx < 0 || newIdx >= items.length) return;
+            
+            // Swap
+            [items[itemIdx], items[newIdx]] = [items[newIdx], items[itemIdx]];
+            saveDeckChanges();
+            renderSlideEditor();
+        }
+        
+        function deleteContentItem(slideIdx, itemIdx) {
+            if (!currentEditingDeck || slideIdx === 0) return;
+            if (!confirm('Delete this content item?')) return;
+            
+            const realSlideIdx = slideIdx - 1;
+            if (currentEditingDeck.slides[realSlideIdx]?.contentItems) {
+                currentEditingDeck.slides[realSlideIdx].contentItems.splice(itemIdx, 1);
+                saveDeckChanges();
+                renderSlideEditor();
+                showNotification('🗑️ Content removed', 'info');
+            }
         }
         
         function renderCurrentSlide(slide, idx) {
