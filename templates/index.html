@@ -23801,8 +23801,8 @@
             if (dropdown) dropdown.value = sortValue;
         }
         
-        // Generate audience vs Gen Pop takeaways
-        function generateAudienceTakeaways(demoInsights, data) {
+        // Generate audience vs Gen Pop takeaways with AI behavioral summary
+        async function generateAudienceTakeaways(demoInsights, data) {
             const takeawaysContainer = document.getElementById('audienceTakeaways');
             if (!takeawaysContainer) return;
             
@@ -23947,6 +23947,7 @@
                 }
             }
             
+            // Show initial demographic takeaways immediately
             if (takeaways.length > 0) {
                 takeawaysContainer.innerHTML = `
                     <div class="audience-takeaways-title">
@@ -23955,10 +23956,59 @@
                     <ul>
                         ${takeaways.map(t => `<li>${t}</li>`).join('')}
                     </ul>
+                    <div id="behavioralSummarySection" style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                        <div class="audience-takeaways-title" style="margin-bottom: 0.5rem;">
+                            <span>🧠</span> Behavioral Profile
+                        </div>
+                        <div id="behavioralSummaryContent" style="font-size: 0.85rem; color: var(--text-secondary);">
+                            <span style="display: inline-flex; align-items: center; gap: 0.5rem;">
+                                <span class="loading-spinner" style="width: 14px; height: 14px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                                Generating behavioral insights...
+                            </span>
+                        </div>
+                    </div>
                 `;
                 takeawaysContainer.style.display = 'block';
             } else {
                 takeawaysContainer.style.display = 'none';
+            }
+            
+            // Now fetch AI-generated behavioral summary
+            try {
+                const profileData = {
+                    profileName: currentDashboardData?.brandName || 'This audience',
+                    demographics: data?.demographics || {},
+                    demographicsIndex: data?.demographicsIndex || {},
+                    demographicsGenPop: data?.demographicsGenPop || {},
+                    behavioral: data?.behavioral || {},
+                    behavioralIndex: data?.behavioralIndex || {},
+                    topOverIndexers: currentDashboardData?.topOverIndexers || []
+                };
+                
+                const response = await fetch('/api/ai/behavioral-summary', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(profileData)
+                });
+                
+                const result = await response.json();
+                const behavioralContent = document.getElementById('behavioralSummaryContent');
+                
+                if (result.bullets && result.bullets.length > 0) {
+                    behavioralContent.innerHTML = `
+                        <ul style="margin: 0; padding-left: 1.25rem; list-style-type: disc;">
+                            ${result.bullets.map(b => `<li style="margin-bottom: 0.4rem; color: var(--text-primary); line-height: 1.5;">${b}</li>`).join('')}
+                        </ul>
+                    `;
+                } else if (result.error) {
+                    behavioralContent.innerHTML = `<span style="color: var(--text-secondary); font-style: italic;">Unable to generate behavioral insights</span>`;
+                }
+            } catch (err) {
+                console.error('Error fetching behavioral summary:', err);
+                const behavioralContent = document.getElementById('behavioralSummaryContent');
+                if (behavioralContent) {
+                    behavioralContent.innerHTML = `<span style="color: var(--text-secondary); font-style: italic;">Behavioral insights unavailable</span>`;
+                }
             }
         }
         

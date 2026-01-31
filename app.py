@@ -3113,6 +3113,139 @@ def api_generate_logline():
     return jsonify(result)
 
 
+@app.route('/api/ai/behavioral-summary', methods=['POST'])
+@requires_auth
+def api_behavioral_summary():
+    """Generate AI-powered behavioral summary bullets describing who this person is."""
+    data = request.get_json()
+    result = generate_behavioral_summary(data)
+    return jsonify(result)
+
+
+def generate_behavioral_summary(profile_data):
+    """Generate behavioral summary bullets using AI based on demographic and behavioral data."""
+    client = get_openai_client()
+    if not client:
+        return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
+    
+    try:
+        # Extract demographic data
+        demographics = profile_data.get('demographics', {})
+        demographics_index = profile_data.get('demographicsIndex', {})
+        demographics_gen_pop = profile_data.get('demographicsGenPop', {})
+        
+        # Extract behavioral data
+        behavioral = profile_data.get('behavioral', {})
+        behavioral_index = profile_data.get('behavioralIndex', {})
+        
+        # Extract top over-indexers
+        top_over_indexers = profile_data.get('topOverIndexers', [])
+        
+        # Get profile name
+        profile_name = profile_data.get('profileName', 'This audience')
+        
+        # Build demographic summary
+        demo_summary = []
+        for category, values in demographics.items():
+            if isinstance(values, dict) and values:
+                top_items = sorted(values.items(), key=lambda x: x[1], reverse=True)[:3]
+                index_data = demographics_index.get(category, {})
+                items_with_index = []
+                for name, pct in top_items:
+                    idx = index_data.get(name, 100) if isinstance(index_data, dict) else 100
+                    items_with_index.append(f"{name} ({pct:.1f}%, {idx:.0f} index)")
+                demo_summary.append(f"{category}: {', '.join(items_with_index)}")
+        
+        # Build behavioral summary with top items per category
+        behavior_summary = []
+        for category, items in behavioral.items():
+            if isinstance(items, list) and items:
+                top_items = items[:5]
+                index_data = behavioral_index.get(category, [])
+                items_str = []
+                for i, item in enumerate(top_items):
+                    name = item.get('name', item.get('value', ''))
+                    pct = item.get('pct', 0)
+                    # Try to get index from behavioral_index
+                    idx = 100
+                    if isinstance(index_data, list) and i < len(index_data):
+                        idx = index_data[i].get('index', 100)
+                    elif isinstance(item, dict):
+                        idx = item.get('index', 100)
+                    items_str.append(f"{name} ({pct:.1f}%, {idx:.0f} index)")
+                behavior_summary.append(f"{category}: {', '.join(items_str)}")
+        
+        # Build top over-indexers summary
+        top_indexers_str = ""
+        if top_over_indexers:
+            top_5 = top_over_indexers[:10]
+            top_indexers_str = "\n".join([
+                f"- {item.get('name', '')} ({item.get('category', '')}) - {item.get('pct', 0):.1f}% vs {item.get('genPop', 0):.1f}% GP, {item.get('index', 100):.0f} index"
+                for item in top_5
+            ])
+        
+        prompt = f"""You are an expert consumer behavior analyst. Based on the following audience data, write 4-6 concise bullet points that describe WHO this person is BEHAVIORALLY - their lifestyle, interests, habits, and what makes them unique.
+
+PROFILE: {profile_name}
+
+DEMOGRAPHIC PROFILE:
+{chr(10).join(demo_summary[:6])}
+
+BEHAVIORAL DATA (what they engage with):
+{chr(10).join(behavior_summary[:12])}
+
+TOP OVER-INDEXING BEHAVIORS (where they most differ from general population):
+{top_indexers_str}
+
+INSTRUCTIONS:
+- Write 4-6 bullet points describing this person's behavioral profile
+- Focus on LIFESTYLE and BEHAVIORS, not just demographics
+- Be specific about their interests, habits, media consumption, and shopping patterns
+- Highlight what makes them UNIQUE compared to the average person
+- Use vivid, descriptive language that paints a picture of who they are
+- Each bullet should be 1-2 sentences max
+- Start each bullet with an action verb or descriptive phrase
+- Do NOT include demographic stats - focus on behavioral insights
+
+Format: Return ONLY a JSON array of strings, each string being one bullet point. Example:
+["Bullet 1 text here", "Bullet 2 text here", "Bullet 3 text here"]"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert consumer behavior analyst who creates vivid, insightful behavioral profiles. Return only valid JSON arrays."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=600,
+            temperature=0.7
+        )
+        
+        content = response.choices[0].message.content.strip()
+        
+        # Parse JSON response
+        try:
+            # Remove markdown code blocks if present
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+            bullets = json.loads(content)
+            if not isinstance(bullets, list):
+                bullets = [content]
+        except:
+            # Fallback: split by newlines if JSON parsing fails
+            bullets = [line.strip().lstrip('- •').strip() for line in content.split('\n') if line.strip() and not line.strip().startswith('[')]
+        
+        return {
+            "bullets": bullets,
+            "tokens_used": response.usage.total_tokens
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
+
 def generate_content_logline(analysis_data):
     """Generate a content logline using AI based on audience analysis."""
     client = get_openai_client()
