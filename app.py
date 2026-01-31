@@ -113,6 +113,15 @@ HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Hedge Fund IQ ticker d
 S3_REGION = 'us-east-2'
 USERS_FILE = os.path.join(os.path.dirname(__file__), 'users.json')
 
+# AI Summary Cache Directory
+AI_CACHE_DIR = os.path.join(os.path.dirname(__file__), 'ai_cache')
+
+def ensure_cache_dir():
+    """Ensure the AI cache directory exists."""
+    if not os.path.exists(AI_CACHE_DIR):
+        os.makedirs(AI_CACHE_DIR)
+        print(f"✅ Created AI cache directory: {AI_CACHE_DIR}")
+
 # Initialize S3 client (with timeout to prevent hanging during startup)
 # This is after health check registration so it won't block health checks
 try:
@@ -1501,6 +1510,58 @@ def send_email_via_gmail(to_email, subject, html_content, text_content=None):
     except Exception as e:
         print(f"❌ Gmail send error: {e}")
         return False, str(e)
+
+@app.route('/api/admin/ai-cache/status')
+@requires_admin
+def ai_cache_status():
+    """Get AI cache statistics."""
+    ensure_cache_dir()
+    cache_files = [f for f in os.listdir(AI_CACHE_DIR) if f.endswith('.json')]
+    
+    total_size = 0
+    cache_entries = []
+    
+    for f in cache_files:
+        filepath = os.path.join(AI_CACHE_DIR, f)
+        try:
+            stat = os.stat(filepath)
+            total_size += stat.st_size
+            with open(filepath, 'r') as file:
+                data = json.load(file)
+                cache_entries.append({
+                    'key': f.replace('.json', ''),
+                    'cached_at': data.get('cached_at', 'Unknown'),
+                    'size': stat.st_size
+                })
+        except:
+            pass
+    
+    return jsonify({
+        'success': True,
+        'total_entries': len(cache_files),
+        'total_size_kb': round(total_size / 1024, 2),
+        'entries': sorted(cache_entries, key=lambda x: x.get('cached_at', ''), reverse=True)[:50]
+    })
+
+@app.route('/api/admin/ai-cache/clear', methods=['POST'])
+@requires_admin
+def ai_cache_clear():
+    """Clear all AI cache entries."""
+    ensure_cache_dir()
+    cache_files = [f for f in os.listdir(AI_CACHE_DIR) if f.endswith('.json')]
+    
+    cleared = 0
+    for f in cache_files:
+        try:
+            os.remove(os.path.join(AI_CACHE_DIR, f))
+            cleared += 1
+        except:
+            pass
+    
+    return jsonify({
+        'success': True,
+        'cleared': cleared
+    })
 
 @app.route('/api/admin/gmail/status')
 @requires_admin
@@ -3122,8 +3183,95 @@ def api_behavioral_summary():
     return jsonify(result)
 
 
+# ============================================================================
+# AI SUMMARY CACHING HELPERS
+# ============================================================================
+
+def generate_cache_key(profile_name, behavioral_data, top_over_indexers):
+    """Generate a unique cache key based on profile name and behavioral data signature."""
+    # Create a hash from the profile name and key behavioral data
+    # We use top items from each category to create a stable fingerprint
+    fingerprint_parts = [profile_name.lower().strip()]
+    
+    # Add behavioral category names and top item names (sorted for consistency)
+    if isinstance(behavioral_data, dict):
+        for cat in sorted(behavioral_data.keys()):
+            items = behavioral_data.get(cat, [])
+            if isinstance(items, list) and items:
+                # Take top 3 item names for the fingerprint
+                top_names = [item.get('name', '') for item in items[:3] if isinstance(item, dict)]
+                fingerprint_parts.append(f"{cat}:{','.join(top_names)}")
+    
+    # Add top over-indexers for additional uniqueness
+    if isinstance(top_over_indexers, list) and top_over_indexers:
+        top_indexer_names = [item.get('name', '') for item in top_over_indexers[:5] if isinstance(item, dict)]
+        fingerprint_parts.append(f"top:{','.join(top_indexer_names)}")
+    
+    # Create hash
+    fingerprint = '|'.join(fingerprint_parts)
+    cache_hash = hashlib.md5(fingerprint.encode()).hexdigest()[:16]
+    
+    # Clean profile name for filename
+    safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', profile_name)[:50]
+    
+    return f"{safe_name}_{cache_hash}"
+
+def get_cached_summary(cache_key):
+    """Retrieve a cached summary if it exists and is not expired."""
+    ensure_cache_dir()
+    cache_file = os.path.join(AI_CACHE_DIR, f"{cache_key}.json")
+    
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'r') as f:
+                cached = json.load(f)
+            
+            # Check if cache is expired (30 days)
+            cached_time = datetime.fromisoformat(cached.get('cached_at', '2000-01-01'))
+            if datetime.now() - cached_time < timedelta(days=30):
+                print(f"✅ Cache HIT for behavioral summary: {cache_key}")
+                return cached.get('data')
+            else:
+                print(f"⏰ Cache EXPIRED for behavioral summary: {cache_key}")
+        except Exception as e:
+            print(f"⚠️ Error reading cache file {cache_key}: {e}")
+    
+    return None
+
+def save_cached_summary(cache_key, data):
+    """Save a summary to the cache."""
+    ensure_cache_dir()
+    cache_file = os.path.join(AI_CACHE_DIR, f"{cache_key}.json")
+    
+    try:
+        cache_entry = {
+            'cached_at': datetime.now().isoformat(),
+            'data': data
+        }
+        with open(cache_file, 'w') as f:
+            json.dump(cache_entry, f)
+        print(f"💾 Cached behavioral summary: {cache_key}")
+    except Exception as e:
+        print(f"⚠️ Error saving cache file {cache_key}: {e}")
+
+
 def generate_behavioral_summary(profile_data):
     """Generate behavioral summary bullets using AI based on demographic and behavioral data."""
+    # Extract data needed for cache key
+    profile_name = profile_data.get('profileName', 'This audience')
+    behavioral = profile_data.get('behavioral', {})
+    top_over_indexers = profile_data.get('topOverIndexers', [])
+    
+    # Generate cache key and check for cached result
+    cache_key = generate_cache_key(profile_name, behavioral, top_over_indexers)
+    cached_result = get_cached_summary(cache_key)
+    
+    if cached_result:
+        # Return cached result with a flag indicating it was cached
+        cached_result['cached'] = True
+        return cached_result
+    
+    # No cache hit - generate new summary
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
@@ -3237,10 +3385,16 @@ Format: Return ONLY a JSON array of strings, each string being one bullet point.
             # Fallback: split by newlines if JSON parsing fails
             bullets = [line.strip().lstrip('- •').strip() for line in content.split('\n') if line.strip() and not line.strip().startswith('[')]
         
-        return {
+        result = {
             "bullets": bullets,
-            "tokens_used": response.usage.total_tokens
+            "tokens_used": response.usage.total_tokens,
+            "cached": False
         }
+        
+        # Save to cache for future requests
+        save_cached_summary(cache_key, result)
+        
+        return result
     except Exception as e:
         import traceback
         traceback.print_exc()
