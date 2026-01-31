@@ -42107,14 +42107,17 @@
                 return `
                     <div class="slide-preview title-slide">
                         <div style="margin-bottom: 2rem;">
-                            ${slide.image ? `<img src="${slide.image}" style="max-width: 150px; max-height: 150px; border-radius: 8px; margin-bottom: 1rem;">` : ''}
+                            ${slide.image ? `
+                                <img src="${slide.image}" style="max-width: 150px; max-height: 150px; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                            ` : ''}
                         </div>
                         <input type="text" class="slide-title-input" value="${slide.title || 'Presentation Title'}" 
                                onchange="updateTitleSlide('title', this.value)" placeholder="Presentation Title">
                         <input type="text" class="slide-subtitle-input" value="${slide.subtitle || ''}" 
                                onchange="updateTitleSlide('subtitle', this.value)" placeholder="Subtitle or description">
-                        <div style="margin-top: 2rem;">
-                            <button class="btn btn-small btn-secondary" onclick="uploadTitleImage()">🖼️ Add Image</button>
+                        <div style="margin-top: 2rem; display: flex; gap: 0.5rem; justify-content: center;">
+                            <button class="btn btn-small btn-secondary" onclick="uploadTitleImage()">🖼️ ${slide.image ? 'Change' : 'Add'} Image</button>
+                            ${slide.image ? `<button class="btn btn-small btn-danger" onclick="removeTitleImage()" style="background: rgba(239, 68, 68, 0.2); color: #ef4444;">✕ Remove</button>` : ''}
                         </div>
                     </div>
                 `;
@@ -42456,6 +42459,14 @@
                 }
             };
             input.click();
+        }
+        
+        function removeTitleImage() {
+            if (currentEditingDeck) {
+                currentEditingDeck.titleSlide.image = null;
+                saveDeckChanges();
+                renderSlideEditor();
+            }
         }
         
         // Drag and drop for slides
