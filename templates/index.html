@@ -4972,6 +4972,15 @@
             margin-top: 0.25rem;
             opacity: 0.8;
         }
+        /* When Gen Pop profile is selected: hide Index and Gen Pop columns everywhere */
+        body.profile-is-genpop .genpop-col,
+        body.profile-is-genpop .index-col,
+        body.profile-is-genpop .col-gp,
+        body.profile-is-genpop .col-idx,
+        body.profile-is-genpop [data-genpop-col],
+        body.profile-is-genpop [data-index-col] { display: none !important; }
+        body.profile-is-genpop .insight-col-header { grid-template-columns: 1fr 70px !important; }
+        body.profile-is-genpop .insight-row-genpop { grid-template-columns: 1fr 70px !important; }
         .insights-list {
             display: flex;
             flex-direction: column;
@@ -6842,6 +6851,10 @@
             border-bottom: 1px solid var(--border-color);
             font-size: 0.75rem;
             align-items: center;
+            text-align: left;
+        }
+        .location-row span {
+            text-align: left;
         }
 
         .location-row.header {
@@ -9036,6 +9049,10 @@
             background: transparent;
         }
         
+        .slide-element.line-element {
+            min-width: 40px;
+            box-sizing: border-box;
+        }
         .slide-element.text-element .text-content {
             outline: none;
             min-height: 1em;
@@ -11082,8 +11099,8 @@
                                 <div class="insight-col-header" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
                                     <span class="has-tooltip" data-tooltip="Characteristic: The dominant demographic trait in each category (gender, age, income, ethnicity).">Characteristic</span>
                                     <span class="has-tooltip" data-tooltip="Profile: The percentage of THIS audience in this demographic segment." style="text-align: right;">Profile</span>
-                                    <span class="has-tooltip" data-tooltip="Gen Pop: The percentage of the general US population in this demographic segment." style="text-align: right;">Gen Pop</span>
-                                    <span class="has-tooltip" data-tooltip="Index: How this segment compares to Gen Pop. 1.0x = same as Gen Pop. Higher = over-indexes, Lower = under-indexes." style="text-align: right;">Index</span>
+                                    <span class="genpop-col has-tooltip" data-tooltip="Gen Pop: The percentage of the general US population in this demographic segment." style="text-align: right;">Gen Pop</span>
+                                    <span class="index-col has-tooltip" data-tooltip="Index: How this segment compares to Gen Pop. 1.0x = same as Gen Pop. Higher = over-indexes, Lower = under-indexes." style="text-align: right;">Index</span>
                                 </div>
                                 <div id="demoProfileSummary" class="demo-insight-content">
                                     <div class="loading-placeholder">Analyzing demographics...</div>
@@ -11100,8 +11117,8 @@
                                 <div class="insight-col-header" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
                                     <span class="has-tooltip" data-tooltip="Segment: A specific demographic group (e.g., 18-24, Female, $100K+).">Segment</span>
                                     <span class="has-tooltip" data-tooltip="Profile: The percentage of THIS audience in this demographic segment." style="text-align: right;">Profile</span>
-                                    <span class="has-tooltip" data-tooltip="Gen Pop: The percentage of the general US population in this demographic segment." style="text-align: right;">Gen Pop</span>
-                                    <span class="has-tooltip" data-tooltip="Index: How this segment compares to Gen Pop. 1.0x = same as Gen Pop. Higher = over-indexes, Lower = under-indexes." style="text-align: right;">Index</span>
+                                    <span class="genpop-col has-tooltip" data-tooltip="Gen Pop: The percentage of the general US population in this demographic segment." style="text-align: right;">Gen Pop</span>
+                                    <span class="index-col has-tooltip" data-tooltip="Index: How this segment compares to Gen Pop. 1.0x = same as Gen Pop. Higher = over-indexes, Lower = under-indexes." style="text-align: right;">Index</span>
                                 </div>
                                 <div id="demoDifferentiators" class="demo-insight-content">
                                     <div class="loading-placeholder">Loading...</div>
@@ -11362,8 +11379,8 @@
                             <span style="flex: 1; text-align: left;">Category</span>
                             <span style="display: flex; gap: 0.5rem;">
                                 <span class="has-tooltip" data-tooltip="Profile %: Average percentage of this audience engaging with items in this category." style="min-width: 55px; text-align: left;">Profile</span>
-                                <span class="has-tooltip" data-tooltip="Gen Pop %: Average percentage of general population engaging with items in this category." style="min-width: 50px; text-align: left;">GP</span>
-                                <span class="has-tooltip" data-tooltip="Avg Index: Average index across all items in this category. 1.0x = same as Gen Pop, 2.0x = 2x more likely than Gen Pop." style="min-width: 50px; text-align: left;">Index</span>
+                                <span class="genpop-col has-tooltip" data-tooltip="Gen Pop %: Average percentage of general population engaging with items in this category." style="min-width: 50px; text-align: left;">GP</span>
+                                <span class="index-col has-tooltip" data-tooltip="Avg Index: Average index across all items in this category. 1.0x = same as Gen Pop, 2.0x = 2x more likely than Gen Pop." style="min-width: 50px; text-align: left;">Index</span>
                                 <span class="has-tooltip" data-tooltip="Hot Count: Number of items in this category with index above 1.5x (strong over-indexers)." style="min-width: 40px; text-align: left;">Hot 🔥</span>
                             </span>
                         </div>
@@ -11583,11 +11600,11 @@
                             </div>
                         </div>
                         <div class="location-row header">
-                            <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="line-height: 1.1; text-align: center;">DMA<br>Rank</span>
+                            <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="line-height: 1.1; text-align: left;">DMA<br>Rank</span>
                             <span>Location</span>
                             <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
                             <span class="has-tooltip" data-tooltip="Profile percentage">Profile</span>
-                            <span>Index</span>
+                            <span class="index-col">Index</span>
                         </div>
                         <div id="locationList" style="max-height: 500px; overflow-y: auto;"></div>
                         <div id="locationCountTop" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
@@ -11615,11 +11632,11 @@
                             </div>
                         </div>
                         <div class="location-row header">
-                            <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="line-height: 1.1; text-align: center;">DMA<br>Rank</span>
+                            <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="line-height: 1.1; text-align: left;">DMA<br>Rank</span>
                             <span>Location</span>
                             <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
                             <span class="has-tooltip" data-tooltip="Profile percentage">Profile</span>
-                            <span>Index</span>
+                            <span class="index-col">Index</span>
                         </div>
                         <div id="locationListBottom" style="max-height: 500px; overflow-y: auto;"></div>
                         <div id="locationCountBottom" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
@@ -11650,11 +11667,11 @@
                         </div>
                     </div>
                     <div class="location-row header">
-                        <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="line-height: 1.1; text-align: center;">DMA<br>Rank</span>
+                        <span class="has-tooltip" data-tooltip="National ranking by total TV homes (1=largest)" style="line-height: 1.1; text-align: left;">DMA<br>Rank</span>
                         <span>Location</span>
                         <span class="has-tooltip" data-tooltip="Profile's ranking for this DMA">Rank</span>
                         <span class="has-tooltip" data-tooltip="Profile percentage">Profile</span>
-                        <span>Index</span>
+                        <span class="index-col">Index</span>
                     </div>
                     <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
                     <div id="locationCountAll" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
@@ -22471,6 +22488,7 @@
                 locations: parsed.locations,
                 s3Key: currentS3Key
             };
+            applyGenPopMode();
 
             // Load profile selector in sidebar (instead of categories)
             loadDashboardProfiles();
@@ -23217,6 +23235,7 @@
                 currentDashboardData = null;
                 currentS3Key = null;
                 currentProfileForImage = null; // Clear image profile tracker
+                applyGenPopMode();
                 
                 renderProfileTabsBar();
                 renderDashboardProfileTree(dashboardProfiles);
@@ -23273,6 +23292,7 @@
                 locations: parsed.locations,
                 s3Key: profileId
             };
+            applyGenPopMode();
             
             // Update favorite button
             updateFavoriteButton();
@@ -23370,6 +23390,16 @@
         let currentDemoIndexes = {};
         let dashDisplayMode = 'percent'; // 'percent' or 'projection'
         let currentDashboardData = null; // Store full parsed data for re-rendering
+        
+        function isSelectedProfileGenPop() {
+            const key = (currentS3Key || '').toUpperCase();
+            const name = (currentProfileData?.name || '').toUpperCase();
+            return key.includes('GEN_POP') || key.includes('GEN POP') || name.includes('GEN POP');
+        }
+        
+        function applyGenPopMode() {
+            document.body.classList.toggle('profile-is-genpop', isSelectedProfileGenPop());
+        }
         
         function toggleDashboardDisplayMode() {
             dashDisplayMode = dashDisplayMode === 'percent' ? 'projection' : 'percent';
@@ -24112,11 +24142,11 @@
             
             document.getElementById('demoProfileSummary').innerHTML = summaryItems.length > 0
                 ? summaryItems.map(i => `
-                    <div class="demo-insight-item" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; align-items: center; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
+                    <div class="demo-insight-item insight-row-genpop" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; align-items: center; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
                         <span style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;"><span class="icon">${i.icon}</span>${i.text}</span>
                         <span class="diff-col-pct" style="text-align: right; font-size: 0.85rem;">${i.profilePct}</span>
-                        <span class="diff-col-gp" style="text-align: right; font-size: 0.85rem; color: var(--text-secondary);">${i.genPopPct}</span>
-                        <span class="value ${i.valueClass}" style="text-align: right;">${i.value}</span>
+                        <span class="genpop-col diff-col-gp" style="text-align: right; font-size: 0.85rem; color: var(--text-secondary);">${i.genPopPct}</span>
+                        <span class="index-col value ${i.valueClass}" style="text-align: right;">${i.value}</span>
                     </div>
                 `).join('')
                 : '<p style="color: var(--text-secondary);">No data available</p>';
@@ -24217,11 +24247,11 @@
             
             document.getElementById('demoDifferentiators').innerHTML = differentiators.length > 0
                 ? differentiators.map(i => `
-                    <div class="demo-insight-item" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; align-items: center; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
+                    <div class="demo-insight-item insight-row-genpop" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; align-items: center; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
                         <span style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;"><span class="icon">${i.icon}</span>${i.text}</span>
                         <span class="diff-col-pct" style="text-align: right; font-size: 0.85rem;">${i.profilePct}</span>
-                        <span class="diff-col-gp" style="text-align: right; font-size: 0.85rem; color: var(--text-secondary);">${i.genPopPct}</span>
-                        <span class="value ${i.valueClass}" style="text-align: right;">${i.value}</span>
+                        <span class="genpop-col diff-col-gp" style="text-align: right; font-size: 0.85rem; color: var(--text-secondary);">${i.genPopPct}</span>
+                        <span class="index-col value ${i.valueClass}" style="text-align: right;">${i.value}</span>
                     </div>
                 `).join('')
                 : '<p style="color: var(--text-secondary);">Similar to general population</p>';
@@ -24475,6 +24505,7 @@
 
             const colors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74', '#75715e'];
             const isProjection = dashDisplayMode === 'projection';
+            const isGenPop = isSelectedProfileGenPop();
             const US_POPULATION = 324700000;
 
             // Age - horizontal bar with Gen Pop in data labels (green/red based on index)
@@ -24500,7 +24531,9 @@
                 const profileName = currentProfileData?.name || 'Profile';
                 const profileVal = ageMedian.profile ? `${ageMedian.profile.value} years` : 'N/A';
                 const genPopVal = ageMedian.genPop ? `${ageMedian.genPop.value} years` : 'N/A';
-                ageMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
+                ageMedianDisplay.innerHTML = isGenPop 
+                    ? `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>`
+                    : `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
             }
             
             const ageChartType = chartTypePrefs.age || 'bar';
@@ -24531,6 +24564,7 @@
                             align: 'end',
                             font: { size: 12, weight: 'bold' },
                             color: (ctx) => {
+                                if (isGenPop) return '#fff';
                                 const pct = agePcts[ctx.dataIndex] || 0;
                                 const genPop = ageGenPop[ctx.dataIndex] || 0;
                                 return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
@@ -24538,6 +24572,7 @@
                             formatter: (value, ctx) => {
                                 const pct = agePcts[ctx.dataIndex] || 0;
                                 const genPop = ageGenPop[ctx.dataIndex] || 0;
+                                if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
                                 if (isProjection) {
                                     const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
                                     return formatNumber(Math.round(value)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
@@ -24594,8 +24629,8 @@
                                         const genPop = genderGenPop[i] || 0;
                                         const val = data.datasets[0].data[i];
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : formatPct(pct);
-                                        const gpStr = genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '';
-                                        const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
+                                        const gpStr = (isGenPop || genPop <= 0.05) ? '' : ` (GP: ${formatPct(genPop)})`;
+                                        const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                         return {
                                             text: `${label} ${valStr}${gpStr}`,
                                             fillStyle: data.datasets[0].backgroundColor[i],
@@ -28519,71 +28554,75 @@
             if (allSelect) allSelect.value = `${locationSortState.all.column}-${locationSortState.all.direction}`;
         }
         
-        // 2025 DMA Market Rankings (by Total Homes) - Updated format
+        // 2025 DMA Market Rankings (by Total Homes) - Nielsen DMA list
         const DMA_RANKS = {
-            "New York  NY": 1, "Los Angeles  CA": 2, "Chicago  IL": 3, "Dallas Ft. Worth  TX": 4,
-            "Philadelphia  PA": 5, "Houston  TX": 6, "Atlanta  GA": 7, "Washington  DC (Hagerstown  MD)": 8,
-            "Boston  MA (Manchester  NH)": 9, "San Francisco Oakland San Jose  CA": 10,
-            "Tampa St. Petersburg (Sarasota)  FL": 11, "Phoenix (Prescott)  AZ": 12, "Seattle Tacoma  WA": 13,
-            "Detroit  MI": 14, "Minneapolis St. Paul  MN": 15, "Orlando Daytona Beach Melbourne  FL": 16,
-            "Denver  CO": 17, "Miami Ft. Lauderdale  FL": 18, "Cleveland Akron (Canton)  OH": 19,
-            "Sacramento Stockton Modesto  CA": 20, "Charlotte  NC": 21, "Raleigh Durham (Fayetteville)  NC": 22,
-            "Portland  OR": 23, "St. Louis  MO": 24, "Indianapolis  IN": 25, "Nashville  TN": 26,
-            "Salt Lake City  UT": 27, "Pittsburgh  PA": 28, "Baltimore  MD": 29, "San Diego  CA": 30,
-            "San Antonio  TX": 31, "Hartford & New Haven  CT": 32, "Austin  TX": 33, "Columbus  OH": 34,
-            "Kansas City  MO": 35, "Greenville Spartanburg  SC Asheville  NC Anderson  SC": 36, "Cincinnati  OH": 37,
-            "Milwaukee  WI": 38, "West Palm Beach Ft. Pierce  FL": 39, "Las Vegas  NV": 40, "Jacksonville  FL": 41,
-            "Harrisburg Lancaster Lebanon York  PA": 42, "Grand Rapids Kalamazoo Battle Creek  MI": 43,
-            "Norfolk Portsmouth Newport News  VA": 44, "Birmingham (Anniston and Tuscaloosa)  AL": 45,
-            "Oklahoma City  OK": 46, "Greensboro High Point Winston Salem  NC": 47, "Albuquerque Santa Fe  NM": 48,
-            "Louisville  KY": 49, "Memphis  TN": 50, "New Orleans  LA": 51, "Providence  RI New Bedford  MA": 52,
-            "Ft. Myers Naples  FL": 53, "Buffalo  NY": 54, "Fresno Visalia  CA": 55, "Richmond Petersburg  VA": 56,
-            "Mobile  AL Pensacola (Ft. Walton Beach)  FL": 57, "Knoxville  TN": 58,
-            "Wilkes Barre Scranton Hazleton  PA": 59, "Little Rock Pine Bluff  AR": 60,
-            "Albany Schenectady Troy  NY": 61, "Tulsa  OK": 62, "Lexington  KY": 63, "Spokane  WA": 64,
-            "Tucson (Sierra Vista)  AZ": 65, "Dayton  OH": 66, "Des Moines Ames  IA": 67, "Green Bay Appleton  WI": 68,
-            "Honolulu  HI": 69, "Roanoke Lynchburg  VA": 70, "Wichita Hutchinson  KS Plus": 71, "Omaha  NE": 72,
-            "Flint Saginaw Bay City  MI": 73, "Springfield  MO": 74, "Huntsville Decatur (Florence)  AL": 75,
-            "Columbia  SC": 76, "Portland Auburn  ME": 77, "Rochester  NY": 78, "Madison  WI": 79,
-            "Harlingen Weslaco Brownsville McAllen  TX": 80, "Charleston Huntington  WV": 81, "Toledo  OH": 82,
-            "Waco Temple Bryan  TX": 83, "Savannah  GA": 84, "Charleston  SC": 85, "Chattanooga  TN": 86,
-            "Syracuse  NY": 87, "Colorado Springs Pueblo  CO": 88, "El Paso  TX (Las Cruces  NM)": 89,
-            "Burlington  VT Plattsburgh  NY": 90, "Shreveport  LA": 91, "Champaign & Springfield Decatur  IL": 92,
-            "Paducah  KY Cape Girardeau  MO Harrisburg  IL": 93, "Cedar Rapids Waterloo Iowa City & Dubuque  IA": 94,
-            "Ft. Smith Fayetteville Springdale Rogers  AR": 95, "Baton Rouge  LA": 96, "Boise  ID": 97,
-            "Myrtle Beach Florence  SC": 98, "South Bend Elkhart  IN": 99, "Jackson  MS": 100,
-            "Tri Cities  TN VA": 101, "Greenville New Bern Washington  NC": 102, "Reno  NV": 103,
-            "Davenport  IA Rock Island Moline  IL": 104, "Tallahassee  FL Thomasville  GA": 105,
-            "Tyler Longview(Lufkin & Nacogdoches)  TX": 106, "Lincoln & Hastings Kearney  NE": 107,
-            "Ft. Wayne  IN": 108, "Augusta  GA Aiken  SC": 109, "Evansville  IN": 110, "Sioux Falls(Mitchell)  SD": 111,
-            "Johnstown Altoona State College  PA": 112, "Fargo  ND": 113, "Springfield Holyoke  MA": 114,
-            "Lansing  MI": 115, "Yakima Pasco Richland Kennewick  WA": 116, "Traverse City Cadillac  MI": 117,
-            "Youngstown  OH": 118, "Eugene  OR": 119, "Macon  GA": 120, "Montgomery Selma  AL": 121,
-            "Peoria Bloomington  IL": 122, "Bakersfield  CA": 123, "Santa Barbara Santa Maria San Luis Obispo  CA": 124,
-            "Lafayette  LA": 125, "Wilmington  NC": 126, "Columbus  GA (Opelika  AL)": 127, "Monterey Salinas  CA": 128,
-            "La Crosse Eau Claire  WI": 129, "Corpus Christi  TX": 130, "Amarillo  TX": 131, "Salisbury  MD": 132,
-            "Wausau Rhinelander  WI": 133, "Columbia Jefferson City  MO": 134, "Columbus Tupelo West Point Houston  MS": 135,
-            "Chico Redding  CA": 136, "Rockford  IL": 137, "Medford Klamath Falls  OR": 138, "Duluth  MN Superior  WI": 139,
-            "Topeka  KS": 140, "Lubbock  TX": 141, "Monroe  LA El Dorado  AR": 142, "Anchorage  AK": 143,
-            "Beaumont Port Arthur  TX": 144, "Odessa Midland  TX": 145, "Palm Springs  CA": 146,
-            "Bismarck Minot Dickinson(Williston) ND": 147, "Panama City  FL": 148, "Wichita Falls  TX & Lawton  OK": 149,
-            "Sioux City  IA": 150, "Joplin  MO Pittsburg  KS": 151, "Albany  GA": 152,
-            "Rochester  MN Mason City  IA Austin  MN": 153, "Erie  PA": 154, "Bangor  ME": 155,
-            "Idaho Falls Pocatello  ID (Jackson  WY)": 156, "Gainesville  FL": 157, "Biloxi Gulfport  MS": 158,
-            "Terre Haute  IN": 159, "Missoula  MT": 160, "Sherman  TX Ada  OK": 161, "Binghamton  NY": 162,
-            "Wheeling  WV Steubenville  OH": 163, "Yuma  AZ El Centro  CA": 164, "Billings  MT": 165,
-            "Abilene Sweetwater  TX": 166, "Bluefield Beckley Oak Hill  WV": 167, "Hattiesburg Laurel  MS": 168,
-            "Rapid City  SD": 169, "Dothan  AL": 170, "Utica  NY": 171, "Harrisonburg  VA": 172,
-            "Charlottesville  VA": 173, "Clarksburg Weston  WV": 174, "Jackson  TN": 175,
-            "Quincy  IL Hannibal  MO Keokuk  IA": 176, "Lake Charles  LA": 177, "Elmira (Corning)  NY": 178,
-            "Watertown  NY": 179, "Bowling Green  KY": 180, "Marquette  MI": 181, "Jonesboro  AR": 182,
-            "Alexandria  LA": 183, "Butte Bozeman  MT": 184, "Laredo  TX": 185, "Bend  OR": 186,
-            "Grand Junction Montrose  CO": 187, "Twin Falls  ID": 188, "Lafayette  IN": 189, "Lima  OH": 190,
-            "Great Falls  MT": 191, "Meridian  MS": 192, "Eureka  CA": 193, "Cheyenne  WY Scottsbluff  NE": 194,
-            "Parkersburg  WV": 195, "Greenwood Greenville  MS": 196, "Casper Riverton  WY": 197, "San Angelo  TX": 198,
-            "Mankato  MN": 199, "Ottumwa  IA Kirksville  MO": 200, "St. Joseph  MO": 201, "Fairbanks  AK": 202,
-            "Helena  MT": 203, "Zanesville  OH": 204, "Victoria  TX": 205, "Presque Isle  ME": 206,
-            "Juneau  AK": 207, "Alpena  MI": 208, "North Platte  NE": 209, "Glendive  MT": 210
+            "New York NY": 1, "Los Angeles CA": 2, "Chicago IL": 3, "Dallas Ft. Worth TX": 4,
+            "Philadelphia PA": 5, "Houston TX": 6, "Atlanta GA": 7, "Washington DC (Hagerstown MD)": 8,
+            "Boston MA (Manchester NH)": 9, "San Francisco Oakland San Jose CA": 10,
+            "Tampa St. Petersburg (Sarasota) FL": 11, "Phoenix (Prescott) AZ": 12, "Seattle Tacoma WA": 13,
+            "Detroit MI": 14, "Orlando Daytona Beach Melbourne FL": 15, "Minneapolis St. Paul MN": 16,
+            "Denver CO": 17, "Miami Ft. Lauderdale FL": 18, "Cleveland Akron (Canton) OH": 19,
+            "Sacramento Stockton Modesto CA": 20, "Charlotte NC": 21, "Raleigh Durham (Fayetteville) NC": 22,
+            "Portland OR": 23, "St. Louis MO": 24, "Nashville TN": 25, "Indianapolis IN": 26,
+            "Salt Lake City UT": 27, "Pittsburgh PA": 28, "Baltimore MD": 29, "San Diego CA": 30,
+            "San Antonio TX": 31, "Hartford & New Haven CT": 32, "Austin TX": 33, "Columbus OH": 34,
+            "Kansas City MO": 35, "Greenville Spartanburg SC Asheville NC": 36, "Cincinnati OH": 37,
+            "West Palm Beach Ft. Pierce FL": 38, "Milwaukee WI": 39, "Las Vegas NV": 40, "Jacksonville FL": 41,
+            "Harrisburg Lancaster Lebanon York PA": 42, "Grand Rapids Kalamazoo Battle Creek MI": 43,
+            "Norfolk Portsmouth Newport News VA": 44, "Birmingham Anniston and Tuscaloosa AL": 45,
+            "Oklahoma City OK": 46, "Greensboro High Point Winston Salem NC": 47, "Albuquerque Santa Fe NM": 48,
+            "Louisville KY": 49, "Memphis TN": 50, "New Orleans LA": 51, "Providence RI New Bedford MA": 52,
+            "Ft. Myers Naples FL": 53, "Fresno Visalia CA": 54, "Buffalo NY": 55, "Richmond Petersburg VA": 56,
+            "Mobile AL Pensacola (Ft. Walton Beach) FL": 57, "Knoxville TN": 58,
+            "Wilkes Barre Scranton Hazleton PA": 59, "Little Rock Pine Bluff AR": 60,
+            "Albany Schenectady Troy NY": 61, "Tulsa OK": 62, "Lexington KY": 63, "Spokane WA": 64,
+            "Tucson (Sierra Vista) AZ": 65, "Dayton OH": 66, "Des Moines Ames IA": 67, "Green Bay Appleton WI": 68,
+            "Honolulu HI": 69, "Wichita Hutchinson KS Plus": 70, "Omaha NE": 71,
+            "Roanoke Lynchburg VA": 72, "Huntsville Decatur (Florence) AL": 73, "Flint Saginaw Bay City MI": 74,
+            "Springfield MO": 75, "Columbia SC": 76, "Portland Auburn ME": 77, "Madison WI": 78, "Rochester NY": 79,
+            "Harlingen Weslaco Brownsville McAllen TX": 80, "Toledo OH": 81, "Waco Temple Bryan TX": 82,
+            "Charleston Huntington WV": 83, "Charleston SC": 84, "Savannah GA": 85, "Chattanooga TN": 86,
+            "Syracuse NY": 87, "Colorado Springs Pueblo CO": 88, "El Paso TX (Las Cruces NM)": 89,
+            "Champaign & Springfield Decatur IL": 90, "Burlington VT Plattsburgh NY": 91, "Shreveport LA": 92,
+            "Paducah KY Cape Girardeau MO": 93, "Cedar Rapids Waterloo Iowa City & Dubuque IA": 94,
+            "Ft. Smith Fayetteville Springdale Rogers AR": 95, "Baton Rouge LA": 96, "Boise ID": 97,
+            "Myrtle Beach Florence SC": 98, "South Bend Elkhart IN": 99, "Jackson MS": 100,
+            "Tri Cities TN VA": 101, "Greenville New Bern Washington NC": 102, "Reno NV": 103,
+            "Tallahassee FL Thomasville GA": 104, "Davenport IA Rock Island Moline IL": 105,
+            "Tyler Longview (Lufkin & Nacogdoches) TX": 106, "Lincoln & Hastings Kearney NE": 107,
+            "Ft. Wayne IN": 108, "Augusta GA Aiken SC": 109, "Evansville IN": 110,
+            "Johnstown Altoona State College PA": 111, "Sioux Falls (Mitchell) SD": 112,
+            "Springfield Holyoke MA": 113, "Fargo ND": 114, "Lansing MI": 115,
+            "Yakima Pasco Richland Kennewick WA": 116, "Yuma AZ El Centro CA": 117,
+            "Traverse City Cadillac MI": 118, "Youngstown OH": 119, "Eugene OR": 120, "Macon GA": 121,
+            "Bakersfield CA": 122, "Peoria Bloomington IL": 123, "Santa Barbara Santa Maria San Luis Obispo CA": 124,
+            "Lafayette LA": 125, "Wilmington NC": 126, "Columbus GA (Opelika AL)": 127, "Monterey Salinas CA": 128,
+            "Montgomery Selma AL": 129, "La Crosse Eau Claire WI": 130, "Corpus Christi TX": 131,
+            "Salisbury MD": 132, "Amarillo TX": 133, "Wausau Rhinelander WI": 134, "Columbia Jefferson City MO": 135,
+            "Chico Redding CA": 136, "Columbus Tupelo West Point MS": 137, "Rockford IL": 138,
+            "Duluth MN Superior WI": 139, "Medford Klamath Falls OR": 140, "Topeka KS": 141,
+            "Lubbock TX": 142, "Anchorage AK": 143, "Beaumont Port Arthur TX": 144,
+            "Monroe LA El Dorado AR": 145, "Palm Springs CA": 146, "Odessa Midland TX": 147,
+            "Panama City FL": 148, "Bismarck Minot Dickinson (Williston) ND": 149,
+            "Wichita Falls TX & Lawton OK": 150, "Sioux City IA": 151, "Joplin MO Pittsburg KS": 152,
+            "Albany GA": 153, "Rochester MN Mason City IA Austin MN": 154, "Erie PA": 155,
+            "Idaho Falls Pocatello ID (Jackson WY)": 156, "Gainesville FL": 157, "Bangor ME": 158,
+            "Biloxi Gulfport MS": 159, "Sherman TX Ada OK": 160, "Terre Haute IN": 161, "Missoula MT": 162,
+            "Binghamton NY": 163, "Wheeling WV Steubenville OH": 164,
+            "Dothan AL": 165, "Billings MT": 166, "Abilene Sweetwater TX": 167, "Bluefield Beckley Oak Hill WV": 168,
+            "Bluefield Beckley Oak Hill WV": 168, "Hattiesburg Laurel MS": 169, "Rapid City SD": 170,
+            "Utica NY": 171, "Harrisonburg VA": 172, "Charlottesville VA": 173,
+            "Clarksburg Weston WV": 174, "Lake Charles LA": 175, "Jackson TN": 176,
+            "Quincy IL Hannibal MO Keokuk IA": 177, "Bowling Green KY": 178, "Elmira (Corning) NY": 179,
+            "Watertown NY": 180, "Marquette MI": 181, "Jonesboro AR": 182, "Alexandria LA": 183,
+            "Butte Bozeman MT": 184, "Laredo TX": 185, "Bend OR": 186,
+            "Grand Junction Montrose CO": 187, "Twin Falls ID": 188, "Lafayette IN": 189, "Lima OH": 190,
+            "Great Falls MT": 191, "Meridian MS": 192, "Eureka CA": 193, "Cheyenne WY Scottsbluff NE": 194,
+            "Parkersburg WV": 195, "Greenwood Greenville MS": 196, "San Angelo TX": 197,
+            "Casper Riverton WY": 198, "Mankato MN": 199, "Ottumwa IA Kirksville MO": 200,
+            "St. Joseph MO": 201, "Fairbanks AK": 202, "Helena MT": 203, "Zanesville OH": 204,
+            "Victoria TX": 205, "Presque Isle ME": 206, "Juneau AK": 207, "Alpena MI": 208,
+            "North Platte NE": 209, "Glendive MT": 210
         };
         
         // Helper function to get DMA rank with fuzzy matching
@@ -37899,41 +37938,76 @@
             return result;
         }
 
-        // Calculate median age from age distribution percentages
+        // Calculate median age from age distribution percentages using interpolated formula:
+        // 1. Find the median group (where cumulative % crosses 50%)
+        // 2. Median Age = Start of Group + ( (Distance to reach 50%) / (Pct in Group) ) * Width of Group
         function calculateMedianAgeFromDistribution(ageData) {
             if (!ageData || Object.keys(ageData).length === 0) return 0;
             
-            // Age bracket midpoints
-            const ageMidpoints = {
-                '<16': 14, '16-18': 17, '18-20': 19, '21-25': 23, '26-30': 28,
-                '31-40': 35.5, '41-59': 50, '60+': 70,
-                '13-17': 15, '18-24': 21, '25-34': 29.5, '35-44': 39.5, '45-54': 49.5, '55-64': 59.5, '65+': 72
-            };
-            
-            // Build cumulative distribution
-            let total = 0;
-            const brackets = [];
-            Object.entries(ageData).forEach(([bracket, pct]) => {
-                const midpoint = ageMidpoints[bracket] || 30;
-                brackets.push({ bracket, pct, midpoint });
-                total += pct;
-            });
-            
-            if (total === 0) return 0;
-            
-            // Sort by midpoint
-            brackets.sort((a, b) => a.midpoint - b.midpoint);
-            
-            // Find median (50th percentile)
-            let cumulative = 0;
-            for (const b of brackets) {
-                cumulative += b.pct;
-                if (cumulative >= total / 2) {
-                    return b.midpoint;
+            // Parse bracket to get start age and width (for "31-40" -> start 31, width 10)
+            function parseBracket(key) {
+                const range = key.match(/^(\d+)-(\d+)$/);
+                if (range) {
+                    const start = parseInt(range[1], 10);
+                    const end = parseInt(range[2], 10);
+                    return { start, width: end - start + 1 }; // inclusive: 31-40 = 10 years
                 }
+                const under = key.match(/^<(\d+)$/);
+                if (under) {
+                    const end = parseInt(under[1], 10);
+                    return { start: 0, width: end };
+                }
+                const over = key.match(/^(\d+)\+$/);
+                if (over) {
+                    const start = parseInt(over[1], 10);
+                    return { start, width: 25 }; // assume 25-year span for open-ended
+                }
+                return null;
             }
             
-            return brackets.length > 0 ? brackets[Math.floor(brackets.length / 2)].midpoint : 0;
+            // Order for common age keys (others sorted by start)
+            const order = ['<16', '16-18', '18-20', '21-25', '26-30', '31-40', '41-59', '60+', '13-17', '18-24', '25-34', '35-44', '45-54', '55-64', '65+'];
+            const brackets = [];
+            Object.entries(ageData).forEach(([key, pct]) => {
+                const val = parseFloat(pct);
+                if (isNaN(val) || val <= 0) return;
+                const parsed = parseBracket(key);
+                if (parsed) brackets.push({ key, pct: val, ...parsed });
+            });
+            
+            if (brackets.length === 0) return 0;
+            
+            // Sort by start age (use order for known keys, else numeric)
+            brackets.sort((a, b) => {
+                const idxA = order.indexOf(a.key);
+                const idxB = order.indexOf(b.key);
+                if (idxA >= 0 && idxB >= 0) return idxA - idxB;
+                if (idxA >= 0) return -1;
+                if (idxB >= 0) return 1;
+                return a.start - b.start;
+            });
+            
+            // Step 1: Find median group (add % in order until we cross 50%)
+            let cumulativeBefore = 0;
+            let medianGroup = null;
+            for (const b of brackets) {
+                if (cumulativeBefore + b.pct >= 50) {
+                    medianGroup = { ...b, cumulativeBefore };
+                    break;
+                }
+                cumulativeBefore += b.pct;
+            }
+            
+            if (!medianGroup) {
+                medianGroup = brackets[brackets.length - 1];
+                medianGroup.cumulativeBefore = brackets.slice(0, -1).reduce((s, x) => s + x.pct, 0);
+            }
+            
+            // Step 2: Median Age = Start + ( (50 - CumBefore) / PctInGroup ) * Width
+            const distanceTo50 = 50 - medianGroup.cumulativeBefore;
+            const medianAge = medianGroup.start + (distanceTo50 / medianGroup.pct) * medianGroup.width;
+            
+            return Math.max(0, medianAge);
         }
 
         // Jump to comparison section
@@ -43773,7 +43847,7 @@
             const selColor = (selEl && selEl.type === 'text') ? (selEl.color || '#ffffff') : '#ffffff';
             const selFontFamily = (selEl && selEl.type === 'text') ? (selEl.fontFamily || 'inherit') : 'inherit';
             const selFontWeight = (selEl && selEl.type === 'text') ? (selEl.fontWeight || 'normal') : 'normal';
-            const selShapeFill = (selEl && selEl.type === 'shape') ? (selEl.fill || '#4a8ac9') : '#4a8ac9';
+            const selShapeFill = (selEl && (selEl.type === 'shape' || selEl.type === 'line')) ? (selEl.fill || selEl.stroke || '#4a8ac9') : '#4a8ac9';
             
             contentEl.innerHTML = `
                 <div class="slide-editor-wrapper">
@@ -43795,11 +43869,13 @@
                             <button class="toolbar-btn" onclick="addSlideElement('image')" title="Add Image (upload)">🖼️ Image</button>
                             <button class="toolbar-btn" onclick="addSlideElement('imageUrl')" title="Add Image from URL">🔗 Image URL</button>
                             <button class="toolbar-btn" onclick="addSlideElement('shape')" title="Add Shape">⬛ Shape</button>
+                            <button class="toolbar-btn" onclick="addSlideElement('line')" title="Add Line/Divider">➖ Line</button>
                         </div>
                         <div class="slide-toolbar-group">
                             <button class="toolbar-btn" onclick="formatText('bold')" title="Bold"><b>B</b></button>
                             <button class="toolbar-btn" onclick="formatText('italic')" title="Italic"><i>I</i></button>
                             <button class="toolbar-btn" onclick="formatText('underline')" title="Underline"><u>U</u></button>
+                            <button class="toolbar-btn" onclick="formatText('strikeThrough')" title="Strikethrough"><s>S</s></button>
                             <button class="toolbar-btn" onclick="formatText('insertUnorderedList')" title="Bullet List">• List</button>
                             <button class="toolbar-btn" onclick="formatText('insertOrderedList')" title="Numbered List">1. List</button>
                         </div>
@@ -43851,18 +43927,32 @@
                             <button class="toolbar-btn" onclick="setTextBackgroundColor('')" title="Remove background" style="font-size: 0.75rem;">✕ BG</button>
                         </div>
                         <div class="slide-toolbar-group">
+                            <select class="toolbar-btn" onchange="setTextTransform(this.value)" style="padding: 0.3rem; min-width: 85px;" title="Text Transform">
+                                <option value="none" ${(!selEl||selEl.type!=='text'||!selEl.textTransform||selEl.textTransform==='none')?'selected':''}>Transform</option>
+                                <option value="uppercase" ${(selEl&&selEl.type==='text'&&selEl.textTransform==='uppercase')?'selected':''}>UPPERCASE</option>
+                                <option value="lowercase" ${(selEl&&selEl.type==='text'&&selEl.textTransform==='lowercase')?'selected':''}>lowercase</option>
+                                <option value="capitalize" ${(selEl&&selEl.type==='text'&&selEl.textTransform==='capitalize')?'selected':''}>Capitalize</option>
+                            </select>
                             <button class="toolbar-btn" onclick="alignElement('left')" title="Align Left">⬅</button>
                             <button class="toolbar-btn" onclick="alignElement('center')" title="Align Center">⬌</button>
                             <button class="toolbar-btn" onclick="alignElement('right')" title="Align Right">➡</button>
+                            <button class="toolbar-btn" onclick="alignElement('justify')" title="Justify">≡</button>
+                            <select class="toolbar-btn" onchange="setElementOpacity(this.value)" style="padding: 0.3rem; min-width: 60px;" title="Opacity">
+                                <option value="1" ${(!selEl||selEl.opacity===undefined||selEl.opacity===1)?'selected':''}>100%</option>
+                                <option value="0.9" ${(selEl&&selEl.opacity===0.9)?'selected':''}>90%</option>
+                                <option value="0.75" ${(selEl&&selEl.opacity===0.75)?'selected':''}>75%</option>
+                                <option value="0.5" ${(selEl&&selEl.opacity===0.5)?'selected':''}>50%</option>
+                                <option value="0.25" ${(selEl&&selEl.opacity===0.25)?'selected':''}>25%</option>
+                            </select>
                         </div>
                         <div class="slide-toolbar-group" id="shapeFormatGroup">
-                            <input type="color" class="toolbar-btn" id="shapeFillPicker" onchange="setShapeFill(this.value)" value="${selShapeFill}" title="Shape Fill Color" style="width: 32px; height: 28px; padding: 2px; cursor: pointer;">
-                            <span style="display: flex; gap: 2px;" title="Shape preset colors">
-                                <button class="toolbar-btn" onclick="setShapeFill('#4a8ac9')" style="width: 22px; height: 22px; padding: 0; background: #4a8ac9; border-radius: 3px;" title="Blue"></button>
-                                <button class="toolbar-btn" onclick="setShapeFill('#66d9ef')" style="width: 22px; height: 22px; padding: 0; background: #66d9ef; border-radius: 3px;" title="Cyan"></button>
-                                <button class="toolbar-btn" onclick="setShapeFill('#c8e600')" style="width: 22px; height: 22px; padding: 0; background: #c8e600; border-radius: 3px;" title="Lime"></button>
-                                <button class="toolbar-btn" onclick="setShapeFill('#132f4c')" style="width: 22px; height: 22px; padding: 0; background: #132f4c; border-radius: 3px; border: 1px solid #2a4a6e;" title="Dark"></button>
-                                <button class="toolbar-btn" onclick="setShapeFill('#1e3a5f')" style="width: 22px; height: 22px; padding: 0; background: #1e3a5f; border-radius: 3px;" title="Border"></button>
+                            <input type="color" class="toolbar-btn" id="shapeFillPicker" onchange="setShapeOrLineColor(this.value)" value="${selShapeFill}" title="Shape/Line Color" style="width: 32px; height: 28px; padding: 2px; cursor: pointer;">
+                            <span style="display: flex; gap: 2px;" title="Color presets">
+                                <button class="toolbar-btn" onclick="setShapeOrLineColor('#4a8ac9')" style="width: 22px; height: 22px; padding: 0; background: #4a8ac9; border-radius: 3px;" title="Blue"></button>
+                                <button class="toolbar-btn" onclick="setShapeOrLineColor('#66d9ef')" style="width: 22px; height: 22px; padding: 0; background: #66d9ef; border-radius: 3px;" title="Cyan"></button>
+                                <button class="toolbar-btn" onclick="setShapeOrLineColor('#c8e600')" style="width: 22px; height: 22px; padding: 0; background: #c8e600; border-radius: 3px;" title="Lime"></button>
+                                <button class="toolbar-btn" onclick="setShapeOrLineColor('#132f4c')" style="width: 22px; height: 22px; padding: 0; background: #132f4c; border-radius: 3px; border: 1px solid #2a4a6e;" title="Dark"></button>
+                                <button class="toolbar-btn" onclick="setShapeOrLineColor('#1e3a5f')" style="width: 22px; height: 22px; padding: 0; background: #1e3a5f; border-radius: 3px;" title="Border"></button>
                             </span>
                             <select class="toolbar-btn" onchange="setShapeBorderRadius(this.value)" style="padding: 0.3rem; min-width: 70px;" title="Shape corners">
                                 <option value="0" ${(selEl&&selEl.type==='shape'&&selEl.borderRadius===0)?'selected':''}>Sharp</option>
@@ -43870,6 +43960,12 @@
                                 <option value="8" ${(selEl&&selEl.type==='shape'&&selEl.borderRadius===8)?'selected':''}>8px</option>
                                 <option value="12" ${(selEl&&selEl.type==='shape'&&selEl.borderRadius===12)?'selected':''}>12px</option>
                                 <option value="50" ${(selEl&&selEl.type==='shape'&&selEl.borderRadius===50)?'selected':''}>Round</option>
+                            </select>
+                            <select class="toolbar-btn" onchange="setLineThickness(this.value)" style="padding: 0.3rem; min-width: 65px;" title="Line thickness">
+                                <option value="1" ${(selEl&&selEl.type==='line'&&selEl.strokeWidth===1)?'selected':''}>1px</option>
+                                <option value="2" ${(!selEl||selEl.type!=='line'||selEl.strokeWidth===2||!selEl.strokeWidth)?'selected':''}>2px</option>
+                                <option value="4" ${(selEl&&selEl.type==='line'&&selEl.strokeWidth===4)?'selected':''}>4px</option>
+                                <option value="6" ${(selEl&&selEl.type==='line'&&selEl.strokeWidth===6)?'selected':''}>6px</option>
                             </select>
                         </div>
                         <div class="slide-toolbar-group">
@@ -43879,6 +43975,7 @@
                             <button class="toolbar-btn ${speakerNotesVisible ? 'active' : ''}" id="toggleNotesBtn" onclick="toggleSpeakerNotes()" title="${speakerNotesVisible ? 'Hide Speaker Notes' : 'Show Speaker Notes'}">📝 ${speakerNotesVisible ? 'Notes' : 'Show notes'}</button>
                         </div>
                         <div class="slide-toolbar-group">
+                            <button class="toolbar-btn" onclick="duplicateSelectedElement()" title="Duplicate">📋 Duplicate</button>
                             <button class="toolbar-btn" onclick="bringToFront()" title="Bring to Front">⬆️</button>
                             <button class="toolbar-btn" onclick="sendToBack()" title="Send to Back">⬇️</button>
                             <button class="toolbar-btn" onclick="deleteSelectedElement()" title="Delete" style="color: #ef4444;">🗑️</button>
@@ -44151,6 +44248,7 @@
                 ${el.background ? `background: ${el.background};` : ''}
                 ${el.padding ? `padding: ${el.padding}px;` : ''}
                 ${el.borderRadius ? `border-radius: ${el.borderRadius}px;` : ''}
+                ${el.opacity !== undefined && el.opacity !== 1 ? `opacity: ${el.opacity};` : ''}
             `;
             
             if (el.type === 'text') {
@@ -44160,6 +44258,7 @@
                     `font-family: ${el.fontFamily || 'inherit'}`,
                     `color: ${el.color || '#ffffff'}`,
                     `text-align: ${el.align || 'left'}`,
+                    `text-transform: ${el.textTransform || 'none'}`,
                     'white-space: pre-wrap'
                 ].join('; ');
                 return `
@@ -44191,6 +44290,17 @@
                     <div class="slide-element shape-element ${isSelected ? 'selected' : ''}"
                          data-element-id="${el.id}"
                          style="${baseStyle} background: ${el.fill || '#4a8ac9'}; border-radius: ${el.borderRadius || 4}px;"
+                         onmousedown="startElementDrag(event, '${el.id}')">
+                        ${resizeHandles}
+                    </div>
+                `;
+            } else if (el.type === 'line') {
+                const sw = el.strokeWidth || 2;
+                const stroke = el.stroke || '#5a9ad9';
+                return `
+                    <div class="slide-element line-element ${isSelected ? 'selected' : ''}"
+                         data-element-id="${el.id}"
+                         style="${baseStyle} background: ${stroke}; border-radius: ${sw/2}px; height: ${sw}px !important; min-height: ${sw}px;"
                          onmousedown="startElementDrag(event, '${el.id}')">
                         ${resizeHandles}
                     </div>
@@ -44598,6 +44708,15 @@
                     fill: '#4a8ac9',
                     borderRadius: 4
                 };
+            } else if (type === 'line') {
+                newElement = {
+                    id: newId,
+                    type: 'line',
+                    x: 10, y: 45,
+                    width: 80, height: 2,
+                    stroke: '#5a9ad9',
+                    strokeWidth: 2
+                };
             }
             
             if (newElement) {
@@ -44683,9 +44802,14 @@
         }
         
         function setShapeFill(color) {
+            setShapeOrLineColor(color);
+        }
+        function setShapeOrLineColor(color) {
             const el = getSlideElement(selectedElementId);
-            if (el && el.type === 'shape') {
-                el.fill = color;
+            if (el) {
+                if (el.type === 'shape') el.fill = color;
+                else if (el.type === 'line') el.stroke = color;
+                else return;
                 saveDeckChanges();
                 renderSlideEditor();
             }
@@ -44698,6 +44822,51 @@
                 saveDeckChanges();
                 renderSlideEditor();
             }
+        }
+        
+        function setLineThickness(w) {
+            const el = getSlideElement(selectedElementId);
+            if (el && el.type === 'line') {
+                el.strokeWidth = parseInt(w) || 2;
+                saveDeckChanges();
+                renderSlideEditor();
+            }
+        }
+        
+        function setTextTransform(transform) {
+            const el = getSlideElement(selectedElementId);
+            if (el && el.type === 'text') {
+                el.textTransform = transform === 'none' ? undefined : transform;
+                saveDeckChanges();
+                renderSlideEditor();
+            }
+        }
+        
+        function setElementOpacity(val) {
+            const el = getSlideElement(selectedElementId);
+            if (el) {
+                const opacity = parseFloat(val);
+                el.opacity = opacity === 1 ? undefined : opacity;
+                saveDeckChanges();
+                renderSlideEditor();
+            }
+        }
+        
+        function duplicateSelectedElement() {
+            if (!selectedElementId || !currentEditingDeck) return;
+            const slide = currentEditingSlide === 0 ? currentEditingDeck.titleSlide : currentEditingDeck.slides[currentEditingSlide - 1];
+            if (!slide?.elements) return;
+            const idx = slide.elements.findIndex(e => e.id === selectedElementId);
+            if (idx < 0) return;
+            const orig = slide.elements[idx];
+            const copy = JSON.parse(JSON.stringify(orig));
+            copy.id = 'el_' + Date.now();
+            copy.x = Math.min(100 - (copy.width || 20), (copy.x || 0) + 2);
+            copy.y = Math.min(100 - (copy.height || 15), (copy.y || 0) + 2);
+            slide.elements.splice(idx + 1, 0, copy);
+            selectedElementId = copy.id;
+            saveDeckChanges();
+            renderSlideEditor();
         }
         
         function alignElement(alignment) {
