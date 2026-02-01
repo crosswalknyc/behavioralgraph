@@ -3000,6 +3000,10 @@
         .module-btn.png-btn:hover { background: #60a5fa; color: #000; border-color: #60a5fa; }
         .module-btn.pdf-btn:hover { background: #f87171; color: #fff; border-color: #f87171; }
         .module-btn.deck-btn:hover { background: var(--accent-lime); color: #000; border-color: var(--accent-lime); }
+        .module-btn.deck-btn,
+        .comp-section-title .btn {
+            white-space: nowrap;
+        }
         .module-btn.spotlight-btn { font-size: 0.7rem; }
         .module-btn.spotlight-btn:hover { background: #fbbf24; color: #000; border-color: #fbbf24; }
         
@@ -3169,6 +3173,7 @@
             font-size: 0.7rem;
             transition: all 0.2s;
             opacity: 0.6;
+            white-space: nowrap;
         }
         
         .module-deck-btn:hover {
@@ -13392,19 +13397,19 @@
 
                         <!-- Tabs -->
                         <div class="dashboard-tabs" id="subscriberTabs">
-                            <button class="tab-btn active" onclick="showSubscriberTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
-                            <button class="tab-btn" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
+                            <button class="tab-btn active" onclick="showSubscriberTab('episodes')"><span class="tab-icon">🎬</span><span class="tab-label">EPISODES</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('timing')"><span class="tab-icon">⏱️</span><span class="tab-label">TIMING</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('platforms')"><span class="tab-icon">📱</span><span class="tab-label">SVOD PLATFORMS</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
                             <button class="tab-btn" onclick="showSubscriberTab('trends')"><span class="tab-icon">📈</span><span class="tab-label">TRENDS</span></button>
+                            <button class="tab-btn" onclick="showSubscriberTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
                         </div>
                     </div>
 
                     <!-- Scrollable Tab Content -->
                     <div id="subscriberTabContent">
                         <!-- Insights Tab -->
-                        <div id="subscriber-tab-insights" class="tab-content active">
+                        <div id="subscriber-tab-insights" class="tab-content">
                             <!-- Executive Summary -->
                             <div id="subscriberExecutiveSummary" class="executive-summary-section"></div>
                             
@@ -13425,7 +13430,7 @@
                         </div>
 
                         <!-- Episodes Tab -->
-                        <div id="subscriber-tab-episodes" class="tab-content">
+                        <div id="subscriber-tab-episodes" class="tab-content active">
                             <div id="subscriberEpisodesInsights" class="tab-insights-section"></div>
                             
                             <!-- Timeline Chart -->
@@ -19597,8 +19602,8 @@
                 renderSubscriberTrends(data);
             } catch (e) { console.error('Error rendering trends:', e); }
             
-            // Ensure the default tab (insights) is shown
-            showSubscriberTab('insights');
+            // Ensure the default tab (episodes) is shown
+            showSubscriberTab('episodes');
         }
         
         // Save open subscriber tabs to localStorage
@@ -24430,65 +24435,63 @@
             }
             
             if (categoryType === 'income') {
-                // Income range to numeric midpoint mapping
-                const incomeToNumeric = (incomeRange) => {
-                    const lower = incomeRange.toLowerCase();
+                // Use interpolated median formula (same as age): find median group, then
+                // Median = Start + ( (50 - CumBefore) / PctInGroup ) * Width
+                const parseIncomeBracket = (key) => {
+                    const k = (key || '').replace(/\s/g, '');
+                    const lower = k.toLowerCase();
+                    const toNum = (numStr, isThousands) => {
+                        const n = parseInt(String(numStr).replace(/[^\d]/g, ''), 10);
+                        return (isThousands || lower.includes('k')) ? n * 1000 : n;
+                    };
                     if (lower.includes('<') || lower.includes('under')) {
-                        const match = lower.match(/under\s*\$?(\d+)/) || lower.match(/<\s*\$?(\d+)/);
-                        if (match) return parseInt(match[1]) / 2;
-                        return 20000; // Default for <$40k
+                        const m = lower.match(/(\d+)\s*[k]?/);
+                        const end = m ? toNum(m[1], true) : 40000;
+                        return { start: 0, width: end };
                     }
-                    if (lower.includes('$40') && lower.includes('$60')) return 50000;
-                    if (lower.includes('$60') && lower.includes('$75')) return 67500;
-                    if (lower.includes('$75') && lower.includes('$100')) return 87500;
-                    if (lower.includes('$100') && lower.includes('$150')) return 125000;
-                    if (lower.includes('$150') && lower.includes('$250')) return 200000;
-                    if (lower.includes('$250+') || lower.includes('over $250')) return 300000;
-                    // Try to parse range
-                    const match = lower.match(/\$?(\d+)[kK]?\s*-\s*\$?(\d+)[kK]?/);
-                    if (match) {
-                        const low = parseInt(match[1]) * (match[1].includes('k') || match[1].includes('K') ? 1000 : 1);
-                        const high = parseInt(match[2]) * (match[2].includes('k') || match[2].includes('K') ? 1000 : 1);
-                        return (low + high) / 2;
+                    const rangeMatch = lower.match(/(\d+)\s*[k]?\s*-\s*\$?(\d+)\s*[k]?/);
+                    if (rangeMatch) {
+                        const low = toNum(rangeMatch[1], true);
+                        const high = toNum(rangeMatch[2], true);
+                        return { start: low, width: high - low };
                     }
-                    const singleMatch = lower.match(/\$?(\d+)[kK]?\+/);
-                    if (singleMatch) {
-                        const val = parseInt(singleMatch[1]) * (singleMatch[1].includes('k') || singleMatch[1].includes('K') ? 1000 : 1);
-                        return val * 1.25; // Estimate above threshold
+                    const overMatch = lower.match(/(\d+)\s*[k]?\+/);
+                    if (overMatch) {
+                        const start = toNum(overMatch[1], true);
+                        return { start, width: 150000 }; // assume 150k span for open-ended
                     }
                     return null;
                 };
-                
-                // Create weighted array
-                const profileWeighted = [];
-                Object.entries(data).forEach(([range, pct]) => {
-                    const num = incomeToNumeric(range);
-                    if (num !== null && pct > 0) {
-                        for (let i = 0; i < Math.round(pct * 10); i++) {
-                            profileWeighted.push(num);
-                        }
-                    }
-                });
-                
-                const genPopWeighted = [];
-                if (genPopData) {
-                    Object.entries(genPopData).forEach(([range, pct]) => {
-                        const num = incomeToNumeric(range);
-                        if (num !== null && pct > 0) {
-                            for (let i = 0; i < Math.round(pct * 10); i++) {
-                                genPopWeighted.push(num);
-                            }
-                        }
+                const calcInterpolatedMedian = (incomeData) => {
+                    if (!incomeData || Object.keys(incomeData).length === 0) return null;
+                    const brackets = [];
+                    Object.entries(incomeData).forEach(([key, pct]) => {
+                        const val = parseFloat(pct);
+                        if (isNaN(val) || val <= 0) return;
+                        const parsed = parseIncomeBracket(key);
+                        if (parsed) brackets.push({ key, pct: val, ...parsed });
                     });
-                }
-                
-                const profileMedian = profileWeighted.length > 0 
-                    ? profileWeighted.sort((a, b) => a - b)[Math.floor(profileWeighted.length / 2)]
-                    : null;
-                const genPopMedian = genPopWeighted.length > 0
-                    ? genPopWeighted.sort((a, b) => a - b)[Math.floor(genPopWeighted.length / 2)]
-                    : null;
-                
+                    if (brackets.length === 0) return null;
+                    brackets.sort((a, b) => a.start - b.start);
+                    let cumulativeBefore = 0;
+                    let medianGroup = null;
+                    for (const b of brackets) {
+                        if (cumulativeBefore + b.pct >= 50) {
+                            medianGroup = { ...b, cumulativeBefore };
+                            break;
+                        }
+                        cumulativeBefore += b.pct;
+                    }
+                    if (!medianGroup) {
+                        medianGroup = brackets[brackets.length - 1];
+                        medianGroup.cumulativeBefore = brackets.slice(0, -1).reduce((s, x) => s + x.pct, 0);
+                    }
+                    const distanceTo50 = 50 - medianGroup.cumulativeBefore;
+                    const medianVal = medianGroup.start + (distanceTo50 / medianGroup.pct) * medianGroup.width;
+                    return Math.max(0, medianVal);
+                };
+                const profileMedian = calcInterpolatedMedian(data);
+                const genPopMedian = genPopData ? calcInterpolatedMedian(genPopData) : null;
                 return {
                     profile: profileMedian !== null ? { value: formatNumber(Math.round(profileMedian)), percentage: null } : null,
                     genPop: genPopMedian !== null ? { value: formatNumber(Math.round(genPopMedian)), percentage: null } : null
@@ -39136,20 +39139,38 @@
         }
 
         function renderDemoComparisonRows(profiles, demoType, sortByProfileIdx = null, limit = 15, sortType = 'pct') {
+            // Find Gen Pop profile for index baseline (index = profile% / genPop% * 100)
+            const genPopProfile = profiles.find(p => {
+                const n = (p.name || '').toUpperCase();
+                return n.includes('GEN POP') || n.includes('GENPOP');
+            });
+            const genPopDemo = genPopProfile?.demographics?.[demoType] || {};
+            const getGenPopPct = (value) => {
+                if (genPopDemo[value] != null) return genPopDemo[value];
+                const lower = (value || '').toLowerCase();
+                const key = Object.keys(genPopDemo).find(k => k.toLowerCase() === lower);
+                return key != null ? genPopDemo[key] : 0;
+            };
+
             // Get all unique values across all profiles
             const allValues = new Set();
             profiles.forEach(p => {
                 Object.keys(p.demographics[demoType] || {}).forEach(v => allValues.add(v));
             });
 
-            // Build data array with values for sorting
+            // Build data array with values for sorting; compute index at render time from Gen Pop baseline
             let dataRows = Array.from(allValues).map(value => {
-                return {
-                    value: value,
-                    pctData: profiles.map(p => p.demographics[demoType]?.[value] || 0),
-                    projData: profiles.map(p => p.demographicsProjection?.[demoType]?.[value] || 0),
-                    indexData: profiles.map(p => p.demographicsIndex?.[demoType]?.[value] || 0)
-                };
+                const pctData = profiles.map(p => p.demographics[demoType]?.[value] || 0);
+                const projData = profiles.map(p => p.demographicsProjection?.[demoType]?.[value] || 0);
+                const genPopPct = getGenPopPct(value);
+                const indexData = profiles.map((p, i) => {
+                    const pct = pctData[i];
+                    if (pct <= 0) return 0;
+                    if (genPopProfile && profiles[i] === genPopProfile) return 100;
+                    if (genPopPct > 0) return Math.round((pct / genPopPct) * 100);
+                    return p.demographicsIndex?.[demoType]?.[value] || 0;
+                });
+                return { value, pctData, projData, indexData };
             });
 
             // Determine which data to use for sorting based on sortType
