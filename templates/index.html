@@ -4982,6 +4982,8 @@
         body.profile-is-genpop .index-col,
         body.profile-is-genpop .col-gp,
         body.profile-is-genpop .col-idx,
+        body.profile-is-genpop .cat-gp,
+        body.profile-is-genpop .cat-idx,
         body.profile-is-genpop [data-genpop-col],
         body.profile-is-genpop [data-index-col] { display: none !important; }
         body.profile-is-genpop .insight-col-header { grid-template-columns: 1fr 70px !important; }
@@ -23565,10 +23567,12 @@
                     : (isProjectionCats 
                         ? formatNumber(Math.round((stats.avgGenPop / 100) * US_POP_CATS))
                         : stats.avgGenPop.toFixed(2) + '%');
-                // Build top 5 items tooltip
+                // Build top 5 items tooltip (no GP/index when Gen Pop)
+                const isGenPopCat = isSelectedProfileGenPop();
                 const top5Tooltip = stats.top5Items.map((item, idx) => {
                     const itemName = item.name || item.brand || 'Unknown';
                     const itemPct = (item.pct || item.percentage || 0).toFixed(2);
+                    if (isGenPopCat) return `${idx + 1}. ${itemName}: ${itemPct}%`;
                     const itemGP = (item.genPopPct || item.genPop || item.gen_pop || 0);
                     const itemGPDisplay = itemGP < 0.01 ? 'N/A' : itemGP.toFixed(2) + '%';
                     return `${idx + 1}. ${itemName}: ${itemPct}% (GP: ${itemGPDisplay})`;
@@ -23588,13 +23592,16 @@
             // === ACTIVATION OPPORTUNITIES ===
             const activations = [];
             
-            // Helper to format activation stats with N/A for missing Gen Pop
+            // Helper to format activation stats (no GP/index when Gen Pop)
+            const isGenPopAct = isSelectedProfileGenPop();
             const formatActivationStats = (item) => {
                 const pctDisplay = item.pct.toFixed(2) + '%';
+                if (isGenPopAct) return `(${pctDisplay})`;
                 const gpDisplay = item.genPop < 0.01 ? 'N/A' : item.genPop.toFixed(2) + '%';
                 return `(${pctDisplay} | GP: ${gpDisplay} | ${formatIndex(item.index)})`;
             };
             const formatActivationTooltip = (item) => {
+                if (isGenPopAct) return `${item.name} (${item.pct.toFixed(2)}%)`;
                 const gpDisplay = item.genPop < 0.01 ? 'N/A' : item.genPop.toFixed(2) + '%';
                 return `${item.name} (${item.pct.toFixed(2)}% vs GP ${gpDisplay}, ${formatIndex(item.index)})`;
             };
@@ -24649,15 +24656,14 @@
                             color: (ctx) => {
                                 const pct = genderPcts[ctx.dataIndex] || 0;
                                 const genPop = genderGenPop[ctx.dataIndex] || 0;
+                                if (isGenPop) return '#fff';
                                 return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
                             },
                             formatter: (v, ctx) => {
                                 const pct = genderPcts[ctx.dataIndex] || 0;
+                                if (isGenPop) return isProjection ? formatNumber(Math.round(v)) : formatPct(pct);
                                 let genPop = genderGenPop[ctx.dataIndex] || 0;
-                                // Normalize gen pop: if < 1, multiply by 100 (it's a decimal)
-                                if (genPop > 0 && genPop < 1) {
-                                    genPop = genPop * 100;
-                                }
+                                if (genPop > 0 && genPop < 1) genPop = genPop * 100;
                                 if (isProjection) {
                                     const gpVal = genPop > 0 ? Math.round(US_POPULATION * genPop / 100) : 0;
                                     return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
@@ -24764,15 +24770,14 @@
                             color: (ctx) => {
                                 const pct = ethPcts[ctx.dataIndex] || 0;
                                 const genPop = ethGenPop[ctx.dataIndex] || 0;
+                                if (isGenPop) return '#fff';
                                 return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
                             },
                             formatter: (v, ctx) => {
                                 const pct = ethPcts[ctx.dataIndex] || 0;
+                                if (isGenPop) return isProjection ? formatNumber(Math.round(v)) : formatPct(pct);
                                 let genPop = ethGenPop[ctx.dataIndex] || 0;
-                                // Normalize gen pop: if < 1, multiply by 100 (it's a decimal)
-                                if (genPop > 0 && genPop < 1) {
-                                    genPop = genPop * 100;
-                                }
+                                if (genPop > 0 && genPop < 1) genPop = genPop * 100;
                                 if (isProjection) {
                                     const gpVal = genPop > 0 ? Math.round(US_POPULATION * genPop / 100) : 0;
                                     return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
@@ -24843,13 +24848,15 @@
             // Calculate median for income
             const incomeMedian = calculateDemographicMedian(demographics.income, demographicsGenPop.income, 'income');
             
-            // Update median display in chart header
+            // Update median display in chart header (no Gen Pop comparison when Gen Pop selected)
             const incomeMedianDisplay = document.getElementById('incomeMedianDisplay');
             if (incomeMedianDisplay) {
                 const profileName = currentProfileData?.name || 'Profile';
                 const profileVal = incomeMedian.profile ? `$${incomeMedian.profile.value}` : 'N/A';
                 const genPopVal = incomeMedian.genPop ? `$${incomeMedian.genPop.value}` : 'N/A';
-                incomeMedianDisplay.innerHTML = `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
+                incomeMedianDisplay.innerHTML = isGenPop 
+                    ? `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>`
+                    : `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
             }
             
             charts.income = new Chart(document.getElementById('incomeChart'), {
@@ -24879,10 +24886,12 @@
                             color: (ctx) => {
                                 const pct = incomePcts[ctx.dataIndex] || 0;
                                 const genPop = incomeGenPop[ctx.dataIndex] || 0;
+                                if (isGenPop) return '#fff';
                                 return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
                             },
                             formatter: (value, ctx) => {
                                 const pct = incomePcts[ctx.dataIndex] || 0;
+                                if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
                                 const genPop = incomeGenPop[ctx.dataIndex] || 0;
                                 if (isProjection) {
                                     const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
@@ -24957,10 +24966,12 @@
                                 color: (ctx) => {
                                     const pct = eduPcts[ctx.dataIndex] || 0;
                                     const genPop = eduGenPop[ctx.dataIndex] || 0;
+                                    if (isGenPop) return '#fff';
                                     return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
                                 },
                                 formatter: (v, ctx) => {
                                     const pct = eduPcts[ctx.dataIndex] || 0;
+                                    if (isGenPop) return isProjection ? formatNumber(Math.round(v)) : formatPct(pct);
                                     const genPop = eduGenPop[ctx.dataIndex] || 0;
                                     if (isProjection) {
                                         const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
@@ -25046,10 +25057,10 @@
                                             const valStr = isProjection 
                                                 ? formatNumber(Math.round(data.datasets[0].data[i])) 
                                                 : pct.toFixed(2) + '%';
-                                            const gpStr = isProjection
+                                            const gpStr = isGenPop ? '' : (isProjection
                                                 ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 324700000))})` : '')
-                                                : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : '');
-                                            const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
+                                                : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : ''));
+                                            const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     } : undefined
@@ -25062,10 +25073,12 @@
                                 color: (ctx) => {
                                     const pct = relPcts[ctx.dataIndex] || 0;
                                     const genPop = relGenPop[ctx.dataIndex] || 0;
+                                    if (isGenPop) return '#fff';
                                     return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = relPcts[ctx.dataIndex] || 0;
+                                    if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
                                     const genPop = relGenPop[ctx.dataIndex] || 0;
                                     if (isProjection) {
                                         const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
@@ -25155,10 +25168,10 @@
                                             const valStr = isProjection 
                                                 ? formatNumber(Math.round(data.datasets[0].data[i])) 
                                                 : pct.toFixed(2) + '%';
-                                            const gpStr = isProjection
+                                            const gpStr = isGenPop ? '' : (isProjection
                                                 ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 324700000))})` : '')
-                                                : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : '');
-                                            const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
+                                                : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : ''));
+                                            const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     } : undefined
@@ -25171,10 +25184,12 @@
                                 color: (ctx) => {
                                     const pct = soPcts[ctx.dataIndex] || 0;
                                     const genPop = soGenPop[ctx.dataIndex] || 0;
+                                    if (isGenPop) return '#fff';
                                     return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = soPcts[ctx.dataIndex] || 0;
+                                    if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
                                     const genPop = soGenPop[ctx.dataIndex] || 0;
                                     if (isProjection) {
                                         const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
@@ -25262,10 +25277,10 @@
                                             const valStr = isProjection 
                                                 ? formatNumber(Math.round(data.datasets[0].data[i])) 
                                                 : pct.toFixed(2) + '%';
-                                            const gpStr = isProjection
+                                            const gpStr = isGenPop ? '' : (isProjection
                                                 ? (genPop > 0 ? ` (GP: ${formatNumber(Math.round((genPop / 100) * 324700000))})` : '')
-                                                : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : '');
-                                            const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
+                                                : (genPop > 0 ? ` (GP: ${genPop.toFixed(2)}%)` : ''));
+                                            const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     } : undefined
@@ -25278,10 +25293,12 @@
                                 color: (ctx) => {
                                     const pct = psPcts[ctx.dataIndex] || 0;
                                     const genPop = psGenPop[ctx.dataIndex] || 0;
+                                    if (isGenPop) return '#fff';
                                     return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = psPcts[ctx.dataIndex] || 0;
+                                    if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
                                     const genPop = psGenPop[ctx.dataIndex] || 0;
                                     if (isProjection) {
                                         const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
@@ -25378,7 +25395,7 @@
                                             const pct = occPcts[i] || 0;
                                             const genPop = occGenPop[i] || 0;
                                             const valStr = isProjection ? formatNumber(Math.round(data.datasets[0].data[i])) : pct.toFixed(2) + '%';
-                                            const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
+                                            const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                             return { text: `${label} ${valStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     } : undefined
@@ -25391,10 +25408,12 @@
                                 color: (ctx) => {
                                     const pct = occPcts[ctx.dataIndex] || 0;
                                     const genPop = occGenPop[ctx.dataIndex] || 0;
+                                    if (isGenPop) return '#fff';
                                     return (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#fff');
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = occPcts[ctx.dataIndex] || 0;
+                                    if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
                                     const genPop = occGenPop[ctx.dataIndex] || 0;
                                     if (isProjection) {
                                         const gpVal = genPop > 0 ? Math.round(324700000 * genPop / 100) : 0;
@@ -39218,9 +39237,10 @@
                                 ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                                 : (pct > 0 ? pct.toFixed(2) + '%' : '-');
                             
-                            // Index color: green if >= 100, red if < 100
+                            // Never show index for Gen Pop column
+                            const isGenPopCol = genPopProfile && profiles[i] === genPopProfile;
                             const indexColor = index >= 100 ? '#10b981' : '#ef4444';
-                            const indexBadge = index > 0 ? `<span class="index-badge" style="color: ${indexColor};">${index}</span>` : '';
+                            const indexBadge = (!isGenPopCol && index > 0) ? `<span class="index-badge" style="color: ${indexColor};">${index}</span>` : '';
                             
                             return `
                                 <td class="${primaryClass}">
