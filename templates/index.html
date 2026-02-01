@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crosswalk IQ+</title>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&family=Open+Sans:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Playfair+Display:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
@@ -11019,23 +11019,6 @@
             
             <!-- Action Buttons Row with Tab Title -->
             <div class="action-buttons-row" style="display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem; margin-bottom: 0.5rem;">
-                <div class="content-action-buttons" id="contentActionButtons" style="margin-top: 0;">
-                    <div class="dash-dropdown">
-                        <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, full report as PDF, or add page to deck." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
-                        <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
-                            <a onclick="exportAllCSV()">📄 All Data (CSV)</a>
-                            <a onclick="exportAllPNG()">🖼️ All Charts (PNG)</a>
-                            <a onclick="exportPDF()">📑 Full Report (PDF)</a>
-                            <a onclick="addCurrentTabToDeck()">➕ Add Page to Deck</a>
-                        </div>
-                    </div>
-                    <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements.">
-                        <span id="hoverToggleLabel">HOVER ON</span>
-                    </div>
-                    <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" data-tooltip="US %: Toggle between showing percentages of audience vs. projected US population numbers.">
-                        <span id="dashDisplayLabel">US %</span>
-                    </div>
-                </div>
                 <div class="inline-tab-header" id="inlineTabHeader" style="display: flex; align-items: center; gap: 0.75rem;">
                     <h2 style="margin: 0; font-size: 1.1rem;">🔬 Deep Insights</h2>
                     <p style="margin: 0; color: var(--text-secondary); font-size: 0.8rem;">Deep-dive analysis across behavioral patterns, media consumption, and activation opportunities.</p>
@@ -43377,9 +43360,11 @@
             event.currentTarget.style.background = '';
             
             try {
-                const data = JSON.parse(event.dataTransfer.getData('text/plain'));
+                const data = JSON.parse(event.dataTransfer.getData('text/plain') || '{}');
                 if (data.type === 'datapoint') {
                     addDataPointToSlide(data, slideIdx);
+                } else if (data.type === 'demo_box') {
+                    addDemoBoxToSlide(data, slideIdx);
                 }
             } catch (e) {
                 console.error('Drop error:', e);
@@ -43400,9 +43385,11 @@
             event.currentTarget.classList.remove('drag-over');
             
             try {
-                const data = JSON.parse(event.dataTransfer.getData('text/plain'));
+                const data = JSON.parse(event.dataTransfer.getData('text/plain') || '{}');
                 if (data.type === 'datapoint') {
                     addDataPointAsNewSlide(data);
+                } else if (data.type === 'demo_box') {
+                    addDemoBoxAsNewSlide(data);
                 }
             } catch (e) {
                 console.error('Drop error:', e);
@@ -43781,6 +43768,13 @@
                 dropdown.value = `${wsId}|${deck.id}`;
             }
             
+            const selEl = getSlideElement(selectedElementId);
+            const selFontSize = (selEl && selEl.type === 'text') ? (selEl.fontSize || 24) : 24;
+            const selColor = (selEl && selEl.type === 'text') ? (selEl.color || '#ffffff') : '#ffffff';
+            const selFontFamily = (selEl && selEl.type === 'text') ? (selEl.fontFamily || 'inherit') : 'inherit';
+            const selFontWeight = (selEl && selEl.type === 'text') ? (selEl.fontWeight || 'normal') : 'normal';
+            const selShapeFill = (selEl && selEl.type === 'shape') ? (selEl.fill || '#4a8ac9') : '#4a8ac9';
+            
             contentEl.innerHTML = `
                 <div class="slide-editor-wrapper">
                     <!-- Slide Toolbar -->
@@ -43810,20 +43804,73 @@
                             <button class="toolbar-btn" onclick="formatText('insertOrderedList')" title="Numbered List">1. List</button>
                         </div>
                         <div class="slide-toolbar-group">
-                            <select class="toolbar-btn" onchange="setFontSize(this.value)" style="padding: 0.3rem;">
-                                <option value="14">14px</option>
-                                <option value="18">18px</option>
-                                <option value="24" selected>24px</option>
-                                <option value="32">32px</option>
-                                <option value="48">48px</option>
-                                <option value="64">64px</option>
+                            <select class="toolbar-btn" onchange="setFontFamily(this.value)" style="padding: 0.3rem; min-width: 110px;" title="Font">
+                                <option value="inherit" ${!selFontFamily||selFontFamily==='inherit'?'selected':''}>Default</option>
+                                <option value="'DM Sans', sans-serif" ${selFontFamily==="'DM Sans', sans-serif"?'selected':''}>DM Sans</option>
+                                <option value="'Space Mono', monospace" ${selFontFamily==="'Space Mono', monospace"?'selected':''}>Space Mono</option>
+                                <option value="'Roboto', sans-serif" ${selFontFamily==="'Roboto', sans-serif"?'selected':''}>Roboto</option>
+                                <option value="'Open Sans', sans-serif" ${selFontFamily==="'Open Sans', sans-serif"?'selected':''}>Open Sans</option>
+                                <option value="'Montserrat', sans-serif" ${selFontFamily==="'Montserrat', sans-serif"?'selected':''}>Montserrat</option>
+                                <option value="'Playfair Display', serif" ${selFontFamily==="'Playfair Display', serif"?'selected':''}>Playfair Display</option>
+                                <option value="'Lato', sans-serif" ${selFontFamily==="'Lato', sans-serif"?'selected':''}>Lato</option>
+                                <option value="Arial, sans-serif" ${selFontFamily==='Arial, sans-serif'?'selected':''}>Arial</option>
+                                <option value="Georgia, serif" ${selFontFamily==='Georgia, serif'?'selected':''}>Georgia</option>
+                                <option value="'Times New Roman', serif" ${selFontFamily==="'Times New Roman', serif"?'selected':''}>Times New Roman</option>
+                                <option value="Verdana, sans-serif" ${selFontFamily==='Verdana, sans-serif'?'selected':''}>Verdana</option>
+                                <option value="'Trebuchet MS', sans-serif" ${selFontFamily==="'Trebuchet MS', sans-serif"?'selected':''}>Trebuchet MS</option>
+                                <option value="'Courier New', monospace" ${selFontFamily==="'Courier New', monospace"?'selected':''}>Courier New</option>
+                                <option value="Impact, sans-serif" ${selFontFamily==='Impact, sans-serif'?'selected':''}>Impact</option>
                             </select>
-                            <input type="color" class="toolbar-btn" onchange="setTextColor(this.value)" value="#ffffff" title="Text Color" style="width: 32px; height: 28px; padding: 2px;">
+                            <select class="toolbar-btn" onchange="setFontSize(this.value)" style="padding: 0.3rem; min-width: 70px;" title="Font Size">
+                                <option value="12" ${selFontSize==12?'selected':''}>12px</option>
+                                <option value="14" ${selFontSize==14?'selected':''}>14px</option>
+                                <option value="18" ${selFontSize==18?'selected':''}>18px</option>
+                                <option value="24" ${selFontSize==24?'selected':''}>24px</option>
+                                <option value="32" ${selFontSize==32?'selected':''}>32px</option>
+                                <option value="36" ${selFontSize==36?'selected':''}>36px</option>
+                                <option value="48" ${selFontSize==48?'selected':''}>48px</option>
+                                <option value="64" ${selFontSize==64?'selected':''}>64px</option>
+                                <option value="72" ${selFontSize==72?'selected':''}>72px</option>
+                                <option value="96" ${selFontSize==96?'selected':''}>96px</option>
+                            </select>
+                            <select class="toolbar-btn" onchange="setFontWeight(this.value)" style="padding: 0.3rem; min-width: 75px;" title="Font Weight">
+                                <option value="300" ${selFontWeight=='300'?'selected':''}>Light</option>
+                                <option value="normal" ${(selFontWeight=='normal'||!selFontWeight)?'selected':''}>Regular</option>
+                                <option value="600" ${selFontWeight=='600'?'selected':''}>Semi Bold</option>
+                                <option value="bold" ${selFontWeight=='bold'?'selected':''}>Bold</option>
+                            </select>
+                            <input type="color" class="toolbar-btn" id="textColorPicker" onchange="setTextColor(this.value)" value="${selColor}" title="Text Color" style="width: 32px; height: 28px; padding: 2px; cursor: pointer;">
+                            <span style="display: flex; gap: 2px;" title="Preset colors">
+                                <button class="toolbar-btn" onclick="setTextColor('#ffffff')" style="width: 22px; height: 22px; padding: 0; background: #ffffff; border-radius: 3px;" title="White"></button>
+                                <button class="toolbar-btn" onclick="setTextColor('#c8e600')" style="width: 22px; height: 22px; padding: 0; background: #c8e600; border-radius: 3px;" title="Lime"></button>
+                                <button class="toolbar-btn" onclick="setTextColor('#66d9ef')" style="width: 22px; height: 22px; padding: 0; background: #66d9ef; border-radius: 3px;" title="Cyan"></button>
+                                <button class="toolbar-btn" onclick="setTextColor('#5a9ad9')" style="width: 22px; height: 22px; padding: 0; background: #5a9ad9; border-radius: 3px;" title="Blue"></button>
+                                <button class="toolbar-btn" onclick="setTextColor('#000000')" style="width: 22px; height: 22px; padding: 0; background: #000000; border-radius: 3px; border: 1px solid #444;" title="Black"></button>
+                            </span>
+                            <input type="color" class="toolbar-btn" id="textBgColorPicker" onchange="setTextBackgroundColor(this.value)" value="${selEl&&selEl.type==='text'&&selEl.background?selEl.background:'#132f4c'}" title="Text Background" style="width: 32px; height: 28px; padding: 2px; cursor: pointer;">
+                            <button class="toolbar-btn" onclick="setTextBackgroundColor('')" title="Remove background" style="font-size: 0.75rem;">✕ BG</button>
                         </div>
                         <div class="slide-toolbar-group">
                             <button class="toolbar-btn" onclick="alignElement('left')" title="Align Left">⬅</button>
                             <button class="toolbar-btn" onclick="alignElement('center')" title="Align Center">⬌</button>
                             <button class="toolbar-btn" onclick="alignElement('right')" title="Align Right">➡</button>
+                        </div>
+                        <div class="slide-toolbar-group" id="shapeFormatGroup">
+                            <input type="color" class="toolbar-btn" id="shapeFillPicker" onchange="setShapeFill(this.value)" value="${selShapeFill}" title="Shape Fill Color" style="width: 32px; height: 28px; padding: 2px; cursor: pointer;">
+                            <span style="display: flex; gap: 2px;" title="Shape preset colors">
+                                <button class="toolbar-btn" onclick="setShapeFill('#4a8ac9')" style="width: 22px; height: 22px; padding: 0; background: #4a8ac9; border-radius: 3px;" title="Blue"></button>
+                                <button class="toolbar-btn" onclick="setShapeFill('#66d9ef')" style="width: 22px; height: 22px; padding: 0; background: #66d9ef; border-radius: 3px;" title="Cyan"></button>
+                                <button class="toolbar-btn" onclick="setShapeFill('#c8e600')" style="width: 22px; height: 22px; padding: 0; background: #c8e600; border-radius: 3px;" title="Lime"></button>
+                                <button class="toolbar-btn" onclick="setShapeFill('#132f4c')" style="width: 22px; height: 22px; padding: 0; background: #132f4c; border-radius: 3px; border: 1px solid #2a4a6e;" title="Dark"></button>
+                                <button class="toolbar-btn" onclick="setShapeFill('#1e3a5f')" style="width: 22px; height: 22px; padding: 0; background: #1e3a5f; border-radius: 3px;" title="Border"></button>
+                            </span>
+                            <select class="toolbar-btn" onchange="setShapeBorderRadius(this.value)" style="padding: 0.3rem; min-width: 70px;" title="Shape corners">
+                                <option value="0" ${(selEl&&selEl.type==='shape'&&selEl.borderRadius===0)?'selected':''}>Sharp</option>
+                                <option value="4" ${(selEl&&selEl.type==='shape'&&(selEl.borderRadius===4||!selEl.borderRadius))?'selected':''}>4px</option>
+                                <option value="8" ${(selEl&&selEl.type==='shape'&&selEl.borderRadius===8)?'selected':''}>8px</option>
+                                <option value="12" ${(selEl&&selEl.type==='shape'&&selEl.borderRadius===12)?'selected':''}>12px</option>
+                                <option value="50" ${(selEl&&selEl.type==='shape'&&selEl.borderRadius===50)?'selected':''}>Round</option>
+                            </select>
                         </div>
                         <div class="slide-toolbar-group">
                             <button class="toolbar-btn" onclick="analyzeSlideWithAI()" title="Analyze slide data with AI and add key points & takeaways" style="background: var(--accent-cyan); color: var(--bg-dark);">🤖 Analyze with AI</button>
@@ -44059,12 +44106,16 @@
                 const analysisBlock = slide.aiAnalysis ? `<div style="margin-top: 1rem; padding: 1rem; background: rgba(74, 138, 201, 0.1); border-radius: 8px; border-left: 3px solid var(--accent-cyan); font-size: 0.9rem; line-height: 1.5;"><div style="font-size: 0.8rem; font-weight: 600; color: var(--accent-cyan); margin-bottom: 0.5rem;">🤖 AI Key Points & Takeaways</div><div>${slide.aiAnalysis}</div></div>` : '';
                 try {
                     const content = renderSlideContent(slide);
+                    const overlayElements = (slide.elements && slide.elements.length > 0) 
+                        ? slide.elements.map(el => renderSingleElement(el)).join('') 
+                        : '';
                     return `
                     <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 10%; width: 90%; height: 80%; overflow-y: auto; padding: 0.5rem; z-index: 1;">
                         <div class="slide-module-title" style="font-size: 1.5rem; font-weight: 600; color: var(--accent-lime); margin-bottom: 1rem;">${escapeHtml(title)}</div>
                         ${content}
                         ${analysisBlock}
                     </div>
+                    ${overlayElements}
                     `;
                 } catch (e) {
                     console.warn('renderSlideContent error:', e);
@@ -44103,6 +44154,14 @@
             `;
             
             if (el.type === 'text') {
+                const textStyle = [
+                    `font-size: ${el.fontSize || 24}px`,
+                    `font-weight: ${el.fontWeight || 'normal'}`,
+                    `font-family: ${el.fontFamily || 'inherit'}`,
+                    `color: ${el.color || '#ffffff'}`,
+                    `text-align: ${el.align || 'left'}`,
+                    'white-space: pre-wrap'
+                ].join('; ');
                 return `
                     <div class="slide-element text-element ${isSelected ? 'selected' : ''}" 
                          data-element-id="${el.id}"
@@ -44110,11 +44169,7 @@
                          onmousedown="startElementDrag(event, '${el.id}')"
                          ondblclick="startTextEdit(event, '${el.id}')">
                         <div class="text-content" 
-                             style="font-size: ${el.fontSize || 24}px; 
-                                    font-weight: ${el.fontWeight || 'normal'}; 
-                                    color: ${el.color || '#ffffff'};
-                                    text-align: ${el.align || 'left'};
-                                    white-space: pre-wrap;"
+                             style="${textStyle}"
                              ${isSelected ? 'contenteditable="true"' : ''}
                              onblur="saveTextContent(event, '${el.id}')"
                              onkeydown="handleTextKeydown(event)">${el.content || ''}</div>
@@ -44321,6 +44376,69 @@
             if (key && slide.data.boxOverrides) delete slide.data.boxOverrides[key];
             saveDeckChanges();
             renderSlideEditor();
+        }
+        
+        function handleDemoBoxDragStart(event, boxEl) {
+            if (!boxEl) return;
+            const slide = getCurrentSlideForBoxEdit();
+            const slideTitle = slide?.customTitle || slide?.title || slide?.category || '';
+            const payload = {
+                type: 'demo_box',
+                label: boxEl.dataset.label || boxEl.querySelector('.editable-box-label')?.textContent?.trim() || '',
+                value: boxEl.dataset.value || boxEl.querySelector('.editable-box-value')?.textContent?.trim() || '',
+                key: boxEl.dataset.key || '',
+                origVal: parseFloat(boxEl.dataset.origVal || '0'),
+                slideTitle: slideTitle,
+                bgColor: boxEl.dataset.bg || 'var(--bg-input)',
+                valueColor: boxEl.dataset.valueColor || 'var(--accent-lime)',
+                labelColor: boxEl.dataset.labelColor || 'var(--text-secondary)'
+            };
+            event.dataTransfer.setData('text/plain', JSON.stringify(payload));
+            event.dataTransfer.effectAllowed = 'copy';
+        }
+        
+        function addDemoBoxToSlide(data, slideIdx) {
+            if (!currentEditingDeck || slideIdx === 0) return;
+            const slide = currentEditingDeck.slides[slideIdx - 1];
+            if (!slide) return;
+            if (!slide.elements) slide.elements = [];
+            const newId = 'el_' + Date.now();
+            const content = (data.label || '') + '\n' + (data.value || '');
+            const color = (data.valueColor && data.valueColor.startsWith('#')) ? data.valueColor : '#c8e600';
+            const bg = (data.bgColor && data.bgColor.startsWith('#')) ? data.bgColor : 'rgba(30, 41, 59, 0.9)';
+            slide.elements.push({
+                id: newId, type: 'text',
+                x: 15, y: 30 + (slide.elements.length % 3) * 20,
+                width: 25, height: 15,
+                content: content, fontSize: 24, color: color,
+                background: bg,
+                padding: 8, borderRadius: 6
+            });
+            saveDeckChanges();
+            renderSlideEditor();
+            showNotification('✅ Data point added to slide', 'success');
+        }
+        
+        function addDemoBoxAsNewSlide(data) {
+            if (!currentEditingDeck) return;
+            const key = (data.key || data.label || '').includes('_') 
+                ? (data.key || '').split('_').slice(1).join('_') || data.label 
+                : (data.key || data.label);
+            const newSlide = {
+                id: 'slide_' + Date.now(),
+                type: 'demographic',
+                title: (data.label || '') + ' - ' + (data.value || ''),
+                customTitle: (data.label || '') + ' - ' + (data.value || ''),
+                data: { values: { [key]: data.origVal } },
+                notes: ''
+            };
+            if (!currentEditingDeck.slides) currentEditingDeck.slides = [];
+            currentEditingDeck.slides.push(newSlide);
+            saveDeckChanges();
+            currentEditingSlide = currentEditingDeck.slides.length;
+            renderSlideEditor();
+            renderSlideThumbnails();
+            showNotification('✅ New slide created from data point', 'success');
         }
         
         function getSlideElement(elementId) {
@@ -44531,6 +44649,52 @@
             const el = getSlideElement(selectedElementId);
             if (el && el.type === 'text') {
                 el.color = color;
+                saveDeckChanges();
+                renderSlideEditor();
+            }
+        }
+        
+        function setTextBackgroundColor(color) {
+            const el = getSlideElement(selectedElementId);
+            if (el && el.type === 'text') {
+                el.background = color === 'transparent' || !color ? '' : color;
+                if (el.background && (el.padding === undefined || el.padding === null)) el.padding = 8;
+                saveDeckChanges();
+                renderSlideEditor();
+            }
+        }
+        
+        function setFontFamily(font) {
+            const el = getSlideElement(selectedElementId);
+            if (el && el.type === 'text') {
+                el.fontFamily = font === 'inherit' ? '' : font;
+                saveDeckChanges();
+                renderSlideEditor();
+            }
+        }
+        
+        function setFontWeight(weight) {
+            const el = getSlideElement(selectedElementId);
+            if (el && el.type === 'text') {
+                el.fontWeight = weight;
+                saveDeckChanges();
+                renderSlideEditor();
+            }
+        }
+        
+        function setShapeFill(color) {
+            const el = getSlideElement(selectedElementId);
+            if (el && el.type === 'shape') {
+                el.fill = color;
+                saveDeckChanges();
+                renderSlideEditor();
+            }
+        }
+        
+        function setShapeBorderRadius(radius) {
+            const el = getSlideElement(selectedElementId);
+            if (el && el.type === 'shape') {
+                el.borderRadius = parseInt(radius) || 4;
                 saveDeckChanges();
                 renderSlideEditor();
             }
@@ -44865,9 +45029,11 @@
             if (currentEditingSlide === 0) return; // Can't drop on title slide
             
             try {
-                const data = JSON.parse(event.dataTransfer.getData('text/plain'));
+                const data = JSON.parse(event.dataTransfer.getData('text/plain') || '{}');
                 if (data.type === 'datapoint') {
                     addDataPointToSlide(data, currentEditingSlide);
+                } else if (data.type === 'demo_box') {
+                    addDemoBoxToSlide(data, currentEditingSlide);
                 }
             } catch (e) {
                 console.error('Drop error:', e);
@@ -45001,10 +45167,12 @@
                             const labelColor = o.labelColor || 'var(--text-secondary)';
                             const boxStyle = o.width || o.height ? `min-width: ${o.width || 'auto'}; min-height: ${o.height || 'auto'};` : '';
                             return `
-                            <div class="editable-demo-box" data-key="${escapeHtml(key)}" data-orig-val="${parseFloat(val).toFixed(1)}"
+                            <div class="editable-demo-box" data-key="${escapeHtml(key)}" data-orig-val="${parseFloat(val).toFixed(1)}" data-label="${escapeHtml(label)}" data-value="${escapeHtml(String(value))}"
+                                 data-bg="${escapeHtml(bg)}" data-value-color="${escapeHtml(valueColor)}" data-label-color="${escapeHtml(labelColor)}"
                                  style="background: ${bg}; padding: 0.75rem; border-radius: 6px; cursor: pointer; position: relative; transition: box-shadow 0.2s; ${boxStyle}"
                                  onclick="selectEditableBox(event, this)">
-                                <div class="editable-box-label" contenteditable="true" spellcheck="false" style="font-size: 0.8rem; color: ${labelColor};" onblur="saveEditableBoxEdit(this)">${escapeHtml(label)}</div>
+                                <span class="demo-box-drag-handle" draggable="true" ondragstart="handleDemoBoxDragStart(event, this.closest('.editable-demo-box'))" onmousedown="event.stopPropagation()" title="Drag to slide or drop zone to add" style="position: absolute; top: 4px; left: 4px; cursor: grab; opacity: 0.6; font-size: 0.7rem; user-select: none;">⋮⋮</span>
+                                <div class="editable-box-label" contenteditable="true" spellcheck="false" style="font-size: 0.8rem; color: ${labelColor}; padding-left: 14px;" onblur="saveEditableBoxEdit(this)">${escapeHtml(label)}</div>
                                 <div class="editable-box-value" contenteditable="true" spellcheck="false" style="font-size: 1.5rem; font-weight: 700; color: ${valueColor};" onblur="saveEditableBoxEdit(this)">${escapeHtml(String(value))}</div>
                                 <div class="editable-box-toolbar" style="display: none; position: absolute; bottom: -42px; left: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem; flex-wrap: wrap; gap: 0.35rem; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.4);" onclick="event.stopPropagation()">
                                     <input type="color" title="Background color" value="${bg.startsWith('#') ? bg : '#1e293b'}" onchange="updateEditableBoxColor(this, 'bg')" style="width: 24px; height: 24px; border: none; cursor: pointer; padding: 0; border-radius: 4px;">
@@ -45088,10 +45256,12 @@
                                     const vc = o.valueColor || 'var(--accent-lime)';
                                     const lc = o.labelColor || 'var(--text-secondary)';
                                     return `
-                                    <div class="editable-demo-box" data-key="${escapeHtml(catKey + key)}" data-orig-val="${parseFloat(val || 0).toFixed(1)}"
+                                    <div class="editable-demo-box" data-key="${escapeHtml(catKey + key)}" data-orig-val="${parseFloat(val || 0).toFixed(1)}" data-label="${escapeHtml(l)}" data-value="${escapeHtml(String(v))}"
+                                         data-bg="${escapeHtml(bg)}" data-value-color="${escapeHtml(vc)}" data-label-color="${escapeHtml(lc)}"
                                          style="background: ${bg}; padding: 0.5rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer; position: relative;"
                                          onclick="selectEditableBox(event, this)">
-                                        <div class="editable-box-label" contenteditable="true" spellcheck="false" style="color: ${lc};" onblur="saveEditableBoxEdit(this)">${escapeHtml(l)}</div>
+                                        <span class="demo-box-drag-handle" draggable="true" ondragstart="handleDemoBoxDragStart(event, this.closest('.editable-demo-box'))" onmousedown="event.stopPropagation()" title="Drag to slide or drop zone" style="position: absolute; top: 2px; left: 2px; cursor: grab; opacity: 0.6; font-size: 0.65rem; user-select: none;">⋮⋮</span>
+                                        <div class="editable-box-label" contenteditable="true" spellcheck="false" style="color: ${lc}; padding-left: 12px;" onblur="saveEditableBoxEdit(this)">${escapeHtml(l)}</div>
                                         <div class="editable-box-value" contenteditable="true" spellcheck="false" style="font-weight: 600; color: ${vc};" onblur="saveEditableBoxEdit(this)">${escapeHtml(String(v))}</div>
                                         <div class="editable-box-toolbar" style="display: none; position: absolute; bottom: -42px; left: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem; flex-wrap: wrap; gap: 0.35rem; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.4);" onclick="event.stopPropagation()">
                                             <input type="color" title="Background" value="${bg.startsWith('#') ? bg : '#1e293b'}" onchange="updateEditableBoxColor(this, 'bg')" style="width: 24px; height: 24px; border: none; cursor: pointer; border-radius: 4px;">
@@ -45354,7 +45524,7 @@
                         <button onclick="document.getElementById('addSlideModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
                     </div>
                     <div style="padding: 1.5rem;">
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
                             <div onclick="addBlankSlide()" style="padding: 1.5rem; background: var(--bg-input); border-radius: 8px; cursor: pointer; text-align: center; border: 2px solid transparent; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-lime)'" onmouseout="this.style.borderColor='transparent'">
                                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">📄</div>
                                 <div style="font-weight: 600;">Blank Slide</div>
@@ -45363,12 +45533,7 @@
                             <div onclick="addSlideFromModule()" style="padding: 1.5rem; background: var(--bg-input); border-radius: 8px; cursor: pointer; text-align: center; border: 2px solid transparent; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-lime)'" onmouseout="this.style.borderColor='transparent'">
                                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
                                 <div style="font-weight: 600;">From Module</div>
-                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Add single module data</div>
-                            </div>
-                            <div onclick="addSlideFromCategory()" style="padding: 1.5rem; background: var(--bg-input); border-radius: 8px; cursor: pointer; text-align: center; border: 2px solid transparent; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-lime)'" onmouseout="this.style.borderColor='transparent'">
-                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">📋</div>
-                                <div style="font-weight: 600;">From Category</div>
-                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Demographics (all or selected)</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Select modules to add (multi-select)</div>
                             </div>
                         </div>
                     </div>
@@ -45400,7 +45565,6 @@
         
         function addSlideFromModule() {
             document.getElementById('addSlideModal')?.remove();
-            // Show module selection
             if (!currentDashboardData) {
                 alert('Please load a profile first to add modules');
                 return;
@@ -45410,126 +45574,87 @@
             modal.className = 'deck-workspace-modal';
             modal.id = 'moduleSelectModal';
             
-            let moduleOptions = '';
-            
-            // Demographics
             const demoLabels = { age: 'Age', gender: 'Gender', ethnicity: 'Ethnicity', income: 'Income', education: 'Education', relationship: 'Relationship Status', sexual_orientation: 'Sexual Orientation', parental_status: 'Parental Status', occupation: 'Occupation' };
+            
+            let demoHtml = '';
             if (currentDashboardData.demographics) {
-                moduleOptions += '<h4 style="margin: 1rem 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Demographics</h4>';
-                Object.keys(currentDashboardData.demographics).forEach(key => {
+                demoHtml = Object.keys(currentDashboardData.demographics).map(key => {
                     const label = demoLabels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                    moduleOptions += `<div onclick="addModuleToCurrentDeck('demographic', '${key}')" style="padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer;">📊 ${label}</div>`;
-                });
+                    return `<label class="module-select-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer;">
+                        <input type="checkbox" class="module-select-check" data-type="demographic" data-cat="${key}">
+                        <span>📊 ${label}</span>
+                    </label>`;
+                }).join('');
             }
             
-            // Behavioral
+            let behavioralHtml = '';
             if (currentDashboardData.behavioral) {
-                moduleOptions += '<h4 style="margin: 1rem 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Behavioral</h4>';
-                Object.keys(currentDashboardData.behavioral).slice(0, 15).forEach(key => {
-                    moduleOptions += `<div onclick="addModuleToCurrentDeck('behavioral', '${key}')" style="padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer;">🎯 ${key}</div>`;
-                });
+                const allBehavioralKeys = Object.keys(currentDashboardData.behavioral);
+                behavioralHtml = allBehavioralKeys.map(key => {
+                    return `<label class="module-select-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-input); border-radius: 4px; margin-bottom: 0.25rem; cursor: pointer;">
+                        <input type="checkbox" class="module-select-check" data-type="behavioral" data-cat="${escapeHtml(key || '')}">
+                        <span>🎯 ${escapeHtml(key)}</span>
+                    </label>`;
+                }).join('');
             }
+            
+            const hasModules = demoHtml || behavioralHtml;
             
             modal.innerHTML = `
-                <div class="deck-workspace-content" style="max-width: 400px; max-height: 80vh;">
+                <div class="deck-workspace-content" style="max-width: 480px; max-height: 85vh;">
                     <div class="deck-workspace-header">
                         <h2>Select Module</h2>
                         <button onclick="document.getElementById('moduleSelectModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
                     </div>
-                    <div style="padding: 1rem; max-height: 60vh; overflow-y: auto;">
-                        ${moduleOptions || '<p>No modules available</p>'}
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(modal);
-        }
-        
-        function addSlideFromCategory() {
-            document.getElementById('addSlideModal')?.remove();
-            if (!currentDashboardData || !currentDashboardData.demographics) {
-                alert('Please load a profile first to add demographics pages');
-                return;
-            }
-            const demoKeys = Object.keys(currentDashboardData.demographics);
-            const demoLabels = { age: 'Age', gender: 'Gender', ethnicity: 'Ethnicity', income: 'Income', education: 'Education', relationship: 'Relationship Status', sexual_orientation: 'Sexual Orientation', parental_status: 'Parental Status', occupation: 'Occupation' };
-            let checkboxesHtml = demoKeys.map(key => {
-                const label = demoLabels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                return `<label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0; cursor: pointer;">
-                    <input type="checkbox" class="demo-cat-check" data-key="${key}" ${key === 'age' ? 'checked' : ''}>
-                    <span>${label}</span>
-                </label>`;
-            }).join('');
-            const modal = document.createElement('div');
-            modal.className = 'deck-workspace-modal';
-            modal.id = 'categorySelectModal';
-            modal.innerHTML = `
-                <div class="deck-workspace-content" style="max-width: 420px;">
-                    <div class="deck-workspace-header">
-                        <h2>📋 Add Page from Category</h2>
-                        <button onclick="document.getElementById('categorySelectModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
-                    </div>
                     <div style="padding: 1rem;">
-                        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">Select demographics to include on the slide:</p>
-                        <div style="margin-bottom: 0.75rem;">
-                            <button onclick="document.querySelectorAll('.demo-cat-check').forEach(c => c.checked = true)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">Select All</button>
-                            <button onclick="document.querySelectorAll('.demo-cat-check').forEach(c => c.checked = false)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer; margin-left: 0.5rem;">Clear</button>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                            <button type="button" onclick="document.querySelectorAll('.module-select-check').forEach(c => c.checked = true)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">Select All</button>
+                            <button type="button" onclick="document.querySelectorAll('.module-select-check').forEach(c => c.checked = false)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">Clear</button>
+                            <button type="button" onclick="document.querySelectorAll('.module-select-check[data-type=demographic]').forEach(c => c.checked = true)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">All Demographics</button>
+                            <button type="button" onclick="document.querySelectorAll('.module-select-check[data-type=behavioral]').forEach(c => c.checked = true)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">All Behavioral</button>
                         </div>
-                        <div style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px; padding: 0.75rem; background: var(--bg-dark);">
-                            ${checkboxesHtml}
+                        <div style="max-height: 50vh; overflow-y: auto;">
+                            ${demoHtml ? '<h4 style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Demographics</h4>' + demoHtml : ''}
+                            ${behavioralHtml ? '<h4 style="margin: 1rem 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Behavioral</h4>' + behavioralHtml : ''}
                         </div>
+                        ${hasModules ? `
                         <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
-                            <button class="btn btn-secondary" onclick="document.getElementById('categorySelectModal').remove()" style="flex: 1;">Cancel</button>
-                            <button class="btn btn-primary" onclick="confirmAddSlideFromCategory()" style="flex: 1;">Add Page</button>
+                            <button class="btn btn-secondary" onclick="document.getElementById('moduleSelectModal').remove()" style="flex: 1;">Cancel</button>
+                            <button class="btn btn-primary" onclick="addSelectedModulesToDeck()" style="flex: 1;">Add Selected to Slide</button>
                         </div>
+                        ` : '<p style="color: var(--text-secondary); margin-top: 1rem;">No modules available</p>'}
                     </div>
                 </div>
             `;
             document.body.appendChild(modal);
         }
         
-        function confirmAddSlideFromCategory() {
-            const modal = document.getElementById('categorySelectModal');
+        function addSelectedModulesToDeck() {
+            const modal = document.getElementById('moduleSelectModal');
             if (!modal || !currentEditingDeck) return;
-            const checked = Array.from(modal.querySelectorAll('.demo-cat-check:checked')).map(c => c.dataset.key);
+            
+            const checked = modal.querySelectorAll('.module-select-check:checked');
             if (checked.length === 0) {
-                alert('Please select at least one demographic category');
+                alert('Please select at least one module');
                 return;
             }
+            
             modal.remove();
-            const item = createDemographicsCategoryItem(checked);
+            
             if (!currentEditingDeck.slides) currentEditingDeck.slides = [];
-            currentEditingDeck.slides.push(item);
-            saveDeckChanges();
-            currentEditingSlide = currentEditingDeck.slides.length;
-            renderSlideEditor();
-            showNotification(`✅ Added demographics slide (${checked.length} categories)`, 'success');
-        }
-        
-        function createDemographicsCategoryItem(selectedKeys) {
-            const categories = {};
-            selectedKeys.forEach(key => {
-                categories[key] = {
-                    values: currentDashboardData.demographics[key] || {},
-                    index: currentDashboardData.demographicsIndex?.[key] || {},
-                    genPop: currentDashboardData.demographicsGenPop?.[key] || {}
-                };
+            
+            checked.forEach(cb => {
+                const type = cb.dataset.type;
+                const cat = cb.dataset.cat;
+                const item = createModuleItem(type, cat);
+                currentEditingDeck.slides.push(item);
             });
-            const labels = { age: 'Age', gender: 'Gender', ethnicity: 'Ethnicity', income: 'Income', education: 'Education', relationship: 'Relationship', sexual_orientation: 'Sexual Orientation', parental_status: 'Parental Status', occupation: 'Occupation' };
-            const title = selectedKeys.length === Object.keys(currentDashboardData.demographics || {}).length
-                ? 'All Demographics'
-                : selectedKeys.map(k => labels[k] || k).join(', ');
-            return {
-                id: 'slide_' + Date.now(),
-                type: 'demographics',
-                category: 'Demographics',
-                profileName: currentProfileData?.name || 'Profile',
-                profileKey: currentS3Key,
-                dateAdded: new Date().toISOString(),
-                data: { categories },
-                customTitle: title,
-                title: `${currentProfileData?.name || 'Profile'} - ${title}`,
-                customNotes: ''
-            };
+            
+            saveDeckChanges();
+            currentEditingSlide = Math.max(1, currentEditingDeck.slides.length - checked.length + 1);
+            renderSlideEditor();
+            renderSlideThumbnails();
+            showNotification(`✅ Added ${checked.length} module(s) to deck`, 'success');
         }
         
         function addModuleToCurrentDeck(type, category) {
@@ -45859,29 +45984,36 @@
         function shareDeckWithTeam() {
             if (!currentEditingDeck) return;
             
+            const teamOptions = collabTeamMembers.map(m => {
+                const displayName = m.first_name && m.last_name ? `${m.first_name} ${m.last_name}` : m.username;
+                const avatarHtml = m.profile_picture 
+                    ? `<img src="${m.profile_picture}" alt="" style="width: 100%; height: 100%; object-fit: cover;">`
+                    : `<div style="width: 100%; height: 100%; border-radius: 50%; background: var(--accent-blue); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.85rem; color: white;">${(m.username || '?').substring(0, 2).toUpperCase()}</div>`;
+                return `
+                    <label style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem; cursor: pointer; text-align: left;">
+                        <input type="checkbox" class="share-deck-member" value="${m.username}">
+                        <div style="width: 44px; height: 44px; border-radius: 50%; overflow: hidden; flex-shrink: 0;">${avatarHtml}</div>
+                        <span style="font-size: 0.95rem;">${displayName}</span>
+                    </label>
+                `;
+            }).join('');
+            
             const modal = document.createElement('div');
             modal.className = 'deck-workspace-modal';
             modal.id = 'shareDeckModal';
-            
-            const teamOptions = collabTeamMembers.map(m => `
-                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" class="share-deck-member" value="${m.username}">
-                    <span>${m.first_name && m.last_name ? `${m.first_name} ${m.last_name}` : m.username}</span>
-                </label>
-            `).join('');
-            
             modal.innerHTML = `
-                <div class="deck-workspace-content" style="max-width: 400px;">
+                <div class="deck-workspace-content" style="max-width: 560px; width: 95%;">
                     <div class="deck-workspace-header">
-                        <h2>👥 Share Deck</h2>
+                        <h2>👥 Collaborate</h2>
                         <button onclick="document.getElementById('shareDeckModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
                     </div>
                     <div style="padding: 1.5rem; text-align: left;">
-                        <p style="margin-bottom: 1rem; color: var(--text-secondary);">Share "${currentEditingDeck.name}" with team members:</p>
-                        <div style="max-height: 200px; overflow-y: auto; background: var(--bg-input); border-radius: 6px; padding: 0.5rem; margin-bottom: 1rem;">
-                            ${teamOptions || '<p style="padding: 0.5rem; color: var(--text-secondary);">No team members available</p>'}
+                        <p style="margin-bottom: 0.75rem; color: var(--text-primary); font-size: 0.95rem;">Invite team members to collaborate on "${currentEditingDeck.name}":</p>
+                        <p style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.8rem;">When granted access, collaborators work on the same deck in real time. Changes are auto-saved for everyone with access.</p>
+                        <div style="max-height: 280px; overflow-y: auto; background: var(--bg-input); border-radius: 8px; padding: 0.5rem; margin-bottom: 1.25rem;">
+                            ${teamOptions || '<p style="padding: 0.5rem; color: var(--text-secondary); text-align: left;">No team members available</p>'}
                         </div>
-                        <div style="display: flex; gap: 0.5rem;">
+                        <div style="display: flex; gap: 0.5rem; justify-content: flex-start;">
                             <button class="btn btn-secondary" onclick="document.getElementById('shareDeckModal').remove()" style="flex: 1;">Cancel</button>
                             <button class="btn btn-primary" onclick="confirmShareDeck()" style="flex: 1;">Share</button>
                         </div>
