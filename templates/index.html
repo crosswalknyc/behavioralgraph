@@ -2793,6 +2793,13 @@
         .insight-col-header span:hover {
             color: var(--accent-lime);
         }
+        /* Demographics page: left-justify all columns and headers so they align */
+        .demo-insight-card .insight-col-header span {
+            text-align: left;
+        }
+        .demo-insight-item.insight-row-genpop > span {
+            text-align: left;
+        }
         .top-cat-header {
             flex-shrink: 0;
         }
@@ -2849,13 +2856,15 @@
             }
         }
 
+        /* Dynamic fonts: dashboard boxes scale with viewport to prevent text cutoff */
         .chart-card {
             background: var(--bg-card);
             border-radius: 8px;
-            padding: 0.75rem;
+            padding: clamp(0.5rem, 1vw, 0.75rem);
             position: relative;
-            min-width: 0; /* Allow shrinking below content size */
-            overflow: hidden; /* Prevent content overflow */
+            min-width: 0;
+            overflow: hidden;
+            font-size: clamp(0.7rem, 1.2vw + 0.4rem, 0.9rem);
         }
         
         .chart-card.dragging {
@@ -2867,7 +2876,7 @@
         }
 
         .chart-card h3 {
-            font-size: 0.85rem;
+            font-size: clamp(0.7rem, 1.1vw + 0.45rem, 0.85rem);
             color: var(--text-primary);
             margin-bottom: 0.75rem;
             text-transform: uppercase;
@@ -2878,6 +2887,7 @@
             gap: 0.5rem;
             padding-bottom: 0.5rem;
             border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
         }
         
         .chart-card-title-row {
@@ -2885,11 +2895,12 @@
             align-items: center;
             gap: 0.4rem;
             flex-shrink: 0;
+            min-width: 0;
         }
         
         .chart-card-title-row .drag-handle {
             opacity: 0.3;
-            font-size: 0.8rem;
+            font-size: 0.9em;
             transition: opacity 0.2s;
         }
         
@@ -2901,12 +2912,12 @@
             display: flex;
             align-items: center;
             gap: 0.25rem;
-            flex-wrap: nowrap;
+            flex-wrap: wrap;
         }
         
         .chart-card-controls-row select.chart-type-select {
             padding: 0.2rem 0.3rem;
-            font-size: 0.7rem;
+            font-size: clamp(0.55rem, 1vw + 0.3rem, 0.7rem);
             background: var(--bg-dark);
             border: 1px solid var(--border-color);
             border-radius: 4px;
@@ -2921,9 +2932,9 @@
             color: var(--text-primary);
         }
         
-        /* Median display styling */
+        /* Median display styling - dynamic and wrap */
         .chart-card .median-display {
-            font-size: 0.65rem;
+            font-size: clamp(0.55rem, 1vw + 0.3rem, 0.65rem);
             color: #f0ff00;
             font-weight: 600;
             text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);
@@ -2932,18 +2943,18 @@
             background: rgba(200, 255, 0, 0.1);
             padding: 0.15rem 0.4rem;
             border-radius: 4px;
-            white-space: nowrap;
             width: 100%;
-            order: 10; /* Push to end/new row */
+            order: 10;
             margin-top: 0.25rem;
             padding-top: 0.25rem;
             border-top: 1px solid var(--border-color);
             white-space: normal;
             word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         
         .chart-type-select {
-            font-size: 0.6rem;
+            font-size: clamp(0.5rem, 0.9vw + 0.3rem, 0.6rem);
             padding: 0.1rem 0.2rem;
             background: var(--bg-input);
             border: 1px solid var(--border-color);
@@ -2958,24 +2969,59 @@
         }
 
         .chart-container { 
-            height: 220px; 
+            height: clamp(160px, 18vw + 80px, 220px);
             overflow: visible;
             position: relative;
         }
         
-        /* Responsive chart sizing */
+        /* Responsive chart sizing - use clamp in base styles above; keep media for layout */
         @media (max-width: 1600px) {
-            .chart-container { height: 200px; }
-            .chart-card h3 { font-size: 0.8rem; }
+            .chart-container { height: clamp(150px, 16vw + 60px, 200px); }
         }
         
         @media (max-width: 1200px) {
-            .chart-container { height: 180px; }
-            .chart-card h3 { font-size: 0.75rem; }
-            .chart-card-controls-row select.chart-type-select {
-                padding: 0.15rem 0.25rem;
-                font-size: 0.65rem;
-            }
+            .chart-container { height: clamp(140px, 15vw + 50px, 180px); }
+        }
+        
+        /* Dynamic fonts: all dashboard boxes scale with viewport to prevent text cutoff */
+        .demo-insight-card,
+        .insight-card,
+        .behavioral-card,
+        .region-card,
+        .location-section {
+            font-size: clamp(0.72rem, 1.1vw + 0.4rem, 0.88rem);
+        }
+        .demo-insight-card h4,
+        .behavioral-card h3,
+        .region-card h4 {
+            font-size: clamp(0.7rem, 1vw + 0.45rem, 0.85rem);
+        }
+        .region-pct,
+        .region-bar-fill + span {
+            font-size: clamp(0.65rem, 1vw + 0.35rem, 0.8rem);
+        }
+        .state-box .state-name,
+        .state-box .state-pct {
+            font-size: clamp(0.6rem, 0.9vw + 0.35rem, 0.75rem);
+        }
+        .insight-list-header,
+        .insight-item-v2 {
+            font-size: clamp(0.7rem, 1vw + 0.35rem, 0.82rem);
+        }
+        .insight-card .insight-label,
+        .insight-card .insight-detail {
+            font-size: clamp(0.6rem, 0.9vw + 0.3rem, 0.7rem);
+        }
+        .insight-card .insight-value {
+            font-size: clamp(0.85rem, 1.1vw + 0.4rem, 1rem);
+        }
+        .comp-section .comp-section-title,
+        .comp-table {
+            font-size: clamp(0.72rem, 1vw + 0.4rem, 0.85rem);
+        }
+        .profile-chart-card,
+        .profile-chart-card h3 {
+            font-size: clamp(0.7rem, 1vw + 0.4rem, 0.85rem);
         }
         
         /* Module Action Buttons (Add to Deck, CSV, PNG, PDF) */
@@ -24563,6 +24609,11 @@
             const isProjection = dashDisplayMode === 'projection';
             const isGenPop = isSelectedProfileGenPop();
             const US_POPULATION = 324700000;
+            const ageChartEl = document.getElementById('ageChart');
+            const chartContainerWidth = ageChartEl?.parentElement?.offsetWidth || 400;
+            const legendFontSize = Math.max(6, Math.min(11, Math.floor(chartContainerWidth / 28)));
+            const axisFontSize = Math.max(9, Math.min(14, Math.floor(chartContainerWidth / 28)));
+            const legendPaddingRight = Math.min(100, Math.max(50, Math.floor(chartContainerWidth * 0.22)));
 
             // Age - horizontal bar with Gen Pop in data labels (green/red based on index)
             // Apply sorting based on user selection
@@ -24578,15 +24629,16 @@
             // Calculate max for x-axis with padding for labels (horizontal bar)
             const ageMax = Math.max(...ageData) * 1.5; // 50% padding for horizontal labels
             
-            // Calculate median for age
-            const ageMedian = calculateDemographicMedian(demographics.age, demographicsGenPop.age, 'age');
+            // Calculate median for age using same interpolated formula as Compare feature
+            const profileMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(demographics.age || {}) : 0;
+            const genPopMedianAge = typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(demographicsGenPop.age || {}) : 0;
             
             // Update median display in chart header
             const ageMedianDisplay = document.getElementById('ageMedianDisplay');
             if (ageMedianDisplay) {
                 const profileName = currentProfileData?.name || 'Profile';
-                const profileVal = ageMedian.profile ? `${ageMedian.profile.value} years` : 'N/A';
-                const genPopVal = ageMedian.genPop ? `${ageMedian.genPop.value} years` : 'N/A';
+                const profileVal = profileMedianAge > 0 ? `${profileMedianAge.toFixed(2)} years` : 'N/A';
+                const genPopVal = genPopMedianAge > 0 ? `${genPopMedianAge.toFixed(2)} years` : 'N/A';
                 ageMedianDisplay.innerHTML = isGenPop 
                     ? `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span>`
                     : `<span style="color: #f0ff00; text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);">${profileName} Median: ${profileVal}</span> | <span style="color: var(--text-secondary);">Gen Pop Median: ${genPopVal}</span>`;
@@ -24612,9 +24664,9 @@
                     indexAxis: ageIsCircular || ageChartType === 'line' ? 'x' : 'y', 
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: ageIsCircular ? {} : { right: 50 } }, // Increased padding to prevent text cutoff
+                    layout: { padding: ageIsCircular ? { right: legendPaddingRight } : { right: 50 } },
                     plugins: { 
-                        legend: { display: ageIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: 11 } } },
+                        legend: { display: ageIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: legendFontSize }, boxWidth: 10, padding: 5 } },
                         datalabels: ageIsCircular ? { display: false } : {
                             anchor: 'end',
                             align: 'end',
@@ -24638,8 +24690,8 @@
                         }
                     }, 
                     scales: ageIsCircular ? {} : { 
-                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 13 } }, suggestedMax: ageMax }, 
-                        y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: 14 } } } 
+                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: axisFontSize } }, suggestedMax: ageMax }, 
+                        y: { grid: { display: false }, ticks: { color: '#e6f1ff', font: { size: axisFontSize } } } 
                     } 
                 },
                 plugins: [ChartDataLabels]
@@ -24668,16 +24720,16 @@
                     indexAxis: genderChartType === 'bar' ? 'y' : 'x',
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: genderIsCircular ? { right: 10 } : { right: 50 } }, // Increased padding for bar charts
+                    layout: { padding: genderIsCircular ? { right: legendPaddingRight } : { right: 50 } },
                     plugins: { 
                         legend: { 
                             display: genderIsCircular,
                             position: 'right', 
                             labels: { 
                                 color: '#e6f1ff', 
-                                font: { size: 10 },
-                                padding: 8,
-                                boxWidth: 12,
+                                font: { size: legendFontSize },
+                                padding: 5,
+                                boxWidth: 10,
                                 generateLabels: genderIsCircular ? (chart) => {
                                     const data = chart.data;
                                     return data.labels.map((label, i) => {
@@ -24718,17 +24770,17 @@
                             }
                         } : { display: false }
                     },
-                    scales: genderIsCircular ? {} : {
+                        scales: genderIsCircular ? {} : {
                         x: { 
                             grid: { color: '#1e3a5f' }, 
-                            ticks: { color: '#8892b0', font: { size: 13 } },
-                            suggestedMax: genderMax // Add suggestedMax to prevent cutoff
+                            ticks: { color: '#8892b0', font: { size: axisFontSize } },
+                            suggestedMax: genderMax
                         },
                         y: { 
                             grid: { display: false }, 
                             ticks: { 
                                 color: '#e6f1ff', 
-                                font: { size: 13 },
+                                font: { size: axisFontSize },
                                 autoSkip: false,
                                 callback: function(value, index, ticks) {
                                     const label = this.getLabelForValue(value);
@@ -24782,16 +24834,16 @@
                     indexAxis: ethnicityChartType === 'bar' ? 'y' : 'x',
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: ethnicityIsCircular ? { right: 10 } : { right: 50 } }, // Increased padding to prevent text cutoff
+                    layout: { padding: ethnicityIsCircular ? { right: legendPaddingRight } : { right: 50 } },
                     plugins: { 
                         legend: { 
                             display: ethnicityIsCircular,
                             position: 'right', 
                             labels: { 
                                 color: '#e6f1ff', 
-                                font: { size: 10 },
-                                padding: 8,
-                                boxWidth: 12,
+                                font: { size: legendFontSize },
+                                padding: 5,
+                                boxWidth: 10,
                                 generateLabels: ethnicityIsCircular ? (chart) => {
                                     const data = chart.data;
                                     return data.labels.map((label, i) => {
@@ -24835,14 +24887,14 @@
                     scales: ethnicityIsCircular ? {} : {
                         x: { 
                             grid: { color: '#1e3a5f' }, 
-                            ticks: { color: '#8892b0', font: { size: 13 } },
-                            suggestedMax: ethMax // Add suggestedMax to prevent cutoff
+                            ticks: { color: '#8892b0', font: { size: axisFontSize } },
+                            suggestedMax: ethMax
                         },
                         y: { 
                             grid: { display: false }, 
                             ticks: { 
                                 color: '#e6f1ff', 
-                                font: { size: 13 },
+                                font: { size: axisFontSize },
                                 autoSkip: false,
                                 callback: function(value, index, ticks) {
                                     const label = this.getLabelForValue(value);
@@ -24922,9 +24974,9 @@
                     indexAxis: incomeIsCircular || incomeChartType === 'line' ? 'x' : 'y',
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: incomeIsCircular ? {} : { right: 50 } }, // Increased padding to prevent text cutoff
-                    plugins: { 
-                        legend: { display: incomeIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: 10 } } },
+                        layout: { padding: incomeIsCircular ? { right: legendPaddingRight } : { right: 50 } },
+                        plugins: { 
+                            legend: { display: incomeIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: legendFontSize }, boxWidth: 10, padding: 5 } },
                         datalabels: incomeIsCircular ? { display: false } : {
                             anchor: 'end',
                             align: 'right',
@@ -24952,7 +25004,7 @@
                             grid: { display: false }, 
                             ticks: { 
                                 color: '#e6f1ff', 
-                                font: { size: 13 },
+                                font: { size: axisFontSize },
                                 autoSkip: false,
                                 callback: function(value, index, ticks) {
                                     const label = this.getLabelForValue(value);
@@ -24978,7 +25030,7 @@
                             },
                             afterFit: (scale) => { scale.width = Math.max(scale.width, 180); }
                         }, 
-                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 13 } }, suggestedMax: incomeMax } 
+                        x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: axisFontSize } }, suggestedMax: incomeMax } 
                     } 
                 },
                 plugins: [ChartDataLabels]
@@ -25002,9 +25054,9 @@
                     data: { labels: eduLabels, datasets: [{ data: eduData, backgroundColor: educationIsCircular ? colors : '#a6e22e', borderRadius: educationIsCircular ? 0 : 4 }] },
                     options: { 
                         indexAxis: educationIsCircular ? 'x' : 'y', responsive: true, maintainAspectRatio: false,
-                        layout: { padding: educationIsCircular ? {} : { right: 50 } }, // Increased padding to prevent text cutoff
+                        layout: { padding: educationIsCircular ? { right: legendPaddingRight } : { right: 50 } },
                         plugins: { 
-                            legend: { display: educationIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: 10 } } }, 
+                            legend: { display: educationIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: legendFontSize }, boxWidth: 10, padding: 5 } }, 
                             datalabels: educationIsCircular ? { display: false } : { 
                                 anchor: 'end', 
                                 align: 'end', 
@@ -25028,12 +25080,12 @@
                             } 
                         }, 
                         scales: educationIsCircular ? {} : { 
-                            x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: 13 } }, suggestedMax: eduMax }, 
+                            x: { grid: { color: '#1e3a5f' }, ticks: { color: '#8892b0', font: { size: axisFontSize } }, suggestedMax: eduMax }, 
                             y: { 
                                 grid: { display: false }, 
                                 ticks: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 13 },
+                                    font: { size: axisFontSize },
                                     autoSkip: false,
                                     callback: function(value, index, ticks) {
                                         const label = this.getLabelForValue(value);
@@ -25087,14 +25139,16 @@
                         indexAxis: relationshipChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
-                        layout: { padding: relationshipIsCircular ? {} : { right: 50 } }, // Increased padding to prevent text cutoff 
+                        layout: { padding: relationshipIsCircular ? { right: legendPaddingRight } : { right: 50 } },
                         plugins: { 
                             legend: { 
                                 display: relationshipIsCircular,
                                 position: 'right', 
                                 labels: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 11 },
+                                    font: { size: legendFontSize },
+                                    padding: 5,
+                                    boxWidth: 10,
                                     generateLabels: relationshipIsCircular ? (chart) => {
                                         const data = chart.data;
                                         return data.labels.map((label, i) => {
@@ -25137,14 +25191,14 @@
                         scales: relationshipIsCircular ? {} : {
                             x: { 
                                 grid: { color: '#1e3a5f' }, 
-                                ticks: { color: '#8892b0', font: { size: 13 } },
-                                suggestedMax: relMax // Add suggestedMax to prevent cutoff
+                                ticks: { color: '#8892b0', font: { size: axisFontSize } },
+                                suggestedMax: relMax
                             },
                             y: { 
                                 grid: { display: false }, 
                                 ticks: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 13 },
+                                    font: { size: axisFontSize },
                                     autoSkip: false,
                                     callback: function(value, index, ticks) {
                                         const label = this.getLabelForValue(value);
@@ -25198,14 +25252,16 @@
                         indexAxis: soChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
-                        layout: { padding: soIsCircular ? {} : { right: 50 } }, // Increased padding to prevent text cutoff 
+                        layout: { padding: soIsCircular ? { right: legendPaddingRight } : { right: 50 } },
                         plugins: { 
                             legend: { 
                                 display: soIsCircular,
                                 position: 'right', 
                                 labels: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 11 },
+                                    font: { size: legendFontSize },
+                                    boxWidth: 10,
+                                    padding: 5,
                                     generateLabels: soIsCircular ? (chart) => {
                                         const data = chart.data;
                                         return data.labels.map((label, i) => {
@@ -25248,14 +25304,14 @@
                         scales: soIsCircular ? {} : {
                             x: { 
                                 grid: { color: '#1e3a5f' }, 
-                                ticks: { color: '#8892b0', font: { size: 13 } },
-                                suggestedMax: soMax // Add suggestedMax to prevent cutoff
+                                ticks: { color: '#8892b0', font: { size: axisFontSize } },
+                                suggestedMax: soMax
                             },
                             y: { 
                                 grid: { display: false }, 
                                 ticks: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 13 },
+                                    font: { size: axisFontSize },
                                     autoSkip: false,
                                     callback: function(value, index, ticks) {
                                         const label = this.getLabelForValue(value);
@@ -25307,14 +25363,16 @@
                         indexAxis: psChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
-                        layout: { padding: psIsCircular ? {} : { right: 50 } }, // Increased padding to prevent text cutoff 
+                        layout: { padding: psIsCircular ? { right: legendPaddingRight } : { right: 50 } },
                         plugins: { 
                             legend: { 
                                 display: psIsCircular,
                                 position: 'right', 
                                 labels: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 11 },
+                                    font: { size: legendFontSize },
+                                    boxWidth: 10,
+                                    padding: 5,
                                     generateLabels: psIsCircular ? (chart) => {
                                         const data = chart.data;
                                         return data.labels.map((label, i) => {
@@ -25357,14 +25415,14 @@
                         scales: psIsCircular ? {} : {
                             x: { 
                                 grid: { color: '#1e3a5f' }, 
-                                ticks: { color: '#8892b0', font: { size: 13 } },
-                                suggestedMax: psMax // Add suggestedMax to prevent cutoff
+                                ticks: { color: '#8892b0', font: { size: axisFontSize } },
+                                suggestedMax: psMax
                             },
                             y: { 
                                 grid: { display: false }, 
                                 ticks: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 13 },
+                                    font: { size: axisFontSize },
                                     autoSkip: false,
                                     callback: function(value, index, ticks) {
                                         const label = this.getLabelForValue(value);
@@ -25427,14 +25485,16 @@
                         indexAxis: occChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
-                        layout: { padding: occIsCircular ? {} : { right: 50, top: 15, bottom: 15, left: 10 } }, // Increased padding 
+                        layout: { padding: occIsCircular ? { right: legendPaddingRight } : { right: 50, top: 15, bottom: 15, left: 10 } },
                         plugins: { 
                             legend: { 
                                 display: occIsCircular,
                                 position: 'right', 
                                 labels: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 11 },
+                                    font: { size: legendFontSize },
+                                    boxWidth: 10,
+                                    padding: 5,
                                     generateLabels: occIsCircular ? (chart) => {
                                         const data = chart.data;
                                         return data.labels.map((label, i) => {
@@ -25472,14 +25532,14 @@
                         scales: occIsCircular ? {} : {
                             x: { 
                                 grid: { color: '#1e3a5f' }, 
-                                ticks: { color: '#8892b0', font: { size: 9 } },
-                                suggestedMax: occMax // Add suggestedMax to prevent cutoff
+                                ticks: { color: '#8892b0', font: { size: Math.max(8, axisFontSize - 1) } },
+                                suggestedMax: occMax
                             },
                             y: { 
                                 grid: { display: false }, 
                                 ticks: { 
                                     color: '#e6f1ff', 
-                                    font: { size: 9, weight: '500' },
+                                    font: { size: Math.max(8, axisFontSize - 1), weight: '500' },
                                     autoSkip: false,
                                     padding: 8,
                                     callback: function(value, index, ticks) {
