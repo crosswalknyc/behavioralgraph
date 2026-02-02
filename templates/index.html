@@ -36709,9 +36709,22 @@
             }
             
             const isGenPopProfile = (currentProfileData?.name || '').toUpperCase().includes('GEN POP') || (currentS3Key || '').toUpperCase().includes('GEN_POP');
-            // Gen Pop: same as profile—use Gen Pop file's locations and run the same aggregation
+            // Gen Pop: run the exact same logic as profile—simple sum by state/region/DMA, no dedupe, no conversion, no normalize
             const genPopLocations = isGenPopProfile ? locations : (genPopBaselineData && genPopBaselineData.locations) ? genPopBaselineData.locations : null;
-            const genPopAgg = genPopLocations ? aggregateLocationsByStateAndRegion(genPopLocations) : { byState: {}, byRegion: {}, byDma: {} };
+            const genPopAgg = { byState: {}, byRegion: {}, byDma: {} };
+            if (genPopLocations) {
+                genPopLocations.forEach(loc => {
+                    const pct = parseFloat(loc.pct ?? loc.genPopPct) || 0;
+                    const dmaKey = (loc.name || '').toString().trim().toUpperCase();
+                    if (dmaKey) genPopAgg.byDma[dmaKey] = (genPopAgg.byDma[dmaKey] || 0) + pct;
+                    const state = getStateFromLocation(loc.name);
+                    if (state) {
+                        genPopAgg.byState[state] = (genPopAgg.byState[state] || 0) + pct;
+                        const region = getRegionForState(state);
+                        genPopAgg.byRegion[region] = (genPopAgg.byRegion[region] || 0) + pct;
+                    }
+                });
+            }
             const genPopByDma = genPopAgg.byDma;
             
             // Group by state - profile % from current profile's locations (same aggregation as we run on Gen Pop)
