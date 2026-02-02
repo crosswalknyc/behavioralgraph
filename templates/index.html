@@ -4991,6 +4991,9 @@
         body.profile-is-genpop .cat-idx,
         body.profile-is-genpop [data-genpop-col],
         body.profile-is-genpop [data-index-col] { display: none !important; }
+        /* Never show index in Gen Pop column (Compare tab) */
+        td.genpop-column .index-badge,
+        .genpop-column .index-badge { display: none !important; }
         body.profile-is-genpop .insight-col-header { grid-template-columns: 1fr 70px !important; }
         body.profile-is-genpop .insight-row-genpop { grid-template-columns: 1fr 70px !important; }
         .insights-list {
@@ -22264,6 +22267,7 @@
                     selectedDashProfile = fileKey; // Set selected profile for sidebar
                     renderDashboard(data.data, data.brand, data.date_range);
                     showDashboardView();
+                    applyGenPopMode(); // Hide index/GP when Gen Pop is selected
                 } else {
                     console.error('API returned error:', data.error);
                     alert('Failed to load: ' + (data.error || 'Unknown error'));
@@ -23668,65 +23672,45 @@
                 i.category.toUpperCase().includes('PURCHASED') || i.category.toUpperCase().includes('SHOP') || i.category.toUpperCase().includes('RETAIL')
             );
             
+            // Helper: push one activation row per brand (so we can sort globally by index and take true top 15)
+            const pushChannelEntries = (icon, channelLabel, matches, tooltipPrefix, tooltipSuffix) => {
+                if (!matches || matches.length === 0) return;
+                matches.forEach((b, idx) => {
+                    const indexVal = b.index || 0;
+                    activations.push({
+                        icon,
+                        maxIndex: indexVal,
+                        text: `<strong>${channelLabel}:</strong> <span style="color: var(--accent-lime)">${b.name}</span> <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(b)}</span>`,
+                        tooltip: `${tooltipPrefix} ${formatActivationTooltip(b)}. ${tooltipSuffix}`,
+                        category: b.category,
+                        searchTerm: b.name
+                    });
+                });
+            };
+            
             // Big Box Stores
             const bigBoxMatches = shoppingItems.filter(i => 
                 bigBoxStores.some(store => i.name.toUpperCase().includes(store))
             ).sort((a, b) => b.index - a.index).slice(0, 2);
-            if (bigBoxMatches.length > 0) {
-                activations.push({
-                    icon: '🏬',
-                    maxIndex: bigBoxMatches[0].index || 0,
-                    text: `<strong>Big Box:</strong> ${bigBoxMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(bigBoxMatches[0])}</span>`,
-                    tooltip: `Big Box Retail: This audience shops at ${bigBoxMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider in-store activations, endcap displays, or retail media network ads.`,
-                    category: bigBoxMatches[0].category,
-                    searchTerm: bigBoxMatches[0].name
-                });
-            }
+            pushChannelEntries('🏬', 'Big Box', bigBoxMatches, 'Big Box Retail: This audience shops at', 'Consider in-store activations, endcap displays, or retail media network ads.');
             
             // Department Stores
             const deptMatches = shoppingItems.filter(i => 
                 departmentStores.some(store => i.name.toUpperCase().includes(store))
             ).sort((a, b) => b.index - a.index).slice(0, 2);
-            if (deptMatches.length > 0) {
-                activations.push({
-                    icon: '👔',
-                    maxIndex: deptMatches[0].index || 0,
-                    text: `<strong>Dept Store:</strong> ${deptMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(deptMatches[0])}</span>`,
-                    tooltip: `Department Stores: This audience shops at ${deptMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider premium placement, store events, or loyalty program partnerships.`,
-                    category: deptMatches[0].category,
-                    searchTerm: deptMatches[0].name
-                });
-            }
+            pushChannelEntries('👔', 'Dept Store', deptMatches, 'Department Stores: This audience shops at', 'Consider premium placement, store events, or loyalty program partnerships.');
             
             // E-commerce
             const ecomMatches = shoppingItems.filter(i => 
                 ecommerceStores.some(store => i.name.toUpperCase().includes(store))
             ).sort((a, b) => b.index - a.index).slice(0, 2);
-            if (ecomMatches.length > 0) {
-                activations.push({
-                    icon: '🛒',
-                    maxIndex: ecomMatches[0].index || 0,
-                    text: `<strong>E-commerce:</strong> ${ecomMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(ecomMatches[0])}</span>`,
-                    tooltip: `E-commerce: This audience shops online at ${ecomMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider sponsored products, display ads, or marketplace partnerships.`,
-                    category: ecomMatches[0].category,
-                    searchTerm: ecomMatches[0].name
-                });
-            }
+            pushChannelEntries('🛒', 'E-commerce', ecomMatches, 'E-commerce: This audience shops online at', 'Consider sponsored products, display ads, or marketplace partnerships.');
             
             // Grocery
             const groceryMatches = shoppingItems.filter(i => 
                 groceryStores.some(store => i.name.toUpperCase().includes(store))
             ).sort((a, b) => b.index - a.index).slice(0, 2);
-            if (groceryMatches.length > 0) {
-                activations.push({
-                    icon: '🥬',
-                    maxIndex: groceryMatches[0].index || 0,
-                    text: `<strong>Grocery:</strong> ${groceryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(groceryMatches[0])}</span>`,
-                    tooltip: `Grocery: This audience shops at ${groceryMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider in-store sampling, circular ads, or loyalty card targeting.`,
-                    category: groceryMatches[0].category,
-                    searchTerm: groceryMatches[0].name
-                });
-            }
+            pushChannelEntries('🥬', 'Grocery', groceryMatches, 'Grocery: This audience shops at', 'Consider in-store sampling, circular ads, or loyalty card targeting.');
             
             // Search Engines
             const searchMatches = allItems.filter(i => 
@@ -23734,16 +23718,7 @@
                 i.category.toUpperCase().includes('SEARCH') ||
                 i.name.toUpperCase().includes('SEARCH')
             ).sort((a, b) => b.index - a.index).slice(0, 2);
-            if (searchMatches.length > 0) {
-                activations.push({
-                    icon: '🔍',
-                    maxIndex: searchMatches[0].index || 0,
-                    text: `<strong>Search:</strong> ${searchMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(searchMatches[0])}</span>`,
-                    tooltip: `Search Engines: This audience uses ${searchMatches.map(b => formatActivationTooltip(b)).join('; ')}. Prioritize SEM/PPC campaigns on these platforms for maximum reach.`,
-                    category: searchMatches[0].category,
-                    searchTerm: searchMatches[0].name
-                });
-            }
+            pushChannelEntries('🔍', 'Search', searchMatches, 'Search: This audience uses', 'Prioritize SEM/PPC campaigns on these platforms for maximum reach.');
             
             // Get all app/platform items for smart categorization
             const appItems = allItems.filter(i => 
@@ -23755,29 +23730,22 @@
             const foodDeliveryMatches = allItems.filter(i => 
                 foodDeliveryApps.some(app => i.name.toUpperCase().includes(app))
             ).sort((a, b) => b.index - a.index).slice(0, 2);
-            if (foodDeliveryMatches.length > 0) {
-                activations.push({
-                    icon: '🍔',
-                    maxIndex: foodDeliveryMatches[0].index || 0,
-                    text: `<strong>Food Delivery:</strong> ${foodDeliveryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(foodDeliveryMatches[0])}</span>`,
-                    tooltip: `Food Delivery: This audience uses ${foodDeliveryMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider sponsored placements, promo code partnerships, or in-app advertising.`,
-                    category: foodDeliveryMatches[0].category,
-                    searchTerm: foodDeliveryMatches[0].name
-                });
-            }
+            pushChannelEntries('🍔', 'Food Delivery', foodDeliveryMatches, 'Food Delivery: This audience uses', 'Consider sponsored placements, promo code partnerships, or in-app advertising.');
             
             // Rideshare Apps
             const rideshareMatches = allItems.filter(i => 
                 rideshareApps.some(app => i.name.toUpperCase().includes(app)) && !i.name.toUpperCase().includes('EATS')
             ).sort((a, b) => b.index - a.index).slice(0, 2);
             if (rideshareMatches.length > 0) {
-                activations.push({
-                    icon: '🚗',
-                    maxIndex: rideshareMatches[0].index || 0,
-                    text: `<strong>Rideshare:</strong> ${rideshareMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(rideshareMatches[0])}</span>`,
-                    category: rideshareMatches[0].category,
-                    searchTerm: rideshareMatches[0].name,
-                    tooltip: `Rideshare: This audience uses ${rideshareMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider in-app ads, promo partnerships, or event transportation sponsorships.`
+                rideshareMatches.forEach(b => {
+                    activations.push({
+                        icon: '🚗',
+                        maxIndex: b.index || 0,
+                        text: `<strong>Rideshare:</strong> <span style="color: var(--accent-lime)">${b.name}</span> <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(b)}</span>`,
+                        tooltip: `Rideshare: This audience uses ${formatActivationTooltip(b)}. Consider in-app ads, promo partnerships, or event transportation sponsorships.`,
+                        category: b.category,
+                        searchTerm: b.name
+                    });
                 });
             }
             
@@ -23785,25 +23753,22 @@
             const fitnessMatches = allItems.filter(i => 
                 fitnessApps.some(app => i.name.toUpperCase().includes(app))
             ).sort((a, b) => b.index - a.index).slice(0, 2);
-            if (fitnessMatches.length > 0) {
-                activations.push({
-                    icon: '💪',
-                    maxIndex: fitnessMatches[0].index || 0,
-                    text: `<strong>Fitness:</strong> ${fitnessMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(fitnessMatches[0])}</span>`,
-                    tooltip: `Fitness/Wellness: This audience uses ${fitnessMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider health-focused partnerships, workout integrations, or wellness sponsorships.`
-                });
-            }
+            pushChannelEntries('💪', 'Fitness', fitnessMatches, 'Fitness/Wellness: This audience uses', 'Consider health-focused partnerships, workout integrations, or wellness sponsorships.');
             
             // Finance Apps
             const financeMatches = allItems.filter(i => 
                 financeApps.some(app => i.name.toUpperCase().includes(app))
             ).sort((a, b) => b.index - a.index).slice(0, 2);
             if (financeMatches.length > 0) {
-                activations.push({
-                    icon: '💳',
-                    maxIndex: financeMatches[0].index || 0,
-                    text: `<strong>Finance:</strong> ${financeMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${financeMatches[0].pct.toFixed(2)}% | GP: ${financeMatches[0].genPop.toFixed(2)}% | ${formatIndex(financeMatches[0].index)})</span>`,
-                    tooltip: `Finance/Payments: This audience uses ${financeMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider payment integrations, cashback offers, or fintech partnerships.`
+                financeMatches.forEach(b => {
+                    activations.push({
+                        icon: '💳',
+                        maxIndex: b.index || 0,
+                        text: `<strong>Finance:</strong> <span style="color: var(--accent-lime)">${b.name}</span> <span style="font-size: 0.7rem; color: var(--text-secondary);">(${b.pct.toFixed(2)}% | GP: ${b.genPop.toFixed(2)}% | ${formatIndex(b.index)})</span>`,
+                        tooltip: `Finance/Payments: This audience uses ${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)}). Consider payment integrations, cashback offers, or fintech partnerships.`,
+                        category: b.category,
+                        searchTerm: b.name
+                    });
                 });
             }
             
@@ -23812,11 +23777,15 @@
                 travelApps.some(app => i.name.toUpperCase().includes(app))
             ).sort((a, b) => b.index - a.index).slice(0, 2);
             if (travelMatches.length > 0) {
-                activations.push({
-                    icon: '✈️',
-                    maxIndex: travelMatches[0].index || 0,
-                    text: `<strong>Travel:</strong> ${travelMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${travelMatches[0].pct.toFixed(2)}% | GP: ${travelMatches[0].genPop.toFixed(2)}% | ${formatIndex(travelMatches[0].index)})</span>`,
-                    tooltip: `Travel: This audience uses ${travelMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider travel package partnerships, destination marketing, or loyalty program integrations.`
+                travelMatches.forEach(b => {
+                    activations.push({
+                        icon: '✈️',
+                        maxIndex: b.index || 0,
+                        text: `<strong>Travel:</strong> <span style="color: var(--accent-lime)">${b.name}</span> <span style="font-size: 0.7rem; color: var(--text-secondary);">(${b.pct.toFixed(2)}% | GP: ${b.genPop.toFixed(2)}% | ${formatIndex(b.index)})</span>`,
+                        tooltip: `Travel: This audience uses ${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)}). Consider travel package partnerships, destination marketing, or loyalty program integrations.`,
+                        category: b.category,
+                        searchTerm: b.name
+                    });
                 });
             }
             
@@ -23824,27 +23793,13 @@
             const musicMatches = allItems.filter(i => 
                 musicApps.some(app => i.name.toUpperCase().includes(app))
             ).sort((a, b) => b.index - a.index).slice(0, 2);
-            if (musicMatches.length > 0) {
-                activations.push({
-                    icon: '🎵',
-                    maxIndex: musicMatches[0].index || 0,
-                    text: `<strong>Music/Audio:</strong> ${musicMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${musicMatches[0].pct.toFixed(2)}% | GP: ${musicMatches[0].genPop.toFixed(2)}% | ${formatIndex(musicMatches[0].index)})</span>`,
-                    tooltip: `Music/Audio: This audience uses ${musicMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider audio ads, playlist sponsorships, or podcast integrations.`
-                });
-            }
+            pushChannelEntries('🎵', 'Music/Audio', musicMatches, 'Music/Audio: This audience uses', 'Consider audio ads, playlist sponsorships, or podcast integrations.');
             
             // Gaming Platforms
             const gamingMatches = allItems.filter(i => 
                 gamingPlatforms.some(platform => i.name.toUpperCase().includes(platform))
             ).sort((a, b) => b.index - a.index).slice(0, 2);
-            if (gamingMatches.length > 0) {
-                activations.push({
-                    icon: '🎮',
-                    maxIndex: gamingMatches[0].index || 0,
-                    text: `<strong>Gaming:</strong> ${gamingMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${gamingMatches[0].pct.toFixed(2)}% | GP: ${gamingMatches[0].genPop.toFixed(2)}% | ${formatIndex(gamingMatches[0].index)})</span>`,
-                    tooltip: `Gaming: This audience engages with ${gamingMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-game advertising, esports sponsorships, or gaming influencer partnerships.`
-                });
-            }
+            pushChannelEntries('🎮', 'Gaming', gamingMatches, 'Gaming: This audience engages with', 'Consider in-game advertising, esports sponsorships, or gaming influencer partnerships.');
             
             // ============ RESTAURANT CATEGORIES ============
             // Get all dining/restaurant items
@@ -24062,8 +24017,8 @@
                 });
             }
             
-            // Sort by highest index first so "Top Performing Brands" shows actual highest-indexing channels
-            activations.sort((a, b) => (b.maxIndex || 0) - (a.maxIndex || 0));
+            // Sort by highest index first so "Top Performing Brands" shows the actual top 15 highest-indexing brands globally
+            activations.sort((a, b) => Number(b.maxIndex || 0) - Number(a.maxIndex || 0));
             
             document.getElementById('behavioralActivations').innerHTML = activations.slice(0, 15).map(a => {
                 // Escape special characters for onclick attribute
@@ -25819,11 +25774,14 @@
                 const pct = parseFloat(d.sub);
                 
                 if (d.label === 'Dominant Gender') {
-                    const pctDiff = Math.round(pct - (pct / (idx / 100)));
-                    if (idx >= 108) {
-                        takeaways.push(`<span class="takeaway-over">Gender skews ${d.value.toLowerCase()}</span> — ${d.sub}, +${pctDiff}pp vs Gen Pop`);
-                    } else if (idx <= 92) {
-                        takeaways.push(`<span class="takeaway-under">Under-indexes on ${d.value.toLowerCase()}</span> — ${idxMultiplier}x vs Gen Pop`);
+                    const idxNorm = idx > 0 && idx < 10 ? idx * 100 : idx;
+                    const mult = (idxNorm / 100).toFixed(2);
+                    const gpPct = pct / (idxNorm / 100);
+                    const pctDiff = Math.round((pct - gpPct) * 10) / 10;
+                    if (idxNorm >= 105) {
+                        takeaways.push(`<span class="takeaway-over">Gender skews ${d.value.toLowerCase()}</span> — ${d.sub} (${mult}x), +${pctDiff}pp vs Gen Pop`);
+                    } else if (idxNorm <= 95) {
+                        takeaways.push(`<span class="takeaway-under">Under-indexes on ${d.value.toLowerCase()}</span> — ${mult}x vs Gen Pop`);
                     } else {
                         takeaways.push(`Gender <span class="takeaway-highlight">similar to Gen Pop</span> (${d.value} ${d.sub})`);
                     }
@@ -39143,7 +39101,7 @@
                         const indexDisplay = (!isGenPopCol && index > 0) ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${index}</span>` : '';
                         
                         return `
-                            <td class="${primaryClass}">
+                            <td class="${primaryClass} ${isGenPopCol ? 'genpop-column' : ''}">
                                 <div class="comp-bar-cell">
                                     <div class="comp-bar">
                                         <div class="comp-bar-fill" style="width: ${Math.min(pct / 30 * 100, 100)}%; background: ${p.color};"></div>
@@ -39245,7 +39203,7 @@
                         const indexDisplay = (!isGenPopCol && index > 0) ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${Math.round(index)}</span>` : '';
                         
                         return `
-                            <td class="${primaryClass}">
+                            <td class="${primaryClass} ${isGenPopCol ? 'genpop-column' : ''}">
                                 <div class="comp-bar-cell">
                                     <div class="comp-bar">
                                         <div class="comp-bar-fill" style="width: ${Math.min(pct / 10 * 100, 100)}%; background: ${p.color};"></div>
@@ -39350,13 +39308,14 @@
                                 ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                                 : (pct > 0 ? pct.toFixed(2) + '%' : '-');
                             
-                            // Never show index for Gen Pop column
-                            const isGenPopCol = genPopProfile && profiles[i] === genPopProfile;
+                            // Never show index for Gen Pop column (by reference or by name)
+                            const pName = (profiles[i]?.name || '').toUpperCase();
+                            const isGenPopCol = (genPopProfile && profiles[i] === genPopProfile) || pName.includes('GEN POP') || pName.includes('GENPOP');
                             const indexColor = index >= 100 ? '#10b981' : '#ef4444';
                             const indexBadge = (!isGenPopCol && index > 0) ? `<span class="index-badge" style="color: ${indexColor};">${index}</span>` : '';
                             
                             return `
-                                <td class="${primaryClass}">
+                                <td class="${primaryClass} ${isGenPopCol ? 'genpop-column' : ''}">
                                     <div class="comp-bar-cell">
                                         <div class="comp-bar">
                                             <div class="comp-bar-fill" style="width: ${Math.min(pct / maxPct * 100, 100)}%; background: ${p.color};"></div>
