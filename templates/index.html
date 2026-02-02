@@ -3898,7 +3898,8 @@
             white-space: nowrap;
         }
         .behavioral-card h3.behavioral-card-title-row .drag-handle { flex-shrink: 0; }
-        .behavioral-card h3.behavioral-card-title-row > span:not(.drag-handle) {
+        .behavioral-card h3.behavioral-card-title-row .behavioral-cat-icon { flex-shrink: 0; margin-right: 0.35rem; font-size: 1em; }
+        .behavioral-card h3.behavioral-card-title-row > span:not(.drag-handle):not(.behavioral-cat-icon) {
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -9604,6 +9605,8 @@
         /* Profile Selection Modal (Exec Summary / Key Insight Builder / Ecosystem) - all content left-justified */
         .profile-selection-modal-content {
             text-align: left !important;
+            width: 100%;
+            max-width: 480px;
         }
         .profile-selection-modal-content .modal-header,
         .profile-selection-modal-content #profileSelectionModalBody,
@@ -9617,15 +9620,18 @@
             color: var(--text-secondary);
             text-transform: uppercase;
             margin-bottom: 0.35rem;
+            text-align: left !important;
         }
         .profile-selection-select {
             width: 100%;
+            box-sizing: border-box;
             padding: 0.5rem 0.6rem;
             background: var(--bg-input);
             border: 1px solid var(--border-color);
             border-radius: 6px;
             color: var(--text-primary);
             font-size: 0.9rem;
+            text-align: left !important;
         }
         .profile-selection-compare-list {
             display: flex;
@@ -9633,11 +9639,11 @@
             gap: 0.35rem;
             max-height: 240px;
             overflow-y: auto;
-            padding: 0.5rem;
+            padding: 0.5rem 0.5rem 0.5rem 0;
             background: var(--bg-dark);
             border-radius: 6px;
             border: 1px solid var(--border-color);
-            align-items: stretch;
+            align-items: flex-start;
         }
         .profile-selection-compare-list label,
         .profile-selection-compare-item {
@@ -9648,17 +9654,22 @@
             cursor: pointer;
             font-size: 0.9rem;
             width: 100%;
+            max-width: 100%;
             text-align: left !important;
+            margin: 0;
         }
         .profile-selection-compare-list label input,
-        .profile-selection-compare-item input { flex-shrink: 0; }
+        .profile-selection-compare-item input {
+            flex-shrink: 0;
+            margin: 0;
+            vertical-align: middle;
+        }
         .profile-selection-compare-list label span,
         .profile-selection-compare-list .profile-selection-compare-name,
         .profile-selection-compare-item .profile-selection-compare-name {
             flex: 0 1 auto;
             min-width: 0;
             text-align: left !important;
-            justify-content: flex-start;
             color: var(--text-primary);
         }
         .profile-selection-actions {
@@ -14493,6 +14504,10 @@
                     if (data.success && data.data) {
                         genPopBaselineData = parseAllData(data.data);
                         console.log('✅ Gen Pop baseline loaded successfully');
+                        // Re-render Location tab so parentheses show correct Gen Pop values (same as when Gen Pop is selected)
+                        if (currentDashboardData && Array.isArray(currentDashboardData.locations) && currentDashboardData.locations.length > 0) {
+                            renderLocationTable(currentDashboardData.locations);
+                        }
                     } else {
                         console.warn('⚠️ Gen Pop baseline file not found, using hardcoded values');
                     }
@@ -27460,6 +27475,68 @@
                 'WRITER/DIRECTOR/AUTHOR/ARTIST': 'Behind the scenes creatives panelists digitally engaged with.'
             };
             
+            // Icons for behavioral module headers (match descriptions)
+            const behavioralCategoryIcons = {
+                'MOST PURCHASED BRANDS': '🏷️',
+                'MOST PURCHASED': '🏷️',
+                'WHERE THEY SHOP': '🛒',
+                'MOST PURCHASED CATEGORIES': '📂',
+                'INTEREST': '💡',
+                'APP/PLATFORM': '📱',
+                'APP/PLATFORM USAGE': '📱',
+                'APPS/PLATFORMS': '📱',
+                'STREAMING/MUSIC': '🎵',
+                'STREAMING MUSIC': '🎵',
+                'STREAMING/PLATFORM': '📺',
+                'STREAMING/VIDEO': '📺',
+                'STREAMING VIDEO': '📺',
+                'BROADCAST/CABLE': '📺',
+                'SOCIAL MEDIA': '👥',
+                'SEARCH ENGINE/AI': '🔍',
+                'QSR': '🍔',
+                'WHERE THEY DINE': '🍽️',
+                'TRAVEL': '✈️',
+                'SPORTS': '⚽',
+                'TALENT': '⭐',
+                'PETS': '🐾',
+                'PHARMACY': '💊',
+                'TECHNOLOGY/DEVICE': '💻',
+                'TECHNOLOGY BRAND': '💻',
+                'WORKOUT FACILITY': '🏋️',
+                'GAMES': '🎮',
+                'GAME PLAYERS': '🎮',
+                'AUTOMOBILE': '🚗',
+                'AUTOMOTIVE': '🚗',
+                'INVESTMENTS': '📈',
+                'INSURANCE': '🛡️',
+                'EDUCATION & LEARNING': '📚',
+                'BANKING': '🏦',
+                'CREDIT PROVIDER': '💳',
+                'FRANCHISE': '🏪',
+                'NON PROFIT/CHARITY': '❤️',
+                'MOVIE THEATER': '🎬',
+                'PODCAST': '🎙️',
+                'PODCASTS': '🎙️',
+                'BETTING': '🎲',
+                'TICKETING': '🎫',
+                'AMUSEMENT PARKS': '🎢',
+                'GOLF': '⛳',
+                'BEAUTY': '💄',
+                'BEAUTY/WELLNESS': '💄',
+                'HOME/OUTDOOR': '🏠',
+                'VMVPD/FAST': '📡'
+            };
+            function getBehavioralCategoryIcon(categoryName) {
+                const upper = (categoryName || '').toUpperCase();
+                if (behavioralCategoryIcons[upper]) return behavioralCategoryIcons[upper];
+                if (upper.includes('MOST PURCHASED BRANDS') || upper === 'MOST PURCHASED') return '🏷️';
+                if (upper.includes('WHERE THEY SHOP')) return '🛒';
+                if (upper.includes('MOST PURCHASED CATEGORIES')) return '📂';
+                if (upper.includes('STREAMING')) return '📺';
+                if (upper.includes('WHERE THEY DINE')) return '🍽️';
+                return '📊';
+            }
+            
             container.innerHTML = sortedCats.map((cat, idx) => {
                 const catId = cat.replace(/[^a-zA-Z0-9]/g, '');
                 const items = aggregatedBehavioral[cat];
@@ -27687,6 +27764,7 @@
                          ondrop="handleDrop(event)">
                         <h3 class="behavioral-card-title-row">
                             <span class="drag-handle" title="Drag to reorder">⋮⋮</span>
+                            <span class="behavioral-cat-icon" aria-hidden="true">${getBehavioralCategoryIcon(cat)}</span>
                             <span class="${hasTooltip}" ${tooltipAttr}>${cat}</span>
                             ${positionBadge}
                         </h3>
@@ -36588,22 +36666,9 @@
                 Object.keys(stateData).forEach(state => {
                     stateData[state].genPopPct = genPopByState[state] ?? 0;
                 });
-            } else {
-                // Fallback: derive Gen Pop % from current profile's loc.genPopPct or (profile % / index) so parentheses = same metric (percentage) for Gen Pop
-                locations.forEach(loc => {
-                    const state = getStateFromLocation(loc.name);
-                    if (state && stateData[state]) {
-                        let genPopPct = 0;
-                        if (loc.genPopPct != null && loc.genPopPct !== undefined) {
-                            genPopPct = loc.genPopPct;
-                            if (genPopPct > 0 && genPopPct < 1) genPopPct = genPopPct * 100;
-                        } else if (loc.index && loc.index > 0) {
-                            genPopPct = (loc.pct / loc.index) * 100;
-                        }
-                        stateData[state].genPopPct += genPopPct;
-                    }
-                });
             }
+            // When Gen Pop baseline is not available, leave genPopPct as 0 so we show 0% or N/A (never sum (pct/index)*100 per DMA — that produces wrong values like 356%)
+            const hasGenPopBaseline = isGenPopProfile || (genPopBaselineData && genPopBaselineData.locations && genPopBaselineData.locations.length > 0);
             
             // Calculate average index and sort cities by percentage
             Object.keys(stateData).forEach(state => {
@@ -36634,9 +36699,9 @@
                     ? (data.pct === 0 || data.pct === null ? 'N/A' : formatNumber(Math.round((data.pct / 100) * US_POP)))
                     : formatValueOrNA(data.pct, true);
                 
-                const genPopDisplay = isProjection 
+                const genPopDisplay = !hasGenPopBaseline ? 'N/A' : (isProjection 
                     ? (data.genPopPct === 0 || data.genPopPct === null ? 'N/A' : formatNumber(Math.round((data.genPopPct / 100) * US_POP)))
-                    : formatValueOrNA(data.genPopPct, true);
+                    : formatValueOrNA(data.genPopPct, true));
                 
                 // Build top 5 cities tooltip (Profile % = selected profile; Gen Pop % = same metric from Gen Pop profile when available)
                 const top5Cities = data.cities.slice(0, 5);
@@ -36714,9 +36779,9 @@
                         ? (data.pct === 0 || data.pct === null ? 'N/A' : formatNumber(Math.round((data.pct / 100) * US_POP)))
                         : formatValueOrNA(data.pct, true);
                     
-                    const genPopDisplay = isProjection 
+                    const genPopDisplay = !hasGenPopBaseline ? 'N/A' : (isProjection 
                         ? (data.genPopPct === 0 || data.genPopPct === null ? 'N/A' : formatNumber(Math.round((data.genPopPct / 100) * US_POP)))
-                        : formatValueOrNA(data.genPopPct, true);
+                        : formatValueOrNA(data.genPopPct, true));
                     
                     // Build top 5 cities tooltip for region (Profile % = selected profile; Gen Pop % = same metric from Gen Pop when available)
                     const top5Cities = data.cities.slice(0, 5);
