@@ -12058,6 +12058,18 @@
                                             <button class="module-btn csv-btn" onclick="exportNetflixDailyCSV()">CSV</button>
                                         </div>
                                     </div>
+                                    <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem;">
+                                        <span style="font-size: 0.75rem; color: var(--text-secondary);">Sort by:</span>
+                                        <select id="netflixDailySortBy" onchange="renderNetflixDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 140px;">
+                                            <option value="views">Views (high to low)</option>
+                                            <option value="type-movie">Type: Movie first</option>
+                                            <option value="type-show">Type: Show first</option>
+                                        </select>
+                                        <span style="font-size: 0.75rem; color: var(--text-secondary);">Genre:</span>
+                                        <select id="netflixDailyGenreFilter" onchange="renderNetflixDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 180px;">
+                                            <option value="">All genres</option>
+                                        </select>
+                                    </div>
                                     <div id="netflixDailyTableWrap" style="overflow-x: auto;"><table id="netflixDailyTable" class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Views</th><th>Genre</th><th>Type</th></tr></thead><tbody id="netflixDailyBody"></tbody></table></div>
                                     <div id="netflixDailyLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers to view daily data.</div>
                                 </div>
@@ -29622,6 +29634,13 @@
         let netflixGenreChartInstance = null;
         let netflixTopShowsChartInstance = null;
 
+        /** Project raw views to US Gen Pop: multiply by 150, then (boosted / 100M) * 324,838,700 */
+        function netflixProjectedViews(rawViews) {
+            const v = Number(rawViews) || 0;
+            const boosted = v * 150;
+            return Math.round((boosted / 100000000) * 324838700);
+        }
+
         function showRankerPlatform(id) {
             document.querySelectorAll('.ranker-platform-panel').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.rankers-platform-tabs .tab-btn').forEach(b => b.classList.remove('active'));
@@ -29740,11 +29759,18 @@
             sel.innerHTML = '<option value="">Select show...</option>' + shows.map(s => '<option value="' + s.replace(/"/g, '&quot;') + '">' + s + '</option>').join('');
         }
 
+        function _netflixDailyGenreList(genreStr) {
+            if (!genreStr || typeof genreStr !== 'string') return [];
+            return genreStr.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
         function renderNetflixDailyRanker() {
             const wrap = document.getElementById('netflixDailyTableWrap');
             const tbody = document.getElementById('netflixDailyBody');
             const loading = document.getElementById('netflixDailyLoading');
             const dateInp = document.getElementById('netflixDailyDate');
+            const sortSelect = document.getElementById('netflixDailySortBy');
+            const genreSelect = document.getElementById('netflixDailyGenreFilter');
             if (!netflixRankerData || !netflixRankerData.by_date) {
                 if (loading) loading.style.display = 'block';
                 if (wrap) wrap.style.display = 'none';
@@ -29753,10 +29779,50 @@
             if (loading) loading.style.display = 'none';
             if (wrap) wrap.style.display = 'block';
             const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
-            const rows = (netflixRankerData.by_date[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian'));
-            const sorted = rows.slice().sort((a, b) => (b.views - a.views));
+            let rows = (netflixRankerData.by_date[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian'));
+
+            // Build unique genres from current date (comma-separated list)
+            const genreSet = new Set();
+            rows.forEach(r => _netflixDailyGenreList(r.genre).forEach(g => genreSet.add(g)));
+            const allGenres = Array.from(genreSet).sort();
+            if (genreSelect) {
+                const currentGenre = genreSelect.value;
+                genreSelect.innerHTML = '<option value="">All genres</option>' + allGenres.map(g => '<option value="' + g.replace(/"/g, '&quot;') + '">' + g + '</option>').join('');
+                if (allGenres.includes(currentGenre)) genreSelect.value = currentGenre;
+            }
+
+            // Apply genre filter: show only rows that have the selected genre in their comma-separated list
+            const selectedGenre = genreSelect ? genreSelect.value : '';
+            if (selectedGenre) {
+                rows = rows.filter(r => _netflixDailyGenreList(r.genre).includes(selectedGenre));
+            }
+
+            // Sort
+            const sortBy = sortSelect ? sortSelect.value : 'views';
+            if (sortBy === 'views') {
+                rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            } else if (sortBy === 'type-movie') {
+                rows = rows.slice().sort((a, b) => {
+                    const ta = (a.type || '').toLowerCase();
+                    const tb = (b.type || '').toLowerCase();
+                    const orderA = ta === 'movie' ? 0 : 1;
+                    const orderB = tb === 'movie' ? 0 : 1;
+                    if (orderA !== orderB) return orderA - orderB;
+                    return (b.views || 0) - (a.views || 0);
+                });
+            } else if (sortBy === 'type-show') {
+                rows = rows.slice().sort((a, b) => {
+                    const ta = (a.type || '').toLowerCase();
+                    const tb = (b.type || '').toLowerCase();
+                    const orderA = ta === 'show' ? 0 : 1;
+                    const orderB = tb === 'show' ? 0 : 1;
+                    if (orderA !== orderB) return orderA - orderB;
+                    return (b.views || 0) - (a.views || 0);
+                });
+            }
+
             if (!tbody) return;
-            tbody.innerHTML = sorted.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + (r.genre || '-') + '</td><td>' + (r.type || '-') + '</td></tr>').join('');
+            tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td><td>' + (r.genre || '-') + '</td><td>' + (r.type || '-') + '</td></tr>').join('');
         }
 
         function renderNetflixTrends() {
@@ -29780,7 +29846,7 @@
             const labels = series.map(d => d.date).sort();
             const values = labels.map(d => {
                 const pt = series.find(p => p.date === d);
-                return pt ? pt.views : 0;
+                return pt ? netflixProjectedViews(pt.views) : 0;
             });
             const ctx = document.getElementById('netflixTrendsChart');
             if (!ctx) return;
@@ -29805,19 +29871,22 @@
             }
             const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
             const rows = (netflixRankerData.genres_by_date[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian'));
-            const total = rows.reduce((s, r) => s + (r.views || 0), 0);
+            const total = rows.reduce((s, r) => s + netflixProjectedViews(r.views), 0);
             if (loading) loading.style.display = 'none';
             if (wrap) wrap.style.display = 'block';
             if (tbody) {
                 tbody.parentElement.style.display = 'table';
-                tbody.innerHTML = rows.map(r => '<tr><td>' + (r.genre || '-') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + (total ? ((r.views / total * 100).toFixed(1) + '%') : '-') + '</td><td>' + (r.top_show || '-') + '</td></tr>').join('');
+                tbody.innerHTML = rows.map(r => {
+                    const proj = netflixProjectedViews(r.views);
+                    return '<tr><td>' + (r.genre || '-') + '</td><td>' + proj.toLocaleString() + '</td><td>' + (total ? ((proj / total * 100).toFixed(1) + '%') : '-') + '</td><td>' + (r.top_show || '-') + '</td></tr>';
+                }).join('');
             }
             const ctx = document.getElementById('netflixGenreChart');
             if (ctx && typeof Chart !== 'undefined') {
                 if (netflixGenreChartInstance) netflixGenreChartInstance.destroy();
                 netflixGenreChartInstance = new Chart(ctx.getContext('2d'), {
                     type: 'bar',
-                    data: { labels: rows.map(r => r.genre || 'Other'), datasets: [{ label: 'Views', data: rows.map(r => r.views || 0), backgroundColor: 'rgba(102,217,239,0.6)' }] },
+                    data: { labels: rows.map(r => r.genre || 'Other'), datasets: [{ label: 'Views', data: rows.map(r => netflixProjectedViews(r.views)), backgroundColor: 'rgba(102,217,239,0.6)' }] },
                     options: { responsive: true, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
                 });
             }
@@ -29843,7 +29912,7 @@
                     type: 'line',
                     data: {
                         labels: allDates,
-                        datasets: top.map((s, i) => ({ label: s.show_name, data: allDates.map(d => (s.by_date[d] || 0)), borderColor: colors[i % colors.length], fill: false, tension: 0.2 }))
+                        datasets: top.map((s, i) => ({ label: s.show_name, data: allDates.map(d => netflixProjectedViews(s.by_date[d] || 0)), borderColor: colors[i % colors.length], fill: false, tension: 0.2 }))
                     },
                     options: { responsive: true, interaction: { mode: 'index' }, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
                 });
@@ -29880,16 +29949,24 @@
         function exportNetflixDailyCSV() {
             if (!netflixRankerData || !netflixRankerData.by_date) return;
             const dateInp = document.getElementById('netflixDailyDate');
+            const genreSelect = document.getElementById('netflixDailyGenreFilter');
+            const sortSelect = document.getElementById('netflixDailySortBy');
             const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
-            const rows = (netflixRankerData.by_date[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian')).slice().sort((a, b) => (b.views - a.views));
-            const csv = 'Rank,Show,Views,Genre,Type\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '",' + (r.views || 0) + ',"' + (r.genre || '').replace(/"/g, '""') + '","' + (r.type || '').replace(/"/g, '""') + '"').join('\n');
+            let rows = (netflixRankerData.by_date[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian'));
+            const selectedGenre = genreSelect ? genreSelect.value : '';
+            if (selectedGenre) rows = rows.filter(r => _netflixDailyGenreList(r.genre).includes(selectedGenre));
+            const sortBy = sortSelect ? sortSelect.value : 'views';
+            if (sortBy === 'views') rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            else if (sortBy === 'type-movie') rows = rows.slice().sort((a, b) => { const oa = ((a.type || '').toLowerCase() === 'movie') ? 0 : 1; const ob = ((b.type || '').toLowerCase() === 'movie') ? 0 : 1; if (oa !== ob) return oa - ob; return (b.views || 0) - (a.views || 0); });
+            else if (sortBy === 'type-show') rows = rows.slice().sort((a, b) => { const oa = ((a.type || '').toLowerCase() === 'show') ? 0 : 1; const ob = ((b.type || '').toLowerCase() === 'show') ? 0 : 1; if (oa !== ob) return oa - ob; return (b.views || 0) - (a.views || 0); });
+            const csv = 'Rank,Show,Views,Genre,Type\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '",' + netflixProjectedViews(r.views) + ',"' + (r.genre || '').replace(/"/g, '""') + '","' + (r.type || '').replace(/"/g, '""') + '"').join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_daily_ranker_' + date + '.csv'; a.click();
         }
         function exportNetflixTrendsCSV() {
             const sel = document.getElementById('netflixTrendsShow');
             if (!netflixRankerData || !sel || !sel.value) return;
             const series = netflixRankerData.by_show[sel.value] || [];
-            const csv = 'Date,Views\n' + series.map(p => p.date + ',' + (p.views || 0)).join('\n');
+            const csv = 'Date,Views\n' + series.map(p => p.date + ',' + netflixProjectedViews(p.views)).join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_trends_' + sel.value.replace(/\W/g, '_') + '.csv'; a.click();
         }
         function exportNetflixTopShowsCSV() {
@@ -29897,7 +29974,7 @@
             const rows = netflixRankerData.top_shows_over_time.slice(0, 20);
             const dates = netflixRankerData.dates_sorted || [];
             const header = 'Show,' + dates.join(',') + '\n';
-            const body = rows.map(s => s.show_name + ',' + dates.map(d => (s.by_date[d] || 0)).join(',')).join('\n');
+            const body = rows.map(s => s.show_name + ',' + dates.map(d => netflixProjectedViews(s.by_date[d] || 0)).join(',')).join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(header + body); a.download = 'netflix_top_shows_over_time.csv'; a.click();
         }
 
@@ -38403,6 +38480,13 @@
         let loadedComparisonData = {};
         let displayMode = 'percent'; // 'percent' or 'projection'
 
+        /** Project sample size (n) to US Gen Pop for display: multiply by 150, then (boosted / 100M) * 324,838,700 */
+        function compareProjectedN(n) {
+            const v = Number(n) || 0;
+            const boosted = v * 150;
+            return Math.round((boosted / 100000000) * 324838700);
+        }
+
         const profileColors = ['#4a8ac9', '#8b5cf6', '#10b981', '#f43f5e', '#06b6d4', '#f97316', '#eab308', '#ec4899'];
         let expandedCategories = new Set();
         
@@ -39990,7 +40074,7 @@
                         <tbody>
                             <tr>
                                 <td>Crosswalk Respondents</td>
-                                ${profiles.map((p, idx) => `<td class="${idx === primaryProfileIndex ? 'primary-col' : ''}">n=${formatNumber(p.sampleSize)}</td>`).join('')}
+                                ${profiles.map((p, idx) => `<td class="${idx === primaryProfileIndex ? 'primary-col' : ''}">n=${formatNumber(compareProjectedN(p.sampleSize))}</td>`).join('')}
                             </tr>
                             <tr>
                                 <td>Projected US</td>
@@ -40047,7 +40131,7 @@
                         <thead>
                             <tr>
                                 <th>Gender</th>
-                                ${profiles.map((p, i) => sortableHeader('gender', i, p.name + (p.sampleSize ? ` (n=${formatNumber(p.sampleSize)})` : ''), p.color, p.medianAge)).join('')}
+                                ${profiles.map((p, i) => sortableHeader('gender', i, p.name + (p.sampleSize ? ` (n=${formatNumber(compareProjectedN(p.sampleSize))})` : ''), p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -40088,7 +40172,7 @@
                         <thead>
                             <tr>
                                 <th>Age</th>
-                                ${profiles.map((p, i) => sortableHeader('age', i, p.name + (p.sampleSize ? ` (n=${formatNumber(p.sampleSize)})` : ''), p.color, p.medianAge)).join('')}
+                                ${profiles.map((p, i) => sortableHeader('age', i, p.name + (p.sampleSize ? ` (n=${formatNumber(compareProjectedN(p.sampleSize))})` : ''), p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -40128,7 +40212,7 @@
                         <thead>
                             <tr>
                                 <th>Ethnicity</th>
-                                ${profiles.map((p, i) => sortableHeader('ethnicity', i, p.name + (p.sampleSize ? ` (n=${formatNumber(p.sampleSize)})` : ''), p.color, p.medianAge)).join('')}
+                                ${profiles.map((p, i) => sortableHeader('ethnicity', i, p.name + (p.sampleSize ? ` (n=${formatNumber(compareProjectedN(p.sampleSize))})` : ''), p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -40168,7 +40252,7 @@
                         <thead>
                             <tr>
                                 <th>Income</th>
-                                ${profiles.map((p, i) => sortableHeader('income', i, p.name + (p.sampleSize ? ` (n=${formatNumber(p.sampleSize)})` : ''), p.color, p.medianAge)).join('')}
+                                ${profiles.map((p, i) => sortableHeader('income', i, p.name + (p.sampleSize ? ` (n=${formatNumber(compareProjectedN(p.sampleSize))})` : ''), p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -40216,7 +40300,7 @@
                         <thead>
                             <tr>
                                 <th>${title}</th>
-                                ${profiles.map((p, i) => sortableHeader(key, i, p.name + (p.sampleSize ? ` (n=${formatNumber(p.sampleSize)})` : ''), p.color, p.medianAge)).join('')}
+                                ${profiles.map((p, i) => sortableHeader(key, i, p.name + (p.sampleSize ? ` (n=${formatNumber(compareProjectedN(p.sampleSize))})` : ''), p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -40269,7 +40353,7 @@
                                     ${profiles.map((p, i) => {
                                         const isGenPop = (p.name || '').toUpperCase().includes('GEN POP') || (p.name || '').toUpperCase().includes('GENPOP');
                                         const colLabel = isGenPop ? p.name + ' (%)' : p.name + ' (% / Idx)';
-                                        return sortableHeader(catKey, i, colLabel + (p.sampleSize ? ` (n=${formatNumber(p.sampleSize)})` : ''), p.color, p.medianAge);
+                                        return sortableHeader(catKey, i, colLabel + (p.sampleSize ? ` (n=${formatNumber(compareProjectedN(p.sampleSize))})` : ''), p.color, p.medianAge);
                                     }).join('')}
                                 </tr>
                             </thead>
@@ -40309,7 +40393,7 @@
                             <thead>
                                 <tr>
                                     <th>Location</th>
-                                    ${profiles.map((p, i) => sortableHeader('location', i, p.name + (p.sampleSize ? ` (n=${formatNumber(p.sampleSize)})` : ''), p.color, p.medianAge)).join('')}
+                                    ${profiles.map((p, i) => sortableHeader('location', i, p.name + (p.sampleSize ? ` (n=${formatNumber(compareProjectedN(p.sampleSize))})` : ''), p.color, p.medianAge)).join('')}
                                 </tr>
                             </thead>
                             <tbody>
@@ -47029,7 +47113,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td>Respondents</td>${profiles.map(p => `<td>n=${formatNumber(p.sampleSize)}</td>`).join('')}</tr>
+                                <tr><td>Respondents</td>${profiles.map(p => `<td>n=${formatNumber(compareProjectedN(p.sampleSize))}</td>`).join('')}</tr>
                                 <tr><td>Projected US</td>${profiles.map(p => `<td>${formatNumber(p.projectedUS)}</td>`).join('')}</tr>
                                 <tr><td>Median Age</td>${profiles.map(p => `<td>${p.medianAge > 0 ? p.medianAge.toFixed(2) : '-'}</td>`).join('')}</tr>
                             </tbody>

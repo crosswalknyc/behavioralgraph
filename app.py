@@ -3764,6 +3764,8 @@ Respond in JSON format:
 
 # ============================================================================
 # RANKERS - Netflix (BEHAVIORALGRAPH.PUBLIC.NETFLIX)
+# Cached system-wide: in-memory per process + JSON file on disk. After the first
+# user loads data, all other users (and other workers) get it from file/memory.
 # ============================================================================
 
 NETFLIX_RANKER_CACHE = {}
@@ -3949,6 +3951,7 @@ def get_netflix_ranker_data():
 
 # ============================================================================
 # RANKERS - YouTube (BEHAVIORALGRAPH.YOUTUBE.YOUTUBE)
+# Cached system-wide: in-memory per process + JSON file on disk. Same as Netflix.
 # ============================================================================
 
 YOUTUBE_RANKER_CACHE = {}
@@ -4111,6 +4114,23 @@ def get_youtube_ranker_data():
                 if data is None:
                     return jsonify({'error': str(e)}), 500
     return jsonify(data or {})
+
+
+# Eager-load ranker caches from disk at startup so first request in each worker is fast
+def _preload_ranker_caches():
+    try:
+        if os.path.exists(NETFLIX_RANKER_CACHE_FILE):
+            _load_netflix_ranker_cache()
+    except Exception:
+        pass
+    try:
+        if os.path.exists(YOUTUBE_RANKER_CACHE_FILE):
+            _load_youtube_ranker_cache()
+    except Exception:
+        pass
+
+
+_preload_ranker_caches()
 
 
 # ============================================================================
