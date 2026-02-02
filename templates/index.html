@@ -29818,15 +29818,21 @@
         function showRankersProgressBlock() {
             const progress = document.getElementById('rankersLoadProgress');
             const done = document.getElementById('rankersLoadDone');
+            const block = document.getElementById('rankersLoadBlock');
             if (progress) progress.style.display = 'flex';
             if (done) done.style.display = 'none';
+            if (block) block.style.display = 'block';
         }
 
         function showRankersDoneBlock() {
             const progress = document.getElementById('rankersLoadProgress');
             const done = document.getElementById('rankersLoadDone');
+            const block = document.getElementById('rankersLoadBlock');
             if (progress) progress.style.display = 'none';
             if (done) done.style.display = 'block';
+            // When Netflix data is loaded, hide the whole block so the table is the focus (no confusing "loaded" message)
+            if (block && netflixRankerData) block.style.display = 'none';
+            else if (block) block.style.display = 'block';
         }
 
         function updateRankersLoadStatus(msg) {
@@ -29900,6 +29906,9 @@
                     renderNetflixTopShows();
                     renderNetflixInsights();
                     if (btn) btn.disabled = false;
+                    // Hide load block so Netflix table is visible (data is the focus)
+                    const loadBlock = document.getElementById('rankersLoadBlock');
+                    if (loadBlock) loadBlock.style.display = 'none';
                     if (youtubeRankerData) showRankersDoneBlock();
                 })
                 .catch(err => {
@@ -29983,7 +29992,11 @@
             }
 
             if (!tbody) return;
-            tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td><td>' + (r.genre || '-') + '</td><td>' + (r.type || '-') + '</td></tr>').join('');
+            if (rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date' + (date ? ' (' + date + ')' : '') + '. Try another date or check filters.</td></tr>';
+            } else {
+                tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td><td>' + (r.genre || '-') + '</td><td>' + (r.type || '-') + '</td></tr>').join('');
+            }
         }
 
         function renderNetflixSeasonsRanker() {
