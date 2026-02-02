@@ -3887,32 +3887,35 @@
             box-shadow: 0 0 20px rgba(200, 255, 0, 0.2);
         }
 
-        .behavioral-card h3 {
+        .behavioral-card h3.behavioral-card-title-row {
             font-size: 0.9rem;
             color: var(--text-primary);
-            margin-bottom: 0.75rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            flex-shrink: 0;
-            gap: 0.35rem;
-            flex-wrap: wrap;
-        }
-        
-        .behavioral-card h3 > span:first-child {
-            flex: 1;
-            min-width: 0;
-            white-space: normal;
-            word-wrap: break-word;
-            word-break: break-word;
-        }
-        
-        .behavioral-card h3 > span:last-child {
-            flex-shrink: 0;
+            margin: 0 0 0.5rem 0;
             display: flex;
             align-items: center;
             gap: 0.35rem;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
+            white-space: nowrap;
+        }
+        .behavioral-card h3.behavioral-card-title-row .drag-handle { flex-shrink: 0; }
+        .behavioral-card h3.behavioral-card-title-row > span:not(.drag-handle) {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+        }
+        .behavioral-card-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            flex-wrap: nowrap;
+            margin-bottom: 0.5rem;
+        }
+        .behavioral-card-controls .module-action-btns {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            flex-wrap: nowrap;
         }
 
         .behavioral-card .count {
@@ -27666,25 +27669,23 @@
                          ondragover="handleDragOver(event)"
                          ondragleave="handleDragLeave(event)"
                          ondrop="handleDrop(event)">
-                        <h3>
-                            <span style="display: flex; align-items: center; gap: 0.3rem; min-width: 0;">
-                                <span class="drag-handle" title="Drag to reorder">⋮⋮</span>
-                                <span class="${hasTooltip}" ${tooltipAttr} style="word-wrap: break-word; white-space: normal;">${cat}</span>
-                                ${positionBadge}
-                            </span>
-                            <span style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; flex-wrap: nowrap;">
-                                <span class="count">${items.length} items</span>
-                                <span class="module-action-btns" style="display: flex; align-items: center; gap: 0.25rem; flex-wrap: nowrap;">
-                                    <button class="module-btn csv-btn has-tooltip" onclick="event.stopPropagation(); exportModuleCSV('behavioral', '${cat}')" data-tooltip="Export CSV: Download this behavioral category data as a CSV file.">CSV</button>
-                                    <button class="module-btn png-btn has-tooltip" onclick="event.stopPropagation(); exportModulePNG('behavioral', '${cat}')" data-tooltip="Export PNG: Download this behavioral category chart as a PNG image.">PNG</button>
-                                    <button class="module-btn deck-btn has-tooltip" onclick="event.stopPropagation(); addModuleToDeck('behavioral', '${cat}')" data-tooltip="Add to Deck: Save this behavioral category to your presentation deck.">➕</button>
-                                    <button class="module-btn spotlight-btn has-tooltip" onclick="event.stopPropagation(); openBehavioralSpotlight('${cat}')" data-tooltip="Spotlight: Expand this category to view all data in a larger popup window.">🔍</button>
-                                    <select class="item-limit-select has-tooltip" id="limit-${catId}" onchange="event.stopPropagation(); setCategoryItemLimit('${catId}', '${cat}', this.value)" data-tooltip="How many items to show in this list">
-                                        ${generateItemLimitOptions(cat, items.length)}
-                                    </select>
-                                </span>
-                            </span>
+                        <h3 class="behavioral-card-title-row">
+                            <span class="drag-handle" title="Drag to reorder">⋮⋮</span>
+                            <span class="${hasTooltip}" ${tooltipAttr}>${cat}</span>
+                            ${positionBadge}
                         </h3>
+                        <div class="behavioral-card-controls">
+                            <span class="count">${items.length} items</span>
+                            <span class="module-action-btns">
+                                <button class="module-btn csv-btn has-tooltip" onclick="event.stopPropagation(); exportModuleCSV('behavioral', '${cat}')" data-tooltip="Export CSV: Download this behavioral category data as a CSV file.">CSV</button>
+                                <button class="module-btn png-btn has-tooltip" onclick="event.stopPropagation(); exportModulePNG('behavioral', '${cat}')" data-tooltip="Export PNG: Download this behavioral category chart as a PNG image.">PNG</button>
+                                <button class="module-btn deck-btn has-tooltip" onclick="event.stopPropagation(); addModuleToDeck('behavioral', '${cat}')" data-tooltip="Add to Deck: Save this behavioral category to your presentation deck.">➕</button>
+                                <button class="module-btn spotlight-btn has-tooltip" onclick="event.stopPropagation(); openBehavioralSpotlight('${cat}')" data-tooltip="Spotlight: Expand this category to view all data in a larger popup window.">🔍</button>
+                                <select class="item-limit-select has-tooltip" id="limit-${catId}" onchange="event.stopPropagation(); setCategoryItemLimit('${catId}', '${cat}', this.value)" data-tooltip="How many items to show in this list">
+                                    ${generateItemLimitOptions(cat, items.length)}
+                                </select>
+                            </span>
+                        </div>
                         <div class="behavioral-filter" style="display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center;">
                             ${isMostPurchased ? `
                                 <select class="behavioral-slice-select" id="slice-${catId}" onchange="sliceMostPurchased('${catId}', '${cat}', this.value)" style="flex: 1; min-width: 80px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
