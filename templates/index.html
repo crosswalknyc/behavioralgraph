@@ -2203,67 +2203,6 @@
             flex-direction: column;
             position: relative;
         }
-
-        /* Behavioral tab: align profile sidebar with data tables (2-row grid so profile list and tables start at same level) */
-        .dashboard-layout.behavioral-active {
-            display: grid;
-            grid-template-columns: 280px 1fr;
-            grid-template-rows: auto 1fr;
-            gap: 1rem;
-            align-items: start;
-        }
-        .dashboard-layout.behavioral-active .persistent-sidebar {
-            display: contents;
-        }
-        .dashboard-layout.behavioral-active .sidebar-header-section {
-            grid-row: 1;
-            grid-column: 1;
-            background: var(--bg-card);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 0;
-        }
-        .dashboard-layout.behavioral-active .sidebar-body {
-            grid-row: 2;
-            grid-column: 1;
-            background: var(--bg-card);
-            border-radius: 8px;
-            padding: 1rem;
-            min-height: 0;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-        .dashboard-layout.behavioral-active .dashboard-tab-content {
-            grid-row: 1 / -1;
-            grid-column: 2;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-            overflow: hidden;
-        }
-        .dashboard-layout.behavioral-active .dashboard-tab-content #dashboardContent {
-            display: grid;
-            grid-template-rows: auto 1fr;
-            grid-template-columns: 1fr;
-            flex: 1;
-            min-height: 0;
-            overflow: hidden;
-        }
-        .dashboard-layout.behavioral-active #tab-behavioral {
-            display: contents;
-        }
-        .dashboard-layout.behavioral-active .behavioral-top-section {
-            grid-row: 1;
-            flex-shrink: 0;
-        }
-        .dashboard-layout.behavioral-active .behavioral-grid {
-            grid-row: 2;
-            min-height: 0;
-            overflow-y: auto;
-            overflow-x: hidden;
-            -webkit-overflow-scrolling: touch;
-        }
         
         /* Content action buttons - positioned above sidebar, matching sidebar width */
         .content-action-buttons {
@@ -2484,15 +2423,6 @@
             border-radius: 6px;
             color: var(--text-primary);
             font-size: 0.8rem;
-        }
-
-        .sidebar-body {
-            flex: 1;
-            overflow-y: auto;
-            overflow-x: hidden;
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
         }
 
         .profile-select-tree {
@@ -4105,21 +4035,21 @@
         .behavioral-header-row span.profile-col,
         .behavioral-header-row span.genpop-col,
         .behavioral-header-row span.index-col {
-            text-align: right !important;
+            text-align: left !important;
             justify-self: stretch;
             width: 100%;
             display: block;
-            padding-left: 0.25rem;
-            padding-right: 0.5rem;
+            padding-left: 0.5rem;
+            padding-right: 0.25rem;
         }
         .behavioral-item .behavioral-pct,
         .behavioral-item .behavioral-index {
-            text-align: right !important;
+            text-align: left !important;
             justify-self: stretch;
             width: 100%;
             display: block;
-            padding-left: 0.25rem;
-            padding-right: 0.5rem;
+            padding-left: 0.5rem;
+            padding-right: 0.25rem;
         }
         .behavioral-list {
             padding-right: 0.5rem;
@@ -4197,13 +4127,13 @@
             font-size: 0.8rem;
             font-weight: 500;
             color: var(--text-primary);
-            text-align: right !important;
+            text-align: left !important;
         }
 
         .behavioral-index {
             font-size: 0.8rem;
             font-weight: 700;
-            text-align: right !important;
+            text-align: left !important;
             padding: 3px 6px;
             border-radius: 4px;
             background: rgba(0, 0, 0, 0.3);
@@ -11451,10 +11381,8 @@
                         <h3>Select Profile</h3>
                         <input type="text" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()">
                     </div>
-                    <div class="sidebar-body">
-                        <div class="profile-select-tree" id="dashProfileTree">
-                            <!-- Profiles will be loaded here -->
-                        </div>
+                    <div class="profile-select-tree" id="dashProfileTree">
+                        <!-- Profiles will be loaded here -->
                     </div>
                 </div>
                 
@@ -11750,16 +11678,15 @@
 
             <!-- Behavioral Tab -->
             <div id="tab-behavioral" class="tab-content">
-                <div class="behavioral-top-section">
-                    <div class="metric-legend" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem; background: rgba(90, 154, 217, 0.1); border-radius: 8px; font-size: 0.75rem;">
-                        <span class="has-tooltip" data-tooltip="The percentage of this specific audience that engages with each item."><strong style="color: var(--accent-blue);">Profile %</strong> — Audience penetration</span>
-                        <span class="has-tooltip" data-tooltip="The percentage of the general US population that engages with each item."><strong style="color: var(--text-secondary);">(GP: X%)</strong> — Gen Pop penetration</span>
-                        <span class="has-tooltip" data-tooltip="Index shows how much more/less likely this audience is to engage vs. Gen Pop. 2.0x = twice as likely, 0.5x = half as likely."><strong style="color: #10b981;">Index (X.Xx)</strong> — Over/under-index multiplier</span>
-                        <span class="has-tooltip" data-tooltip="Items with index above 1.5x are considered 'hot' - strong over-indexers."><strong>🔥</strong> — Hot (index > 1.5x)</span>
-                        <span class="has-tooltip" data-tooltip="N/A indicates that data is not available for this metric."><strong style="color: var(--text-secondary);">N/A</strong> — Data not available</span>
-                    </div>
-                    <!-- Behavioral Insights Row -->
-                    <div class="behavioral-insights-row" id="behavioralInsightsRow">
+                <div class="metric-legend" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem; background: rgba(90, 154, 217, 0.1); border-radius: 8px; font-size: 0.75rem;">
+                    <span class="has-tooltip" data-tooltip="The percentage of this specific audience that engages with each item."><strong style="color: var(--accent-blue);">Profile %</strong> — Audience penetration</span>
+                    <span class="has-tooltip" data-tooltip="The percentage of the general US population that engages with each item."><strong style="color: var(--text-secondary);">(GP: X%)</strong> — Gen Pop penetration</span>
+                    <span class="has-tooltip" data-tooltip="Index shows how much more/less likely this audience is to engage vs. Gen Pop. 2.0x = twice as likely, 0.5x = half as likely."><strong style="color: #10b981;">Index (X.Xx)</strong> — Over/under-index multiplier</span>
+                    <span class="has-tooltip" data-tooltip="Items with index above 1.5x are considered 'hot' - strong over-indexers."><strong>🔥</strong> — Hot (index > 1.5x)</span>
+                    <span class="has-tooltip" data-tooltip="N/A indicates that data is not available for this metric."><strong style="color: var(--text-secondary);">N/A</strong> — Data not available</span>
+                </div>
+                <!-- Behavioral Insights Row -->
+                <div class="behavioral-insights-row" id="behavioralInsightsRow">
                     <div class="behavioral-insight-card highlight" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Behavioral Profile Summary">
                         <h4 class="has-tooltip" data-tooltip="Behavioral Profile Summary: AI-generated analysis of this audience's lifestyle, interests, habits, and unique characteristics based on their behavioral data." style="display: flex; justify-content: space-between; align-items: center;">
                             <span style="display: flex; align-items: center;">
@@ -11818,13 +11745,12 @@
                     </div>
                 </div>
                 
-                    <!-- Category Reorder Controls -->
-                    <div class="behavioral-controls">
-                        <select id="categoryReorderSelect" onchange="moveCategoryToTop(this.value)" class="has-tooltip" data-tooltip="Move Category to Top: Select a behavioral category to move it to the top of the list for easier viewing." style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                            <option value="">📌 Move to top...</option>
-                        </select>
-                        <button class="btn btn-small btn-secondary has-tooltip" data-tooltip="Reset Category Order: Restore the default category order if you've moved any categories to the top." onclick="resetCategoryOrder()" style="padding: 0.3rem 0.5rem; font-size: 0.7rem;">↻</button>
-                    </div>
+                <!-- Category Reorder Controls -->
+                <div class="behavioral-controls">
+                    <select id="categoryReorderSelect" onchange="moveCategoryToTop(this.value)" class="has-tooltip" data-tooltip="Move Category to Top: Select a behavioral category to move it to the top of the list for easier viewing." style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                        <option value="">📌 Move to top...</option>
+                    </select>
+                    <button class="btn btn-small btn-secondary has-tooltip" data-tooltip="Reset Category Order: Restore the default category order if you've moved any categories to the top." onclick="resetCategoryOrder()" style="padding: 0.3rem 0.5rem; font-size: 0.7rem;">↻</button>
                 </div>
                 
                 <div class="behavioral-grid" id="behavioralGrid"></div>
