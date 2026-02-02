@@ -3763,6 +3763,186 @@ Respond in JSON format:
 
 
 # ============================================================================
+# RANKERS - Netflix (BEHAVIORALGRAPH.PUBLIC.NETFLIX)
+# ============================================================================
+
+NETFLIX_RANKER_CACHE = {}
+NETFLIX_RANKER_LOCK = threading.Lock()
+NETFLIX_RANKER_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'netflix_ranker_cache.json')
+NETFLIX_RANKER_CACHE_MAX_AGE_HOURS = 24  # refresh today's data if cache older than this
+
+def _build_netflix_ranker_payload(rows):
+    """Build API payload from raw rows: (visit_date, name_of_show, genre, type, views)."""
+    from collections import defaultdict
+    daily = []
+    by_date = defaultdict(list)
+    by_show = defaultdict(list)
+    for r in rows:
+        dt = r[0].strftime('%Y-%m-%d') if hasattr(r[0], 'strftime') else str(r[0])[:10]
+        show_name = (r[1] or '').strip() or 'Unknown'
+        genre = (r[2] or '').strip() or '-'
+        typ = (r[3] or '').strip() or '-'
+        views = int(r[4] or 0)
+        daily.append({'date': dt, 'show_name': show_name, 'views': views, 'genre': genre, 'type': typ})
+        by_date[dt].append({'show_name': show_name, 'views': views, 'genre': genre, 'type': typ})
+        by_show[show_name].append({'date': dt, 'views': views})
+    dates_sorted = sorted(by_date.keys())
+    date_range = {'min': dates_sorted[0], 'max': dates_sorted[-1]} if dates_sorted else {}
+    # genres_by_date: for each date, aggregate by genre and pick top show per genre
+    genres_by_date = defaultdict(list)
+    for dt, items in by_date.items():
+        genre_views = defaultdict(lambda: {'views': 0, 'top_show': '', 'top_views': 0})
+        for it in items:
+            g = it['genre'] or 'Other'
+            genre_views[g]['views'] += it['views']
+            if it['views'] > genre_views[g]['top_views']:
+                genre_views[g]['top_show'] = it['show_name']
+                genre_views[g]['top_views'] = it['views']
+        for g, v in genre_views.items():
+            genres_by_date[dt].append({'genre': g, 'views': v['views'], 'top_show': v['top_show']})
+    # top_shows_over_time: top 20 shows by total views, with by_date
+    show_totals = [(name, sum(p['views'] for p in pts)) for name, pts in by_show.items()]
+    show_totals.sort(key=lambda x: -x[1])
+    top_20_names = [s[0] for s in show_totals[:20]]
+    top_shows_over_time = []
+    for name in top_20_names:
+        pts = by_show[name]
+        by_date_show = {p['date']: p['views'] for p in pts}
+        top_shows_over_time.append({'show_name': name, 'by_date': by_date_show})
+    return {
+        'daily': daily,
+        'by_date': dict(by_date),
+        'by_show': dict(by_show),
+        'genres_by_date': dict(genres_by_date),
+        'top_shows_over_time': top_shows_over_time,
+        'dates_sorted': dates_sorted,
+        'date_range': date_range
+    }
+
+def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
+    """Query BEHAVIORALGRAPH.PUBLIC.NETFLIX for past year (or latest day only) and return payload."""
+    try:
+        import bg
+        conn = bg.connect_snowflake()
+        cur = conn.cursor()
+    except Exception as e:
+        raise RuntimeError(f'Snowflake connection failed: {e}')
+    try:
+        if refresh_today_only:
+            sql = """
+                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views
+                FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+                WHERE VISIT_TS >= CURRENT_DATE()
+                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                GROUP BY 1, 2, 3, 4
+                ORDER BY 1, 3 DESC
+            """
+        else:
+            sql = """
+                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views
+                FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+                WHERE VISIT_TS >= DATEADD(year, -1, CURRENT_DATE())
+                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                GROUP BY 1, 2, 3, 4
+                ORDER BY 1, 3 DESC
+            """
+        cur.execute(sql)
+        rows = cur.fetchall()
+        conn.close()
+        return _build_netflix_ranker_payload(rows)
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+def _load_netflix_ranker_cache():
+    """Load cache from file if present."""
+    global NETFLIX_RANKER_CACHE
+    if not os.path.exists(NETFLIX_RANKER_CACHE_FILE):
+        return None
+    try:
+        with open(NETFLIX_RANKER_CACHE_FILE, 'r') as f:
+            data = json.load(f)
+        NETFLIX_RANKER_CACHE['data'] = data
+        NETFLIX_RANKER_CACHE['loaded_at'] = datetime.now().timestamp()
+        return data
+    except Exception:
+        return None
+
+def _save_netflix_ranker_cache(data):
+    """Save payload to file."""
+    try:
+        with open(NETFLIX_RANKER_CACHE_FILE, 'w') as f:
+            json.dump(data, f, indent=0)
+    except Exception as e:
+        print(f"Netflix ranker cache save failed: {e}")
+
+@app.route('/api/rankers/netflix/data', methods=['GET'])
+@requires_auth
+def get_netflix_ranker_data():
+    """
+    Return Netflix ranker data (day-by-day views by show) from BEHAVIORALGRAPH.PUBLIC.NETFLIX.
+    Cached on disk; first request after cache expiry refreshes only the most recent day and merges.
+    """
+    global NETFLIX_RANKER_CACHE
+    refresh_today = request.args.get('refresh_today', '').lower() in ('1', 'true', 'yes')
+    with NETFLIX_RANKER_LOCK:
+        data = NETFLIX_RANKER_CACHE.get('data')
+        loaded_at = NETFLIX_RANKER_CACHE.get('loaded_at') or 0
+        age_hours = (datetime.now().timestamp() - loaded_at) / 3600.0
+        if data is None:
+            data = _load_netflix_ranker_cache()
+        # If cache is stale (e.g. >24h), first request refreshes only latest day and merges
+        if data is not None and age_hours >= NETFLIX_RANKER_CACHE_MAX_AGE_HOURS:
+            refresh_today = True
+        if data is None or (refresh_today and data.get('date_range')):
+            try:
+                if data and refresh_today and data.get('date_range'):
+                    # Refresh only latest day and merge
+                    today_payload = _fetch_netflix_ranker_from_snowflake(refresh_today_only=True)
+                    by_date = data.get('by_date', {})
+                    for dt, rows in (today_payload.get('by_date') or {}).items():
+                        by_date[dt] = rows
+                    data['by_date'] = by_date
+                    data['daily'] = data.get('daily', []) + (today_payload.get('daily') or [])
+                    by_show = data.get('by_show', {})
+                    for show_name, pts in (today_payload.get('by_show') or {}).items():
+                        by_show.setdefault(show_name, []).extend(pts)
+                    data['by_show'] = by_show
+                    dates_sorted = sorted(set(data.get('dates_sorted', []) + list((today_payload.get('by_date') or {}).keys()))
+                    data['dates_sorted'] = dates_sorted
+                    if dates_sorted:
+                        data['date_range'] = {'min': dates_sorted[0], 'max': dates_sorted[-1]}
+                    genres_by_date = data.get('genres_by_date', {})
+                    for dt, rows in (today_payload.get('genres_by_date') or {}).items():
+                        genres_by_date[dt] = rows
+                    data['genres_by_date'] = genres_by_date
+                    # Rebuild top_shows_over_time from updated by_show
+                    by_show = data['by_show']
+                    show_totals = [(name, sum(p['views'] for p in pts)) for name, pts in by_show.items()]
+                    show_totals.sort(key=lambda x: -x[1])
+                    top_20_names = [s[0] for s in show_totals[:20]]
+                    top_shows_over_time = []
+                    for name in top_20_names:
+                        pts = by_show[name]
+                        by_date_show = {p['date']: p['views'] for p in pts}
+                        top_shows_over_time.append({'show_name': name, 'by_date': by_date_show})
+                    data['top_shows_over_time'] = top_shows_over_time
+                else:
+                    data = _fetch_netflix_ranker_from_snowflake(refresh_today_only=False)
+                NETFLIX_RANKER_CACHE['data'] = data
+                NETFLIX_RANKER_CACHE['loaded_at'] = datetime.now().timestamp()
+                _save_netflix_ranker_cache(data)
+            except Exception as e:
+                if data is None:
+                    return jsonify({'error': str(e)}), 500
+        elif age_hours >= NETFLIX_RANKER_CACHE_MAX_AGE_HOURS and request.args.get('refresh_today') != '1':
+            # Optional: in background, refresh only today and merge (so next request gets fresh today)
+            pass
+    return jsonify(data or {})
+
+# ============================================================================
 # FAVORITES/BOOKMARKS
 # ============================================================================
 

@@ -39,3 +39,4 @@ Thumbs.db
 # Cache
 .cache/
 ai_cache/
+netflix_ranker_cache.json

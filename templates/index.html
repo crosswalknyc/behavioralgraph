@@ -2203,6 +2203,62 @@
             flex-direction: column;
             position: relative;
         }
+
+        /* Behavioral tab: align profile sidebar with data tables (2-row grid so profile list and tables start at same level) */
+        .dashboard-layout.behavioral-active {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            grid-template-rows: auto 1fr;
+            gap: 1rem;
+            align-items: start;
+        }
+        .dashboard-layout.behavioral-active .persistent-sidebar {
+            display: contents;
+        }
+        .dashboard-layout.behavioral-active .sidebar-header-section {
+            grid-row: 1;
+            grid-column: 1;
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0;
+        }
+        .dashboard-layout.behavioral-active .sidebar-body {
+            grid-row: 2;
+            grid-column: 1;
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 1rem;
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .dashboard-layout.behavioral-active .dashboard-tab-content {
+            grid-row: 1 / -1;
+            grid-column: 2;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .dashboard-layout.behavioral-active .dashboard-tab-content #dashboardContent {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            grid-template-columns: 1fr;
+            flex: 1;
+            min-height: 0;
+        }
+        .dashboard-layout.behavioral-active #tab-behavioral {
+            display: contents;
+        }
+        .dashboard-layout.behavioral-active .behavioral-top-section {
+            grid-row: 1;
+        }
+        .dashboard-layout.behavioral-active .behavioral-grid {
+            grid-row: 2;
+            min-height: 0;
+            overflow: auto;
+        }
         
         /* Content action buttons - positioned above sidebar, matching sidebar width */
         .content-action-buttons {
@@ -2423,6 +2479,15 @@
             border-radius: 6px;
             color: var(--text-primary);
             font-size: 0.8rem;
+        }
+
+        .sidebar-body {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
         }
 
         .profile-select-tree {
@@ -7114,6 +7179,20 @@
             color: var(--accent-blue);
         }
 
+        /* Rankers tab */
+        .rankers-container { padding: 0; }
+        .ranker-platform-panel { display: none; }
+        .ranker-platform-panel.active { display: block; }
+        .netflix-sub-content { display: none; }
+        .netflix-sub-content.active { display: block; }
+        .rankers-table { font-size: 0.8rem; }
+        .rankers-table th, .rankers-table td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border-color); }
+        .rankers-table th { background: rgba(102, 217, 239, 0.08); color: var(--text-secondary); font-weight: 600; }
+        .rankers-table tbody tr:hover { background: rgba(102, 217, 239, 0.05); }
+        .rankers-insights-grid .insight-card { background: var(--bg-card); border-radius: 8px; padding: 1rem; border: 1px solid var(--border-color); }
+        .rankers-insights-grid .insight-label { font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 0.25rem; }
+        .rankers-insights-grid .insight-value { font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan); }
+
         .index-high { background: rgba(166, 226, 46, 0.2); color: var(--accent-green); padding: 0.15rem 0.4rem; border-radius: 3px; }
         .index-low { background: rgba(249, 38, 114, 0.2); color: var(--accent-red); padding: 0.15rem 0.4rem; border-radius: 3px; }
 
@@ -11331,6 +11410,7 @@
                         <button class="tab-btn has-tooltip" data-tooltip="Behavioral: Analysis of consumer behaviors, brand preferences, purchase patterns, and lifestyle activities." onclick="showTab('behavioral')"><span class="tab-icon">📈</span><span class="tab-label">BEHAVIORAL</span></button>
                         <button class="tab-btn has-tooltip" data-tooltip="Interests: Top interests and passions of this audience, categorized by topic area with index scores." onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
                         <button class="tab-btn has-tooltip" data-tooltip="Location: Geographic distribution showing where this audience is concentrated by state and metro area." onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
+                        <button class="tab-btn has-tooltip" data-tooltip="Rankers: Day-by-day view counts and rankings for streaming content (Netflix, etc.)." onclick="showTab('rankers')"><span class="tab-icon">📊</span><span class="tab-label">RANKERS</span></button>
                     </div>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 0.25rem;">
@@ -11366,8 +11446,10 @@
                         <h3>Select Profile</h3>
                         <input type="text" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()">
                     </div>
-                    <div class="profile-select-tree" id="dashProfileTree">
-                        <!-- Profiles will be loaded here -->
+                    <div class="sidebar-body">
+                        <div class="profile-select-tree" id="dashProfileTree">
+                            <!-- Profiles will be loaded here -->
+                        </div>
                     </div>
                 </div>
                 
@@ -11663,15 +11745,16 @@
 
             <!-- Behavioral Tab -->
             <div id="tab-behavioral" class="tab-content">
-                <div class="metric-legend" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem; background: rgba(90, 154, 217, 0.1); border-radius: 8px; font-size: 0.75rem;">
-                    <span class="has-tooltip" data-tooltip="The percentage of this specific audience that engages with each item."><strong style="color: var(--accent-blue);">Profile %</strong> — Audience penetration</span>
-                    <span class="has-tooltip" data-tooltip="The percentage of the general US population that engages with each item."><strong style="color: var(--text-secondary);">(GP: X%)</strong> — Gen Pop penetration</span>
-                    <span class="has-tooltip" data-tooltip="Index shows how much more/less likely this audience is to engage vs. Gen Pop. 2.0x = twice as likely, 0.5x = half as likely."><strong style="color: #10b981;">Index (X.Xx)</strong> — Over/under-index multiplier</span>
-                    <span class="has-tooltip" data-tooltip="Items with index above 1.5x are considered 'hot' - strong over-indexers."><strong>🔥</strong> — Hot (index > 1.5x)</span>
-                    <span class="has-tooltip" data-tooltip="N/A indicates that data is not available for this metric."><strong style="color: var(--text-secondary);">N/A</strong> — Data not available</span>
-                </div>
-                <!-- Behavioral Insights Row -->
-                <div class="behavioral-insights-row" id="behavioralInsightsRow">
+                <div class="behavioral-top-section">
+                    <div class="metric-legend" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem; background: rgba(90, 154, 217, 0.1); border-radius: 8px; font-size: 0.75rem;">
+                        <span class="has-tooltip" data-tooltip="The percentage of this specific audience that engages with each item."><strong style="color: var(--accent-blue);">Profile %</strong> — Audience penetration</span>
+                        <span class="has-tooltip" data-tooltip="The percentage of the general US population that engages with each item."><strong style="color: var(--text-secondary);">(GP: X%)</strong> — Gen Pop penetration</span>
+                        <span class="has-tooltip" data-tooltip="Index shows how much more/less likely this audience is to engage vs. Gen Pop. 2.0x = twice as likely, 0.5x = half as likely."><strong style="color: #10b981;">Index (X.Xx)</strong> — Over/under-index multiplier</span>
+                        <span class="has-tooltip" data-tooltip="Items with index above 1.5x are considered 'hot' - strong over-indexers."><strong>🔥</strong> — Hot (index > 1.5x)</span>
+                        <span class="has-tooltip" data-tooltip="N/A indicates that data is not available for this metric."><strong style="color: var(--text-secondary);">N/A</strong> — Data not available</span>
+                    </div>
+                    <!-- Behavioral Insights Row -->
+                    <div class="behavioral-insights-row" id="behavioralInsightsRow">
                     <div class="behavioral-insight-card highlight" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Behavioral Profile Summary">
                         <h4 class="has-tooltip" data-tooltip="Behavioral Profile Summary: AI-generated analysis of this audience's lifestyle, interests, habits, and unique characteristics based on their behavioral data." style="display: flex; justify-content: space-between; align-items: center;">
                             <span style="display: flex; align-items: center;">
@@ -11730,12 +11813,13 @@
                     </div>
                 </div>
                 
-                <!-- Category Reorder Controls -->
-                <div class="behavioral-controls">
-                    <select id="categoryReorderSelect" onchange="moveCategoryToTop(this.value)" class="has-tooltip" data-tooltip="Move Category to Top: Select a behavioral category to move it to the top of the list for easier viewing." style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                        <option value="">📌 Move to top...</option>
-                    </select>
-                    <button class="btn btn-small btn-secondary has-tooltip" data-tooltip="Reset Category Order: Restore the default category order if you've moved any categories to the top." onclick="resetCategoryOrder()" style="padding: 0.3rem 0.5rem; font-size: 0.7rem;">↻</button>
+                    <!-- Category Reorder Controls -->
+                    <div class="behavioral-controls">
+                        <select id="categoryReorderSelect" onchange="moveCategoryToTop(this.value)" class="has-tooltip" data-tooltip="Move Category to Top: Select a behavioral category to move it to the top of the list for easier viewing." style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                            <option value="">📌 Move to top...</option>
+                        </select>
+                        <button class="btn btn-small btn-secondary has-tooltip" data-tooltip="Reset Category Order: Restore the default category order if you've moved any categories to the top." onclick="resetCategoryOrder()" style="padding: 0.3rem 0.5rem; font-size: 0.7rem;">↻</button>
+                    </div>
                 </div>
                 
                 <div class="behavioral-grid" id="behavioralGrid"></div>
@@ -11996,6 +12080,79 @@
                     </div>
                     <div id="locationListAll" style="max-height: 600px; overflow-y: auto;"></div>
                     <div id="locationCountAll" style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; padding: 0.25rem;"></div>
+                </div>
+            </div>
+
+            <!-- Rankers Tab -->
+            <div id="tab-rankers" class="tab-content">
+                <div class="rankers-container">
+                    <div class="rankers-platform-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                        <button class="tab-btn active" onclick="showRankerPlatform('netflix')" id="rankerPlatformNetflix"><span class="tab-icon">📺</span> Netflix</button>
+                    </div>
+                    <div id="rankerPlatformContent" class="ranker-platform-content">
+                        <!-- Netflix sub-view -->
+                        <div id="ranker-netflix" class="ranker-platform-panel active">
+                            <div class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                                <button class="tab-btn" onclick="showNetflixSubTab('daily')" id="netflixSubTabDaily">📅 Daily Ranker</button>
+                                <button class="tab-btn" onclick="showNetflixSubTab('trends')" id="netflixSubTabTrends">📈 Trends</button>
+                                <button class="tab-btn" onclick="showNetflixSubTab('genre')" id="netflixSubTabGenre">🎬 By Genre</button>
+                                <button class="tab-btn" onclick="showNetflixSubTab('topshows')" id="netflixSubTabTopShows">🏆 Top Shows Over Time</button>
+                                <button class="tab-btn" onclick="showNetflixSubTab('insights')" id="netflixSubTabInsights">💡 Insights</button>
+                            </div>
+                            <div id="netflixSubTabContent">
+                                <div id="netflix-daily" class="netflix-sub-content active">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">📅 Daily View Ranker</h3>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
+                                            <input type="date" id="netflixDailyDate" onchange="renderNetflixDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                            <button class="module-btn csv-btn" onclick="exportNetflixDailyCSV()">CSV</button>
+                                        </div>
+                                    </div>
+                                    <div id="netflixDailyTableWrap" style="overflow-x: auto;"><table id="netflixDailyTable" class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Views</th><th>Genre</th><th>Type</th></tr></thead><tbody id="netflixDailyBody"></tbody></table></div>
+                                    <div id="netflixDailyLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers to view daily data.</div>
+                                </div>
+                                <div id="netflix-trends" class="netflix-sub-content">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">📈 Show Trends (Past Year)</h3>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <select id="netflixTrendsShow" onchange="renderNetflixTrends()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 200px;"><option value="">Select show...</option></select>
+                                            <button class="module-btn csv-btn" onclick="exportNetflixTrendsCSV()">CSV</button>
+                                        </div>
+                                    </div>
+                                    <div id="netflixTrendsChartWrap" style="min-height: 300px;"><canvas id="netflixTrendsChart"></canvas></div>
+                                    <div id="netflixTrendsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers and select a show.</div>
+                                </div>
+                                <div id="netflix-genre" class="netflix-sub-content">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">🎬 Views by Genre</h3>
+                                        <input type="date" id="netflixGenreDate" onchange="renderNetflixByGenre()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    </div>
+                                    <div id="netflixGenreChartWrap" style="min-height: 280px;"><canvas id="netflixGenreChart"></canvas></div>
+                                    <div id="netflixGenreTableWrap" style="overflow-x: auto; margin-top: 1rem;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Genre</th><th>Views</th><th>% of Total</th><th>Top Show</th></tr></thead><tbody id="netflixGenreBody"></tbody></table></div>
+                                    <div id="netflixGenreLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers to view genre breakdown.</div>
+                                </div>
+                                <div id="netflix-topshows" class="netflix-sub-content">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">🏆 Top 20 Shows Over Time</h3>
+                                        <button class="module-btn csv-btn" onclick="exportNetflixTopShowsCSV()">CSV</button>
+                                    </div>
+                                    <div id="netflixTopShowsChartWrap" style="min-height: 400px;"><canvas id="netflixTopShowsChart"></canvas></div>
+                                    <div id="netflixTopShowsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers to view top shows over time.</div>
+                                </div>
+                                <div id="netflix-insights" class="netflix-sub-content">
+                                    <h3 style="margin: 0 0 0.75rem 0;">💡 Netflix Ranker Insights</h3>
+                                    <div id="netflixInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
+                                    <div id="netflixInsightsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers to view insights.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="rankersLoadBlock" style="padding: 2rem; text-align: center; background: var(--bg-card); border-radius: 8px; margin-top: 1rem;">
+                        <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Netflix ranker data is cached for the past year. First load may take a moment.</p>
+                        <button class="btn btn-primary" onclick="loadNetflixRankerData()" id="rankersLoadBtn">📊 Load Netflix Ranker Data</button>
+                        <div id="rankersLoadStatus" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);"></div>
+                    </div>
                 </div>
             </div>
 
@@ -22200,6 +22357,7 @@
             behavioral: { icon: '📈', title: 'Behavioral', desc: 'Consumer behaviors, brand preferences, purchase patterns, and lifestyle activities.' },
             interests: { icon: '🎯', title: 'Interests', desc: 'Top interests and passions categorized by topic area with index scores.' },
             location: { icon: '📍', title: 'Location', desc: 'Geographic distribution showing where this audience is concentrated.' },
+            rankers: { icon: '📊', title: 'Rankers', desc: 'Day-by-day view counts and rankings for streaming content (Netflix, etc.).' },
             affinity: { icon: '🔗', title: 'Affinity', desc: 'Cross-category affinities showing what else this audience engages with.' },
             ecosystem: { icon: '🌐', title: 'Ecosystem', desc: 'Behavioral ecosystem analysis showing life moments, substitution patterns, cultural signals, emotional engagement, relevance shifts, and white-space opportunities.' },
             sponsorship: { icon: '💰', title: 'Sponsorship', desc: 'Sponsorship valuation and partnership opportunity analysis.' },
@@ -22248,6 +22406,16 @@
             // Update inline tab header
             updateInlineTabHeader(tabName);
             if (tabName === 'segmentation') updateSegmentBuilderTitle();
+
+            // Behavioral tab: use 2-row grid so profile sidebar aligns with data tables
+            const dashboardLayout = document.querySelector('.dashboard-layout');
+            if (dashboardLayout) {
+                if (tabName === 'behavioral') {
+                    dashboardLayout.classList.add('behavioral-active');
+                } else {
+                    dashboardLayout.classList.remove('behavioral-active');
+                }
+            }
             
             // Find and activate the corresponding tab button
             // Try to find button by onclick attribute first
@@ -22269,6 +22437,7 @@
                     'behavioral': 'BEHAVIORAL',
                     'interests': 'INTERESTS',
                     'location': 'LOCATION',
+                    'rankers': 'RANKERS',
                     'affinity': 'AFFINITY',
                     'ecosystem': 'ECOSYSTEM',
                     'sponsorship': 'SPONSORSHIP',
@@ -22323,6 +22492,11 @@
             if (tabName === 'demographics') {
                 // Load profile selector in sidebar
                 loadDashboardProfiles();
+            }
+
+            if (tabName === 'rankers') {
+                showRankerPlatform('netflix');
+                showNetflixSubTab('daily');
             }
             
             if (tabName === 'comparison' || tabName === 'collaboration' || tabName === 'segmentation') {
@@ -28183,6 +28357,7 @@
                 if (tabContent.id === 'tab-demographics') return 'demographic';
                 if (tabContent.id === 'tab-behavioral') return 'behavioral';
                 if (tabContent.id === 'tab-location') return 'location';
+                if (tabContent.id === 'tab-rankers') return 'rankers';
                 if (tabContent.id === 'tab-insights') return 'insight';
                 if (tabContent.id === 'tab-interests') return 'interests';
                 if (tabContent.id === 'tab-affinity') return 'affinity';
@@ -29376,6 +29551,240 @@
             const searchBottom = document.getElementById('locationSearchBottom');
             if (searchTop) searchTop.value = '';
             if (searchBottom) searchBottom.value = '';
+        }
+
+        // --- Netflix Ranker (Rankers tab) ---
+        let netflixRankerData = null;
+        let netflixTrendsChartInstance = null;
+        let netflixGenreChartInstance = null;
+        let netflixTopShowsChartInstance = null;
+
+        function showRankerPlatform(id) {
+            document.querySelectorAll('.ranker-platform-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.rankers-platform-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+            const panel = document.getElementById('ranker-' + id);
+            const btn = document.getElementById('rankerPlatform' + id.charAt(0).toUpperCase() + id.slice(1));
+            if (panel) panel.classList.add('active');
+            if (btn) btn.classList.add('active');
+        }
+
+        function showNetflixSubTab(id) {
+            document.querySelectorAll('.netflix-sub-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.netflix-subtabs .tab-btn').forEach(b => b.classList.remove('active'));
+            const content = document.getElementById('netflix-' + id);
+            const btn = document.getElementById('netflixSubTab' + (id === 'topshows' ? 'TopShows' : id.charAt(0).toUpperCase() + id.slice(1)));
+            if (content) content.classList.add('active');
+            if (btn) btn.classList.add('active');
+            if (id === 'daily') renderNetflixDailyRanker();
+            else if (id === 'trends') renderNetflixTrends();
+            else if (id === 'genre') renderNetflixByGenre();
+            else if (id === 'topshows') renderNetflixTopShows();
+            else if (id === 'insights') renderNetflixInsights();
+        }
+
+        function loadNetflixRankerData() {
+            const btn = document.getElementById('rankersLoadBtn');
+            const status = document.getElementById('rankersLoadStatus');
+            if (btn) btn.disabled = true;
+            if (status) status.textContent = 'Loading from server (first load may refresh cache)...';
+            fetch('/api/rankers/netflix/data', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) throw new Error(data.error);
+                    netflixRankerData = data;
+                    if (status) status.textContent = 'Loaded. ' + (data.date_range ? (data.date_range.min + ' to ' + data.date_range.max) : '') + '. Cached for all users.';
+                    document.getElementById('rankersLoadBlock').style.display = 'none';
+                    const dateInp = document.getElementById('netflixDailyDate');
+                    if (dateInp && data.date_range) {
+                        dateInp.min = data.date_range.min;
+                        dateInp.max = data.date_range.max;
+                        dateInp.value = data.date_range.max || data.date_range.min;
+                    }
+                    const genreDate = document.getElementById('netflixGenreDate');
+                    if (genreDate && data.date_range) {
+                        genreDate.min = data.date_range.min;
+                        genreDate.max = data.date_range.max;
+                        genreDate.value = data.date_range.max || data.date_range.min;
+                    }
+                    renderNetflixDailyRanker();
+                    populateNetflixTrendsShowSelect();
+                    renderNetflixByGenre();
+                    renderNetflixTopShows();
+                    renderNetflixInsights();
+                })
+                .catch(err => {
+                    if (status) status.textContent = 'Error: ' + (err.message || err);
+                    if (btn) btn.disabled = false;
+                });
+        }
+
+        function populateNetflixTrendsShowSelect() {
+            if (!netflixRankerData || !netflixRankerData.by_show) return;
+            const sel = document.getElementById('netflixTrendsShow');
+            if (!sel) return;
+            const shows = Object.keys(netflixRankerData.by_show).sort();
+            sel.innerHTML = '<option value="">Select show...</option>' + shows.map(s => '<option value="' + s.replace(/"/g, '&quot;') + '">' + s + '</option>').join('');
+        }
+
+        function renderNetflixDailyRanker() {
+            const wrap = document.getElementById('netflixDailyTableWrap');
+            const tbody = document.getElementById('netflixDailyBody');
+            const loading = document.getElementById('netflixDailyLoading');
+            const dateInp = document.getElementById('netflixDailyDate');
+            if (!netflixRankerData || !netflixRankerData.by_date) {
+                if (loading) loading.style.display = 'block';
+                if (wrap) wrap.style.display = 'none';
+                return;
+            }
+            if (loading) loading.style.display = 'none';
+            if (wrap) wrap.style.display = 'block';
+            const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            const rows = netflixRankerData.by_date[date] || [];
+            const sorted = rows.slice().sort((a, b) => (b.views - a.views));
+            if (!tbody) return;
+            tbody.innerHTML = sorted.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + (r.genre || '-') + '</td><td>' + (r.type || '-') + '</td></tr>').join('');
+        }
+
+        function renderNetflixTrends() {
+            const wrap = document.getElementById('netflixTrendsChartWrap');
+            const loading = document.getElementById('netflixTrendsLoading');
+            const sel = document.getElementById('netflixTrendsShow');
+            if (!netflixRankerData || !netflixRankerData.by_show) {
+                if (loading) loading.style.display = 'block';
+                if (wrap) wrap.style.display = 'none';
+                return;
+            }
+            const showName = sel ? sel.value : '';
+            if (!showName) {
+                if (loading) loading.style.display = 'block';
+                if (wrap) wrap.style.display = 'none';
+                return;
+            }
+            if (loading) loading.style.display = 'none';
+            if (wrap) wrap.style.display = 'block';
+            const series = netflixRankerData.by_show[showName] || [];
+            const labels = series.map(d => d.date).sort();
+            const values = labels.map(d => {
+                const pt = series.find(p => p.date === d);
+                return pt ? pt.views : 0;
+            });
+            const ctx = document.getElementById('netflixTrendsChart');
+            if (!ctx) return;
+            if (netflixTrendsChartInstance) netflixTrendsChartInstance.destroy();
+            netflixTrendsChartInstance = typeof Chart !== 'undefined' && new Chart(ctx.getContext('2d'), {
+                type: 'line',
+                data: { labels: labels, datasets: [{ label: 'Views', data: values, borderColor: '#66d9ef', backgroundColor: 'rgba(102,217,239,0.1)', fill: true, tension: 0.2 }] },
+                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        function renderNetflixByGenre() {
+            const wrap = document.getElementById('netflixGenreChartWrap');
+            const tbody = document.getElementById('netflixGenreBody');
+            const loading = document.getElementById('netflixGenreLoading');
+            const dateInp = document.getElementById('netflixGenreDate');
+            if (!netflixRankerData || !netflixRankerData.genres_by_date) {
+                if (loading) loading.style.display = 'block';
+                if (wrap) wrap.style.display = 'none';
+                if (tbody) tbody.parentElement.style.display = 'none';
+                return;
+            }
+            const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            const rows = netflixRankerData.genres_by_date[date] || [];
+            const total = rows.reduce((s, r) => s + (r.views || 0), 0);
+            if (loading) loading.style.display = 'none';
+            if (wrap) wrap.style.display = 'block';
+            if (tbody) {
+                tbody.parentElement.style.display = 'table';
+                tbody.innerHTML = rows.map(r => '<tr><td>' + (r.genre || '-') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + (total ? ((r.views / total * 100).toFixed(1) + '%') : '-') + '</td><td>' + (r.top_show || '-') + '</td></tr>').join('');
+            }
+            const ctx = document.getElementById('netflixGenreChart');
+            if (ctx && typeof Chart !== 'undefined') {
+                if (netflixGenreChartInstance) netflixGenreChartInstance.destroy();
+                netflixGenreChartInstance = new Chart(ctx.getContext('2d'), {
+                    type: 'bar',
+                    data: { labels: rows.map(r => r.genre || 'Other'), datasets: [{ label: 'Views', data: rows.map(r => r.views || 0), backgroundColor: 'rgba(102,217,239,0.6)' }] },
+                    options: { responsive: true, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+                });
+            }
+        }
+
+        function renderNetflixTopShows() {
+            const wrap = document.getElementById('netflixTopShowsChartWrap');
+            const loading = document.getElementById('netflixTopShowsLoading');
+            if (!netflixRankerData || !netflixRankerData.top_shows_over_time || !netflixRankerData.top_shows_over_time.length) {
+                if (loading) loading.style.display = 'block';
+                if (wrap) wrap.style.display = 'none';
+                return;
+            }
+            if (loading) loading.style.display = 'none';
+            if (wrap) wrap.style.display = 'block';
+            const top = netflixRankerData.top_shows_over_time.slice(0, 20);
+            const allDates = netflixRankerData.dates_sorted || [];
+            const colors = ['#66d9ef','#a6e22e','#f92672','#fd971f','#ae81ff','#38a169','#e53e3e','#805ad5'];
+            const ctx = document.getElementById('netflixTopShowsChart');
+            if (ctx && typeof Chart !== 'undefined') {
+                if (netflixTopShowsChartInstance) netflixTopShowsChartInstance.destroy();
+                netflixTopShowsChartInstance = new Chart(ctx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: allDates,
+                        datasets: top.map((s, i) => ({ label: s.show_name, data: allDates.map(d => (s.by_date[d] || 0)), borderColor: colors[i % colors.length], fill: false, tension: 0.2 }))
+                    },
+                    options: { responsive: true, interaction: { mode: 'index' }, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+                });
+            }
+        }
+
+        function renderNetflixInsights() {
+            const wrap = document.getElementById('netflixInsightsCards');
+            const loading = document.getElementById('netflixInsightsLoading');
+            if (!netflixRankerData) {
+                if (loading) loading.style.display = 'block';
+                if (wrap) wrap.innerHTML = '';
+                return;
+            }
+            if (loading) loading.style.display = 'none';
+            const byDate = netflixRankerData.by_date || {};
+            const dates = Object.keys(byDate).sort();
+            const latest = dates.length ? byDate[dates[dates.length - 1]] : [];
+            const totalViews = latest.reduce((s, r) => s + (r.views || 0), 0);
+            const topShow = latest.length ? latest.slice().sort((a, b) => (b.views - a.views))[0] : null;
+            const allViews = netflixRankerData.daily ? netflixRankerData.daily.reduce((s, r) => s + (r.views || 0), 0) : 0;
+            const showCount = netflixRankerData.by_show ? Object.keys(netflixRankerData.by_show).length : 0;
+            const cards = [
+                { label: 'Total View Events (Past Year)', value: (allViews || 0).toLocaleString() },
+                { label: 'Unique Shows', value: (showCount || 0).toLocaleString() },
+                { label: 'Date Range', value: (netflixRankerData.date_range ? netflixRankerData.date_range.min + ' – ' + netflixRankerData.date_range.max : '-') },
+                { label: 'Latest Day Total Views', value: totalViews.toLocaleString() },
+                { label: 'Top Show (Latest Day)', value: topShow ? topShow.show_name : '-' },
+                { label: 'Days of Data', value: (dates.length || 0).toString() }
+            ];
+            if (wrap) wrap.innerHTML = cards.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
+        }
+
+        function exportNetflixDailyCSV() {
+            if (!netflixRankerData || !netflixRankerData.by_date) return;
+            const dateInp = document.getElementById('netflixDailyDate');
+            const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            const rows = (netflixRankerData.by_date[date] || []).slice().sort((a, b) => (b.views - a.views));
+            const csv = 'Rank,Show,Views,Genre,Type\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '",' + (r.views || 0) + ',"' + (r.genre || '').replace(/"/g, '""') + '","' + (r.type || '').replace(/"/g, '""') + '"').join('\n');
+            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_daily_ranker_' + date + '.csv'; a.click();
+        }
+        function exportNetflixTrendsCSV() {
+            const sel = document.getElementById('netflixTrendsShow');
+            if (!netflixRankerData || !sel || !sel.value) return;
+            const series = netflixRankerData.by_show[sel.value] || [];
+            const csv = 'Date,Views\n' + series.map(p => p.date + ',' + (p.views || 0)).join('\n');
+            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_trends_' + sel.value.replace(/\W/g, '_') + '.csv'; a.click();
+        }
+        function exportNetflixTopShowsCSV() {
+            if (!netflixRankerData || !netflixRankerData.top_shows_over_time) return;
+            const rows = netflixRankerData.top_shows_over_time.slice(0, 20);
+            const dates = netflixRankerData.dates_sorted || [];
+            const header = 'Show,' + dates.join(',') + '\n';
+            const body = rows.map(s => s.show_name + ',' + dates.map(d => (s.by_date[d] || 0)).join(',')).join('\n');
+            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(header + body); a.download = 'netflix_top_shows_over_time.csv'; a.click();
         }
         
         function filterLocationList(which) {
