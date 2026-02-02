@@ -4858,17 +4858,35 @@
             color: var(--text-secondary);
         }
         
-        /* Highlight List (Interest Highlights) - left-justify all columns and headers */
+        /* Highlight List (Interest Highlights) - grid so headers and rows align left-justified */
         .highlight-list {
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
         }
-        .highlight-item {
-            display: flex;
-            align-items: center;
+        [data-module="Interest Highlights"] .differentiator-header {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 110px 72px 68px;
             gap: 0.5rem;
-            padding: 0.6rem 0.75rem;
+            align-items: center;
+            padding: 0.5rem 0.6rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        [data-module="Interest Highlights"] .differentiator-header span {
+            text-align: left !important;
+        }
+        [data-module="Interest Highlights"] .highlight-item {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 110px 72px 68px;
+            gap: 0.5rem;
+            align-items: center;
+            padding: 0.5rem 0.6rem;
             background: rgba(255,255,255,0.03);
             border-radius: 6px;
             font-size: 0.85rem;
@@ -4878,11 +4896,7 @@
             text-align: left !important;
         }
         .highlight-item .label {
-            color: var(--text-secondary);
-        }
-        [data-module="Interest Highlights"] .differentiator-header,
-        [data-module="Interest Highlights"] .differentiator-header span {
-            text-align: left !important;
+            color: var(--text-primary);
         }
         #interestHighlights .highlight-item span {
             text-align: left !important;
@@ -12911,11 +12925,11 @@
                                         <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('interest-highlights')" data-tooltip="Add to Deck">➕</button>
                                     </div>
                                 </div>
-                                <div class="differentiator-header" style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem;">
-                                    <span style="flex: 1; text-align: left;">Interest</span>
-                                    <span style="min-width: 80px; text-align: left;">Category</span>
-                                    <span class="has-tooltip" data-tooltip="Profile %: The percentage of THIS audience that engages with this interest." style="min-width: 70px; text-align: left;">Profile %</span>
-                                    <span class="has-tooltip" data-tooltip="Index: How much more likely this audience is to engage vs Gen Pop. 2.0x = twice as likely." style="min-width: 60px; text-align: left;">Index</span>
+                                <div class="differentiator-header">
+                                    <span>Interest</span>
+                                    <span>Category</span>
+                                    <span class="has-tooltip" data-tooltip="Profile %: The percentage of THIS audience that engages with this interest.">Profile %</span>
+                                    <span class="has-tooltip" data-tooltip="Index: How much more likely this audience is to engage vs Gen Pop. 2.0x = twice as likely.">Index</span>
                                 </div>
                                 <div id="interestHighlights" class="highlight-list"></div>
                             </div>
@@ -25902,11 +25916,11 @@
             container.innerHTML = sorted.map(item => {
                 const indexClass = item.index >= 150 ? 'high' : item.index >= 100 ? '' : 'low';
                 return `
-                <div class="highlight-item" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
-                    <span class="label" style="flex: 1; font-size: 0.85rem; text-align: left; color: var(--text-primary);">${item.name}</span>
-                    <span style="min-width: 80px; text-align: left; font-size: 0.75rem; color: var(--text-secondary);">${item.category}</span>
-                    <span style="min-width: 70px; text-align: left; font-size: 0.85rem;">${item.pct.toFixed(1)}%</span>
-                    <span class="differentiator-index ${indexClass}" style="min-width: 60px; text-align: left;">${formatIndex(item.index)}</span>
+                <div class="highlight-item">
+                    <span class="label">${item.name}</span>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary);">${item.category}</span>
+                    <span>${item.pct.toFixed(1)}%</span>
+                    <span class="differentiator-index ${indexClass}">${formatIndex(item.index)}</span>
                 </div>
             `;
             }).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No interest data available</p>';
