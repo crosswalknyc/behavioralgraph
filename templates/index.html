@@ -13563,9 +13563,9 @@
                     <button class="comp-tab" onclick="showCompTab('gap')">🎯 Gap Analysis</button>
                     <button class="comp-action-btn" onclick="generateExecutiveSummary()" title="Generate Executive Summary">📄 Exec Summary</button>
                     <button class="comp-action-btn" onclick="generateKeyInsightBuilder()" title="Generate SWOT Analysis and Key Insights for Primary Brand">🎯 Key Insight Builder</button>
-                    <div class="comp-mode-toggle" id="displayModeToggle" onclick="toggleDisplayMode()" title="Click to toggle between percentages and US population numbers">
+                    <button type="button" class="comp-mode-toggle" id="displayModeToggle" onclick="toggleDisplayMode()" title="Click to toggle between percentages and US population numbers" aria-pressed="false">
                         <span id="displayModeLabel">US %</span>
-                    </div>
+                    </button>
                     <select id="compJumpToSelect" class="comp-action-select" onchange="jumpToCompSection(this.value)" title="Jump to section">
                             <option value="">📍 Jump to...</option>
                         </select>
@@ -22526,7 +22526,10 @@
                     // Default to comparison report view
                     setCompReportType('comparison');
                     loadComparisonProfiles();
-                    
+                    // Sync US% / US# toggle with current displayMode so it shows correctly
+                    if (typeof syncCompareDisplayModeToggle === 'function') {
+                        syncCompareDisplayModeToggle();
+                    }
                     // Auto-run comparison if profiles are selected
                     setTimeout(() => {
                         if (selectedForComparison.size > 0) {
@@ -22995,26 +22998,44 @@
             } catch (error) { console.error('Failed:', error); }
         }
 
+        function getProfileDisplayTitle(brandName, brandCategory, behavioral) {
+            const name = (brandName || 'Brand').trim();
+            const cat = (brandCategory || '').toString().toUpperCase();
+            if (!cat || !cat.includes('SERIES')) return name;
+            const behav = behavioral || {};
+            const streamingKey = Object.keys(behav).find(k => {
+                const u = k.toUpperCase();
+                return u.includes('STREAMING') && u.includes('PLATFORM');
+            });
+            if (!streamingKey || !behav[streamingKey] || !behav[streamingKey].length) return name;
+            const items = behav[streamingKey];
+            const at100 = items.find(item => (item.pct || 0) >= 99.5);
+            const platform = at100 ? at100.name : (items.length ? items.reduce((best, item) => (item.pct || 0) > (best.pct || 0) ? item : best).name : null);
+            if (platform) return name + ' - ' + platform.trim();
+            return name;
+        }
+
         function renderDashboard(csvData, brandName, dateRange) {
             // Hide empty state, show dashboard content
             const emptyState = document.getElementById('dashboardEmptyState');
             const dashContent = document.getElementById('dashboardContent');
             if (emptyState) emptyState.style.display = 'none';
             if (dashContent) dashContent.style.display = 'block';
+
+            const parsed = parseAllData(csvData);
+            const displayTitle = getProfileDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral);
             
             // Update header profile info and show it
             const profileInfo = document.getElementById('dashProfileInfo');
             if (profileInfo && brandName) {
                 profileInfo.style.display = 'flex';
-                document.getElementById('dashBrandNameHeader').textContent = (brandName || 'Brand').toUpperCase();
+                document.getElementById('dashBrandNameHeader').textContent = displayTitle.toUpperCase();
                 document.getElementById('dashDateRangeHeader').textContent = dateRange ? 'Date Range: ' + dateRange : '';
                 document.getElementById('dashDateRangeHeader').style.display = dateRange ? 'block' : 'none';
                 
-                // Fetch profile image from Wikipedia
+                // Fetch profile image from Wikipedia (use base name for image lookup)
                 fetchProfileImage(brandName);
             }
-
-            const parsed = parseAllData(csvData);
             
             // Store parsed data for re-rendering when display mode changes
             currentDashboardData = parsed;
@@ -23055,6 +23076,7 @@
             const result = {
                 sampleSize: 0,
                 projectedUS: 0,
+                brandCategory: '',
                 demographics: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {} },
                 demographicsIndex: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {} },
                 demographicsGenPop: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {} },
@@ -23244,6 +23266,11 @@
                 // Fallback: also check BRAND INPUT row for projectedUS if not already set
                 if (category === 'BRAND INPUT' && result.projectedUS === 0) {
                     result.projectedUS = usProjection;
+                }
+
+                // Store BRAND CATEGORY for display (e.g. SERIES - Netflix -> append platform to title)
+                if (category === 'BRAND CATEGORY' && value) {
+                    result.brandCategory = (value || '').toString().trim();
                 }
 
                 // Demographics - store pct, genPopPct, index, and projection
@@ -23826,15 +23853,17 @@
             currentS3Key = profileId;
             currentDashboardData = parsed;
             
+            const displayTitle = getProfileDisplayTitle(brandName, parsed.brandCategory, parsed.behavioral);
+            
             // Update header profile info and show it
             const profileInfo = document.getElementById('dashProfileInfo');
             if (profileInfo && brandName) {
                 profileInfo.style.display = 'flex';
-                document.getElementById('dashBrandNameHeader').textContent = brandName.toUpperCase();
+                document.getElementById('dashBrandNameHeader').textContent = displayTitle.toUpperCase();
                 document.getElementById('dashDateRangeHeader').textContent = dateRange ? `Date Range: ${dateRange}` : '';
                 document.getElementById('dashDateRangeHeader').style.display = dateRange ? 'block' : 'none';
                 
-                // Fetch profile image from Wikipedia
+                // Fetch profile image from Wikipedia (use base name for image lookup)
                 fetchProfileImage(brandName);
             }
             document.getElementById('dashSampleSize').textContent = formatNumber(parsed.sampleSize);
@@ -39412,16 +39441,7 @@
 
         function toggleDisplayMode() {
             displayMode = displayMode === 'percent' ? 'projection' : 'percent';
-            const toggle = document.getElementById('displayModeToggle');
-            const label = document.getElementById('displayModeLabel');
-            
-            if (displayMode === 'projection') {
-                toggle.classList.add('active');
-                label.textContent = 'US POP #';
-            } else {
-                toggle.classList.remove('active');
-                label.textContent = 'US %';
-            }
+            syncCompareDisplayModeToggle();
 
             // Re-render comparison if data is loaded
             if (window.comparisonProfilesData && window.comparisonProfilesData.length > 0) {
@@ -39431,6 +39451,21 @@
             // Re-render profile report if a profile is loaded
             if (currentProfileReportData && currentReportType === 'profile') {
                 renderProfileReport(currentProfileReportData);
+            }
+        }
+
+        function syncCompareDisplayModeToggle() {
+            const toggle = document.getElementById('displayModeToggle');
+            const label = document.getElementById('displayModeLabel');
+            if (!toggle || !label) return;
+            if (displayMode === 'projection') {
+                toggle.classList.add('active');
+                toggle.setAttribute('aria-pressed', 'true');
+                label.textContent = 'US POP #';
+            } else {
+                toggle.classList.remove('active');
+                toggle.setAttribute('aria-pressed', 'false');
+                label.textContent = 'US %';
             }
         }
 
