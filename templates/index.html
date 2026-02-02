@@ -29865,7 +29865,18 @@
             else parts.push('YouTube: loaded.');
             updateRankersLoadStatus(parts.join(' '));
             fetch('/api/rankers/netflix/data', { credentials: 'same-origin' })
-                .then(r => r.json())
+                .then(r => {
+                    if (!r.ok) throw new Error(r.status + ' ' + (r.statusText || 'Request failed'));
+                    return r.text();
+                })
+                .then(text => {
+                    if (!text || text.trim() === '') throw new Error('Empty response from server');
+                    try {
+                        return JSON.parse(text);
+                    } catch (e) {
+                        throw new Error('Invalid response from server');
+                    }
+                })
                 .then(data => {
                     if (data.error) throw new Error(data.error);
                     netflixRankerData = data;
@@ -29946,10 +29957,19 @@
                 if (wrap) wrap.style.display = 'none';
                 return;
             }
+            const loadBlock = document.getElementById('rankersLoadBlock');
+            if (loadBlock) loadBlock.style.display = 'none';
             if (loading) loading.style.display = 'none';
             if (wrap) wrap.style.display = 'block';
-            const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            let date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
             let rows = (netflixRankerData.by_date[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian'));
+            // If selected date has no data, default to last available day
+            const lastDate = (netflixRankerData.dates_sorted && netflixRankerData.dates_sorted.length) ? netflixRankerData.dates_sorted[netflixRankerData.dates_sorted.length - 1] : (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            if (rows.length === 0 && lastDate && netflixRankerData.by_date[lastDate] && netflixRankerData.by_date[lastDate].length) {
+                date = lastDate;
+                if (dateInp) dateInp.value = date;
+                rows = (netflixRankerData.by_date[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian'));
+            }
 
             // Build unique genres from current date (comma-separated list)
             const genreSet = new Set();
@@ -30011,8 +30031,14 @@
             }
             if (loading) loading.style.display = 'none';
             if (wrap) wrap.style.display = 'block';
-            const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            let date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
             let rows = (netflixRankerData.by_date_season[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            const lastDate = (netflixRankerData.dates_sorted && netflixRankerData.dates_sorted.length) ? netflixRankerData.dates_sorted[netflixRankerData.dates_sorted.length - 1] : (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            if (rows.length === 0 && lastDate && netflixRankerData.by_date_season[lastDate] && netflixRankerData.by_date_season[lastDate].length) {
+                date = lastDate;
+                if (dateInp) dateInp.value = date;
+                rows = (netflixRankerData.by_date_season[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            }
             if (!tbody) return;
             tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>').join('');
         }
@@ -30029,8 +30055,14 @@
             }
             if (loading) loading.style.display = 'none';
             if (wrap) wrap.style.display = 'block';
-            const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            let date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
             let rows = (netflixRankerData.by_date_episode[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            const lastDate = (netflixRankerData.dates_sorted && netflixRankerData.dates_sorted.length) ? netflixRankerData.dates_sorted[netflixRankerData.dates_sorted.length - 1] : (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            if (rows.length === 0 && lastDate && netflixRankerData.by_date_episode[lastDate] && netflixRankerData.by_date_episode[lastDate].length) {
+                date = lastDate;
+                if (dateInp) dateInp.value = date;
+                rows = (netflixRankerData.by_date_episode[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            }
             if (!tbody) return;
             tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.episode_name || '-') + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>').join('');
         }
@@ -30233,7 +30265,18 @@
             parts.push('YouTube: loading...');
             updateRankersLoadStatus(parts.join(' '));
             fetch('/api/rankers/youtube/data', { credentials: 'same-origin' })
-                .then(r => r.json())
+                .then(r => {
+                    if (!r.ok) throw new Error(r.status + ' ' + (r.statusText || 'Request failed'));
+                    return r.text();
+                })
+                .then(text => {
+                    if (!text || text.trim() === '') throw new Error('Empty response from server');
+                    try {
+                        return JSON.parse(text);
+                    } catch (e) {
+                        throw new Error('Invalid response from server');
+                    }
+                })
                 .then(data => {
                     if (data.error) throw new Error(data.error);
                     youtubeRankerData = data;
