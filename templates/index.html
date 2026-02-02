@@ -12088,6 +12088,7 @@
                 <div class="rankers-container">
                     <div class="rankers-platform-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
                         <button class="tab-btn active" onclick="showRankerPlatform('netflix')" id="rankerPlatformNetflix"><span class="tab-icon">📺</span> Netflix</button>
+                        <button class="tab-btn" onclick="showRankerPlatform('youtube')" id="rankerPlatformYouTube"><span class="tab-icon">▶️</span> YouTube</button>
                     </div>
                     <div id="rankerPlatformContent" class="ranker-platform-content">
                         <!-- Netflix sub-view -->
@@ -12147,10 +12148,70 @@
                                 </div>
                             </div>
                         </div>
+                        <!-- YouTube sub-view -->
+                        <div id="ranker-youtube" class="ranker-platform-panel">
+                            <div class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                                <button class="tab-btn active" onclick="showYouTubeSubTab('daily')" id="youtubeSubTabDaily">📅 Daily Ranker</button>
+                                <button class="tab-btn" onclick="showYouTubeSubTab('trends')" id="youtubeSubTabTrends">📈 Trends</button>
+                                <button class="tab-btn" onclick="showYouTubeSubTab('channel')" id="youtubeSubTabChannel">📺 By Channel</button>
+                                <button class="tab-btn" onclick="showYouTubeSubTab('toptitles')" id="youtubeSubTabTopTitles">🏆 Top Titles Over Time</button>
+                                <button class="tab-btn" onclick="showYouTubeSubTab('insights')" id="youtubeSubTabInsights">💡 Insights</button>
+                            </div>
+                            <div id="youtubeSubTabContent">
+                                <div id="youtube-daily" class="netflix-sub-content active">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">📅 Daily View Ranker</h3>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
+                                            <input type="date" id="youtubeDailyDate" onchange="renderYouTubeDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                            <button class="module-btn csv-btn" onclick="exportYouTubeDailyCSV()">CSV</button>
+                                        </div>
+                                    </div>
+                                    <div id="youtubeDailyTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Title</th><th>Views</th><th>Channel</th></tr></thead><tbody id="youtubeDailyBody"></tbody></table></div>
+                                    <div id="youtubeDailyLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load YouTube Ranker to view daily data.</div>
+                                </div>
+                                <div id="youtube-trends" class="netflix-sub-content">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">📈 Title Trends (Past Year)</h3>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <select id="youtubeTrendsTitle" onchange="renderYouTubeTrends()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 200px;"><option value="">Select title...</option></select>
+                                            <button class="module-btn csv-btn" onclick="exportYouTubeTrendsCSV()">CSV</button>
+                                        </div>
+                                    </div>
+                                    <div id="youtubeTrendsChartWrap" style="min-height: 300px;"><canvas id="youtubeTrendsChart"></canvas></div>
+                                    <div id="youtubeTrendsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load YouTube Ranker and select a title.</div>
+                                </div>
+                                <div id="youtube-channel" class="netflix-sub-content">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">📺 Views by Channel</h3>
+                                        <input type="date" id="youtubeChannelDate" onchange="renderYouTubeByChannel()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                    </div>
+                                    <div id="youtubeChannelChartWrap" style="min-height: 280px;"><canvas id="youtubeChannelChart"></canvas></div>
+                                    <div id="youtubeChannelTableWrap" style="overflow-x: auto; margin-top: 1rem;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Channel</th><th>Views</th><th>% of Total</th><th>Top Title</th></tr></thead><tbody id="youtubeChannelBody"></tbody></table></div>
+                                    <div id="youtubeChannelLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load YouTube Ranker to view channel breakdown.</div>
+                                </div>
+                                <div id="youtube-toptitles" class="netflix-sub-content">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">🏆 Top 20 Titles Over Time</h3>
+                                        <button class="module-btn csv-btn" onclick="exportYouTubeTopTitlesCSV()">CSV</button>
+                                    </div>
+                                    <div id="youtubeTopTitlesChartWrap" style="min-height: 400px;"><canvas id="youtubeTopTitlesChart"></canvas></div>
+                                    <div id="youtubeTopTitlesLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load YouTube Ranker to view top titles over time.</div>
+                                </div>
+                                <div id="youtube-insights" class="netflix-sub-content">
+                                    <h3 style="margin: 0 0 0.75rem 0;">💡 YouTube Ranker Insights</h3>
+                                    <div id="youtubeInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
+                                    <div id="youtubeInsightsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load YouTube Ranker to view insights.</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div id="rankersLoadBlock" style="padding: 2rem; text-align: center; background: var(--bg-card); border-radius: 8px; margin-top: 1rem;">
-                        <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Netflix ranker data is cached for the past year. First load may take a moment.</p>
-                        <button class="btn btn-primary" onclick="loadNetflixRankerData()" id="rankersLoadBtn">📊 Load Netflix Ranker Data</button>
+                        <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data is cached for the past year. First load may take a moment.</p>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
+                            <button class="btn btn-primary" onclick="loadNetflixRankerData()" id="rankersLoadBtnNetflix">📺 Load Netflix Ranker</button>
+                            <button class="btn btn-primary" onclick="loadYouTubeRankerData()" id="rankersLoadBtnYouTube">▶️ Load YouTube Ranker</button>
+                        </div>
                         <div id="rankersLoadStatus" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);"></div>
                     </div>
                 </div>
@@ -29563,14 +29624,18 @@
             document.querySelectorAll('.ranker-platform-panel').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.rankers-platform-tabs .tab-btn').forEach(b => b.classList.remove('active'));
             const panel = document.getElementById('ranker-' + id);
-            const btn = document.getElementById('rankerPlatform' + id.charAt(0).toUpperCase() + id.slice(1));
+            const btnId = id === 'youtube' ? 'rankerPlatformYouTube' : 'rankerPlatform' + id.charAt(0).toUpperCase() + id.slice(1);
+            const btn = document.getElementById(btnId);
             if (panel) panel.classList.add('active');
             if (btn) btn.classList.add('active');
+            if (id === 'youtube') {
+                showYouTubeSubTab('daily');
+            }
         }
 
         function showNetflixSubTab(id) {
-            document.querySelectorAll('.netflix-sub-content').forEach(c => c.classList.remove('active'));
-            document.querySelectorAll('.netflix-subtabs .tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('#ranker-netflix .netflix-sub-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('#ranker-netflix .netflix-subtabs .tab-btn').forEach(b => b.classList.remove('active'));
             const content = document.getElementById('netflix-' + id);
             const btn = document.getElementById('netflixSubTab' + (id === 'topshows' ? 'TopShows' : id.charAt(0).toUpperCase() + id.slice(1)));
             if (content) content.classList.add('active');
@@ -29583,17 +29648,16 @@
         }
 
         function loadNetflixRankerData() {
-            const btn = document.getElementById('rankersLoadBtn');
+            const btn = document.getElementById('rankersLoadBtnNetflix');
             const status = document.getElementById('rankersLoadStatus');
             if (btn) btn.disabled = true;
-            if (status) status.textContent = 'Loading from server (first load may refresh cache)...';
+            if (status) status.textContent = 'Loading Netflix (first load may refresh cache)...';
             fetch('/api/rankers/netflix/data', { credentials: 'same-origin' })
                 .then(r => r.json())
                 .then(data => {
                     if (data.error) throw new Error(data.error);
                     netflixRankerData = data;
-                    if (status) status.textContent = 'Loaded. ' + (data.date_range ? (data.date_range.min + ' to ' + data.date_range.max) : '') + '. Cached for all users.';
-                    document.getElementById('rankersLoadBlock').style.display = 'none';
+                    if (status) status.textContent = (status.textContent ? status.textContent + ' ' : '') + 'Netflix: loaded ' + (data.date_range ? (data.date_range.min + ' to ' + data.date_range.max) : '') + '.';
                     const dateInp = document.getElementById('netflixDailyDate');
                     if (dateInp && data.date_range) {
                         dateInp.min = data.date_range.min;
@@ -29785,6 +29849,226 @@
             const header = 'Show,' + dates.join(',') + '\n';
             const body = rows.map(s => s.show_name + ',' + dates.map(d => (s.by_date[d] || 0)).join(',')).join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(header + body); a.download = 'netflix_top_shows_over_time.csv'; a.click();
+        }
+
+        // --- YouTube Ranker (Rankers tab) ---
+        let youtubeRankerData = null;
+        let youtubeTrendsChartInstance = null;
+        let youtubeChannelChartInstance = null;
+        let youtubeTopTitlesChartInstance = null;
+
+        function showYouTubeSubTab(id) {
+            document.querySelectorAll('#ranker-youtube .netflix-sub-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('#ranker-youtube .netflix-subtabs .tab-btn').forEach(b => b.classList.remove('active'));
+            const content = document.getElementById('youtube-' + id);
+            const btn = document.getElementById('youtubeSubTab' + (id === 'toptitles' ? 'TopTitles' : id.charAt(0).toUpperCase() + id.slice(1)));
+            if (content) content.classList.add('active');
+            if (btn) btn.classList.add('active');
+            if (id === 'daily') renderYouTubeDailyRanker();
+            else if (id === 'trends') renderYouTubeTrends();
+            else if (id === 'channel') renderYouTubeByChannel();
+            else if (id === 'toptitles') renderYouTubeTopTitles();
+            else if (id === 'insights') renderYouTubeInsights();
+        }
+
+        function loadYouTubeRankerData() {
+            const btn = document.getElementById('rankersLoadBtnYouTube');
+            const status = document.getElementById('rankersLoadStatus');
+            if (btn) btn.disabled = true;
+            if (status) status.textContent = (status.textContent ? status.textContent + ' ' : '') + 'Loading YouTube...';
+            fetch('/api/rankers/youtube/data', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) throw new Error(data.error);
+                    youtubeRankerData = data;
+                    if (status) status.textContent = (status.textContent ? status.textContent.replace(/Loading YouTube\.\.\.?/g, '').trim() + ' ' : '') + 'YouTube: loaded ' + (data.date_range ? (data.date_range.min + ' to ' + data.date_range.max) : '') + '.';
+                    const dateInp = document.getElementById('youtubeDailyDate');
+                    if (dateInp && data.date_range) {
+                        dateInp.min = data.date_range.min;
+                        dateInp.max = data.date_range.max;
+                        dateInp.value = data.date_range.max || data.date_range.min;
+                    }
+                    const channelDate = document.getElementById('youtubeChannelDate');
+                    if (channelDate && data.date_range) {
+                        channelDate.min = data.date_range.min;
+                        channelDate.max = data.date_range.max;
+                        channelDate.value = data.date_range.max || data.date_range.min;
+                    }
+                    renderYouTubeDailyRanker();
+                    populateYouTubeTrendsSelect();
+                    renderYouTubeByChannel();
+                    renderYouTubeTopTitles();
+                    renderYouTubeInsights();
+                })
+                .catch(err => {
+                    if (status) status.textContent = (status.textContent || '') + ' YouTube error: ' + (err.message || err);
+                    if (btn) btn.disabled = false;
+                });
+        }
+
+        function populateYouTubeTrendsSelect() {
+            if (!youtubeRankerData || !youtubeRankerData.by_title) return;
+            const sel = document.getElementById('youtubeTrendsTitle');
+            if (!sel) return;
+            const titles = Object.keys(youtubeRankerData.by_title).sort();
+            sel.innerHTML = '<option value="">Select title...</option>' + titles.map(s => '<option value="' + s.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '">' + (s.length > 60 ? s.slice(0, 57) + '...' : s) + '</option>').join('');
+        }
+
+        function renderYouTubeDailyRanker() {
+            const wrap = document.getElementById('youtubeDailyTableWrap');
+            const tbody = document.getElementById('youtubeDailyBody');
+            const loading = document.getElementById('youtubeDailyLoading');
+            const dateInp = document.getElementById('youtubeDailyDate');
+            if (!youtubeRankerData || !youtubeRankerData.by_date) {
+                if (loading) loading.style.display = 'block';
+                if (wrap) wrap.style.display = 'none';
+                return;
+            }
+            if (loading) loading.style.display = 'none';
+            if (wrap) wrap.style.display = 'block';
+            const date = dateInp ? dateInp.value : (youtubeRankerData.date_range && youtubeRankerData.date_range.max);
+            const rows = youtubeRankerData.by_date[date] || [];
+            const sorted = rows.slice().sort((a, b) => (b.views - a.views));
+            if (tbody) tbody.innerHTML = sorted.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + (r.channel || '-') + '</td></tr>').join('');
+        }
+
+        function renderYouTubeTrends() {
+            const wrap = document.getElementById('youtubeTrendsChartWrap');
+            const loading = document.getElementById('youtubeTrendsLoading');
+            const sel = document.getElementById('youtubeTrendsTitle');
+            if (!youtubeRankerData || !youtubeRankerData.by_title) {
+                if (loading) loading.style.display = 'block';
+                if (wrap) wrap.style.display = 'none';
+                return;
+            }
+            const titleVal = sel ? sel.value : '';
+            if (!titleVal) {
+                if (loading) loading.style.display = 'block';
+                if (wrap) wrap.style.display = 'none';
+                return;
+            }
+            if (loading) loading.style.display = 'none';
+            if (wrap) wrap.style.display = 'block';
+            const series = youtubeRankerData.by_title[titleVal] || [];
+            const labels = series.map(d => d.date).sort();
+            const values = labels.map(d => { const pt = series.find(p => p.date === d); return pt ? pt.views : 0; });
+            const ctx = document.getElementById('youtubeTrendsChart');
+            if (!ctx) return;
+            if (youtubeTrendsChartInstance) youtubeTrendsChartInstance.destroy();
+            youtubeTrendsChartInstance = typeof Chart !== 'undefined' && new Chart(ctx.getContext('2d'), {
+                type: 'line',
+                data: { labels: labels, datasets: [{ label: 'Views', data: values, borderColor: '#ff0000', backgroundColor: 'rgba(255,0,0,0.1)', fill: true, tension: 0.2 }] },
+                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        function renderYouTubeByChannel() {
+            const wrap = document.getElementById('youtubeChannelChartWrap');
+            const tbody = document.getElementById('youtubeChannelBody');
+            const loading = document.getElementById('youtubeChannelLoading');
+            const dateInp = document.getElementById('youtubeChannelDate');
+            if (!youtubeRankerData || !youtubeRankerData.channels_by_date) {
+                if (loading) loading.style.display = 'block';
+                if (wrap) wrap.style.display = 'none';
+                if (tbody && tbody.parentElement) tbody.parentElement.style.display = 'none';
+                return;
+            }
+            const date = dateInp ? dateInp.value : (youtubeRankerData.date_range && youtubeRankerData.date_range.max);
+            const rows = youtubeRankerData.channels_by_date[date] || [];
+            const total = rows.reduce((s, r) => s + (r.views || 0), 0);
+            if (loading) loading.style.display = 'none';
+            if (wrap) wrap.style.display = 'block';
+            if (tbody) {
+                if (tbody.parentElement) tbody.parentElement.style.display = 'table';
+                tbody.innerHTML = rows.map(r => '<tr><td>' + (r.channel || '-') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + (total ? ((r.views / total * 100).toFixed(1) + '%') : '-') + '</td><td>' + (r.top_title || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</td></tr>').join('');
+            }
+            const ctx = document.getElementById('youtubeChannelChart');
+            if (ctx && typeof Chart !== 'undefined') {
+                if (youtubeChannelChartInstance) youtubeChannelChartInstance.destroy();
+                youtubeChannelChartInstance = new Chart(ctx.getContext('2d'), {
+                    type: 'bar',
+                    data: { labels: rows.map(r => r.channel || 'Other'), datasets: [{ label: 'Views', data: rows.map(r => r.views || 0), backgroundColor: 'rgba(255,0,0,0.6)' }] },
+                    options: { responsive: true, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+                });
+            }
+        }
+
+        function renderYouTubeTopTitles() {
+            const wrap = document.getElementById('youtubeTopTitlesChartWrap');
+            const loading = document.getElementById('youtubeTopTitlesLoading');
+            if (!youtubeRankerData || !youtubeRankerData.top_titles_over_time || !youtubeRankerData.top_titles_over_time.length) {
+                if (loading) loading.style.display = 'block';
+                if (wrap) wrap.style.display = 'none';
+                return;
+            }
+            if (loading) loading.style.display = 'none';
+            if (wrap) wrap.style.display = 'block';
+            const top = youtubeRankerData.top_titles_over_time.slice(0, 20);
+            const allDates = youtubeRankerData.dates_sorted || [];
+            const colors = ['#ff0000','#ff4444','#ff8844','#ffaa44','#cc0000','#aa4444','#884444','#664444'];
+            const ctx = document.getElementById('youtubeTopTitlesChart');
+            if (ctx && typeof Chart !== 'undefined') {
+                if (youtubeTopTitlesChartInstance) youtubeTopTitlesChartInstance.destroy();
+                youtubeTopTitlesChartInstance = new Chart(ctx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: allDates,
+                        datasets: top.map((s, i) => ({ label: (s.title || '').slice(0, 40), data: allDates.map(d => (s.by_date[d] || 0)), borderColor: colors[i % colors.length], fill: false, tension: 0.2 }))
+                    },
+                    options: { responsive: true, interaction: { mode: 'index' }, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+                });
+            }
+        }
+
+        function renderYouTubeInsights() {
+            const wrap = document.getElementById('youtubeInsightsCards');
+            const loading = document.getElementById('youtubeInsightsLoading');
+            if (!youtubeRankerData) {
+                if (loading) loading.style.display = 'block';
+                if (wrap) wrap.innerHTML = '';
+                return;
+            }
+            if (loading) loading.style.display = 'none';
+            const byDate = youtubeRankerData.by_date || {};
+            const dates = Object.keys(byDate).sort();
+            const latest = dates.length ? byDate[dates[dates.length - 1]] : [];
+            const totalViews = latest.reduce((s, r) => s + (r.views || 0), 0);
+            const topTitle = latest.length ? latest.slice().sort((a, b) => (b.views - a.views))[0] : null;
+            const allViews = youtubeRankerData.daily ? youtubeRankerData.daily.reduce((s, r) => s + (r.views || 0), 0) : 0;
+            const titleCount = youtubeRankerData.by_title ? Object.keys(youtubeRankerData.by_title).length : 0;
+            const cards = [
+                { label: 'Total View Events (Past Year)', value: (allViews || 0).toLocaleString() },
+                { label: 'Unique Titles', value: (titleCount || 0).toLocaleString() },
+                { label: 'Date Range', value: (youtubeRankerData.date_range ? youtubeRankerData.date_range.min + ' – ' + youtubeRankerData.date_range.max : '-') },
+                { label: 'Latest Day Total Views', value: totalViews.toLocaleString() },
+                { label: 'Top Title (Latest Day)', value: topTitle ? (topTitle.title || '').slice(0, 50) : '-' },
+                { label: 'Days of Data', value: (dates.length || 0).toString() }
+            ];
+            if (wrap) wrap.innerHTML = cards.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
+        }
+
+        function exportYouTubeDailyCSV() {
+            if (!youtubeRankerData || !youtubeRankerData.by_date) return;
+            const dateInp = document.getElementById('youtubeDailyDate');
+            const date = dateInp ? dateInp.value : (youtubeRankerData.date_range && youtubeRankerData.date_range.max);
+            const rows = (youtubeRankerData.by_date[date] || []).slice().sort((a, b) => (b.views - a.views));
+            const csv = 'Rank,Title,Views,Channel\n' + rows.map((r, i) => (i + 1) + ',"' + (r.title || '').replace(/"/g, '""') + '",' + (r.views || 0) + ',"' + (r.channel || '').replace(/"/g, '""') + '"').join('\n');
+            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'youtube_daily_ranker_' + date + '.csv'; a.click();
+        }
+        function exportYouTubeTrendsCSV() {
+            const sel = document.getElementById('youtubeTrendsTitle');
+            if (!youtubeRankerData || !sel || !sel.value) return;
+            const series = youtubeRankerData.by_title[sel.value] || [];
+            const csv = 'Date,Views\n' + series.map(p => p.date + ',' + (p.views || 0)).join('\n');
+            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'youtube_trends.csv'; a.click();
+        }
+        function exportYouTubeTopTitlesCSV() {
+            if (!youtubeRankerData || !youtubeRankerData.top_titles_over_time) return;
+            const rows = youtubeRankerData.top_titles_over_time.slice(0, 20);
+            const dates = youtubeRankerData.dates_sorted || [];
+            const header = 'Title,' + dates.join(',') + '\n';
+            const body = rows.map(s => '"' + (s.title || '').replace(/"/g, '""') + '",' + dates.map(d => (s.by_date[d] || 0)).join(',')).join('\n');
+            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(header + body); a.download = 'youtube_top_titles_over_time.csv'; a.click();
         }
         
         function filterLocationList(which) {
