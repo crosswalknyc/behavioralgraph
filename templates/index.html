@@ -4006,9 +4006,10 @@
             max-height: 500px;
             min-height: 0;
             padding-right: 0.5rem;
+            scrollbar-gutter: stable;
         }
 
-        /* Behavioral table: same grid for header and rows; headers left-aligned directly over columns */
+        /* Behavioral table: same grid for header and rows; headers left-aligned directly over values */
         .behavioral-header-row {
             display: grid;
             grid-template-columns: 28px minmax(0, 1fr) 64px 64px 52px;
@@ -4027,7 +4028,10 @@
         .behavioral-header-row span {
             text-align: left !important;
             justify-self: start;
+            align-self: center;
             min-width: 0;
+            width: 100%;
+            box-sizing: border-box;
         }
         .behavioral-list {
             padding-right: 0.5rem;
@@ -4044,7 +4048,9 @@
         }
         .behavioral-item > * {
             justify-self: start;
+            align-self: center;
             min-width: 0;
+            text-align: left !important;
         }
 
         .behavioral-item:hover {
@@ -4103,13 +4109,13 @@
             font-size: 0.8rem;
             font-weight: 500;
             color: var(--text-primary);
-            text-align: left;
+            text-align: left !important;
         }
 
         .behavioral-index {
             font-size: 0.8rem;
             font-weight: 700;
-            text-align: left;
+            text-align: left !important;
             padding: 3px 6px;
             border-radius: 4px;
             background: rgba(0, 0, 0, 0.3);
@@ -25990,10 +25996,11 @@
             
             container.innerHTML = sorted.map(item => {
                 const indexClass = item.index >= 150 ? 'high' : item.index >= 100 ? '' : 'low';
+                const categoryDisplay = (item.category || '').replace(/\//g, '/\u200B');
                 return `
                 <div class="highlight-item">
                     <span class="label">${item.name}</span>
-                    <span style="font-size: 0.75rem; color: var(--text-secondary);">${item.category}</span>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary);">${categoryDisplay}</span>
                     <span>${item.pct.toFixed(1)}%</span>
                     <span class="differentiator-index ${indexClass}">${formatIndex(item.index)}</span>
                 </div>
@@ -36617,7 +36624,7 @@
             return 'Other';
         }
         
-        /** Compute Gen Pop location data once from baseline and cache. Sanity-check: if totals > 150%, normalize so we never show inflated values. */
+        /** Compute Gen Pop location data once from baseline and cache. Dedupe by DMA so each DMA counted once (matches Gen Pop profile view). */
         function computeAndCacheGenPopLocationFromBaseline() {
             if (!genPopBaselineData || !genPopBaselineData.locations || genPopBaselineData.locations.length === 0) {
                 cachedGenPopLocation.ready = false;
@@ -36626,25 +36633,21 @@
             const byState = {};
             const byRegion = {};
             const byDma = {};
+            const seenDma = new Set();
             genPopBaselineData.locations.forEach(loc => {
-                const state = getStateFromLocation(loc.name);
+                const dmaKey = (loc.name || '').toString().trim().toUpperCase();
+                if (!dmaKey || seenDma.has(dmaKey)) return;
+                seenDma.add(dmaKey);
                 let pct = parseFloat(loc.pct ?? loc.genPopPct) || 0;
                 if (pct > 0 && pct < 1) pct = pct * 100;
-                const dmaKey = (loc.name || '').toString().trim();
-                if (dmaKey) byDma[dmaKey.toUpperCase()] = pct;
+                byDma[dmaKey] = pct;
+                const state = getStateFromLocation(loc.name);
                 if (state) {
                     byState[state] = (byState[state] || 0) + pct;
                     const region = getRegionForState(state);
                     byRegion[region] = (byRegion[region] || 0) + pct;
                 }
             });
-            const totalState = Object.values(byState).reduce((s, v) => s + v, 0);
-            if (totalState > 150) {
-                const scale = 100 / totalState;
-                Object.keys(byState).forEach(s => { byState[s] = (byState[s] || 0) * scale; });
-                Object.keys(byRegion).forEach(r => { byRegion[r] = (byRegion[r] || 0) * scale; });
-                Object.keys(byDma).forEach(d => { byDma[d] = (byDma[d] || 0) * scale; });
-            }
             cachedGenPopLocation.byState = byState;
             cachedGenPopLocation.byRegion = byRegion;
             cachedGenPopLocation.byDma = byDma;
