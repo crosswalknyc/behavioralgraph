@@ -12073,7 +12073,7 @@
                                         </select>
                                     </div>
                                     <div id="netflixDailyTableWrap" style="overflow-x: auto;"><table id="netflixDailyTable" class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Views</th><th>Genre</th><th>Type</th></tr></thead><tbody id="netflixDailyBody"></tbody></table></div>
-                                    <div id="netflixDailyLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers to view daily data.</div>
+                                    <div id="netflixDailyLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
                                 </div>
                                 <div id="netflix-seasons" class="netflix-sub-content">
                                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
@@ -12086,7 +12086,7 @@
                                     </div>
                                     <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">Shows only (no movies). Ranked by Show + Season combined.</p>
                                     <div id="netflixSeasonsTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Name of Show</th><th>Season</th><th>Views</th></tr></thead><tbody id="netflixSeasonsBody"></tbody></table></div>
-                                    <div id="netflixSeasonsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers to view seasons data.</div>
+                                    <div id="netflixSeasonsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
                                 </div>
                                 <div id="netflix-episodes" class="netflix-sub-content">
                                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
@@ -12099,7 +12099,7 @@
                                     </div>
                                     <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">Ranked by episode. Indian genre excluded.</p>
                                     <div id="netflixEpisodesTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Episode</th><th>Season</th><th>Views</th></tr></thead><tbody id="netflixEpisodesBody"></tbody></table></div>
-                                    <div id="netflixEpisodesLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers to view episodes data.</div>
+                                    <div id="netflixEpisodesLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
                                 </div>
                                 <div id="netflix-trends" class="netflix-sub-content">
                                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
@@ -12119,7 +12119,7 @@
                                     </div>
                                     <div id="netflixGenreChartWrap" style="min-height: 280px;"><canvas id="netflixGenreChart"></canvas></div>
                                     <div id="netflixGenreTableWrap" style="overflow-x: auto; margin-top: 1rem;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Genre</th><th>Views</th><th>% of Total</th><th>Top Show</th></tr></thead><tbody id="netflixGenreBody"></tbody></table></div>
-                                    <div id="netflixGenreLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers to view genre breakdown.</div>
+                                    <div id="netflixGenreLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
                                 </div>
                                 <div id="netflix-topshows" class="netflix-sub-content">
                                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
@@ -12127,12 +12127,12 @@
                                         <button class="module-btn csv-btn" onclick="exportNetflixTopShowsCSV()">CSV</button>
                                     </div>
                                     <div id="netflixTopShowsChartWrap" style="min-height: 400px;"><canvas id="netflixTopShowsChart"></canvas></div>
-                                    <div id="netflixTopShowsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers to view top shows over time.</div>
+                                    <div id="netflixTopShowsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
                                 </div>
                                 <div id="netflix-insights" class="netflix-sub-content">
                                     <h3 style="margin: 0 0 0.75rem 0;">💡 Netflix Ranker Insights</h3>
                                     <div id="netflixInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
-                                    <div id="netflixInsightsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers to view insights.</div>
+                                    <div id="netflixInsightsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
                                 </div>
                             </div>
                         </div>
@@ -29816,7 +29816,7 @@
             const sortSelect = document.getElementById('netflixDailySortBy');
             const genreSelect = document.getElementById('netflixDailyGenreFilter');
             if (!netflixRankerData || !netflixRankerData.by_date) {
-                if (loading) loading.style.display = 'block';
+                if (loading) loading.style.display = 'none';
                 if (wrap) wrap.style.display = 'none';
                 return;
             }
@@ -29875,7 +29875,7 @@
             const loading = document.getElementById('netflixSeasonsLoading');
             const dateInp = document.getElementById('netflixSeasonsDate');
             if (!netflixRankerData || !netflixRankerData.by_date_season) {
-                if (loading) loading.style.display = 'block';
+                if (loading) loading.style.display = 'none';
                 if (wrap) wrap.style.display = 'none';
                 return;
             }
@@ -29893,7 +29893,7 @@
             const loading = document.getElementById('netflixEpisodesLoading');
             const dateInp = document.getElementById('netflixEpisodesDate');
             if (!netflixRankerData || !netflixRankerData.by_date_episode) {
-                if (loading) loading.style.display = 'block';
+                if (loading) loading.style.display = 'none';
                 if (wrap) wrap.style.display = 'none';
                 return;
             }
@@ -29910,13 +29910,13 @@
             const loading = document.getElementById('netflixTrendsLoading');
             const sel = document.getElementById('netflixTrendsShow');
             if (!netflixRankerData || !netflixRankerData.by_show) {
-                if (loading) loading.style.display = 'block';
+                if (loading) loading.style.display = 'none';
                 if (wrap) wrap.style.display = 'none';
                 return;
             }
             const showName = sel ? sel.value : '';
             if (!showName) {
-                if (loading) loading.style.display = 'block';
+                if (loading) loading.style.display = 'none';
                 if (wrap) wrap.style.display = 'none';
                 return;
             }
@@ -29944,7 +29944,7 @@
             const loading = document.getElementById('netflixGenreLoading');
             const dateInp = document.getElementById('netflixGenreDate');
             if (!netflixRankerData || !netflixRankerData.genres_by_date) {
-                if (loading) loading.style.display = 'block';
+                if (loading) loading.style.display = 'none';
                 if (wrap) wrap.style.display = 'none';
                 if (tbody) tbody.parentElement.style.display = 'none';
                 return;
@@ -29976,7 +29976,7 @@
             const wrap = document.getElementById('netflixTopShowsChartWrap');
             const loading = document.getElementById('netflixTopShowsLoading');
             if (!netflixRankerData || !netflixRankerData.top_shows_over_time || !netflixRankerData.top_shows_over_time.length) {
-                if (loading) loading.style.display = 'block';
+                if (loading) loading.style.display = 'none';
                 if (wrap) wrap.style.display = 'none';
                 return;
             }
@@ -30003,7 +30003,7 @@
             const wrap = document.getElementById('netflixInsightsCards');
             const loading = document.getElementById('netflixInsightsLoading');
             if (!netflixRankerData) {
-                if (loading) loading.style.display = 'block';
+                if (loading) loading.style.display = 'none';
                 if (wrap) wrap.innerHTML = '';
                 return;
             }
