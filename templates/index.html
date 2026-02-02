@@ -2787,6 +2787,10 @@
             letter-spacing: 0.5px;
             flex-shrink: 0;
         }
+        .insight-col-header span,
+        .behavioral-header-row span {
+            text-align: left;
+        }
         .insight-col-header span {
             cursor: default;
         }
@@ -2803,6 +2807,25 @@
         .top-cat-header {
             flex-shrink: 0;
         }
+        .top-cat-header-left {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0 0.5rem;
+            margin-bottom: 0.25rem;
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        .top-cat-header-left .top-cat-col-name,
+        .top-cat-header-left .top-cat-col {
+            text-align: left !important;
+        }
+        .top-cat-col-name { flex: 1; min-width: 0; }
+        .top-cat-col-pct { min-width: 55px; }
+        .top-cat-col-gp { min-width: 50px; }
+        .top-cat-col-idx { min-width: 50px; }
+        .top-cat-col-hot { min-width: 40px; }
         .demo-insight-content {
             font-size: 0.8rem;
             line-height: 1.5;
@@ -3332,19 +3355,29 @@
         .behavioral-stat-row .value.low { background: rgba(239,68,68,0.15); color: #ef4444; }
         .behavioral-top-cat {
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            gap: 0.5rem;
             padding: 0.6rem 0.75rem;
             background: var(--bg-input);
             border-radius: 6px;
             margin-bottom: 0.5rem;
         }
-        .behavioral-top-cat .cat-name { flex: 1; font-size: 0.8rem; }
+        .behavioral-top-cat .cat-name { flex: 1; font-size: 0.8rem; text-align: left !important; min-width: 0; }
         .behavioral-top-cat .cat-stats { 
             display: flex; 
-            gap: 0.75rem; 
+            gap: 0.5rem; 
             font-size: 0.75rem;
         }
+        .behavioral-top-cat .cat-pct,
+        .behavioral-top-cat .cat-gp,
+        .behavioral-top-cat .cat-idx,
+        .behavioral-top-cat .cat-high {
+            text-align: left !important;
+        }
+        .behavioral-top-cat .cat-pct { min-width: 55px; }
+        .behavioral-top-cat .cat-gp { min-width: 50px; }
+        .behavioral-top-cat .cat-idx { min-width: 50px; }
+        .behavioral-top-cat .cat-high { min-width: 40px; }
         .behavioral-top-cat .cat-idx {
             color: var(--accent-lime);
             font-weight: 700;
@@ -3860,32 +3893,36 @@
             margin-bottom: 0.75rem;
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             flex-shrink: 0;
-            gap: 0.25rem;
-            flex-wrap: nowrap;
-            overflow: hidden;
+            gap: 0.35rem;
+            flex-wrap: wrap;
         }
         
         .behavioral-card h3 > span:first-child {
             flex: 1;
             min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            white-space: normal;
+            word-wrap: break-word;
+            word-break: break-word;
         }
         
         .behavioral-card h3 > span:last-child {
             flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            flex-wrap: wrap;
         }
 
         .behavioral-card .count {
-            font-size: 0.6rem;
+            font-size: 0.65rem;
             color: var(--text-secondary);
             background: var(--bg-input);
-            padding: 0.1rem 0.35rem;
+            padding: 0.2rem 0.4rem;
             border-radius: 10px;
             flex-shrink: 0;
+            white-space: nowrap;
         }
         
         .behavioral-card .item-limit-select {
@@ -3972,6 +4009,7 @@
             border-bottom: 1px solid var(--border-color);
             gap: 0.5rem;
             position: relative;
+            text-align: left;
         }
 
         .behavioral-item:hover {
@@ -3999,6 +4037,7 @@
             z-index: 2;
             padding: 0.2rem 0.4rem;
             cursor: help;
+            text-align: left;
         }
 
         .behavioral-name-wrapper {
@@ -4823,13 +4862,17 @@
         }
         .highlight-item .label,
         .highlight-item span {
-            text-align: left;
+            text-align: left !important;
         }
         .highlight-item .label {
             color: var(--text-secondary);
         }
+        [data-module="Interest Highlights"] .differentiator-header,
         [data-module="Interest Highlights"] .differentiator-header span {
-            text-align: left;
+            text-align: left !important;
+        }
+        #interestHighlights .highlight-item span {
+            text-align: left !important;
         }
         .highlight-item .value {
             font-weight: 600;
@@ -4971,17 +5014,17 @@
         .differentiator-grouped-pct {
             color: var(--accent-blue);
             min-width: 60px;
-            text-align: left;
+            text-align: left !important;
         }
         .differentiator-grouped-gp {
             color: var(--text-secondary);
             min-width: 60px;
-            text-align: left;
+            text-align: left !important;
         }
         .differentiator-grouped-index {
             font-weight: 600;
             min-width: 65px;
-            text-align: left;
+            text-align: left !important;
             padding: 0.15rem 0.4rem;
             border-radius: 4px;
         }
@@ -4993,8 +5036,10 @@
             background: rgba(239, 68, 68, 0.2);
             color: #ef4444;
         }
-        .differentiator-list-grouped .differentiator-column-headers span {
-            text-align: left;
+        .differentiator-list-grouped .differentiator-column-headers,
+        .differentiator-list-grouped .differentiator-column-headers span,
+        .differentiator-list-grouped .differentiator-grouped-item span {
+            text-align: left !important;
         }
         
         /* Key Stats Grid */
@@ -11503,14 +11548,12 @@
                                 <option value="hot">By Hot 🔥</option>
                             </select>
                         </h4>
-                        <div class="top-cat-header" style="display: flex; justify-content: space-between; align-items: center; padding: 0 0.5rem; margin-bottom: 0.25rem; font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; flex-wrap: wrap; gap: 0.35rem;">
-                            <span style="flex: 1; text-align: left;">Category</span>
-                            <span style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span class="has-tooltip" data-tooltip="Profile %: Average percentage of this audience engaging with items in this category." style="min-width: 55px; text-align: left;">Profile</span>
-                                <span class="genpop-col has-tooltip" data-tooltip="Gen Pop %: Average percentage of general population engaging with items in this category." style="min-width: 50px; text-align: left;">GP</span>
-                                <span class="index-col has-tooltip" data-tooltip="Avg Index: Average index across all items in this category. 1.0x = same as Gen Pop, 2.0x = 2x more likely than Gen Pop." style="min-width: 50px; text-align: left;">Index</span>
-                                <span class="has-tooltip" data-tooltip="Hot Count: Number of items in this category with index above 1.5x (strong over-indexers)." style="min-width: 40px; text-align: left;">Hot 🔥</span>
-                            </span>
+                        <div class="top-cat-header top-cat-header-left">
+                            <span class="top-cat-col-name">Category</span>
+                            <span class="top-cat-col top-cat-col-pct has-tooltip" data-tooltip="Profile %: Average percentage of this audience engaging with items in this category.">Profile</span>
+                            <span class="top-cat-col top-cat-col-gp genpop-col has-tooltip" data-tooltip="Gen Pop %: Average percentage of general population engaging with items in this category.">GP</span>
+                            <span class="top-cat-col top-cat-col-idx index-col has-tooltip" data-tooltip="Avg Index: Average index across all items in this category. 1.0x = same as Gen Pop, 2.0x = 2x more likely than Gen Pop.">Index</span>
+                            <span class="top-cat-col top-cat-col-hot has-tooltip" data-tooltip="Hot Count: Number of items in this category with index above 1.5x (strong over-indexers).">Hot 🔥</span>
                         </div>
                         <div id="behavioralTopCategories" class="behavioral-insight-content">
                             <div class="behavioral-stat-row">
@@ -27554,10 +27597,11 @@
                         <h3>
                             <span style="display: flex; align-items: center; gap: 0.3rem; min-width: 0;">
                                 <span class="drag-handle" title="Drag to reorder">⋮⋮</span>
-                                <span class="${hasTooltip}" ${tooltipAttr} style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${cat}</span>
+                                <span class="${hasTooltip}" ${tooltipAttr} style="word-wrap: break-word; white-space: normal;">${cat}</span>
                                 ${positionBadge}
                             </span>
                             <span style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0;">
+                                <span class="count">${items.length} items</span>
                                 <span class="module-action-btns">
                                     <button class="module-btn csv-btn has-tooltip" onclick="event.stopPropagation(); exportModuleCSV('behavioral', '${cat}')" data-tooltip="Export CSV: Download this behavioral category data as a CSV file.">CSV</button>
                                     <button class="module-btn png-btn has-tooltip" onclick="event.stopPropagation(); exportModulePNG('behavioral', '${cat}')" data-tooltip="Export PNG: Download this behavioral category chart as a PNG image.">PNG</button>
