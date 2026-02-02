@@ -13563,7 +13563,7 @@
                     <button class="comp-tab" onclick="showCompTab('gap')">🎯 Gap Analysis</button>
                     <button class="comp-action-btn" onclick="generateExecutiveSummary()" title="Generate Executive Summary">📄 Exec Summary</button>
                     <button class="comp-action-btn" onclick="generateKeyInsightBuilder()" title="Generate SWOT Analysis and Key Insights for Primary Brand">🎯 Key Insight Builder</button>
-                    <button type="button" class="comp-mode-toggle" id="displayModeToggle" onclick="toggleDisplayMode()" title="Click to toggle between percentages and US population numbers" aria-pressed="false">
+                    <button type="button" class="comp-mode-toggle" id="displayModeToggle" onclick="toggleDisplayMode(event)" title="Click to toggle between percentages and US population numbers" aria-pressed="false">
                         <span id="displayModeLabel">US %</span>
                     </button>
                     <select id="compJumpToSelect" class="comp-action-select" onchange="jumpToCompSection(this.value)" title="Jump to section">
@@ -39467,11 +39467,12 @@
             }
         }
 
-        function toggleDisplayMode() {
+        function toggleDisplayMode(e) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
             displayMode = displayMode === 'percent' ? 'projection' : 'percent';
             syncCompareDisplayModeToggle();
 
-            // Re-render comparison if data is loaded
+            // Re-render comparison if data is loaded (use current displayMode)
             if (window.comparisonProfilesData && window.comparisonProfilesData.length > 0) {
                 renderComparison(window.comparisonProfilesData, currentSortSection, currentSortColumn);
             }
@@ -40402,7 +40403,8 @@
             return seenNormalized.size;
         }
 
-        function renderBehavioralComparisonRows(profiles, category, sortByProfileIdx = null, limit = 15, sortType = 'pct', mode = displayMode) {
+        function renderBehavioralComparisonRows(profiles, category, sortByProfileIdx = null, limit = 15, sortType = 'pct', mode) {
+            const useProjection = (mode !== undefined && mode !== null) ? mode === 'projection' : displayMode === 'projection';
             // Gen Pop is the baseline: never show index for Gen Pop column; compute others as (profile% / Gen Pop%) * 100
             const genPopIdx = profiles.findIndex(p => {
                 const n = (p.name || '').toUpperCase();
@@ -40487,7 +40489,7 @@
                         const index = row.indexData[i];
                         const isPrimary = i === primaryProfileIndex;
                         const primaryClass = isPrimary ? 'primary-col' : '';
-                        const displayVal = mode === 'projection' 
+                        const displayVal = useProjection
                             ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                             : (pct > 0 ? pct.toFixed(2) + '%' : '-');
                         
@@ -40512,7 +40514,8 @@
             `).join('');
         }
 
-        function renderLocationComparisonRows(profiles, sortByProfileIdx = null, limit = 15, sortType = 'pct', mode = displayMode) {
+        function renderLocationComparisonRows(profiles, sortByProfileIdx = null, limit = 15, sortType = 'pct', mode) {
+            const useProjection = (mode !== undefined && mode !== null) ? mode === 'projection' : displayMode === 'projection';
             const genPopIdx = profiles.findIndex(p => {
                 const n = (p.name || '').toUpperCase();
                 return n.includes('GEN POP') || n.includes('GENPOP');
@@ -40590,7 +40593,7 @@
                         const index = row.indexData[i];
                         const isPrimary = i === primaryProfileIndex;
                         const primaryClass = isPrimary ? 'primary-col' : '';
-                        const displayVal = mode === 'projection' 
+                        const displayVal = useProjection
                             ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                             : (pct > 0 ? pct.toFixed(2) + '%' : '-');
                         
@@ -40614,7 +40617,8 @@
             `).join('');
         }
 
-        function renderDemoComparisonRows(profiles, demoType, sortByProfileIdx = null, limit = 15, sortType = 'pct', mode = displayMode) {
+        function renderDemoComparisonRows(profiles, demoType, sortByProfileIdx = null, limit = 15, sortType = 'pct', mode) {
+            const useProjection = (mode !== undefined && mode !== null) ? mode === 'projection' : displayMode === 'projection';
             // Find Gen Pop profile for index baseline (index = profile% / genPop% * 100)
             const genPopProfile = profiles.find(p => {
                 const n = (p.name || '').toUpperCase();
@@ -40700,7 +40704,7 @@
                             const maxPct = 60;
                             const isPrimary = i === primaryProfileIndex;
                             const primaryClass = isPrimary ? 'primary-col' : '';
-                            const displayVal = mode === 'projection' 
+                            const displayVal = useProjection
                                 ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                                 : (pct > 0 ? pct.toFixed(2) + '%' : '-');
                             
