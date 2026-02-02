@@ -4874,9 +4874,9 @@
         }
         [data-module="Interest Highlights"] .differentiator-header {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 110px 72px 68px;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 110px) 72px 68px;
             gap: 0.5rem;
-            align-items: center;
+            align-items: start;
             padding: 0.5rem 0.6rem;
             margin-bottom: 0.5rem;
             font-size: 0.65rem;
@@ -4888,12 +4888,16 @@
         }
         [data-module="Interest Highlights"] .differentiator-header span {
             text-align: left !important;
+            white-space: normal;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            min-width: 0;
         }
         [data-module="Interest Highlights"] .highlight-item {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 110px 72px 68px;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 110px) 72px 68px;
             gap: 0.5rem;
-            align-items: center;
+            align-items: start;
             padding: 0.5rem 0.6rem;
             background: rgba(255,255,255,0.03);
             border-radius: 6px;
@@ -4902,6 +4906,13 @@
         .highlight-item .label,
         .highlight-item span {
             text-align: left !important;
+        }
+        [data-module="Interest Highlights"] .highlight-item .label,
+        [data-module="Interest Highlights"] .highlight-item span {
+            white-space: normal;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            min-width: 0;
         }
         .highlight-item .label {
             color: var(--text-primary);
