@@ -3108,7 +3108,7 @@
         .spotlight-rank {
             color: var(--accent-blue);
             font-weight: 600;
-            text-align: center;
+            text-align: left;
         }
         
         .spotlight-name {
@@ -3116,18 +3116,18 @@
         }
         
         .spotlight-pct {
-            text-align: right;
+            text-align: left;
             color: var(--accent-lime);
             font-weight: 600;
         }
         
         .spotlight-genpop {
-            text-align: right;
+            text-align: left;
             color: var(--text-secondary);
         }
         
         .spotlight-index {
-            text-align: center;
+            text-align: left;
             font-weight: 700;
             padding: 0.25rem 0.5rem;
             border-radius: 4px;
@@ -3423,14 +3423,11 @@
         }
         
         .interest-header-row span:nth-child(1),
-        .interest-header-row span:nth-child(2) {
-            text-align: left;
-        }
-        
+        .interest-header-row span:nth-child(2),
         .interest-header-row span:nth-child(3),
         .interest-header-row span:nth-child(4),
         .interest-header-row span:nth-child(5) {
-            text-align: right;
+            text-align: left;
         }
         
         .interest-rank {
@@ -3451,7 +3448,7 @@
         .interest-genpop,
         .interest-index {
             font-size: 0.75rem;
-            text-align: right;
+            text-align: left;
         }
         
         .interest-bar-container {
@@ -3478,7 +3475,7 @@
             font-size: 0.75rem;
             font-weight: 700;
             min-width: 45px;
-            text-align: right;
+            text-align: left;
             padding: 1px 4px;
             border-radius: 3px;
             background: rgba(0, 0, 0, 0.3);
@@ -3488,7 +3485,7 @@
         .interest-pct {
             font-size: 0.75rem;
             min-width: 55px;
-            text-align: right;
+            text-align: left;
             flex-shrink: 0;
         }
         
@@ -3496,7 +3493,7 @@
             font-size: 0.75rem;
             color: var(--text-secondary);
             min-width: 55px;
-            text-align: right;
+            text-align: left;
             flex-shrink: 0;
         }
         
@@ -4836,13 +4833,13 @@
         .differentiator-pct {
             font-size: 0.75rem;
             min-width: 65px;
-            text-align: right;
+            text-align: left;
             color: var(--accent-cyan);
         }
         .differentiator-gp {
             font-size: 0.75rem;
             min-width: 65px;
-            text-align: right;
+            text-align: left;
             color: var(--text-secondary);
         }
         .differentiator-index {
@@ -4851,7 +4848,7 @@
             border-radius: 4px;
             font-size: 0.8rem;
             min-width: 55px;
-            text-align: center;
+            text-align: left;
         }
         .differentiator-index.high {
             background: rgba(16, 185, 129, 0.2);
@@ -5035,12 +5032,12 @@
             border-bottom: 1px solid var(--border-color);
             margin-bottom: 0.5rem;
         }
-        .insight-list-header .col-rank { min-width: 20px; }
-        .insight-list-header .col-name { flex: 1; }
-        .insight-list-header .col-cat { min-width: 80px; }
-        .insight-list-header .col-pct { min-width: 50px; text-align: right; }
-        .insight-list-header .col-gp { min-width: 50px; text-align: right; }
-        .insight-list-header .col-idx { min-width: 50px; text-align: center; }
+        .insight-list-header .col-rank { min-width: 20px; text-align: left; }
+        .insight-list-header .col-name { flex: 1; text-align: left; }
+        .insight-list-header .col-cat { min-width: 80px; text-align: left; }
+        .insight-list-header .col-pct { min-width: 50px; text-align: left; }
+        .insight-list-header .col-gp { min-width: 50px; text-align: left; }
+        .insight-list-header .col-idx { min-width: 50px; text-align: left; }
         .insight-list-v2 {
             display: flex;
             flex-direction: column;
@@ -5065,12 +5062,14 @@
             font-weight: 700;
             color: var(--text-secondary);
             min-width: 20px;
+            text-align: left;
         }
         .insight-item-v2 .name {
             flex: 1;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            text-align: left;
         }
         .insight-item-v2 .category-tag, .category-tag {
             font-size: 0.65rem;
@@ -5093,13 +5092,13 @@
         .insight-item-v2 .item-pct {
             font-size: 0.75rem;
             min-width: 50px;
-            text-align: right;
+            text-align: left;
             color: var(--accent-cyan);
         }
         .insight-item-v2 .item-gp {
             font-size: 0.75rem;
             min-width: 50px;
-            text-align: right;
+            text-align: left;
             color: var(--text-secondary);
         }
         .insight-item-v2 .index-badge {
@@ -5107,7 +5106,7 @@
             padding: 0.2rem 0.5rem;
             border-radius: 4px;
             min-width: 50px;
-            text-align: center;
+            text-align: left;
             font-size: 0.8rem;
         }
         .insight-item-v2 .index-badge.high {
@@ -7314,7 +7313,7 @@
         .comp-table th {
             background: var(--bg-dark);
             padding: 0.6rem;
-            text-align: center;
+            text-align: left;
             border: 1px solid var(--border-color);
             font-weight: 600;
             color: var(--accent-cyan);
@@ -7322,7 +7321,7 @@
 
         .comp-table td {
             padding: 0.5rem;
-            text-align: center;
+            text-align: left;
             border: 1px solid var(--border-color);
         }
 
@@ -7353,13 +7352,13 @@
 
         .comp-bar-pct {
             min-width: 55px;
-            text-align: right;
+            text-align: left;
             font-size: 0.75rem;
         }
 
         .index-badge {
             min-width: 38px;
-            text-align: center;
+            text-align: left;
             font-size: 0.7rem;
             font-weight: 600;
             padding: 2px 5px;
@@ -11039,7 +11038,7 @@
                         <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-feature="keyInsightBuilder" data-tooltip="Key Insight Builder: SWOT analysis and key insights for the primary brand, comparing to comparison profiles and general population." onclick="generateKeyInsightBuilderFromNav()"><span class="tab-icon">🎯</span><span class="tab-label">KEY INSIGHT BUILDER</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-feature="ecosystem" data-tooltip="Ecosystem: Behavioral ecosystem analysis showing life moments, substitution patterns, cultural signals, emotional engagement, relevance shifts, and white-space opportunities." onclick="showTab('ecosystem')"><span class="tab-icon">🌐</span><span class="tab-label">ECOSYSTEM</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-feature="ecosystem" data-tooltip="Ecosystem: Behavioral ecosystem analysis showing life moments, substitution patterns, cultural signals, emotional engagement, relevance shifts, and white-space opportunities." onclick="showProfileSelectionModal('ecosystem')"><span class="tab-icon">🌐</span><span class="tab-label">ECOSYSTEM</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-feature="affinity" data-tooltip="Affinity: Cross-category affinities showing what else this audience engages with across brands and content." onclick="showTab('affinity')"><span class="tab-icon">🔗</span><span class="tab-label">AFFINITY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-feature="sponsorship" data-tooltip="Sponsorship: Sponsorship valuation and partnership opportunity analysis for brand collaborations." onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-feature="media" data-tooltip="Media: Media consumption patterns including TV, streaming, social media, and digital platform preferences." onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">MEDIA</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
@@ -11113,9 +11112,9 @@
                                 </h4>
                                 <div class="insight-col-header" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
                                     <span class="has-tooltip" data-tooltip="Characteristic: The dominant demographic trait in each category (gender, age, income, ethnicity).">Characteristic</span>
-                                    <span class="has-tooltip" data-tooltip="Profile: The percentage of THIS audience in this demographic segment." style="text-align: right;">Profile</span>
-                                    <span class="genpop-col has-tooltip" data-tooltip="Gen Pop: The percentage of the general US population in this demographic segment." style="text-align: right;">Gen Pop</span>
-                                    <span class="index-col has-tooltip" data-tooltip="Index: How this segment compares to Gen Pop. 1.0x = same as Gen Pop. Higher = over-indexes, Lower = under-indexes." style="text-align: right;">Index</span>
+                                    <span class="has-tooltip" data-tooltip="Profile: The percentage of THIS audience in this demographic segment." style="text-align: left;">Profile</span>
+                                    <span class="genpop-col has-tooltip" data-tooltip="Gen Pop: The percentage of the general US population in this demographic segment." style="text-align: left;">Gen Pop</span>
+                                    <span class="index-col has-tooltip" data-tooltip="Index: How this segment compares to Gen Pop. 1.0x = same as Gen Pop. Higher = over-indexes, Lower = under-indexes." style="text-align: left;">Index</span>
                                 </div>
                                 <div id="demoProfileSummary" class="demo-insight-content">
                                     <div class="loading-placeholder">Analyzing demographics...</div>
@@ -11131,9 +11130,9 @@
                                 </h4>
                                 <div class="insight-col-header" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
                                     <span class="has-tooltip" data-tooltip="Segment: A specific demographic group (e.g., 18-24, Female, $100K+).">Segment</span>
-                                    <span class="has-tooltip" data-tooltip="Profile: The percentage of THIS audience in this demographic segment." style="text-align: right;">Profile</span>
-                                    <span class="genpop-col has-tooltip" data-tooltip="Gen Pop: The percentage of the general US population in this demographic segment." style="text-align: right;">Gen Pop</span>
-                                    <span class="index-col has-tooltip" data-tooltip="Index: How this segment compares to Gen Pop. 1.0x = same as Gen Pop. Higher = over-indexes, Lower = under-indexes." style="text-align: right;">Index</span>
+                                    <span class="has-tooltip" data-tooltip="Profile: The percentage of THIS audience in this demographic segment." style="text-align: left;">Profile</span>
+                                    <span class="genpop-col has-tooltip" data-tooltip="Gen Pop: The percentage of the general US population in this demographic segment." style="text-align: left;">Gen Pop</span>
+                                    <span class="index-col has-tooltip" data-tooltip="Index: How this segment compares to Gen Pop. 1.0x = same as Gen Pop. Higher = over-indexes, Lower = under-indexes." style="text-align: left;">Index</span>
                                 </div>
                                 <div id="demoDifferentiators" class="demo-insight-content">
                                     <div class="loading-placeholder">Loading...</div>
@@ -11390,9 +11389,14 @@
                             <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
                             <span>🏆 Top Performing Categories</span>
                         </h4>
-                        <div class="top-cat-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.25rem; font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">
+                        <div class="top-cat-header" style="display: flex; justify-content: space-between; align-items: center; padding: 0 0.5rem; margin-bottom: 0.25rem; font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; flex-wrap: wrap; gap: 0.35rem;">
                             <span style="flex: 1; text-align: left;">Category</span>
-                            <span style="display: flex; gap: 0.5rem;">
+                            <span style="display: flex; align-items: center; gap: 0.5rem;">
+                                <select id="topCategoriesSortSelect" onchange="sortTopCategories(this.value)" style="padding: 0.2rem 0.35rem; font-size: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;" title="Sort by">
+                                    <option value="index">By Index</option>
+                                    <option value="profile">By Profile %</option>
+                                    <option value="hot">By Hot 🔥</option>
+                                </select>
                                 <span class="has-tooltip" data-tooltip="Profile %: Average percentage of this audience engaging with items in this category." style="min-width: 55px; text-align: left;">Profile</span>
                                 <span class="genpop-col has-tooltip" data-tooltip="Gen Pop %: Average percentage of general population engaging with items in this category." style="min-width: 50px; text-align: left;">GP</span>
                                 <span class="index-col has-tooltip" data-tooltip="Avg Index: Average index across all items in this category. 1.0x = same as Gen Pop, 2.0x = 2x more likely than Gen Pop." style="min-width: 50px; text-align: left;">Index</span>
@@ -13090,18 +13094,6 @@
                     </div>
                     <select id="compJumpToSelect" class="comp-action-select" onchange="jumpToCompSection(this.value)" title="Jump to section">
                             <option value="">📍 Jump to...</option>
-                            <option value="comp-summary">📊 Summary Data</option>
-                            <option value="comp-gender">👫 Gender</option>
-                            <option value="comp-age">📅 Age</option>
-                            <option value="comp-ethnicity">🌍 Ethnicity</option>
-                            <option value="comp-income">💰 Income</option>
-                            <option value="comp-education">🎓 Education</option>
-                            <option value="comp-relationship">💑 Relationship Status</option>
-                            <option value="comp-sexual_orientation">🏳️‍🌈 Sexual Orientation</option>
-                            <option value="comp-parental_status">👶 Parental Status</option>
-                            <option value="comp-occupation">💼 Occupation</option>
-                            <option value="comp-behavioral">🎯 Behavioral</option>
-                            <option value="comp-location">📍 Location</option>
                         </select>
                 </div>
                 
@@ -13198,6 +13190,34 @@
                     </div>
                 </div>
 
+            </div>
+            
+            <!-- Profile Selection Modal (Exec Summary / Key Insight Builder / Ecosystem) -->
+            <div id="profileSelectionModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeProfileSelectionModal()">
+                <div class="modal-content" style="max-width: 480px;">
+                    <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                        <h2 id="profileSelectionModalTitle" style="margin: 0; font-size: 1.25rem; color: var(--text-primary);">📄 Executive Summary</h2>
+                        <button type="button" onclick="closeProfileSelectionModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); padding: 0.25rem 0.5rem;">&times;</button>
+                    </div>
+                    <div id="profileSelectionModalBody">
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.35rem;">Profile</label>
+                            <select id="profileSelectionPrimarySelect" style="width: 100%; padding: 0.5rem 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                                <option value="">Select profile...</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.35rem;">Compare to</label>
+                            <div id="profileSelectionCompareList" style="display: flex; flex-direction: column; gap: 0.35rem; max-height: 200px; overflow-y: auto; padding: 0.5rem; background: var(--bg-dark); border-radius: 6px; border: 1px solid var(--border-color);">
+                                <!-- checkboxes populated by JS -->
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+                            <button type="button" class="btn btn-small" onclick="closeProfileSelectionModal()" style="background: var(--bg-input);">Cancel</button>
+                            <button type="button" id="profileSelectionGenerateBtn" class="btn btn-primary btn-small">Generate</button>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <!-- Key Insight Builder Modal -->
@@ -17063,10 +17083,10 @@
                             <span style="font-size: 0.7rem; color: var(--text-secondary); background: var(--bg-input); padding: 0.15rem 0.4rem; border-radius: 10px;">${items.length} items</span>
                         </h3>
                         <div class="behavioral-header-row" style="display: flex; align-items: center; padding: 0.35rem 0; margin-bottom: 0.25rem; border-bottom: 1px solid var(--border-color); font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; gap: 0.5rem;">
-                            <span style="width: 20px; text-align: right;">#</span>
-                            <span style="flex: 1;">Item</span>
-                            <span style="min-width: 50px; text-align: right;">Profile</span>
-                            <span style="min-width: 45px; text-align: center;">Index</span>
+                            <span style="width: 20px; text-align: left;">#</span>
+                            <span style="flex: 1; text-align: left;">Item</span>
+                            <span style="min-width: 50px; text-align: left;">Profile</span>
+                            <span style="min-width: 45px; text-align: left;">Index</span>
                         </div>
                         <div class="behavioral-list" style="max-height: 300px; overflow-y: auto;">
                             ${sortedItems.map((item, idx) => {
@@ -17076,13 +17096,13 @@
                                 const barWidth = (pct / maxPct) * 100;
                                 return `
                                     <div class="behavioral-item" style="display: flex; align-items: center; padding: 0.4rem 0; border-bottom: 1px solid var(--border-color); gap: 0.5rem; font-size: 0.8rem;">
-                                        <span style="width: 20px; text-align: right; color: var(--text-secondary); font-size: 0.75rem;">${idx + 1}</span>
+                                        <span style="width: 20px; text-align: left; color: var(--text-secondary); font-size: 0.75rem;">${idx + 1}</span>
                                         <div style="flex: 1; min-width: 0; position: relative;">
                                             <div style="position: absolute; left: 0; top: 0; bottom: 0; width: ${barWidth}%; background: rgba(90, 154, 217, 0.2); border-radius: 3px;"></div>
                                             <span style="position: relative; z-index: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; padding: 0.1rem 0.3rem;" title="${item.name}">${item.name}</span>
                                         </div>
-                                        <span style="min-width: 50px; text-align: right; color: var(--text-primary);">${pct.toFixed(2)}%</span>
-                                        <span style="min-width: 45px; text-align: center; color: ${indexColor}; font-weight: 600;">${index > 0 ? (index / 100).toFixed(2) + 'x' : '-'}</span>
+                                        <span style="min-width: 50px; text-align: left; color: var(--text-primary);">${pct.toFixed(2)}%</span>
+                                        <span style="min-width: 45px; text-align: left; color: ${indexColor}; font-weight: 600;">${index > 0 ? (index / 100).toFixed(2) + 'x' : '-'}</span>
                                     </div>
                                 `;
                             }).join('')}
@@ -21886,13 +21906,16 @@
         
         function updateInlineTabHeader(tabName) {
             const header = document.getElementById('inlineTabHeader');
+            const actionRow = document.querySelector('.action-buttons-row');
             if (!header) return;
             
-            if (tabName === 'collaboration') {
+            if (tabName === 'collaboration' || tabName === 'segmentation') {
                 header.style.display = 'none';
+                if (actionRow) actionRow.style.display = 'none';
                 return;
             }
             
+            if (actionRow) actionRow.style.display = 'flex';
             header.style.display = 'flex';
             if (TAB_HEADERS[tabName]) {
                 const info = TAB_HEADERS[tabName];
@@ -21988,8 +22011,8 @@
                 loadDashboardProfiles();
             }
             
-            if (tabName === 'comparison' || tabName === 'collaboration') {
-                // Hide the main profile selector sidebar when in comparison or collaboration mode
+            if (tabName === 'comparison' || tabName === 'collaboration' || tabName === 'segmentation') {
+                // Hide the main profile selector sidebar when in comparison, collaboration, or segment mode
                 const mainSidebar = document.querySelector('.persistent-sidebar');
                 if (mainSidebar) {
                     mainSidebar.style.display = 'none';
@@ -22652,22 +22675,36 @@
                         genPopPct = GENPOP_DEMOGRAPHICS[category][value] || 0;
                     }
                 } else if (category === 'LOCATION' && value) {
-                    // Look up hardcoded Gen Pop value for this DMA
-                    const dmaKey = value.toUpperCase();
-                    // Try exact match first, then try partial matches
-                    genPopPct = GENPOP_DMA[dmaKey] || 0;
-                    if (genPopPct === 0) {
-                        // Try to match by first part of DMA name
-                        const dmaFirstPart = dmaKey.split(' ')[0];
-                        for (const [key, val] of Object.entries(GENPOP_DMA)) {
-                            if (key.startsWith(dmaFirstPart) || key.includes(dmaFirstPart)) {
-                                genPopPct = val;
-                                break;
-                            }
+                    // Use same calculation as profile: Gen Pop % from Gen Pop profile's location data when available
+                    if (genPopBaselineData && genPopBaselineData.locations && genPopBaselineData.locations.length > 0) {
+                        const dmaKey = value.toUpperCase().trim();
+                        let genPopLoc = genPopBaselineData.locations.find(loc => (loc.name || '').toUpperCase().trim() === dmaKey);
+                        if (!genPopLoc) {
+                            genPopLoc = genPopBaselineData.locations.find(loc => {
+                                const locKey = (loc.name || '').toUpperCase().trim();
+                                return locKey.includes(dmaKey) || dmaKey.includes(locKey);
+                            });
+                        }
+                        if (genPopLoc != null && (genPopLoc.pct != null || genPopLoc.genPopPct != null)) {
+                            genPopPct = parseFloat(genPopLoc.pct ?? genPopLoc.genPopPct) || 0;
+                            if (genPopPct > 0 && genPopPct < 1) genPopPct = genPopPct * 100;
                         }
                     }
-                    // Default to 0.2% for unlisted DMAs (small markets)
-                    if (genPopPct === 0) genPopPct = 0.2;
+                    // Fallback: hardcoded Gen Pop DMA percentages only when Gen Pop baseline locations not available
+                    if (genPopPct === 0) {
+                        const dmaKey = value.toUpperCase();
+                        genPopPct = GENPOP_DMA[dmaKey] || 0;
+                        if (genPopPct === 0) {
+                            const dmaFirstPart = dmaKey.split(' ')[0];
+                            for (const [key, val] of Object.entries(GENPOP_DMA)) {
+                                if (key.startsWith(dmaFirstPart) || key.includes(dmaFirstPart)) {
+                                    genPopPct = val;
+                                    break;
+                                }
+                            }
+                        }
+                        if (genPopPct === 0) genPopPct = 0.2;
+                    }
                 } else {
                     // For behavioral items, try to get Gen Pop percentage from loaded baseline data
                     if (genPopBaselineData && genPopBaselineData.behavioral && genPopBaselineData.behavioral[category]) {
@@ -23568,13 +23605,18 @@
                 categoryStats[cat] = { avgIndex: avgIdx, avgPct: avgPct, avgGenPop: avgGenPop, count: items.length, highCount, top5Items };
             });
             
-            const topCategories = Object.entries(categoryStats)
-                .sort((a, b) => b[1].avgIndex - a[1].avgIndex)
-                .slice(0, 6);
+            window.topCategoriesData = Object.entries(categoryStats);
+            window.topCategoriesSortBy = window.topCategoriesSortBy || 'index';
+            const topCategoriesSorted = [...window.topCategoriesData].sort((a, b) => {
+                const [, sa] = a, [, sb] = b;
+                if (window.topCategoriesSortBy === 'profile') return (sb.avgPct || 0) - (sa.avgPct || 0);
+                if (window.topCategoriesSortBy === 'hot') return (sb.highCount || 0) - (sa.highCount || 0);
+                return (sb.avgIndex || 0) - (sa.avgIndex || 0);
+            }).slice(0, 6);
             
             const US_POP_CATS = 324700000;
             const isProjectionCats = dashDisplayMode === 'projection';
-            document.getElementById('behavioralTopCategories').innerHTML = topCategories.map(([cat, stats]) => {
+            document.getElementById('behavioralTopCategories').innerHTML = topCategoriesSorted.map(([cat, stats]) => {
                 const profileDisplay = isProjectionCats 
                     ? formatNumber(Math.round((stats.avgPct / 100) * US_POP_CATS))
                     : stats.avgPct.toFixed(2) + '%';
@@ -23604,6 +23646,9 @@
                     </span>
                 </div>
             `}).join('') || '<p style="color: var(--text-secondary);">No data available</p>';
+            
+            const topCatSortSelect = document.getElementById('topCategoriesSortSelect');
+            if (topCatSortSelect) topCatSortSelect.value = window.topCategoriesSortBy || 'index';
             
             // === ACTIVATION OPPORTUNITIES ===
             const activations = [];
@@ -23661,6 +23706,8 @@
             const fitnessApps = ['PELOTON', 'STRAVA', 'MYFITNESSPAL', 'MY FITNESS PAL', 'FITBIT', 'NIKE TRAINING', 'NIKE RUN', 'ADIDAS RUNNING', 'CALM', 'HEADSPACE', 'NOOM', 'WEIGHT WATCHERS', 'WW', 'ORANGETHEORY', 'CLASSPASS', 'MINDBODY', 'BEACHBODY', 'APPLE FITNESS', 'GARMIN', 'WHOOP', 'OURA', 'EIGHT SLEEP', 'MIRROR', 'TONAL', 'TEMPO', 'FUTURE', 'TRAINIAC', 'LADDER', 'FITURE', 'LITEBOXER', 'HYDROW', 'ERGATTA', 'AVIRON', 'NORDICTRACK', 'BOWFLEX', 'ECHELON', 'MOTOSUMO', 'ZWIFT', 'SUFFERFEST', 'TRAINERROAD', 'WAHOO', 'TACX', 'ROUVY', 'BKOOL', 'FULGAZ', 'KINOMAP'];
             const financeApps = ['VENMO', 'PAYPAL', 'ZELLE', 'CASH APP', 'CASHAPP', 'APPLE PAY', 'GOOGLE PAY', 'SAMSUNG PAY', 'ROBINHOOD', 'COINBASE', 'ACORNS', 'MINT', 'CREDIT KARMA', 'CHIME', 'SOFI', 'MARCUS', 'ALLY', 'DISCOVER', 'CAPITAL ONE', 'BETTERMENT', 'WEALTHFRONT', 'PERSONAL CAPITAL', 'YNAB', 'KLARNA', 'AFTERPAY', 'AFFIRM', 'SEZZLE', 'ZIP', 'QUADPAY', 'SPLITIT', 'BREAD', 'UPLIFT', 'GREENSKY', 'SYNCHRONY', 'COMENITY', 'WEBBANK', 'CROSS RIVER', 'CELTIC BANK', 'COASTAL COMMUNITY', 'BLUE RIDGE', 'SUTTON', 'TRANSPORTATION ALLIANCE', 'TAB BANK', 'NBKC', 'LEAD BANK', 'EVOLVE', 'CHOICE FINANCIAL', 'LINCOLN SAVINGS', 'BANCORP', 'THE BANCORP', 'METABANK', 'PATHWARD', 'STRIDE', 'AXOS', 'CUSTOMERS BANK', 'CROSS RIVER BANK'];
             const travelApps = ['AIRBNB', 'VRBO', 'BOOKING.COM', 'EXPEDIA', 'HOTELS.COM', 'KAYAK', 'HOPPER', 'SKYSCANNER', 'PRICELINE', 'TRAVELOCITY', 'ORBITZ', 'TRIPADVISOR', 'TRIP ADVISOR', 'GOOGLE FLIGHTS', 'SOUTHWEST', 'DELTA', 'UNITED', 'AMERICAN AIRLINES', 'JETBLUE', 'SPIRIT', 'FRONTIER', 'ALLEGIANT', 'ALASKA', 'HAWAIIAN', 'SUN COUNTRY', 'BREEZE', 'AVELO', 'JSX', 'WHEELS UP', 'NETJETS', 'XOJET', 'SENTIENT', 'FLEXJET', 'VISTAJET', 'SURF AIR', 'BLADE', 'UBER COPTER', 'GOTHAM AIR'];
+            // Exclude non-travel brands that contain travel keywords (e.g. Kings Hawaiian = bread, USGA = sport)
+            const travelExclusions = ['KINGS HAWAIIAN', 'KING HAWAIIAN', 'HAWAIIAN ROLLS', 'UNITED STATES GOLF', 'USGA', 'PGA TOUR', 'LPGA ', 'GOLF ASSOCIATION', 'GOLF CHANNEL', 'PGA OF AMERICA'];
             const datingApps = ['TINDER', 'BUMBLE', 'HINGE', 'MATCH', 'OKCUPID', 'OK CUPID', 'PLENTY OF FISH', 'POF', 'EHARMONY', 'GRINDR', 'HER', 'COFFEE MEETS BAGEL', 'HAPPN', 'BADOO', 'ZOOSK', 'FEELD', 'RAYA', 'THE LEAGUE', 'INNER CIRCLE', 'ONCE', 'SHIP', 'SNACK', 'THURSDAY', 'LUMEN', 'OURTIME', 'SILVERSINGLES', 'SENIOR MATCH', 'STIR', 'FACEBOOK DATING', 'ARCHER', 'LEX', 'TAIMI', 'SCRUFF', 'JACK\'D', 'JACKD', 'GROWLR', 'HORNET', 'ADAM4ADAM', 'MANHUNT', 'SNIFFIES'];
             const gamingPlatforms = ['PLAYSTATION', 'XBOX', 'NINTENDO', 'STEAM', 'EPIC GAMES', 'ROBLOX', 'MINECRAFT', 'FORTNITE', 'CALL OF DUTY', 'FIFA', 'MADDEN', 'NBA 2K', 'TWITCH', 'DISCORD', 'ORIGIN', 'UBISOFT', 'BATTLE.NET', 'BATTLENET', 'GOG', 'HUMBLE BUNDLE', 'ITCH.IO', 'GAME PASS', 'XBOX GAME PASS', 'PS NOW', 'PS PLUS', 'PLAYSTATION PLUS', 'NINTENDO SWITCH ONLINE', 'GEFORCE NOW', 'STADIA', 'LUNA', 'XCLOUD', 'SHADOW', 'BOOSTEROID', 'PARSEC', 'MOONLIGHT', 'RAINWAY'];
             const musicApps = ['SPOTIFY', 'APPLE MUSIC', 'PANDORA', 'TIDAL', 'AMAZON MUSIC', 'YOUTUBE MUSIC', 'SOUNDCLOUD', 'DEEZER', 'IHEART', 'IHEARTRADIO', 'AUDIBLE', 'SIRIUS', 'SIRIUSXM', 'TUNEIN', 'RADIO.COM', 'STITCHER', 'POCKET CASTS', 'OVERCAST', 'CASTRO', 'BREAKER', 'ANCHOR', 'SPREAKER', 'PODBEAN', 'BUZZSPROUT', 'TRANSISTOR', 'SIMPLECAST', 'CAPTIVATE', 'CASTOS', 'RESONATE', 'BANDCAMP', 'BEATPORT', 'TRAXSOURCE', 'JUNO', 'BOOMPLAY', 'AUDIOMACK', 'MIXCLOUD', 'HEARTHIS', 'DATPIFF', 'LIVEMIXTAPES', 'SPINRILLA'];
@@ -23772,10 +23819,12 @@
                 });
             }
             
-            // Travel Apps
-            const travelMatches = allItems.filter(i => 
-                travelApps.some(app => i.name.toUpperCase().includes(app))
-            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            // Travel Apps (exclude non-travel brands that contain travel keywords, e.g. Kings Hawaiian bread, USGA golf)
+            const travelMatches = allItems.filter(i => {
+                const n = (i.name || '').toUpperCase();
+                if (travelExclusions.some(ex => n.includes(ex))) return false;
+                return travelApps.some(app => n.includes(app));
+            }).sort((a, b) => b.index - a.index).slice(0, 2);
             if (travelMatches.length > 0) {
                 travelMatches.forEach(b => {
                     activations.push({
@@ -24153,9 +24202,9 @@
                 ? summaryItems.map(i => `
                     <div class="demo-insight-item insight-row-genpop" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; align-items: center; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
                         <span style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;"><span class="icon">${i.icon}</span>${i.text}</span>
-                        <span class="diff-col-pct" style="text-align: right; font-size: 0.85rem;">${i.profilePct}</span>
-                        <span class="genpop-col diff-col-gp" style="text-align: right; font-size: 0.85rem; color: var(--text-secondary);">${i.genPopPct}</span>
-                        <span class="index-col value ${i.valueClass}" style="text-align: right;">${i.value}</span>
+                        <span class="diff-col-pct" style="text-align: left; font-size: 0.85rem;">${i.profilePct}</span>
+                        <span class="genpop-col diff-col-gp" style="text-align: left; font-size: 0.85rem; color: var(--text-secondary);">${i.genPopPct}</span>
+                        <span class="index-col value ${i.valueClass}" style="text-align: left;">${i.value}</span>
                     </div>
                 `).join('')
                 : '<p style="color: var(--text-secondary);">No data available</p>';
@@ -24258,9 +24307,9 @@
                 ? differentiators.map(i => `
                     <div class="demo-insight-item insight-row-genpop" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; align-items: center; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border-color);">
                         <span style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;"><span class="icon">${i.icon}</span>${i.text}</span>
-                        <span class="diff-col-pct" style="text-align: right; font-size: 0.85rem;">${i.profilePct}</span>
-                        <span class="genpop-col diff-col-gp" style="text-align: right; font-size: 0.85rem; color: var(--text-secondary);">${i.genPopPct}</span>
-                        <span class="index-col value ${i.valueClass}" style="text-align: right;">${i.value}</span>
+                        <span class="diff-col-pct" style="text-align: left; font-size: 0.85rem;">${i.profilePct}</span>
+                        <span class="genpop-col diff-col-gp" style="text-align: left; font-size: 0.85rem; color: var(--text-secondary);">${i.genPopPct}</span>
+                        <span class="index-col value ${i.valueClass}" style="text-align: left;">${i.value}</span>
                     </div>
                 `).join('')
                 : '<p style="color: var(--text-secondary);">Similar to general population</p>';
@@ -25661,6 +25710,50 @@
         let topDifferentiatorsSortState = 'index-desc';
         
         // Sort and render top differentiators
+        function sortTopCategories(sortValue) {
+            window.topCategoriesSortBy = sortValue || 'index';
+            const container = document.getElementById('behavioralTopCategories');
+            const dropdown = document.getElementById('topCategoriesSortSelect');
+            if (!container || !window.topCategoriesData) return;
+            if (dropdown) dropdown.value = window.topCategoriesSortBy;
+            const sorted = [...window.topCategoriesData].sort((a, b) => {
+                const [, sa] = a, [, sb] = b;
+                if (window.topCategoriesSortBy === 'profile') return (sb.avgPct || 0) - (sa.avgPct || 0);
+                if (window.topCategoriesSortBy === 'hot') return (sb.highCount || 0) - (sa.highCount || 0);
+                return (sb.avgIndex || 0) - (sa.avgIndex || 0);
+            }).slice(0, 6);
+            const US_POP_CATS = 324700000;
+            const isProjectionCats = dashDisplayMode === 'projection';
+            const isGenPopCat = isSelectedProfileGenPop();
+            container.innerHTML = sorted.map(([cat, stats]) => {
+                const profileDisplay = isProjectionCats 
+                    ? formatNumber(Math.round((stats.avgPct / 100) * US_POP_CATS))
+                    : stats.avgPct.toFixed(2) + '%';
+                const gpDisplay = stats.avgGenPop < 0.01 
+                    ? 'N/A' 
+                    : (isProjectionCats 
+                        ? formatNumber(Math.round((stats.avgGenPop / 100) * US_POP_CATS))
+                        : stats.avgGenPop.toFixed(2) + '%');
+                const top5Tooltip = stats.top5Items.map((item, idx) => {
+                    const itemName = item.name || item.brand || 'Unknown';
+                    const itemPct = (item.pct || item.percentage || 0).toFixed(2);
+                    if (isGenPopCat) return `${idx + 1}. ${itemName}: ${itemPct}%`;
+                    const itemGP = (item.genPopPct || item.genPop || item.gen_pop || 0);
+                    const itemGPDisplay = itemGP < 0.01 ? 'N/A' : itemGP.toFixed(2) + '%';
+                    return `${idx + 1}. ${itemName}: ${itemPct}% (GP: ${itemGPDisplay})`;
+                }).join(' | ');
+                return `<div class="behavioral-top-cat has-tooltip" style="cursor: pointer;" onclick="jumpToBehavioralCategory('${cat.replace(/'/g, "\\'")}')" data-tooltip="Top 5: ${top5Tooltip.replace(/"/g, '&quot;')}. Click to view all ${cat.replace(/'/g, "\\'")} items.">
+                    <span class="cat-name" style="flex: 1; text-align: left;">${cat}</span>
+                    <span class="cat-stats">
+                        <span class="cat-pct" style="color: var(--accent-lime); min-width: 55px; text-align: left;">${profileDisplay}</span>
+                        <span class="cat-gp" style="color: var(--text-secondary); min-width: 50px; text-align: left;">${gpDisplay}</span>
+                        <span class="cat-idx" style="color: ${stats.avgIndex >= 100 ? '#10b981' : '#ef4444'}; min-width: 50px; text-align: left;">${formatIndex(stats.avgIndex)}</span>
+                        <span class="cat-high" style="min-width: 40px; text-align: left;">${stats.highCount > 0 ? stats.highCount + '🔥' : '-'}</span>
+                    </span>
+                </div>`;
+            }).join('') || '<p style="color: var(--text-secondary);">No data available</p>';
+        }
+        
         function sortTopDifferentiators(sortValue) {
             topDifferentiatorsSortState = sortValue;
             renderTopDifferentiators(sortValue);
@@ -25776,10 +25869,8 @@
                 if (d.label === 'Dominant Gender') {
                     const idxNorm = idx > 0 && idx < 10 ? idx * 100 : idx;
                     const mult = (idxNorm / 100).toFixed(2);
-                    const gpPct = pct / (idxNorm / 100);
-                    const pctDiff = Math.round((pct - gpPct) * 10) / 10;
                     if (idxNorm >= 105) {
-                        takeaways.push(`<span class="takeaway-over">Gender skews ${d.value.toLowerCase()}</span> — ${d.sub} (${mult}x), +${pctDiff}pp vs Gen Pop`);
+                        takeaways.push(`<span class="takeaway-over">Gender skews ${d.value.toLowerCase()}</span> — ${d.sub} (${mult}x vs Gen Pop)`);
                     } else if (idxNorm <= 95) {
                         takeaways.push(`<span class="takeaway-under">Under-indexes on ${d.value.toLowerCase()}</span> — ${mult}x vs Gen Pop`);
                     } else {
@@ -38023,16 +38114,49 @@
             return Math.max(0, medianAge);
         }
 
-        // Jump to comparison section
+        // Jump to comparison section; if section not in DOM (category deselected), auto-select and re-render then scroll
         function jumpToCompSection(sectionId) {
             if (!sectionId) return;
             
-            const section = document.getElementById(sectionId);
+            let section = document.getElementById(sectionId);
+            if (!section && window.comparisonProfilesData) {
+                const cat = sectionId.replace('comp-', '');
+                if (cat === 'summary') {
+                    section = document.getElementById('comp-summary');
+                } else if (cat === 'location') {
+                    selectedCategories.add('location');
+                    renderComparison(window.comparisonProfilesData, currentSortSection, currentSortColumn);
+                    setTimeout(() => {
+                        const el = document.getElementById(sectionId);
+                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 100);
+                } else if (cat.startsWith('beh-')) {
+                    const safeId = cat.replace('beh-', '');
+                    const profiles = window.comparisonProfilesData;
+                    const allCats = new Set();
+                    (profiles || []).forEach(p => Object.keys(p.behavioral || {}).forEach(c => allCats.add(c)));
+                    const match = Array.from(allCats).find(c => c.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() === safeId);
+                    if (match) {
+                        selectedCategories.add('beh_' + match);
+                        renderComparison(window.comparisonProfilesData, currentSortSection, currentSortColumn);
+                        setTimeout(() => {
+                            const el = document.getElementById(sectionId);
+                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 100);
+                    }
+                } else if (availableCategories.demographics && availableCategories.demographics.includes(cat)) {
+                    selectedCategories.add('demo_' + cat);
+                    renderComparison(window.comparisonProfilesData, currentSortSection, currentSortColumn);
+                    setTimeout(() => {
+                        const el = document.getElementById(sectionId);
+                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 100);
+                }
+            }
             if (section) {
                 section.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
             
-            // Reset dropdown
             document.getElementById('compJumpToSelect').value = '';
         }
         
@@ -38953,42 +39077,65 @@
 
             container.innerHTML = html;
             
-            // Update the Jump To dropdown with all displayed categories
-            updateJumpToDropdown(displayedBehavioralCats, hasLocations && selectedCategories.has('location'));
+            // Update the Jump To dropdown with all possible modules, grouped by section
+            updateJumpToDropdown(availableCategories, hasLocations, sortedBehavioralCats);
         }
         
-        function updateJumpToDropdown(behavioralCats, hasLocations) {
+        const compDemoLabels = {
+            gender: 'Gender',
+            age: 'Age',
+            ethnicity: 'Ethnicity',
+            income: 'Income',
+            education: 'Education',
+            relationship: 'Relationship Status',
+            sexual_orientation: 'Sexual Orientation',
+            parental_status: 'Parental Status',
+            occupation: 'Occupation'
+        };
+        
+        function updateJumpToDropdown(availableCategories, hasLocations, sortedBehavioralCats) {
             const dropdown = document.getElementById('compJumpToSelect');
             if (!dropdown) return;
             
-            let options = `
-                <option value="">📍 Jump to...</option>
-                <option value="comp-summary">📊 Summary Data</option>
-            `;
+            let options = `<option value="">📍 Jump to...</option>`;
             
-            // Add demographic sections if they exist
-            if (selectedCategories.has('demo_gender')) {
-                options += `<option value="comp-gender">👫 Gender</option>`;
-            }
-            if (selectedCategories.has('demo_age')) {
-                options += `<option value="comp-age">📅 Age</option>`;
-            }
-            if (selectedCategories.has('demo_ethnicity')) {
-                options += `<option value="comp-ethnicity">🌍 Ethnicity</option>`;
-            }
-            if (selectedCategories.has('demo_income')) {
-                options += `<option value="comp-income">💰 Income</option>`;
-            }
-            
-            // Add all behavioral categories
-            behavioralCats.forEach(cat => {
-                options += `<option value="comp-beh-${cat.id}">🎯 ${cat.name}</option>`;
+            // Group 1: Demographics & Location
+            options += `<optgroup label="Demographics & Location">`;
+            options += `<option value="comp-summary">📊 Summary Data</option>`;
+            (availableCategories.demographics || []).forEach(key => {
+                const label = compDemoLabels[key] || key;
+                const emoji = { gender: '👫', age: '📅', ethnicity: '🌍', income: '💰', education: '🎓', relationship: '💑', sexual_orientation: '🏳️‍🌈', parental_status: '👶', occupation: '💼' }[key] || '📋';
+                options += `<option value="comp-${key}">${emoji} ${label}</option>`;
             });
-            
-            // Add location if available
             if (hasLocations) {
                 options += `<option value="comp-location">📍 Location</option>`;
             }
+            options += `</optgroup>`;
+            
+            // Group 2: Interests (no separate comparison section; optgroup for future use)
+            const interestCats = (sortedBehavioralCats || []).filter(c => /interest/i.test(c));
+            options += `<optgroup label="Interests">`;
+            if (interestCats.length > 0) {
+                interestCats.forEach(cat => {
+                    const safeId = cat.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+                    options += `<option value="comp-beh-${safeId}">🎯 ${cat}</option>`;
+                });
+            } else {
+                options += `<option value="" disabled>—</option>`;
+            }
+            options += `</optgroup>`;
+            
+            // Group 3: Behavioral (all behavioral categories, excluding any already under Interests)
+            const behavioralCats = (sortedBehavioralCats || []).filter(c => !/interest/i.test(c));
+            options += `<optgroup label="Behavioral">`;
+            behavioralCats.forEach(cat => {
+                const safeId = cat.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+                options += `<option value="comp-beh-${safeId}">🎯 ${cat}</option>`;
+            });
+            if (behavioralCats.length === 0 && interestCats.length === 0) {
+                options += `<option value="" disabled>—</option>`;
+            }
+            options += `</optgroup>`;
             
             dropdown.innerHTML = options;
         }
@@ -40733,16 +40880,164 @@
         }
         
         // ============================================================================
+        // PROFILE SELECTION MODAL (Exec Summary / Key Insight Builder / Ecosystem)
+        // ============================================================================
+        
+        let profileSelectionMode = null; // 'execSummary' | 'keyInsightBuilder' | 'ecosystem'
+        
+        function showProfileSelectionModal(mode) {
+            profileSelectionMode = mode;
+            const modal = document.getElementById('profileSelectionModal');
+            const titleEl = document.getElementById('profileSelectionModalTitle');
+            const primarySelect = document.getElementById('profileSelectionPrimarySelect');
+            const compareList = document.getElementById('profileSelectionCompareList');
+            const titles = { execSummary: '📄 Executive Summary', keyInsightBuilder: '🎯 Key Insight Builder', ecosystem: '🌐 Ecosystem Analysis' };
+            if (titleEl) titleEl.textContent = titles[mode] || mode;
+            
+            const tabs = typeof openProfileTabs !== 'undefined' ? openProfileTabs : [];
+            const activeId = typeof activeProfileTabId !== 'undefined' ? activeProfileTabId : (tabs[0] && tabs[0].id);
+            
+            if (tabs.length === 0) {
+                primarySelect.innerHTML = '<option value="">Open at least one profile first</option>';
+                compareList.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">Open profiles to compare.</div>';
+                document.getElementById('profileSelectionGenerateBtn').disabled = true;
+            } else {
+                primarySelect.innerHTML = tabs.map(t => `<option value="${t.id}" ${t.id === activeId ? 'selected' : ''}>${(t.name || t.id)}</option>`).join('');
+                let compareHtml = tabs.map(t => {
+                    const id = 'ps_compare_' + t.id.replace(/[^a-zA-Z0-9]/g, '_');
+                    const name = (t.name || t.id).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    return `<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem;"><input type="checkbox" class="profile-selection-compare-cb" data-id="${t.id}" data-name="${name}" id="${id}"><span>${name}</span></label>`;
+                }).join('');
+                compareHtml += `<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem;"><input type="checkbox" class="profile-selection-compare-cb" data-id="__GENPOP__" data-name="Gen Pop" id="ps_compare_genpop"><span>Gen Pop</span></label>`;
+                compareHtml += `<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem;"><input type="checkbox" class="profile-selection-compare-cb" data-id="__NONE__" data-name="None" id="ps_compare_none"><span>None</span></label>`;
+                compareList.innerHTML = compareHtml;
+                document.getElementById('profileSelectionGenerateBtn').disabled = false;
+            }
+            
+            document.getElementById('profileSelectionGenerateBtn').onclick = runProfileSelectionGenerate;
+            if (modal) modal.style.display = 'flex';
+        }
+        
+        function closeProfileSelectionModal() {
+            const modal = document.getElementById('profileSelectionModal');
+            if (modal) modal.style.display = 'none';
+            profileSelectionMode = null;
+        }
+        
+        async function runProfileSelectionGenerate() {
+            if (!profileSelectionMode) return;
+            const primarySelect = document.getElementById('profileSelectionPrimarySelect');
+            const primaryId = primarySelect && primarySelect.value;
+            if (!primaryId || primaryId === '') {
+                alert('Please select a profile.');
+                return;
+            }
+            const tabs = typeof openProfileTabs !== 'undefined' ? openProfileTabs : [];
+            const primaryTab = tabs.find(t => t.id === primaryId);
+            if (!primaryTab || !primaryTab.parsed) {
+                alert('Selected profile data not loaded.');
+                return;
+            }
+            
+            const noneCb = document.getElementById('ps_compare_none');
+            const compareIds = noneCb && noneCb.checked ? [] : Array.from(document.querySelectorAll('.profile-selection-compare-cb:checked')).map(cb => cb.dataset.id).filter(id => id !== '__NONE__');
+            const wantGenPop = compareIds.includes('__GENPOP__');
+            const otherIds = compareIds.filter(id => id !== '__GENPOP__');
+            
+            const buildProfileFromTab = (tab) => ({
+                name: tab.name || 'Profile',
+                sampleSize: tab.parsed.sampleSize || 0,
+                projectedUS: tab.parsed.projectedUS || 0,
+                medianAge: typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(tab.parsed.demographics?.age || {}) : 0,
+                demographics: tab.parsed.demographics || {},
+                demographicsProjection: tab.parsed.demographicsProjection || {},
+                behavioral: tab.parsed.behavioral || {},
+                color: tab === primaryTab ? '#4a8ac9' : '#888888'
+            });
+            
+            let profiles = [buildProfileFromTab(primaryTab)];
+            otherIds.forEach(id => {
+                const t = tabs.find(t => t.id === id);
+                if (t && t.parsed) profiles.push(buildProfileFromTab(t));
+            });
+            
+            if (wantGenPop) {
+                let genPopProfile = tabs.find(t => {
+                    const n = (t.name || '').toUpperCase();
+                    const k = (t.id || '').toUpperCase();
+                    return n.includes('GEN POP') || n.includes('GENPOP') || k.includes('GEN_POP') || k.includes('GENPOP');
+                });
+                if (genPopProfile && genPopProfile.parsed) {
+                    profiles.push(buildProfileFromTab(genPopProfile));
+                } else if (typeof window.dashboardProfiles !== 'undefined' && Array.isArray(window.dashboardProfiles)) {
+                    const gp = window.dashboardProfiles.find(p => {
+                        const n = (p.name || '').toUpperCase();
+                        const k = (p.s3_key || '').toUpperCase();
+                        return n.includes('GEN POP') || n.includes('GENPOP') || k.includes('GEN_POP') || k.includes('GENPOP');
+                    });
+                    if (gp && gp.s3_key) {
+                        try {
+                            const response = await fetch(`/api/get-csv-data/${encodeURIComponent(gp.s3_key)}`);
+                            if (response.ok) {
+                                const data = await response.json();
+                                if (data.success && data.data) {
+                                    const parsed = parseAllData(data.data);
+                                    profiles.push({
+                                        name: gp.name || 'General Population',
+                                        sampleSize: parsed.sampleSize || 0,
+                                        projectedUS: parsed.projectedUS || 0,
+                                        medianAge: typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution(parsed.demographics?.age || {}) : 0,
+                                        demographics: parsed.demographics || {},
+                                        demographicsProjection: parsed.demographicsProjection || {},
+                                        behavioral: parsed.behavioral || {},
+                                        color: '#888888'
+                                    });
+                                }
+                            }
+                        } catch (e) { console.warn('Gen Pop load failed', e); }
+                    }
+                }
+            }
+            
+            closeProfileSelectionModal();
+            
+            if (profileSelectionMode === 'ecosystem') {
+                window.comparisonProfilesData = profiles;
+                window.currentProfileData = { name: primaryTab.name, sampleSize: primaryTab.parsed.sampleSize, projectedUS: primaryTab.parsed.projectedUS, demographics: primaryTab.parsed.demographics, behavioral: primaryTab.parsed.behavioral };
+                window.currentDashboardData = primaryTab.parsed;
+                showTab('ecosystem');
+                if (typeof renderEcosystemInsights === 'function') renderEcosystemInsights(primaryTab.parsed);
+                return;
+            }
+            
+            const originalComparison = window.comparisonProfilesData;
+            const originalPrimaryIdx = typeof primaryProfileIndex !== 'undefined' ? primaryProfileIndex : 0;
+            window.comparisonProfilesData = profiles;
+            if (typeof primaryProfileIndex !== 'undefined') window.primaryProfileIndex = 0;
+            
+            try {
+                if (profileSelectionMode === 'execSummary') {
+                    await generateExecutiveSummary();
+                } else if (profileSelectionMode === 'keyInsightBuilder') {
+                    await generateKeyInsightBuilder();
+                }
+            } finally {
+                window.comparisonProfilesData = originalComparison;
+                if (typeof primaryProfileIndex !== 'undefined') window.primaryProfileIndex = originalPrimaryIdx;
+            }
+        }
+        
+        // ============================================================================
         // EXECUTIVE SUMMARY GENERATOR
         // ============================================================================
         
-        // Wrapper function for nav bar - works with single profile or comparison
+        // Wrapper function for nav bar - shows profile selection modal; also used when already in comparison
         async function generateExecutiveSummaryFromNav() {
-            // Check if we have comparison data first
             if (window.comparisonProfilesData && window.comparisonProfilesData.length > 0) {
-                // Use comparison mode
                 return generateExecutiveSummary();
             }
+            showProfileSelectionModal('execSummary');
+            return;
             
             // Try to get active profile from tabs first
             let activeProfile = null;
@@ -41258,143 +41553,13 @@
         // KEY INSIGHT BUILDER - SWOT Analysis for Primary Brand
         // ============================================================================
         
-        // Wrapper function for nav bar - works with active profile tabs or comparison
+        // Wrapper function for nav bar - shows profile selection modal; or runs with comparison data if already in Compare
         async function generateKeyInsightBuilderFromNav() {
-            // Check if we have comparison data first
             if (window.comparisonProfilesData && window.comparisonProfilesData.length > 0) {
-                // Use comparison mode
                 return generateKeyInsightBuilder();
             }
-            
-            // Get active profile from tabs
-            let activeProfile = null;
-            let otherProfiles = [];
-            
-            if (typeof activeProfileTabId !== 'undefined' && activeProfileTabId && typeof openProfileTabs !== 'undefined' && openProfileTabs.length > 0) {
-                // Use active tab as primary
-                const activeTab = openProfileTabs.find(t => t.id === activeProfileTabId);
-                if (activeTab && activeTab.parsed) {
-                    activeProfile = {
-                        name: activeTab.name || 'Profile',
-                        sampleSize: activeTab.parsed.sampleSize || 0,
-                        projectedUS: activeTab.parsed.projectedUS || 0,
-                        medianAge: calculateMedianAgeFromDistribution(activeTab.parsed.demographics?.age || {}),
-                        demographics: activeTab.parsed.demographics || {},
-                        demographicsProjection: activeTab.parsed.demographicsProjection || {},
-                        behavioral: activeTab.parsed.behavioral || {},
-                        color: '#4a8ac9'
-                    };
-                    
-                    // Get other open tabs as competitors
-                    otherProfiles = openProfileTabs
-                        .filter(t => t.id !== activeProfileTabId && t.parsed)
-                        .map(tab => ({
-                            name: tab.name || 'Profile',
-                            sampleSize: tab.parsed.sampleSize || 0,
-                            projectedUS: tab.parsed.projectedUS || 0,
-                            medianAge: calculateMedianAgeFromDistribution(tab.parsed.demographics?.age || {}),
-                            demographics: tab.parsed.demographics || {},
-                            demographicsProjection: tab.parsed.demographicsProjection || {},
-                            behavioral: tab.parsed.behavioral || {},
-                            color: '#888888'
-                        }));
-                }
-            }
-            
-            // Fall back to currentProfileData if no active tab
-            if (!activeProfile && window.currentProfileData) {
-                activeProfile = {
-                    name: window.currentProfileData.name || 'Profile',
-                    sampleSize: window.currentProfileData.sampleSize || 0,
-                    projectedUS: window.currentProfileData.projectedUS || 0,
-                    medianAge: calculateMedianAgeFromDistribution(window.currentProfileData.demographics?.age || {}),
-                    demographics: window.currentProfileData.demographics || {},
-                    demographicsProjection: window.currentProfileData.demographicsProjection || {},
-                    behavioral: window.currentProfileData.behavioral || {},
-                    color: '#4a8ac9'
-                };
-            }
-            
-            if (!activeProfile) {
-                alert('Please select a profile first to generate key insights.');
-                return;
-            }
-            
-            // Try to find Gen Pop profile
-            let genPopProfile = null;
-            
-            // First check open tabs for Gen Pop
-            if (typeof openProfileTabs !== 'undefined' && openProfileTabs.length > 0) {
-                const genPopTab = openProfileTabs.find(t => {
-                    const name = (t.name || '').toUpperCase();
-                    const key = (t.id || '').toUpperCase();
-                    return name.includes('GEN POP') || name.includes('GENPOP') || name.includes('GENERAL POPULATION') ||
-                           key.includes('GEN_POP') || key.includes('GENPOP');
-                });
-                
-                if (genPopTab && genPopTab.parsed) {
-                    genPopProfile = {
-                        name: genPopTab.name || 'General Population',
-                        sampleSize: genPopTab.parsed.sampleSize || 0,
-                        projectedUS: genPopTab.parsed.projectedUS || 0,
-                        medianAge: calculateMedianAgeFromDistribution(genPopTab.parsed.demographics?.age || {}),
-                        demographics: genPopTab.parsed.demographics || {},
-                        demographicsProjection: genPopTab.parsed.demographicsProjection || {},
-                        behavioral: genPopTab.parsed.behavioral || {},
-                        color: '#888888'
-                    };
-                }
-            }
-            
-            // If not found in tabs, try dashboard profiles
-            if (!genPopProfile && window.dashboardProfiles && Array.isArray(window.dashboardProfiles)) {
-                const genPopProfileData = window.dashboardProfiles.find(p => {
-                    const name = (p.name || '').toUpperCase();
-                    const key = (p.s3_key || '').toUpperCase();
-                    return name.includes('GEN POP') || name.includes('GENPOP') || name.includes('GENERAL POPULATION') ||
-                           key.includes('GEN_POP') || key.includes('GENPOP');
-                });
-                
-                // If we found Gen Pop in dashboard, load it
-                if (genPopProfileData && genPopProfileData.s3_key) {
-                    try {
-                        const response = await fetch(`/api/get-csv-data/${encodeURIComponent(genPopProfileData.s3_key)}`);
-                        if (response.ok) {
-                            const csvData = await response.text();
-                            const parsed = parseAllData(csvData);
-                            genPopProfile = {
-                                name: genPopProfileData.name || 'General Population',
-                                sampleSize: parsed.sampleSize || 0,
-                                projectedUS: parsed.projectedUS || 0,
-                                medianAge: calculateMedianAgeFromDistribution(parsed.demographics?.age || {}),
-                                demographics: parsed.demographics || {},
-                                demographicsProjection: parsed.demographicsProjection || {},
-                                behavioral: parsed.behavioral || {},
-                                color: '#888888'
-                            };
-                        }
-                    } catch (error) {
-                        console.error('Error loading Gen Pop profile:', error);
-                    }
-                }
-            }
-            
-            // Create profiles array: primary, then other tabs, then Gen Pop
-            const profiles = [activeProfile, ...otherProfiles];
-            if (genPopProfile) {
-                profiles.push(genPopProfile);
-            }
-            
-            // Temporarily set comparisonProfilesData so the function works
-            const originalComparisonData = window.comparisonProfilesData;
-            window.comparisonProfilesData = profiles;
-            
-            try {
-                await generateKeyInsightBuilder();
-            } finally {
-                // Restore original comparison data
-                window.comparisonProfilesData = originalComparisonData;
-            }
+            showProfileSelectionModal('keyInsightBuilder');
+            return;
         }
         
         async function generateKeyInsightBuilder() {
