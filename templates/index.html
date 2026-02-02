@@ -4008,10 +4008,10 @@
             padding-right: 0.5rem;
         }
 
-        /* Behavioral table: same grid for header and rows; headers directly over data, all left-aligned */
+        /* Behavioral table: same grid for header and rows; headers left-aligned directly over columns */
         .behavioral-header-row {
             display: grid;
-            grid-template-columns: 26px minmax(0, 1fr) 58px 58px 48px;
+            grid-template-columns: 28px minmax(0, 1fr) 64px 64px 52px;
             gap: 0.5rem;
             align-items: center;
             padding: 0.5rem 0.5rem 0.5rem 0;
@@ -4025,12 +4025,16 @@
             background: rgba(102, 217, 239, 0.05);
         }
         .behavioral-header-row span {
-            text-align: left;
+            text-align: left !important;
             justify-self: start;
+            min-width: 0;
+        }
+        .behavioral-list {
+            padding-right: 0.5rem;
         }
         .behavioral-item {
             display: grid;
-            grid-template-columns: 26px minmax(0, 1fr) 58px 58px 48px;
+            grid-template-columns: 28px minmax(0, 1fr) 64px 64px 52px;
             gap: 0.5rem;
             align-items: center;
             padding: 0.4rem 0.5rem 0.4rem 0;
@@ -4040,6 +4044,7 @@
         }
         .behavioral-item > * {
             justify-self: start;
+            min-width: 0;
         }
 
         .behavioral-item:hover {
@@ -14392,6 +14397,9 @@
         let currentS3Key = null;
         let charts = {};
         let genPopBaselineData = null; // Cache for Gen Pop CSV data used as baseline for all profiles
+        // Single computed Gen Pop location data (by state/region) - only overwritten when a new Gen Pop file is loaded from S3
+        let cachedGenPopLocation = { byState: {}, byRegion: {}, byDma: {}, ready: false };
+        let cachedGenPopLocationVersion = null; // S3 key of the Gen Pop file used to build the cache; cache is only overwritten when this changes
         
         // Subscriber IQ state variables (declared early for tooltip system access)
         let subscriberDisplayMode = 'percent'; // 'percent' or 'projection'
@@ -14507,8 +14515,13 @@
                     const data = await response.json();
                     if (data.success && data.data) {
                         genPopBaselineData = parseAllData(data.data);
+                        const fileKey = data.s3_key || GEN_POP_FILE;
+                        if (!cachedGenPopLocation.ready || cachedGenPopLocationVersion !== fileKey) {
+                            computeAndCacheGenPopLocationFromBaseline();
+                            cachedGenPopLocationVersion = fileKey;
+                        }
                         console.log('✅ Gen Pop baseline loaded successfully');
-                        // Re-render Location tab so parentheses show correct Gen Pop values (same as when Gen Pop is selected)
+                        // Re-render Location tab so parentheses show correct Gen Pop values
                         if (currentDashboardData && Array.isArray(currentDashboardData.locations) && currentDashboardData.locations.length > 0) {
                             renderLocationTable(currentDashboardData.locations);
                         }
@@ -27491,9 +27504,9 @@
                 'APPS/PLATFORMS': '📱',
                 'STREAMING/MUSIC': '🎵',
                 'STREAMING MUSIC': '🎵',
-                'STREAMING/PLATFORM': '📺',
-                'STREAMING/VIDEO': '📺',
-                'STREAMING VIDEO': '📺',
+                'STREAMING/PLATFORM': '🎬',
+                'STREAMING/VIDEO': '🎬',
+                'STREAMING VIDEO': '🎬',
                 'BROADCAST/CABLE': '📺',
                 'SOCIAL MEDIA': '👥',
                 'SEARCH ENGINE/AI': '🔍',
@@ -27536,7 +27549,8 @@
                 if (upper.includes('MOST PURCHASED BRANDS') || upper === 'MOST PURCHASED') return '🏷️';
                 if (upper.includes('WHERE THEY SHOP')) return '🛒';
                 if (upper.includes('MOST PURCHASED CATEGORIES')) return '📂';
-                if (upper.includes('STREAMING')) return '📺';
+                if (upper.includes('STREAMING') && !upper.includes('MUSIC')) return '🎬';
+                if (upper.includes('STREAMING')) return '🎵';
                 if (upper.includes('WHERE THEY DINE')) return '🍽️';
                 return '📊';
             }
@@ -36603,6 +36617,40 @@
             return 'Other';
         }
         
+        /** Compute Gen Pop location data once from baseline and cache. Sanity-check: if totals > 150%, normalize so we never show inflated values. */
+        function computeAndCacheGenPopLocationFromBaseline() {
+            if (!genPopBaselineData || !genPopBaselineData.locations || genPopBaselineData.locations.length === 0) {
+                cachedGenPopLocation.ready = false;
+                return;
+            }
+            const byState = {};
+            const byRegion = {};
+            const byDma = {};
+            genPopBaselineData.locations.forEach(loc => {
+                const state = getStateFromLocation(loc.name);
+                let pct = parseFloat(loc.pct ?? loc.genPopPct) || 0;
+                if (pct > 0 && pct < 1) pct = pct * 100;
+                const dmaKey = (loc.name || '').toString().trim();
+                if (dmaKey) byDma[dmaKey.toUpperCase()] = pct;
+                if (state) {
+                    byState[state] = (byState[state] || 0) + pct;
+                    const region = getRegionForState(state);
+                    byRegion[region] = (byRegion[region] || 0) + pct;
+                }
+            });
+            const totalState = Object.values(byState).reduce((s, v) => s + v, 0);
+            if (totalState > 150) {
+                const scale = 100 / totalState;
+                Object.keys(byState).forEach(s => { byState[s] = (byState[s] || 0) * scale; });
+                Object.keys(byRegion).forEach(r => { byRegion[r] = (byRegion[r] || 0) * scale; });
+                Object.keys(byDma).forEach(d => { byDma[d] = (byDma[d] || 0) * scale; });
+            }
+            cachedGenPopLocation.byState = byState;
+            cachedGenPopLocation.byRegion = byRegion;
+            cachedGenPopLocation.byDma = byDma;
+            cachedGenPopLocation.ready = true;
+        }
+        
         function getHeatColor(value, min, max) {
             const normalized = (value - min) / (max - min || 1);
             // Blue -> Green -> Yellow -> Orange -> Red
@@ -36625,26 +36673,10 @@
             
             const isGenPopProfile = (currentProfileData?.name || '').toUpperCase().includes('GEN POP') || (currentS3Key || '').toUpperCase().includes('GEN_POP');
             
-            // Gen Pop state/region totals: SAME calculation as selected profile (sum of pct by state/region) but using Gen Pop profile's locations (only when current profile is NOT Gen Pop)
-            const genPopByState = {};
-            const genPopByRegion = {};
-            const genPopByDma = {}; // DMA name -> Gen Pop pct for tooltips
-            if (!isGenPopProfile && genPopBaselineData && genPopBaselineData.locations && genPopBaselineData.locations.length > 0) {
-                genPopBaselineData.locations.forEach(loc => {
-                    const state = getStateFromLocation(loc.name);
-                    let pct = parseFloat(loc.pct ?? loc.genPopPct) || 0;
-                    if (pct > 0 && pct < 1) pct = pct * 100;
-                    const dmaKey = (loc.name || '').toString().trim();
-                    if (dmaKey) genPopByDma[dmaKey.toUpperCase()] = pct;
-                    if (state) {
-                        genPopByState[state] = (genPopByState[state] || 0) + pct;
-                        const region = getRegionForState(state);
-                        genPopByRegion[region] = (genPopByRegion[region] || 0) + pct;
-                    }
-                });
-            }
+            // Gen Pop values: use single cached dataset (populated once from baseline or from Gen Pop profile). Never recompute in a way that can inflate.
+            const genPopByDma = cachedGenPopLocation.byDma || {};
             
-            // Group by state - profile % from current profile's locations; Gen Pop % from Gen Pop profile aggregate when available
+            // Group by state - profile % from current profile's locations; Gen Pop % from cache when available
             const stateData = {};
             locations.forEach(loc => {
                 const state = getStateFromLocation(loc.name);
@@ -36661,18 +36693,17 @@
                 }
             });
             
-            // Apply Gen Pop state totals: when current profile IS Gen Pop, parentheses = same as profile (same calculation)
+            // Apply Gen Pop state totals: from cache only (cache is only overwritten when a new Gen Pop file is loaded from S3)
             if (isGenPopProfile) {
                 Object.keys(stateData).forEach(state => {
                     stateData[state].genPopPct = stateData[state].pct;
                 });
-            } else if (Object.keys(genPopByState).length > 0) {
+            } else if (cachedGenPopLocation.ready) {
                 Object.keys(stateData).forEach(state => {
-                    stateData[state].genPopPct = genPopByState[state] ?? 0;
+                    stateData[state].genPopPct = cachedGenPopLocation.byState[state] ?? 0;
                 });
             }
-            // When Gen Pop baseline is not available, leave genPopPct as 0 so we show 0% or N/A (never sum (pct/index)*100 per DMA — that produces wrong values like 356%)
-            const hasGenPopBaseline = isGenPopProfile || (genPopBaselineData && genPopBaselineData.locations && genPopBaselineData.locations.length > 0);
+            const hasGenPopBaseline = cachedGenPopLocation.ready;
             
             // Calculate average index and sort cities by percentage
             Object.keys(stateData).forEach(state => {
@@ -36748,10 +36779,10 @@
                 regionData[region].cities.push(...data.cities);
             });
             
-            // Override region Gen Pop with Gen Pop profile's aggregated region totals only when current profile is NOT Gen Pop
-            if (!isGenPopProfile && Object.keys(genPopByRegion).length > 0) {
+            // Use cached Gen Pop region totals when not viewing Gen Pop profile
+            if (!isGenPopProfile && cachedGenPopLocation.ready) {
                 Object.keys(regionData).forEach(region => {
-                    regionData[region].genPopPct = genPopByRegion[region] ?? 0;
+                    regionData[region].genPopPct = cachedGenPopLocation.byRegion[region] ?? 0;
                 });
             }
             
