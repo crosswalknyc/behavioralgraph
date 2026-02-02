@@ -29828,11 +29828,22 @@
             const progress = document.getElementById('rankersLoadProgress');
             const done = document.getElementById('rankersLoadDone');
             const block = document.getElementById('rankersLoadBlock');
-            if (progress) progress.style.display = 'none';
-            if (done) done.style.display = 'block';
-            // When Netflix data is loaded, hide the whole block so the table is the focus (no confusing "loaded" message)
-            if (block && netflixRankerData) block.style.display = 'none';
-            else if (block) block.style.display = 'block';
+            const bothLoaded = netflixRankerData && youtubeRankerData;
+            if (bothLoaded) {
+                if (progress) progress.style.display = 'none';
+                if (done) done.style.display = 'block';
+                if (block) block.style.display = 'none';
+            } else {
+                if (progress) progress.style.display = 'flex';
+                if (done) done.style.display = 'none';
+                if (block) block.style.display = 'block';
+                const parts = [];
+                if (!netflixRankerData) parts.push('Netflix: loading or error');
+                else parts.push('Netflix: loaded.');
+                if (!youtubeRankerData) parts.push('YouTube: loading...');
+                else parts.push('YouTube: loaded.');
+                updateRankersLoadStatus(parts.join(' '));
+            }
         }
 
         function updateRankersLoadStatus(msg) {
@@ -29928,7 +29939,7 @@
                     else parts.push('YouTube: loaded.');
                     updateRankersLoadStatus(parts.join(' '));
                     if (btn) btn.disabled = false;
-                    if (youtubeRankerData) showRankersDoneBlock();
+                    showRankersProgressBlock();
                 });
         }
 
@@ -29952,15 +29963,15 @@
             const dateInp = document.getElementById('netflixDailyDate');
             const sortSelect = document.getElementById('netflixDailySortBy');
             const genreSelect = document.getElementById('netflixDailyGenreFilter');
-            const loadBlock = document.getElementById('rankersLoadBlock');
-            if (loading) loading.style.display = 'none';
-            if (wrap) wrap.style.display = 'block';
             if (!netflixRankerData || !netflixRankerData.by_date) {
-                if (loadBlock) loadBlock.style.display = 'block';
-                if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">Netflix data not loaded. Click <strong>Refresh Netflix</strong> below to load ranker data.</td></tr>';
+                if (loading) loading.style.display = 'none';
+                if (wrap) wrap.style.display = 'none';
                 return;
             }
+            const loadBlock = document.getElementById('rankersLoadBlock');
             if (loadBlock) loadBlock.style.display = 'none';
+            if (loading) loading.style.display = 'none';
+            if (wrap) wrap.style.display = 'block';
             let date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
             let rows = (netflixRankerData.by_date[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian'));
             // If selected date has no data, default to last available day
