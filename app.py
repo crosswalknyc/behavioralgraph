@@ -3879,7 +3879,6 @@ def _save_netflix_ranker_cache(data):
         print(f"Netflix ranker cache save failed: {e}")
 
 @app.route('/api/rankers/netflix/data', methods=['GET'])
-@requires_auth
 def get_netflix_ranker_data():
     """
     Return Netflix ranker data (day-by-day views by show) from BEHAVIORALGRAPH.PUBLIC.NETFLIX.
@@ -4056,7 +4055,6 @@ def _save_youtube_ranker_cache(data):
         print(f"YouTube ranker cache save failed: {e}")
 
 @app.route('/api/rankers/youtube/data', methods=['GET'])
-@requires_auth
 def get_youtube_ranker_data():
     """Return YouTube ranker data (day-by-day views by title) from BEHAVIORALGRAPH.YOUTUBE.YOUTUBE. Cached on disk; stale cache refreshes latest day only."""
     global YOUTUBE_RANKER_CACHE
