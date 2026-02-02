@@ -5094,6 +5094,13 @@
         .genpop-column .index-badge { display: none !important; }
         body.profile-is-genpop .insight-col-header { grid-template-columns: 1fr 70px !important; }
         body.profile-is-genpop .insight-row-genpop { grid-template-columns: 1fr 70px !important; }
+        /* When Gen Pop profile is selected: hide Insights tab modules that compare to Gen Pop */
+        body.profile-is-genpop .audience-takeaways,
+        body.profile-is-genpop [data-module="Interest Highlights"],
+        body.profile-is-genpop [data-module="Top Differentiators"] { display: none !important; }
+        /* Behavioral spotlight modal: hide Gen Pop and Index when profile is Gen Pop */
+        body.profile-is-genpop .spotlight-genpop,
+        body.profile-is-genpop .spotlight-index { display: none !important; }
         .insights-list {
             display: flex;
             flex-direction: column;
@@ -6968,8 +6975,13 @@
             align-items: center;
             text-align: left;
         }
-        .location-row span {
-            text-align: left;
+        .location-row span,
+        .location-row span:nth-child(1),
+        .location-row span:nth-child(2),
+        .location-row span:nth-child(3),
+        .location-row span:nth-child(4),
+        .location-row span:nth-child(5) {
+            text-align: left !important;
         }
 
         .location-row.header {
@@ -6982,8 +6994,10 @@
             user-select: none;
             display: flex;
             align-items: center;
+            justify-content: flex-start;
             gap: 0.25rem;
             transition: color 0.2s;
+            text-align: left !important;
         }
 
         .location-row.header span:hover {
@@ -9570,13 +9584,20 @@
         .profile-selection-compare-list label {
             display: flex;
             align-items: center;
+            justify-content: flex-start;
             gap: 0.5rem;
             cursor: pointer;
             font-size: 0.9rem;
             text-align: left;
         }
         .profile-selection-compare-list label input { flex-shrink: 0; }
-        .profile-selection-compare-list label span { text-align: left; }
+        .profile-selection-compare-list label span,
+        .profile-selection-compare-list .profile-selection-compare-name {
+            flex: 1;
+            min-width: 0;
+            text-align: left !important;
+            color: var(--text-primary);
+        }
         .profile-selection-actions {
             display: flex;
             gap: 0.5rem;
@@ -24967,8 +24988,8 @@
                                         const genPop = ethGenPop[i] || 0;
                                         const val = data.datasets[0].data[i];
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : formatPct(pct);
-                                        const gpStr = genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '';
-                                        const indexColor = (genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff');
+                                        const gpStr = (isGenPop || genPop <= 0.05) ? '' : ` (GP: ${formatPct(genPop)})`;
+                                        const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                         return {
                                             text: `${label} ${valStr}${gpStr}`,
                                             fillStyle: data.datasets[0].backgroundColor[i],
@@ -24994,9 +25015,9 @@
                                 if (genPop > 0 && genPop < 1) genPop = genPop * 100;
                                 if (isProjection) {
                                     const gpVal = genPop > 0 ? Math.round(US_POPULATION * genPop / 100) : 0;
-                                    return formatNumber(Math.round(v)) + (gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
+                                    return formatNumber(Math.round(v)) + (!isGenPop && gpVal > 0 ? ` (GP: ${formatNumber(gpVal)})` : '');
                                 }
-                                return formatPct(pct) + (genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
+                                return formatPct(pct) + (!isGenPop && genPop > 0.05 ? ` (GP: ${formatPct(genPop)})` : '');
                             }
                         } : { display: false }
                     },
@@ -26835,8 +26856,8 @@
                         <div class="interest-category-header" style="display: flex; justify-content: space-between; padding: 0.25rem 0; margin-bottom: 0.25rem; border-bottom: 1px solid var(--border-color); font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; gap: 1rem;">
                             <span style="flex: 1; text-align: left;">Item</span>
                             <span style="min-width: 55px; text-align: left;">${isProjection ? 'US #' : 'Profile'}</span>
-                            <span style="min-width: 55px; text-align: left;">${isProjection ? 'GP #' : 'GP'}</span>
-                            <span style="min-width: 45px; text-align: left;">Index</span>
+                            <span class="genpop-col" style="min-width: 55px; text-align: left;">${isProjection ? 'GP #' : 'GP'}</span>
+                            <span class="index-col" style="min-width: 45px; text-align: left;">Index</span>
                         </div>
                         <div class="interest-category-items">
                             ${cat.items.map(item => {
@@ -26861,8 +26882,8 @@
                                 return `<div class="interest-category-item" style="display: flex; gap: 1rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border-color); align-items: center;">
                                     <span class="item-name" style="flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.name}</span>
                                     <span style="min-width: 55px; text-align: left;">${profileDisplay}</span>
-                                    <span style="min-width: 55px; text-align: left; color: var(--text-secondary);">(${genPopDisplay})</span>
-                                    <span style="min-width: 45px; text-align: left; color: ${idxColor}; font-weight: 600;">${formatIndex(item.index)}</span>
+                                    <span class="genpop-col" style="min-width: 55px; text-align: left; color: var(--text-secondary);">(${genPopDisplay})</span>
+                                    <span class="index-col" style="min-width: 45px; text-align: left; color: ${idxColor}; font-weight: 600;">${formatIndex(item.index)}</span>
                                 </div>`;
                             }).join('')}
                         </div>
@@ -26911,8 +26932,8 @@
                     <span>#</span>
                     <span>Item</span>
                     <span>Profile</span>
-                    <span>Gen Pop</span>
-                    <span>Index</span>
+                    <span class="genpop-col">Gen Pop</span>
+                    <span class="index-col">Index</span>
                 </div>
             `;
             
@@ -26938,8 +26959,8 @@
                         <span class="interest-rank">${idx + 1}</span>
                         <span class="interest-name" title="${item.name}">${item.name}</span>
                         <span class="interest-pct">${profileDisplay}</span>
-                        <span class="interest-genpop" style="color: var(--text-secondary);">${genPopDisplay}</span>
-                        <span class="interest-index" style="color: ${indexColor};">${formatIndex(item.index)}</span>
+                        <span class="interest-genpop genpop-col" style="color: var(--text-secondary);">${genPopDisplay}</span>
+                        <span class="interest-index index-col" style="color: ${indexColor};">${formatIndex(item.index)}</span>
                     </div>
                 `;
             }).join('');
@@ -27746,8 +27767,8 @@
                             <span style="width: 22px; text-align: left; flex-shrink: 0;">#</span>
                             <span style="flex: 1; min-width: 0; text-align: left;">Item</span>
                             <span style="min-width: 55px; text-align: left; flex-shrink: 0;">${dashDisplayMode === 'projection' ? 'US #' : 'Profile'}</span>
-                            <span style="min-width: 55px; text-align: left; flex-shrink: 0;">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
-                            <span style="min-width: 45px; text-align: left; flex-shrink: 0;">Index</span>
+                            <span class="genpop-col" style="min-width: 55px; text-align: left; flex-shrink: 0;">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
+                            <span class="index-col" style="min-width: 45px; text-align: left; flex-shrink: 0;">Index</span>
                         </div>
                         <div class="behavioral-list" id="list-${catId}" data-cat="${cat}">
                             ${renderBehavioralItems(displayItems, maxPct)}
@@ -28128,8 +28149,8 @@
                             <span class="behavioral-name has-tooltip" data-tooltip="${item.name}">${item.name}</span>
                         </div>
                         <span class="behavioral-pct" style="color: var(--text-primary);">${profileDisplay}</span>
-                        <span class="behavioral-pct" style="color: var(--text-secondary);">(${genPopDisplay})</span>
-                        <span class="behavioral-index" style="color: ${indexColor}; font-weight: 700;">${formatIndex(index)}</span>
+                        <span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">(${genPopDisplay})</span>
+                        <span class="behavioral-index index-col" style="color: ${indexColor}; font-weight: 700;">${formatIndex(index)}</span>
                     </div>
                 `;
             }).join('');
@@ -29047,7 +29068,7 @@
                         <span>${loc.name}</span>
                         <span>${i + 1}</span>
                         <span>${displayValue}</span>
-                        <span style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
+                        <span class="index-col" style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
                     </div>
                 `;
             }).join('');
@@ -29091,7 +29112,7 @@
                         <span>${loc.name}</span>
                         <span>${i + 1}</span>
                         <span>${displayValue}</span>
-                        <span style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
+                        <span class="index-col" style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
                     </div>
                 `;
             }).join('');
@@ -29135,7 +29156,7 @@
                         <span>${loc.name}</span>
                         <span>${i + 1}</span>
                         <span style="font-weight: 600;">${displayValue}</span>
-                        <span style="color: ${indexColor};">${formatIndex(loc.index)}</span>
+                        <span class="index-col" style="color: ${indexColor};">${formatIndex(loc.index)}</span>
                     </div>
                 `;
             }).join('');
@@ -29211,7 +29232,7 @@
                         <span>${loc.name}</span>
                         <span>${i + 1}</span>
                         <span>${displayValue}</span>
-                        <span style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
+                        <span class="index-col" style="color: ${indexColor}; font-weight: 600;">${formatIndex(loc.index)}</span>
                     </div>
                 `;
             }).join('');
@@ -29273,7 +29294,7 @@
                         <span>${loc.name}</span>
                         <span>${i + 1}</span>
                         <span style="font-weight: 600;">${displayValue}</span>
-                        <span style="color: ${indexColor};">${formatIndex(loc.index)}</span>
+                        <span class="index-col" style="color: ${indexColor};">${formatIndex(loc.index)}</span>
                     </div>
                 `;
             }).join('');
@@ -41113,15 +41134,20 @@
                 compareList.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.85rem; text-align: left;">Open profiles to compare.</div>';
                 document.getElementById('profileSelectionGenerateBtn').disabled = true;
             } else {
-                primarySelect.innerHTML = tabs.map(t => `<option value="${t.id}" ${t.id === activeId ? 'selected' : ''}>${(t.name || t.id)}</option>`).join('');
+                const safeLabel = (val) => {
+                    const s = String(val != null ? val : '').trim();
+                    return s || 'Unnamed';
+                };
+                primarySelect.innerHTML = tabs.map(t => `<option value="${t.id}" ${t.id === activeId ? 'selected' : ''}>${safeLabel(t.name || t.id)}</option>`).join('');
                 let compareHtml = tabs.map(t => {
-                    const id = 'ps_compare_' + t.id.replace(/[^a-zA-Z0-9]/g, '_');
-                    const name = (t.name || t.id).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    const id = 'ps_compare_' + String(t.id).replace(/[^a-zA-Z0-9]/g, '_');
+                    const rawName = safeLabel(t.name || t.id);
+                    const name = rawName.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                     const checked = t.id !== activeId ? ' checked' : '';
-                    return `<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; text-align: left;"><input type="checkbox" class="profile-selection-compare-cb" data-id="${t.id}" data-name="${name}" id="${id}"${checked}><span>${name}</span></label>`;
+                    return `<label class="profile-selection-compare-item" style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; text-align: left;"><input type="checkbox" class="profile-selection-compare-cb" data-id="${t.id}" data-name="${name}" id="${id}"${checked}><span class="profile-selection-compare-name">${name}</span></label>`;
                 }).join('');
-                compareHtml += `<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; text-align: left;"><input type="checkbox" class="profile-selection-compare-cb" data-id="__GENPOP__" data-name="Gen Pop" id="ps_compare_genpop" checked><span>Gen Pop</span></label>`;
-                compareHtml += `<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; text-align: left;"><input type="checkbox" class="profile-selection-compare-cb" data-id="__NONE__" data-name="None" id="ps_compare_none"><span>None</span></label>`;
+                compareHtml += `<label class="profile-selection-compare-item" style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; text-align: left;"><input type="checkbox" class="profile-selection-compare-cb" data-id="__GENPOP__" data-name="Gen Pop" id="ps_compare_genpop" checked><span class="profile-selection-compare-name">Gen Pop</span></label>`;
+                compareHtml += `<label class="profile-selection-compare-item" style="display: flex; align-items: center; justify-content: flex-start; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; text-align: left;"><input type="checkbox" class="profile-selection-compare-cb" data-id="__NONE__" data-name="None" id="ps_compare_none"><span class="profile-selection-compare-name">None</span></label>`;
                 compareList.innerHTML = compareHtml;
                 document.getElementById('profileSelectionGenerateBtn').disabled = false;
             }
@@ -41243,11 +41269,8 @@
         // EXECUTIVE SUMMARY GENERATOR
         // ============================================================================
         
-        // Wrapper function for nav bar - shows profile selection modal; also used when already in comparison
+        // Wrapper function for nav bar - always show profile selection modal so user can choose what to compare
         async function generateExecutiveSummaryFromNav() {
-            if (window.comparisonProfilesData && window.comparisonProfilesData.length > 0) {
-                return generateExecutiveSummary();
-            }
             showProfileSelectionModal('execSummary');
             return;
             
@@ -41765,11 +41788,8 @@
         // KEY INSIGHT BUILDER - SWOT Analysis for Primary Brand
         // ============================================================================
         
-        // Wrapper function for nav bar - shows profile selection modal; or runs with comparison data if already in Compare
+        // Wrapper function for nav bar - always show profile selection modal so user can choose what to compare
         async function generateKeyInsightBuilderFromNav() {
-            if (window.comparisonProfilesData && window.comparisonProfilesData.length > 0) {
-                return generateKeyInsightBuilder();
-            }
             showProfileSelectionModal('keyInsightBuilder');
             return;
         }
