@@ -2015,6 +2015,11 @@
             display: flex;
             flex-direction: column;
             box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+            text-align: left;
+        }
+        .module-select-item {
+            text-align: left;
+            justify-content: flex-start;
         }
         
         .deck-workspace-header {
@@ -13253,12 +13258,12 @@
                                 <button class="btn btn-small btn-success" onclick="shareDeckWithTeam()" style="padding: 0.35rem 0.5rem; font-size: 0.7rem;">👥 SHARE</button>
                                 <div class="export-dropdown" style="position: relative;">
                                     <button class="btn btn-small btn-primary" onclick="toggleDeckExportMenu(event)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem;">EXPORT ▾</button>
-                                    <div id="deckExportMenu" class="export-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 180px; z-index: 1000; margin-top: 0.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
-                                        <a onclick="exportDeckToPDF()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📄 PDF</a>
-                                        <a onclick="exportDeckToGoogleSlides()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📑 Google Slides</a>
-                                        <a onclick="exportDeckToPPT()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">📊 PowerPoint</a>
-                                        <a onclick="exportDeckToKeynote()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">🍎 Keynote</a>
-                                        <a onclick="commitDeckToGitHub()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem;">🐙 Commit to GitHub</a>
+                                    <div id="deckExportMenu" class="export-dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 180px; z-index: 1000; margin-top: 0.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3); text-align: left;">
+                                        <a href="javascript:void(0)" onclick="exportDeckToPDF(); return false;" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem; text-align: left;">📄 PDF</a>
+                                        <a href="javascript:void(0)" onclick="exportDeckToGoogleSlides(); return false;" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem; text-align: left;">📑 Google Slides</a>
+                                        <a href="javascript:void(0)" onclick="exportDeckToPPT(); return false;" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem; text-align: left;">📊 PowerPoint</a>
+                                        <a href="javascript:void(0)" onclick="exportDeckToKeynote(); return false;" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem; text-align: left;">🍎 Keynote</a>
+                                        <a href="javascript:void(0)" onclick="commitDeckToGitHub(); return false;" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem; text-align: left;">🐙 Commit to GitHub</a>
                                     </div>
                                 </div>
                                 <button class="btn btn-small" onclick="archiveCurrentDeck()" title="Archive deck" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: rgba(147, 51, 234, 0.2); color: #a78bfa;">📦</button>
@@ -23663,6 +23668,7 @@
             if (bigBoxMatches.length > 0) {
                 activations.push({
                     icon: '🏬',
+                    maxIndex: bigBoxMatches[0].index || 0,
                     text: `<strong>Big Box:</strong> ${bigBoxMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(bigBoxMatches[0])}</span>`,
                     tooltip: `Big Box Retail: This audience shops at ${bigBoxMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider in-store activations, endcap displays, or retail media network ads.`,
                     category: bigBoxMatches[0].category,
@@ -23677,6 +23683,7 @@
             if (deptMatches.length > 0) {
                 activations.push({
                     icon: '👔',
+                    maxIndex: deptMatches[0].index || 0,
                     text: `<strong>Dept Store:</strong> ${deptMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(deptMatches[0])}</span>`,
                     tooltip: `Department Stores: This audience shops at ${deptMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider premium placement, store events, or loyalty program partnerships.`,
                     category: deptMatches[0].category,
@@ -23691,6 +23698,7 @@
             if (ecomMatches.length > 0) {
                 activations.push({
                     icon: '🛒',
+                    maxIndex: ecomMatches[0].index || 0,
                     text: `<strong>E-commerce:</strong> ${ecomMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(ecomMatches[0])}</span>`,
                     tooltip: `E-commerce: This audience shops online at ${ecomMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider sponsored products, display ads, or marketplace partnerships.`,
                     category: ecomMatches[0].category,
@@ -23705,6 +23713,7 @@
             if (groceryMatches.length > 0) {
                 activations.push({
                     icon: '🥬',
+                    maxIndex: groceryMatches[0].index || 0,
                     text: `<strong>Grocery:</strong> ${groceryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(groceryMatches[0])}</span>`,
                     tooltip: `Grocery: This audience shops at ${groceryMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider in-store sampling, circular ads, or loyalty card targeting.`,
                     category: groceryMatches[0].category,
@@ -23721,6 +23730,7 @@
             if (searchMatches.length > 0) {
                 activations.push({
                     icon: '🔍',
+                    maxIndex: searchMatches[0].index || 0,
                     text: `<strong>Search:</strong> ${searchMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(searchMatches[0])}</span>`,
                     tooltip: `Search Engines: This audience uses ${searchMatches.map(b => formatActivationTooltip(b)).join('; ')}. Prioritize SEM/PPC campaigns on these platforms for maximum reach.`,
                     category: searchMatches[0].category,
@@ -23741,6 +23751,7 @@
             if (foodDeliveryMatches.length > 0) {
                 activations.push({
                     icon: '🍔',
+                    maxIndex: foodDeliveryMatches[0].index || 0,
                     text: `<strong>Food Delivery:</strong> ${foodDeliveryMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(foodDeliveryMatches[0])}</span>`,
                     tooltip: `Food Delivery: This audience uses ${foodDeliveryMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider sponsored placements, promo code partnerships, or in-app advertising.`,
                     category: foodDeliveryMatches[0].category,
@@ -23755,6 +23766,7 @@
             if (rideshareMatches.length > 0) {
                 activations.push({
                     icon: '🚗',
+                    maxIndex: rideshareMatches[0].index || 0,
                     text: `<strong>Rideshare:</strong> ${rideshareMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(rideshareMatches[0])}</span>`,
                     category: rideshareMatches[0].category,
                     searchTerm: rideshareMatches[0].name,
@@ -23769,6 +23781,7 @@
             if (fitnessMatches.length > 0) {
                 activations.push({
                     icon: '💪',
+                    maxIndex: fitnessMatches[0].index || 0,
                     text: `<strong>Fitness:</strong> ${fitnessMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">${formatActivationStats(fitnessMatches[0])}</span>`,
                     tooltip: `Fitness/Wellness: This audience uses ${fitnessMatches.map(b => formatActivationTooltip(b)).join('; ')}. Consider health-focused partnerships, workout integrations, or wellness sponsorships.`
                 });
@@ -23781,6 +23794,7 @@
             if (financeMatches.length > 0) {
                 activations.push({
                     icon: '💳',
+                    maxIndex: financeMatches[0].index || 0,
                     text: `<strong>Finance:</strong> ${financeMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${financeMatches[0].pct.toFixed(2)}% | GP: ${financeMatches[0].genPop.toFixed(2)}% | ${formatIndex(financeMatches[0].index)})</span>`,
                     tooltip: `Finance/Payments: This audience uses ${financeMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider payment integrations, cashback offers, or fintech partnerships.`
                 });
@@ -23793,6 +23807,7 @@
             if (travelMatches.length > 0) {
                 activations.push({
                     icon: '✈️',
+                    maxIndex: travelMatches[0].index || 0,
                     text: `<strong>Travel:</strong> ${travelMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${travelMatches[0].pct.toFixed(2)}% | GP: ${travelMatches[0].genPop.toFixed(2)}% | ${formatIndex(travelMatches[0].index)})</span>`,
                     tooltip: `Travel: This audience uses ${travelMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider travel package partnerships, destination marketing, or loyalty program integrations.`
                 });
@@ -23805,6 +23820,7 @@
             if (musicMatches.length > 0) {
                 activations.push({
                     icon: '🎵',
+                    maxIndex: musicMatches[0].index || 0,
                     text: `<strong>Music/Audio:</strong> ${musicMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${musicMatches[0].pct.toFixed(2)}% | GP: ${musicMatches[0].genPop.toFixed(2)}% | ${formatIndex(musicMatches[0].index)})</span>`,
                     tooltip: `Music/Audio: This audience uses ${musicMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider audio ads, playlist sponsorships, or podcast integrations.`
                 });
@@ -23817,6 +23833,7 @@
             if (gamingMatches.length > 0) {
                 activations.push({
                     icon: '🎮',
+                    maxIndex: gamingMatches[0].index || 0,
                     text: `<strong>Gaming:</strong> ${gamingMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${gamingMatches[0].pct.toFixed(2)}% | GP: ${gamingMatches[0].genPop.toFixed(2)}% | ${formatIndex(gamingMatches[0].index)})</span>`,
                     tooltip: `Gaming: This audience engages with ${gamingMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-game advertising, esports sponsorships, or gaming influencer partnerships.`
                 });
@@ -23837,6 +23854,7 @@
             if (burgerMatches.length > 0) {
                 activations.push({
                     icon: '🍔',
+                    maxIndex: burgerMatches[0].index || 0,
                     text: `<strong>QSR Burger:</strong> ${burgerMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${burgerMatches[0].pct.toFixed(2)}% | GP: ${burgerMatches[0].genPop.toFixed(2)}% | ${formatIndex(burgerMatches[0].index)})</span>`,
                     tooltip: `QSR Burgers: This audience dines at ${burgerMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, app partnerships, or sponsorship activations.`,
                     category: burgerMatches[0].category,
@@ -23851,6 +23869,7 @@
             if (chickenMatches.length > 0) {
                 activations.push({
                     icon: '🍗',
+                    maxIndex: chickenMatches[0].index || 0,
                     text: `<strong>QSR Chicken:</strong> ${chickenMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${chickenMatches[0].pct.toFixed(2)}% | GP: ${chickenMatches[0].genPop.toFixed(2)}% | ${formatIndex(chickenMatches[0].index)})</span>`,
                     tooltip: `QSR Chicken: This audience dines at ${chickenMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, app partnerships, or sponsorship activations.`,
                     category: chickenMatches[0].category,
@@ -23865,6 +23884,7 @@
             if (pizzaMatches.length > 0) {
                 activations.push({
                     icon: '🍕',
+                    maxIndex: pizzaMatches[0].index || 0,
                     text: `<strong>QSR Pizza:</strong> ${pizzaMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${pizzaMatches[0].pct.toFixed(2)}% | GP: ${pizzaMatches[0].genPop.toFixed(2)}% | ${formatIndex(pizzaMatches[0].index)})</span>`,
                     tooltip: `QSR Pizza: This audience orders from ${pizzaMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider delivery app partnerships, box toppers, or loyalty program integrations.`,
                     category: pizzaMatches[0].category,
@@ -23879,6 +23899,7 @@
             if (mexicanMatches.length > 0) {
                 activations.push({
                     icon: '🌮',
+                    maxIndex: mexicanMatches[0].index || 0,
                     text: `<strong>QSR Mexican:</strong> ${mexicanMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${mexicanMatches[0].pct.toFixed(2)}% | GP: ${mexicanMatches[0].genPop.toFixed(2)}% | ${formatIndex(mexicanMatches[0].index)})</span>`,
                     tooltip: `QSR Mexican: This audience dines at ${mexicanMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider in-store promotions, catering partnerships, or app integrations.`,
                     category: mexicanMatches[0].category,
@@ -23893,6 +23914,7 @@
             if (sandwichMatches.length > 0) {
                 activations.push({
                     icon: '🥪',
+                    maxIndex: sandwichMatches[0].index || 0,
                     text: `<strong>QSR Subs:</strong> ${sandwichMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${sandwichMatches[0].pct.toFixed(2)}% | GP: ${sandwichMatches[0].genPop.toFixed(2)}% | ${formatIndex(sandwichMatches[0].index)})</span>`,
                     tooltip: `QSR Sandwiches: This audience dines at ${sandwichMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider catering partnerships, loyalty programs, or delivery promotions.`,
                     category: sandwichMatches[0].category,
@@ -23907,6 +23929,7 @@
             if (coffeeMatches.length > 0) {
                 activations.push({
                     icon: '☕',
+                    maxIndex: coffeeMatches[0].index || 0,
                     text: `<strong>Coffee/Cafe:</strong> ${coffeeMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${coffeeMatches[0].pct.toFixed(2)}% | GP: ${coffeeMatches[0].genPop.toFixed(2)}% | ${formatIndex(coffeeMatches[0].index)})</span>`,
                     tooltip: `Coffee/Cafe: This audience frequents ${coffeeMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider morning daypart targeting, rewards program partnerships, or in-store activations.`,
                     category: coffeeMatches[0].category,
@@ -23921,6 +23944,7 @@
             if (asianMatches.length > 0) {
                 activations.push({
                     icon: '🥡',
+                    maxIndex: asianMatches[0].index || 0,
                     text: `<strong>Asian QSR:</strong> ${asianMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${asianMatches[0].pct.toFixed(2)}% | GP: ${asianMatches[0].genPop.toFixed(2)}% | ${formatIndex(asianMatches[0].index)})</span>`,
                     tooltip: `Asian QSR: This audience dines at ${asianMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider delivery partnerships, cultural event sponsorships, or app promotions.`,
                     category: asianMatches[0].category,
@@ -23937,6 +23961,7 @@
                     category: casualMatches[0].category,
                     searchTerm: casualMatches[0].name,
                     icon: '🍽️',
+                    maxIndex: casualMatches[0].index || 0,
                     text: `<strong>Casual Dining:</strong> ${casualMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${casualMatches[0].pct.toFixed(2)}% | GP: ${casualMatches[0].genPop.toFixed(2)}% | ${formatIndex(casualMatches[0].index)})</span>`,
                     tooltip: `Casual Dining: This audience dines at ${casualMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider gift card partnerships, event hosting, or loyalty program integrations.`
                 });
@@ -23949,6 +23974,7 @@
             if (fastCasualMatches.length > 0) {
                 activations.push({
                     icon: '🥗',
+                    maxIndex: fastCasualMatches[0].index || 0,
                     text: `<strong>Fast Casual:</strong> ${fastCasualMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${fastCasualMatches[0].pct.toFixed(2)}% | GP: ${fastCasualMatches[0].genPop.toFixed(2)}% | ${formatIndex(fastCasualMatches[0].index)})</span>`,
                     tooltip: `Fast Casual: This audience dines at ${fastCasualMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider health-focused partnerships, catering, or corporate meal programs.`
                 });
@@ -23961,6 +23987,7 @@
             if (fineMatches.length > 0) {
                 activations.push({
                     icon: '🥂',
+                    maxIndex: fineMatches[0].index || 0,
                     text: `<strong>Fine Dining:</strong> ${fineMatches.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${fineMatches[0].pct.toFixed(2)}% | GP: ${fineMatches[0].genPop.toFixed(2)}% | ${formatIndex(fineMatches[0].index)})</span>`,
                     tooltip: `Fine Dining: This audience dines at ${fineMatches.map(b => `${b.name} (${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)})`).join('; ')}. Consider premium experiences, wine/spirits partnerships, or VIP events.`
                 });
@@ -23972,6 +23999,7 @@
                 if (purchaseBrands.length > 0) {
                     activations.push({
                         icon: '🛍️',
+                        maxIndex: purchaseBrands[0].index || 0,
                         text: `<strong>Shopping:</strong> Partner with ${purchaseBrands.map(b => `<span style="color: var(--accent-lime)">${b.name}</span>`).join(', ')} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${purchaseBrands[0].pct.toFixed(2)}% | GP: ${purchaseBrands[0].genPop.toFixed(2)}%)</span>`,
                         tooltip: `Shopping Partnership: This audience strongly over-indexes on these brands (${purchaseBrands.map(b => `${b.name}: ${b.pct.toFixed(2)}% vs GP ${b.genPop.toFixed(2)}%, ${formatIndex(b.index)}`).join('; ')}). Co-branded campaigns or retail activations could drive high engagement.`
                     });
@@ -23985,6 +24013,7 @@
             if (streamingBrands.length > 0) {
                 activations.push({
                     icon: '📺',
+                    maxIndex: streamingBrands[0].index || 0,
                     text: `<strong>Content:</strong> ${streamingBrands[0].name} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${streamingBrands[0].pct.toFixed(2)}% | GP: ${streamingBrands[0].genPop.toFixed(2)}% | ${formatIndex(streamingBrands[0].index)})</span>`,
                     tooltip: `Content Integration: ${streamingBrands[0].name} is a top streaming/content choice for this audience (${streamingBrands[0].pct.toFixed(2)}% vs GP ${streamingBrands[0].genPop.toFixed(2)}%). Consider product placement, sponsored content, or ad buys on this platform.`
                 });
@@ -23997,6 +24026,7 @@
             if (socialBrands.length > 0) {
                 activations.push({
                     icon: '📱',
+                    maxIndex: socialBrands[0].index || 0,
                     text: `<strong>Social:</strong> Focus on ${socialBrands[0].name} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${socialBrands[0].pct.toFixed(2)}% | GP: ${socialBrands[0].genPop.toFixed(2)}% | ${formatIndex(socialBrands[0].index)})</span>`,
                     tooltip: `Social Media Focus: ${socialBrands[0].name} is the preferred social platform for this audience (${socialBrands[0].pct.toFixed(2)}% vs GP ${socialBrands[0].genPop.toFixed(2)}%). Prioritize paid media and organic content on this channel for maximum reach.`
                 });
@@ -24009,6 +24039,7 @@
             if (sportsItems.length > 0) {
                 activations.push({
                     icon: '🏆',
+                    maxIndex: sportsItems[0].index || 0,
                     text: `<strong>Sports:</strong> ${sportsItems[0].name} <span style="font-size: 0.7rem; color: var(--text-secondary);">(${sportsItems[0].pct.toFixed(2)}% | GP: ${sportsItems[0].genPop.toFixed(2)}% | ${formatIndex(sportsItems[0].index)})</span>`,
                     tooltip: `Sports Sponsorship: This audience over-indexes on ${sportsItems[0].name} (${sportsItems[0].pct.toFixed(2)}% vs GP ${sportsItems[0].genPop.toFixed(2)}%, ${formatIndex(sportsItems[0].index)}). Consider sponsorship, athlete partnerships, or sports-related activations.`
                 });
@@ -24018,10 +24049,14 @@
             if (activations.length === 0) {
                 activations.push({
                     icon: '📊',
+                    maxIndex: 0,
                     text: 'Review behavioral data for partnership opportunities',
                     tooltip: `Explore the behavioral cards below to identify specific partnership and activation opportunities based on this audience's interests and behaviors.`
                 });
             }
+            
+            // Sort by highest index first so "Top Performing Brands" shows actual highest-indexing channels
+            activations.sort((a, b) => (b.maxIndex || 0) - (a.maxIndex || 0));
             
             document.getElementById('behavioralActivations').innerHTML = activations.slice(0, 15).map(a => {
                 // Escape special characters for onclick attribute
@@ -25777,12 +25812,13 @@
                 const pct = parseFloat(d.sub);
                 
                 if (d.label === 'Dominant Gender') {
-                    if (idx >= 120) {
-                        takeaways.push(`<span class="takeaway-over">Skews ${d.value.toLowerCase()}</span> — ${idxMultiplier}x more likely to be ${d.value.toLowerCase()} than Gen Pop`);
-                    } else if (idx <= 80) {
-                        takeaways.push(`<span class="takeaway-under">Under-indexes on ${d.value.toLowerCase()}</span> — only ${idxMultiplier}x vs Gen Pop`);
+                    const pctDiff = Math.round(pct - (pct / (idx / 100)));
+                    if (idx >= 108) {
+                        takeaways.push(`<span class="takeaway-over">Gender skews ${d.value.toLowerCase()}</span> — ${d.sub}, +${pctDiff}pp vs Gen Pop`);
+                    } else if (idx <= 92) {
+                        takeaways.push(`<span class="takeaway-under">Under-indexes on ${d.value.toLowerCase()}</span> — ${idxMultiplier}x vs Gen Pop`);
                     } else {
-                        takeaways.push(`Gender distribution is <span class="takeaway-highlight">similar to Gen Pop</span> (${d.value} at ${d.sub})`);
+                        takeaways.push(`Gender <span class="takeaway-highlight">similar to Gen Pop</span> (${d.value} ${d.sub})`);
                     }
                 }
                 
@@ -30095,12 +30131,12 @@
                             <button class="btn btn-secondary" onclick="clearDeckWorkspace()">🗑️ Clear Session</button>
                             <div class="export-dropdown" style="position: relative;">
                                 <button class="btn btn-secondary" onclick="toggleExportDropdown()" id="exportDropdownBtn">📥 Export ▾</button>
-                                <div id="deckExportDropdown" class="export-dropdown-menu" style="display: none; position: absolute; bottom: 100%; left: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 200px; z-index: 1000; margin-bottom: 0.5rem;">
-                                    <a onclick="exportDeckAsPDF()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">📄 PDF Report</a>
-                                    <a onclick="exportDeckAsCSV()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">📊 CSV Data</a>
-                                    <a onclick="exportToGoogleSlides()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">📑 Google Slides</a>
-                                    <a onclick="exportToPowerPoint()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">📊 PowerPoint</a>
-                                    <a onclick="exportToKeynote()" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none;">🍎 Keynote</a>
+                                <div id="deckExportDropdown" class="export-dropdown-menu" style="display: none; position: absolute; bottom: 100%; left: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 200px; z-index: 1000; margin-bottom: 0.5rem; text-align: left;">
+                                    <a href="javascript:void(0)" onclick="exportDeckAsPDF(); return false;" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; text-align: left;">📄 PDF Report</a>
+                                    <a href="javascript:void(0)" onclick="exportDeckAsCSV(); return false;" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; text-align: left;">📊 CSV Data</a>
+                                    <a href="javascript:void(0)" onclick="exportToGoogleSlides(); return false;" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; text-align: left;">📑 Google Slides</a>
+                                    <a href="javascript:void(0)" onclick="exportToPowerPoint(); return false;" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; text-align: left;">📊 PowerPoint</a>
+                                    <a href="javascript:void(0)" onclick="exportToKeynote(); return false;" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; text-align: left;">🍎 Keynote</a>
                                 </div>
                             </div>
                         </div>
@@ -36181,19 +36217,13 @@
                         stateData[state] = { pct: 0, genPopPct: 0, index: 0, count: 0, names: [], cities: [] };
                     }
                     stateData[state].pct += loc.pct;
-                    // Calculate gen pop percentage from profile pct and index (apples to apples)
-                    // Formula: genPopPct = (profilePct / index) * 100
-                    // If index is 200, that means profile is 2x gen pop, so genPopPct = profilePct / 2
+                    // Gen Pop: sum raw genPopPct per location (same aggregation as profile pct)
                     let genPopPct = 0;
-                    if (loc.index && loc.index > 0) {
-                        genPopPct = (loc.pct / loc.index) * 100;
-                    } else if (loc.genPopPct) {
-                        // Fallback: use provided genPopPct if available
+                    if (loc.genPopPct != null && loc.genPopPct !== undefined) {
                         genPopPct = loc.genPopPct;
-                        // Normalize: if it's a decimal like 0.04, convert to 4%
-                        if (genPopPct > 0 && genPopPct < 1) {
-                            genPopPct = genPopPct * 100;
-                        }
+                        if (genPopPct > 0 && genPopPct < 1) genPopPct = genPopPct * 100;
+                    } else if (loc.index && loc.index > 0) {
+                        genPopPct = (loc.pct / loc.index) * 100;
                     }
                     stateData[state].genPopPct += genPopPct;
                     stateData[state].index += loc.index || 100;
@@ -38682,7 +38712,7 @@
                         <thead>
                             <tr>
                                 <th>Gender</th>
-                                ${profiles.map((p, i) => sortableHeader('gender', i, p.name, p.color, p.medianAge)).join('')}
+                                ${profiles.map((p, i) => sortableHeader('gender', i, p.name + (p.sampleSize ? ` (n=${formatNumber(p.sampleSize)})` : ''), p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -38712,9 +38742,10 @@
                                 <option value="50" ${ageLimit == 50 ? 'selected' : ''}>Top 50</option>
                                 <option value="All" ${ageLimit === 'All' ? 'selected' : ''}>All</option>
                             </select>
-                            <select onchange="setComparisonSectionSortType('demo_age', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
+                            <select onchange="setComparisonSectionSortType('demo_age', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                 <option value="pct" ${ageSortType === 'pct' ? 'selected' : ''}>By ${displayMode === 'projection' ? '#' : '%'}</option>
                                 <option value="index" ${ageSortType === 'index' ? 'selected' : ''}>By Index</option>
+                                <option value="age" ${ageSortType === 'age' ? 'selected' : ''}>By Age ↓</option>
                             </select>
                         </span>
                     </div>
@@ -38722,7 +38753,7 @@
                         <thead>
                             <tr>
                                 <th>Age</th>
-                                ${profiles.map((p, i) => sortableHeader('age', i, p.name, p.color, p.medianAge)).join('')}
+                                ${profiles.map((p, i) => sortableHeader('age', i, p.name + (p.sampleSize ? ` (n=${formatNumber(p.sampleSize)})` : ''), p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -38762,7 +38793,7 @@
                         <thead>
                             <tr>
                                 <th>Ethnicity</th>
-                                ${profiles.map((p, i) => sortableHeader('ethnicity', i, p.name, p.color, p.medianAge)).join('')}
+                                ${profiles.map((p, i) => sortableHeader('ethnicity', i, p.name + (p.sampleSize ? ` (n=${formatNumber(p.sampleSize)})` : ''), p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -38802,7 +38833,7 @@
                         <thead>
                             <tr>
                                 <th>Income</th>
-                                ${profiles.map((p, i) => sortableHeader('income', i, p.name, p.color, p.medianAge)).join('')}
+                                ${profiles.map((p, i) => sortableHeader('income', i, p.name + (p.sampleSize ? ` (n=${formatNumber(p.sampleSize)})` : ''), p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -38851,7 +38882,7 @@
                             <thead>
                                 <tr>
                                     <th>${cat}</th>
-                                    ${profiles.map((p, i) => sortableHeader(catKey, i, p.name + ' (% / Idx)', p.color, p.medianAge)).join('')}
+                                    ${profiles.map((p, i) => sortableHeader(catKey, i, p.name + ' (% / Idx)' + (p.sampleSize ? ` (n=${formatNumber(p.sampleSize)})` : ''), p.color, p.medianAge)).join('')}
                                 </tr>
                             </thead>
                             <tbody>
@@ -38890,7 +38921,7 @@
                             <thead>
                                 <tr>
                                     <th>Location</th>
-                                    ${profiles.map((p, i) => sortableHeader('location', i, p.name, p.color, p.medianAge)).join('')}
+                                    ${profiles.map((p, i) => sortableHeader('location', i, p.name + (p.sampleSize ? ` (n=${formatNumber(p.sampleSize)})` : ''), p.color, p.medianAge)).join('')}
                                 </tr>
                             </thead>
                             <tbody>
@@ -39203,8 +39234,17 @@
             // Sort by selected profile column or default sort
             if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
                 dataRows.sort((a, b) => getSortValue(b, sortByProfileIdx) - getSortValue(a, sortByProfileIdx));
+            } else if (demoType === 'age' && sortType === 'age') {
+                // By age descending (oldest first): parse age bracket start, sort high to low
+                const getAgeSortKey = (val) => {
+                    const s = (val || '').toString();
+                    if (s.includes('+')) return parseInt(s.replace(/[^0-9]/g, '')) || 0;
+                    const nums = s.match(/\d+/g);
+                    return nums && nums[0] ? parseInt(nums[0]) : 0;
+                };
+                dataRows.sort((a, b) => getAgeSortKey(b.value) - getAgeSortKey(a.value));
             } else if (demoType === 'age' && sortType === 'pct') {
-                // For age with pct sort, use natural age order
+                // For age with pct sort, use natural age order (ascending)
                 dataRows.sort((a, b) => {
                     const numA = parseInt(a.value.replace(/[^0-9]/g, '')) || 0;
                     const numB = parseInt(b.value.replace(/[^0-9]/g, '')) || 0;
@@ -39493,7 +39533,7 @@
                 
                 // Calculate metrics - use actual index values
                 const avgIndex = allItems.length ? Math.round(allItems.reduce((sum, i) => sum + i.index, 0) / allItems.length) : (isGenPop ? 100 : 0);
-                const medianIndex = allItems.length ? allItems.sort((a, b) => a.index - b.index)[Math.floor(allItems.length / 2)].index : 100;
+                const medianIndex = allItems.length ? [...allItems].sort((a, b) => a.index - b.index)[Math.floor(allItems.length / 2)].index : 100;
                 const overIndexCount = allItems.filter(i => i.index > 100).length;
                 const underIndexCount = allItems.filter(i => i.index < 100).length;
                 const atIndexCount = allItems.filter(i => i.index === 100).length;
@@ -39609,12 +39649,12 @@
                             <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border-color);">
                                 <div style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.35rem;">Index Distribution:</div>
                                 <div style="display: flex; height: 20px; border-radius: 4px; overflow: hidden; background: var(--bg-dark);">
-                                    ${b.indexDistribution['0-49'] > 0 ? `<div class="has-tooltip" data-tooltip="Strong Under-Index (0-49): ${b.indexDistribution['0-49']} items" style="width: ${(b.indexDistribution['0-49'] / b.totalBehaviors) * 100}%; background: #ef4444;"></div>` : ''}
-                                    ${b.indexDistribution['50-99'] > 0 ? `<div class="has-tooltip" data-tooltip="Under-Index (50-99): ${b.indexDistribution['50-99']} items" style="width: ${(b.indexDistribution['50-99'] / b.totalBehaviors) * 100}%; background: #f97316;"></div>` : ''}
-                                    ${b.indexDistribution['100-149'] > 0 ? `<div class="has-tooltip" data-tooltip="Light Over-Index (100-149): ${b.indexDistribution['100-149']} items" style="width: ${(b.indexDistribution['100-149'] / b.totalBehaviors) * 100}%; background: #eab308;"></div>` : ''}
-                                    ${b.indexDistribution['150-199'] > 0 ? `<div class="has-tooltip" data-tooltip="Moderate Over-Index (150-199): ${b.indexDistribution['150-199']} items" style="width: ${(b.indexDistribution['150-199'] / b.totalBehaviors) * 100}%; background: #84cc16;"></div>` : ''}
-                                    ${b.indexDistribution['200-299'] > 0 ? `<div class="has-tooltip" data-tooltip="Strong Over-Index (200-299): ${b.indexDistribution['200-299']} items" style="width: ${(b.indexDistribution['200-299'] / b.totalBehaviors) * 100}%; background: #22c55e;"></div>` : ''}
-                                    ${b.indexDistribution['300+'] > 0 ? `<div class="has-tooltip" data-tooltip="Very Strong Over-Index (300+): ${b.indexDistribution['300+']} items" style="width: ${(b.indexDistribution['300+'] / b.totalBehaviors) * 100}%; background: #10b981;"></div>` : ''}
+                                    ${(b.totalBehaviors > 0 && b.indexDistribution['0-49'] > 0) ? `<div class="has-tooltip" data-tooltip="Strong Under-Index (0-49): ${b.indexDistribution['0-49']} items" style="width: ${(b.indexDistribution['0-49'] / b.totalBehaviors) * 100}%; background: #ef4444;"></div>` : ''}
+                                    ${(b.totalBehaviors > 0 && b.indexDistribution['50-99'] > 0) ? `<div class="has-tooltip" data-tooltip="Under-Index (50-99): ${b.indexDistribution['50-99']} items" style="width: ${(b.indexDistribution['50-99'] / b.totalBehaviors) * 100}%; background: #f97316;"></div>` : ''}
+                                    ${(b.totalBehaviors > 0 && b.indexDistribution['100-149'] > 0) ? `<div class="has-tooltip" data-tooltip="Light Over-Index (100-149): ${b.indexDistribution['100-149']} items" style="width: ${(b.indexDistribution['100-149'] / b.totalBehaviors) * 100}%; background: #eab308;"></div>` : ''}
+                                    ${(b.totalBehaviors > 0 && b.indexDistribution['150-199'] > 0) ? `<div class="has-tooltip" data-tooltip="Moderate Over-Index (150-199): ${b.indexDistribution['150-199']} items" style="width: ${(b.indexDistribution['150-199'] / b.totalBehaviors) * 100}%; background: #84cc16;"></div>` : ''}
+                                    ${(b.totalBehaviors > 0 && b.indexDistribution['200-299'] > 0) ? `<div class="has-tooltip" data-tooltip="Strong Over-Index (200-299): ${b.indexDistribution['200-299']} items" style="width: ${(b.indexDistribution['200-299'] / b.totalBehaviors) * 100}%; background: #22c55e;"></div>` : ''}
+                                    ${(b.totalBehaviors > 0 && b.indexDistribution['300+'] > 0) ? `<div class="has-tooltip" data-tooltip="Very Strong Over-Index (300+): ${b.indexDistribution['300+']} items" style="width: ${(b.indexDistribution['300+'] / b.totalBehaviors) * 100}%; background: #10b981;"></div>` : ''}
                                 </div>
                                 <div style="display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--text-secondary); margin-top: 0.25rem;">
                                     <span>Under</span>
@@ -39622,32 +39662,38 @@
                                 </div>
                             </div>
                             
-                            <!-- Breakdown -->
+                            <!-- Breakdown: Under (left) = index < 100, Over (right) = index >= 100 -->
                             <div style="margin-top: 0.5rem; font-size: 0.75rem;">
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem;">
-                                    <div class="has-tooltip" data-tooltip="Behaviors with index 300+">
-                                        <span style="color: var(--text-secondary);">300+:</span>
-                                        <span style="color: #10b981; font-weight: 600;">${b.veryStrongOverIndex}</span>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 0.25rem;">
+                                    <div>
+                                        <div style="font-size: 0.6rem; color: var(--text-secondary); margin-bottom: 0.15rem;">Under (&lt;100)</div>
+                                        <div class="has-tooltip" data-tooltip="Behaviors with index below 50">
+                                            <span style="color: var(--text-secondary);">&lt;50:</span>
+                                            <span style="color: #ef4444; font-weight: 600;">${b.strongUnderIndex}</span>
+                                        </div>
+                                        <div class="has-tooltip" data-tooltip="Behaviors with index 50-99">
+                                            <span style="color: var(--text-secondary);">50-99:</span>
+                                            <span style="color: #f97316; font-weight: 600;">${b.lightUnderIndex}</span>
+                                        </div>
                                     </div>
-                                    <div class="has-tooltip" data-tooltip="Behaviors with index 200-299">
-                                        <span style="color: var(--text-secondary);">200-299:</span>
-                                        <span style="color: #22c55e; font-weight: 600;">${b.strongOverIndex - b.veryStrongOverIndex}</span>
-                                    </div>
-                                    <div class="has-tooltip" data-tooltip="Behaviors with index 150-199">
-                                        <span style="color: var(--text-secondary);">150-199:</span>
-                                        <span style="color: #84cc16; font-weight: 600;">${b.moderateOverIndex}</span>
-                                    </div>
-                                    <div class="has-tooltip" data-tooltip="Behaviors with index 100-149">
-                                        <span style="color: var(--text-secondary);">100-149:</span>
-                                        <span style="color: #eab308; font-weight: 600;">${b.lightOverIndex}</span>
-                                    </div>
-                                    <div class="has-tooltip" data-tooltip="Behaviors with index 50-99">
-                                        <span style="color: var(--text-secondary);">50-99:</span>
-                                        <span style="color: #f97316; font-weight: 600;">${b.lightUnderIndex}</span>
-                                    </div>
-                                    <div class="has-tooltip" data-tooltip="Behaviors with index below 50">
-                                        <span style="color: var(--text-secondary);">&lt;50:</span>
-                                        <span style="color: #ef4444; font-weight: 600;">${b.strongUnderIndex}</span>
+                                    <div>
+                                        <div style="font-size: 0.6rem; color: var(--text-secondary); margin-bottom: 0.15rem;">Over (≥100)</div>
+                                        <div class="has-tooltip" data-tooltip="Behaviors with index 100-149">
+                                            <span style="color: var(--text-secondary);">100-149:</span>
+                                            <span style="color: #eab308; font-weight: 600;">${b.lightOverIndex}</span>
+                                        </div>
+                                        <div class="has-tooltip" data-tooltip="Behaviors with index 150-199">
+                                            <span style="color: var(--text-secondary);">150-199:</span>
+                                            <span style="color: #84cc16; font-weight: 600;">${b.moderateOverIndex}</span>
+                                        </div>
+                                        <div class="has-tooltip" data-tooltip="Behaviors with index 200-299">
+                                            <span style="color: var(--text-secondary);">200-299:</span>
+                                            <span style="color: #22c55e; font-weight: 600;">${b.strongOverIndex - b.veryStrongOverIndex}</span>
+                                        </div>
+                                        <div class="has-tooltip" data-tooltip="Behaviors with index 300+">
+                                            <span style="color: var(--text-secondary);">300+:</span>
+                                            <span style="color: #10b981; font-weight: 600;">${b.veryStrongOverIndex}</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -45811,28 +45857,28 @@
             const hasModules = demoHtml || behavioralHtml;
             
             modal.innerHTML = `
-                <div class="deck-workspace-content" style="max-width: 480px; max-height: 85vh;">
-                    <div class="deck-workspace-header">
+                <div class="deck-workspace-content" style="max-width: 480px; max-height: 85vh; text-align: left;">
+                    <div class="deck-workspace-header" style="text-align: left;">
                         <h2>Select Module</h2>
                         <button onclick="document.getElementById('moduleSelectModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
                     </div>
-                    <div style="padding: 1rem;">
-                        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                    <div style="padding: 1rem; text-align: left;">
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; justify-content: flex-start;">
                             <button type="button" onclick="document.querySelectorAll('.module-select-check').forEach(c => c.checked = true)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">Select All</button>
                             <button type="button" onclick="document.querySelectorAll('.module-select-check').forEach(c => c.checked = false)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">Clear</button>
                             <button type="button" onclick="document.querySelectorAll('.module-select-check[data-type=demographic]').forEach(c => c.checked = true)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">All Demographics</button>
                             <button type="button" onclick="document.querySelectorAll('.module-select-check[data-type=behavioral]').forEach(c => c.checked = true)" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); cursor: pointer;">All Behavioral</button>
                         </div>
-                        <div style="max-height: 50vh; overflow-y: auto;">
-                            ${demoHtml ? '<h4 style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Demographics</h4>' + demoHtml : ''}
-                            ${behavioralHtml ? '<h4 style="margin: 1rem 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">Behavioral</h4>' + behavioralHtml : ''}
+                        <div style="max-height: 50vh; overflow-y: auto; text-align: left;">
+                            ${demoHtml ? '<h4 style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary); text-align: left;">Demographics</h4>' + demoHtml : ''}
+                            ${behavioralHtml ? '<h4 style="margin: 1rem 0 0.5rem; font-size: 0.8rem; color: var(--text-secondary); text-align: left;">Behavioral</h4>' + behavioralHtml : ''}
                         </div>
                         ${hasModules ? `
-                        <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                        <div style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-start;">
                             <button class="btn btn-secondary" onclick="document.getElementById('moduleSelectModal').remove()" style="flex: 1;">Cancel</button>
                             <button class="btn btn-primary" onclick="addSelectedModulesToDeck()" style="flex: 1;">Add Selected to Slide</button>
                         </div>
-                        ` : '<p style="color: var(--text-secondary); margin-top: 1rem;">No modules available</p>'}
+                        ` : '<p style="color: var(--text-secondary); margin-top: 1rem; text-align: left;">No modules available</p>'}
                     </div>
                 </div>
             `;
@@ -45973,7 +46019,10 @@
         // Export functions
         async function exportDeckToPDF() {
             toggleDeckExportMenu();
-            if (!currentEditingDeck) return;
+            if (!currentEditingDeck) {
+                showNotification('⚠️ Please select or create a deck first, then add slides.', 'warning');
+                return;
+            }
             
             showNotification('📄 Generating PDF...', 'info');
             
@@ -46028,7 +46077,10 @@
         
         async function exportDeckToGoogleSlides() {
             toggleDeckExportMenu();
-            if (!currentEditingDeck) return;
+            if (!currentEditingDeck) {
+                showNotification('⚠️ Please select or create a deck first, then add slides.', 'warning');
+                return;
+            }
             
             // Generate Google Slides compatible format
             const deck = currentEditingDeck;
@@ -46058,7 +46110,10 @@
         
         async function exportDeckToPPT() {
             toggleDeckExportMenu();
-            if (!currentEditingDeck) return;
+            if (!currentEditingDeck) {
+                showNotification('⚠️ Please select or create a deck first, then add slides.', 'warning');
+                return;
+            }
             
             showNotification('📊 Generating PowerPoint...', 'info');
             
@@ -46097,15 +46152,36 @@
                     pptx.writeFile({ fileName: `${deck.name.replace(/[^a-z0-9]/gi, '_')}.pptx` });
                     showNotification('✅ PowerPoint downloaded!', 'success');
                 } else {
-                    // Fallback: export as JSON
-                    const blob = new Blob([JSON.stringify(currentEditingDeck, null, 2)], { type: 'application/json' });
+                    // Fallback: export as HTML that PowerPoint can open (File > Open)
+                    const deck = currentEditingDeck;
+                    let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Calibri,Arial,sans-serif;margin:0;padding:0;}.slide{page-break-after:always;padding:50px;min-height:500px;}.slide h1{font-size:32px;color:#2c3e50;}.slide h2{font-size:24px;color:#34495e;}.slide table{width:100%;border-collapse:collapse;}.slide th{background:#3498db;color:white;padding:12px;text-align:left;}.slide td{padding:10px;border-bottom:1px solid #ecf0f1;}</style></head><body>`;
+                    html += `<div class="slide"><h1>${(deck.titleSlide?.title || deck.name || 'Presentation').replace(/</g,'&lt;')}</h1><h2>${(deck.titleSlide?.subtitle || '').replace(/</g,'&lt;')}</h2><p>${(deck.slides || []).length} slides</p></div>`;
+                    (deck.slides || []).forEach((s, i) => {
+                        html += `<div class="slide"><h1>${(s.customTitle || s.title || s.category || 'Slide ' + (i+1)).replace(/</g,'&lt;')}</h1>`;
+                        if (s.data) {
+                            html += '<table><tr><th>Item</th><th>Value</th></tr>';
+                            if (s.type === 'demographic' && s.data.values) {
+                                Object.entries(s.data.values).slice(0, 10).forEach(([k, v]) => {
+                                    html += `<tr><td>${String(k).replace(/</g,'&lt;')}</td><td>${typeof v === 'number' ? v.toFixed(1) + '%' : v}</td></tr>`;
+                                });
+                            } else if (s.data.items) {
+                                (s.data.items || []).slice(0, 10).forEach(it => {
+                                    html += `<tr><td>${String(it.name || it).replace(/</g,'&lt;')}</td><td>${(it.pct || 0).toFixed(1)}%</td></tr>`;
+                                });
+                            }
+                            html += '</table>';
+                        }
+                        html += '</div>';
+                    });
+                    html += '</body></html>';
+                    const blob = new Blob([html], { type: 'text/html' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `${currentEditingDeck.name.replace(/[^a-z0-9]/gi, '_')}_ppt_data.json`;
+                    a.download = `${deck.name.replace(/[^a-z0-9]/gi, '_')}.htm`;
                     a.click();
                     URL.revokeObjectURL(url);
-                    showNotification('📊 Deck data exported (install PptxGenJS for .pptx)', 'info');
+                    showNotification('✅ HTML exported! Open in PowerPoint (File > Open) to use.', 'success');
                 }
             } catch (e) {
                 console.error('PPT export error:', e);
@@ -46115,7 +46191,10 @@
         
         async function exportDeckToKeynote() {
             toggleDeckExportMenu();
-            if (!currentEditingDeck) return;
+            if (!currentEditingDeck) {
+                showNotification('⚠️ Please select or create a deck first, then add slides.', 'warning');
+                return;
+            }
             
             // Keynote uses the same format as PowerPoint essentially
             // Export as JSON that can be imported
