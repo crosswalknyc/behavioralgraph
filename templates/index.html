@@ -3934,7 +3934,7 @@
             border-radius: 10px;
             cursor: pointer;
             transition: all 0.2s;
-            min-width: 65px;
+            min-width: 88px;
             flex-shrink: 0;
         }
         
@@ -27158,14 +27158,14 @@
         const defaultItemLimit = 15;
         const itemLimitOptions = [3, 5, 10, 15, 20, 25, 'All'];
         
-        // Generate item limit dropdown options
+        // Generate item limit dropdown options (labels: "Show: Top 15", "Show: All", etc.)
         function generateItemLimitOptions(cat, totalItems) {
             const currentLimit = categoryItemLimits[cat] || defaultItemLimit;
             return itemLimitOptions.map(opt => {
                 const isAll = opt === 'All';
                 const optValue = isAll ? totalItems : opt;
                 const isSelected = (isAll && (currentLimit === 'All' || currentLimit >= totalItems)) || currentLimit === opt;
-                const displayText = isAll ? totalItems + ' items' : opt + ' items';
+                const displayText = isAll ? 'Show: All' : 'Show: Top ' + opt;
                 return '<option value="' + opt + '"' + (isSelected ? ' selected' : '') + '>' + displayText + '</option>';
             }).join('');
         }
@@ -27655,17 +27655,17 @@
                                 <span class="${hasTooltip}" ${tooltipAttr} style="word-wrap: break-word; white-space: normal;">${cat}</span>
                                 ${positionBadge}
                             </span>
-                            <span style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0;">
+                            <span style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; flex-wrap: nowrap;">
                                 <span class="count">${items.length} items</span>
-                                <span class="module-action-btns">
+                                <span class="module-action-btns" style="display: flex; align-items: center; gap: 0.25rem; flex-wrap: nowrap;">
                                     <button class="module-btn csv-btn has-tooltip" onclick="event.stopPropagation(); exportModuleCSV('behavioral', '${cat}')" data-tooltip="Export CSV: Download this behavioral category data as a CSV file.">CSV</button>
                                     <button class="module-btn png-btn has-tooltip" onclick="event.stopPropagation(); exportModulePNG('behavioral', '${cat}')" data-tooltip="Export PNG: Download this behavioral category chart as a PNG image.">PNG</button>
                                     <button class="module-btn deck-btn has-tooltip" onclick="event.stopPropagation(); addModuleToDeck('behavioral', '${cat}')" data-tooltip="Add to Deck: Save this behavioral category to your presentation deck.">➕</button>
                                     <button class="module-btn spotlight-btn has-tooltip" onclick="event.stopPropagation(); openBehavioralSpotlight('${cat}')" data-tooltip="Spotlight: Expand this category to view all data in a larger popup window.">🔍</button>
+                                    <select class="item-limit-select has-tooltip" id="limit-${catId}" onchange="event.stopPropagation(); setCategoryItemLimit('${catId}', '${cat}', this.value)" data-tooltip="How many items to show in this list">
+                                        ${generateItemLimitOptions(cat, items.length)}
+                                    </select>
                                 </span>
-                                <select class="item-limit-select has-tooltip" id="limit-${catId}" onchange="event.stopPropagation(); setCategoryItemLimit('${catId}', '${cat}', this.value)" data-tooltip="Click to change how many items are displayed">
-                                    ${generateItemLimitOptions(cat, items.length)}
-                                </select>
                             </span>
                         </h3>
                         <div class="behavioral-filter" style="display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center;">
