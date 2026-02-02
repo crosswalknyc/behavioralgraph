@@ -1442,6 +1442,13 @@
                                 <span style="font-size: 1.25rem;">📊</span>
                                 <span style="font-size: 0.9rem;">Deck Builder</span>
                             </label>
+                            
+                            <!-- Rankers (Data tab: Netflix/YouTube daily view rankers) -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="rankers" checked onchange="updateLiveFeature('rankers', this.checked)">
+                                <span style="font-size: 1.25rem;">📊</span>
+                                <span style="font-size: 0.9rem;">Rankers</span>
+                            </label>
                         </div>
                         
                         <!-- Insights Sub Tabs Section -->
@@ -2620,6 +2627,7 @@
             content: true,
             collaborate: true,
             deckBuilder: true,
+            rankers: true,
             // Insights Sub Tabs
             insightsSummary: true,
             insightsBehavioral: true,

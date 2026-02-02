@@ -1,15 +1,21 @@
 # Render Blueprint for Behavioral Graph Web App
 # Native Python runtime - FASTER builds than Docker
 # This avoids Docker build overhead and deployment timeouts
+#
+# Scaling (Dashboard or below):
+#   - Starter (512MB) often OOMs: use GUNICORN_WORKERS=1, GUNICORN_THREADS=1 (defaults below).
+#   - RECOMMENDED: Upgrade to Standard (2GB) in Dashboard > Service > Settings > Instance Type to avoid OOM.
+#   - Autoscaling (min/max instances by CPU/memory): Dashboard > Service > Scaling; requires Professional workspace.
 
 services:
   - type: web
     name: behavioral-graph
     runtime: python
     plan: starter
+    # Instance count (manual scaling). For CPU/memory-based autoscaling use Dashboard > Scaling (Pro workspace).
+    numInstances: 1
     buildCommand: chmod +x build.sh && ./build.sh
     startCommand: ./start.sh
-    # Health check settings - must respond quickly
     healthCheckPath: /healthz
     envVars:
       - key: APP_USERNAME
@@ -53,6 +59,10 @@ services:
         sync: false
       - key: APP_URL
         value: "https://behavioralgraph.onrender.com"
-    healthCheckPath: /healthz
-    # Health check settings - /healthz responds immediately
-    # The endpoint is registered before any heavy initialization
+      # Gunicorn: 1 worker + 1 thread to stay under 512MB; upgrade plan if OOM persists
+      - key: GUNICORN_WORKERS
+        value: "1"
+      - key: GUNICORN_THREADS
+        value: "1"
+      - key: GUNICORN_TIMEOUT
+        value: "300"

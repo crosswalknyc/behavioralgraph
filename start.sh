@@ -1,22 +1,23 @@
 #!/bin/bash
 # Startup script for Render deployment
-# Optimized for fast startup and health check response
+# Optimized for fast startup, health check, and memory (512MB Starter)
+# Workers/threads/timeout can be overridden via env: GUNICORN_WORKERS, GUNICORN_THREADS, GUNICORN_TIMEOUT
 
 echo "🚀 Starting application..."
 echo "PORT: ${PORT:-10000}"
 
-# Start Gunicorn with optimized settings for Render
-# Use eventlet worker for WebSocket/real-time collaboration (when flask-socketio is installed)
-# --timeout: Increased to 300s for long-running requests
-# --graceful-timeout: Time to wait for workers to finish on shutdown
-# --access-logfile -: Log to stdout
-# --error-logfile -: Log errors to stderr
+WORKERS="${GUNICORN_WORKERS:-1}"
+THREADS="${GUNICORN_THREADS:-1}"
+TIMEOUT="${GUNICORN_TIMEOUT:-300}"
+echo "Gunicorn: workers=${WORKERS} threads=${THREADS} timeout=${TIMEOUT}"
+
+# Eventlet path (1 worker only to stay under 512MB)
 if python -c "import flask_socketio" 2>/dev/null; then
     exec gunicorn app:app \
         --worker-class eventlet \
-        -w 1 \
+        -w "${WORKERS}" \
         --bind 0.0.0.0:${PORT:-10000} \
-        --timeout 300 \
+        --timeout "${TIMEOUT}" \
         --graceful-timeout 30 \
         --access-logfile - \
         --error-logfile - \
@@ -27,9 +28,9 @@ if python -c "import flask_socketio" 2>/dev/null; then
 else
     exec gunicorn app:app \
         --bind 0.0.0.0:${PORT:-10000} \
-        --workers 1 \
-        --threads 2 \
-        --timeout 300 \
+        --workers "${WORKERS}" \
+        --threads "${THREADS}" \
+        --timeout "${TIMEOUT}" \
         --graceful-timeout 30 \
         --access-logfile - \
         --error-logfile - \

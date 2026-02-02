@@ -6146,7 +6146,8 @@ def get_live_features():
                 'media': True,
                 'content': True,
                 'collaborate': True,
-                'deckBuilder': True
+                'deckBuilder': True,
+                'rankers': True
             }
         })
 

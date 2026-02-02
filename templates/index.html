@@ -2240,6 +2240,8 @@
             display: flex;
             flex-direction: column;
             min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
         .dashboard-layout.behavioral-active .dashboard-tab-content #dashboardContent {
             display: grid;
@@ -2247,17 +2249,19 @@
             grid-template-columns: 1fr;
             flex: 1;
             min-height: 0;
+            min-height: min-content;
         }
         .dashboard-layout.behavioral-active #tab-behavioral {
             display: contents;
         }
         .dashboard-layout.behavioral-active .behavioral-top-section {
             grid-row: 1;
+            min-height: 0;
         }
         .dashboard-layout.behavioral-active .behavioral-grid {
             grid-row: 2;
             min-height: 0;
-            overflow: auto;
+            overflow: visible;
         }
         
         /* Content action buttons - positioned above sidebar, matching sidebar width */
@@ -11410,7 +11414,7 @@
                         <button class="tab-btn has-tooltip" data-tooltip="Behavioral: Analysis of consumer behaviors, brand preferences, purchase patterns, and lifestyle activities." onclick="showTab('behavioral')"><span class="tab-icon">📈</span><span class="tab-label">BEHAVIORAL</span></button>
                         <button class="tab-btn has-tooltip" data-tooltip="Interests: Top interests and passions of this audience, categorized by topic area with index scores." onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
                         <button class="tab-btn has-tooltip" data-tooltip="Location: Geographic distribution showing where this audience is concentrated by state and metro area." onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
-                        <button class="tab-btn has-tooltip" data-tooltip="Rankers: Day-by-day view counts and rankings for streaming content (Netflix, etc.)." onclick="showTab('rankers')"><span class="tab-icon">📊</span><span class="tab-label">RANKERS</span></button>
+                        <button class="tab-btn has-tooltip" data-feature="rankers" data-tooltip="Rankers: Day-by-day view counts and rankings for streaming content (Netflix, etc.)." onclick="showTab('rankers')"><span class="tab-icon">📊</span><span class="tab-label">RANKERS</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                     </div>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 0.25rem;">
@@ -12207,12 +12211,18 @@
                         </div>
                     </div>
                     <div id="rankersLoadBlock" style="padding: 2rem; text-align: center; background: var(--bg-card); border-radius: 8px; margin-top: 1rem;">
-                        <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data is cached for the past year. First load may take a moment.</p>
-                        <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
-                            <button class="btn btn-primary" onclick="loadNetflixRankerData()" id="rankersLoadBtnNetflix">📺 Load Netflix Ranker</button>
-                            <button class="btn btn-primary" onclick="loadYouTubeRankerData()" id="rankersLoadBtnYouTube">▶️ Load YouTube Ranker</button>
+                        <div id="rankersLoadProgress" style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem;">
+                            <div class="spinner" style="margin-bottom: 0;"></div>
+                            <div id="rankersLoadStatus" style="font-size: 0.9rem; color: var(--text-secondary);">Loading rankers...</div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">Ranker data is cached for the past year. First load may take a moment.</div>
                         </div>
-                        <div id="rankersLoadStatus" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary);"></div>
+                        <div id="rankersLoadDone" style="display: none;">
+                            <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data loaded. Use the Netflix and YouTube tabs above to view.</p>
+                            <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
+                                <button class="btn btn-primary" onclick="loadNetflixRankerData()" id="rankersLoadBtnNetflix">📺 Refresh Netflix</button>
+                                <button class="btn btn-primary" onclick="loadYouTubeRankerData()" id="rankersLoadBtnYouTube">▶️ Refresh YouTube</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -14681,6 +14691,7 @@
             content: true,
             collaborate: true,
             deckBuilder: true,
+            rankers: true,
             // Insights Sub Tabs
             insightsSummary: true,
             insightsBehavioral: true,
@@ -14707,23 +14718,16 @@
             applyLiveFeatureVisibility();
         }
         
-        // Apply live feature visibility to Analysis Tools tabs and Insights sub-tabs
+        // Apply live feature visibility to Data tabs (e.g. Rankers), Analysis Tools, and Insights sub-tabs
         function applyLiveFeatureVisibility() {
-            // Apply to Analysis Tools
-            const toolsContainer = document.getElementById('analysisToolsTabs');
-            if (toolsContainer) {
-                toolsContainer.querySelectorAll('[data-feature]').forEach(btn => {
-                    applyFeatureVisibility(btn);
-                });
-            }
+            // Apply to any element with data-feature (Data tabs like Rankers, Analysis Tools, Insights sub-tabs)
+            document.querySelectorAll('[data-feature]').forEach(btn => {
+                applyFeatureVisibility(btn);
+            });
             
-            // Apply to Insights Sub Tabs
+            // If Insights sub-tabs: when current active tab is hidden, switch to first visible
             const insightsSubTabs = document.getElementById('insightsSubTabs');
             if (insightsSubTabs) {
-                insightsSubTabs.querySelectorAll('[data-feature]').forEach(btn => {
-                    applyFeatureVisibility(btn);
-                });
-                
                 // If the currently active tab is hidden, switch to the first visible tab
                 const activeTab = insightsSubTabs.querySelector('.insights-tab.active');
                 if (activeTab && activeTab.style.display === 'none') {
@@ -22558,6 +22562,7 @@
             if (tabName === 'rankers') {
                 showRankerPlatform('netflix');
                 showNetflixSubTab('daily');
+                ensureRankersLoaded();
             }
             
             if (tabName === 'comparison' || tabName === 'collaboration' || tabName === 'segmentation') {
@@ -29647,17 +29652,59 @@
             else if (id === 'insights') renderNetflixInsights();
         }
 
+        function showRankersProgressBlock() {
+            const progress = document.getElementById('rankersLoadProgress');
+            const done = document.getElementById('rankersLoadDone');
+            if (progress) progress.style.display = 'flex';
+            if (done) done.style.display = 'none';
+        }
+
+        function showRankersDoneBlock() {
+            const progress = document.getElementById('rankersLoadProgress');
+            const done = document.getElementById('rankersLoadDone');
+            if (progress) progress.style.display = 'none';
+            if (done) done.style.display = 'block';
+        }
+
+        function updateRankersLoadStatus(msg) {
+            const status = document.getElementById('rankersLoadStatus');
+            if (status) status.textContent = msg;
+        }
+
+        function ensureRankersLoaded() {
+            const bothLoaded = netflixRankerData && youtubeRankerData;
+            if (bothLoaded) {
+                showRankersDoneBlock();
+                return;
+            }
+            showRankersProgressBlock();
+            const parts = [];
+            if (!netflixRankerData) parts.push('Netflix: loading...');
+            else parts.push('Netflix: loaded.');
+            if (!youtubeRankerData) parts.push('YouTube: loading...');
+            else parts.push('YouTube: loaded.');
+            updateRankersLoadStatus(parts.join(' '));
+            if (!netflixRankerData) loadNetflixRankerData();
+            if (!youtubeRankerData) loadYouTubeRankerData();
+        }
+
         function loadNetflixRankerData() {
             const btn = document.getElementById('rankersLoadBtnNetflix');
-            const status = document.getElementById('rankersLoadStatus');
             if (btn) btn.disabled = true;
-            if (status) status.textContent = 'Loading Netflix (first load may refresh cache)...';
+            const parts = ['Netflix: loading...'];
+            if (!youtubeRankerData) parts.push('YouTube: loading...');
+            else parts.push('YouTube: loaded.');
+            updateRankersLoadStatus(parts.join(' '));
             fetch('/api/rankers/netflix/data', { credentials: 'same-origin' })
                 .then(r => r.json())
                 .then(data => {
                     if (data.error) throw new Error(data.error);
                     netflixRankerData = data;
-                    if (status) status.textContent = (status.textContent ? status.textContent + ' ' : '') + 'Netflix: loaded ' + (data.date_range ? (data.date_range.min + ' to ' + data.date_range.max) : '') + '.';
+                    const rangeStr = data.date_range ? (data.date_range.min + ' to ' + data.date_range.max) : '';
+                    const parts = ['Netflix: loaded' + (rangeStr ? ' (' + rangeStr + ').' : '.')];
+                    if (!youtubeRankerData) parts.push('YouTube: loading...');
+                    else parts.push('YouTube: loaded.');
+                    updateRankersLoadStatus(parts.join(' '));
                     const dateInp = document.getElementById('netflixDailyDate');
                     if (dateInp && data.date_range) {
                         dateInp.min = data.date_range.min;
@@ -29675,10 +29722,16 @@
                     renderNetflixByGenre();
                     renderNetflixTopShows();
                     renderNetflixInsights();
+                    if (btn) btn.disabled = false;
+                    if (youtubeRankerData) showRankersDoneBlock();
                 })
                 .catch(err => {
-                    if (status) status.textContent = 'Error: ' + (err.message || err);
+                    const parts = ['Netflix: error — ' + (err.message || err) + '.'];
+                    if (!youtubeRankerData) parts.push('YouTube: loading...');
+                    else parts.push('YouTube: loaded.');
+                    updateRankersLoadStatus(parts.join(' '));
                     if (btn) btn.disabled = false;
+                    if (youtubeRankerData) showRankersDoneBlock();
                 });
         }
 
@@ -29873,15 +29926,23 @@
 
         function loadYouTubeRankerData() {
             const btn = document.getElementById('rankersLoadBtnYouTube');
-            const status = document.getElementById('rankersLoadStatus');
             if (btn) btn.disabled = true;
-            if (status) status.textContent = (status.textContent ? status.textContent + ' ' : '') + 'Loading YouTube...';
+            const parts = [];
+            if (!netflixRankerData) parts.push('Netflix: loading...');
+            else parts.push('Netflix: loaded.');
+            parts.push('YouTube: loading...');
+            updateRankersLoadStatus(parts.join(' '));
             fetch('/api/rankers/youtube/data', { credentials: 'same-origin' })
                 .then(r => r.json())
                 .then(data => {
                     if (data.error) throw new Error(data.error);
                     youtubeRankerData = data;
-                    if (status) status.textContent = (status.textContent ? status.textContent.replace(/Loading YouTube\.\.\.?/g, '').trim() + ' ' : '') + 'YouTube: loaded ' + (data.date_range ? (data.date_range.min + ' to ' + data.date_range.max) : '') + '.';
+                    const rangeStr = data.date_range ? (data.date_range.min + ' to ' + data.date_range.max) : '';
+                    const parts2 = [];
+                    if (!netflixRankerData) parts2.push('Netflix: loading...');
+                    else parts2.push('Netflix: loaded.');
+                    parts2.push('YouTube: loaded' + (rangeStr ? ' (' + rangeStr + ').' : '.'));
+                    updateRankersLoadStatus(parts2.join(' '));
                     const dateInp = document.getElementById('youtubeDailyDate');
                     if (dateInp && data.date_range) {
                         dateInp.min = data.date_range.min;
@@ -29899,10 +29960,17 @@
                     renderYouTubeByChannel();
                     renderYouTubeTopTitles();
                     renderYouTubeInsights();
+                    if (btn) btn.disabled = false;
+                    if (netflixRankerData) showRankersDoneBlock();
                 })
                 .catch(err => {
-                    if (status) status.textContent = (status.textContent || '') + ' YouTube error: ' + (err.message || err);
+                    const parts2 = [];
+                    if (!netflixRankerData) parts2.push('Netflix: loading...');
+                    else parts2.push('Netflix: loaded.');
+                    parts2.push('YouTube: error — ' + (err.message || err) + '.');
+                    updateRankersLoadStatus(parts2.join(' '));
                     if (btn) btn.disabled = false;
+                    if (netflixRankerData) showRankersDoneBlock();
                 });
         }
 
