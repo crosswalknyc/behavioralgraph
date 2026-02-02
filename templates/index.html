@@ -29753,7 +29753,7 @@
             if (loading) loading.style.display = 'none';
             if (wrap) wrap.style.display = 'block';
             const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
-            const rows = netflixRankerData.by_date[date] || [];
+            const rows = (netflixRankerData.by_date[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian'));
             const sorted = rows.slice().sort((a, b) => (b.views - a.views));
             if (!tbody) return;
             tbody.innerHTML = sorted.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + (r.genre || '-') + '</td><td>' + (r.type || '-') + '</td></tr>').join('');
@@ -29804,7 +29804,7 @@
                 return;
             }
             const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
-            const rows = netflixRankerData.genres_by_date[date] || [];
+            const rows = (netflixRankerData.genres_by_date[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian'));
             const total = rows.reduce((s, r) => s + (r.views || 0), 0);
             if (loading) loading.style.display = 'none';
             if (wrap) wrap.style.display = 'block';
@@ -29881,7 +29881,7 @@
             if (!netflixRankerData || !netflixRankerData.by_date) return;
             const dateInp = document.getElementById('netflixDailyDate');
             const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
-            const rows = (netflixRankerData.by_date[date] || []).slice().sort((a, b) => (b.views - a.views));
+            const rows = (netflixRankerData.by_date[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian')).slice().sort((a, b) => (b.views - a.views));
             const csv = 'Rank,Show,Views,Genre,Type\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '",' + (r.views || 0) + ',"' + (r.genre || '').replace(/"/g, '""') + '","' + (r.type || '').replace(/"/g, '""') + '"').join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_daily_ranker_' + date + '.csv'; a.click();
         }

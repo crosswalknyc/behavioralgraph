@@ -3772,7 +3772,7 @@ NETFLIX_RANKER_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'netflix_ran
 NETFLIX_RANKER_CACHE_MAX_AGE_HOURS = 24  # refresh today's data if cache older than this
 
 def _build_netflix_ranker_payload(rows):
-    """Build API payload from raw rows: (visit_date, name_of_show, genre, type, views)."""
+    """Build API payload from raw rows: (visit_date, name_of_show, genre, type, views). Excludes any row where genre contains 'Indian'."""
     from collections import defaultdict
     daily = []
     by_date = defaultdict(list)
@@ -3783,6 +3783,9 @@ def _build_netflix_ranker_payload(rows):
         genre = (r[2] or '').strip() or '-'
         typ = (r[3] or '').strip() or '-'
         views = int(r[4] or 0)
+        # Exclude Indian genre from all ranker views
+        if 'indian' in (genre or '').lower():
+            continue
         daily.append({'date': dt, 'show_name': show_name, 'views': views, 'genre': genre, 'type': typ})
         by_date[dt].append({'show_name': show_name, 'views': views, 'genre': genre, 'type': typ})
         by_show[show_name].append({'date': dt, 'views': views})
