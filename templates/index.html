@@ -36507,15 +36507,18 @@
                 return;
             }
             
-            // Gen Pop state/region totals: compute from Gen Pop profile's locations the same way we do for selected profile (sum pct by state/region)
+            // Gen Pop state/region totals: SAME calculation as selected profile (sum of pct by state/region) but using Gen Pop profile's locations
             const genPopByState = {};
             const genPopByRegion = {};
+            const genPopByDma = {}; // DMA name -> Gen Pop pct for tooltips
             if (genPopBaselineData && genPopBaselineData.locations && genPopBaselineData.locations.length > 0) {
                 genPopBaselineData.locations.forEach(loc => {
                     const state = getStateFromLocation(loc.name);
+                    let pct = parseFloat(loc.pct ?? loc.genPopPct) || 0;
+                    if (pct > 0 && pct < 1) pct = pct * 100;
+                    const dmaKey = (loc.name || '').toString().trim();
+                    if (dmaKey) genPopByDma[dmaKey.toUpperCase()] = pct;
                     if (state) {
-                        let pct = parseFloat(loc.pct ?? loc.genPopPct) || 0;
-                        if (pct > 0 && pct < 1) pct = pct * 100;
                         genPopByState[state] = (genPopByState[state] || 0) + pct;
                         const region = getRegionForState(state);
                         genPopByRegion[region] = (genPopByRegion[region] || 0) + pct;
@@ -36546,7 +36549,7 @@
                     stateData[state].genPopPct = genPopByState[state] ?? 0;
                 });
             } else {
-                // Fallback: derive from current profile's loc.genPopPct or index (may be less accurate)
+                // Fallback: derive Gen Pop % from current profile's loc.genPopPct or (profile % / index) so parentheses = same metric (percentage) for Gen Pop
                 locations.forEach(loc => {
                     const state = getStateFromLocation(loc.name);
                     if (state && stateData[state]) {
@@ -36595,10 +36598,15 @@
                     ? (data.genPopPct === 0 || data.genPopPct === null ? 'N/A' : formatNumber(Math.round((data.genPopPct / 100) * US_POP)))
                     : formatValueOrNA(data.genPopPct, true);
                 
-                // Build top 5 cities tooltip
+                // Build top 5 cities tooltip (Profile % = selected profile; Gen Pop % = same metric from Gen Pop profile when available)
                 const top5Cities = data.cities.slice(0, 5);
                 const citiesText = top5Cities.length > 0 
-                    ? `Top Cities in ${state}: ${top5Cities.map((c, i) => `${i + 1}. ${c.name} (${c.pct.toFixed(2)}%)`).join(' | ')}`
+                    ? `Top Cities in ${state}: ${top5Cities.map((c, i) => {
+                        const gpPct = genPopByDma[(c.name || '').toUpperCase()];
+                        return gpPct != null 
+                            ? `${i + 1}. ${c.name} (Profile: ${c.pct.toFixed(2)}% | Gen Pop: ${gpPct.toFixed(2)}%)`
+                            : `${i + 1}. ${c.name} (${c.pct.toFixed(2)}%)`;
+                    }).join(' | ')}`
                     : `${state}: No city data`;
                 
                 return `
@@ -36672,10 +36680,15 @@
                         ? (data.genPopPct === 0 || data.genPopPct === null ? 'N/A' : formatNumber(Math.round((data.genPopPct / 100) * US_POP)))
                         : formatValueOrNA(data.genPopPct, true);
                     
-                    // Build top 5 cities tooltip for region
+                    // Build top 5 cities tooltip for region (Profile % = selected profile; Gen Pop % = same metric from Gen Pop when available)
                     const top5Cities = data.cities.slice(0, 5);
                     const citiesText = top5Cities.length > 0 
-                        ? `Top Cities in ${region}: ${top5Cities.map((c, i) => `${i + 1}. ${c.name} (${c.pct.toFixed(2)}%)`).join(' | ')}`
+                        ? `Top Cities in ${region}: ${top5Cities.map((c, i) => {
+                            const gpPct = genPopByDma[(c.name || '').toUpperCase()];
+                            return gpPct != null 
+                                ? `${i + 1}. ${c.name} (Profile: ${c.pct.toFixed(2)}% | Gen Pop: ${gpPct.toFixed(2)}%)`
+                                : `${i + 1}. ${c.name} (${c.pct.toFixed(2)}%)`;
+                        }).join(' | ')}`
                         : `${region}: No city data`;
                     
                     return `
