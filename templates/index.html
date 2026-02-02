@@ -3731,7 +3731,7 @@
         }
         
         .interest-category-item .item-stats span {
-            text-align: right;
+            text-align: left;
         }
         
         .interest-category-item .item-stats span:nth-child(1) {
@@ -3984,7 +3984,7 @@
             font-size: 0.75rem;
             color: var(--text-secondary);
             width: 22px;
-            text-align: right;
+            text-align: left;
             flex-shrink: 0;
         }
 
@@ -4034,7 +4034,7 @@
             font-weight: 500;
             color: var(--text-primary);
             min-width: 55px;
-            text-align: right;
+            text-align: left;
             flex-shrink: 0;
         }
 
@@ -4042,7 +4042,7 @@
             font-size: 0.8rem;
             font-weight: 700;
             min-width: 45px;
-            text-align: center;
+            text-align: left;
             padding: 3px 6px;
             border-radius: 4px;
             background: rgba(0, 0, 0, 0.3);
@@ -4806,7 +4806,7 @@
             color: var(--text-secondary);
         }
         
-        /* Highlight List */
+        /* Highlight List (Interest Highlights) - left-justify all columns and headers */
         .highlight-list {
             display: flex;
             flex-direction: column;
@@ -4814,15 +4814,22 @@
         }
         .highlight-item {
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            gap: 0.5rem;
             padding: 0.6rem 0.75rem;
             background: rgba(255,255,255,0.03);
             border-radius: 6px;
             font-size: 0.85rem;
         }
+        .highlight-item .label,
+        .highlight-item span {
+            text-align: left;
+        }
         .highlight-item .label {
             color: var(--text-secondary);
+        }
+        [data-module="Interest Highlights"] .differentiator-header span {
+            text-align: left;
         }
         .highlight-item .value {
             font-weight: 600;
@@ -4964,17 +4971,17 @@
         .differentiator-grouped-pct {
             color: var(--accent-blue);
             min-width: 60px;
-            text-align: right;
+            text-align: left;
         }
         .differentiator-grouped-gp {
             color: var(--text-secondary);
             min-width: 60px;
-            text-align: right;
+            text-align: left;
         }
         .differentiator-grouped-index {
             font-weight: 600;
             min-width: 65px;
-            text-align: right;
+            text-align: left;
             padding: 0.15rem 0.4rem;
             border-radius: 4px;
         }
@@ -4985,6 +4992,9 @@
         .differentiator-grouped-index.low {
             background: rgba(239, 68, 68, 0.2);
             color: #ef4444;
+        }
+        .differentiator-list-grouped .differentiator-column-headers span {
+            text-align: left;
         }
         
         /* Key Stats Grid */
@@ -9479,6 +9489,57 @@
             padding: 2rem;
         }
         
+        /* Profile Selection Modal (Exec Summary / Key Insight Builder / Ecosystem) - left-justified, includes all open tabs */
+        .profile-selection-modal-content { text-align: left; }
+        .profile-selection-label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 0.35rem;
+            text-align: left;
+        }
+        .profile-selection-select {
+            width: 100%;
+            padding: 0.5rem 0.6rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            text-align: left;
+        }
+        .profile-selection-compare-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            max-height: 240px;
+            overflow-y: auto;
+            padding: 0.5rem;
+            background: var(--bg-dark);
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            text-align: left;
+        }
+        .profile-selection-compare-list label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            text-align: left;
+        }
+        .profile-selection-compare-list label input { flex-shrink: 0; }
+        .profile-selection-compare-list label span { text-align: left; }
+        .profile-selection-actions {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: flex-start;
+            margin-top: 1rem;
+            text-align: left;
+        }
+        
         /* Key Insight Builder Modal */
         .modal-overlay {
             position: fixed;
@@ -11431,18 +11492,20 @@
                         </div>
                     </div>
                     <div class="behavioral-insight-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Top Performing Categories">
-                        <h4 class="has-tooltip" data-tooltip="Top Performing Categories: Behavioral categories where this audience most over-indexes vs. Gen Pop. Higher index = stronger affinity. Fire count = number of items in that category with index > 1.5x.">
-                            <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                            <span>🏆 Top Performing Categories</span>
+                        <h4 class="has-tooltip" data-tooltip="Top Performing Categories: Behavioral categories where this audience most over-indexes vs. Gen Pop. Higher index = stronger affinity. Fire count = number of items in that category with index > 1.5x." style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.35rem;">
+                            <span style="display: flex; align-items: center;">
+                                <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
+                                <span>🏆 Top Performing Categories</span>
+                            </span>
+                            <select id="topCategoriesSortSelect" onchange="sortTopCategories(this.value)" style="padding: 0.2rem 0.35rem; font-size: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;" title="Sort by">
+                                <option value="index">By Index</option>
+                                <option value="profile">By Profile %</option>
+                                <option value="hot">By Hot 🔥</option>
+                            </select>
                         </h4>
                         <div class="top-cat-header" style="display: flex; justify-content: space-between; align-items: center; padding: 0 0.5rem; margin-bottom: 0.25rem; font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; flex-wrap: wrap; gap: 0.35rem;">
                             <span style="flex: 1; text-align: left;">Category</span>
                             <span style="display: flex; align-items: center; gap: 0.5rem;">
-                                <select id="topCategoriesSortSelect" onchange="sortTopCategories(this.value)" style="padding: 0.2rem 0.35rem; font-size: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;" title="Sort by">
-                                    <option value="index">By Index</option>
-                                    <option value="profile">By Profile %</option>
-                                    <option value="hot">By Hot 🔥</option>
-                                </select>
                                 <span class="has-tooltip" data-tooltip="Profile %: Average percentage of this audience engaging with items in this category." style="min-width: 55px; text-align: left;">Profile</span>
                                 <span class="genpop-col has-tooltip" data-tooltip="Gen Pop %: Average percentage of general population engaging with items in this category." style="min-width: 50px; text-align: left;">GP</span>
                                 <span class="index-col has-tooltip" data-tooltip="Avg Index: Average index across all items in this category. 1.0x = same as Gen Pop, 2.0x = 2x more likely than Gen Pop." style="min-width: 50px; text-align: left;">Index</span>
@@ -11456,10 +11519,10 @@
                             </div>
                         </div>
                     </div>
-                    <div class="behavioral-insight-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Top Performing Brands">
-                        <h4 class="has-tooltip" data-tooltip="Top Performing Brands: Top brands where this audience over-indexes across shopping, content, social media, and entertainment categories.">
+                    <div class="behavioral-insight-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Top Performers">
+                        <h4 class="has-tooltip" data-tooltip="Top Performers: Top brands where this audience over-indexes across shopping, content, social media, and entertainment categories.">
                             <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                            <span>🏷️ Top Performing Brands</span>
+                            <span>🏷️ Top Performers</span>
                         </h4>
                         <div class="insight-col-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
                             <span class="has-tooltip" data-tooltip="Channel: The marketing channel or category type (Shopping, Content, Social, Sports, etc.).">Channel</span>
@@ -12999,7 +13062,7 @@
             <div id="tab-segmentation" class="tab-content">
                 <div class="segmentation-container">
                     <div class="seg-header">
-                        <h2>🎯 Audience Segment Builder</h2>
+                        <h2 id="segmentBuilderTitle">🎯 Audience Segment Builder</h2>
                         <p>Filter by demographics to see how behaviors change for specific segments</p>
                     </div>
                     
@@ -13240,25 +13303,25 @@
             
             <!-- Profile Selection Modal (Exec Summary / Key Insight Builder / Ecosystem) -->
             <div id="profileSelectionModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeProfileSelectionModal()">
-                <div class="modal-content" style="max-width: 480px;">
+                <div class="modal-content profile-selection-modal-content" style="max-width: 480px; text-align: left;">
                     <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
-                        <h2 id="profileSelectionModalTitle" style="margin: 0; font-size: 1.25rem; color: var(--text-primary);">📄 Executive Summary</h2>
+                        <h2 id="profileSelectionModalTitle" style="margin: 0; font-size: 1.25rem; color: var(--text-primary); text-align: left;">📄 Executive Summary</h2>
                         <button type="button" onclick="closeProfileSelectionModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); padding: 0.25rem 0.5rem;">&times;</button>
                     </div>
-                    <div id="profileSelectionModalBody">
-                        <div style="margin-bottom: 1rem;">
-                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.35rem;">Profile</label>
-                            <select id="profileSelectionPrimarySelect" style="width: 100%; padding: 0.5rem 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem;">
+                    <div id="profileSelectionModalBody" style="text-align: left;">
+                        <div style="margin-bottom: 1rem; text-align: left;">
+                            <label class="profile-selection-label">PROFILE</label>
+                            <select id="profileSelectionPrimarySelect" class="profile-selection-select">
                                 <option value="">Select profile...</option>
                             </select>
                         </div>
-                        <div style="margin-bottom: 1rem;">
-                            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.35rem;">Compare to</label>
-                            <div id="profileSelectionCompareList" style="display: flex; flex-direction: column; gap: 0.35rem; max-height: 200px; overflow-y: auto; padding: 0.5rem; background: var(--bg-dark); border-radius: 6px; border: 1px solid var(--border-color);">
+                        <div style="margin-bottom: 1rem; text-align: left;">
+                            <label class="profile-selection-label">COMPARE TO</label>
+                            <div id="profileSelectionCompareList" class="profile-selection-compare-list">
                                 <!-- checkboxes populated by JS -->
                             </div>
                         </div>
-                        <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+                        <div class="profile-selection-actions">
                             <button type="button" class="btn btn-small" onclick="closeProfileSelectionModal()" style="background: var(--bg-input);">Cancel</button>
                             <button type="button" id="profileSelectionGenerateBtn" class="btn btn-primary btn-small">Generate</button>
                         </div>
@@ -21950,6 +22013,13 @@
             comparison: { icon: '⚖️', title: 'Compare', desc: 'Side-by-side comparison of multiple profiles.' }
         };
         
+        function updateSegmentBuilderTitle() {
+            const el = document.getElementById('segmentBuilderTitle');
+            if (!el) return;
+            const name = (currentProfileData && currentProfileData.name) ? currentProfileData.name : 'Audience';
+            el.textContent = '🎯 ' + name + ' Segment Builder';
+        }
+        
         function updateInlineTabHeader(tabName) {
             const header = document.getElementById('inlineTabHeader');
             const actionRow = document.querySelector('.action-buttons-row');
@@ -21958,6 +22028,7 @@
             if (tabName === 'collaboration' || tabName === 'segmentation') {
                 header.style.display = 'none';
                 if (actionRow) actionRow.style.display = 'none';
+                if (tabName === 'segmentation') updateSegmentBuilderTitle();
                 return;
             }
             
@@ -21980,6 +22051,7 @@
             
             // Update inline tab header
             updateInlineTabHeader(tabName);
+            if (tabName === 'segmentation') updateSegmentBuilderTitle();
             
             // Find and activate the corresponding tab button
             // Try to find button by onclick attribute first
@@ -23399,6 +23471,7 @@
                 s3Key: profileId
             };
             applyGenPopMode();
+            updateSegmentBuilderTitle();
             
             // Update favorite button
             updateFavoriteButton();
@@ -24112,7 +24185,7 @@
                 });
             }
             
-            // Sort by highest index first so "Top Performing Brands" shows the actual top 15 highest-indexing brands globally
+            // Sort by highest index first so "Top Performers" shows the actual top 15 highest-indexing brands globally
             activations.sort((a, b) => Number(b.maxIndex || 0) - Number(a.maxIndex || 0));
             
             document.getElementById('behavioralActivations').innerHTML = activations.slice(0, 15).map(a => {
@@ -25896,9 +25969,9 @@
                         </div>
                         <div class="differentiator-column-headers" style="display: flex; align-items: center; padding: 0.25rem 0.5rem; font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase; border-bottom: 1px solid var(--border-color);">
                             <span style="flex: 1; text-align: left;">Item</span>
-                            <span style="min-width: 60px; text-align: right;">Profile</span>
-                            <span style="min-width: 60px; text-align: right;">Gen Pop</span>
-                            <span style="min-width: 65px; text-align: right;">Index</span>
+                            <span style="min-width: 60px; text-align: left;">Profile</span>
+                            <span style="min-width: 60px; text-align: left;">Gen Pop</span>
+                            <span style="min-width: 65px; text-align: left;">Index</span>
                         </div>
                         <div class="differentiator-category-items">
                             ${itemsHtml}
@@ -26718,9 +26791,9 @@
                         </h4>
                         <div class="interest-category-header" style="display: flex; justify-content: space-between; padding: 0.25rem 0; margin-bottom: 0.25rem; border-bottom: 1px solid var(--border-color); font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase; gap: 1rem;">
                             <span style="flex: 1; text-align: left;">Item</span>
-                            <span style="min-width: 55px; text-align: right;">${isProjection ? 'US #' : 'Profile'}</span>
-                            <span style="min-width: 55px; text-align: right;">${isProjection ? 'GP #' : 'GP'}</span>
-                            <span style="min-width: 45px; text-align: right;">Index</span>
+                            <span style="min-width: 55px; text-align: left;">${isProjection ? 'US #' : 'Profile'}</span>
+                            <span style="min-width: 55px; text-align: left;">${isProjection ? 'GP #' : 'GP'}</span>
+                            <span style="min-width: 45px; text-align: left;">Index</span>
                         </div>
                         <div class="interest-category-items">
                             ${cat.items.map(item => {
@@ -26744,9 +26817,9 @@
                                 
                                 return `<div class="interest-category-item" style="display: flex; gap: 1rem; padding: 0.35rem 0; border-bottom: 1px solid var(--border-color); align-items: center;">
                                     <span class="item-name" style="flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.name}</span>
-                                    <span style="min-width: 55px; text-align: right;">${profileDisplay}</span>
-                                    <span style="min-width: 55px; text-align: right; color: var(--text-secondary);">(${genPopDisplay})</span>
-                                    <span style="min-width: 45px; text-align: right; color: ${idxColor}; font-weight: 600;">${formatIndex(item.index)}</span>
+                                    <span style="min-width: 55px; text-align: left;">${profileDisplay}</span>
+                                    <span style="min-width: 55px; text-align: left; color: var(--text-secondary);">(${genPopDisplay})</span>
+                                    <span style="min-width: 45px; text-align: left; color: ${idxColor}; font-weight: 600;">${formatIndex(item.index)}</span>
                                 </div>`;
                             }).join('')}
                         </div>
@@ -27626,11 +27699,11 @@
                             <input type="text" placeholder="Search..." oninput="searchInCard('${catId}', this.value)" style="flex: 2; min-width: 60px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                         </div>
                         <div class="behavioral-header-row" style="display: flex; align-items: center; padding: 0.5rem 0; margin-bottom: 0.25rem; border-bottom: 2px solid var(--border-color); font-size: 0.7rem; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; background: rgba(102, 217, 239, 0.05); gap: 0.5rem;">
-                            <span style="width: 22px; text-align: right; flex-shrink: 0;">#</span>
-                            <span style="flex: 1; min-width: 0;">Item</span>
-                            <span style="min-width: 55px; text-align: right; flex-shrink: 0;">${dashDisplayMode === 'projection' ? 'US #' : 'Profile'}</span>
-                            <span style="min-width: 55px; text-align: right; flex-shrink: 0;">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
-                            <span style="min-width: 45px; text-align: center; flex-shrink: 0;">Index</span>
+                            <span style="width: 22px; text-align: left; flex-shrink: 0;">#</span>
+                            <span style="flex: 1; min-width: 0; text-align: left;">Item</span>
+                            <span style="min-width: 55px; text-align: left; flex-shrink: 0;">${dashDisplayMode === 'projection' ? 'US #' : 'Profile'}</span>
+                            <span style="min-width: 55px; text-align: left; flex-shrink: 0;">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
+                            <span style="min-width: 45px; text-align: left; flex-shrink: 0;">Index</span>
                         </div>
                         <div class="behavioral-list" id="list-${catId}" data-cat="${cat}">
                             ${renderBehavioralItems(displayItems, maxPct)}
@@ -36335,7 +36408,23 @@
                 return;
             }
             
-            // Group by state - sum both profile % and gen pop % the same way (apples to apples)
+            // Gen Pop state/region totals: compute from Gen Pop profile's locations the same way we do for selected profile (sum pct by state/region)
+            const genPopByState = {};
+            const genPopByRegion = {};
+            if (genPopBaselineData && genPopBaselineData.locations && genPopBaselineData.locations.length > 0) {
+                genPopBaselineData.locations.forEach(loc => {
+                    const state = getStateFromLocation(loc.name);
+                    if (state) {
+                        let pct = parseFloat(loc.pct ?? loc.genPopPct) || 0;
+                        if (pct > 0 && pct < 1) pct = pct * 100;
+                        genPopByState[state] = (genPopByState[state] || 0) + pct;
+                        const region = getRegionForState(state);
+                        genPopByRegion[region] = (genPopByRegion[region] || 0) + pct;
+                    }
+                });
+            }
+            
+            // Group by state - profile % from current profile's locations; Gen Pop % from Gen Pop profile aggregate when available
             const stateData = {};
             locations.forEach(loc => {
                 const state = getStateFromLocation(loc.name);
@@ -36344,22 +36433,35 @@
                         stateData[state] = { pct: 0, genPopPct: 0, index: 0, count: 0, names: [], cities: [] };
                     }
                     stateData[state].pct += loc.pct;
-                    // Gen Pop: sum raw genPopPct per location (same aggregation as profile pct)
-                    let genPopPct = 0;
-                    if (loc.genPopPct != null && loc.genPopPct !== undefined) {
-                        genPopPct = loc.genPopPct;
-                        if (genPopPct > 0 && genPopPct < 1) genPopPct = genPopPct * 100;
-                    } else if (loc.index && loc.index > 0) {
-                        genPopPct = (loc.pct / loc.index) * 100;
-                    }
-                    stateData[state].genPopPct += genPopPct;
+                    // Gen Pop for this state: use pre-aggregated Gen Pop profile data below (genPopByState), not per-location sum
                     stateData[state].index += loc.index || 100;
                     stateData[state].count++;
                     stateData[state].names.push(loc.name);
-                    // Store city with its percentage for tooltip
                     stateData[state].cities.push({ name: loc.name, pct: loc.pct || 0, index: loc.index || 100 });
                 }
             });
+            
+            // Apply Gen Pop state totals from Gen Pop profile (same calculation as profile: sum of pct by state)
+            if (Object.keys(genPopByState).length > 0) {
+                Object.keys(stateData).forEach(state => {
+                    stateData[state].genPopPct = genPopByState[state] ?? 0;
+                });
+            } else {
+                // Fallback: derive from current profile's loc.genPopPct or index (may be less accurate)
+                locations.forEach(loc => {
+                    const state = getStateFromLocation(loc.name);
+                    if (state && stateData[state]) {
+                        let genPopPct = 0;
+                        if (loc.genPopPct != null && loc.genPopPct !== undefined) {
+                            genPopPct = loc.genPopPct;
+                            if (genPopPct > 0 && genPopPct < 1) genPopPct = genPopPct * 100;
+                        } else if (loc.index && loc.index > 0) {
+                            genPopPct = (loc.pct / loc.index) * 100;
+                        }
+                        stateData[state].genPopPct += genPopPct;
+                    }
+                });
+            }
             
             // Calculate average index and sort cities by percentage
             Object.keys(stateData).forEach(state => {
@@ -36419,7 +36521,7 @@
                 <span class="stat">🏆 Top: ${topState ? topState[0] + ' (' + topState[1].pct.toFixed(2) + '%)' : '-'}</span>
             `;
             
-            // Regional breakdown - also collect all cities per region
+            // Regional breakdown - profile % from stateData; Gen Pop % from Gen Pop profile aggregate when available (same calculation as profile)
             const regionData = {};
             const isGenPopProfile = currentProfileData?.name?.toUpperCase().includes('GEN POP') || currentS3Key?.toUpperCase().includes('GEN_POP');
             
@@ -36427,12 +36529,17 @@
                 const region = getRegionForState(state);
                 if (!regionData[region]) regionData[region] = { pct: 0, genPopPct: 0, count: 0, cities: [] };
                 regionData[region].pct += data.pct;
-                // If viewing Gen Pop profile, use profile pct as gen pop pct (they should be the same)
                 regionData[region].genPopPct += isGenPopProfile ? data.pct : data.genPopPct;
                 regionData[region].count++;
-                // Add all cities from this state to the region
                 regionData[region].cities.push(...data.cities);
             });
+            
+            // Override region Gen Pop with Gen Pop profile's aggregated region totals when available (same way we do for profile)
+            if (Object.keys(genPopByRegion).length > 0) {
+                Object.keys(regionData).forEach(region => {
+                    regionData[region].genPopPct = genPopByRegion[region] ?? 0;
+                });
+            }
             
             // Sort cities by percentage within each region
             Object.keys(regionData).forEach(region => {
@@ -40959,17 +41066,18 @@
             
             if (tabs.length === 0) {
                 primarySelect.innerHTML = '<option value="">Open at least one profile first</option>';
-                compareList.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.85rem;">Open profiles to compare.</div>';
+                compareList.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.85rem; text-align: left;">Open profiles to compare.</div>';
                 document.getElementById('profileSelectionGenerateBtn').disabled = true;
             } else {
                 primarySelect.innerHTML = tabs.map(t => `<option value="${t.id}" ${t.id === activeId ? 'selected' : ''}>${(t.name || t.id)}</option>`).join('');
                 let compareHtml = tabs.map(t => {
                     const id = 'ps_compare_' + t.id.replace(/[^a-zA-Z0-9]/g, '_');
                     const name = (t.name || t.id).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                    return `<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem;"><input type="checkbox" class="profile-selection-compare-cb" data-id="${t.id}" data-name="${name}" id="${id}"><span>${name}</span></label>`;
+                    const checked = t.id !== activeId ? ' checked' : '';
+                    return `<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; text-align: left;"><input type="checkbox" class="profile-selection-compare-cb" data-id="${t.id}" data-name="${name}" id="${id}"${checked}><span>${name}</span></label>`;
                 }).join('');
-                compareHtml += `<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem;"><input type="checkbox" class="profile-selection-compare-cb" data-id="__GENPOP__" data-name="Gen Pop" id="ps_compare_genpop"><span>Gen Pop</span></label>`;
-                compareHtml += `<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem;"><input type="checkbox" class="profile-selection-compare-cb" data-id="__NONE__" data-name="None" id="ps_compare_none"><span>None</span></label>`;
+                compareHtml += `<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; text-align: left;"><input type="checkbox" class="profile-selection-compare-cb" data-id="__GENPOP__" data-name="Gen Pop" id="ps_compare_genpop" checked><span>Gen Pop</span></label>`;
+                compareHtml += `<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.9rem; text-align: left;"><input type="checkbox" class="profile-selection-compare-cb" data-id="__NONE__" data-name="None" id="ps_compare_none"><span>None</span></label>`;
                 compareList.innerHTML = compareHtml;
                 document.getElementById('profileSelectionGenerateBtn').disabled = false;
             }
