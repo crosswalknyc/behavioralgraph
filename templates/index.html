@@ -4007,13 +4007,13 @@
             padding-right: 0.5rem;
         }
 
-        /* Behavioral table: same grid for header and rows so columns align left-justified */
+        /* Behavioral table: same grid for header and rows; headers directly over data, all left-aligned */
         .behavioral-header-row {
             display: grid;
             grid-template-columns: 26px minmax(0, 1fr) 58px 58px 48px;
             gap: 0.5rem;
             align-items: center;
-            padding: 0.5rem 0;
+            padding: 0.5rem 0.5rem 0.5rem 0;
             margin-bottom: 0;
             border-bottom: 2px solid var(--border-color);
             font-size: 0.7rem;
@@ -4025,16 +4025,20 @@
         }
         .behavioral-header-row span {
             text-align: left;
+            justify-self: start;
         }
         .behavioral-item {
             display: grid;
             grid-template-columns: 26px minmax(0, 1fr) 58px 58px 48px;
             gap: 0.5rem;
             align-items: center;
-            padding: 0.4rem 0;
+            padding: 0.4rem 0.5rem 0.4rem 0;
             border-bottom: 1px solid var(--border-color);
             position: relative;
             text-align: left;
+        }
+        .behavioral-item > * {
+            justify-self: start;
         }
 
         .behavioral-item:hover {
