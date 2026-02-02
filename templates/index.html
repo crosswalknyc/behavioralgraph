@@ -11034,8 +11034,8 @@
                     <div class="dashboard-tabs" id="analysisToolsTabs">
                         <button class="tab-btn tool-tab has-tooltip" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to competitors and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-feature="keyInsightBuilder" data-tooltip="Key Insight Builder: SWOT analysis and key insights for the primary brand, comparing to competitors and general population." onclick="generateKeyInsightBuilderFromNav()"><span class="tab-icon">🎯</span><span class="tab-label">KEY INSIGHT BUILDER</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-feature="keyInsightBuilder" data-tooltip="Key Insight Builder: SWOT analysis and key insights for the primary brand, comparing to comparison profiles and general population." onclick="generateKeyInsightBuilderFromNav()"><span class="tab-icon">🎯</span><span class="tab-label">KEY INSIGHT BUILDER</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-feature="ecosystem" data-tooltip="Ecosystem: Behavioral ecosystem analysis showing life moments, substitution patterns, cultural signals, emotional engagement, relevance shifts, and white-space opportunities." onclick="showTab('ecosystem')"><span class="tab-icon">🌐</span><span class="tab-label">ECOSYSTEM</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-feature="affinity" data-tooltip="Affinity: Cross-category affinities showing what else this audience engages with across brands and content." onclick="showTab('affinity')"><span class="tab-icon">🔗</span><span class="tab-label">AFFINITY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-feature="sponsorship" data-tooltip="Sponsorship: Sponsorship valuation and partnership opportunity analysis for brand collaborations." onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
@@ -13092,6 +13092,11 @@
                             <option value="comp-age">📅 Age</option>
                             <option value="comp-ethnicity">🌍 Ethnicity</option>
                             <option value="comp-income">💰 Income</option>
+                            <option value="comp-education">🎓 Education</option>
+                            <option value="comp-relationship">💑 Relationship Status</option>
+                            <option value="comp-sexual_orientation">🏳️‍🌈 Sexual Orientation</option>
+                            <option value="comp-parental_status">👶 Parental Status</option>
+                            <option value="comp-occupation">💼 Occupation</option>
                             <option value="comp-behavioral">🎯 Behavioral</option>
                             <option value="comp-location">📍 Location</option>
                         </select>
@@ -16705,11 +16710,13 @@
         function renderTickerInsightsTab(parsed, csvData, brandName) {
             const container = document.getElementById('tickerProfileTabContent');
             
-            // Get top insights (high penetration items)
+            // Get top insights (high penetration items); exclude metadata and system rows
+            const skipInsightColumns = ['SAMPLE SIZE', 'INPUT_METADATA', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'];
             const insights = csvData
                 .filter(row => {
                     const penetration = parseFloat(row['Brand Penetration (Row)'] || 0);
-                    return penetration > 50 && row.Column && row.Value && row.Column.toUpperCase() !== 'SAMPLE SIZE';
+                    const col = (row.Column || '').toUpperCase();
+                    return penetration > 50 && row.Column && row.Value && !skipInsightColumns.includes(col);
                 })
                 .sort((a, b) => parseFloat(b['Brand Penetration (Row)'] || 0) - parseFloat(a['Brand Penetration (Row)'] || 0))
                 .slice(0, 20);
@@ -26422,6 +26429,9 @@
             // Science & Environment
             if (lower.includes('science') || lower.includes('environment') || lower.includes('climate') || lower.includes('sustainab') || lower.includes('eco') || lower.includes('green') || lower.includes('space') || lower.includes('astronomy') || lower.includes('biology') || lower.includes('physics')) return 'Science & Environment';
             
+            // Nerd Culture (comics, anime, cosplay, sci-fi, fantasy, geek - before Gaming so "gaming" doesn't catch "nerd culture")
+            if (lower.includes('nerd') || lower.includes('comic') || lower.includes('anime') || lower.includes('manga') || lower.includes('cosplay') || lower.includes('sci-fi') || lower.includes('scifi') || lower.includes('fantasy') || lower.includes('geek') || lower.includes('superhero') || lower.includes('dungeon') || lower.includes('dragon') || lower.includes('convention')) return 'Nerd Culture';
+            
             // Shopping & Retail
             if (lower.includes('shop') || lower.includes('retail') || lower.includes('deal') || lower.includes('coupon') || lower.includes('bargain') || lower.includes('online shopping') || lower.includes('mall')) return 'Shopping & Retail';
             
@@ -26503,21 +26513,29 @@
                     };
                 });
             
-            // Split into 3 tiers relative to the data
+            // Top over-indexing item (same as Top Over-Indexing card): ensure its category appears in Over-Indexing
+            const topItem = items.length ? items.reduce((best, i) => (i.index > (best?.index || 0) ? i : best), items[0]) : null;
+            const topItemCategoryName = topItem ? topItem.category : null;
+            
+            // Split into 3 tiers by percentile so Over / Neutral / Under are consistent and comparable
             const allIndices = categoryData.map(c => c.avgIndex);
-            const minIdx = Math.min(...allIndices);
-            const maxIdx = Math.max(...allIndices);
-            const range = maxIdx - minIdx || 1;
-            
-            // Calculate percentile-based thresholds
             const sortedIndices = [...allIndices].sort((a, b) => a - b);
-            const lowThreshold = sortedIndices[Math.floor(sortedIndices.length * 0.33)] || minIdx;
-            const highThreshold = sortedIndices[Math.floor(sortedIndices.length * 0.67)] || maxIdx;
+            const lowThreshold = sortedIndices[Math.floor(sortedIndices.length * 0.33)] ?? Math.min(...allIndices);
+            const highThreshold = sortedIndices[Math.floor(sortedIndices.length * 0.67)] ?? Math.max(...allIndices);
             
-            // Categorize and sort
-            const overIndexing = categoryData.filter(c => c.avgIndex >= highThreshold).sort((a, b) => b.avgIndex - a.avgIndex);
-            const neutral = categoryData.filter(c => c.avgIndex >= lowThreshold && c.avgIndex < highThreshold).sort((a, b) => b.avgIndex - a.avgIndex);
-            const underIndexing = categoryData.filter(c => c.avgIndex < lowThreshold).sort((a, b) => b.avgIndex - a.avgIndex);
+            let overIndexing = categoryData.filter(c => c.avgIndex >= highThreshold).sort((a, b) => b.avgIndex - a.avgIndex);
+            let neutral = categoryData.filter(c => c.avgIndex >= lowThreshold && c.avgIndex < highThreshold).sort((a, b) => b.avgIndex - a.avgIndex);
+            let underIndexing = categoryData.filter(c => c.avgIndex < lowThreshold).sort((a, b) => b.avgIndex - a.avgIndex);
+            
+            // Ensure the category containing the #1 top over-indexing item is in Over-Indexing (matches Top Over-Indexing card)
+            if (topItemCategoryName && topItem && topItem.index >= 100) {
+                const topCat = categoryData.find(c => c.name === topItemCategoryName);
+                if (topCat && !overIndexing.some(c => c.name === topCat.name)) {
+                    overIndexing = [...overIndexing, topCat].sort((a, b) => b.avgIndex - a.avgIndex);
+                    neutral = neutral.filter(c => c.name !== topCat.name);
+                    underIndexing = underIndexing.filter(c => c.name !== topCat.name);
+                }
+            }
             
             const renderGroup = (items, label, colors) => {
                 if (items.length === 0) return '';
@@ -37890,20 +37908,22 @@
 
         function parseComparisonData(csvData) {
             const US_POPULATION = 324700000;
+            const demoKeys = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'];
             const result = {
                 sampleSize: 0,
                 projectedUS: 0,
                 medianAge: 0,
-                demographics: { age: {}, gender: {}, ethnicity: {}, income: {} },
-                demographicsProjection: { age: {}, gender: {}, ethnicity: {}, income: {} }, // Raw US projection numbers
-                demographicsIndex: { age: {}, gender: {}, ethnicity: {}, income: {} }, // Gen Pop Index
+                demographics: Object.fromEntries(demoKeys.map(k => [k, {}])),
+                demographicsProjection: Object.fromEntries(demoKeys.map(k => [k, {}])),
+                demographicsIndex: Object.fromEntries(demoKeys.map(k => [k, {}])),
                 behavioral: {},
-                behavioralProjection: {}, // Raw projection numbers for behavioral
+                behavioralProjection: {},
                 locations: [],
-                locationsProjection: [] // Raw projection numbers for locations
+                locationsProjection: []
             };
 
             const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'];
+            const demoKeyByCategory = { AGE: 'age', GENDER: 'gender', ETHNICITY: 'ethnicity', INCOME: 'income', EDUCATION: 'education', RELATIONSHIP: 'relationship', SEXUAL_ORIENTATION: 'sexual_orientation', PARENTAL_STATUS: 'parental_status', OCCUPATION: 'occupation' };
             const skipCategories = ['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY', 'MEDIAN AGE'];
 
             csvData.forEach(row => {
@@ -37915,16 +37935,13 @@
                 const usGenPop = parseFloat(row['US Gen Pop Projection'] || row[5] || 0);
                 const pct = brandPen || catShare || 0;
                 
-                // Calculate Gen Pop % and Index
                 const genPopPct = usGenPop > 0 ? (usGenPop / US_POPULATION) * 100 : 0;
                 const index = genPopPct > 0 ? Math.round((pct / genPopPct) * 100) : 0;
 
                 if (category === 'SAMPLE SIZE') {
                     result.sampleSize = rawNum || catShare || brandPen || 0;
-                    // Projected US comes from F4 (US Gen Pop Projection column on SAMPLE SIZE row)
                     if (usGenPop > 0) result.projectedUS = usGenPop;
                 }
-                // Fallback: also check BRAND INPUT row for projectedUS if not already set
                 if (category === 'BRAND INPUT' && result.projectedUS === 0) {
                     result.projectedUS = usGenPop || 0;
                 }
@@ -37932,26 +37949,12 @@
                     result.medianAge = brandPen || catShare || parseFloat(value) || 0;
                 }
 
-                // Demographics - store percent, projection, and index
-                if (category === 'AGE' && value && pct > 0) {
-                    result.demographics.age[value] = pct;
-                    result.demographicsProjection.age[value] = usGenPop || 0;
-                    result.demographicsIndex.age[value] = index;
-                }
-                if (category === 'GENDER' && value && pct > 0) {
-                    result.demographics.gender[value] = pct;
-                    result.demographicsProjection.gender[value] = usGenPop || 0;
-                    result.demographicsIndex.gender[value] = index;
-                }
-                if (category === 'ETHNICITY' && value && pct > 0) {
-                    result.demographics.ethnicity[value] = pct;
-                    result.demographicsProjection.ethnicity[value] = usGenPop || 0;
-                    result.demographicsIndex.ethnicity[value] = index;
-                }
-                if (category === 'INCOME' && value && pct > 0) {
-                    result.demographics.income[value] = pct;
-                    result.demographicsProjection.income[value] = usGenPop || 0;
-                    result.demographicsIndex.income[value] = index;
+                // Demographics - all categories (Age, Gender, Ethnicity, Income, Education, Relationship, Sexual Orientation, Parental Status, Occupation)
+                const demoKey = demoKeyByCategory[category];
+                if (demoKey && value && pct > 0) {
+                    result.demographics[demoKey][value] = pct;
+                    result.demographicsProjection[demoKey][value] = usGenPop || 0;
+                    result.demographicsIndex[demoKey][value] = index;
                 }
 
                 // Location/DMA - store both percent and projection
@@ -38398,7 +38401,7 @@
 
         // Category filter state
         let availableCategories = {
-            demographics: ['gender', 'age', 'ethnicity', 'income'],
+            demographics: ['gender', 'age', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'],
             behavioral: [],
             location: false
         };
@@ -38745,7 +38748,7 @@
                             <select onchange="setComparisonSectionSortType('demo_age', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                 <option value="pct" ${ageSortType === 'pct' ? 'selected' : ''}>By ${displayMode === 'projection' ? '#' : '%'}</option>
                                 <option value="index" ${ageSortType === 'index' ? 'selected' : ''}>By Index</option>
-                                <option value="age" ${ageSortType === 'age' ? 'selected' : ''}>By Age ↓</option>
+                                <option value="age" ${ageSortType === 'age' ? 'selected' : ''}>By Age ↑ (youngest first)</option>
                             </select>
                         </span>
                     </div>
@@ -38843,6 +38846,54 @@
                 </div>`;
             }
 
+            // Education, Relationship, Sexual Orientation, Parental Status, Occupation (if selected)
+            const extraDemoSections = [
+                { key: 'education', title: 'Education' },
+                { key: 'relationship', title: 'Relationship Status' },
+                { key: 'sexual_orientation', title: 'Sexual Orientation' },
+                { key: 'parental_status', title: 'Parental Status' },
+                { key: 'occupation', title: 'Occupation' }
+            ];
+            extraDemoSections.forEach(({ key, title }) => {
+                if (!selectedCategories.has('demo_' + key)) return;
+                const limit = getComparisonSectionLimit('demo_' + key);
+                const sortType = getComparisonSectionSortType('demo_' + key);
+                const count = countDemoValues(key);
+                html += `
+                <div class="comp-section" id="comp-${key}">
+                    <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+                        <span style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="white-space: nowrap;">${title} (${modeLabel})</span>
+                            <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${count} values</span>
+                        </span>
+                        <span style="display: flex; align-items: center; gap: 0.35rem;">
+                            <button class="btn btn-small btn-primary" onclick="addComparisonModuleToDeck('${key}')" title="Add this comparison to deck" style="font-size: 0.7rem; padding: 0.3rem 0.6rem;">➕ Add to Deck</button>
+                            <select onchange="setComparisonSectionLimit('demo_${key}', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
+                                <option value="15" ${limit == 15 ? 'selected' : ''}>Top 15</option>
+                                <option value="25" ${limit == 25 ? 'selected' : ''}>Top 25</option>
+                                <option value="50" ${limit == 50 ? 'selected' : ''}>Top 50</option>
+                                <option value="All" ${limit === 'All' ? 'selected' : ''}>All</option>
+                            </select>
+                            <select onchange="setComparisonSectionSortType('demo_${key}', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
+                                <option value="pct" ${sortType === 'pct' ? 'selected' : ''}>By ${displayMode === 'projection' ? '#' : '%'}</option>
+                                <option value="index" ${sortType === 'index' ? 'selected' : ''}>By Index</option>
+                            </select>
+                        </span>
+                    </div>
+                    <table class="comp-table">
+                        <thead>
+                            <tr>
+                                <th>${title}</th>
+                                ${profiles.map((p, i) => sortableHeader(key, i, p.name + (p.sampleSize ? ` (n=${formatNumber(p.sampleSize)})` : ''), p.color, p.medianAge)).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${renderDemoComparisonRows(profiles, key, sortSection === key ? sortProfileIdx : null, limit, sortType)}
+                        </tbody>
+                    </table>
+                </div>`;
+            });
+
             // Add behavioral categories (only if selected)
             const sortedBehavioralCats = Array.from(allBehavioralCats).sort();
             const displayedBehavioralCats = []; // Track which categories are displayed for Jump To dropdown
@@ -38850,18 +38901,19 @@
                 const catKey = 'beh_' + cat;
                 if (!selectedCategories.has(catKey)) return; // Skip if not selected
                 
-                // Create a safe ID from category name
                 const safeCatId = cat.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
                 displayedBehavioralCats.push({ name: cat, id: safeCatId });
                 
                 const currentLimit = getComparisonSectionLimit(catKey);
                 const currentSortType = getComparisonSectionSortType(catKey);
+                const valueCount = getBehavioralCategoryValueCount(profiles, cat);
                 
                 html += `
                     <div class="comp-section" id="comp-beh-${safeCatId}">
                         <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
                             <span style="display: flex; align-items: center; gap: 0.5rem;">
                                 <span style="white-space: nowrap;">${cat}</span>
+                                <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.8;">(${valueCount} value${valueCount !== 1 ? 's' : ''})</span>
                                 <span style="font-size: 0.65rem; font-weight: normal; opacity: 0.7;">Index: <span style="color: #10b981;">●</span> &gt;100 | <span style="color: #ef4444;">●</span> &lt;100</span>
                             </span>
                             <span style="display: flex; align-items: center; gap: 0.35rem;">
@@ -38881,8 +38933,12 @@
                         <table class="comp-table">
                             <thead>
                                 <tr>
-                                    <th>${cat}</th>
-                                    ${profiles.map((p, i) => sortableHeader(catKey, i, p.name + ' (% / Idx)' + (p.sampleSize ? ` (n=${formatNumber(p.sampleSize)})` : ''), p.color, p.medianAge)).join('')}
+                                    <th>${cat} (${valueCount})</th>
+                                    ${profiles.map((p, i) => {
+                                        const isGenPop = (p.name || '').toUpperCase().includes('GEN POP') || (p.name || '').toUpperCase().includes('GENPOP');
+                                        const colLabel = isGenPop ? p.name + ' (%)' : p.name + ' (% / Idx)';
+                                        return sortableHeader(catKey, i, colLabel + (p.sampleSize ? ` (n=${formatNumber(p.sampleSize)})` : ''), p.color, p.medianAge);
+                                    }).join('')}
                                 </tr>
                             </thead>
                             <tbody>
@@ -38979,7 +39035,26 @@
             dropdown.innerHTML = options;
         }
 
+        function getBehavioralCategoryValueCount(profiles, category) {
+            const seenNormalized = new Set();
+            profiles.forEach(p => {
+                (p.behavioral[category] || []).forEach(item => {
+                    if (item && item.name) {
+                        const normalizedName = normalizeNameForDedup(item.name);
+                        if (!seenNormalized.has(normalizedName)) seenNormalized.add(normalizedName);
+                    }
+                });
+            });
+            return seenNormalized.size;
+        }
+
         function renderBehavioralComparisonRows(profiles, category, sortByProfileIdx = null, limit = 15, sortType = 'pct') {
+            // Gen Pop is the baseline: never show index for Gen Pop column; compute others as (profile% / Gen Pop%) * 100
+            const genPopIdx = profiles.findIndex(p => {
+                const n = (p.name || '').toUpperCase();
+                return n.includes('GEN POP') || n.includes('GENPOP');
+            });
+            
             // Get all values across all profiles for this category, with deduplication
             const allValues = new Map();
             const seenNormalized = new Set();
@@ -38987,7 +39062,6 @@
             profiles.forEach(p => {
                 (p.behavioral[category] || []).forEach(item => {
                     const normalizedName = normalizeNameForDedup(item.name);
-                    // Skip if we've already seen this normalized name
                     if (!seenNormalized.has(normalizedName)) {
                         seenNormalized.add(normalizedName);
                         allValues.set(item.name, {});
@@ -38995,39 +39069,33 @@
                 });
             });
 
-            // Build data rows with pct, projection, and index
-            // When looking up items, also check for normalized name matches
+            // Build data rows with pct and projection; index will be computed from Gen Pop baseline at render
             let dataRows = Array.from(allValues.keys()).map(value => {
                 const normalizedValue = normalizeNameForDedup(value);
-                
-                // Helper to find item by exact or normalized name match
                 const findItem = (items) => items.find(i => 
                     i.name === value || normalizeNameForDedup(i.name) === normalizedValue
                 );
                 
-                return {
-                    value: value,
-                    pctData: profiles.map(p => {
-                        const item = findItem(p.behavioral[category] || []);
-                        return item ? item.pct : 0;
-                    }),
-                    projData: profiles.map(p => {
-                        const item = findItem(p.behavioral[category] || []);
-                        return item ? (item.projection || 0) : 0;
-                    }),
-                    indexData: profiles.map(p => {
-                        const item = findItem(p.behavioral[category] || []);
-                        return item ? (item.index || 0) : 0;
-                    }),
-                    genPopPct: (() => {
-                        // Get gen pop % from first profile that has this item
-                        for (const p of profiles) {
-                            const item = findItem(p.behavioral[category] || []);
-                            if (item && item.genPopPct > 0) return item.genPopPct;
-                        }
-                        return 0;
-                    })()
-                };
+                const pctData = profiles.map(p => {
+                    const item = findItem(p.behavioral[category] || []);
+                    return item ? item.pct : 0;
+                });
+                const projData = profiles.map(p => {
+                    const item = findItem(p.behavioral[category] || []);
+                    return item ? (item.projection || 0) : 0;
+                });
+                // Index relative to Gen Pop: (profile pct / Gen Pop pct) * 100 (computed at render; fallback from item.index if no Gen Pop)
+                const genPopPct = genPopIdx >= 0 ? pctData[genPopIdx] : 0;
+                const indexData = profiles.map((p, i) => {
+                    const pct = pctData[i];
+                    if (pct <= 0) return 0;
+                    if (genPopIdx >= 0 && i === genPopIdx) return 100; // Gen Pop = baseline (not displayed)
+                    if (genPopPct > 0) return Math.round((pct / genPopPct) * 100);
+                    const item = findItem(p.behavioral[category] || []);
+                    return item ? (item.index || 0) : 0;
+                });
+                
+                return { value: value, pctData, projData, indexData };
             });
 
             // Determine which data to use for sorting based on sortType
@@ -39069,9 +39137,10 @@
                             ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                             : (pct > 0 ? pct.toFixed(2) + '%' : '-');
                         
-                        // Index color: green if > 100 (over-index), red if < 100 (under-index)
+                        // Gen Pop is the baseline: never show index in its own column
+                        const isGenPopCol = genPopIdx >= 0 && i === genPopIdx;
                         const indexColor = index >= 100 ? '#10b981' : '#ef4444';
-                        const indexDisplay = index > 0 ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${index}</span>` : '';
+                        const indexDisplay = (!isGenPopCol && index > 0) ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${index}</span>` : '';
                         
                         return `
                             <td class="${primaryClass}">
@@ -39090,10 +39159,13 @@
         }
 
         function renderLocationComparisonRows(profiles, sortByProfileIdx = null, limit = 15, sortType = 'pct') {
-            // Get all locations across all profiles, with deduplication
+            const genPopIdx = profiles.findIndex(p => {
+                const n = (p.name || '').toUpperCase();
+                return n.includes('GEN POP') || n.includes('GENPOP');
+            });
+            
             const allLocations = new Set();
             const seenNormalized = new Set();
-            
             profiles.forEach(p => {
                 (p.locations || []).forEach(loc => {
                     const normalizedName = normalizeNameForDedup(loc.name);
@@ -39104,30 +39176,30 @@
                 });
             });
 
-            // Build data rows with pct, projection, and index
+            // Build data rows; index = (profile% / Gen Pop%) * 100, never show for Gen Pop column
             let dataRows = Array.from(allLocations).map(locName => {
                 const normalizedLocName = normalizeNameForDedup(locName);
-                
-                // Helper to find location by exact or normalized name match
                 const findLoc = (locations) => locations.find(l => 
                     l.name === locName || normalizeNameForDedup(l.name) === normalizedLocName
                 );
-                
-                return {
-                    value: locName,
-                    pctData: profiles.map(p => {
-                        const loc = findLoc(p.locations || []);
-                        return loc ? loc.pct : 0;
-                    }),
-                    projData: profiles.map(p => {
-                        const loc = findLoc(p.locations || []);
-                        return loc ? (loc.projection || 0) : 0;
-                    }),
-                    indexData: profiles.map(p => {
-                        const loc = findLoc(p.locations || []);
-                        return loc ? (loc.index || 0) : 0;
-                    })
-                };
+                const pctData = profiles.map(p => {
+                    const loc = findLoc(p.locations || []);
+                    return loc ? loc.pct : 0;
+                });
+                const projData = profiles.map(p => {
+                    const loc = findLoc(p.locations || []);
+                    return loc ? (loc.projection || 0) : 0;
+                });
+                const genPopPct = genPopIdx >= 0 ? pctData[genPopIdx] : 0;
+                const indexData = profiles.map((p, i) => {
+                    const pct = pctData[i];
+                    if (pct <= 0) return 0;
+                    if (genPopIdx >= 0 && i === genPopIdx) return 100;
+                    if (genPopPct > 0) return Math.round((pct / genPopPct) * 100);
+                    const loc = findLoc(p.locations || []);
+                    return loc ? (loc.index || 0) : 0;
+                });
+                return { value: locName, pctData, projData, indexData };
             });
 
             // Determine which data to use for sorting based on sortType
@@ -39168,9 +39240,9 @@
                             ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                             : (pct > 0 ? pct.toFixed(2) + '%' : '-');
                         
-                        // Index color: green if >= 100, red if < 100
+                        const isGenPopCol = genPopIdx >= 0 && i === genPopIdx;
                         const indexColor = index >= 100 ? '#10b981' : '#ef4444';
-                        const indexDisplay = index > 0 ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${Math.round(index)}</span>` : '';
+                        const indexDisplay = (!isGenPopCol && index > 0) ? `<span class="index-badge" style="color: ${indexColor}; font-weight: 600;">${Math.round(index)}</span>` : '';
                         
                         return `
                             <td class="${primaryClass}">
@@ -39235,14 +39307,15 @@
             if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
                 dataRows.sort((a, b) => getSortValue(b, sortByProfileIdx) - getSortValue(a, sortByProfileIdx));
             } else if (demoType === 'age' && sortType === 'age') {
-                // By age descending (oldest first): parse age bracket start, sort high to low
+                // By age ascending (youngest first): <16 at top, then 17-18, 19-20, ..., 60+ at bottom
                 const getAgeSortKey = (val) => {
-                    const s = (val || '').toString();
-                    if (s.includes('+')) return parseInt(s.replace(/[^0-9]/g, '')) || 0;
+                    const s = (val || '').toString().trim();
+                    if (/^<\d+/.test(s)) return 0; // e.g. <16 -> 0 so it sorts first
+                    if (s.includes('+')) return parseInt(s.replace(/[^0-9]/g, '')) || 99;
                     const nums = s.match(/\d+/g);
                     return nums && nums[0] ? parseInt(nums[0]) : 0;
                 };
-                dataRows.sort((a, b) => getAgeSortKey(b.value) - getAgeSortKey(a.value));
+                dataRows.sort((a, b) => getAgeSortKey(a.value) - getAgeSortKey(b.value));
             } else if (demoType === 'age' && sortType === 'pct') {
                 // For age with pct sort, use natural age order (ascending)
                 dataRows.sort((a, b) => {
@@ -39492,14 +39565,26 @@
         let benchmarkData = null;
         let benchmarkCategoryData = {};
         
+        // Display names for demographic categories so Compare includes all sections (e.g. Parental Status)
+        const BENCHMARK_DEMO_CATEGORY_NAMES = {
+            age: 'Age',
+            gender: 'Gender',
+            ethnicity: 'Ethnicity',
+            income: 'Income',
+            education: 'Education',
+            relationship: 'Relationship Status',
+            sexual_orientation: 'Sexual Orientation',
+            parental_status: 'Parental Status',
+            occupation: 'Occupation'
+        };
+        
         function renderBenchmarkAnalysis(profiles) {
             if (!profiles || profiles.length < 1) {
                 document.getElementById('benchmarkContent').innerHTML = '<div class="comparison-empty"><p>Run a comparison to see benchmarking data</p></div>';
                 return;
             }
             
-            // Collect ALL behavioral data including items with index < 100
-            // We need to look at the raw data, not just filtered items
+            // Collect ALL behavioral AND demographic data (all sections) including items with index < 100
             benchmarkCategoryData = {};
             
             // Calculate aggregate metrics for each profile
@@ -39507,6 +39592,7 @@
                 const allItems = [];
                 const categoryItems = {};
                 
+                // Behavioral categories (Content & Entertainment, Brand Affinities, etc.)
                 if (p.behavioral) {
                     Object.entries(p.behavioral).forEach(([cat, items]) => {
                         if (!categoryItems[cat]) categoryItems[cat] = [];
@@ -39518,7 +39604,6 @@
                                     allItems.push(itemData);
                                     categoryItems[cat].push(itemData);
                                     
-                                    // Store for category deep dive
                                     if (!benchmarkCategoryData[cat]) benchmarkCategoryData[cat] = {};
                                     if (!benchmarkCategoryData[cat][p.name]) benchmarkCategoryData[cat][p.name] = [];
                                     benchmarkCategoryData[cat][p.name].push(itemData);
@@ -39527,6 +39612,24 @@
                         }
                     });
                 }
+                
+                // Demographic categories (Age, Gender, Parental Status, etc.) so Compare includes all sections
+                const demoIndex = p.demographicsIndex || {};
+                Object.entries(BENCHMARK_DEMO_CATEGORY_NAMES).forEach(([demoKey, displayName]) => {
+                    const indexMap = demoIndex[demoKey];
+                    if (!indexMap || typeof indexMap !== 'object') return;
+                    if (!categoryItems[displayName]) categoryItems[displayName] = [];
+                    Object.entries(indexMap).forEach(([value, indexVal]) => {
+                        if (value == null || value === '') return;
+                        const idx = typeof indexVal === 'number' ? indexVal : 100;
+                        const itemData = { name: value, index: idx, category: displayName };
+                        allItems.push(itemData);
+                        categoryItems[displayName].push(itemData);
+                        if (!benchmarkCategoryData[displayName]) benchmarkCategoryData[displayName] = {};
+                        if (!benchmarkCategoryData[displayName][p.name]) benchmarkCategoryData[displayName][p.name] = [];
+                        benchmarkCategoryData[displayName][p.name].push(itemData);
+                    });
+                });
                 
                 // Check if this is Gen Pop (baseline profile)
                 const isGenPop = p.name.toUpperCase() === 'GEN POP' || p.name.toUpperCase() === 'GENPOP';
@@ -40792,16 +40895,16 @@
             }
             
             const profiles = window.comparisonProfilesData;
-            const primaryProfile = profiles[0];
-            const otherProfiles = profiles.slice(1);
+            const primaryIdx = (typeof primaryProfileIndex !== 'undefined' && primaryProfileIndex >= 0 && primaryProfileIndex < profiles.length) ? primaryProfileIndex : 0;
+            const primaryProfile = profiles[primaryIdx];
+            const otherProfiles = profiles.filter((_, i) => i !== primaryIdx);
             
-            // Find Gen Pop profile
             const genPopProfile = profiles.find(p => {
                 const name = (p.name || '').toUpperCase();
                 return name.includes('GEN POP') || name.includes('GENPOP') || name.includes('GENERAL POPULATION');
             });
             
-            const competitors = otherProfiles.filter(p => p !== genPopProfile);
+            const comparisons = otherProfiles.filter(p => p !== genPopProfile);
             
             if (!primaryProfile) {
                 alert('No primary profile found.');
@@ -40910,7 +41013,7 @@
             const primaryTopCategories = getTopCategories(primaryItems);
             const primaryTopInterests = primaryItems.sort((a, b) => b.index - a.index).slice(0, 10);
             
-            const competitorData = competitors.map(comp => {
+            const competitorData = comparisons.map(comp => {
                 const compItems = collectItems(comp);
                 return {
                     name: comp.name,
@@ -41000,7 +41103,7 @@
                             <h3>Overview</h3>
                                 <p><strong>Primary Profile:</strong> ${primaryProfile.name}</p>
                                 <p><strong>Sample Size:</strong> ${formatNumber(primaryProfile.sampleSize || 0)} | <strong>Projected US:</strong> ${formatNumber(primaryProfile.projectedUS || 0)} | <strong>Median Age:</strong> ${primaryProfile.medianAge || 'N/A'}</p>
-                                ${competitors.length > 0 ? `<p><strong>Competitors:</strong> ${competitors.map(c => c.name).join(', ')}</p>` : ''}
+                                ${comparisons.length > 0 ? `<p><strong>Comparisons:</strong> ${comparisons.map(c => c.name).join(', ')}</p>` : ''}
                                 ${genPopProfile ? `<p><strong>Baseline:</strong> Gen Pop (General Population)</p>` : ''}
                             <p style="color: var(--text-secondary); font-size: 0.85rem;">Generated on ${new Date().toLocaleDateString()}</p>
                         </div>
@@ -41337,26 +41440,26 @@
         
         async function generateKeyInsightBuilder() {
             if (!window.comparisonProfilesData || window.comparisonProfilesData.length === 0) {
-                alert('Please run a comparison first. The leftmost (first) profile will be analyzed as the primary brand.');
+                alert('Please run a comparison first. The selected primary profile (★) will be analyzed.');
                 return;
             }
             
             const profiles = window.comparisonProfilesData;
-            const primaryBrand = profiles[0]; // Leftmost/first profile is the primary brand
-            const otherProfiles = profiles.slice(1);
+            const primaryIdx = (typeof primaryProfileIndex !== 'undefined' && primaryProfileIndex >= 0 && primaryProfileIndex < profiles.length) ? primaryProfileIndex : 0;
+            const primaryBrand = profiles[primaryIdx];
+            const otherProfiles = profiles.filter((_, i) => i !== primaryIdx);
             
             if (!primaryBrand) {
-                alert('No primary brand found. Please ensure at least one profile is selected.');
+                alert('No primary profile found. Please ensure at least one profile is selected.');
                 return;
             }
             
-            // Find Gen Pop profile
             const genPopProfile = profiles.find(p => {
                 const name = (p.name || '').toUpperCase();
                 return name.includes('GEN POP') || name.includes('GENPOP') || name.includes('GENERAL POPULATION');
             });
             
-            const competitors = otherProfiles.filter(p => p !== genPopProfile);
+            const comparisons = otherProfiles.filter(p => p !== genPopProfile);
             
             // Show modal with loading state
             document.getElementById('keyInsightBuilderModal').style.display = 'flex';
@@ -41398,7 +41501,7 @@
                     },
                     body: JSON.stringify({
                         primaryProfile: primaryBrand,
-                        competitors: competitors,
+                        competitors: comparisons,
                         genPopProfile: genPopProfile
                     })
                 });
@@ -41522,7 +41625,7 @@
             };
             
             if (!otherProfiles || otherProfiles.length === 0) {
-                swot.strengths.push('No competitors selected for comparison. Add more profiles to see competitive insights.');
+                swot.strengths.push('No comparisons selected. Add more profiles to see comparative insights.');
                 return swot;
             }
             
@@ -41938,16 +42041,16 @@
             
             // Ensure we have at least something in each category
             if (swot.strengths.length === 0) {
-                swot.strengths.push('No significant competitive strengths identified vs. selected competitors');
+                swot.strengths.push('No significant competitive strengths identified vs. selected comparisons');
             }
             if (swot.weaknesses.length === 0) {
-                swot.weaknesses.push('No significant competitive weaknesses identified vs. selected competitors');
+                swot.weaknesses.push('No significant competitive weaknesses identified vs. selected comparisons');
             }
             if (swot.opportunities.length === 0) {
                 swot.opportunities.push('No significant growth opportunities identified from competitive analysis');
             }
             if (swot.threats.length === 0) {
-                swot.threats.push('No significant competitive threats identified from selected competitors');
+                swot.threats.push('No significant competitive threats identified from selected comparisons');
             }
             
             return swot;
