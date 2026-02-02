@@ -12200,7 +12200,7 @@
                             <div id="rankersLoadStatus" style="font-size: 0.9rem; color: var(--text-secondary);">Loading rankers...</div>
                         </div>
                         <div id="rankersLoadDone" style="display: none;">
-                            <p id="rankersLoadDoneMessage" style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data loaded. Use the Netflix and YouTube tabs above to view.</p>
+                            <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data loaded. Use the Netflix and YouTube tabs above to view.</p>
                             <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
                                 <button class="btn btn-primary" onclick="loadNetflixRankerData()" id="rankersLoadBtnNetflix">📺 Refresh Netflix</button>
                                 <button class="btn btn-primary" onclick="loadYouTubeRankerData()" id="rankersLoadBtnYouTube">▶️ Refresh YouTube</button>
@@ -29828,16 +29828,9 @@
             const progress = document.getElementById('rankersLoadProgress');
             const done = document.getElementById('rankersLoadDone');
             const block = document.getElementById('rankersLoadBlock');
-            const doneMsg = document.getElementById('rankersLoadDoneMessage');
             if (progress) progress.style.display = 'none';
             if (done) done.style.display = 'block';
-            if (doneMsg) {
-                if (netflixRankerData) doneMsg.textContent = 'Ranker data loaded. Use the Netflix and YouTube tabs above to view.';
-                else {
-                    const statusEl = document.getElementById('rankersLoadStatus');
-                    doneMsg.textContent = (statusEl && statusEl.textContent) ? statusEl.textContent : 'Netflix failed to load. Click Refresh Netflix to retry.';
-                }
-            }
+            // When Netflix data is loaded, hide the whole block so the table is the focus (no confusing "loaded" message)
             if (block && netflixRankerData) block.style.display = 'none';
             else if (block) block.style.display = 'block';
         }
@@ -29959,15 +29952,15 @@
             const dateInp = document.getElementById('netflixDailyDate');
             const sortSelect = document.getElementById('netflixDailySortBy');
             const genreSelect = document.getElementById('netflixDailyGenreFilter');
-            if (!netflixRankerData || !netflixRankerData.by_date) {
-                if (loading) loading.style.display = 'none';
-                if (wrap) wrap.style.display = 'none';
-                return;
-            }
             const loadBlock = document.getElementById('rankersLoadBlock');
-            if (loadBlock) loadBlock.style.display = 'none';
             if (loading) loading.style.display = 'none';
             if (wrap) wrap.style.display = 'block';
+            if (!netflixRankerData || !netflixRankerData.by_date) {
+                if (loadBlock) loadBlock.style.display = 'block';
+                if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">Netflix data not loaded. Click <strong>Refresh Netflix</strong> below to load ranker data.</td></tr>';
+                return;
+            }
+            if (loadBlock) loadBlock.style.display = 'none';
             let date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
             let rows = (netflixRankerData.by_date[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian'));
             // If selected date has no data, default to last available day
