@@ -2240,6 +2240,7 @@
             display: flex;
             flex-direction: column;
             min-height: 0;
+            overflow: hidden;
         }
         .dashboard-layout.behavioral-active .dashboard-tab-content #dashboardContent {
             display: grid;
@@ -2247,17 +2248,21 @@
             grid-template-columns: 1fr;
             flex: 1;
             min-height: 0;
+            overflow: hidden;
         }
         .dashboard-layout.behavioral-active #tab-behavioral {
             display: contents;
         }
         .dashboard-layout.behavioral-active .behavioral-top-section {
             grid-row: 1;
+            flex-shrink: 0;
         }
         .dashboard-layout.behavioral-active .behavioral-grid {
             grid-row: 2;
             min-height: 0;
-            overflow: auto;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
         }
         
         /* Content action buttons - positioned above sidebar, matching sidebar width */
