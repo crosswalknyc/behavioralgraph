@@ -12202,7 +12202,7 @@
                         <div id="rankersLoadDone" style="display: none;">
                             <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data loaded. Use the Netflix and YouTube tabs above to view.</p>
                             <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
-                                <button class="btn btn-primary" onclick="loadNetflixRankerData()" id="rankersLoadBtnNetflix">📺 Refresh Netflix</button>
+                                <button class="btn btn-primary" onclick="loadNetflixRankerData(true)" id="rankersLoadBtnNetflix">📺 Refresh Netflix</button>
                                 <button class="btn btn-primary" onclick="loadYouTubeRankerData()" id="rankersLoadBtnYouTube">▶️ Refresh YouTube</button>
                             </div>
                         </div>
@@ -29793,7 +29793,9 @@
             const btn = document.getElementById(btnId);
             if (panel) panel.classList.add('active');
             if (btn) btn.classList.add('active');
-            if (id === 'youtube') {
+            if (id === 'netflix') {
+                showNetflixSubTab('daily');
+            } else if (id === 'youtube') {
                 showYouTubeSubTab('daily');
             }
         }
@@ -29868,14 +29870,26 @@
             if (!youtubeRankerData) loadYouTubeRankerData();
         }
 
-        function loadNetflixRankerData() {
+        function _getLastNetflixDateWithData(data, key) {
+            if (!data) return null;
+            const byDate = data[key || 'by_date'] || {};
+            const dates = data.dates_sorted || Object.keys(byDate).sort();
+            for (let i = dates.length - 1; i >= 0; i--) {
+                const dt = dates[i];
+                if (byDate[dt] && byDate[dt].length > 0) return dt;
+            }
+            return data.date_range ? (data.date_range.max || data.date_range.min) : null;
+        }
+
+        function loadNetflixRankerData(forceRefresh) {
             const btn = document.getElementById('rankersLoadBtnNetflix');
             if (btn) btn.disabled = true;
             const parts = ['Netflix: loading...'];
             if (!youtubeRankerData) parts.push('YouTube: loading...');
             else parts.push('YouTube: loaded.');
             updateRankersLoadStatus(parts.join(' '));
-            fetch('/api/rankers/netflix/data', { credentials: 'same-origin' })
+            const url = '/api/rankers/netflix/data' + (forceRefresh ? '?force_refresh=1' : '');
+            fetch(url, { credentials: 'same-origin' })
                 .then(r => {
                     if (!r.ok) throw new Error(r.status + ' ' + (r.statusText || 'Request failed'));
                     return r.text();
@@ -29896,29 +29910,34 @@
                     if (!youtubeRankerData) parts.push('YouTube: loading...');
                     else parts.push('YouTube: loaded.');
                     updateRankersLoadStatus(parts.join(' '));
+                    // Use last date that actually has data (not just date_range.max which may be stale)
+                    const lastDateWithData = _getLastNetflixDateWithData(data);
+                    const seasonsLastDate = _getLastNetflixDateWithData(data, 'by_date_season');
+                    const episodesLastDate = _getLastNetflixDateWithData(data, 'by_date_episode');
+                    const genreLastDate = _getLastNetflixDateWithData(data, 'genres_by_date');
                     const dateInp = document.getElementById('netflixDailyDate');
                     if (dateInp && data.date_range) {
                         dateInp.min = data.date_range.min;
                         dateInp.max = data.date_range.max;
-                        dateInp.value = data.date_range.max || data.date_range.min;
+                        dateInp.value = lastDateWithData || data.date_range.max || data.date_range.min;
                     }
                     const seasonsDate = document.getElementById('netflixSeasonsDate');
                     if (seasonsDate && data.date_range) {
                         seasonsDate.min = data.date_range.min;
                         seasonsDate.max = data.date_range.max;
-                        seasonsDate.value = data.date_range.max || data.date_range.min;
+                        seasonsDate.value = seasonsLastDate || data.date_range.max || data.date_range.min;
                     }
                     const episodesDate = document.getElementById('netflixEpisodesDate');
                     if (episodesDate && data.date_range) {
                         episodesDate.min = data.date_range.min;
                         episodesDate.max = data.date_range.max;
-                        episodesDate.value = data.date_range.max || data.date_range.min;
+                        episodesDate.value = episodesLastDate || data.date_range.max || data.date_range.min;
                     }
                     const genreDate = document.getElementById('netflixGenreDate');
                     if (genreDate && data.date_range) {
                         genreDate.min = data.date_range.min;
                         genreDate.max = data.date_range.max;
-                        genreDate.value = data.date_range.max || data.date_range.min;
+                        genreDate.value = genreLastDate || data.date_range.max || data.date_range.min;
                     }
                     renderNetflixDailyRanker();
                     renderNetflixSeasonsRanker();
@@ -29972,10 +29991,12 @@
             if (loadBlock) loadBlock.style.display = 'none';
             if (loading) loading.style.display = 'none';
             if (wrap) wrap.style.display = 'block';
-            let date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            let date = dateInp ? dateInp.value : null;
+            if (!date) date = _getLastNetflixDateWithData(netflixRankerData);
+            if (!date) date = (netflixRankerData.date_range && netflixRankerData.date_range.max);
             let rows = (netflixRankerData.by_date[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian'));
-            // If selected date has no data, default to last available day
-            const lastDate = (netflixRankerData.dates_sorted && netflixRankerData.dates_sorted.length) ? netflixRankerData.dates_sorted[netflixRankerData.dates_sorted.length - 1] : (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            // If selected date has no data, default to last available day with data
+            const lastDate = _getLastNetflixDateWithData(netflixRankerData);
             if (rows.length === 0 && lastDate && netflixRankerData.by_date[lastDate] && netflixRankerData.by_date[lastDate].length) {
                 date = lastDate;
                 if (dateInp) dateInp.value = date;

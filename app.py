@@ -3952,14 +3952,16 @@ def get_netflix_ranker_data():
     """
     Return Netflix ranker data (day-by-day views by show) from BEHAVIORALGRAPH.PUBLIC.NETFLIX.
     Cached on disk; first request after cache expiry refreshes only the most recent day and merges.
+    Pass force_refresh=1 to bypass cache and fetch full data from Snowflake.
     """
     global NETFLIX_RANKER_CACHE
     refresh_today = request.args.get('refresh_today', '').lower() in ('1', 'true', 'yes')
+    force_refresh = request.args.get('force_refresh', '').lower() in ('1', 'true', 'yes')
     with NETFLIX_RANKER_LOCK:
-        data = NETFLIX_RANKER_CACHE.get('data')
+        data = None if force_refresh else NETFLIX_RANKER_CACHE.get('data')
         loaded_at = NETFLIX_RANKER_CACHE.get('loaded_at') or 0
         age_hours = (datetime.now().timestamp() - loaded_at) / 3600.0
-        if data is None:
+        if data is None and not force_refresh:
             data = _load_netflix_ranker_cache()
         # If cache is stale (e.g. >24h), first request refreshes only latest day and merges
         if data is not None and age_hours >= NETFLIX_RANKER_CACHE_MAX_AGE_HOURS:
