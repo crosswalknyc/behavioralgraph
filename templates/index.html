@@ -14428,9 +14428,15 @@
                             </div>
                             
                             <div class="chart-card">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem;">
                                     <h3 style="margin: 0;">📅 Historic Performance</h3>
-                                    <div style="display: flex; gap: 0.5rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                        <span style="font-size: 0.8rem; color: var(--text-secondary);">View:</span>
+                                        <select id="historicViewSelect" onchange="setHistoricView(this.value)" style="padding: 0.4rem 0.6rem; font-size: 0.85rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); min-width: 120px;">
+                                            <option value="table">Table</option>
+                                            <option value="line">Line chart</option>
+                                            <option value="bar">Bar chart</option>
+                                        </select>
                                         <button id="sortChronological" class="sort-btn active" onclick="sortQuarterlyTable('chronological')" style="padding: 0.5rem 1rem; background: var(--accent-cyan); color: var(--bg-dark); border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;">
                                             📅 Chronological
                                         </button>
@@ -14439,7 +14445,12 @@
                                         </button>
                                     </div>
                                 </div>
-                                <div id="quarterlyTable" style="overflow-x: auto;"></div>
+                                <div id="historicTableView" style="overflow-x: auto;">
+                                    <div id="quarterlyTable"></div>
+                                </div>
+                                <div id="historicChartView" style="display: none; height: 380px; position: relative;">
+                                    <canvas id="historicPerformanceChart"></canvas>
+                                </div>
                             </div>
                         </div>
                         <!-- Customer Profile Tab -->
@@ -19184,10 +19195,13 @@
             }
         }
         
-        // Store quarterly data globally for sorting
+        // Store quarterly data globally for sorting and chart
         let quarterlyDataCache = null;
         let secActualsCache = null;
         let currentQuarterlySortMode = 'chronological';
+        let historicSortedQuartersCache = [];
+        let currentHistoricView = 'table';
+        let historicPerformanceChartInstance = null;
         
         async function renderQuarterlyTable(dailyData, sortMode = 'chronological') {
             const quarters = {};
@@ -19314,7 +19328,110 @@
             });
             
             html += '</tbody></table>';
-            document.getElementById('quarterlyTable').innerHTML = html;
+            const tableEl = document.getElementById('quarterlyTable');
+            if (tableEl) tableEl.innerHTML = html;
+            
+            historicSortedQuartersCache = sortedQuarters;
+            const tableView = document.getElementById('historicTableView');
+            const chartView = document.getElementById('historicChartView');
+            if (currentHistoricView === 'table') {
+                if (tableView) tableView.style.display = 'block';
+                if (chartView) chartView.style.display = 'none';
+            } else {
+                if (tableView) tableView.style.display = 'none';
+                if (chartView) chartView.style.display = 'block';
+                renderHistoricPerformanceChart(currentHistoricView);
+            }
+        }
+        
+        function setHistoricView(view) {
+            currentHistoricView = view;
+            const tableView = document.getElementById('historicTableView');
+            const chartView = document.getElementById('historicChartView');
+            const selectEl = document.getElementById('historicViewSelect');
+            if (selectEl) selectEl.value = view;
+            if (view === 'table') {
+                if (tableView) tableView.style.display = 'block';
+                if (chartView) chartView.style.display = 'none';
+                if (historicPerformanceChartInstance) {
+                    historicPerformanceChartInstance.destroy();
+                    historicPerformanceChartInstance = null;
+                }
+            } else {
+                if (tableView) tableView.style.display = 'none';
+                if (chartView) chartView.style.display = 'block';
+                renderHistoricPerformanceChart(view);
+            }
+        }
+        
+        function renderHistoricPerformanceChart(chartType) {
+            const chartView = document.getElementById('historicChartView');
+            if (!chartView) return;
+            const quarters = quarterlyDataCache;
+            const sortedQuarters = historicSortedQuartersCache;
+            const secActuals = secActualsCache || {};
+            if (!quarters || !sortedQuarters || sortedQuarters.length === 0) {
+                chartView.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary);">No quarterly data. Load a ticker with historic data.</div>';
+                return;
+            }
+            if (!chartView.querySelector('canvas')) {
+                chartView.innerHTML = '<canvas id="historicPerformanceChart"></canvas>';
+            }
+            const canvas = document.getElementById('historicPerformanceChart');
+            if (!canvas) return;
+            if (historicPerformanceChartInstance) {
+                historicPerformanceChartInstance.destroy();
+                historicPerformanceChartInstance = null;
+            }
+            const labels = sortedQuarters;
+            const netGrowthData = sortedQuarters.map(q => {
+                const d = quarters[q];
+                return d ? (d.subs - d.cancels) : 0;
+            });
+            const growthPctData = sortedQuarters.map(q => {
+                const d = quarters[q];
+                if (!d) return null;
+                const startC = d.startConsumers != null ? Number(d.startConsumers) : 0;
+                const endC = d.endConsumers != null ? Number(d.endConsumers) : 0;
+                return startC > 0 && endC != null ? ((endC - startC) / startC) * 100 : (startC > 0 ? ((d.subs - d.cancels) / startC) * 100 : null);
+            });
+            const secActualsData = sortedQuarters.map(q => {
+                const v = secActuals[q] != null ? secActuals[q] : (secActuals[(q || '').trim()] != null ? secActuals[(q || '').trim()] : null);
+                return v !== undefined && v !== null && v !== '' ? parseFloat(v) : null;
+            });
+            const accentCyan = 'rgba(0, 255, 255, 0.9)';
+            const green = '#10b981';
+            const blue = 'rgba(59, 130, 246, 0.9)';
+            const commonOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 400 },
+                plugins: {
+                    legend: { labels: { color: '#e6f1ff' } },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#00ffff',
+                        bodyColor: '#e6f1ff',
+                        borderColor: '#00ffff',
+                        borderWidth: 1
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#94a3b8', maxTicksLimit: 20 } },
+                    y: { ticks: { color: '#94a3b8' } }
+                }
+            };
+            const datasets = [
+                { label: 'Net Growth', data: netGrowthData, borderColor: accentCyan, backgroundColor: 'rgba(0, 255, 255, 0.15)', fill: false, tension: 0.3, pointRadius: 4 },
+                { label: 'Growth %', data: growthPctData, borderColor: green, backgroundColor: 'rgba(16, 185, 129, 0.15)', fill: false, tension: 0.3, pointRadius: 4 },
+                { label: 'SEC Actuals %', data: secActualsData, borderColor: blue, backgroundColor: 'rgba(59, 130, 246, 0.15)', fill: false, tension: 0.3, pointRadius: 4 }
+            ];
+            const ctx = canvas.getContext('2d');
+            historicPerformanceChartInstance = new Chart(ctx, {
+                type: chartType === 'bar' ? 'bar' : 'line',
+                data: { labels, datasets },
+                options: chartType === 'bar' ? { ...commonOptions, scales: { ...commonOptions.scales, x: { ...commonOptions.scales.x, grid: { display: false } }, y: { ...commonOptions.scales.y, beginAtZero: true } } } : commonOptions
+            });
         }
         
         function sortQuarterlyTable(mode) {
@@ -40227,7 +40344,7 @@
                         <thead>
                             <tr>
                                 <th>Gender</th>
-                                ${profiles.map((p, i) => sortableHeader('gender', i, p.name + (p.sampleSize ? ` (n=${formatNumber(compareProjectedN(p.sampleSize))})` : ''), p.color, p.medianAge)).join('')}
+                                ${profiles.map((p, i) => sortableHeader('gender', i, p.name, p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -40268,7 +40385,7 @@
                         <thead>
                             <tr>
                                 <th>Age</th>
-                                ${profiles.map((p, i) => sortableHeader('age', i, p.name + (p.sampleSize ? ` (n=${formatNumber(compareProjectedN(p.sampleSize))})` : ''), p.color, p.medianAge)).join('')}
+                                ${profiles.map((p, i) => sortableHeader('age', i, p.name, p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -40308,7 +40425,7 @@
                         <thead>
                             <tr>
                                 <th>Ethnicity</th>
-                                ${profiles.map((p, i) => sortableHeader('ethnicity', i, p.name + (p.sampleSize ? ` (n=${formatNumber(compareProjectedN(p.sampleSize))})` : ''), p.color, p.medianAge)).join('')}
+                                ${profiles.map((p, i) => sortableHeader('ethnicity', i, p.name, p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -40348,7 +40465,7 @@
                         <thead>
                             <tr>
                                 <th>Income</th>
-                                ${profiles.map((p, i) => sortableHeader('income', i, p.name + (p.sampleSize ? ` (n=${formatNumber(compareProjectedN(p.sampleSize))})` : ''), p.color, p.medianAge)).join('')}
+                                ${profiles.map((p, i) => sortableHeader('income', i, p.name, p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -40396,7 +40513,7 @@
                         <thead>
                             <tr>
                                 <th>${title}</th>
-                                ${profiles.map((p, i) => sortableHeader(key, i, p.name + (p.sampleSize ? ` (n=${formatNumber(compareProjectedN(p.sampleSize))})` : ''), p.color, p.medianAge)).join('')}
+                                ${profiles.map((p, i) => sortableHeader(key, i, p.name, p.color, p.medianAge)).join('')}
                             </tr>
                         </thead>
                         <tbody>
@@ -40449,7 +40566,7 @@
                                     ${profiles.map((p, i) => {
                                         const isGenPop = (p.name || '').toUpperCase().includes('GEN POP') || (p.name || '').toUpperCase().includes('GENPOP');
                                         const colLabel = isGenPop ? p.name + ' (%)' : p.name + ' (% / Idx)';
-                                        return sortableHeader(catKey, i, colLabel + (p.sampleSize ? ` (n=${formatNumber(compareProjectedN(p.sampleSize))})` : ''), p.color, p.medianAge);
+                                        return sortableHeader(catKey, i, colLabel, p.color, p.medianAge);
                                     }).join('')}
                                 </tr>
                             </thead>
@@ -40489,7 +40606,7 @@
                             <thead>
                                 <tr>
                                     <th>Location</th>
-                                    ${profiles.map((p, i) => sortableHeader('location', i, p.name + (p.sampleSize ? ` (n=${formatNumber(compareProjectedN(p.sampleSize))})` : ''), p.color, p.medianAge)).join('')}
+                                    ${profiles.map((p, i) => sortableHeader('location', i, p.name, p.color, p.medianAge)).join('')}
                                 </tr>
                             </thead>
                             <tbody>
