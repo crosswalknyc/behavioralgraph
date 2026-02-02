@@ -11367,6 +11367,23 @@
             
             <!-- Action Buttons Row with Tab Title -->
             <div class="action-buttons-row" style="display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem; margin-bottom: 0.5rem;">
+                <div class="content-action-buttons" id="contentActionButtons" style="margin-top: 0;">
+                    <div class="dash-dropdown">
+                        <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, full report as PDF, or add page to deck." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
+                        <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
+                            <a href="javascript:void(0)" onclick="exportToCSV(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📄 All Data (CSV)</a>
+                            <a href="javascript:void(0)" onclick="exportAllPNG(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">🖼️ All Charts (PNG)</a>
+                            <a href="javascript:void(0)" onclick="exportPDF(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📑 Full Report (PDF)</a>
+                            <a href="javascript:void(0)" onclick="addCurrentTabToDeck(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">➕ Add Page to Deck</a>
+                        </div>
+                    </div>
+                    <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements.">
+                        <span id="hoverToggleLabel">HOVER ON</span>
+                    </div>
+                    <div class="display-mode-toggle has-tooltip" id="dashDisplayToggle" onclick="toggleDashboardDisplayMode()" data-tooltip="US %: Toggle between showing percentages of audience vs. projected US population numbers.">
+                        <span id="dashDisplayLabel">US %</span>
+                    </div>
+                </div>
                 <div class="inline-tab-header" id="inlineTabHeader" style="display: flex; align-items: center; gap: 0.75rem;">
                     <h2 style="margin: 0; font-size: 1.1rem;">🔬 Deep Insights</h2>
                     <p style="margin: 0; color: var(--text-secondary); font-size: 0.8rem;">Deep-dive analysis across behavioral patterns, media consumption, and activation opportunities.</p>
@@ -37589,6 +37606,22 @@
             if (currentS3Key) {
                 window.location.href = `/api/download-cached/${encodeURIComponent(currentS3Key)}`;
             }
+        }
+        
+        function exportAllPNG() {
+            if (!currentProfileData) {
+                alert('Please select a profile first');
+                return;
+            }
+            alert('Use the PNG button on each chart or module to export that chart as an image.');
+        }
+        
+        function exportPDF() {
+            if (!currentProfileData) {
+                alert('Please select a profile first');
+                return;
+            }
+            alert('Full report PDF export coming soon. Use Add Page to Deck to add the current tab to your deck, then export the deck.');
         }
         
         function exportToExcel() {
