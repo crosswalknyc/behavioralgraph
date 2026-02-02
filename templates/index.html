@@ -4033,6 +4033,17 @@
             width: 100%;
             box-sizing: border-box;
         }
+        .behavioral-header-row span.profile-col,
+        .behavioral-header-row span.genpop-col,
+        .behavioral-header-row span.index-col {
+            text-align: left !important;
+            justify-self: start;
+        }
+        .behavioral-item .behavioral-pct,
+        .behavioral-item .behavioral-index {
+            text-align: left !important;
+            justify-self: start;
+        }
         .behavioral-list {
             padding-right: 0.5rem;
         }
@@ -14417,10 +14428,8 @@
         let currentCSVData = null;
         let currentS3Key = null;
         let charts = {};
-        let genPopBaselineData = null; // Cache for Gen Pop CSV data used as baseline for all profiles
-        // Single computed Gen Pop location data (by state/region) - only overwritten when a new Gen Pop file is loaded from S3
-        let cachedGenPopLocation = { byState: {}, byRegion: {}, byDma: {}, ready: false };
-        let cachedGenPopLocationVersion = null; // S3 key of the Gen Pop file used to build the cache; cache is only overwritten when this changes
+        let genPopBaselineData = null; // Parsed Gen Pop file (Gen_Pop_11_13_2025_07_52.csv) - same parse as any profile; used for Gen Pop % everywhere
+        const GEN_POP_FILE_NAME = 'Gen_Pop_11_13_2025_07_52.csv';
         
         // Subscriber IQ state variables (declared early for tooltip system access)
         let subscriberDisplayMode = 'percent'; // 'percent' or 'projection'
@@ -14526,31 +14535,24 @@
             }
         }
 
-        // Load Gen Pop baseline data for all profile comparisons
+        // Load Gen Pop file and parse it the same way as any profile; use that for Gen Pop % everywhere (locations, behavioral, demographics).
         async function loadGenPopBaseline() {
             try {
-                const GEN_POP_FILE = 'Gen_Pop_11_13_2025_07_52.csv';
-                console.log(`📊 Loading Gen Pop baseline from: ${GEN_POP_FILE}`);
-                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(GEN_POP_FILE)}`, { credentials: 'same-origin' });
+                console.log(`📊 Loading Gen Pop from: ${GEN_POP_FILE_NAME}`);
+                const response = await fetch(`/api/get-csv-data/${encodeURIComponent(GEN_POP_FILE_NAME)}`, { credentials: 'same-origin' });
                 if (response.ok) {
                     const data = await response.json();
                     if (data.success && data.data) {
                         genPopBaselineData = parseAllData(data.data);
-                        const fileKey = data.s3_key || GEN_POP_FILE;
-                        if (!cachedGenPopLocation.ready || cachedGenPopLocationVersion !== fileKey) {
-                            computeAndCacheGenPopLocationFromBaseline();
-                            cachedGenPopLocationVersion = fileKey;
-                        }
                         console.log('✅ Gen Pop baseline loaded successfully');
-                        // Re-render Location tab so parentheses show correct Gen Pop values
                         if (currentDashboardData && Array.isArray(currentDashboardData.locations) && currentDashboardData.locations.length > 0) {
                             renderLocationTable(currentDashboardData.locations);
                         }
                     } else {
-                        console.warn('⚠️ Gen Pop baseline file not found, using hardcoded values');
+                        console.warn('⚠️ Gen Pop file not found');
                     }
                 } else {
-                    console.warn('⚠️ Could not load Gen Pop baseline, using hardcoded values');
+                    console.warn('⚠️ Could not load Gen Pop file');
                 }
             } catch (error) {
                 console.error('❌ Error loading Gen Pop baseline:', error);
@@ -24011,9 +24013,13 @@
             const rideshareApps = ['UBER', 'LYFT', 'WAYMO', 'CURB', 'VIA', 'GETT', 'JUNO', 'WINGZ', 'ALTO', 'EMPOWER', 'BLACKLANE', 'CAREEM', 'GRAB', 'GOJEK', 'DIDI', 'OLA', 'BOLT', 'FREENOW', 'KAPTEN', 'HEETCH', 'TAXIFY'];
             const fitnessApps = ['PELOTON', 'STRAVA', 'MYFITNESSPAL', 'MY FITNESS PAL', 'FITBIT', 'NIKE TRAINING', 'NIKE RUN', 'ADIDAS RUNNING', 'CALM', 'HEADSPACE', 'NOOM', 'WEIGHT WATCHERS', 'WW', 'ORANGETHEORY', 'CLASSPASS', 'MINDBODY', 'BEACHBODY', 'APPLE FITNESS', 'GARMIN', 'WHOOP', 'OURA', 'EIGHT SLEEP', 'MIRROR', 'TONAL', 'TEMPO', 'FUTURE', 'TRAINIAC', 'LADDER', 'FITURE', 'LITEBOXER', 'HYDROW', 'ERGATTA', 'AVIRON', 'NORDICTRACK', 'BOWFLEX', 'ECHELON', 'MOTOSUMO', 'ZWIFT', 'SUFFERFEST', 'TRAINERROAD', 'WAHOO', 'TACX', 'ROUVY', 'BKOOL', 'FULGAZ', 'KINOMAP'];
             const financeApps = ['VENMO', 'PAYPAL', 'ZELLE', 'CASH APP', 'CASHAPP', 'APPLE PAY', 'GOOGLE PAY', 'SAMSUNG PAY', 'ROBINHOOD', 'COINBASE', 'ACORNS', 'MINT', 'CREDIT KARMA', 'CHIME', 'SOFI', 'MARCUS', 'ALLY', 'DISCOVER', 'CAPITAL ONE', 'BETTERMENT', 'WEALTHFRONT', 'PERSONAL CAPITAL', 'YNAB', 'KLARNA', 'AFTERPAY', 'AFFIRM', 'SEZZLE', 'ZIP', 'QUADPAY', 'SPLITIT', 'BREAD', 'UPLIFT', 'GREENSKY', 'SYNCHRONY', 'COMENITY', 'WEBBANK', 'CROSS RIVER', 'CELTIC BANK', 'COASTAL COMMUNITY', 'BLUE RIDGE', 'SUTTON', 'TRANSPORTATION ALLIANCE', 'TAB BANK', 'NBKC', 'LEAD BANK', 'EVOLVE', 'CHOICE FINANCIAL', 'LINCOLN SAVINGS', 'BANCORP', 'THE BANCORP', 'METABANK', 'PATHWARD', 'STRIDE', 'AXOS', 'CUSTOMERS BANK', 'CROSS RIVER BANK'];
+            // Exclude athletes/people mistaken for finance (e.g. Marcus Smart = NBA player, not Marcus by Goldman Sachs)
+            const financeExclusions = ['MARCUS SMART'];
             const travelApps = ['AIRBNB', 'VRBO', 'BOOKING.COM', 'EXPEDIA', 'HOTELS.COM', 'KAYAK', 'HOPPER', 'SKYSCANNER', 'PRICELINE', 'TRAVELOCITY', 'ORBITZ', 'TRIPADVISOR', 'TRIP ADVISOR', 'GOOGLE FLIGHTS', 'SOUTHWEST', 'DELTA', 'UNITED', 'AMERICAN AIRLINES', 'JETBLUE', 'SPIRIT', 'FRONTIER', 'ALLEGIANT', 'ALASKA', 'HAWAIIAN', 'SUN COUNTRY', 'BREEZE', 'AVELO', 'JSX', 'WHEELS UP', 'NETJETS', 'XOJET', 'SENTIENT', 'FLEXJET', 'VISTAJET', 'SURF AIR', 'BLADE', 'UBER COPTER', 'GOTHAM AIR'];
             // Exclude non-travel brands that contain travel keywords (e.g. Kings Hawaiian = bread, USGA = sport)
             const travelExclusions = ['KINGS HAWAIIAN', 'KING HAWAIIAN', 'HAWAIIAN ROLLS', 'UNITED STATES GOLF', 'USGA', 'PGA TOUR', 'LPGA ', 'GOLF ASSOCIATION', 'GOLF CHANNEL', 'PGA OF AMERICA'];
+            // Exclude non-gaming brands (e.g. Werther's Original candy contains "ORIGIN" and was wrongly matched to Origin game platform)
+            const gamingExclusions = ['WERTHERS ORIGINAL', 'WERTHER\'S ORIGINAL', 'WERTHERS'];
             const datingApps = ['TINDER', 'BUMBLE', 'HINGE', 'MATCH', 'OKCUPID', 'OK CUPID', 'PLENTY OF FISH', 'POF', 'EHARMONY', 'GRINDR', 'HER', 'COFFEE MEETS BAGEL', 'HAPPN', 'BADOO', 'ZOOSK', 'FEELD', 'RAYA', 'THE LEAGUE', 'INNER CIRCLE', 'ONCE', 'SHIP', 'SNACK', 'THURSDAY', 'LUMEN', 'OURTIME', 'SILVERSINGLES', 'SENIOR MATCH', 'STIR', 'FACEBOOK DATING', 'ARCHER', 'LEX', 'TAIMI', 'SCRUFF', 'JACK\'D', 'JACKD', 'GROWLR', 'HORNET', 'ADAM4ADAM', 'MANHUNT', 'SNIFFIES'];
             const gamingPlatforms = ['PLAYSTATION', 'XBOX', 'NINTENDO', 'STEAM', 'EPIC GAMES', 'ROBLOX', 'MINECRAFT', 'FORTNITE', 'CALL OF DUTY', 'FIFA', 'MADDEN', 'NBA 2K', 'TWITCH', 'DISCORD', 'ORIGIN', 'UBISOFT', 'BATTLE.NET', 'BATTLENET', 'GOG', 'HUMBLE BUNDLE', 'ITCH.IO', 'GAME PASS', 'XBOX GAME PASS', 'PS NOW', 'PS PLUS', 'PLAYSTATION PLUS', 'NINTENDO SWITCH ONLINE', 'GEFORCE NOW', 'STADIA', 'LUNA', 'XCLOUD', 'SHADOW', 'BOOSTEROID', 'PARSEC', 'MOONLIGHT', 'RAINWAY'];
             const musicApps = ['SPOTIFY', 'APPLE MUSIC', 'PANDORA', 'TIDAL', 'AMAZON MUSIC', 'YOUTUBE MUSIC', 'SOUNDCLOUD', 'DEEZER', 'IHEART', 'IHEARTRADIO', 'AUDIBLE', 'SIRIUS', 'SIRIUSXM', 'TUNEIN', 'RADIO.COM', 'STITCHER', 'POCKET CASTS', 'OVERCAST', 'CASTRO', 'BREAKER', 'ANCHOR', 'SPREAKER', 'PODBEAN', 'BUZZSPROUT', 'TRANSISTOR', 'SIMPLECAST', 'CAPTIVATE', 'CASTOS', 'RESONATE', 'BANDCAMP', 'BEATPORT', 'TRAXSOURCE', 'JUNO', 'BOOMPLAY', 'AUDIOMACK', 'MIXCLOUD', 'HEARTHIS', 'DATPIFF', 'LIVEMIXTAPES', 'SPINRILLA'];
@@ -24108,10 +24114,12 @@
             ).sort((a, b) => b.index - a.index).slice(0, 2);
             pushChannelEntries('💪', 'Fitness', fitnessMatches, 'Fitness/Wellness: This audience uses', 'Consider health-focused partnerships, workout integrations, or wellness sponsorships.');
             
-            // Finance Apps
-            const financeMatches = allItems.filter(i => 
-                financeApps.some(app => i.name.toUpperCase().includes(app))
-            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            // Finance Apps (exclude athletes/people: e.g. Marcus Smart = NBA player, not Marcus bank)
+            const financeMatches = allItems.filter(i => {
+                const n = (i.name || '').toUpperCase();
+                if (financeExclusions.some(ex => n.includes(ex))) return false;
+                return financeApps.some(app => n.includes(app));
+            }).sort((a, b) => b.index - a.index).slice(0, 2);
             if (financeMatches.length > 0) {
                 financeMatches.forEach(b => {
                     activations.push({
@@ -24150,10 +24158,12 @@
             ).sort((a, b) => b.index - a.index).slice(0, 2);
             pushChannelEntries('🎵', 'Music/Audio', musicMatches, 'Music/Audio: This audience uses', 'Consider audio ads, playlist sponsorships, or podcast integrations.');
             
-            // Gaming Platforms
-            const gamingMatches = allItems.filter(i => 
-                gamingPlatforms.some(platform => i.name.toUpperCase().includes(platform))
-            ).sort((a, b) => b.index - a.index).slice(0, 2);
+            // Gaming Platforms (exclude candy/brands: e.g. Werther's Original contains "ORIGIN" but is candy, not EA Origin)
+            const gamingMatches = allItems.filter(i => {
+                const n = (i.name || '').toUpperCase();
+                if (gamingExclusions.some(ex => n.includes(ex))) return false;
+                return gamingPlatforms.some(platform => n.includes(platform));
+            }).sort((a, b) => b.index - a.index).slice(0, 2);
             pushChannelEntries('🎮', 'Gaming', gamingMatches, 'Gaming: This audience engages with', 'Consider in-game advertising, esports sponsorships, or gaming influencer partnerships.');
             
             // ============ RESTAURANT CATEGORIES ============
@@ -27952,7 +27962,7 @@
                         <div class="behavioral-header-row">
                             <span>#</span>
                             <span>Item</span>
-                            <span>${dashDisplayMode === 'projection' ? 'US #' : 'Profile'}</span>
+                            <span class="profile-col">${dashDisplayMode === 'projection' ? 'US #' : 'Profile'}</span>
                             <span class="genpop-col">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
                             <span class="index-col">Index</span>
                         </div>
@@ -36639,23 +36649,19 @@
             return 'Other';
         }
         
-        /** Compute Gen Pop location data once from baseline and cache. Dedupe by DMA so each DMA counted once (matches Gen Pop profile view). */
-        function computeAndCacheGenPopLocationFromBaseline() {
-            if (!genPopBaselineData || !genPopBaselineData.locations || genPopBaselineData.locations.length === 0) {
-                cachedGenPopLocation.ready = false;
-                return;
-            }
+        /** Run the same aggregation on a locations array (profile or Gen Pop): by state, by region, by DMA. */
+        function aggregateLocationsByStateAndRegion(locations) {
             const byState = {};
             const byRegion = {};
             const byDma = {};
-            const seenDma = new Set();
-            genPopBaselineData.locations.forEach(loc => {
-                const dmaKey = (loc.name || '').toString().trim().toUpperCase();
-                if (!dmaKey || seenDma.has(dmaKey)) return;
-                seenDma.add(dmaKey);
+            if (!locations || !locations.length) return { byState, byRegion, byDma };
+            locations.forEach(loc => {
                 let pct = parseFloat(loc.pct ?? loc.genPopPct) || 0;
                 if (pct > 0 && pct < 1) pct = pct * 100;
-                byDma[dmaKey] = pct;
+                const dmaKey = (loc.name || '').toString().trim().toUpperCase();
+                if (dmaKey) {
+                    byDma[dmaKey] = (byDma[dmaKey] || 0) + pct;
+                }
                 const state = getStateFromLocation(loc.name);
                 if (state) {
                     byState[state] = (byState[state] || 0) + pct;
@@ -36663,10 +36669,7 @@
                     byRegion[region] = (byRegion[region] || 0) + pct;
                 }
             });
-            cachedGenPopLocation.byState = byState;
-            cachedGenPopLocation.byRegion = byRegion;
-            cachedGenPopLocation.byDma = byDma;
-            cachedGenPopLocation.ready = true;
+            return { byState, byRegion, byDma };
         }
         
         function getHeatColor(value, min, max) {
@@ -36690,11 +36693,12 @@
             }
             
             const isGenPopProfile = (currentProfileData?.name || '').toUpperCase().includes('GEN POP') || (currentS3Key || '').toUpperCase().includes('GEN_POP');
+            // Gen Pop: same as profile—use Gen Pop file's locations and run the same aggregation
+            const genPopLocations = isGenPopProfile ? locations : (genPopBaselineData && genPopBaselineData.locations) ? genPopBaselineData.locations : null;
+            const genPopAgg = genPopLocations ? aggregateLocationsByStateAndRegion(genPopLocations) : { byState: {}, byRegion: {}, byDma: {} };
+            const genPopByDma = genPopAgg.byDma;
             
-            // Gen Pop values: use single cached dataset (populated once from baseline or from Gen Pop profile). Never recompute in a way that can inflate.
-            const genPopByDma = cachedGenPopLocation.byDma || {};
-            
-            // Group by state - profile % from current profile's locations; Gen Pop % from cache when available
+            // Group by state - profile % from current profile's locations (same aggregation as we run on Gen Pop)
             const stateData = {};
             locations.forEach(loc => {
                 const state = getStateFromLocation(loc.name);
@@ -36703,7 +36707,6 @@
                         stateData[state] = { pct: 0, genPopPct: 0, index: 0, count: 0, names: [], cities: [] };
                     }
                     stateData[state].pct += loc.pct;
-                    // Gen Pop for this state: use pre-aggregated Gen Pop profile data below (genPopByState), not per-location sum
                     stateData[state].index += loc.index || 100;
                     stateData[state].count++;
                     stateData[state].names.push(loc.name);
@@ -36711,17 +36714,17 @@
                 }
             });
             
-            // Apply Gen Pop state totals: from cache only (cache is only overwritten when a new Gen Pop file is loaded from S3)
+            // Gen Pop state totals: from same aggregation run on Gen Pop file
             if (isGenPopProfile) {
                 Object.keys(stateData).forEach(state => {
                     stateData[state].genPopPct = stateData[state].pct;
                 });
-            } else if (cachedGenPopLocation.ready) {
+            } else {
                 Object.keys(stateData).forEach(state => {
-                    stateData[state].genPopPct = cachedGenPopLocation.byState[state] ?? 0;
+                    stateData[state].genPopPct = genPopAgg.byState[state] ?? 0;
                 });
             }
-            const hasGenPopBaseline = cachedGenPopLocation.ready;
+            const hasGenPopBaseline = !!genPopLocations;
             
             // Calculate average index and sort cities by percentage
             Object.keys(stateData).forEach(state => {
@@ -36786,7 +36789,7 @@
                 <span class="stat">🏆 Top: ${topState ? topState[0] + ' (' + topState[1].pct.toFixed(2) + '%)' : '-'}</span>
             `;
             
-            // Regional breakdown - profile % from stateData; Gen Pop % = same calculation (when Gen Pop profile, parentheses = profile value)
+            // Regional breakdown - profile % from stateData; Gen Pop % = sum of state genPopPct (same as profile)
             const regionData = {};
             Object.entries(stateData).forEach(([state, data]) => {
                 const region = getRegionForState(state);
@@ -36796,13 +36799,6 @@
                 regionData[region].count++;
                 regionData[region].cities.push(...data.cities);
             });
-            
-            // Use cached Gen Pop region totals when not viewing Gen Pop profile
-            if (!isGenPopProfile && cachedGenPopLocation.ready) {
-                Object.keys(regionData).forEach(region => {
-                    regionData[region].genPopPct = cachedGenPopLocation.byRegion[region] ?? 0;
-                });
-            }
             
             // Sort cities by percentage within each region
             Object.keys(regionData).forEach(region => {
