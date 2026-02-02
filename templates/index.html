@@ -6993,10 +6993,12 @@
             margin-bottom: 0.75rem;
         }
 
+        /* Location tab: same grid for header and data rows, all columns left-aligned */
         .location-row {
             display: grid;
-            grid-template-columns: 60px 1fr 40px 70px 60px;
-            padding: 0.4rem 0;
+            grid-template-columns: 58px minmax(0, 1fr) 44px 80px 58px;
+            gap: 0.5rem;
+            padding: 0.4rem 0.5rem;
             border-bottom: 1px solid var(--border-color);
             font-size: 0.75rem;
             align-items: center;
@@ -7009,11 +7011,14 @@
         .location-row span:nth-child(4),
         .location-row span:nth-child(5) {
             text-align: left !important;
+            justify-self: start;
         }
 
         .location-row.header {
             font-weight: 600;
             color: var(--text-secondary);
+            background: rgba(102, 217, 239, 0.05);
+            border-bottom: 2px solid var(--border-color);
         }
 
         .location-row.header span {
@@ -7025,6 +7030,7 @@
             gap: 0.25rem;
             transition: color 0.2s;
             text-align: left !important;
+            justify-self: start;
         }
 
         .location-row.header span:hover {
