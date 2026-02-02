@@ -4011,8 +4011,8 @@
 
         /* Behavioral table: same grid for header and rows; headers left-aligned directly over values */
         .behavioral-header-row {
-            display: grid;
-            grid-template-columns: 28px minmax(0, 1fr) 64px 64px 52px;
+            display: grid !important;
+            grid-template-columns: 28px minmax(0, 1fr) 72px 72px 56px;
             gap: 0.5rem;
             align-items: center;
             padding: 0.5rem 0.5rem 0.5rem 0;
@@ -4030,26 +4030,28 @@
             justify-self: start;
             align-self: center;
             min-width: 0;
-            width: 100%;
             box-sizing: border-box;
+            padding-left: 0.25rem;
         }
         .behavioral-header-row span.profile-col,
         .behavioral-header-row span.genpop-col,
         .behavioral-header-row span.index-col {
             text-align: left !important;
             justify-self: start;
+            padding-left: 0.25rem;
         }
         .behavioral-item .behavioral-pct,
         .behavioral-item .behavioral-index {
             text-align: left !important;
             justify-self: start;
+            padding-left: 0.25rem;
         }
         .behavioral-list {
             padding-right: 0.5rem;
         }
         .behavioral-item {
             display: grid;
-            grid-template-columns: 28px minmax(0, 1fr) 64px 64px 52px;
+            grid-template-columns: 28px minmax(0, 1fr) 72px 72px 56px;
             gap: 0.5rem;
             align-items: center;
             padding: 0.4rem 0.5rem 0.4rem 0;
@@ -36649,19 +36651,20 @@
             return 'Other';
         }
         
-        /** Run the same aggregation on a locations array (profile or Gen Pop): by state, by region, by DMA. */
+        /** Run the same aggregation on a locations array (profile or Gen Pop): by state, by region, by DMA. Dedupe by DMA so each DMA counts once (fixes inflated Gen Pop when CSV has duplicate rows). */
         function aggregateLocationsByStateAndRegion(locations) {
             const byState = {};
             const byRegion = {};
             const byDma = {};
+            const seenDma = new Set();
             if (!locations || !locations.length) return { byState, byRegion, byDma };
             locations.forEach(loc => {
+                const dmaKey = (loc.name || '').toString().trim().toUpperCase();
+                if (!dmaKey || seenDma.has(dmaKey)) return;
+                seenDma.add(dmaKey);
                 let pct = parseFloat(loc.pct ?? loc.genPopPct) || 0;
                 if (pct > 0 && pct < 1) pct = pct * 100;
-                const dmaKey = (loc.name || '').toString().trim().toUpperCase();
-                if (dmaKey) {
-                    byDma[dmaKey] = (byDma[dmaKey] || 0) + pct;
-                }
+                byDma[dmaKey] = pct;
                 const state = getStateFromLocation(loc.name);
                 if (state) {
                     byState[state] = (byState[state] || 0) + pct;
