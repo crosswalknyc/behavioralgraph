@@ -36525,11 +36525,13 @@
                 return;
             }
             
-            // Gen Pop state/region totals: SAME calculation as selected profile (sum of pct by state/region) but using Gen Pop profile's locations
+            const isGenPopProfile = (currentProfileData?.name || '').toUpperCase().includes('GEN POP') || (currentS3Key || '').toUpperCase().includes('GEN_POP');
+            
+            // Gen Pop state/region totals: SAME calculation as selected profile (sum of pct by state/region) but using Gen Pop profile's locations (only when current profile is NOT Gen Pop)
             const genPopByState = {};
             const genPopByRegion = {};
             const genPopByDma = {}; // DMA name -> Gen Pop pct for tooltips
-            if (genPopBaselineData && genPopBaselineData.locations && genPopBaselineData.locations.length > 0) {
+            if (!isGenPopProfile && genPopBaselineData && genPopBaselineData.locations && genPopBaselineData.locations.length > 0) {
                 genPopBaselineData.locations.forEach(loc => {
                     const state = getStateFromLocation(loc.name);
                     let pct = parseFloat(loc.pct ?? loc.genPopPct) || 0;
@@ -36561,8 +36563,12 @@
                 }
             });
             
-            // Apply Gen Pop state totals from Gen Pop profile (same calculation as profile: sum of pct by state)
-            if (Object.keys(genPopByState).length > 0) {
+            // Apply Gen Pop state totals: when current profile IS Gen Pop, parentheses = same as profile (same calculation)
+            if (isGenPopProfile) {
+                Object.keys(stateData).forEach(state => {
+                    stateData[state].genPopPct = stateData[state].pct;
+                });
+            } else if (Object.keys(genPopByState).length > 0) {
                 Object.keys(stateData).forEach(state => {
                     stateData[state].genPopPct = genPopByState[state] ?? 0;
                 });
@@ -36646,10 +36652,8 @@
                 <span class="stat">🏆 Top: ${topState ? topState[0] + ' (' + topState[1].pct.toFixed(2) + '%)' : '-'}</span>
             `;
             
-            // Regional breakdown - profile % from stateData; Gen Pop % from Gen Pop profile aggregate when available (same calculation as profile)
+            // Regional breakdown - profile % from stateData; Gen Pop % = same calculation (when Gen Pop profile, parentheses = profile value)
             const regionData = {};
-            const isGenPopProfile = currentProfileData?.name?.toUpperCase().includes('GEN POP') || currentS3Key?.toUpperCase().includes('GEN_POP');
-            
             Object.entries(stateData).forEach(([state, data]) => {
                 const region = getRegionForState(state);
                 if (!regionData[region]) regionData[region] = { pct: 0, genPopPct: 0, count: 0, cities: [] };
@@ -36659,8 +36663,8 @@
                 regionData[region].cities.push(...data.cities);
             });
             
-            // Override region Gen Pop with Gen Pop profile's aggregated region totals when available (same way we do for profile)
-            if (Object.keys(genPopByRegion).length > 0) {
+            // Override region Gen Pop with Gen Pop profile's aggregated region totals only when current profile is NOT Gen Pop
+            if (!isGenPopProfile && Object.keys(genPopByRegion).length > 0) {
                 Object.keys(regionData).forEach(region => {
                     regionData[region].genPopPct = genPopByRegion[region] ?? 0;
                 });
