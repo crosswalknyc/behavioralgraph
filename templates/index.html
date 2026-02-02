@@ -12042,7 +12042,9 @@
                         <!-- Netflix sub-view -->
                         <div id="ranker-netflix" class="ranker-platform-panel active">
                             <div class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin-bottom: 1rem; flex-wrap: wrap;">
-                                <button class="tab-btn" onclick="showNetflixSubTab('daily')" id="netflixSubTabDaily">📅 Daily Ranker</button>
+                                <button class="tab-btn" onclick="showNetflixSubTab('daily')" id="netflixSubTabDaily">📅 Daily Ranker by Series</button>
+                                <button class="tab-btn" onclick="showNetflixSubTab('seasons')" id="netflixSubTabSeasons">📅 Daily Ranker by Seasons</button>
+                                <button class="tab-btn" onclick="showNetflixSubTab('episodes')" id="netflixSubTabEpisodes">📅 Daily Ranker by Episodes</button>
                                 <button class="tab-btn" onclick="showNetflixSubTab('trends')" id="netflixSubTabTrends">📈 Trends</button>
                                 <button class="tab-btn" onclick="showNetflixSubTab('genre')" id="netflixSubTabGenre">🎬 By Genre</button>
                                 <button class="tab-btn" onclick="showNetflixSubTab('topshows')" id="netflixSubTabTopShows">🏆 Top Shows Over Time</button>
@@ -12051,7 +12053,7 @@
                             <div id="netflixSubTabContent">
                                 <div id="netflix-daily" class="netflix-sub-content active">
                                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
-                                        <h3 style="margin: 0;">📅 Daily View Ranker</h3>
+                                        <h3 style="margin: 0;">📅 Daily Ranker by Series</h3>
                                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                                             <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
                                             <input type="date" id="netflixDailyDate" onchange="renderNetflixDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
@@ -12062,8 +12064,8 @@
                                         <span style="font-size: 0.75rem; color: var(--text-secondary);">Sort by:</span>
                                         <select id="netflixDailySortBy" onchange="renderNetflixDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 140px;">
                                             <option value="views">Views (high to low)</option>
-                                            <option value="type-movie">Type: Movie first</option>
-                                            <option value="type-show">Type: Show first</option>
+                                            <option value="type-movie">Movie</option>
+                                            <option value="type-show">Show</option>
                                         </select>
                                         <span style="font-size: 0.75rem; color: var(--text-secondary);">Genre:</span>
                                         <select id="netflixDailyGenreFilter" onchange="renderNetflixDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 180px;">
@@ -12072,6 +12074,32 @@
                                     </div>
                                     <div id="netflixDailyTableWrap" style="overflow-x: auto;"><table id="netflixDailyTable" class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Views</th><th>Genre</th><th>Type</th></tr></thead><tbody id="netflixDailyBody"></tbody></table></div>
                                     <div id="netflixDailyLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers to view daily data.</div>
+                                </div>
+                                <div id="netflix-seasons" class="netflix-sub-content">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">📅 Daily Ranker by Seasons</h3>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
+                                            <input type="date" id="netflixSeasonsDate" onchange="renderNetflixSeasonsRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                            <button class="module-btn csv-btn" onclick="exportNetflixSeasonsCSV()">CSV</button>
+                                        </div>
+                                    </div>
+                                    <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">Shows only (no movies). Ranked by Show + Season combined.</p>
+                                    <div id="netflixSeasonsTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Name of Show</th><th>Season</th><th>Views</th></tr></thead><tbody id="netflixSeasonsBody"></tbody></table></div>
+                                    <div id="netflixSeasonsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers to view seasons data.</div>
+                                </div>
+                                <div id="netflix-episodes" class="netflix-sub-content">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">📅 Daily Ranker by Episodes</h3>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
+                                            <input type="date" id="netflixEpisodesDate" onchange="renderNetflixEpisodesRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                            <button class="module-btn csv-btn" onclick="exportNetflixEpisodesCSV()">CSV</button>
+                                        </div>
+                                    </div>
+                                    <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">Ranked by episode. Indian genre excluded.</p>
+                                    <div id="netflixEpisodesTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Episode</th><th>Season</th><th>Views</th></tr></thead><tbody id="netflixEpisodesBody"></tbody></table></div>
+                                    <div id="netflixEpisodesLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers to view episodes data.</div>
                                 </div>
                                 <div id="netflix-trends" class="netflix-sub-content">
                                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
@@ -12170,7 +12198,6 @@
                         <div id="rankersLoadProgress" style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem;">
                             <div class="spinner" style="margin-bottom: 0;"></div>
                             <div id="rankersLoadStatus" style="font-size: 0.9rem; color: var(--text-secondary);">Loading rankers...</div>
-                            <div style="font-size: 0.8rem; color: var(--text-muted);">Ranker data is cached for the past year. First load may take a moment.</div>
                         </div>
                         <div id="rankersLoadDone" style="display: none;">
                             <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data loaded. Use the Netflix and YouTube tabs above to view.</p>
@@ -29658,10 +29685,13 @@
             document.querySelectorAll('#ranker-netflix .netflix-sub-content').forEach(c => c.classList.remove('active'));
             document.querySelectorAll('#ranker-netflix .netflix-subtabs .tab-btn').forEach(b => b.classList.remove('active'));
             const content = document.getElementById('netflix-' + id);
-            const btn = document.getElementById('netflixSubTab' + (id === 'topshows' ? 'TopShows' : id.charAt(0).toUpperCase() + id.slice(1)));
+            const btnId = id === 'topshows' ? 'TopShows' : id.charAt(0).toUpperCase() + id.slice(1);
+            const btn = document.getElementById('netflixSubTab' + btnId);
             if (content) content.classList.add('active');
             if (btn) btn.classList.add('active');
             if (id === 'daily') renderNetflixDailyRanker();
+            else if (id === 'seasons') renderNetflixSeasonsRanker();
+            else if (id === 'episodes') renderNetflixEpisodesRanker();
             else if (id === 'trends') renderNetflixTrends();
             else if (id === 'genre') renderNetflixByGenre();
             else if (id === 'topshows') renderNetflixTopShows();
@@ -29727,6 +29757,18 @@
                         dateInp.max = data.date_range.max;
                         dateInp.value = data.date_range.max || data.date_range.min;
                     }
+                    const seasonsDate = document.getElementById('netflixSeasonsDate');
+                    if (seasonsDate && data.date_range) {
+                        seasonsDate.min = data.date_range.min;
+                        seasonsDate.max = data.date_range.max;
+                        seasonsDate.value = data.date_range.max || data.date_range.min;
+                    }
+                    const episodesDate = document.getElementById('netflixEpisodesDate');
+                    if (episodesDate && data.date_range) {
+                        episodesDate.min = data.date_range.min;
+                        episodesDate.max = data.date_range.max;
+                        episodesDate.value = data.date_range.max || data.date_range.min;
+                    }
                     const genreDate = document.getElementById('netflixGenreDate');
                     if (genreDate && data.date_range) {
                         genreDate.min = data.date_range.min;
@@ -29734,6 +29776,8 @@
                         genreDate.value = data.date_range.max || data.date_range.min;
                     }
                     renderNetflixDailyRanker();
+                    renderNetflixSeasonsRanker();
+                    renderNetflixEpisodesRanker();
                     populateNetflixTrendsShowSelect();
                     renderNetflixByGenre();
                     renderNetflixTopShows();
@@ -29823,6 +29867,42 @@
 
             if (!tbody) return;
             tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td><td>' + (r.genre || '-') + '</td><td>' + (r.type || '-') + '</td></tr>').join('');
+        }
+
+        function renderNetflixSeasonsRanker() {
+            const wrap = document.getElementById('netflixSeasonsTableWrap');
+            const tbody = document.getElementById('netflixSeasonsBody');
+            const loading = document.getElementById('netflixSeasonsLoading');
+            const dateInp = document.getElementById('netflixSeasonsDate');
+            if (!netflixRankerData || !netflixRankerData.by_date_season) {
+                if (loading) loading.style.display = 'block';
+                if (wrap) wrap.style.display = 'none';
+                return;
+            }
+            if (loading) loading.style.display = 'none';
+            if (wrap) wrap.style.display = 'block';
+            const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            let rows = (netflixRankerData.by_date_season[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            if (!tbody) return;
+            tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>').join('');
+        }
+
+        function renderNetflixEpisodesRanker() {
+            const wrap = document.getElementById('netflixEpisodesTableWrap');
+            const tbody = document.getElementById('netflixEpisodesBody');
+            const loading = document.getElementById('netflixEpisodesLoading');
+            const dateInp = document.getElementById('netflixEpisodesDate');
+            if (!netflixRankerData || !netflixRankerData.by_date_episode) {
+                if (loading) loading.style.display = 'block';
+                if (wrap) wrap.style.display = 'none';
+                return;
+            }
+            if (loading) loading.style.display = 'none';
+            if (wrap) wrap.style.display = 'block';
+            const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            let rows = (netflixRankerData.by_date_episode[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            if (!tbody) return;
+            tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.episode_name || '-') + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>').join('');
         }
 
         function renderNetflixTrends() {
@@ -29961,6 +30041,22 @@
             else if (sortBy === 'type-show') rows = rows.slice().sort((a, b) => { const oa = ((a.type || '').toLowerCase() === 'show') ? 0 : 1; const ob = ((b.type || '').toLowerCase() === 'show') ? 0 : 1; if (oa !== ob) return oa - ob; return (b.views || 0) - (a.views || 0); });
             const csv = 'Rank,Show,Views,Genre,Type\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '",' + netflixProjectedViews(r.views) + ',"' + (r.genre || '').replace(/"/g, '""') + '","' + (r.type || '').replace(/"/g, '""') + '"').join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_daily_ranker_' + date + '.csv'; a.click();
+        }
+        function exportNetflixSeasonsCSV() {
+            if (!netflixRankerData || !netflixRankerData.by_date_season) return;
+            const dateInp = document.getElementById('netflixSeasonsDate');
+            const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            let rows = (netflixRankerData.by_date_season[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            const csv = 'Rank,Name of Show,Season,Views\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '","' + (r.season || '').replace(/"/g, '""') + '",' + netflixProjectedViews(r.views)).join('\n');
+            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_daily_ranker_seasons_' + date + '.csv'; a.click();
+        }
+        function exportNetflixEpisodesCSV() {
+            if (!netflixRankerData || !netflixRankerData.by_date_episode) return;
+            const dateInp = document.getElementById('netflixEpisodesDate');
+            const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            let rows = (netflixRankerData.by_date_episode[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            const csv = 'Rank,Show,Episode,Season,Views\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '","' + (r.episode_name || '').replace(/"/g, '""') + '","' + (r.season || '').replace(/"/g, '""') + '",' + netflixProjectedViews(r.views)).join('\n');
+            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_daily_ranker_episodes_' + date + '.csv'; a.click();
         }
         function exportNetflixTrendsCSV() {
             const sel = document.getElementById('netflixTrendsShow');
@@ -40074,7 +40170,7 @@
                         <tbody>
                             <tr>
                                 <td>Crosswalk Respondents</td>
-                                ${profiles.map((p, idx) => `<td class="${idx === primaryProfileIndex ? 'primary-col' : ''}">n=${formatNumber(compareProjectedN(p.sampleSize))}</td>`).join('')}
+                                ${profiles.map((p, idx) => `<td class="${idx === primaryProfileIndex ? 'primary-col' : ''}">n=${formatNumber(p.sampleSize)}</td>`).join('')}
                             </tr>
                             <tr>
                                 <td>Projected US</td>

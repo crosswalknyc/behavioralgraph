@@ -3824,8 +3824,34 @@ def _build_netflix_ranker_payload(rows):
         'date_range': date_range
     }
 
+def _build_netflix_seasons_payload(rows):
+    """Build by_date_season from rows (visit_date, name_of_show, season, views)."""
+    from collections import defaultdict
+    by_date_season = defaultdict(list)
+    for r in rows:
+        dt = r[0].strftime('%Y-%m-%d') if hasattr(r[0], 'strftime') else str(r[0])[:10]
+        show_name = (r[1] or '').strip() or 'Unknown'
+        season = (r[2] or '').strip() or '-'
+        views = int(r[3] or 0)
+        by_date_season[dt].append({'show_name': show_name, 'season': season, 'views': views})
+    return dict(by_date_season)
+
+def _build_netflix_episodes_payload(rows):
+    """Build by_date_episode from rows (visit_date, name_of_show, season, episode_name, views)."""
+    from collections import defaultdict
+    by_date_episode = defaultdict(list)
+    for r in rows:
+        dt = r[0].strftime('%Y-%m-%d') if hasattr(r[0], 'strftime') else str(r[0])[:10]
+        show_name = (r[1] or '').strip() or 'Unknown'
+        season = (r[2] or '').strip() or '-'
+        episode_name = (r[3] or '').strip() or 'Unknown'
+        views = int(r[4] or 0)
+        by_date_episode[dt].append({'show_name': show_name, 'season': season, 'episode_name': episode_name, 'views': views})
+    return dict(by_date_episode)
+
 def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
-    """Query BEHAVIORALGRAPH.PUBLIC.NETFLIX for past year (or latest day only) and return payload."""
+    """Query BEHAVIORALGRAPH.PUBLIC.NETFLIX for past year (or latest day only) and return payload.
+    Includes by_date (series), by_date_season (show+season, type=Show only), by_date_episode (show+season+episode)."""
     try:
         import bg
         conn = bg.connect_snowflake()
@@ -3853,8 +3879,46 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
             """
         cur.execute(sql)
         rows = cur.fetchall()
+        payload = _build_netflix_ranker_payload(rows)
+
+        # Seasons: TYPE = 'Show' only, group by (date, name_of_show, season). Exclude Indian genre.
+        date_filter = "VISIT_TS >= CURRENT_DATE()" if refresh_today_only else "VISIT_TS >= DATEADD(year, -1, CURRENT_DATE())"
+        try:
+            sql_seasons = f"""
+                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, COUNT(*) AS views
+                FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+                WHERE {date_filter}
+                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                  AND UPPER(TRIM(TYPE)) = 'SHOW'
+                  AND SEASON IS NOT NULL AND TRIM(SEASON) != ''
+                  AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%indian%')
+                GROUP BY 1, 2, 3
+                ORDER BY 1, 3 DESC
+            """
+            cur.execute(sql_seasons)
+            payload['by_date_season'] = _build_netflix_seasons_payload(cur.fetchall())
+        except Exception:
+            payload['by_date_season'] = {}
+
+        # Episodes: group by (date, name_of_show, season, episode_name). Exclude Indian genre.
+        try:
+            sql_episodes = f"""
+                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE_NAME, COUNT(*) AS views
+                FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+                WHERE {date_filter}
+                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                  AND EPISODE_NAME IS NOT NULL AND TRIM(EPISODE_NAME) != ''
+                  AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%indian%')
+                GROUP BY 1, 2, 3, 4
+                ORDER BY 1, 4 DESC
+            """
+            cur.execute(sql_episodes)
+            payload['by_date_episode'] = _build_netflix_episodes_payload(cur.fetchall())
+        except Exception:
+            payload['by_date_episode'] = {}
+
         conn.close()
-        return _build_netflix_ranker_payload(rows)
+        return payload
     finally:
         try:
             conn.close()
@@ -3924,6 +3988,14 @@ def get_netflix_ranker_data():
                     for dt, rows in (today_payload.get('genres_by_date') or {}).items():
                         genres_by_date[dt] = rows
                     data['genres_by_date'] = genres_by_date
+                    by_date_season = data.get('by_date_season', {})
+                    for dt, rows in (today_payload.get('by_date_season') or {}).items():
+                        by_date_season[dt] = rows
+                    data['by_date_season'] = by_date_season
+                    by_date_episode = data.get('by_date_episode', {})
+                    for dt, rows in (today_payload.get('by_date_episode') or {}).items():
+                        by_date_episode[dt] = rows
+                    data['by_date_episode'] = by_date_episode
                     # Rebuild top_shows_over_time from updated by_show
                     by_show = data['by_show']
                     show_totals = [(name, sum(p['views'] for p in pts)) for name, pts in by_show.items()]
