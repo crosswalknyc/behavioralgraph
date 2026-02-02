@@ -19153,18 +19153,39 @@
         async function renderQuarterlyTable(dailyData, sortMode = 'chronological') {
             const quarters = {};
             dailyData.forEach(d => {
-                const q = d.Quarter;
+                const q = (d.Quarter || '').trim();
+                if (!q) return;
                 if (!quarters[q]) {
                     quarters[q] = {
                         subs: 0,
                         cancels: 0,
-                        startConsumers: d['Total Consumers'],
-                        endConsumers: d['Total Consumers']
+                        startConsumers: null,
+                        endConsumers: null,
+                        firstDate: null,
+                        lastDate: null
                     };
                 }
-                quarters[q].subs += d['Total Subs'] || 0;
-                quarters[q].cancels += d['Total Cancels'] || 0;
-                quarters[q].endConsumers = d['Total Consumers'];
+                const consumers = d['Total Consumers'] != null ? Number(d['Total Consumers']) : 0;
+                const dateStr = d.Date || d.date || '';
+                quarters[q].subs += Number(d['Total Subs']) || 0;
+                quarters[q].cancels += Number(d['Total Cancels']) || 0;
+                if (dateStr) {
+                    if (quarters[q].firstDate == null || dateStr < quarters[q].firstDate) {
+                        quarters[q].firstDate = dateStr;
+                        quarters[q].startConsumers = consumers;
+                    }
+                    if (quarters[q].lastDate == null || dateStr > quarters[q].lastDate) {
+                        quarters[q].lastDate = dateStr;
+                        quarters[q].endConsumers = consumers;
+                    }
+                } else {
+                    if (quarters[q].startConsumers == null) quarters[q].startConsumers = consumers;
+                    quarters[q].endConsumers = consumers;
+                }
+            });
+            Object.keys(quarters).forEach(q => {
+                if (quarters[q].startConsumers == null && quarters[q].endConsumers != null) quarters[q].startConsumers = quarters[q].endConsumers;
+                if (quarters[q].endConsumers == null && quarters[q].startConsumers != null) quarters[q].endConsumers = quarters[q].startConsumers;
             });
             
             // Cache the data for sorting
@@ -19228,26 +19249,29 @@
             sortedQuarters.forEach(q => {
                 const data = quarters[q];
                 const netGrowth = data.subs - data.cancels;
-                const growthPct = ((netGrowth / data.startConsumers) * 100).toFixed(2);
+                const startConsumers = data.startConsumers != null ? Number(data.startConsumers) : 0;
+                const endConsumers = data.endConsumers != null ? Number(data.endConsumers) : 0;
+                const growthPctNum = startConsumers > 0 && endConsumers != null
+                    ? ((endConsumers - startConsumers) / startConsumers) * 100
+                    : (startConsumers > 0 ? (netGrowth / startConsumers) * 100 : 0);
+                const growthPct = growthPctNum.toFixed(2);
                 
-                // Get SEC actual for this quarter
-                const secActual = secActuals[q];
+                // SEC Actuals: use value as entered (key match quarter string)
+                const secActualKey = q;
+                const secActual = secActuals[secActualKey] != null ? secActuals[secActualKey] : (secActuals[q.trim()] != null ? secActuals[q.trim()] : null);
                 let secActualCell = '<td style="padding: 0.75rem; text-align: right; color: var(--text-secondary);">-</td>';
                 let varianceCell = '<td style="padding: 0.75rem; text-align: right; color: var(--text-secondary);">-</td>';
                 
-                if (secActual !== undefined && secActual !== null) {
-                    // Compare Growth % (our calculation) vs SEC Actuals (percentage)
-                    // Both are percentages, so variance is the difference in percentage points
-                    const ourGrowthPct = parseFloat(growthPct);
+                if (secActual !== undefined && secActual !== null && secActual !== '') {
                     const secActualPct = parseFloat(secActual);
+                    const ourGrowthPct = parseFloat(growthPct);
                     const variancePct = ourGrowthPct - secActualPct;
                     const varianceColor = Math.abs(variancePct) < 0.5 ? '#10b981' : (Math.abs(variancePct) < 2 ? '#eab308' : '#ef4444');
-                    
-                    secActualCell = `<td style="padding: 0.75rem; text-align: right;">${secActualPct.toFixed(2)}%</td>`;
+                    secActualCell = `<td style="padding: 0.75rem; text-align: right;">${Number(secActual).toFixed(2)}%</td>`;
                     varianceCell = `<td style="padding: 0.75rem; text-align: right; color: ${varianceColor};">${variancePct >= 0 ? '+' : ''}${variancePct.toFixed(2)}%</td>`;
                 }
                 
-                html += `<tr style="border-bottom: 1px solid var(--border-color);"><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${netGrowth >= 0 ? '#10b981' : '#ef4444'};">${netGrowth.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${growthPct >= 0 ? '#10b981' : '#ef4444'};">${growthPct}%</td>${secActualCell}${varianceCell}</tr>`;
+                html += `<tr style="border-bottom: 1px solid var(--border-color);"><td style="padding: 0.75rem;">${q}</td><td style="padding: 0.75rem; text-align: right;">${data.subs.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right;">${data.cancels.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${netGrowth >= 0 ? '#10b981' : '#ef4444'};">${netGrowth.toLocaleString()}</td><td style="padding: 0.75rem; text-align: right; color: ${growthPctNum >= 0 ? '#10b981' : '#ef4444'};">${growthPct}%</td>${secActualCell}${varianceCell}</tr>`;
             });
             
             html += '</tbody></table>';
@@ -39172,6 +39196,7 @@
                 sampleSize: 0,
                 projectedUS: 0,
                 medianAge: 0,
+                brandCategory: '',
                 demographics: Object.fromEntries(demoKeys.map(k => [k, {}])),
                 demographicsProjection: Object.fromEntries(demoKeys.map(k => [k, {}])),
                 demographicsIndex: Object.fromEntries(demoKeys.map(k => [k, {}])),
@@ -39206,6 +39231,9 @@
                 }
                 if (category.includes('MEDIAN') && category.includes('AGE')) {
                     result.medianAge = brandPen || catShare || parseFloat(value) || 0;
+                }
+                if (category === 'BRAND CATEGORY' && value) {
+                    result.brandCategory = (value || '').toString().trim();
                 }
 
                 // Demographics - all categories (Age, Gender, Ethnicity, Income, Education, Relationship, Sexual Orientation, Parental Status, Occupation)
@@ -39576,10 +39604,11 @@
                         // Formula: (sampleSize / 10,000,000) * 324,838,700
                         const segmentSampleSize = segData.estimatedSize || 0;
                         const segmentProjectedUS = Math.round((segmentSampleSize / 10000000) * 324838700);
+                        const segmentDisplayTitle = getProfileDisplayTitle(segmentProfile.name, baseProfile.brandCategory, baseProfile.behavioral);
                         
                         const profileData = {
                             id: id,
-                            name: segmentProfile.name.toUpperCase(),
+                            name: segmentDisplayTitle.toUpperCase(),
                             color: segmentProfile.color || profileColors[idx % profileColors.length],
                             isSegment: true,
                             sampleSize: segmentSampleSize,
@@ -39629,10 +39658,12 @@
                         const profile = comparisonProfiles.find(p => (p.s3_key || p.job_id) === id);
                         // Use brand from API response, or extract from s3_key
                         const displayName = data.brand || (profile ? getProfileFullName(profile) : id.split('_')[0]);
+                        // Same title as dashboard for SERIES (e.g. "Cobra Kai - Netflix")
+                        const displayTitle = getProfileDisplayTitle(displayName, parsed.brandCategory, parsed.behavioral);
                         
                         const profileData = {
                             id: id,
-                            name: displayName.toUpperCase(),
+                            name: displayTitle.toUpperCase(),
                             color: profileColors[idx % profileColors.length],
                             sampleSize: parsed.sampleSize,
                             projectedUS: parsed.projectedUS,
@@ -39887,6 +39918,8 @@
 
         function renderComparison(profiles, sortSection = null, sortProfileIdx = null) {
             const container = document.getElementById('comparisonResults');
+            // Capture display mode so row renderers use the same value (avoids stale closure)
+            const compDisplayMode = displayMode;
 
             // Build category list (preserve selection if already built)
             const isFirstRender = availableCategories.behavioral.length === 0;
@@ -39972,7 +40005,7 @@
             `;
 
             // Dynamic label based on display mode
-            const modeLabel = displayMode === 'projection' ? 'US POP #' : 'US %';
+            const modeLabel = compDisplayMode === 'projection' ? 'US POP #' : 'US %';
 
             // Helper to count unique values in a demographic category across all profiles
             const countDemoValues = (demoType) => {
@@ -40004,7 +40037,7 @@
                                 <option value="All" ${genderLimit === 'All' ? 'selected' : ''}>All</option>
                             </select>
                             <select onchange="setComparisonSectionSortType('demo_gender', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
-                                <option value="pct" ${genderSortType === 'pct' ? 'selected' : ''}>By ${displayMode === 'projection' ? '#' : '%'}</option>
+                                <option value="pct" ${genderSortType === 'pct' ? 'selected' : ''}>By ${compDisplayMode === 'projection' ? '#' : '%'}</option>
                                 <option value="index" ${genderSortType === 'index' ? 'selected' : ''}>By Index</option>
                             </select>
                         </span>
@@ -40017,7 +40050,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'gender', sortSection === 'gender' ? sortProfileIdx : null, genderLimit, genderSortType)}
+                            ${renderDemoComparisonRows(profiles, 'gender', sortSection === 'gender' ? sortProfileIdx : null, genderLimit, genderSortType, compDisplayMode)}
                         </tbody>
                     </table>
                 </div>`;
@@ -40044,7 +40077,7 @@
                                 <option value="All" ${ageLimit === 'All' ? 'selected' : ''}>All</option>
                             </select>
                             <select onchange="setComparisonSectionSortType('demo_age', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
-                                <option value="pct" ${ageSortType === 'pct' ? 'selected' : ''}>By ${displayMode === 'projection' ? '#' : '%'}</option>
+                                <option value="pct" ${ageSortType === 'pct' ? 'selected' : ''}>By ${compDisplayMode === 'projection' ? '#' : '%'}</option>
                                 <option value="index" ${ageSortType === 'index' ? 'selected' : ''}>By Index</option>
                                 <option value="age" ${ageSortType === 'age' ? 'selected' : ''}>By Age ↑ (youngest first)</option>
                             </select>
@@ -40058,7 +40091,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'age', sortSection === 'age' ? sortProfileIdx : null, ageLimit, ageSortType)}
+                            ${renderDemoComparisonRows(profiles, 'age', sortSection === 'age' ? sortProfileIdx : null, ageLimit, ageSortType, compDisplayMode)}
                         </tbody>
                     </table>
                 </div>`;
@@ -40085,7 +40118,7 @@
                                 <option value="All" ${ethnicityLimit === 'All' ? 'selected' : ''}>All</option>
                             </select>
                             <select onchange="setComparisonSectionSortType('demo_ethnicity', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
-                                <option value="pct" ${ethnicitySortType === 'pct' ? 'selected' : ''}>By ${displayMode === 'projection' ? '#' : '%'}</option>
+                                <option value="pct" ${ethnicitySortType === 'pct' ? 'selected' : ''}>By ${compDisplayMode === 'projection' ? '#' : '%'}</option>
                                 <option value="index" ${ethnicitySortType === 'index' ? 'selected' : ''}>By Index</option>
                             </select>
                         </span>
@@ -40098,7 +40131,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'ethnicity', sortSection === 'ethnicity' ? sortProfileIdx : null, ethnicityLimit, ethnicitySortType)}
+                            ${renderDemoComparisonRows(profiles, 'ethnicity', sortSection === 'ethnicity' ? sortProfileIdx : null, ethnicityLimit, ethnicitySortType, compDisplayMode)}
                         </tbody>
                     </table>
                 </div>`;
@@ -40125,7 +40158,7 @@
                                 <option value="All" ${incomeLimit === 'All' ? 'selected' : ''}>All</option>
                             </select>
                             <select onchange="setComparisonSectionSortType('demo_income', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
-                                <option value="pct" ${incomeSortType === 'pct' ? 'selected' : ''}>By ${displayMode === 'projection' ? '#' : '%'}</option>
+                                <option value="pct" ${incomeSortType === 'pct' ? 'selected' : ''}>By ${compDisplayMode === 'projection' ? '#' : '%'}</option>
                                 <option value="index" ${incomeSortType === 'index' ? 'selected' : ''}>By Index</option>
                             </select>
                         </span>
@@ -40138,7 +40171,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'income', sortSection === 'income' ? sortProfileIdx : null, incomeLimit, incomeSortType)}
+                            ${renderDemoComparisonRows(profiles, 'income', sortSection === 'income' ? sortProfileIdx : null, incomeLimit, incomeSortType, compDisplayMode)}
                         </tbody>
                     </table>
                 </div>`;
@@ -40173,7 +40206,7 @@
                                 <option value="All" ${limit === 'All' ? 'selected' : ''}>All</option>
                             </select>
                             <select onchange="setComparisonSectionSortType('demo_${key}', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
-                                <option value="pct" ${sortType === 'pct' ? 'selected' : ''}>By ${displayMode === 'projection' ? '#' : '%'}</option>
+                                <option value="pct" ${sortType === 'pct' ? 'selected' : ''}>By ${compDisplayMode === 'projection' ? '#' : '%'}</option>
                                 <option value="index" ${sortType === 'index' ? 'selected' : ''}>By Index</option>
                             </select>
                         </span>
@@ -40186,7 +40219,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, key, sortSection === key ? sortProfileIdx : null, limit, sortType)}
+                            ${renderDemoComparisonRows(profiles, key, sortSection === key ? sortProfileIdx : null, limit, sortType, compDisplayMode)}
                         </tbody>
                     </table>
                 </div>`;
@@ -40223,7 +40256,7 @@
                                     <option value="All" ${currentLimit === 'All' ? 'selected' : ''}>All</option>
                                 </select>
                                 <select onchange="setComparisonSectionSortType('${catKey}', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
-                                    <option value="pct" ${currentSortType === 'pct' ? 'selected' : ''}>By ${displayMode === 'projection' ? '#' : '%'}</option>
+                                    <option value="pct" ${currentSortType === 'pct' ? 'selected' : ''}>By ${compDisplayMode === 'projection' ? '#' : '%'}</option>
                                     <option value="index" ${currentSortType === 'index' ? 'selected' : ''}>By Index</option>
                                 </select>
                             </span>
@@ -40240,7 +40273,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${renderBehavioralComparisonRows(profiles, cat, sortSection === catKey ? sortProfileIdx : null, currentLimit, currentSortType)}
+                                ${renderBehavioralComparisonRows(profiles, cat, sortSection === catKey ? sortProfileIdx : null, currentLimit, currentSortType, compDisplayMode)}
                             </tbody>
                         </table>
                     </div>
@@ -40266,7 +40299,7 @@
                                     <option value="All" ${locationLimit === 'All' ? 'selected' : ''}>All</option>
                                 </select>
                                 <select onchange="setComparisonSectionSortType('location', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
-                                    <option value="pct" ${locationSortType === 'pct' ? 'selected' : ''}>By ${displayMode === 'projection' ? '#' : '%'}</option>
+                                    <option value="pct" ${locationSortType === 'pct' ? 'selected' : ''}>By ${compDisplayMode === 'projection' ? '#' : '%'}</option>
                                     <option value="index" ${locationSortType === 'index' ? 'selected' : ''}>By Index</option>
                                 </select>
                             </span>
@@ -40279,7 +40312,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${renderLocationComparisonRows(profiles, sortSection === 'location' ? sortProfileIdx : null, locationLimit, locationSortType)}
+                                ${renderLocationComparisonRows(profiles, sortSection === 'location' ? sortProfileIdx : null, locationLimit, locationSortType, compDisplayMode)}
                             </tbody>
                         </table>
                     </div>
@@ -40369,7 +40402,7 @@
             return seenNormalized.size;
         }
 
-        function renderBehavioralComparisonRows(profiles, category, sortByProfileIdx = null, limit = 15, sortType = 'pct') {
+        function renderBehavioralComparisonRows(profiles, category, sortByProfileIdx = null, limit = 15, sortType = 'pct', mode = displayMode) {
             // Gen Pop is the baseline: never show index for Gen Pop column; compute others as (profile% / Gen Pop%) * 100
             const genPopIdx = profiles.findIndex(p => {
                 const n = (p.name || '').toUpperCase();
@@ -40454,7 +40487,7 @@
                         const index = row.indexData[i];
                         const isPrimary = i === primaryProfileIndex;
                         const primaryClass = isPrimary ? 'primary-col' : '';
-                        const displayVal = displayMode === 'projection' 
+                        const displayVal = mode === 'projection' 
                             ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                             : (pct > 0 ? pct.toFixed(2) + '%' : '-');
                         
@@ -40479,7 +40512,7 @@
             `).join('');
         }
 
-        function renderLocationComparisonRows(profiles, sortByProfileIdx = null, limit = 15, sortType = 'pct') {
+        function renderLocationComparisonRows(profiles, sortByProfileIdx = null, limit = 15, sortType = 'pct', mode = displayMode) {
             const genPopIdx = profiles.findIndex(p => {
                 const n = (p.name || '').toUpperCase();
                 return n.includes('GEN POP') || n.includes('GENPOP');
@@ -40557,7 +40590,7 @@
                         const index = row.indexData[i];
                         const isPrimary = i === primaryProfileIndex;
                         const primaryClass = isPrimary ? 'primary-col' : '';
-                        const displayVal = displayMode === 'projection' 
+                        const displayVal = mode === 'projection' 
                             ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                             : (pct > 0 ? pct.toFixed(2) + '%' : '-');
                         
@@ -40581,7 +40614,7 @@
             `).join('');
         }
 
-        function renderDemoComparisonRows(profiles, demoType, sortByProfileIdx = null, limit = 15, sortType = 'pct') {
+        function renderDemoComparisonRows(profiles, demoType, sortByProfileIdx = null, limit = 15, sortType = 'pct', mode = displayMode) {
             // Find Gen Pop profile for index baseline (index = profile% / genPop% * 100)
             const genPopProfile = profiles.find(p => {
                 const n = (p.name || '').toUpperCase();
@@ -40667,7 +40700,7 @@
                             const maxPct = 60;
                             const isPrimary = i === primaryProfileIndex;
                             const primaryClass = isPrimary ? 'primary-col' : '';
-                            const displayVal = displayMode === 'projection' 
+                            const displayVal = mode === 'projection' 
                                 ? (proj > 0 ? formatNumber(Math.round(proj)) : '-')
                                 : (pct > 0 ? pct.toFixed(2) + '%' : '-');
                             

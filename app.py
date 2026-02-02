@@ -5576,17 +5576,40 @@ def get_hedge_fund_ticker_data(s3_key):
                     ticker_actuals = all_sec_actuals.get(ticker_symbol, {})
                     
                     if ticker_actuals:
-                        # Calculate quarterly net growth % for all quarters
+                        # Build quarters: start_consumers = Total Consumers on first day of quarter, end_consumers = last day
                         quarters = {}
                         for d in data:
-                            q = d.get('Quarter')
-                            if q and q != 'N/A':
-                                if q not in quarters:
-                                    quarters[q] = {'subs': 0, 'cancels': 0, 'start_consumers': None}
-                                quarters[q]['subs'] += d.get('Total Subs', 0)
-                                quarters[q]['cancels'] += d.get('Total Cancels', 0)
+                            q = (d.get('Quarter') or '').strip()
+                            if not q or q == 'N/A':
+                                continue
+                            if q not in quarters:
+                                quarters[q] = {
+                                    'subs': 0, 'cancels': 0,
+                                    'start_consumers': None, 'end_consumers': None,
+                                    'first_date': None, 'last_date': None
+                                }
+                            consumers = d.get('Total Consumers')
+                            if consumers is not None:
+                                consumers = float(consumers) if not isinstance(consumers, (int, float)) else consumers
+                            date_str = d.get('Date') or d.get('date') or ''
+                            quarters[q]['subs'] += d.get('Total Subs', 0) or 0
+                            quarters[q]['cancels'] += d.get('Total Cancels', 0) or 0
+                            if date_str:
+                                if quarters[q]['first_date'] is None or date_str < quarters[q]['first_date']:
+                                    quarters[q]['first_date'] = date_str
+                                    quarters[q]['start_consumers'] = consumers
+                                if quarters[q]['last_date'] is None or date_str > quarters[q]['last_date']:
+                                    quarters[q]['last_date'] = date_str
+                                    quarters[q]['end_consumers'] = consumers
+                            else:
                                 if quarters[q]['start_consumers'] is None:
-                                    quarters[q]['start_consumers'] = d.get('Total Consumers', 0)
+                                    quarters[q]['start_consumers'] = consumers
+                                quarters[q]['end_consumers'] = consumers
+                        for q, q_data in quarters.items():
+                            if q_data['start_consumers'] is None and q_data['end_consumers'] is not None:
+                                q_data['start_consumers'] = q_data['end_consumers']
+                            if q_data['end_consumers'] is None and q_data['start_consumers'] is not None:
+                                q_data['end_consumers'] = q_data['start_consumers']
                         
                         # Calculate variance for all quarters with SEC actuals
                         all_variances = []
@@ -5597,12 +5620,15 @@ def get_hedge_fund_ticker_data(s3_key):
                         
                         for quarter, q_data in quarters.items():
                             if quarter in ticker_actuals:
-                                # Calculate our growth %
-                                net_growth = q_data['subs'] - q_data['cancels']
                                 start_consumers = q_data['start_consumers']
-                                our_growth_pct = (net_growth / start_consumers * 100) if start_consumers > 0 else 0
+                                end_consumers = q_data['end_consumers']
+                                if start_consumers and start_consumers > 0 and end_consumers is not None:
+                                    our_growth_pct = ((end_consumers - start_consumers) / start_consumers) * 100
+                                else:
+                                    net_growth = q_data['subs'] - q_data['cancels']
+                                    our_growth_pct = (net_growth / start_consumers * 100) if start_consumers else 0
                                 
-                                # Get SEC actual % (already a percentage)
+                                # Get SEC actual % (value as entered)
                                 sec_actual_pct = float(ticker_actuals[quarter])
                                 
                                 # Variance = difference in percentage points
