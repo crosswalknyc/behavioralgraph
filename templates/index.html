@@ -12082,7 +12082,7 @@
                                             <option value="">All genres</option>
                                         </select>
                                     </div>
-                                    <div id="netflixDailyTableWrap" style="overflow-x: auto;"><table id="netflixDailyTable" class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Views</th><th>Genre</th><th>Type</th></tr></thead><tbody id="netflixDailyBody"></tbody></table></div>
+                                    <div id="netflixDailyTableWrap" style="overflow-x: auto;"><table id="netflixDailyTable" class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Views</th><th>Genre</th></tr></thead><tbody id="netflixDailyBody"></tbody></table></div>
                                     <div id="netflixDailyLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
                                 </div>
                                 <div id="netflix-seasons" class="netflix-sub-content">
@@ -12107,7 +12107,7 @@
                                             <button class="module-btn csv-btn" onclick="exportNetflixEpisodesCSV()">CSV</button>
                                         </div>
                                     </div>
-                                    <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">Ranked by episode. Indian genre excluded.</p>
+                                    <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">Ranked by episode.</p>
                                     <div id="netflixEpisodesTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Episode</th><th>Season</th><th>Views</th></tr></thead><tbody id="netflixEpisodesBody"></tbody></table></div>
                                     <div id="netflixEpisodesLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
                                 </div>
@@ -30197,9 +30197,47 @@
 
             if (!tbody) return;
             if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date' + (date ? ' (' + date + ')' : '') + '. Try another date or check filters.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date' + (date ? ' (' + date + ')' : '') + '. Try another date or check filters.</td></tr>';
             } else {
-                tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td><td>' + (r.genre || '-') + '</td><td>' + (r.type || '-') + '</td></tr>').join('');
+                tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td><a href="#" onclick="showNetflixEpisodesForShow(\'' + (r.show_name || '').replace(/'/g, "\\'") + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.show_name || '') + '</a></td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td><td>' + (r.genre || '-') + '</td></tr>').join('');
+            }
+        }
+        
+        // Show episodes for a specific show on the selected date
+        function showNetflixEpisodesForShow(showName) {
+            if (!netflixRankerData || !netflixRankerData.by_date_episode) {
+                alert('Episode data not available. Try refreshing.');
+                return;
+            }
+            const dateInp = document.getElementById('netflixDailyDate');
+            let date = dateInp ? dateInp.value : null;
+            if (!date) date = _getLastNetflixDateWithData(netflixRankerData);
+            if (!date) date = (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            
+            // Get episodes for this show on this date
+            const allEpisodes = netflixRankerData.by_date_episode[date] || [];
+            const showEpisodes = allEpisodes.filter(e => (e.show_name || '').toLowerCase() === showName.toLowerCase());
+            
+            if (showEpisodes.length === 0) {
+                alert('No episode data available for "' + showName + '" on ' + date);
+                return;
+            }
+            
+            // Sort by views descending
+            showEpisodes.sort((a, b) => (b.views || 0) - (a.views || 0));
+            
+            // Switch to episodes tab and filter
+            showNetflixSubTab('episodes');
+            
+            // Set the date
+            const episodesDateInp = document.getElementById('netflixEpisodesDate');
+            if (episodesDateInp) episodesDateInp.value = date;
+            
+            // Render filtered episodes table
+            const tbody = document.getElementById('netflixEpisodesBody');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="5" style="padding: 0.5rem; background: var(--bg-dark); font-weight: 600;">Episodes for: ' + showName + ' (' + date + ') <a href="#" onclick="renderNetflixEpisodesRanker(); return false;" style="color: var(--accent-cyan); margin-left: 1rem;">← Show All Episodes</a></td></tr>' +
+                    showEpisodes.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.episode_name || '-') + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>').join('');
             }
         }
 
