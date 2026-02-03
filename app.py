@@ -9216,3 +9216,316 @@ def get_goodshort_ranker_data():
         return jsonify({'error': str(e)}), 500
 
 
+# ============================================================================
+# ROKU FAST RANKER - queries BEHAVIORALGRAPH.PUBLIC.FAST_CHANNEL_FINAL
+# ============================================================================
+
+ROKUFAST_RANKER_CACHE = {}
+ROKUFAST_RANKER_LOCK = threading.Lock()
+ROKUFAST_RANKER_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'rokufast_ranker_cache.json')
+
+# Duration parsing for FAST_CHANNEL_FINAL (TIME_ON_PAGE format like "45m" or "1h 30m")
+_ROKUFAST_DURATION_MINS = """
+COALESCE(TRY_TO_NUMBER(REGEXP_SUBSTR(COALESCE(TIME_ON_PAGE::VARCHAR, ''), '([0-9]+)h', 1, 1, 'e', 1)), 0) * 60
++ COALESCE(TRY_TO_NUMBER(REGEXP_SUBSTR(COALESCE(TIME_ON_PAGE::VARCHAR, ''), '([0-9]+)m', 1, 1, 'e', 1)), 0)
+"""
+
+def _build_rokufast_ranker_payload(rows):
+    """Build API payload from raw rows: (visit_date, show_name, views, avg_watch_time, run_time)."""
+    from collections import defaultdict
+    by_date = defaultdict(list)
+    by_show = defaultdict(list)
+    for r in rows:
+        dt = r[0].strftime('%Y-%m-%d') if hasattr(r[0], 'strftime') else str(r[0])[:10]
+        show_name = (r[1] or '').strip() or 'Unknown'
+        views = int(r[2] or 0)
+        avg_watch_time = round(float(r[3]), 2) if len(r) > 3 and r[3] is not None else None
+        run_time = round(float(r[4]), 2) if len(r) > 4 and r[4] is not None else None
+        if run_time is not None and run_time == int(run_time):
+            run_time = int(run_time)
+        item = {'show_name': show_name, 'views': views, 'avg_watch_time': avg_watch_time, 'run_time': run_time}
+        by_date[dt].append(item)
+        by_show[show_name].append({'date': dt, 'views': views})
+    dates_sorted = sorted(by_date.keys())
+    date_range = {'min': dates_sorted[0], 'max': dates_sorted[-1]} if dates_sorted else {}
+    # Top shows over time (top 20 by total views)
+    show_totals = {s: sum(p['views'] for p in pts) for s, pts in by_show.items()}
+    top_shows = sorted(show_totals.items(), key=lambda x: -x[1])[:20]
+    top_shows_over_time = []
+    for show_name, _ in top_shows:
+        by_date_dict = {p['date']: p['views'] for p in by_show[show_name]}
+        top_shows_over_time.append({'show_name': show_name, 'by_date': by_date_dict})
+    return {
+        'by_date': dict(by_date),
+        'by_show': dict(by_show),
+        'dates_sorted': dates_sorted,
+        'date_range': date_range,
+        'top_shows_over_time': top_shows_over_time
+    }
+
+def _build_rokufast_seasons_payload(rows):
+    """Build seasons payload: (visit_date, show_name, season, views, avg_watch_time, run_time)."""
+    from collections import defaultdict
+    by_date_season = defaultdict(list)
+    for r in rows:
+        dt = r[0].strftime('%Y-%m-%d') if hasattr(r[0], 'strftime') else str(r[0])[:10]
+        show_name = (r[1] or '').strip() or 'Unknown'
+        season = (r[2] or '').strip() or ''
+        views = int(r[3] or 0)
+        avg_watch_time = round(float(r[4]), 2) if len(r) > 4 and r[4] is not None else None
+        run_time = round(float(r[5]), 2) if len(r) > 5 and r[5] is not None else None
+        by_date_season[dt].append({'show_name': show_name, 'season': season, 'views': views, 'avg_watch_time': avg_watch_time, 'run_time': run_time})
+    return dict(by_date_season)
+
+def _build_rokufast_episodes_payload(rows):
+    """Build episodes payload: (visit_date, show_name, season, episode, episode_name, views, avg_watch_time, run_time)."""
+    from collections import defaultdict
+    by_date_episode = defaultdict(list)
+    for r in rows:
+        dt = r[0].strftime('%Y-%m-%d') if hasattr(r[0], 'strftime') else str(r[0])[:10]
+        show_name = (r[1] or '').strip() or 'Unknown'
+        season = (r[2] or '').strip() or ''
+        episode = (r[3] or '').strip() or ''
+        episode_name = (r[4] or '').strip() or ''
+        views = int(r[5] or 0)
+        avg_watch_time = round(float(r[6]), 2) if len(r) > 6 and r[6] is not None else None
+        run_time = round(float(r[7]), 2) if len(r) > 7 and r[7] is not None else None
+        by_date_episode[dt].append({'show_name': show_name, 'season': season, 'episode': episode, 'episode_name': episode_name, 'views': views, 'avg_watch_time': avg_watch_time, 'run_time': run_time})
+    return dict(by_date_episode)
+
+def _build_rokufast_all_payload(rows):
+    """Build all payload (same as episodes): (visit_date, show_name, season, episode, episode_name, views, avg_watch_time, run_time)."""
+    return _build_rokufast_episodes_payload(rows)
+
+def _fetch_rokufast_ranker_from_snowflake():
+    """Query BEHAVIORALGRAPH.PUBLIC.FAST_CHANNEL_FINAL for past 7 days and return payload."""
+    try:
+        import bg
+        conn = bg.connect_snowflake()
+        cur = conn.cursor()
+    except Exception as e:
+        raise RuntimeError(f'Snowflake connection failed: {e}')
+    try:
+        # Daily by series
+        sql = f"""
+            SELECT visit_date, NAME_OF_SHOW, COUNT(*) AS views,
+                AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
+            FROM (
+                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW,
+                    ({_ROKUFAST_DURATION_MINS}) AS duration_mins
+                FROM BEHAVIORALGRAPH.PUBLIC.FAST_CHANNEL_FINAL
+                WHERE VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())
+                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+            ) sub
+            GROUP BY 1, 2
+            ORDER BY 1, 3 DESC
+        """
+        cur.execute(sql)
+        rows = cur.fetchall()
+        payload = _build_rokufast_ranker_payload(rows)
+
+        # By seasons
+        try:
+            sql_seasons = f"""
+                SELECT visit_date, NAME_OF_SHOW, SEASON, COUNT(*) AS views,
+                    AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
+                FROM (
+                    SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON,
+                        ({_ROKUFAST_DURATION_MINS}) AS duration_mins
+                    FROM BEHAVIORALGRAPH.PUBLIC.FAST_CHANNEL_FINAL
+                    WHERE VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())
+                      AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                      AND SEASON IS NOT NULL AND TRIM(SEASON) != ''
+                ) sub
+                GROUP BY 1, 2, 3
+                ORDER BY 1, 4 DESC
+            """
+            cur.execute(sql_seasons)
+            payload['by_date_season'] = _build_rokufast_seasons_payload(cur.fetchall())
+        except Exception as e:
+            print(f"[Roku FAST] Seasons query failed: {e}")
+            payload['by_date_season'] = {}
+
+        # By episodes
+        try:
+            sql_episodes = f"""
+                SELECT visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views,
+                    AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
+                FROM (
+                    SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME,
+                        ({_ROKUFAST_DURATION_MINS}) AS duration_mins
+                    FROM BEHAVIORALGRAPH.PUBLIC.FAST_CHANNEL_FINAL
+                    WHERE VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())
+                      AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                      AND EPISODE_NAME IS NOT NULL AND TRIM(EPISODE_NAME) != ''
+                ) sub
+                GROUP BY 1, 2, 3, 4, 5
+                ORDER BY 1, 6 DESC
+            """
+            cur.execute(sql_episodes)
+            payload['by_date_episode'] = _build_rokufast_episodes_payload(cur.fetchall())
+        except Exception as e:
+            print(f"[Roku FAST] Episodes query failed: {e}")
+            payload['by_date_episode'] = {}
+
+        # All (same as episodes but includes rows without episode_name)
+        try:
+            sql_all = f"""
+                SELECT visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views,
+                    AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
+                FROM (
+                    SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME,
+                        ({_ROKUFAST_DURATION_MINS}) AS duration_mins
+                    FROM BEHAVIORALGRAPH.PUBLIC.FAST_CHANNEL_FINAL
+                    WHERE VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())
+                      AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                ) sub
+                GROUP BY 1, 2, 3, 4, 5
+                ORDER BY 1, 6 DESC
+            """
+            cur.execute(sql_all)
+            payload['by_date_all'] = _build_rokufast_all_payload(cur.fetchall())
+        except Exception as e:
+            print(f"[Roku FAST] All query failed: {e}")
+            payload['by_date_all'] = {}
+
+        conn.close()
+        return payload
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+@app.route('/api/rankers/rokufast/data', methods=['GET'])
+def get_rokufast_ranker_data():
+    """
+    Return Roku FAST ranker data from BEHAVIORALGRAPH.PUBLIC.FAST_CHANNEL_FINAL.
+    Similar to Netflix ranker but without DMA data.
+    """
+    print(f"[Roku FAST Ranker] Request received: force_refresh={request.args.get('force_refresh')}")
+    try:
+        force_refresh = request.args.get('force_refresh', '').lower() in ('1', 'true', 'yes')
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        
+        with ROKUFAST_RANKER_LOCK:
+            cached = None if force_refresh else ROKUFAST_RANKER_CACHE.get('data')
+            if cached is None and not force_refresh and os.path.exists(ROKUFAST_RANKER_CACHE_FILE):
+                try:
+                    with open(ROKUFAST_RANKER_CACHE_FILE, 'r') as f:
+                        cached = json.load(f)
+                    if cached:
+                        ROKUFAST_RANKER_CACHE['data'] = cached
+                        ROKUFAST_RANKER_CACHE['loaded_at'] = datetime.now().timestamp()
+                except Exception:
+                    pass
+            
+            # Check if cache is stale (older than 24 hours)
+            loaded_at = ROKUFAST_RANKER_CACHE.get('loaded_at') or 0
+            age_hours = (datetime.now().timestamp() - loaded_at) / 3600.0
+            
+            if cached is None or force_refresh or age_hours >= 24:
+                try:
+                    data = _fetch_rokufast_ranker_from_snowflake()
+                    ROKUFAST_RANKER_CACHE['data'] = data
+                    ROKUFAST_RANKER_CACHE['loaded_at'] = datetime.now().timestamp()
+                    # Save to file cache
+                    try:
+                        with open(ROKUFAST_RANKER_CACHE_FILE, 'w') as f:
+                            json.dump(data, f, indent=0)
+                    except Exception as e:
+                        print(f"[Roku FAST] Cache save failed: {e}")
+                    return jsonify(data)
+                except Exception as e:
+                    print(f"[Roku FAST Ranker] Snowflake fetch failed: {e}")
+                    if cached:
+                        return jsonify(cached)
+                    return jsonify({'error': str(e)}), 500
+            
+            return jsonify(cached)
+    except Exception as e:
+        print(f"[Roku FAST Ranker] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/rankers/rokufast/show-details', methods=['GET'])
+def get_rokufast_show_details():
+    """
+    Get detailed info for a specific Roku FAST show/episode.
+    No DMA data available for Roku FAST.
+    """
+    show_name = request.args.get('show_name', '').strip()
+    episode_name = request.args.get('episode_name', '').strip()
+    season = request.args.get('season', '').strip()
+    date = request.args.get('date', '').strip()
+    
+    if not show_name:
+        return jsonify({'error': 'show_name is required'}), 400
+    
+    try:
+        import bg
+        conn = bg.connect_snowflake()
+        cur = conn.cursor()
+        
+        # Build WHERE clause
+        where_parts = ["NAME_OF_SHOW = %s"]
+        params = [show_name]
+        
+        if date:
+            where_parts.append("DATE(VISIT_TS) = %s")
+            params.append(date)
+        else:
+            where_parts.append("VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())")
+        
+        if episode_name and episode_name != 'N/A':
+            where_parts.append("EPISODE_NAME = %s")
+            params.append(episode_name)
+        
+        if season and season != 'N/A':
+            where_parts.append("SEASON = %s")
+            params.append(season)
+        
+        where_clause = " AND ".join(where_parts)
+        
+        # Get show metadata
+        meta_sql = f"""
+            SELECT 
+                NAME_OF_SHOW, SEASON, EPISODE_NAME,
+                MAX(({_ROKUFAST_DURATION_MINS})) AS run_time_mins,
+                AVG(({_ROKUFAST_DURATION_MINS})) AS avg_watch_time_mins,
+                COUNT(*) as total_views
+            FROM BEHAVIORALGRAPH.PUBLIC.FAST_CHANNEL_FINAL
+            WHERE {where_clause}
+            GROUP BY NAME_OF_SHOW, SEASON, EPISODE_NAME
+            ORDER BY total_views DESC
+            LIMIT 1
+        """
+        cur.execute(meta_sql, params)
+        meta_row = cur.fetchone()
+        
+        if not meta_row:
+            conn.close()
+            return jsonify({'error': 'Show not found', 'show_name': show_name}), 404
+        
+        result = {
+            'show_name': meta_row[0] or show_name,
+            'season': meta_row[1] or 'N/A',
+            'episode_name': meta_row[2] or 'N/A',
+            'run_time': round(meta_row[3], 2) if meta_row[3] else 'N/A',
+            'avg_watch_time': round(meta_row[4], 2) if meta_row[4] else 'N/A',
+            'total_views': int(meta_row[5] or 0),
+            'genre': 'N/A',
+            'type': 'N/A',
+            'age_rating': 'N/A',
+            'year_released': 'N/A',
+            'cast': 'N/A',
+            'dma_breakdown': []  # No DMA data for Roku FAST
+        }
+        
+        conn.close()
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"[Roku FAST Show Details] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
