@@ -3776,6 +3776,12 @@ NETFLIX_RANKER_S3_PREFIX = 'rankers_cache/netflix/'
 NETFLIX_RANKER_S3_INDEX_KEY = 'rankers_cache/netflix/index.json'
 NETFLIX_RANKER_BACKFILL_RUNNING = False
 
+# ReelShort ranker: cache by date (first request of the day runs query; that day's data cached forever for all users)
+REELSHORT_RANKER_CACHE = {}  # date_str -> payload
+REELSHORT_RANKER_LOCK = threading.Lock()
+REELSHORT_RANKER_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'reelshort_ranker_cache.json')
+REELSHORT_WAREHOUSE = os.environ.get('SNOWFLAKE_WAREHOUSE', 'BEHAVIORGRAPH6X')  # 6XL for speed
+
 
 def _run_netflix_ranker_backfill(start_d, end_d):
     """Run backfill loop for S3 cache from start_d to end_d (date objects). Returns (filled_count, cached_dates_set)."""
@@ -4548,14 +4554,60 @@ def get_netflix_show_details():
         return jsonify({'error': str(e)}), 500
 
 
+def _load_reelshort_ranker_cache():
+    """Load ReelShort cache from file (by-date). Merges into REELSHORT_RANKER_CACHE."""
+    global REELSHORT_RANKER_CACHE
+    if not os.path.exists(REELSHORT_RANKER_CACHE_FILE):
+        return
+    try:
+        with open(REELSHORT_RANKER_CACHE_FILE, 'r') as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            REELSHORT_RANKER_CACHE.update(data)
+    except Exception as e:
+        print(f"[ReelShort Ranker] Cache load failed: {e}")
+
+
+def _save_reelshort_ranker_cache(date_str, payload):
+    """Save one day's payload to file and memory."""
+    global REELSHORT_RANKER_CACHE
+    REELSHORT_RANKER_CACHE[date_str] = payload
+    try:
+        existing = {}
+        if os.path.exists(REELSHORT_RANKER_CACHE_FILE):
+            with open(REELSHORT_RANKER_CACHE_FILE, 'r') as f:
+                existing = json.load(f)
+        if not isinstance(existing, dict):
+            existing = {}
+        existing[date_str] = payload
+        with open(REELSHORT_RANKER_CACHE_FILE, 'w') as f:
+            json.dump(existing, f, indent=0)
+    except Exception as e:
+        print(f"[ReelShort Ranker] Cache save failed: {e}")
+
+
 @app.route('/api/rankers/reelshort/data', methods=['GET'])
 def get_reelshort_ranker_data():
     """
     ReelShort ranker: query PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL for today's rows
-    where COMMON_NAME contains 'reelshort' (case insensitive). Return Active Accounts
-    (row_count * 150 / 10e6 * 329900000) and percentages: New Subscriptions (con/paid/thank in URL),
-    Total Cancels (stop/cancel in URL), Watched Paid Content (dashboard in URL), Watched Free Content (100 - paid).
+    where COMMON_NAME contains 'reelshort' (case insensitive). Uses 6XL warehouse. First request
+    of the day runs the query and caches that day's data forever for all other users.
     """
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    with REELSHORT_RANKER_LOCK:
+        cached = REELSHORT_RANKER_CACHE.get(today_str)
+        if cached is None and os.path.exists(REELSHORT_RANKER_CACHE_FILE):
+            try:
+                with open(REELSHORT_RANKER_CACHE_FILE, 'r') as f:
+                    by_date = json.load(f)
+                cached = by_date.get(today_str) if isinstance(by_date, dict) else None
+                if cached is not None:
+                    REELSHORT_RANKER_CACHE[today_str] = cached
+            except Exception:
+                pass
+        if cached is not None:
+            return jsonify(cached)
+
     try:
         import bg
         conn = bg.connect_snowflake()
@@ -4563,12 +4615,7 @@ def get_reelshort_ranker_data():
     except Exception as e:
         return jsonify({'error': f'Snowflake connection failed: {e}'}), 503
     try:
-        # Use 6XL warehouse for fast ReelShort query
-        try:
-            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
-            cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '6X-LARGE'")
-        except Exception:
-            pass  # Continue with default warehouse if alter fails
+        cur.execute(f"USE WAREHOUSE {REELSHORT_WAREHOUSE}")
         sql = """
             SELECT
                 COUNT(*) AS total,
@@ -4592,15 +4639,18 @@ def get_reelshort_ranker_data():
         total_cancels_pct = (cancels / total * 100) if total else 0
         watched_paid_pct = (paid_content / total * 100) if total else 0
         watched_free_pct = 100.0 - watched_paid_pct
-        return jsonify({
-            'date': datetime.now().strftime('%Y-%m-%d'),
+        payload = {
+            'date': today_str,
             'total_rows': total,
             'active_accounts': round(active_accounts, 2),
             'new_subscriptions_pct': round(new_subscriptions_pct, 2),
             'total_cancels_pct': round(total_cancels_pct, 2),
             'watched_paid_content_pct': round(watched_paid_pct, 2),
             'watched_free_content_pct': round(watched_free_pct, 2),
-        })
+        }
+        with REELSHORT_RANKER_LOCK:
+            _save_reelshort_ranker_cache(today_str, payload)
+        return jsonify(payload)
     except Exception as e:
         print(f"[ReelShort Ranker] Error: {e}")
         return jsonify({'error': str(e)}), 500
@@ -4611,6 +4661,7 @@ def _preload_ranker_caches():
     try:
         if os.path.exists(NETFLIX_RANKER_CACHE_FILE):
             _load_netflix_ranker_cache()
+        _load_reelshort_ranker_cache()
     except Exception:
         pass
 
