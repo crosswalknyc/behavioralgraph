@@ -4548,6 +4548,58 @@ def get_netflix_show_details():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/rankers/reelshort/data', methods=['GET'])
+def get_reelshort_ranker_data():
+    """
+    ReelShort ranker: query PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL for today's rows
+    where COMMON_NAME contains 'reelshort' (case insensitive). Return Active Accounts
+    (row_count * 150 / 10e6 * 329900000) and percentages: New Subscriptions (con/paid/thank in URL),
+    Total Cancels (stop/cancel in URL), Watched Paid Content (dashboard in URL), Watched Free Content (100 - paid).
+    """
+    try:
+        import bg
+        conn = bg.connect_snowflake()
+        cur = conn.cursor()
+    except Exception as e:
+        return jsonify({'error': f'Snowflake connection failed: {e}'}), 503
+    try:
+        sql = """
+            SELECT
+                COUNT(*) AS total,
+                COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%con%' OR LOWER(COALESCE(URL, '')) LIKE '%paid%' OR LOWER(COALESCE(URL, '')) LIKE '%thank%' THEN 1 END) AS new_subs,
+                COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%stop%' OR LOWER(COALESCE(URL, '')) LIKE '%cancel%' THEN 1 END) AS cancels,
+                COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%dashboard%' THEN 1 END) AS paid_content
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
+            WHERE DELIVERED = CURRENT_DATE()
+              AND LOWER(COALESCE(COMMON_NAME, '')) LIKE '%reelshort%'
+        """
+        cur.execute(sql)
+        row = cur.fetchone()
+        conn.close()
+        total = row[0] or 0
+        new_subs = row[1] or 0
+        cancels = row[2] or 0
+        paid_content = row[3] or 0
+        # Active Accounts = (total * 150) / 10_000_000 * 329_900_000
+        active_accounts = (total * 150) / 10_000_000 * 329_900_000 if total else 0
+        new_subscriptions_pct = (new_subs / total * 100) if total else 0
+        total_cancels_pct = (cancels / total * 100) if total else 0
+        watched_paid_pct = (paid_content / total * 100) if total else 0
+        watched_free_pct = 100.0 - watched_paid_pct
+        return jsonify({
+            'date': datetime.now().strftime('%Y-%m-%d'),
+            'total_rows': total,
+            'active_accounts': round(active_accounts, 2),
+            'new_subscriptions_pct': round(new_subscriptions_pct, 2),
+            'total_cancels_pct': round(total_cancels_pct, 2),
+            'watched_paid_content_pct': round(watched_paid_pct, 2),
+            'watched_free_content_pct': round(watched_free_pct, 2),
+        })
+    except Exception as e:
+        print(f"[ReelShort Ranker] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 # Eager-load ranker caches from disk at startup so first request in each worker is fast
 def _preload_ranker_caches():
     try:
