@@ -3856,7 +3856,7 @@ def _netflix_ranker_s3_update_index(cached_dates):
 
 
 def _build_netflix_ranker_payload(rows):
-    """Build API payload from raw rows: (visit_date, name_of_show, genre, type, views). Excludes any row where genre contains 'Indian'."""
+    """Build API payload from raw rows: (visit_date, name_of_show, genre, type, views, avg_watch_time, run_time). Excludes any row where genre contains 'Indian'."""
     from collections import defaultdict
     daily = []
     by_date = defaultdict(list)
@@ -3867,11 +3867,16 @@ def _build_netflix_ranker_payload(rows):
         genre = (r[2] or '').strip() or '-'
         typ = (r[3] or '').strip() or '-'
         views = int(r[4] or 0)
+        avg_watch_time = round(float(r[5]), 2) if r[5] is not None and r[5] != '' else None
+        run_time = r[6] if len(r) > 6 and r[6] is not None and r[6] != '' else None
+        if run_time is not None and isinstance(run_time, (int, float)):
+            run_time = int(run_time) if run_time == int(run_time) else round(float(run_time), 2)
         # Exclude Indian genre from all ranker views
         if 'indian' in (genre or '').lower():
             continue
-        daily.append({'date': dt, 'show_name': show_name, 'views': views, 'genre': genre, 'type': typ})
-        by_date[dt].append({'show_name': show_name, 'views': views, 'genre': genre, 'type': typ})
+        item = {'show_name': show_name, 'views': views, 'genre': genre, 'type': typ, 'avg_watch_time': avg_watch_time, 'run_time': run_time}
+        daily.append({'date': dt, **item})
+        by_date[dt].append(item)
         by_show[show_name].append({'date': dt, 'views': views})
     dates_sorted = sorted(by_date.keys())
     date_range = {'min': dates_sorted[0], 'max': dates_sorted[-1]} if dates_sorted else {}
@@ -3907,7 +3912,7 @@ def _build_netflix_ranker_payload(rows):
     }
 
 def _build_netflix_seasons_payload(rows):
-    """Build by_date_season from rows (visit_date, name_of_show, season, views)."""
+    """Build by_date_season from rows (visit_date, name_of_show, season, views, avg_watch_time, run_time)."""
     from collections import defaultdict
     by_date_season = defaultdict(list)
     for r in rows:
@@ -3915,20 +3920,29 @@ def _build_netflix_seasons_payload(rows):
         show_name = (r[1] or '').strip() or 'Unknown'
         season = (r[2] or '').strip() or '-'
         views = int(r[3] or 0)
-        by_date_season[dt].append({'show_name': show_name, 'season': season, 'views': views})
+        avg_watch_time = round(float(r[4]), 2) if len(r) > 4 and r[4] is not None and r[4] != '' else None
+        run_time = r[5] if len(r) > 5 and r[5] is not None and r[5] != '' else None
+        if run_time is not None and isinstance(run_time, (int, float)):
+            run_time = int(run_time) if run_time == int(run_time) else round(float(run_time), 2)
+        by_date_season[dt].append({'show_name': show_name, 'season': season, 'views': views, 'avg_watch_time': avg_watch_time, 'run_time': run_time})
     return dict(by_date_season)
 
 def _build_netflix_episodes_payload(rows):
-    """Build by_date_episode from rows (visit_date, name_of_show, season, episode_name, views)."""
+    """Build by_date_episode from rows (visit_date, name_of_show, season, episode, episode_name, views, avg_watch_time, run_time)."""
     from collections import defaultdict
     by_date_episode = defaultdict(list)
     for r in rows:
         dt = r[0].strftime('%Y-%m-%d') if hasattr(r[0], 'strftime') else str(r[0])[:10]
         show_name = (r[1] or '').strip() or 'Unknown'
         season = (r[2] or '').strip() or '-'
-        episode_name = (r[3] or '').strip() or 'Unknown'
-        views = int(r[4] or 0)
-        by_date_episode[dt].append({'show_name': show_name, 'season': season, 'episode_name': episode_name, 'views': views})
+        episode = _normalize_netflix_all_field(r[3])
+        episode_name = (r[4] or '').strip() or 'Unknown'
+        views = int(r[5] or 0)
+        avg_watch_time = round(float(r[6]), 2) if len(r) > 6 and r[6] is not None and r[6] != '' else None
+        run_time = r[7] if len(r) > 7 and r[7] is not None and r[7] != '' else None
+        if run_time is not None and isinstance(run_time, (int, float)):
+            run_time = int(run_time) if run_time == int(run_time) else round(float(run_time), 2)
+        by_date_episode[dt].append({'show_name': show_name, 'season': season, 'episode': episode, 'episode_name': episode_name, 'views': views, 'avg_watch_time': avg_watch_time, 'run_time': run_time})
     return dict(by_date_episode)
 
 def _normalize_netflix_all_field(value, allow_unknown=False):
@@ -3946,7 +3960,7 @@ def _normalize_netflix_all_field(value, allow_unknown=False):
     return str(value).strip()
 
 def _build_netflix_all_payload(rows):
-    """Build by_date_all from rows (visit_date, name_of_show, season, episode, episode_name, views)."""
+    """Build by_date_all from rows (visit_date, name_of_show, season, episode, episode_name, views, avg_watch_time, run_time)."""
     from collections import defaultdict
     by_date_all = defaultdict(list)
     for r in rows:
@@ -3956,12 +3970,18 @@ def _build_netflix_all_payload(rows):
         episode = _normalize_netflix_all_field(r[3])
         episode_name = _normalize_netflix_all_field(r[4])
         views = int(r[5] or 0)
+        avg_watch_time = round(float(r[6]), 2) if len(r) > 6 and r[6] is not None and r[6] != '' else None
+        run_time = r[7] if len(r) > 7 and r[7] is not None and r[7] != '' else None
+        if run_time is not None and isinstance(run_time, (int, float)):
+            run_time = int(run_time) if run_time == int(run_time) else round(float(run_time), 2)
         by_date_all[dt].append({
             'show_name': show_name,
             'season': season,
             'episode': episode,
             'episode_name': episode_name,
-            'views': views
+            'views': views,
+            'avg_watch_time': avg_watch_time,
+            'run_time': run_time
         })
     return dict(by_date_all)
 
@@ -3978,22 +3998,24 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
         # Default to last 7 days for fast initial load; use refresh_today_only for just today
         if refresh_today_only:
             sql = """
-                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views
+                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views,
+                    AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
                 FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
                 WHERE VISIT_TS >= CURRENT_DATE()
                   AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
                 GROUP BY 1, 2, 3, 4
-                ORDER BY 1, 3 DESC
+                ORDER BY 1, 5 DESC
             """
         else:
             # Load only last 7 days for fast initial load (was 1 year - too slow)
             sql = """
-                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views
+                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views,
+                    AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
                 FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
                 WHERE VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())
                   AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
                 GROUP BY 1, 2, 3, 4
-                ORDER BY 1, 3 DESC
+                ORDER BY 1, 5 DESC
             """
         cur.execute(sql)
         rows = cur.fetchall()
@@ -4004,7 +4026,8 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
         date_filter = "VISIT_TS >= CURRENT_DATE()" if refresh_today_only else "VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())"
         try:
             sql_seasons = f"""
-                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, COUNT(*) AS views
+                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, COUNT(*) AS views,
+                    AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
                 FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
                 WHERE {date_filter}
                   AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
@@ -4013,26 +4036,27 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
                   AND UPPER(TRIM(SEASON)) != UPPER(TRIM(NAME_OF_SHOW))
                   AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%indian%')
                 GROUP BY 1, 2, 3
-                ORDER BY 1, 3 DESC
+                ORDER BY 1, 4 DESC
             """
             cur.execute(sql_seasons)
             payload['by_date_season'] = _build_netflix_seasons_payload(cur.fetchall())
         except Exception:
             payload['by_date_season'] = {}
 
-        # Episodes: group by (date, name_of_show, season, episode_name). Exclude Indian genre.
+        # Episodes: group by (date, name_of_show, season, episode, episode_name). Exclude Indian genre.
         # Exclude rows where EPISODE_NAME equals NAME_OF_SHOW (not a real episode distinction)
         try:
             sql_episodes = f"""
-                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE_NAME, COUNT(*) AS views
+                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views,
+                    AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
                 FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
                 WHERE {date_filter}
                   AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
                   AND EPISODE_NAME IS NOT NULL AND TRIM(EPISODE_NAME) != ''
                   AND UPPER(TRIM(EPISODE_NAME)) != UPPER(TRIM(NAME_OF_SHOW))
                   AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%indian%')
-                GROUP BY 1, 2, 3, 4
-                ORDER BY 1, 4 DESC
+                GROUP BY 1, 2, 3, 4, 5
+                ORDER BY 1, 6 DESC
             """
             cur.execute(sql_episodes)
             payload['by_date_episode'] = _build_netflix_episodes_payload(cur.fetchall())
@@ -4042,7 +4066,8 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
         # All Netflix: group by (date, name_of_show, season, episode, episode_name) for complete view
         try:
             sql_all = f"""
-                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views
+                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views,
+                    AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
                 FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
                 WHERE {date_filter}
                   AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
@@ -4075,19 +4100,21 @@ def _fetch_netflix_ranker_for_single_date(visit_date_str):
     try:
         # Single-day filter: DATE(VISIT_TS) = %s
         sql = """
-            SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views
+            SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views,
+                AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
             FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
             WHERE DATE(VISIT_TS) = %s
               AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
             GROUP BY 1, 2, 3, 4
-            ORDER BY 1, 3 DESC
+            ORDER BY 1, 5 DESC
         """
         cur.execute(sql, (visit_date_str,))
         rows = cur.fetchall()
         payload = _build_netflix_ranker_payload(rows)
 
         sql_seasons = """
-            SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, COUNT(*) AS views
+            SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, COUNT(*) AS views,
+                AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
             FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
             WHERE DATE(VISIT_TS) = %s
               AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
@@ -4096,7 +4123,7 @@ def _fetch_netflix_ranker_for_single_date(visit_date_str):
               AND UPPER(TRIM(SEASON)) != UPPER(TRIM(NAME_OF_SHOW))
               AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%%indian%%')
             GROUP BY 1, 2, 3
-            ORDER BY 1, 3 DESC
+            ORDER BY 1, 4 DESC
         """
         try:
             cur.execute(sql_seasons, (visit_date_str,))
@@ -4105,15 +4132,16 @@ def _fetch_netflix_ranker_for_single_date(visit_date_str):
             payload['by_date_season'] = {}
 
         sql_episodes = """
-            SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE_NAME, COUNT(*) AS views
+            SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views,
+                AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
             FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
             WHERE DATE(VISIT_TS) = %s
               AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
               AND EPISODE_NAME IS NOT NULL AND TRIM(EPISODE_NAME) != ''
               AND UPPER(TRIM(EPISODE_NAME)) != UPPER(TRIM(NAME_OF_SHOW))
               AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%%indian%%')
-            GROUP BY 1, 2, 3, 4
-            ORDER BY 1, 4 DESC
+            GROUP BY 1, 2, 3, 4, 5
+            ORDER BY 1, 6 DESC
         """
         try:
             cur.execute(sql_episodes, (visit_date_str,))
@@ -4122,7 +4150,8 @@ def _fetch_netflix_ranker_for_single_date(visit_date_str):
             payload['by_date_episode'] = {}
 
         sql_all = """
-            SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views
+            SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views,
+                AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
             FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
             WHERE DATE(VISIT_TS) = %s
               AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''

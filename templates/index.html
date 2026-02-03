@@ -12097,7 +12097,7 @@
                                         </div>
                                     </div>
                                     <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">All content ranked by views. Grouped by Show + Season + Episode # + Episode Name.</p>
-                                    <div id="netflixAllTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Name of Show</th><th>Season</th><th>Episode #</th><th>Episode Name</th><th>Views</th></tr></thead><tbody id="netflixAllBody"></tbody></table></div>
+                                    <div id="netflixAllTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Name of Show</th><th>Season</th><th>Episode #</th><th>Episode Name</th><th>Views</th><th>Avg Watch Time</th><th>Run Time</th></tr></thead><tbody id="netflixAllBody"></tbody></table></div>
                                     <div id="netflixAllLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
                                 </div>
                                 <div id="netflix-daily" class="netflix-sub-content active">
@@ -12121,7 +12121,7 @@
                                             <option value="">All genres</option>
                                         </select>
                                     </div>
-                                    <div id="netflixDailyTableWrap" style="overflow-x: auto;"><table id="netflixDailyTable" class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Views</th><th>Genre</th></tr></thead><tbody id="netflixDailyBody"></tbody></table></div>
+                                    <div id="netflixDailyTableWrap" style="overflow-x: auto;"><table id="netflixDailyTable" class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Views</th><th>Genre</th><th>Avg Watch Time</th><th>Run Time</th></tr></thead><tbody id="netflixDailyBody"></tbody></table></div>
                                     <div id="netflixDailyLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
                                 </div>
                                 <div id="netflix-seasons" class="netflix-sub-content">
@@ -12134,7 +12134,7 @@
                                         </div>
                                     </div>
                                     <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">Shows only (no movies). Ranked by Show + Season combined.</p>
-                                    <div id="netflixSeasonsTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Name of Show</th><th>Season</th><th>Views</th></tr></thead><tbody id="netflixSeasonsBody"></tbody></table></div>
+                                    <div id="netflixSeasonsTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Name of Show</th><th>Season</th><th>Views</th><th>Avg Watch Time</th><th>Run Time</th></tr></thead><tbody id="netflixSeasonsBody"></tbody></table></div>
                                     <div id="netflixSeasonsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
                                 </div>
                                 <div id="netflix-episodes" class="netflix-sub-content">
@@ -12147,7 +12147,7 @@
                                         </div>
                                     </div>
                                     <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">Ranked by episode.</p>
-                                    <div id="netflixEpisodesTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Episode</th><th>Season</th><th>Views</th></tr></thead><tbody id="netflixEpisodesBody"></tbody></table></div>
+                                    <div id="netflixEpisodesTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Episode #</th><th>Episode</th><th>Season</th><th>Views</th><th>Avg Watch Time</th><th>Run Time</th></tr></thead><tbody id="netflixEpisodesBody"></tbody></table></div>
                                     <div id="netflixEpisodesLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
                                 </div>
                                 <div id="netflix-trends" class="netflix-sub-content">
@@ -14928,17 +14928,12 @@
             return isNaN(num) ? null : num;
         }
         
-        // Format index as plain number: no "x". If index < 1, show up to 3 decimal places so it doesn't display as 0 (e.g. 0.023).
-        // Backend sends 100-based scale (100 = 1.0, 150 = 1.5, 23 = 0.23).
+        // Format index as plain number on 100-based scale: 100 = 100, 1.33 = 133 (no decimals).
+        // Backend sends 100-based scale (100 = 1.0, 133 = 1.33). Display as integer.
         function formatIndex(index) {
             if (index === null || index === undefined || isNaN(index)) return 'N/A';
             const n = Number(index);
-            const actual = n / 100;
-            if (actual < 1) {
-                return actual.toFixed(3).replace(/\.?0+$/, '') || '0';
-            }
-            if (actual % 1 === 0) return String(Math.round(actual));
-            return actual.toFixed(2).replace(/\.?0+$/, '');
+            return String(Math.round(n));
         }
         
         // Normalize a name for deduplication (handles variations like "Patrick Mahomes" vs "patrick-mahomes")
@@ -17679,9 +17674,9 @@
                 // Sort locations by index (highest first)
                 const sortedLocations = [...parsed.locations].sort((a, b) => (b.index || 0) - (a.index || 0));
                 
-                // Split into over-indexing and under-indexing
-                const overIndexing = sortedLocations.filter(loc => (loc.index || 0) >= 100);
-                const underIndexing = sortedLocations.filter(loc => (loc.index || 0) < 100);
+                // Split into over-indexing and under-indexing; exclude index 0
+                const overIndexing = sortedLocations.filter(loc => { const idx = loc.index || 0; return idx !== 0 && idx >= 100; });
+                const underIndexing = sortedLocations.filter(loc => { const idx = loc.index || 0; return idx !== 0 && idx < 100; });
                 
                 let html = '<div style="margin-bottom: 2rem;">';
                 html += '<h3 style="color: var(--accent-cyan); margin-bottom: 1rem;">📍 Top DMAs (Over-Indexing)</h3>';
@@ -26342,8 +26337,8 @@
             const isProjectionDemo = dashDisplayMode === 'projection';
             const sampleSize = window.demoHighlightsSampleSize || 0;
             
-            // Sort the data
-            let sorted = [...window.demoHighlightsData];
+            // Exclude rows with index 0
+            let sorted = [...window.demoHighlightsData].filter(h => Number(h.index) !== 0);
             const [column, direction] = sortValue.split('-');
             
             sorted.sort((a, b) => {
@@ -26408,9 +26403,10 @@
             const container = document.getElementById('interestHighlights');
             if (!container || !window.interestHighlightsData) return;
             
-            // Deduplicate by normalized name first
+            // Deduplicate by normalized name first; exclude index 0
             const seenNormalized = new Set();
             let deduped = window.interestHighlightsData.filter(item => {
+                if (Number(item.index) === 0) return false;
                 const normalizedName = normalizeNameForDedup(item.name);
                 if (seenNormalized.has(normalizedName)) return false;
                 seenNormalized.add(normalizedName);
@@ -26527,11 +26523,11 @@
             const isProjectionDiff = dashDisplayMode === 'projection';
             const [column, direction] = sortValue.split('-');
             
-            // Sort items within each category based on sort value, with deduplication
+            // Sort items within each category based on sort value, with deduplication; exclude index 0
             const sortedCategories = window.topDifferentiatorsData.map(catGroup => {
-                // Deduplicate items by normalized name within each category
                 const seenNormalized = new Set();
                 let dedupedItems = catGroup.items.filter(item => {
+                    if (Number(item.index) === 0) return false;
                     const normalizedName = normalizeNameForDedup(item.name);
                     if (seenNormalized.has(normalizedName)) return false;
                     seenNormalized.add(normalizedName);
@@ -27257,6 +27253,8 @@
         }
         
         function renderInterestsInsights(items) {
+            items = (items || []).filter(i => Number(i.index) !== 0);
+            if (items.length === 0) return;
             const avgIndex = Math.round(items.reduce((sum, i) => sum + i.index, 0) / items.length);
             const maxIndex = Math.max(...items.map(i => i.index));
             const minIndex = Math.min(...items.map(i => i.index));
@@ -27308,7 +27306,7 @@
             const barEl = document.getElementById('interestsHeatmapBar');
             const resultsEl = document.getElementById('interestsHeatmapResults');
             const placeholderEl = resultsEl ? resultsEl.querySelector('.interests-heatmap-placeholder') : null;
-            
+            items = (items || []).filter(item => Number(item.index) !== 0);
             // Group by category
             const categories = {};
             items.forEach(item => {
@@ -27327,6 +27325,7 @@
                         name,
                         avgIndex: Math.round(data.totalIndex / data.count),
                         count: data.count,
+                        items: sortedItems,
                         topItem: sortedItems[0],
                         top3: sortedItems.slice(0, 3)
                     };
@@ -27385,10 +27384,28 @@
             
             const segmentColors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'];
             const borderColor = segmentColors[quintileIndex];
+            const isProjection = dashDisplayMode === 'projection';
+            const US_POP = 324700000;
+            function buildHeatmapCategoryTooltip(c) {
+                const lines = [c.name + ' · Avg ' + formatIndex(c.avgIndex) + ' · ' + (c.count || 0) + ' items'];
+                (c.items || []).forEach(item => {
+                    let genPopPct = item.genPopPct || 0;
+                    if (genPopPct > 0 && genPopPct < 1) genPopPct = genPopPct * 100;
+                    const profileDisplay = isProjection
+                        ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || (item.pct / 100) * US_POP)))
+                        : formatValueOrNA(item.pct, true);
+                    const genPopDisplay = isProjection
+                        ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
+                        : formatValueOrNA(genPopPct, true);
+                    const label = isProjection ? 'US# (GP#)' : 'Profile (GP)';
+                    lines.push('  • ' + item.name + ': ' + profileDisplay + ' (' + genPopDisplay + ') · ' + formatIndex(item.index) + ' index');
+                });
+                return lines.join('\n').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            }
             resultsEl.innerHTML = top5.map(cat => {
                 const safeName = (cat.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                 const safeNameJs = (cat.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                const tooltipSafe = (cat.name + ': Avg ' + formatIndex(cat.avgIndex) + ' · ' + cat.count + ' items').replace(/"/g, '&quot;');
+                const tooltipSafe = buildHeatmapCategoryTooltip(cat);
                 return `<div class="quintile-result-card has-tooltip" style="border-left: 3px solid ${borderColor};" data-tooltip="${tooltipSafe}" onclick="filterInterestsByCategory('${safeNameJs}')">
                     <span class="result-name">${safeName}</span>
                     <span class="result-stats">${formatIndex(cat.avgIndex)} · ${cat.count} items</span>
@@ -27416,14 +27433,17 @@
                 categories[item.category].push(item);
             });
             
-            // Sort and take top 5 per category
+            // Sort and take top 5 per category; exclude index 0
             const categoryCards = Object.entries(categories)
                 .map(([name, catItems]) => {
-                    const sorted = catItems.sort((a, b) => b.index - a.index);
+                    const nonZero = catItems.filter(i => Number(i.index) !== 0);
+                    const sorted = nonZero.sort((a, b) => b.index - a.index);
+                    if (sorted.length === 0) return null;
                     const avgIndex = Math.round(sorted.reduce((sum, i) => sum + i.index, 0) / sorted.length);
                     const avgPct = sorted.reduce((sum, i) => sum + (i.pct || 0), 0) / sorted.length;
                     return { name, items: sorted.slice(0, 5), avgIndex, avgPct };
                 })
+                .filter(c => c !== null)
                 .sort((a, b) => b.avgIndex - a.avgIndex)
                 .slice(0, 6);
             
@@ -27486,8 +27506,8 @@
             const categorySelect = document.getElementById('interestsCategorySelect');
             const searchInput = document.getElementById('interestsSearchInput');
             
-            // Apply category filter
-            let filtered = [...items];
+            // Apply category filter; exclude rows with index 0
+            let filtered = [...items].filter(item => Number(item.index) !== 0);
             if (categorySelect && categorySelect.value && categorySelect.value !== 'all') {
                 filtered = filtered.filter(item => item.category === categorySelect.value);
             }
@@ -28080,9 +28100,10 @@
                 const catId = cat.replace(/[^a-zA-Z0-9]/g, '');
                 const items = aggregatedBehavioral[cat];
                 
-                // Deduplicate items by normalized name before sorting
+                // Exclude index 0; deduplicate items by normalized name before sorting
                 const seenNormalized = new Set();
                 const dedupedItems = items.filter(item => {
+                    if (Number(item.index) === 0) return false;
                     const normalizedName = normalizeNameForDedup(item.name);
                     if (seenNormalized.has(normalizedName)) return false;
                     seenNormalized.add(normalizedName);
@@ -29915,6 +29936,7 @@
 
         // --- Netflix Ranker (Rankers tab) ---
         let netflixRankerData = null;
+        let netflixShowDetailsCache = {};
         let netflixTrendsChartInstance = null;
         let netflixGenreChartInstance = null;
         let netflixTopShowsChartInstance = null;
@@ -29924,6 +29946,13 @@
             const v = Number(rawViews) || 0;
             const boosted = v * 150;
             return Math.round((boosted / 100000000) * 324838700);
+        }
+        /** Format avg_watch_time / run_time for display: "X min" or "N/A" */
+        function netflixFormatMin(val) {
+            if (val === null || val === undefined || val === '') return 'N/A';
+            const n = Number(val);
+            if (isNaN(n)) return 'N/A';
+            return (n === Math.floor(n) ? Math.floor(n) : Math.round(n * 100) / 100) + ' min';
         }
 
         function showRankerPlatform(id) {
@@ -30194,7 +30223,7 @@
             
             if (!tbody) return;
             if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date' + (date ? ' (' + date + ')' : '') + '.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date' + (date ? ' (' + date + ')' : '') + '.</td></tr>';
             } else {
                 tbody.innerHTML = rows.map((r, i) => {
                     const showNameEsc = (r.show_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
@@ -30204,7 +30233,7 @@
                     const seasonCell = r.season || '';
                     const episodeCell = r.episode || '';
                     const episodeNameCell = r.episode_name || '';
-                    return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + seasonCell + '</td><td>' + episodeCell + '</td><td>' + episodeNameCell + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>';
+                    return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + seasonCell + '</td><td>' + episodeCell + '</td><td>' + episodeNameCell + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td><td>' + netflixFormatMin(r.avg_watch_time) + '</td><td>' + netflixFormatMin(r.run_time) + '</td></tr>';
                 }).join('');
             }
         }
@@ -30221,7 +30250,7 @@
                 episode: _normalizeNetflixAllField(r.episode),
                 episode_name: _normalizeNetflixAllField(r.episode_name)
             }));
-            const csv = 'Rank,Name of Show,Season,Episode #,Episode Name,Views\n' + rows.map((r, i) => [i + 1, '"' + (r.show_name || 'N/A').replace(/"/g, '""') + '"', '"' + (r.season || '').replace(/"/g, '""') + '"', '"' + (r.episode || '').replace(/"/g, '""') + '"', '"' + (r.episode_name || '').replace(/"/g, '""') + '"', netflixProjectedViews(r.views)].join(',')).join('\n');
+            const csv = 'Rank,Name of Show,Season,Episode #,Episode Name,Views,Avg Watch Time,Run Time\n' + rows.map((r, i) => [i + 1, '"' + (r.show_name || 'N/A').replace(/"/g, '""') + '"', '"' + (r.season || '').replace(/"/g, '""') + '"', '"' + (r.episode || '').replace(/"/g, '""') + '"', '"' + (r.episode_name || '').replace(/"/g, '""') + '"', netflixProjectedViews(r.views), (r.avg_watch_time != null && r.avg_watch_time !== '' ? r.avg_watch_time : ''), (r.run_time != null && r.run_time !== '' ? r.run_time : '')].join(',')).join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_all_ranker_' + date + '.csv'; a.click();
         }
 
@@ -30295,9 +30324,9 @@
 
             if (!tbody) return;
             if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date' + (date ? ' (' + date + ')' : '') + '. Try another date or check filters.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date' + (date ? ' (' + date + ')' : '') + '. Try another date or check filters.</td></tr>';
             } else {
-                tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td><a href="#" onclick="showNetflixEpisodesForShow(\'' + (r.show_name || '').replace(/'/g, "\\'") + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.show_name || '') + '</a></td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td><td>' + (r.genre || '-') + '</td></tr>').join('');
+                tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td><a href="#" onclick="showNetflixEpisodesForShow(\'' + (r.show_name || '').replace(/'/g, "\\'") + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.show_name || '') + '</a></td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td><td>' + (r.genre || '-') + '</td><td>' + netflixFormatMin(r.avg_watch_time) + '</td><td>' + netflixFormatMin(r.run_time) + '</td></tr>').join('');
             }
         }
         
@@ -30334,102 +30363,96 @@
             // Render filtered episodes table
             const tbody = document.getElementById('netflixEpisodesBody');
             if (tbody) {
-                tbody.innerHTML = '<tr><td colspan="5" style="padding: 0.5rem; background: var(--bg-dark); font-weight: 600;">Episodes for: ' + showName + ' (' + date + ') <a href="#" onclick="renderNetflixEpisodesRanker(); return false;" style="color: var(--accent-cyan); margin-left: 1rem;">← Show All Episodes</a></td></tr>' +
-                    showEpisodes.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.episode_name || '-') + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>').join('');
+                var _sn = (showName || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                var _d = (date || '').replace(/'/g, "\\'");
+                tbody.innerHTML = '<tr><td colspan="8" style="padding: 0.5rem; background: var(--bg-dark); font-weight: 600;">Episodes for: ' + showName + ' (' + date + ') <a href="#" onclick="renderNetflixEpisodesRanker(); return false;" style="color: var(--accent-cyan); margin-left: 1rem;">← Show All Episodes</a></td></tr>' +
+                    showEpisodes.map((r, i) => {
+                        var se = (r.season || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                        var en = (r.episode_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                        var showLink = '<a href="#" onclick="openNetflixShowDetails(\'' + _sn + '\', \'' + se + '\', \'' + en + '\', \'' + _d + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.show_name || '') + '</a>';
+                        var epLink = (r.episode_name && r.episode_name !== '-') ? '<a href="#" onclick="openNetflixShowDetails(\'' + _sn + '\', \'' + se + '\', \'' + en + '\', \'' + _d + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.episode_name || '-') + '</a>' : (r.episode_name || '-');
+                        return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (r.episode !== undefined && r.episode !== '' ? r.episode : '-') + '</td><td>' + epLink + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td><td>' + netflixFormatMin(r.avg_watch_time) + '</td><td>' + netflixFormatMin(r.run_time) + '</td></tr>';
+                    }).join('');
             }
         }
         
+        function renderNetflixShowDetailsContent(contentEl, data) {
+            const dmaRows = (data.dma_breakdown || []).slice(0, 15);
+            const dmaTable = dmaRows.length > 0 
+                ? '<table class="rankers-table" style="width: 100%; border-collapse: collapse; margin-top: 0.5rem;"><thead><tr><th>DMA (Location)</th><th>Projected Views</th><th>% of Total</th></tr></thead><tbody>' +
+                  dmaRows.map(d => '<tr><td>' + d.dma + '</td><td>' + netflixProjectedViews(d.views).toLocaleString() + '</td><td>' + d.percentage + '%</td></tr>').join('') +
+                  '</tbody></table>'
+                : '<p style="color: var(--text-secondary);">No DMA data available</p>';
+            let castDisplay = data.cast || 'N/A';
+            if (castDisplay !== 'N/A' && castDisplay.length > 200) {
+                const castNames = castDisplay.split(',').slice(0, 5);
+                castDisplay = castNames.join(', ') + '...';
+            }
+            contentEl.innerHTML = `
+                <h2 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">${data.show_name}</h2>
+                ${data.season !== 'N/A' ? '<p style="margin: 0 0 0.25rem 0; color: var(--text-secondary);">Season: ' + data.season + '</p>' : ''}
+                ${data.episode_name !== 'N/A' ? '<p style="margin: 0 0 0.5rem 0; color: var(--text-secondary);">Episode: ' + data.episode_name + '</p>' : ''}
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1.5rem 0;">
+                    <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Total Views</div>
+                        <div style="font-size: 1.5rem; font-weight: 600; color: var(--accent-lime);">${netflixProjectedViews(data.total_views).toLocaleString()}</div>
+                    </div>
+                    <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Avg Watch Time</div>
+                        <div style="font-size: 1.5rem; font-weight: 600;">${data.avg_watch_time !== 'N/A' ? data.avg_watch_time + ' min' : 'N/A'}</div>
+                    </div>
+                    <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Run Time</div>
+                        <div style="font-size: 1.5rem; font-weight: 600;">${data.run_time !== 'N/A' ? data.run_time + ' min' : 'N/A'}</div>
+                    </div>
+                    <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Year Released</div>
+                        <div style="font-size: 1.5rem; font-weight: 600;">${data.year_released}</div>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                    <div><div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">Genre</div><div style="font-weight: 500;">${data.genre}</div></div>
+                    <div><div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">Type</div><div style="font-weight: 500;">${data.type}</div></div>
+                    <div><div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">Age Rating</div><div style="font-weight: 500;">${data.age_rating}</div></div>
+                </div>
+                <div style="margin-bottom: 1.5rem;">
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">Cast</div>
+                    <div style="font-size: 0.9rem;">${castDisplay}</div>
+                </div>
+                <div><h4 style="margin: 0 0 0.5rem 0;">📍 Viewer Demographics by DMA (Top 15)</h4>${dmaTable}</div>
+            `;
+        }
         function openNetflixShowDetails(showName, season, episodeName, date) {
             const modal = document.getElementById('netflixShowDetailsModal');
             const content = document.getElementById('netflixShowDetailsContent');
             if (!modal || !content) return;
-            
+            const cacheKey = (showName || '') + '|' + (season || '') + '|' + (episodeName || '') + '|' + (date || '');
+            if (netflixShowDetailsCache[cacheKey]) {
+                modal.style.display = 'block';
+                document.body.style.overflow = 'hidden';
+                renderNetflixShowDetailsContent(content, netflixShowDetailsCache[cacheKey]);
+                return;
+            }
             modal.style.display = 'block';
             document.body.style.overflow = 'hidden';
             content.innerHTML = '<div style="text-align: center; padding: 3rem;"><div class="loading-spinner"></div><p>Loading show details...</p></div>';
-            
-            // Build query params
             const params = new URLSearchParams();
             params.append('show_name', showName);
             if (season && season !== 'N/A') params.append('season', season);
             if (episodeName && episodeName !== 'N/A') params.append('episode_name', episodeName);
             if (date) params.append('date', date);
-            
             fetch('/api/rankers/netflix/show-details?' + params.toString(), { credentials: 'same-origin' })
-                .then(r => r.json())
+                .then(r => {
+                    if (!r.ok) throw new Error(r.status === 401 ? 'Unauthorized' : 'Failed to load (' + r.status + ')');
+                    return r.json();
+                })
                 .then(data => {
-                    if (data.error) {
-                        content.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--accent-red);"><p>Error: ' + data.error + '</p></div>';
-                        return;
-                    }
-                    
-                    // Build DMA breakdown table (top 15)
-                    const dmaRows = (data.dma_breakdown || []).slice(0, 15);
-                    const dmaTable = dmaRows.length > 0 
-                        ? '<table class="rankers-table" style="width: 100%; border-collapse: collapse; margin-top: 0.5rem;"><thead><tr><th>DMA (Location)</th><th>Projected Views</th><th>% of Total</th></tr></thead><tbody>' +
-                          dmaRows.map(d => '<tr><td>' + d.dma + '</td><td>' + netflixProjectedViews(d.views).toLocaleString() + '</td><td>' + d.percentage + '%</td></tr>').join('') +
-                          '</tbody></table>'
-                        : '<p style="color: var(--text-secondary);">No DMA data available</p>';
-                    
-                    // Format cast (limit to first 5 names if long)
-                    let castDisplay = data.cast || 'N/A';
-                    if (castDisplay !== 'N/A' && castDisplay.length > 200) {
-                        const castNames = castDisplay.split(',').slice(0, 5);
-                        castDisplay = castNames.join(', ') + '...';
-                    }
-                    
-                    content.innerHTML = `
-                        <h2 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">${data.show_name}</h2>
-                        ${data.season !== 'N/A' ? '<p style="margin: 0 0 0.25rem 0; color: var(--text-secondary);">Season: ' + data.season + '</p>' : ''}
-                        ${data.episode_name !== 'N/A' ? '<p style="margin: 0 0 0.5rem 0; color: var(--text-secondary);">Episode: ' + data.episode_name + '</p>' : ''}
-                        
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1.5rem 0;">
-                            <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Total Views</div>
-                                <div style="font-size: 1.5rem; font-weight: 600; color: var(--accent-lime);">${netflixProjectedViews(data.total_views).toLocaleString()}</div>
-                            </div>
-                            <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Avg Watch Time</div>
-                                <div style="font-size: 1.5rem; font-weight: 600;">${data.avg_watch_time !== 'N/A' ? data.avg_watch_time + ' min' : 'N/A'}</div>
-                            </div>
-                            <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Run Time</div>
-                                <div style="font-size: 1.5rem; font-weight: 600;">${data.run_time !== 'N/A' ? data.run_time + ' min' : 'N/A'}</div>
-                            </div>
-                            <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px;">
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Year Released</div>
-                                <div style="font-size: 1.5rem; font-weight: 600;">${data.year_released}</div>
-                            </div>
-                        </div>
-                        
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-                            <div>
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">Genre</div>
-                                <div style="font-weight: 500;">${data.genre}</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">Type</div>
-                                <div style="font-weight: 500;">${data.type}</div>
-                            </div>
-                            <div>
-                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">Age Rating</div>
-                                <div style="font-weight: 500;">${data.age_rating}</div>
-                            </div>
-                        </div>
-                        
-                        <div style="margin-bottom: 1.5rem;">
-                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">Cast</div>
-                            <div style="font-size: 0.9rem;">${castDisplay}</div>
-                        </div>
-                        
-                        <div>
-                            <h4 style="margin: 0 0 0.5rem 0;">📍 Viewer Demographics by DMA (Top 15)</h4>
-                            ${dmaTable}
-                        </div>
-                    `;
+                    if (data.error) throw new Error(data.error);
+                    netflixShowDetailsCache[cacheKey] = data;
+                    renderNetflixShowDetailsContent(content, data);
                 })
                 .catch(err => {
-                    content.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--accent-red);"><p>Error loading details: ' + err.message + '</p></div>';
+                    content.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--accent-red);"><p>Error loading details: ' + (err.message || String(err)) + '</p></div>';
                 });
         }
         
@@ -30469,7 +30492,7 @@
                 const showNameEsc = (r.show_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 const seasonEsc = (r.season || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 const showLink = '<a href="#" onclick="openNetflixShowDetails(\'' + showNameEsc + '\', \'' + seasonEsc + '\', \'\', \'' + date + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.show_name || '') + '</a>';
-                return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>';
+                return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td><td>' + netflixFormatMin(r.avg_watch_time) + '</td><td>' + netflixFormatMin(r.run_time) + '</td></tr>';
             }).join('');
         }
 
@@ -30500,7 +30523,8 @@
                 const episodeEsc = (r.episode_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 const showLink = '<a href="#" onclick="openNetflixShowDetails(\'' + showNameEsc + '\', \'' + seasonEsc + '\', \'' + episodeEsc + '\', \'' + date + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.show_name || '') + '</a>';
                 const episodeLink = (r.episode_name && r.episode_name !== '-') ? '<a href="#" onclick="openNetflixShowDetails(\'' + showNameEsc + '\', \'' + seasonEsc + '\', \'' + episodeEsc + '\', \'' + date + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.episode_name || '-') + '</a>' : (r.episode_name || '-');
-                return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + episodeLink + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>';
+                const epNum = (r.episode !== undefined && r.episode !== '' ? r.episode : '-');
+                return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + epNum + '</td><td>' + episodeLink + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td><td>' + netflixFormatMin(r.avg_watch_time) + '</td><td>' + netflixFormatMin(r.run_time) + '</td></tr>';
             }).join('');
         }
 
@@ -30638,7 +30662,7 @@
             if (sortBy === 'views') rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
             else if (sortBy === 'type-movie') rows = rows.slice().sort((a, b) => { const oa = ((a.type || '').toLowerCase() === 'movie') ? 0 : 1; const ob = ((b.type || '').toLowerCase() === 'movie') ? 0 : 1; if (oa !== ob) return oa - ob; return (b.views || 0) - (a.views || 0); });
             else if (sortBy === 'type-show') rows = rows.slice().sort((a, b) => { const oa = ((a.type || '').toLowerCase() === 'show') ? 0 : 1; const ob = ((b.type || '').toLowerCase() === 'show') ? 0 : 1; if (oa !== ob) return oa - ob; return (b.views || 0) - (a.views || 0); });
-            const csv = 'Rank,Show,Views,Genre,Type\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '",' + netflixProjectedViews(r.views) + ',"' + (r.genre || '').replace(/"/g, '""') + '","' + (r.type || '').replace(/"/g, '""') + '"').join('\n');
+            const csv = 'Rank,Show,Views,Genre,Type,Avg Watch Time,Run Time\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '",' + netflixProjectedViews(r.views) + ',"' + (r.genre || '').replace(/"/g, '""') + '","' + (r.type || '').replace(/"/g, '""') + '",' + (r.avg_watch_time != null && r.avg_watch_time !== '' ? r.avg_watch_time : '') + ',' + (r.run_time != null && r.run_time !== '' ? r.run_time : '')).join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_daily_ranker_' + date + '.csv'; a.click();
         }
         function exportNetflixSeasonsCSV() {
@@ -30646,7 +30670,7 @@
             const dateInp = document.getElementById('netflixSeasonsDate');
             const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
             let rows = (netflixRankerData.by_date_season[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            const csv = 'Rank,Name of Show,Season,Views\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '","' + (r.season || '').replace(/"/g, '""') + '",' + netflixProjectedViews(r.views)).join('\n');
+            const csv = 'Rank,Name of Show,Season,Views,Avg Watch Time,Run Time\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '","' + (r.season || '').replace(/"/g, '""') + '",' + netflixProjectedViews(r.views) + ',' + (r.avg_watch_time != null && r.avg_watch_time !== '' ? r.avg_watch_time : '') + ',' + (r.run_time != null && r.run_time !== '' ? r.run_time : '')).join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_daily_ranker_seasons_' + date + '.csv'; a.click();
         }
         function exportNetflixEpisodesCSV() {
@@ -30654,7 +30678,7 @@
             const dateInp = document.getElementById('netflixEpisodesDate');
             const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
             let rows = (netflixRankerData.by_date_episode[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            const csv = 'Rank,Show,Episode,Season,Views\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '","' + (r.episode_name || '').replace(/"/g, '""') + '","' + (r.season || '').replace(/"/g, '""') + '",' + netflixProjectedViews(r.views)).join('\n');
+            const csv = 'Rank,Show,Episode #,Episode,Season,Views,Avg Watch Time,Run Time\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '","' + (r.episode !== undefined && r.episode !== '' ? String(r.episode).replace(/"/g, '""') : '') + '","' + (r.episode_name || '').replace(/"/g, '""') + '","' + (r.season || '').replace(/"/g, '""') + '",' + netflixProjectedViews(r.views) + ',' + (r.avg_watch_time != null && r.avg_watch_time !== '' ? r.avg_watch_time : '') + ',' + (r.run_time != null && r.run_time !== '' ? r.run_time : '')).join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_daily_ranker_episodes_' + date + '.csv'; a.click();
         }
         function exportNetflixTrendsCSV() {
