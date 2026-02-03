@@ -29890,17 +29890,22 @@
             updateRankersLoadStatus(parts.join(' '));
             const url = '/api/rankers/netflix/data' + (forceRefresh ? '?force_refresh=1' : '');
             fetch(url, { credentials: 'same-origin' })
-                .then(r => {
-                    if (!r.ok) throw new Error(r.status + ' ' + (r.statusText || 'Request failed'));
-                    return r.text();
-                })
-                .then(text => {
-                    if (!text || text.trim() === '') throw new Error('Empty response from server');
+                .then(r => r.text().then(text => ({ ok: r.ok, status: r.status, text: text })))
+                .then(({ ok, status, text }) => {
+                    if (!text || text.trim() === '') {
+                        throw new Error('Empty response from server. The request may have timed out. Try Refresh Netflix again.');
+                    }
+                    let data;
                     try {
-                        return JSON.parse(text);
+                        data = JSON.parse(text);
                     } catch (e) {
                         throw new Error('Invalid response from server');
                     }
+                    if (!ok) {
+                        const errMsg = data && data.error ? data.error : (status + ' ' + (data.message || 'Request failed'));
+                        throw new Error(errMsg);
+                    }
+                    return data;
                 })
                 .then(data => {
                     if (data.error) throw new Error(data.error);
