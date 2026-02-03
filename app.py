@@ -4638,14 +4638,16 @@ def get_reelshort_ranker_data():
         new_subscriptions_pct = (new_subs / total * 100) if total else 0
         total_cancels_pct = (cancels / total * 100) if total else 0
         watched_paid_pct = (paid_content / total * 100) if total else 0
-        watched_free_pct = 100.0 - watched_paid_pct
+        # If Watched Paid Content is 0, default to New Subscriptions % for display
+        display_paid_pct = watched_paid_pct if watched_paid_pct > 0 else new_subscriptions_pct
+        watched_free_pct = 100.0 - display_paid_pct
         payload = {
             'date': today_str,
             'total_rows': total,
             'active_accounts': round(active_accounts, 2),
             'new_subscriptions_pct': round(new_subscriptions_pct, 2),
             'total_cancels_pct': round(total_cancels_pct, 2),
-            'watched_paid_content_pct': round(watched_paid_pct, 2),
+            'watched_paid_content_pct': round(display_paid_pct, 2),
             'watched_free_content_pct': round(watched_free_pct, 2),
         }
         with REELSHORT_RANKER_LOCK:

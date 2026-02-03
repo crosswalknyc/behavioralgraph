@@ -12239,12 +12239,6 @@
                                         </div>
                                     </div>
                                     <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem;">
-                                        <span style="font-size: 0.75rem; color: var(--text-secondary);">Sort by:</span>
-                                        <select id="netflixDailySortBy" onchange="renderNetflixDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 140px;">
-                                            <option value="views">Views (high to low)</option>
-                                            <option value="type-movie">Movie</option>
-                                            <option value="type-show">Show</option>
-                                        </select>
                                         <span style="font-size: 0.75rem; color: var(--text-secondary);">Genre:</span>
                                         <select id="netflixDailyGenreFilter" onchange="renderNetflixDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 180px;">
                                             <option value="">All genres</option>
@@ -12331,7 +12325,6 @@
                                 <h3 style="margin: 0;">📱 ReelShort</h3>
                                 <button class="btn btn-primary" onclick="loadReelShortRankerData()" id="reelshortRefreshBtn">🔄 Refresh</button>
                             </div>
-                            <p style="margin: 0 0 1rem 0; font-size: 0.8rem; color: var(--text-secondary);">Today’s clickstream (COMMON_NAME contains ReelShort). Active Accounts = rows × 150 ÷ 10M × 329.9M. Percentages are % of active rows.</p>
                             <div id="reelshortInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
                             <div id="reelshortLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading ReelShort data...</div>
                             <div id="reelshortError" style="padding: 1rem; color: var(--error-color); display: none;"></div>
@@ -30154,6 +30147,91 @@
             else if (id === 'insights') renderNetflixInsights();
         }
 
+        function rokufastFormatMin(val) {
+            if (val === null || val === undefined || val === '') return 'N/A';
+            const n = Number(val);
+            if (isNaN(n)) return 'N/A';
+            return (n === Math.floor(n) ? Math.floor(n) : Math.round(n * 100) / 100) + ' min';
+        }
+
+        function showRokuFastSubTab(id) {
+            document.querySelectorAll('#ranker-rokufast .rokufast-sub-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('#ranker-rokufast .rokufast-subtabs .tab-btn').forEach(b => b.classList.remove('active'));
+            const content = document.getElementById('rokufast-' + id);
+            const btnId = id === 'topshows' ? 'TopShows' : id.charAt(0).toUpperCase() + id.slice(1);
+            const btn = document.getElementById('rokufastSubTab' + btnId);
+            if (content) content.classList.add('active');
+            if (btn) btn.classList.add('active');
+            if (id === 'all') renderRokuFastAllRanker();
+            else if (id === 'daily') renderRokuFastDailyRanker();
+            else if (id === 'seasons') renderRokuFastSeasonsRanker();
+            else if (id === 'episodes') renderRokuFastEpisodesRanker();
+            else if (id === 'trends') renderRokuFastTrends();
+            else if (id === 'genre') renderRokuFastByGenre();
+            else if (id === 'topshows') renderRokuFastTopShows();
+            else if (id === 'insights') renderRokuFastInsights();
+        }
+
+        function _getLastRokuFastDateWithData(data, key) {
+            if (!data) return null;
+            const byDate = data[key || 'by_date'] || {};
+            const dates = data.dates_sorted || Object.keys(byDate).sort();
+            for (let i = dates.length - 1; i >= 0; i--) {
+                const dt = dates[i];
+                if (byDate[dt] && byDate[dt].length > 0) return dt;
+            }
+            return data.date_range ? (data.date_range.max || data.date_range.min) : null;
+        }
+
+        function loadRokuFastRankerData(forceRefresh) {
+            const btn = document.getElementById('rankersLoadBtnRokuFast');
+            if (btn) btn.disabled = true;
+            const url = '/api/rankers/rokufast/data' + (forceRefresh ? '?force_refresh=1' : '');
+            fetch(url, { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) throw new Error(data.error);
+                    rokufastRankerData = data;
+                    const rangeStr = data.date_range ? (data.date_range.min + ' to ' + data.date_range.max) : '';
+                    // Set date to most recent day that has data so table populates immediately
+                    const mostRecentDate = _getLastRokuFastDateWithData(data) || (data.date_range && (data.date_range.max || data.date_range.min));
+                    const dateInp = document.getElementById('rokufastDailyDate');
+                    if (dateInp && data.date_range) {
+                        dateInp.min = data.date_range.min;
+                        dateInp.max = data.date_range.max;
+                        dateInp.value = mostRecentDate || '';
+                    }
+                    ['rokufastSeasonsDate', 'rokufastEpisodesDate', 'rokufastAllDate', 'rokufastGenreDate'].forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el && data.date_range) {
+                            el.min = data.date_range.min;
+                            el.max = data.date_range.max;
+                            el.value = _getLastRokuFastDateWithData(data, id === 'rokufastSeasonsDate' ? 'by_date_season' : id === 'rokufastEpisodesDate' ? 'by_date_episode' : id === 'rokufastGenreDate' ? 'genres_by_date' : 'by_date_all') || data.date_range.max || data.date_range.min;
+                        }
+                    });
+                    renderRokuFastDailyRanker();
+                    renderRokuFastSeasonsRanker();
+                    renderRokuFastEpisodesRanker();
+                    populateRokuFastTrendsShowSelect();
+                    renderRokuFastByGenre();
+                    renderRokuFastTopShows();
+                    renderRokuFastInsights();
+                    if (btn) btn.disabled = false;
+                })
+                .catch(err => {
+                    console.error('[Roku FAST] Load error', err);
+                    if (btn) btn.disabled = false;
+                });
+        }
+
+        function populateRokuFastTrendsShowSelect() {
+            if (!rokufastRankerData || !rokufastRankerData.by_show) return;
+            const sel = document.getElementById('rokufastTrendsShow');
+            if (!sel) return;
+            const shows = Object.keys(rokufastRankerData.by_show).sort();
+            sel.innerHTML = '<option value="">Select show...</option>' + shows.map(s => '<option value="' + s.replace(/"/g, '&quot;') + '">' + s + '</option>').join('');
+        }
+
         function showRankersProgressBlock() {
             const progress = document.getElementById('rankersLoadProgress');
             const done = document.getElementById('rankersLoadDone');
@@ -30227,12 +30305,216 @@
             if (!cardsEl) return;
             const cards = [
                 { label: 'Active Accounts', value: (data.active_accounts != null ? Number(data.active_accounts).toLocaleString() : '—') },
-                { label: 'New Subscriptions', value: (data.new_subscriptions_pct != null ? data.new_subscriptions_pct + '%' : '—') },
                 { label: 'Total Cancels', value: (data.total_cancels_pct != null ? data.total_cancels_pct + '%' : '—') },
                 { label: 'Watched Paid Content', value: (data.watched_paid_content_pct != null ? data.watched_paid_content_pct + '%' : '—') },
                 { label: 'Watched Free Content', value: (data.watched_free_content_pct != null ? data.watched_free_content_pct + '%' : '—') }
             ];
             cardsEl.innerHTML = cards.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
+        }
+
+        function renderRokuFastDailyRanker() {
+            const tbody = document.getElementById('rokufastDailyBody');
+            if (!rokufastRankerData || !rokufastRankerData.by_date) { if (tbody) tbody.innerHTML = ''; return; }
+            const dateInp = document.getElementById('rokufastDailyDate');
+            // Default to most recent date that has data (ignore empty or invalid date input)
+            const lastDateWithData = _getLastRokuFastDateWithData(rokufastRankerData);
+            let date = (dateInp && dateInp.value) ? dateInp.value : lastDateWithData;
+            if (!date) date = rokufastRankerData.date_range && rokufastRankerData.date_range.max;
+            let rows = (rokufastRankerData.by_date[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            // If selected date has no data, show most recent day that does
+            if (rows.length === 0 && lastDateWithData && rokufastRankerData.by_date[lastDateWithData] && rokufastRankerData.by_date[lastDateWithData].length) {
+                date = lastDateWithData;
+                if (dateInp) dateInp.value = date;
+                rows = (rokufastRankerData.by_date[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            }
+            if (dateInp && date && !dateInp.value) dateInp.value = date;
+            if (!tbody) return;
+            if (rows.length === 0) tbody.innerHTML = '<tr><td colspan="6" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date.</td></tr>';
+            else tbody.innerHTML = rows.map((r, i) => {
+                const showLink = '<a href="#" onclick="openRokuFastShowDetails(\'' + (r.show_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\', \'\', \'\', \'' + date + '\'); return false;" style="color: var(--accent-cyan);">' + (r.show_name || 'N/A') + '</a>';
+                return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>N/A</td><td>' + rokufastFormatMin(r.avg_watch_time) + '</td><td>' + rokufastFormatMin(r.run_time) + '</td></tr>';
+            }).join('');
+        }
+
+        function renderRokuFastAllRanker() {
+            const tbody = document.getElementById('rokufastAllBody');
+            if (!rokufastRankerData || !rokufastRankerData.by_date_all) { if (tbody) tbody.innerHTML = ''; return; }
+            const dateInp = document.getElementById('rokufastAllDate');
+            let date = dateInp ? dateInp.value : _getLastRokuFastDateWithData(rokufastRankerData, 'by_date_all');
+            let rows = (rokufastRankerData.by_date_all[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            if (!tbody) return;
+            if (rows.length === 0) tbody.innerHTML = '<tr><td colspan="8" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date.</td></tr>';
+            else tbody.innerHTML = rows.map((r, i) => {
+                const showLink = '<a href="#" onclick="openRokuFastShowDetails(\'' + (r.show_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\', \'' + (r.season || '') + '\', \'' + (r.episode_name || '').replace(/'/g, "\\'") + '\', \'' + date + '\'); return false;" style="color: var(--accent-cyan);">' + (r.show_name || 'N/A') + '</a>';
+                return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (r.season || '') + '</td><td>' + (r.episode || '') + '</td><td>' + (r.episode_name || 'N/A') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + rokufastFormatMin(r.avg_watch_time) + '</td><td>' + rokufastFormatMin(r.run_time) + '</td></tr>';
+            }).join('');
+        }
+
+        function renderRokuFastSeasonsRanker() {
+            const tbody = document.getElementById('rokufastSeasonsBody');
+            if (!rokufastRankerData || !rokufastRankerData.by_date_season) { if (tbody) tbody.innerHTML = ''; return; }
+            const dateInp = document.getElementById('rokufastSeasonsDate');
+            let date = dateInp ? dateInp.value : _getLastRokuFastDateWithData(rokufastRankerData, 'by_date_season');
+            let rows = (rokufastRankerData.by_date_season[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            if (!tbody) return;
+            if (rows.length === 0) tbody.innerHTML = '<tr><td colspan="6" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date.</td></tr>';
+            else tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || 'N/A') + '</td><td>' + (r.season || '') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + rokufastFormatMin(r.avg_watch_time) + '</td><td>' + rokufastFormatMin(r.run_time) + '</td></tr>').join('');
+        }
+
+        function renderRokuFastEpisodesRanker() {
+            const tbody = document.getElementById('rokufastEpisodesBody');
+            if (!rokufastRankerData || !rokufastRankerData.by_date_episode) { if (tbody) tbody.innerHTML = ''; return; }
+            const dateInp = document.getElementById('rokufastEpisodesDate');
+            let date = dateInp ? dateInp.value : _getLastRokuFastDateWithData(rokufastRankerData, 'by_date_episode');
+            let rows = (rokufastRankerData.by_date_episode[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            if (!tbody) return;
+            if (rows.length === 0) tbody.innerHTML = '<tr><td colspan="8" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date.</td></tr>';
+            else tbody.innerHTML = rows.map((r, i) => {
+                const showLink = '<a href="#" onclick="openRokuFastShowDetails(\'' + (r.show_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\', \'' + (r.season || '') + '\', \'' + (r.episode_name || '').replace(/'/g, "\\'") + '\', \'' + date + '\'); return false;" style="color: var(--accent-cyan);">' + (r.show_name || 'N/A') + '</a>';
+                return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (r.episode || '') + '</td><td>' + (r.episode_name || 'N/A') + '</td><td>' + (r.season || '') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + rokufastFormatMin(r.avg_watch_time) + '</td><td>' + rokufastFormatMin(r.run_time) + '</td></tr>';
+            }).join('');
+        }
+
+        function renderRokuFastTrends() {
+            const wrap = document.getElementById('rokufastTrendsChartWrap');
+            const loading = document.getElementById('rokufastTrendsLoading');
+            const showId = document.getElementById('rokufastTrendsShow');
+            const showName = showId ? showId.value : '';
+            if (!rokufastRankerData || !rokufastRankerData.by_show || !showName) {
+                if (loading) loading.textContent = 'Load Rankers and select a show.';
+                if (wrap) wrap.style.display = 'none';
+                return;
+            }
+            const pts = rokufastRankerData.by_show[showName] || [];
+            const sortedDates = pts.map(p => p.date).sort();
+            if (sortedDates.length === 0) { if (loading) loading.textContent = 'No data for this show.'; if (wrap) wrap.style.display = 'none'; return; }
+            if (loading) loading.style.display = 'none';
+            if (wrap) wrap.style.display = 'block';
+            const ctx = document.getElementById('rokufastTrendsChart');
+            if (!ctx || !ctx.getContext) return;
+            if (rokufastTrendsChartInstance) rokufastTrendsChartInstance.destroy();
+            const viewsByDate = {}; pts.forEach(p => { viewsByDate[p.date] = p.views; });
+            rokufastTrendsChartInstance = new Chart(ctx.getContext('2d'), {
+                type: 'line',
+                data: { labels: sortedDates, datasets: [{ label: 'Views', data: sortedDates.map(d => viewsByDate[d] || 0), borderColor: '#66d9ef', backgroundColor: 'rgba(102,217,239,0.1)', fill: true }] },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        function renderRokuFastByGenre() {
+            const tbody = document.getElementById('rokufastGenreBody');
+            if (!rokufastRankerData || !rokufastRankerData.genres_by_date) { if (tbody) tbody.innerHTML = ''; return; }
+            const dateInp = document.getElementById('rokufastGenreDate');
+            let date = dateInp ? dateInp.value : _getLastRokuFastDateWithData(rokufastRankerData, 'genres_by_date');
+            let rows = (rokufastRankerData.genres_by_date[date] || []);
+            const total = rows.reduce((s, r) => s + (r.views || 0), 0);
+            if (!tbody) return;
+            if (rows.length === 0) tbody.innerHTML = '<tr><td colspan="4" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data.</td></tr>';
+            else tbody.innerHTML = rows.map(r => '<tr><td>' + (r.genre || 'N/A') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + (total ? ((r.views / total) * 100).toFixed(1) : 0) + '%</td><td>' + (r.top_show || 'N/A') + '</td></tr>').join('');
+        }
+
+        function renderRokuFastTopShows() {
+            const wrap = document.getElementById('rokufastTopShowsChartWrap');
+            const loading = document.getElementById('rokufastTopShowsLoading');
+            if (!rokufastRankerData || !rokufastRankerData.top_shows_over_time || rokufastRankerData.top_shows_over_time.length === 0) {
+                if (loading) loading.textContent = 'No data.'; if (wrap) wrap.style.display = 'none';
+                return;
+            }
+            if (loading) loading.style.display = 'none';
+            if (wrap) wrap.style.display = 'block';
+            const allDates = new Set();
+            rokufastRankerData.top_shows_over_time.forEach(s => Object.keys(s.by_date || {}).forEach(d => allDates.add(d)));
+            const sortedDates = Array.from(allDates).sort();
+            const ctx = document.getElementById('rokufastTopShowsChart');
+            if (!ctx || !ctx.getContext) return;
+            if (rokufastTopShowsChartInstance) rokufastTopShowsChartInstance.destroy();
+            const datasets = rokufastRankerData.top_shows_over_time.slice(0, 20).map((s, i) => ({
+                label: s.show_name,
+                data: sortedDates.map(d => (s.by_date && s.by_date[d]) || 0),
+                borderColor: ['#66d9ef','#a6e22e','#f92672','#fd971f','#ae81ff'][i % 5],
+                backgroundColor: 'transparent',
+                fill: false
+            }));
+            rokufastTopShowsChartInstance = new Chart(ctx.getContext('2d'), { type: 'line', data: { labels: sortedDates, datasets }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
+        }
+
+        function renderRokuFastInsights() {
+            const cards = document.getElementById('rokufastInsightsCards');
+            if (!rokufastRankerData || !cards) return;
+            const byDate = rokufastRankerData.by_date || {};
+            const dates = rokufastRankerData.dates_sorted || Object.keys(byDate).sort();
+            const lastDate = dates.length ? dates[dates.length - 1] : null;
+            const lastRows = lastDate ? (byDate[lastDate] || []) : [];
+            const totalViews = lastRows.reduce((s, r) => s + (r.views || 0), 0);
+            const topShow = lastRows.length ? lastRows[0].show_name : 'N/A';
+            const items = [
+                { label: 'Last date', value: lastDate || '—' },
+                { label: 'Total views (last date)', value: totalViews.toLocaleString() },
+                { label: 'Top show (last date)', value: topShow },
+                { label: 'Shows (last date)', value: lastRows.length + '' }
+            ];
+            cards.innerHTML = items.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
+        }
+
+        function exportRokuFastDailyCSV() {
+            if (!rokufastRankerData || !rokufastRankerData.by_date) return;
+            const dateInp = document.getElementById('rokufastDailyDate');
+            const date = dateInp ? dateInp.value : (rokufastRankerData.date_range && rokufastRankerData.date_range.max);
+            let rows = (rokufastRankerData.by_date[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            const csv = 'Rank,Show,Views,Genre,Avg Watch Time,Run Time\n' + rows.map((r, i) => [i + 1, '"' + (r.show_name || '').replace(/"/g, '""') + '"', r.views, 'N/A', r.avg_watch_time != null ? r.avg_watch_time : '', r.run_time != null ? r.run_time : ''].join(',')).join('\n');
+            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'rokufast_daily_' + date + '.csv'; a.click();
+        }
+        function exportRokuFastAllCSV() {
+            if (!rokufastRankerData || !rokufastRankerData.by_date_all) return;
+            const dateInp = document.getElementById('rokufastAllDate');
+            const date = dateInp ? dateInp.value : (rokufastRankerData.date_range && rokufastRankerData.date_range.max);
+            let rows = (rokufastRankerData.by_date_all[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            const csv = 'Rank,Show,Season,Episode #,Episode Name,Views,Avg Watch Time,Run Time\n' + rows.map((r, i) => [i + 1, '"' + (r.show_name || '').replace(/"/g, '""') + '"', '"' + (r.season || '').replace(/"/g, '""') + '"', '"' + (r.episode || '').replace(/"/g, '""') + '"', '"' + (r.episode_name || '').replace(/"/g, '""') + '"', r.views, r.avg_watch_time != null ? r.avg_watch_time : '', r.run_time != null ? r.run_time : ''].join(',')).join('\n');
+            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'rokufast_all_' + date + '.csv'; a.click();
+        }
+        function exportRokuFastSeasonsCSV() {
+            if (!rokufastRankerData || !rokufastRankerData.by_date_season) return;
+            const dateInp = document.getElementById('rokufastSeasonsDate');
+            const date = dateInp ? dateInp.value : (rokufastRankerData.date_range && rokufastRankerData.date_range.max);
+            let rows = (rokufastRankerData.by_date_season[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            const csv = 'Rank,Show,Season,Views,Avg Watch Time,Run Time\n' + rows.map((r, i) => [i + 1, '"' + (r.show_name || '').replace(/"/g, '""') + '"', '"' + (r.season || '').replace(/"/g, '""') + '"', r.views, r.avg_watch_time != null ? r.avg_watch_time : '', r.run_time != null ? r.run_time : ''].join(',')).join('\n');
+            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'rokufast_seasons_' + date + '.csv'; a.click();
+        }
+        function exportRokuFastEpisodesCSV() {
+            if (!rokufastRankerData || !rokufastRankerData.by_date_episode) return;
+            const dateInp = document.getElementById('rokufastEpisodesDate');
+            const date = dateInp ? dateInp.value : (rokufastRankerData.date_range && rokufastRankerData.date_range.max);
+            let rows = (rokufastRankerData.by_date_episode[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            const csv = 'Rank,Show,Episode #,Episode,Season,Views,Avg Watch Time,Run Time\n' + rows.map((r, i) => [i + 1, '"' + (r.show_name || '').replace(/"/g, '""') + '"', '"' + (r.episode || '').replace(/"/g, '""') + '"', '"' + (r.episode_name || '').replace(/"/g, '""') + '"', '"' + (r.season || '').replace(/"/g, '""') + '"', r.views, r.avg_watch_time != null ? r.avg_watch_time : '', r.run_time != null ? r.run_time : ''].join(',')).join('\n');
+            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'rokufast_episodes_' + date + '.csv'; a.click();
+        }
+        function exportRokuFastTrendsCSV() { if (!rokufastRankerData || !rokufastRankerData.by_show) return; const sel = document.getElementById('rokufastTrendsShow'); const showName = sel ? sel.value : ''; if (!showName) return; const pts = (rokufastRankerData.by_show[showName] || []).slice().sort((a, b) => a.date.localeCompare(b.date)); const csv = 'Date,Views\n' + pts.map(p => p.date + ',' + p.views).join('\n'); const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'rokufast_trends_' + (showName.replace(/\W/g, '_')) + '.csv'; a.click(); }
+        function exportRokuFastTopShowsCSV() { if (!rokufastRankerData || !rokufastRankerData.top_shows_over_time) return; const lines = ['Show,' + (rokufastRankerData.dates_sorted || []).join(',')]; rokufastRankerData.top_shows_over_time.slice(0, 20).forEach(s => { const byDate = s.by_date || {}; lines.push('"' + (s.show_name || '').replace(/"/g, '""') + '",' + (rokufastRankerData.dates_sorted || []).map(d => byDate[d] || 0).join(',')); }); const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(lines.join('\n')); a.download = 'rokufast_top_shows.csv'; a.click(); }
+
+        function openRokuFastShowDetails(showName, season, episodeName, date) {
+            const modal = document.getElementById('rokufastShowDetailsModal');
+            const content = document.getElementById('rokufastShowDetailsContent');
+            if (!modal || !content) return;
+            content.innerHTML = '<div style="text-align: center; padding: 3rem;"><div class="loading-spinner"></div><p>Loading show details...</p></div>';
+            modal.style.display = 'block';
+            const params = new URLSearchParams({ show_name: showName });
+            if (date) params.set('date', date);
+            if (season && season !== 'N/A') params.set('season', season);
+            fetch('/api/rankers/rokufast/show-details?' + params.toString(), { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) { content.innerHTML = '<p style="color: var(--error-color);">' + (data.error || 'Not found') + '</p>'; return; }
+                    let html = '<h3>' + (data.show_name || 'N/A') + '</h3><p><strong>Season:</strong> ' + (data.season || 'N/A') + ' &nbsp; <strong>Episode:</strong> ' + (data.episode_name || 'N/A') + '</p>';
+                    html += '<p><strong>Views:</strong> ' + (data.total_views || 0).toLocaleString() + ' &nbsp; <strong>Avg watch time:</strong> ' + (data.avg_watch_time !== undefined && data.avg_watch_time !== 'N/A' ? data.avg_watch_time + ' min' : 'N/A') + ' &nbsp; <strong>Run time:</strong> ' + (data.run_time !== undefined && data.run_time !== 'N/A' ? data.run_time + ' min' : 'N/A') + '</p>';
+                    html += '<p><strong>Genre:</strong> N/A &nbsp; <strong>Type:</strong> N/A &nbsp; <strong>DMA:</strong> N/A (not available for Roku FAST)</p>';
+                    if (data.dma_breakdown && data.dma_breakdown.length) html += '<h4>DMA breakdown</h4><ul>' + data.dma_breakdown.map(d => '<li>' + d.dma + ': ' + d.percentage + '%</li>').join('') + '</ul>';
+                    content.innerHTML = html;
+                })
+                .catch(() => { content.innerHTML = '<p style="color: var(--error-color);">Failed to load details.</p>'; });
+        }
+        function closeRokuFastShowDetails() {
+            const modal = document.getElementById('rokufastShowDetailsModal');
+            if (modal) modal.style.display = 'none';
         }
 
         function _getLastNetflixDateWithData(data, key) {
@@ -30480,7 +30762,6 @@
             const tbody = document.getElementById('netflixDailyBody');
             const loading = document.getElementById('netflixDailyLoading');
             const dateInp = document.getElementById('netflixDailyDate');
-            const sortSelect = document.getElementById('netflixDailySortBy');
             const genreSelect = document.getElementById('netflixDailyGenreFilter');
             if (!netflixRankerData || !netflixRankerData.by_date) {
                 if (loading) loading.style.display = 'none';
@@ -30519,29 +30800,8 @@
                 rows = rows.filter(r => _netflixDailyGenreList(r.genre).includes(selectedGenre));
             }
 
-            // Sort
-            const sortBy = sortSelect ? sortSelect.value : 'views';
-            if (sortBy === 'views') {
-                rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            } else if (sortBy === 'type-movie') {
-                rows = rows.slice().sort((a, b) => {
-                    const ta = (a.type || '').toLowerCase();
-                    const tb = (b.type || '').toLowerCase();
-                    const orderA = ta === 'movie' ? 0 : 1;
-                    const orderB = tb === 'movie' ? 0 : 1;
-                    if (orderA !== orderB) return orderA - orderB;
-                    return (b.views || 0) - (a.views || 0);
-                });
-            } else if (sortBy === 'type-show') {
-                rows = rows.slice().sort((a, b) => {
-                    const ta = (a.type || '').toLowerCase();
-                    const tb = (b.type || '').toLowerCase();
-                    const orderA = ta === 'show' ? 0 : 1;
-                    const orderB = tb === 'show' ? 0 : 1;
-                    if (orderA !== orderB) return orderA - orderB;
-                    return (b.views || 0) - (a.views || 0);
-                });
-            }
+            // Sort by views (high to low)
+            rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
 
             if (!tbody) return;
             if (rows.length === 0) {
@@ -30874,15 +31134,11 @@
             if (!netflixRankerData || !netflixRankerData.by_date) return;
             const dateInp = document.getElementById('netflixDailyDate');
             const genreSelect = document.getElementById('netflixDailyGenreFilter');
-            const sortSelect = document.getElementById('netflixDailySortBy');
             const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
             let rows = (netflixRankerData.by_date[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian'));
             const selectedGenre = genreSelect ? genreSelect.value : '';
             if (selectedGenre) rows = rows.filter(r => _netflixDailyGenreList(r.genre).includes(selectedGenre));
-            const sortBy = sortSelect ? sortSelect.value : 'views';
-            if (sortBy === 'views') rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            else if (sortBy === 'type-movie') rows = rows.slice().sort((a, b) => { const oa = ((a.type || '').toLowerCase() === 'movie') ? 0 : 1; const ob = ((b.type || '').toLowerCase() === 'movie') ? 0 : 1; if (oa !== ob) return oa - ob; return (b.views || 0) - (a.views || 0); });
-            else if (sortBy === 'type-show') rows = rows.slice().sort((a, b) => { const oa = ((a.type || '').toLowerCase() === 'show') ? 0 : 1; const ob = ((b.type || '').toLowerCase() === 'show') ? 0 : 1; if (oa !== ob) return oa - ob; return (b.views || 0) - (a.views || 0); });
+            rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
             const csv = 'Rank,Show,Views,Genre,Type,Avg Watch Time,Run Time\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '",' + netflixProjectedViews(r.views) + ',"' + (r.genre || '').replace(/"/g, '""') + '","' + (r.type || '').replace(/"/g, '""') + '",' + (r.avg_watch_time != null && r.avg_watch_time !== '' ? r.avg_watch_time : '') + ',' + (r.run_time != null && r.run_time !== '' ? r.run_time : '')).join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_daily_ranker_' + date + '.csv'; a.click();
         }
@@ -40964,9 +41220,10 @@
                                 <option value="50" ${incomeLimit == 50 ? 'selected' : ''}>Top 50</option>
                                 <option value="All" ${incomeLimit === 'All' ? 'selected' : ''}>All</option>
                             </select>
-                            <select onchange="setComparisonSectionSortType('demo_income', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
+                            <select onchange="setComparisonSectionSortType('demo_income', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 95px;">
                                 <option value="pct" ${incomeSortType === 'pct' ? 'selected' : ''}>By ${compDisplayMode === 'projection' ? '#' : '%'}</option>
                                 <option value="index" ${incomeSortType === 'index' ? 'selected' : ''}>By Index</option>
+                                <option value="income" ${incomeSortType === 'income' ? 'selected' : ''}>By Income ↑ (lowest first)</option>
                             </select>
                         </span>
                     </div>
@@ -41468,28 +41725,49 @@
                 return row.pctData[idx] || 0;
             };
 
-            // Sort by selected profile column or default sort
-            if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
-                dataRows.sort((a, b) => getSortValue(b, sortByProfileIdx) - getSortValue(a, sortByProfileIdx));
-            } else if (demoType === 'age' && sortType === 'age') {
-                // By age ascending (youngest first): <16 at top, then 17-18, 19-20, ..., 60+ at bottom
+            // Sort: dropdown "By Age" / "By Income" take precedence; then column click; then by %/index for primary
+            if (demoType === 'age' && sortType === 'age') {
+                // By age ascending: <16 at top, then 16-18, 18-20, 21-25, 26-30, 31-40, 41-59, 60+ at bottom (include 13-17, 18-24, 25-34, etc.)
+                const ageOrder = ['<16', 'under 16', '13-17', '16-18', '17-18', '18-20', '19-20', '18-24', '21-25', '25-34', '26-30', '31-40', '35-44', '41-59', '45-54', '55-64', '60+', '65+', 'over 65'];
                 const getAgeSortKey = (val) => {
-                    const s = (val || '').toString().trim();
-                    if (/^<\d+/.test(s)) return 0; // e.g. <16 -> 0 so it sorts first
-                    if (s.includes('+')) return parseInt(s.replace(/[^0-9]/g, '')) || 99;
+                    const s = (val || '').toString().trim().toLowerCase();
+                    for (let i = 0; i < ageOrder.length; i++) {
+                        const o = ageOrder[i].toLowerCase();
+                        if (s === o || s.startsWith(o) || o.startsWith(s) || (s.includes(o.replace(/\s/g, '')) && s.length <= o.length + 2)) return i;
+                    }
+                    if (/^<\s*16|under\s*16/.test(s)) return 0;
+                    if (/^13[-–]17/.test(s)) return 2;
+                    if (/^16[-–]18|17[-–]18/.test(s)) return 3;
+                    if (/^18[-–]20|19[-–]20/.test(s)) return 5;
+                    if (/^18[-–]24/.test(s)) return 7;
+                    if (/^21[-–]25/.test(s)) return 8;
+                    if (/^25[-–]34/.test(s)) return 9;
+                    if (/^26[-–]30/.test(s)) return 10;
+                    if (/^31[-–]40/.test(s)) return 11;
+                    if (/^35[-–]44/.test(s)) return 12;
+                    if (/^41[-–]59/.test(s)) return 13;
+                    if (/^45[-–]54/.test(s)) return 14;
+                    if (/^55[-–]64/.test(s)) return 15;
+                    if (/60\+|65\+|over\s*65/.test(s)) return 16;
                     const nums = s.match(/\d+/g);
-                    return nums && nums[0] ? parseInt(nums[0]) : 0;
+                    return nums && nums[0] ? parseInt(nums[0], 10) : 999;
                 };
                 dataRows.sort((a, b) => getAgeSortKey(a.value) - getAgeSortKey(b.value));
-            } else if (demoType === 'age' && sortType === 'pct') {
-                // For age with pct sort, use natural age order (ascending)
-                dataRows.sort((a, b) => {
-                    const numA = parseInt(a.value.replace(/[^0-9]/g, '')) || 0;
-                    const numB = parseInt(b.value.replace(/[^0-9]/g, '')) || 0;
-                    return numA - numB;
-                });
+            } else if (demoType === 'income' && sortType === 'income') {
+                // By income ascending: lowest bracket first (Under $25k, $25k-$50k, ... $250k+)
+                const getIncomeSortKey = (val) => {
+                    const s = (val || '').toString().replace(/,/g, '').toLowerCase();
+                    if (/under|less|<\s*\d|^\$?\s*0/.test(s)) return 0;
+                    const nums = s.match(/\d+/g);
+                    if (!nums || nums.length === 0) return 0;
+                    const first = parseInt(nums[0], 10);
+                    return first >= 200 ? 250 : first; // $250k+ at end
+                };
+                dataRows.sort((a, b) => getIncomeSortKey(a.value) - getIncomeSortKey(b.value));
+            } else if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
+                dataRows.sort((a, b) => getSortValue(b, sortByProfileIdx) - getSortValue(a, sortByProfileIdx));
             } else {
-                // Default sort by primary profile's value descending
+                // By % or By Index: sort by primary profile's value descending
                 const idx = (primaryProfileIndex >= 0 && primaryProfileIndex < profiles.length) ? primaryProfileIndex : 0;
                 dataRows.sort((a, b) => getSortValue(b, idx) - getSortValue(a, idx));
             }
