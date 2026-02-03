@@ -7602,6 +7602,25 @@ def refresh_metadata_cache():
         print(f"❌ Error refreshing cache: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/admin/rebuild-profile-cache', methods=['POST'])
+@requires_admin
+def rebuild_profile_cache():
+    """Rebuild the profile cache by reading BRAND CATEGORY from each CSV file in S3."""
+    try:
+        success = rebuild_s3_cache_with_categories()
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Profile cache rebuilt with {len(s3_cache.get("jobs", []))} files',
+                'categories': s3_cache.get('categories', []),
+                'file_count': s3_cache.get('file_count', 0)
+            })
+        else:
+            return jsonify({'success': False, 'error': 'Failed to rebuild cache'}), 500
+    except Exception as e:
+        print(f"❌ Error rebuilding profile cache: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/api/hedge-fund-iq/profile-mapping/<ticker>')
 @requires_auth
@@ -8984,10 +9003,20 @@ def load_persisted_cache():
         s3_cache['last_updated'] = cached_data.get('last_updated')
         s3_cache['file_count'] = cached_data.get('file_count', 0)
         s3_cache['last_full_scan'] = cached_data.get('last_full_scan')
-        print(f"✅ Loaded persisted cache: {len(s3_cache['jobs'])} files")
+        print(f"✅ Loaded persisted cache: {len(s3_cache['jobs'])} files, categories: {s3_cache['categories']}")
+        
+        # Check if cache has proper categories - if all jobs are Uncategorized, rebuild
+        jobs = s3_cache.get('jobs', [])
+        if jobs:
+            uncategorized_count = sum(1 for j in jobs if j.get('category', '').upper() in ('UNCATEGORIZED', 'OTHER', ''))
+            if uncategorized_count > len(jobs) * 0.8:  # More than 80% uncategorized
+                print(f"⚠️ Cache has {uncategorized_count}/{len(jobs)} uncategorized files, triggering rebuild...")
+                rebuild_s3_cache_with_categories()
+        
         return True
     except s3_client.exceptions.NoSuchKey:
         print("📂 No persisted cache found, will do full scan")
+        rebuild_s3_cache_with_categories()
         return False
     except Exception as e:
         print(f"⚠️ Error loading persisted cache: {e}")
@@ -8997,6 +9026,111 @@ def save_persisted_cache():
     """Save the S3 file cache to S3 storage."""
     if not s3_client:
         return
+    try:
+        cache_data = {
+            'jobs': s3_cache.get('jobs', []),
+            'categories': s3_cache.get('categories', []),
+            'last_updated': s3_cache.get('last_updated'),
+            'file_count': s3_cache.get('file_count', 0),
+            'last_full_scan': s3_cache.get('last_full_scan')
+        }
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=S3_CACHE_KEY,
+            Body=json.dumps(cache_data, default=str).encode('utf-8'),
+            ContentType='application/json'
+        )
+        print(f"✅ Saved persisted cache: {len(s3_cache.get('jobs', []))} files")
+    except Exception as e:
+        print(f"⚠️ Error saving persisted cache: {e}")
+
+def extract_category_from_csv(csv_content):
+    """Extract BRAND CATEGORY from CSV content."""
+    lines = csv_content.split('\n')
+    for line in lines[:50]:  # Check first 50 lines for metadata
+        if re.match(r'^\s*BRAND\s*CATEGORY\s*,', line, re.IGNORECASE):
+            parts = line.split(',', 1)
+            if len(parts) > 1:
+                return parts[1].strip().upper()
+    return None
+
+def rebuild_s3_cache_with_categories():
+    """Rebuild the S3 cache by reading BRAND CATEGORY from each CSV file."""
+    global s3_cache
+    if not s3_client:
+        print("❌ S3 client not configured")
+        return False
+    
+    try:
+        print("🔄 Rebuilding S3 cache with categories from CSV files...")
+        
+        s3 = boto3.client('s3',
+                          aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                          aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                          region_name=S3_REGION)
+        
+        bucket_name = 'dashboard-inputs'
+        jobs = []
+        categories = set()
+        
+        # Scan all CSV files in the bucket
+        paginator = s3.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=bucket_name, Prefix=''):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                # Skip historic folder, system folder, and non-CSV files
+                if key.startswith('historic/') or key.startswith('system/') or not key.endswith('.csv'):
+                    continue
+                
+                filename = key.split('/')[-1]
+                last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
+                
+                # Read first 4KB of file to extract category (metadata is at the top)
+                try:
+                    response = s3.get_object(Bucket=bucket_name, Key=key, Range='bytes=0-4096')
+                    content = response['Body'].read().decode('utf-8', errors='ignore')
+                    category = extract_category_from_csv(content) or 'Uncategorized'
+                except Exception as e:
+                    print(f"⚠️ Could not read category from {key}: {e}")
+                    category = 'Uncategorized'
+                
+                # Generate display name with timestamp removal
+                name_without_ext = filename.replace('.csv', '')
+                name_without_timestamp = remove_timestamp_from_name(name_without_ext)
+                project_name = smart_title_case(name_without_timestamp.replace('_', ' '))
+                
+                jobs.append({
+                    'key': key,
+                    's3_key': key,
+                    'filename': filename,
+                    'project_name': project_name,
+                    'category': category,
+                    'size': obj.get('Size', 0),
+                    'last_modified': last_modified,
+                    'created_at': last_modified,
+                    'status': 'cached',
+                    'source': 's3'
+                })
+                categories.add(category)
+                
+        print(f"✅ Found {len(jobs)} files with categories: {sorted(categories)}")
+        
+        # Update cache
+        s3_cache['jobs'] = jobs
+        s3_cache['categories'] = sorted(list(categories))
+        s3_cache['last_updated'] = datetime.now().timestamp()
+        s3_cache['file_count'] = len(jobs)
+        s3_cache['last_full_scan'] = datetime.now().isoformat()
+        
+        # Save to S3
+        save_persisted_cache()
+        
+        return True
+    except Exception as e:
+        import traceback
+        print(f"❌ Error rebuilding cache: {e}")
+        traceback.print_exc()
+        return False
 
 def _load_clickstream_ranker_cache(cache_file, cache_dict, lock):
     """Load cache from file into cache_dict."""

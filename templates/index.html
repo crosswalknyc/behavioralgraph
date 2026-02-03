@@ -93,7 +93,15 @@
                 .then(function(data) {
                     if (data && data._handled) return;
                     if (!data || !data.jobs) return;
-                    var jobs = data.jobs;
+                    // Filter out SVOD Acquisition files - those belong in Subscriber IQ only
+                    var jobs = data.jobs.filter(function(j) {
+                        if (j.is_svod) return false;
+                        if (j.key && j.key.indexOf('svod-acquisition/') === 0) return false;
+                        if (j.s3_key && j.s3_key.indexOf('svod-acquisition/') === 0) return false;
+                        var cat = (j.category || '').toUpperCase();
+                        if (cat === 'SVOD ACQUISITION' || cat === 'SVOD_ACQUISITION') return false;
+                        return true;
+                    });
                     window.dashboardProfileList = jobs;
                     var files = jobs.map(function(j) {
                         return { key: j.key || j.s3_key, s3_key: j.s3_key || j.key, project_name: j.project_name, category: j.category || 'Uncategorized', filename: j.filename };
@@ -39624,8 +39632,17 @@
                 return;
             }
             
-            // Load regular profiles from allJobs
-            comparisonProfiles = allJobs.filter(j => j.status === 'cached' || j.status === 'completed');
+            // Load regular profiles from allJobs, excluding SVOD Acquisition (those belong in Subscriber IQ only)
+            comparisonProfiles = allJobs.filter(j => {
+                if (j.status !== 'cached' && j.status !== 'completed') return false;
+                // Exclude SVOD files - they have is_svod flag, or key starts with svod-acquisition/, or category is SVOD Acquisition
+                if (j.is_svod) return false;
+                if (j.key && j.key.startsWith('svod-acquisition/')) return false;
+                if (j.s3_key && j.s3_key.startsWith('svod-acquisition/')) return false;
+                const cat = (j.category || '').toUpperCase();
+                if (cat === 'SVOD ACQUISITION' || cat === 'SVOD_ACQUISITION') return false;
+                return true;
+            });
             
             // Re-add any segment profiles from persistent storage
             segmentProfilesForComparison.forEach(seg => {
