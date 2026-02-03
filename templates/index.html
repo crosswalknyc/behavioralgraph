@@ -2866,19 +2866,13 @@
 
         .charts-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
             gap: 0.75rem;
             width: 100%;
             max-width: 100%;
             min-width: 0;
         }
         .charts-grid > * { min-width: 0; max-width: 100%; overflow: visible; }
-        
-        @media (max-width: 1200px) {
-            .charts-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
         
         @media (max-width: 800px) {
             .charts-grid {
@@ -17317,7 +17311,7 @@
             container.innerHTML = `
                 <div id="ticker-tab-demographics" class="tab-content" style="display: block;">
                     <div class="demo-main">
-                        <div id="demographicsContent" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
+                        <div id="demographicsContent" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
                             <div class="chart-card">
                                 <h3>👤 AGE</h3>
                                 <div class="chart-container"><canvas id="tickerAgeChart"></canvas></div>
