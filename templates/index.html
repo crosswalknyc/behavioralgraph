@@ -2819,11 +2819,35 @@
         @keyframes pulse-live {
             0%, 100% {
                 opacity: 1;
+                transform: scale(1);
                 text-shadow: 0 0 5px rgba(255, 68, 68, 0.5);
             }
             50% {
-                opacity: 0.6;
-                text-shadow: 0 0 10px rgba(255, 68, 68, 0.8);
+                opacity: 0.7;
+                transform: scale(1.08);
+                text-shadow: 0 0 12px rgba(255, 68, 68, 0.9);
+            }
+        }
+        
+        /* Live tab icon pulse (🔴 in Live Top 10 / Live Data buttons) */
+        .live-tab-icon {
+            display: inline-block;
+            animation: pulse-live 1.5s ease-in-out infinite;
+        }
+        
+        /* Top 3 values in Live Data tab - pulse animation */
+        .live-top-value-pulse {
+            animation: live-value-pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes live-value-pulse {
+            0%, 100% {
+                opacity: 1;
+                text-shadow: 0 0 0 transparent;
+            }
+            50% {
+                opacity: 0.9;
+                text-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
             }
         }
         
@@ -12320,7 +12344,7 @@
                         <!-- Netflix sub-view -->
                         <div id="ranker-netflix" class="ranker-platform-panel active">
                             <div class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin-bottom: 1rem; flex-wrap: wrap;">
-                                <button class="tab-btn" onclick="showNetflixSubTab('livetop10')" id="netflixSubTabLivetop10">🔴 Live Top 10</button>
+                                <button class="tab-btn" onclick="showNetflixSubTab('livetop10')" id="netflixSubTabLivetop10"><span class="live-tab-icon">🔴</span> Live Top 10</button>
                                 <button class="tab-btn" onclick="showNetflixSubTab('all')" id="netflixSubTabAll">📺 All Netflix</button>
                                 <button class="tab-btn" onclick="showNetflixSubTab('daily')" id="netflixSubTabDaily">📅 Daily Ranker by Series</button>
                                 <button class="tab-btn" onclick="showNetflixSubTab('seasons')" id="netflixSubTabSeasons">📅 Daily Ranker by Seasons</button>
@@ -12333,7 +12357,7 @@
                             <div id="netflixSubTabContent">
                                 <div id="netflix-livetop10" class="netflix-sub-content">
                                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
-                                        <h3 style="margin: 0;">🔴 Live Top 10</h3>
+                                        <h3 style="margin: 0;"><span class="live-tab-icon">🔴</span> Live Top 10</h3>
                                         <div style="display: flex; align-items: center; gap: 0.5rem;">
                                             <span id="netflixLiveTop10Date" style="font-size: 0.75rem; color: var(--text-secondary);"></span>
                                             <button class="module-btn" onclick="loadNetflixLiveTop10(true)" style="font-size: 0.75rem; padding: 0.3rem 0.6rem;">🔄 REFRESH</button>
@@ -12341,7 +12365,7 @@
                                     </div>
                                     <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">Real-time Netflix Top 10 from live clickstream data. Updated throughout the day.</p>
                                     <div id="netflixLiveTop10Loading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Loading Live Top 10...</div>
-                                    <div id="netflixLiveTop10TableWrap" style="overflow-x: auto; display: none;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Title</th><th>Views</th><th>% of Total</th><th>Link</th></tr></thead><tbody id="netflixLiveTop10Body"></tbody></table></div>
+                                    <div id="netflixLiveTop10TableWrap" style="overflow-x: auto; display: none;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Title</th><th>Views</th><th>Link</th></tr></thead><tbody id="netflixLiveTop10Body"></tbody></table></div>
                                     <div id="netflixLiveTop10Error" style="padding: 1rem; color: var(--error-color); display: none;"></div>
                                 </div>
                                 <div id="netflix-all" class="netflix-sub-content">
@@ -14527,7 +14551,7 @@
                             <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
                                 <!-- Ticker Dashboard Tabs -->
                                 <div class="dashboard-tabs" style="margin: 0;">
-                                    <button class="tab-btn active" onclick="showTickerTab('livedata')">📊 Live Data</button>
+                                    <button class="tab-btn active" onclick="showTickerTab('livedata')">📊 <span class="live-tab-icon">🔴</span> Live Data</button>
                                     <button class="tab-btn" onclick="showTickerTab('trends')">📈 Trends</button>
                                     <button class="tab-btn" onclick="showTickerTab('daily')">📋 Daily Metrics</button>
                                     <button class="tab-btn" onclick="showTickerTab('historic')">📅 Historic Performance</button>
@@ -14563,7 +14587,7 @@
                                     <!-- Projected Growth Rate and KPI -->
                                     <div style="display: flex; flex-direction: column;">
                                         <div class="stat-label" id="projectedGrowthLabel" style="font-size: 0.75rem; margin-bottom: 0.5rem;">🔮 Q1 2026 Projected Net Growth Rate</div>
-                                        <div class="stat-value pulsing-number" id="projectedGrowth" style="display: block; margin: 0.25rem 0;">--</div>
+                                        <div class="stat-value pulsing-number live-top-value-pulse" id="projectedGrowth" style="display: block; margin: 0.25rem 0;">--</div>
                                         <div class="stat-label" id="projectedGrowthKPI" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">--</div>
                                     </div>
                                     <!-- Accuracy Section - below the number -->
@@ -14601,11 +14625,11 @@
                             <div class="ticker-cards-grid four-columns" style="margin-bottom: 0.75rem;">
                                 <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 80px; padding: 0.6rem 1rem;" data-tooltip="">
                                     <div class="stat-label" style="font-size: 0.7rem;">💹 QTD Net Growth %</div>
-                                    <div class="stat-value" id="netGrowth" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
+                                    <div class="stat-value live-top-value-pulse" id="netGrowth" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
                                 <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 80px; padding: 0.6rem 1rem;" data-tooltip="">
                                     <div class="stat-label" style="font-size: 0.7rem;">📊 Current Consumers QTD</div>
-                                    <div class="stat-value" id="currentConsumers" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
+                                    <div class="stat-value live-top-value-pulse" id="currentConsumers" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
                                 <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 80px; padding: 0.6rem 1rem;" data-tooltip="">
                                     <div class="stat-label" style="font-size: 0.7rem;">📈 Total Subs QTD</div>
@@ -31510,7 +31534,7 @@
             const tableWrap = document.getElementById('netflixLiveTop10TableWrap');
             
             if (!netflixLiveTop10Data || !netflixLiveTop10Data.top10) {
-                if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data available.</td></tr>';
+                if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data available.</td></tr>';
                 return;
             }
             
@@ -31518,7 +31542,7 @@
             
             const rows = netflixLiveTop10Data.top10;
             if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data available.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data available.</td></tr>';
                 return;
             }
             
@@ -31529,7 +31553,6 @@
                     '<td style="font-weight: 600; color: var(--accent-cyan);">#' + r.rank + '</td>' +
                     '<td>' + titleDisplay + '</td>' +
                     '<td style="font-weight: 600;">' + (r.projected_views || 0).toLocaleString() + '</td>' +
-                    '<td>' + (r.pct_of_total || 0) + '%</td>' +
                     '<td>' + titleLink + '</td>' +
                 '</tr>';
             }).join('');
