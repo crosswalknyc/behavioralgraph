@@ -4746,8 +4746,8 @@ def get_netflix_live_top10():
             if match:
                 title_id = match.group(1)
             
-            # Project views: (count * 150) / 10M * 329.9M US pop
-            projected_views = int((count * 150) / 10_000_000 * 329_900_000) if count else 0
+            # Project views: count / 10M * 329.9M US pop (no 150x boost for live data)
+            projected_views = int(count / 10_000_000 * 329_900_000) if count else 0
             
             ranked.append({
                 'rank': rank,
