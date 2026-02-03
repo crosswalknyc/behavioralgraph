@@ -12311,6 +12311,7 @@
                 <div class="rankers-container">
                     <div class="rankers-platform-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
                         <button class="tab-btn active" onclick="showRankerPlatform('netflix')" id="rankerPlatformNetflix"><span class="tab-icon">📺</span> Netflix</button>
+                        <button class="tab-btn" onclick="showRankerPlatform('rokufast')" id="rankerPlatformRokufast"><span class="tab-icon">📺</span> Roku FAST</button>
                         <button class="tab-btn" onclick="showRankerPlatform('reelshort')" id="rankerPlatformReelshort"><span class="tab-icon">📱</span> ReelShort</button>
                         <button class="tab-btn" onclick="showRankerPlatform('shortstv')" id="rankerPlatformShortstv"><span class="tab-icon">📱</span> ShortsTV</button>
                         <button class="tab-btn" onclick="showRankerPlatform('goodshort')" id="rankerPlatformGoodshort"><span class="tab-icon">📱</span> GoodShort</button>
@@ -12436,7 +12437,7 @@
                         <div id="ranker-reelshort" class="ranker-platform-panel">
                             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
                                 <h3 style="margin: 0;">📱 ReelShort</h3>
-                                <button class="btn btn-primary" onclick="loadReelShortRankerData()" id="reelshortRefreshBtn">🔄 Refresh</button>
+                                <button class="module-btn" onclick="loadReelShortRankerData()" id="reelshortRefreshBtn" style="font-size: 0.75rem; padding: 0.3rem 0.6rem;">🔄 REFRESH</button>
                             </div>
                             <div id="reelshortInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
                             <div id="reelshortLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading ReelShort data...</div>
@@ -12447,7 +12448,7 @@
                         <div id="ranker-shortstv" class="ranker-platform-panel">
                             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
                                 <h3 style="margin: 0;">📱 ShortsTV</h3>
-                                <button class="btn btn-primary" onclick="loadShortstvRankerData()" id="shortstvRefreshBtn">🔄 Refresh</button>
+                                <button class="module-btn" onclick="loadShortstvRankerData()" id="shortstvRefreshBtn" style="font-size: 0.75rem; padding: 0.3rem 0.6rem;">🔄 REFRESH</button>
                             </div>
                             <div id="shortstvInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
                             <div id="shortstvLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading ShortsTV data...</div>
@@ -12458,11 +12459,96 @@
                         <div id="ranker-goodshort" class="ranker-platform-panel">
                             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
                                 <h3 style="margin: 0;">📱 GoodShort</h3>
-                                <button class="btn btn-primary" onclick="loadGoodshortRankerData()" id="goodshortRefreshBtn">🔄 Refresh</button>
+                                <button class="module-btn" onclick="loadGoodshortRankerData()" id="goodshortRefreshBtn" style="font-size: 0.75rem; padding: 0.3rem 0.6rem;">🔄 REFRESH</button>
                             </div>
                             <div id="goodshortInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
                             <div id="goodshortLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading GoodShort data...</div>
                             <div id="goodshortError" style="padding: 1rem; color: var(--error-color); display: none;"></div>
+                        </div>
+                        
+                        <!-- Roku FAST ranker panel -->
+                        <div id="ranker-rokufast" class="ranker-platform-panel">
+                            <div class="rokufast-subtabs" style="display: flex; gap: 0.35rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                                <button class="tab-btn active" onclick="showRokuFastSubTab('daily')" id="rokufastSubTabDaily">📅 Daily by Series</button>
+                                <button class="tab-btn" onclick="showRokuFastSubTab('seasons')" id="rokufastSubTabSeasons">📅 By Seasons</button>
+                                <button class="tab-btn" onclick="showRokuFastSubTab('episodes')" id="rokufastSubTabEpisodes">📅 By Episodes</button>
+                                <button class="tab-btn" onclick="showRokuFastSubTab('all')" id="rokufastSubTabAll">📺 All</button>
+                                <button class="tab-btn" onclick="showRokuFastSubTab('trends')" id="rokufastSubTabTrends">📈 Trends</button>
+                                <button class="tab-btn" onclick="showRokuFastSubTab('genre')" id="rokufastSubTabGenre">🎬 By Genre</button>
+                                <button class="tab-btn" onclick="showRokuFastSubTab('topshows')" id="rokufastSubTabTopShows">🏆 Top Shows</button>
+                                <button class="tab-btn" onclick="showRokuFastSubTab('insights')" id="rokufastSubTabInsights">💡 Insights</button>
+                            </div>
+                            <div id="rokufastSubTabContent">
+                                <div id="rokufast-daily" class="rokufast-sub-content active">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">📅 Daily Ranker by Series</h3>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
+                                            <input type="date" id="rokufastDailyDate" onchange="renderRokuFastDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        </div>
+                                    </div>
+                                    <div id="rokufastDailyTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Views</th><th>Genre</th><th>Avg Watch Time</th><th>Run Time</th></tr></thead><tbody id="rokufastDailyBody"></tbody></table></div>
+                                </div>
+                                <div id="rokufast-seasons" class="rokufast-sub-content">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">📅 Daily Ranker by Seasons</h3>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
+                                            <input type="date" id="rokufastSeasonsDate" onchange="renderRokuFastSeasonsRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        </div>
+                                    </div>
+                                    <div id="rokufastSeasonsTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Season</th><th>Views</th><th>Avg Watch Time</th><th>Run Time</th></tr></thead><tbody id="rokufastSeasonsBody"></tbody></table></div>
+                                </div>
+                                <div id="rokufast-episodes" class="rokufast-sub-content">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">📅 Daily Ranker by Episodes</h3>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
+                                            <input type="date" id="rokufastEpisodesDate" onchange="renderRokuFastEpisodesRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        </div>
+                                    </div>
+                                    <div id="rokufastEpisodesTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Episode #</th><th>Episode Name</th><th>Season</th><th>Views</th><th>Avg Watch Time</th><th>Run Time</th></tr></thead><tbody id="rokufastEpisodesBody"></tbody></table></div>
+                                </div>
+                                <div id="rokufast-all" class="rokufast-sub-content">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">📺 All Roku FAST</h3>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
+                                            <input type="date" id="rokufastAllDate" onchange="renderRokuFastAllRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        </div>
+                                    </div>
+                                    <div id="rokufastAllTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Season</th><th>Episode #</th><th>Episode Name</th><th>Views</th><th>Avg Watch Time</th><th>Run Time</th></tr></thead><tbody id="rokufastAllBody"></tbody></table></div>
+                                </div>
+                                <div id="rokufast-trends" class="rokufast-sub-content">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">📈 Trends</h3>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Show:</label>
+                                            <select id="rokufastTrendsShow" onchange="renderRokuFastTrends()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 200px;"><option value="">Select show...</option></select>
+                                        </div>
+                                    </div>
+                                    <div id="rokufastTrendsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers and select a show.</div>
+                                    <div id="rokufastTrendsChartWrap" style="display: none; height: 300px;"><canvas id="rokufastTrendsChart"></canvas></div>
+                                </div>
+                                <div id="rokufast-genre" class="rokufast-sub-content">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">🎬 By Genre</h3>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
+                                            <input type="date" id="rokufastGenreDate" onchange="renderRokuFastByGenre()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        </div>
+                                    </div>
+                                    <div id="rokufastGenreTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Genre</th><th>Views</th><th>% of Total</th><th>Shows</th></tr></thead><tbody id="rokufastGenreBody"></tbody></table></div>
+                                </div>
+                                <div id="rokufast-topshows" class="rokufast-sub-content">
+                                    <div style="margin-bottom: 0.75rem;"><h3 style="margin: 0;">🏆 Top Shows Over Time</h3></div>
+                                    <div id="rokufastTopShowsChartWrap" style="height: 350px;"><canvas id="rokufastTopShowsChart"></canvas></div>
+                                </div>
+                                <div id="rokufast-insights" class="rokufast-sub-content">
+                                    <div style="margin-bottom: 0.75rem;"><h3 style="margin: 0;">💡 Insights</h3></div>
+                                    <div id="rokufastInsightsContent" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;"></div>
+                                </div>
+                            </div>
                         </div>
                         
                     </div>
@@ -12475,11 +12561,12 @@
                         </div>
                         <div id="rankersLoadDone" style="display: none;">
                             <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data loaded. Use the tabs above to view.</p>
-                            <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
-                                <button class="btn btn-primary" onclick="loadNetflixRankerData(true)" id="rankersLoadBtnNetflix">📺 Refresh Netflix</button>
-                                <button class="btn btn-primary" onclick="loadReelShortRankerData()">📱 Refresh ReelShort</button>
-                                <button class="btn btn-primary" onclick="loadShortstvRankerData()">📱 Refresh ShortsTV</button>
-                                <button class="btn btn-primary" onclick="loadGoodshortRankerData()">📱 Refresh GoodShort</button>
+                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
+                                <button class="module-btn" onclick="loadNetflixRankerData(true)" id="rankersLoadBtnNetflix" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;">📺 Netflix</button>
+                                <button class="module-btn" onclick="loadRokuFastRankerData(true)" id="rankersLoadBtnRokuFast" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;">📺 Roku</button>
+                                <button class="module-btn" onclick="loadReelShortRankerData()" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;">📱 ReelShort</button>
+                                <button class="module-btn" onclick="loadShortstvRankerData()" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;">📱 ShortsTV</button>
+                                <button class="module-btn" onclick="loadGoodshortRankerData()" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;">📱 GoodShort</button>
                             </div>
                         </div>
                     </div>
@@ -30251,6 +30338,11 @@
         let netflixGenreChartInstance = null;
         let netflixTopShowsChartInstance = null;
 
+        // --- Roku FAST Ranker ---
+        let rokufastRankerData = null;
+        let rokufastTrendsChartInstance = null;
+        let rokufastTopShowsChartInstance = null;
+
         /** Project raw views to US Gen Pop: multiply by 150, then (boosted / 100M) * 324,838,700 */
         function netflixProjectedViews(rawViews) {
             const v = Number(rawViews) || 0;
@@ -30274,7 +30366,10 @@
             if (panel) panel.classList.add('active');
             if (btn) btn.classList.add('active');
             if (id === 'netflix') showNetflixSubTab('daily');
-            if (id === 'reelshort') loadReelShortRankerData();
+            else if (id === 'rokufast') { showRokuFastSubTab('daily'); loadRokuFastRankerData(); }
+            else if (id === 'reelshort') loadReelShortRankerData();
+            else if (id === 'shortstv') loadShortstvRankerData();
+            else if (id === 'goodshort') loadGoodshortRankerData();
         }
 
         function showNetflixSubTab(id) {
@@ -30450,6 +30545,84 @@
 
         function renderReelShortRanker(data) {
             const cardsEl = document.getElementById('reelshortInsightsCards');
+            if (!cardsEl) return;
+            const cards = [
+                { label: 'Active Accounts', value: (data.active_accounts != null ? Number(data.active_accounts).toLocaleString() : '—') },
+                { label: 'Total Cancels', value: (data.total_cancels_pct != null ? data.total_cancels_pct + '%' : '—') },
+                { label: 'Watched Paid Content', value: (data.watched_paid_content_pct != null ? data.watched_paid_content_pct + '%' : '—') },
+                { label: 'Watched Free Content', value: (data.watched_free_content_pct != null ? data.watched_free_content_pct + '%' : '—') }
+            ];
+            cardsEl.innerHTML = cards.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
+        }
+
+        function loadShortstvRankerData() {
+            const loadingEl = document.getElementById('shortstvLoading');
+            const cardsEl = document.getElementById('shortstvInsightsCards');
+            const errEl = document.getElementById('shortstvError');
+            const btn = document.getElementById('shortstvRefreshBtn');
+            if (loadingEl) loadingEl.style.display = 'block';
+            if (cardsEl) cardsEl.innerHTML = '';
+            if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+            if (btn) btn.disabled = true;
+            fetch('/api/rankers/shortstv/data', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    if (loadingEl) loadingEl.style.display = 'none';
+                    if (btn) btn.disabled = false;
+                    if (data.error) {
+                        if (errEl) { errEl.textContent = data.error; errEl.style.display = 'block'; }
+                        return;
+                    }
+                    renderShortstvRanker(data);
+                })
+                .catch(e => {
+                    if (loadingEl) loadingEl.style.display = 'none';
+                    if (btn) btn.disabled = false;
+                    if (errEl) { errEl.textContent = e.message || String(e); errEl.style.display = 'block'; }
+                });
+        }
+
+        function renderShortstvRanker(data) {
+            const cardsEl = document.getElementById('shortstvInsightsCards');
+            if (!cardsEl) return;
+            const cards = [
+                { label: 'Active Accounts', value: (data.active_accounts != null ? Number(data.active_accounts).toLocaleString() : '—') },
+                { label: 'Total Cancels', value: (data.total_cancels_pct != null ? data.total_cancels_pct + '%' : '—') },
+                { label: 'Watched Paid Content', value: (data.watched_paid_content_pct != null ? data.watched_paid_content_pct + '%' : '—') },
+                { label: 'Watched Free Content', value: (data.watched_free_content_pct != null ? data.watched_free_content_pct + '%' : '—') }
+            ];
+            cardsEl.innerHTML = cards.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
+        }
+
+        function loadGoodshortRankerData() {
+            const loadingEl = document.getElementById('goodshortLoading');
+            const cardsEl = document.getElementById('goodshortInsightsCards');
+            const errEl = document.getElementById('goodshortError');
+            const btn = document.getElementById('goodshortRefreshBtn');
+            if (loadingEl) loadingEl.style.display = 'block';
+            if (cardsEl) cardsEl.innerHTML = '';
+            if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+            if (btn) btn.disabled = true;
+            fetch('/api/rankers/goodshort/data', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    if (loadingEl) loadingEl.style.display = 'none';
+                    if (btn) btn.disabled = false;
+                    if (data.error) {
+                        if (errEl) { errEl.textContent = data.error; errEl.style.display = 'block'; }
+                        return;
+                    }
+                    renderGoodshortRanker(data);
+                })
+                .catch(e => {
+                    if (loadingEl) loadingEl.style.display = 'none';
+                    if (btn) btn.disabled = false;
+                    if (errEl) { errEl.textContent = e.message || String(e); errEl.style.display = 'block'; }
+                });
+        }
+
+        function renderGoodshortRanker(data) {
+            const cardsEl = document.getElementById('goodshortInsightsCards');
             if (!cardsEl) return;
             const cards = [
                 { label: 'Active Accounts', value: (data.active_accounts != null ? Number(data.active_accounts).toLocaleString() : '—') },
