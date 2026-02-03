@@ -4726,20 +4726,53 @@ def _fetch_clickstream_ranker_payload(common_name_substring, today_str):
     cur = conn.cursor()
     cur.execute(f"USE WAREHOUSE {CLICKSTREAM_RANKER_WAREHOUSE}")
     pattern = f"%{common_name_substring}%"
+    
+    # First try today's data
     sql = """
         SELECT
             COUNT(*) AS total,
-            COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%con%' OR LOWER(COALESCE(URL, '')) LIKE '%paid%' OR LOWER(COALESCE(URL, '')) LIKE '%thank%' THEN 1 END) AS new_subs,
-            COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%stop%' OR LOWER(COALESCE(URL, '')) LIKE '%cancel%' THEN 1 END) AS cancels,
-            COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%dashboard%' THEN 1 END) AS paid_content
+            COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%%con%%' OR LOWER(COALESCE(URL, '')) LIKE '%%paid%%' OR LOWER(COALESCE(URL, '')) LIKE '%%thank%%' THEN 1 END) AS new_subs,
+            COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%%stop%%' OR LOWER(COALESCE(URL, '')) LIKE '%%cancel%%' THEN 1 END) AS cancels,
+            COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%%dashboard%%' THEN 1 END) AS paid_content
         FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
         WHERE DELIVERED = CURRENT_DATE()
           AND LOWER(COALESCE(COMMON_NAME, '')) LIKE %s
     """
     cur.execute(sql, (pattern,))
     row = cur.fetchone()
-    conn.close()
     total = row[0] or 0
+    
+    # If no data for today, try the most recent date with data
+    actual_date = today_str
+    if total == 0:
+        print(f"[Clickstream Ranker] No data for today, checking recent dates for {common_name_substring}")
+        sql_recent = """
+            SELECT MAX(DELIVERED) 
+            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
+            WHERE DELIVERED >= DATEADD(day, -7, CURRENT_DATE())
+              AND LOWER(COALESCE(COMMON_NAME, '')) LIKE %s
+        """
+        cur.execute(sql_recent, (pattern,))
+        recent_row = cur.fetchone()
+        if recent_row and recent_row[0]:
+            recent_date = recent_row[0]
+            actual_date = recent_date.strftime('%Y-%m-%d') if hasattr(recent_date, 'strftime') else str(recent_date)[:10]
+            print(f"[Clickstream Ranker] Using recent date: {actual_date}")
+            sql_fallback = """
+                SELECT
+                    COUNT(*) AS total,
+                    COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%%con%%' OR LOWER(COALESCE(URL, '')) LIKE '%%paid%%' OR LOWER(COALESCE(URL, '')) LIKE '%%thank%%' THEN 1 END) AS new_subs,
+                    COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%%stop%%' OR LOWER(COALESCE(URL, '')) LIKE '%%cancel%%' THEN 1 END) AS cancels,
+                    COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%%dashboard%%' THEN 1 END) AS paid_content
+                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
+                WHERE DELIVERED = %s
+                  AND LOWER(COALESCE(COMMON_NAME, '')) LIKE %s
+            """
+            cur.execute(sql_fallback, (recent_date, pattern))
+            row = cur.fetchone()
+            total = row[0] or 0
+    
+    conn.close()
     new_subs = row[1] or 0
     cancels = row[2] or 0
     paid_content = row[3] or 0
@@ -4750,7 +4783,7 @@ def _fetch_clickstream_ranker_payload(common_name_substring, today_str):
     display_paid_pct = watched_paid_pct if watched_paid_pct > 0 else new_subscriptions_pct
     watched_free_pct = 100.0 - display_paid_pct
     return {
-        'date': today_str,
+        'date': actual_date,
         'total_rows': total,
         'active_accounts': round(active_accounts, 2),
         'new_subscriptions_pct': round(new_subscriptions_pct, 2),
