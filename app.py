@@ -1133,6 +1133,19 @@ def normalize_brand_for_search(brand):
     """Normalize brand name for consistent matching."""
     return brand.lower().strip().replace(' ', '_').replace('.', '')
 
+def remove_timestamp_from_name(name):
+    """Remove trailing timestamp pattern _MM_DD_YYYY_HH_MM from filename (e.g. brand_01_02_2024_12_30 -> brand)."""
+    if not name:
+        return name
+    # Match trailing _DD_MM_YYYY_HH_MM or _MM_DD_YYYY_HH_MM
+    return re.sub(r'_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$', '', name)
+
+def smart_title_case(s):
+    """Title-case a string (e.g. 'some name' -> 'Some Name')."""
+    if not s or not isinstance(s, str):
+        return s or ''
+    return s.title()
+
 def parse_metadata_from_csv(csv_content):
     """Extract metadata from the INPUT_METADATA row of a CSV."""
     try:
@@ -2662,6 +2675,26 @@ def get_admin_content():
         print(f"❌ Error getting admin content: {e}")
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/all-profile-images', methods=['GET'])
+@requires_admin
+def get_all_profile_images():
+    """Return profile image cache for admin preload (key -> { url })."""
+    global profile_image_cache
+    if not profile_image_cache:
+        load_profile_image_cache()
+    images = {}
+    for key, info in (profile_image_cache or {}).items():
+        url = info.get('image_url') if isinstance(info, dict) else None
+        if url:
+            images[key] = {'url': url}
+    return jsonify({'success': True, 'images': images, 'count': len(images)})
+
+@app.route('/api/cached_files', methods=['GET'])
+@requires_admin
+def get_cached_files():
+    """Return same file list as admin content (for admin categories/runs)."""
+    return get_admin_content()
 
 @app.route('/api/admin/content/archive', methods=['POST'])
 @requires_admin
