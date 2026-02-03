@@ -1876,6 +1876,9 @@
             padding-left: 0;
             margin: 0; 
             min-height: 200px;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
         }
         .tab-content.active { 
             display: block !important; 
@@ -2194,6 +2197,7 @@
         .dashboard-tab-content {
             flex: 1;
             min-width: 0;
+            max-width: 100%;
             overflow-y: auto;
             overflow-x: hidden;
             padding: 0;
@@ -2865,7 +2869,11 @@
             grid-template-columns: repeat(3, 1fr);
             gap: 0.75rem;
             width: 100%;
+            max-width: 100%;
+            min-width: 0;
         }
+        .charts-grid > * { min-width: 0; max-width: 100%; }
+        .demographics-modules-grid .demo-insight-card { min-width: 0; }
         
         @media (max-width: 1200px) {
             .charts-grid {
@@ -2899,7 +2907,7 @@
         }
 
         .chart-card h3 {
-            font-size: clamp(0.7rem, 1.1vw + 0.45rem, 0.85rem);
+            font-size: clamp(0.72rem, 1.2vw + 0.5rem, 0.9rem);
             color: var(--text-primary);
             margin-bottom: 0.75rem;
             text-transform: uppercase;
@@ -2992,27 +3000,53 @@
         }
 
         .chart-container { 
-            height: clamp(160px, 18vw + 80px, 220px);
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
+            height: clamp(180px, 20vw + 90px, 260px);
             overflow: visible;
             position: relative;
         }
+        .chart-container canvas { max-width: 100%; }
+
+        /* Occupation chart: full width and dynamic height for readable long labels */
+        .chart-card-occupation { grid-column: 1 / -1; }
+        .occupation-chart-container {
+            min-height: 400px;
+            height: auto;
+            max-height: min(900px, 75vh);
+            overflow-y: auto;
+            overflow-x: auto;
+            position: relative;
+        }
+        @media (min-height: 700px) {
+            .occupation-chart-container { min-height: min(550px, 60vh); }
+        }
         
-        /* Responsive chart sizing - use clamp in base styles above; keep media for layout */
+        /* Responsive chart sizing - scales with viewport so text fits */
         @media (max-width: 1600px) {
-            .chart-container { height: clamp(150px, 16vw + 60px, 200px); }
+            .chart-container { height: clamp(170px, 18vw + 70px, 240px); }
         }
         
         @media (max-width: 1200px) {
-            .chart-container { height: clamp(140px, 15vw + 50px, 180px); }
+            .chart-container { height: clamp(160px, 17vw + 60px, 220px); }
+        }
+        
+        @media (max-width: 800px) {
+            .chart-container { height: clamp(200px, 35vw + 80px, 280px); }
+            .chart-card h3 { font-size: clamp(0.75rem, 2.5vw + 0.5rem, 0.9rem); }
         }
         
         /* Dynamic fonts: all dashboard boxes scale with viewport to prevent text cutoff */
+        .dashboard-tab-content > *,
+        .tab-content > * { max-width: 100%; box-sizing: border-box; }
         .demo-insight-card,
         .insight-card,
         .behavioral-card,
         .region-card,
         .location-section {
             font-size: clamp(0.72rem, 1.1vw + 0.4rem, 0.88rem);
+            max-width: 100%;
         }
         .demo-insight-card h4,
         .behavioral-card h3,
@@ -11434,8 +11468,8 @@
                             </div>
                         </div>
                         
-                        <!-- Demographics Insights Row -->
-                        <div class="demo-insights-row" id="demoInsightsRow">
+                        <!-- Demographics Modules Grid - all boxes are draggable and reorderable -->
+                        <div class="charts-grid demographics-modules-grid" id="demographicsModulesGrid">
                             <div class="demo-insight-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Demographic Profile Summary">
                                 <h4 class="has-tooltip" data-tooltip="Demographic Profile Summary: Quick overview of this audience's demographic composition including age skew, gender balance, and income level compared to the general population." style="display: flex; justify-content: space-between; align-items: center;">
                                     <span style="display: flex; align-items: center;">
@@ -11488,9 +11522,6 @@
                                     <div class="loading-placeholder">Loading...</div>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div class="charts-grid">
                             <div class="chart-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Age">
                                 <h3>
                                     <span class="chart-card-title-row">
@@ -11669,7 +11700,7 @@
                                 </h3>
                                 <div class="chart-container"><canvas id="parentalStatusChart"></canvas></div>
                             </div>
-                            <div class="chart-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Occupation">
+                            <div class="chart-card chart-card-occupation" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Occupation">
                                 <h3>
                                     <span class="chart-card-title-row">
                                         <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
@@ -11685,7 +11716,7 @@
                                         <span class="module-action-btns"><button class="module-btn csv-btn" onclick="exportModuleCSV('demographic', 'Occupation')">CSV</button><button class="module-btn png-btn" onclick="exportModulePNG('demographic', 'Occupation')">PNG</button><button class="module-btn deck-btn" onclick="addModuleToDeck('demographic', 'Occupation')">➕</button></span>
                                     </span>
                                 </h3>
-                                <div class="chart-container" style="height: 500px; max-height: 500px; overflow-y: auto; overflow-x: hidden; position: relative;">
+                                <div class="chart-container occupation-chart-container">
                                     <canvas id="occupationChart"></canvas>
                                 </div>
                             </div>
@@ -17506,13 +17537,15 @@
             // Sexual Orientation Chart
             if (demographics.sexual_orientation && Object.keys(demographics.sexual_orientation).length > 0) {
                 const soLabels = Object.keys(demographics.sexual_orientation);
+                const soDisplayLabel = (raw) => { const u = (raw || '').toUpperCase(); if (u === 'NO') return 'Heterosexual'; if (u === 'YES') return 'LGBTQ+'; return raw || ''; };
+                const soDisplayLabels = soLabels.map(soDisplayLabel);
                 const soData = Object.values(demographics.sexual_orientation);
                 const ctx = document.getElementById('tickerSexualOrientationChart');
                 if (ctx) {
                     tickerCharts.sexualOrientation = new Chart(ctx, {
                         type: 'doughnut',
                         data: {
-                            labels: soLabels,
+                            labels: soDisplayLabels,
                             datasets: [{ data: soData, backgroundColor: colors }]
                         },
                         options: {
@@ -22648,6 +22681,11 @@
                 }
             }
             
+            // Restore module order for demographics tab
+            if (tabName === 'demographics') {
+                restoreDemographicsModuleOrder();
+            }
+            
             // Restore module order for interests tab
             if (tabName === 'interests') {
                 restoreInterestsModuleOrder();
@@ -25281,9 +25319,12 @@
             const US_POPULATION = 324700000;
             const ageChartEl = document.getElementById('ageChart');
             const chartContainerWidth = ageChartEl?.parentElement?.offsetWidth || 400;
-            const legendFontSize = Math.max(6, Math.min(11, Math.floor(chartContainerWidth / 28)));
-            const axisFontSize = Math.max(9, Math.min(14, Math.floor(chartContainerWidth / 28)));
-            const legendPaddingRight = Math.min(100, Math.max(50, Math.floor(chartContainerWidth * 0.22)));
+            const vw = typeof window !== 'undefined' ? (window.innerWidth || 1200) : 1200;
+            const effectiveWidth = Math.max(chartContainerWidth, Math.floor(vw / 4));
+            const legendFontSize = Math.max(8, Math.min(13, Math.floor(effectiveWidth / 24)));
+            const axisFontSize = Math.max(10, Math.min(15, Math.floor(effectiveWidth / 22)));
+            const dataLabelFontSize = Math.max(9, Math.min(13, axisFontSize));
+            const legendPaddingRight = Math.min(120, Math.max(50, Math.floor(chartContainerWidth * 0.22)));
 
             // Age - horizontal bar with Gen Pop in data labels (green/red based on index)
             // Apply sorting based on user selection
@@ -25340,7 +25381,7 @@
                         datalabels: ageIsCircular ? { display: false } : {
                             anchor: 'end',
                             align: 'end',
-                            font: { size: 12, weight: 'bold' },
+                            font: { size: dataLabelFontSize, weight: 'bold' },
                             color: (ctx) => {
                                 if (isGenPop) return '#fff';
                                 const pct = agePcts[ctx.dataIndex] || 0;
@@ -25420,7 +25461,7 @@
                             } 
                         },
                         datalabels: genderChartType === 'bar' ? {
-                            anchor: 'end', align: 'end', font: { size: 11, weight: 'bold' },
+                            anchor: 'end', align: 'end', font: { size: dataLabelFontSize, weight: 'bold' },
                             color: (ctx) => {
                                 const pct = genderPcts[ctx.dataIndex] || 0;
                                 const genPop = genderGenPop[ctx.dataIndex] || 0;
@@ -25534,7 +25575,7 @@
                             } 
                         },
                         datalabels: ethnicityChartType === 'bar' ? {
-                            anchor: 'end', align: 'end', font: { size: 11, weight: 'bold' },
+                            anchor: 'end', align: 'end', font: { size: dataLabelFontSize, weight: 'bold' },
                             color: (ctx) => {
                                 const pct = ethPcts[ctx.dataIndex] || 0;
                                 const genPop = ethGenPop[ctx.dataIndex] || 0;
@@ -25650,7 +25691,7 @@
                         datalabels: incomeIsCircular ? { display: false } : {
                             anchor: 'end',
                             align: 'right',
-                            font: { size: 12, weight: 'bold' },
+                            font: { size: dataLabelFontSize, weight: 'bold' },
                             color: (ctx) => {
                                 const pct = incomePcts[ctx.dataIndex] || 0;
                                 const genPop = incomeGenPop[ctx.dataIndex] || 0;
@@ -25730,7 +25771,7 @@
                             datalabels: educationIsCircular ? { display: false } : { 
                                 anchor: 'end', 
                                 align: 'end', 
-                                font: { size: 11, weight: 'bold' }, 
+                                font: { size: dataLabelFontSize, weight: 'bold' }, 
                                 color: (ctx) => {
                                     const pct = eduPcts[ctx.dataIndex] || 0;
                                     const genPop = eduGenPop[ctx.dataIndex] || 0;
@@ -25839,7 +25880,7 @@
                             datalabels: relationshipChartType === 'bar' ? {
                                 anchor: 'end',
                                 align: 'end',
-                                font: { size: 12, weight: 'bold' },
+                                font: { size: dataLabelFontSize, weight: 'bold' },
                                 color: (ctx) => {
                                     const pct = relPcts[ctx.dataIndex] || 0;
                                     const genPop = relGenPop[ctx.dataIndex] || 0;
@@ -25903,6 +25944,8 @@
             // Sexual Orientation - doughnut with Gen Pop
             if (demographics.sexual_orientation && Object.keys(demographics.sexual_orientation).length > 0) {
                 const soLabels = Object.keys(demographics.sexual_orientation);
+                const soDisplayLabel = (raw) => { const u = (raw || '').toUpperCase(); if (u === 'NO') return 'Heterosexual'; if (u === 'YES') return 'LGBTQ+'; return raw || ''; };
+                const soDisplayLabels = soLabels.map(soDisplayLabel);
                 const soGenPop = soLabels.map(k => demographicsGenPop.sexual_orientation?.[k] || 0);
                 const soPcts = Object.values(demographics.sexual_orientation);
                 const soData = isProjection ? soLabels.map(k => demographicsProjection.sexual_orientation?.[k] || 0) : soPcts;
@@ -25917,7 +25960,7 @@
                 
                 charts.sexualOrientation = new Chart(document.getElementById('sexualOrientationChart'), {
                     type: soChartType,
-                    data: { labels: soLabels, datasets: [{ data: soData, backgroundColor: colors, borderRadius: soChartType === 'bar' ? 4 : 0 }] },
+                    data: { labels: soDisplayLabels, datasets: [{ data: soData, backgroundColor: colors, borderRadius: soChartType === 'bar' ? 4 : 0 }] },
                     options: { 
                         indexAxis: soChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
@@ -25952,7 +25995,7 @@
                             datalabels: soChartType === 'bar' ? {
                                 anchor: 'end',
                                 align: 'end',
-                                font: { size: 12, weight: 'bold' },
+                                font: { size: dataLabelFontSize, weight: 'bold' },
                                 color: (ctx) => {
                                     const pct = soPcts[ctx.dataIndex] || 0;
                                     const genPop = soGenPop[ctx.dataIndex] || 0;
@@ -26063,7 +26106,7 @@
                             datalabels: psChartType === 'bar' ? {
                                 anchor: 'end',
                                 align: 'end',
-                                font: { size: 12, weight: 'bold' },
+                                font: { size: dataLabelFontSize, weight: 'bold' },
                                 color: (ctx) => {
                                     const pct = psPcts[ctx.dataIndex] || 0;
                                     const genPop = psGenPop[ctx.dataIndex] || 0;
@@ -26139,11 +26182,13 @@
                 
                 // Set canvas height based on number of categories (for bar chart scrolling)
                 const occCanvas = document.getElementById('occupationChart');
+                const occContainer = occCanvas ? occCanvas.closest('.occupation-chart-container') : null;
                 if (occChartType === 'bar' && occCanvas) {
-                    const barHeight = 90; // Increased height per bar for better readability
-                    const minHeight = 1200; // Minimum height to ensure scrolling
-                    const calculatedHeight = occLabels.length * barHeight;
-                    occCanvas.style.height = Math.max(calculatedHeight, minHeight) + 'px';
+                    const barHeight = 44; // Height per bar for readable labels
+                    const calculatedHeight = Math.max(occLabels.length * barHeight, 400);
+                    const vh = window.innerHeight || 600;
+                    const maxH = Math.min(900, Math.floor(vh * 0.75)); // Cap at 75vh for window fit
+                    occCanvas.style.height = Math.min(calculatedHeight, maxH) + 'px';
                 } else if (occCanvas) {
                     occCanvas.style.height = '400px'; // Default height for circular charts
                 }
@@ -26180,7 +26225,7 @@
                             datalabels: occChartType === 'bar' ? {
                                 anchor: 'end',
                                 align: 'end',
-                                font: { size: 9, weight: 'bold' },
+                                font: { size: dataLabelFontSize, weight: 'bold' },
                                 color: (ctx) => {
                                     const pct = occPcts[ctx.dataIndex] || 0;
                                     const genPop = occGenPop[ctx.dataIndex] || 0;
@@ -26202,26 +26247,25 @@
                         scales: occIsCircular ? {} : {
                             x: { 
                                 grid: { color: '#1e3a5f' }, 
-                                ticks: { color: '#8892b0', font: { size: Math.max(8, axisFontSize - 1) } },
+                                ticks: { color: '#8892b0', font: { size: Math.max(10, axisFontSize - 1) } },
                                 suggestedMax: occMax
                             },
                             y: { 
                                 grid: { display: false }, 
                                 ticks: { 
                                     color: '#e6f1ff', 
-                                    font: { size: Math.max(8, axisFontSize - 1), weight: '500' },
+                                    font: { size: Math.max(10, axisFontSize - 1), weight: '500' },
                                     autoSkip: false,
                                     padding: 8,
                                     callback: function(value, index, ticks) {
                                         const label = this.getLabelForValue(value);
-                                        // Split long labels into multiple lines at 25 characters
-                                        if (label.length > 25) {
+                                        // Split long occupation labels at 20 chars for readability
+                                        if (label.length > 20) {
                                             const words = label.split(' ');
                                             const lines = [];
                                             let currentLine = '';
-                                            
                                             words.forEach(word => {
-                                                if ((currentLine + ' ' + word).trim().length > 25 && currentLine.length > 0) {
+                                                if ((currentLine + ' ' + word).trim().length > 20 && currentLine.length > 0) {
                                                     lines.push(currentLine.trim());
                                                     currentLine = word;
                                                 } else {
@@ -26234,7 +26278,14 @@
                                         return label;
                                     }
                                 },
-                                afterFit: (scale) => { scale.width = Math.max(scale.width, 180); } // Increased width for longer labels
+                                afterFit: (scale) => {
+                                    // Reserve space for long occupation labels (e.g. "Building and Grounds Cleaning and Maintenance")
+                                    const maxLabelLen = occLabels.reduce((m, l) => Math.max(m, String(l).length), 0);
+                                    const charsPerLine = 20;
+                                    const lines = Math.ceil(maxLabelLen / charsPerLine) || 1;
+                                    const minWidth = Math.max(280, Math.min(400, lines * 85));
+                                    scale.width = Math.max(scale.width, minWidth);
+                                }
                             }
                         }
                     },
@@ -27532,6 +27583,35 @@
             }
         }
         
+        function restoreDemographicsModuleOrder() {
+            const grid = document.getElementById('demographicsModulesGrid');
+            if (!grid) return;
+            
+            const savedOrder = loadModuleOrder('demographic');
+            if (!savedOrder || savedOrder.length === 0) return;
+            
+            const modules = Array.from(grid.querySelectorAll('.chart-card, .demo-insight-card'));
+            if (modules.length === 0) return;
+            
+            const moduleMap = new Map();
+            modules.forEach(module => {
+                const moduleName = module.dataset.module;
+                if (moduleName) moduleMap.set(moduleName, module);
+            });
+            
+            const orderedModules = [];
+            const unorderedModules = [];
+            savedOrder.forEach(moduleName => {
+                if (moduleMap.has(moduleName)) orderedModules.push(moduleMap.get(moduleName));
+            });
+            modules.forEach(module => {
+                if (!savedOrder.includes(module.dataset.module)) unorderedModules.push(module);
+            });
+            
+            orderedModules.forEach(m => grid.appendChild(m));
+            unorderedModules.forEach(m => grid.appendChild(m));
+        }
+        
         function restoreInterestsModuleOrder() {
             const tabContent = document.getElementById('tab-interests');
             if (!tabContent) return;
@@ -28445,7 +28525,7 @@
         
         function handleDragStart(e) {
             // Support all draggable module types
-            draggedCard = e.target.closest('.behavioral-card, .chart-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown, .interests-insights-row, .interests-heatmap-section, .interests-categories-section, .interests-list-section, .affinity-card');
+            draggedCard = e.target.closest('.behavioral-card, .chart-card, .demo-insight-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown, .interests-insights-row, .interests-heatmap-section, .interests-categories-section, .interests-list-section, .affinity-card');
             if (!draggedCard) return;
             
             draggedCategory = draggedCard.dataset.category || draggedCard.dataset.module || draggedCard.id;
@@ -28461,14 +28541,14 @@
         
         function handleDragEnd(e) {
             // Support all draggable module types
-            const card = e.target.closest('.behavioral-card, .chart-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown, .interests-insights-row, .interests-heatmap-section, .interests-categories-section, .interests-list-section, .affinity-card');
+            const card = e.target.closest('.behavioral-card, .chart-card, .demo-insight-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown, .interests-insights-row, .interests-heatmap-section, .interests-categories-section, .interests-list-section, .affinity-card');
             if (card) {
                 card.classList.remove('dragging');
                 card.style.opacity = '1';
             }
             
             // Remove drag-over class from all draggable cards
-            document.querySelectorAll('.behavioral-card.drag-over, .chart-card.drag-over, .location-section.drag-over, .insight-card-v2.drag-over, .media-reach-chart-card.drag-over, .regional-breakdown.drag-over, .interests-insights-row.drag-over, .interests-heatmap-section.drag-over, .interests-categories-section.drag-over, .interests-list-section.drag-over, .affinity-card.drag-over').forEach(el => {
+            document.querySelectorAll('.behavioral-card.drag-over, .chart-card.drag-over, .demo-insight-card.drag-over, .location-section.drag-over, .insight-card-v2.drag-over, .media-reach-chart-card.drag-over, .regional-breakdown.drag-over, .interests-insights-row.drag-over, .interests-heatmap-section.drag-over, .interests-categories-section.drag-over, .interests-list-section.drag-over, .affinity-card.drag-over').forEach(el => {
                 el.classList.remove('drag-over');
             });
             
@@ -28481,10 +28561,10 @@
             e.dataTransfer.dropEffect = 'move';
             
             // Support all draggable module types
-            const targetCard = e.target.closest('.behavioral-card, .chart-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown, .interests-insights-row, .interests-heatmap-section, .interests-categories-section, .interests-list-section, .affinity-card');
+            const targetCard = e.target.closest('.behavioral-card, .chart-card, .demo-insight-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown, .interests-insights-row, .interests-heatmap-section, .interests-categories-section, .interests-list-section, .affinity-card');
             if (targetCard && targetCard !== draggedCard) {
                 // Remove drag-over from all
-                document.querySelectorAll('.behavioral-card.drag-over, .chart-card.drag-over, .location-section.drag-over, .insight-card-v2.drag-over, .media-reach-chart-card.drag-over, .regional-breakdown.drag-over, .interests-insights-row.drag-over, .interests-heatmap-section.drag-over, .interests-categories-section.drag-over, .interests-list-section.drag-over, .affinity-card.drag-over').forEach(el => {
+                document.querySelectorAll('.behavioral-card.drag-over, .chart-card.drag-over, .demo-insight-card.drag-over, .location-section.drag-over, .insight-card-v2.drag-over, .media-reach-chart-card.drag-over, .regional-breakdown.drag-over, .interests-insights-row.drag-over, .interests-heatmap-section.drag-over, .interests-categories-section.drag-over, .interests-list-section.drag-over, .affinity-card.drag-over').forEach(el => {
                     el.classList.remove('drag-over');
                 });
                 targetCard.classList.add('drag-over');
@@ -28493,7 +28573,7 @@
         
         function handleDragLeave(e) {
             // Support all draggable module types
-            const targetCard = e.target.closest('.behavioral-card, .chart-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown, .interests-insights-row, .interests-heatmap-section, .interests-categories-section, .interests-list-section, .affinity-card');
+            const targetCard = e.target.closest('.behavioral-card, .chart-card, .demo-insight-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown, .interests-insights-row, .interests-heatmap-section, .interests-categories-section, .interests-list-section, .affinity-card');
             if (targetCard) {
                 targetCard.classList.remove('drag-over');
             }
@@ -28503,7 +28583,7 @@
             e.preventDefault();
             
             // Support all draggable module types
-            const targetCard = e.target.closest('.behavioral-card, .chart-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown, .interests-insights-row, .interests-heatmap-section, .interests-categories-section, .interests-list-section, .affinity-card');
+            const targetCard = e.target.closest('.behavioral-card, .chart-card, .demo-insight-card, .location-section, .insight-card-v2, .media-reach-chart-card, .regional-breakdown, .interests-insights-row, .interests-heatmap-section, .interests-categories-section, .interests-list-section, .affinity-card');
             if (!targetCard || !draggedCard || targetCard === draggedCard) return;
             
             // Only handle reordering for behavioral cards (they have category order system)
@@ -28563,7 +28643,7 @@
             const parentClass = parent.className || '';
             
             if (parentId.includes('behavioral') || parentClass.includes('behavioral')) return 'behavioral';
-            if (parentId.includes('demographic') || parentClass.includes('demo')) return 'demographic';
+            if (parentId === 'demographicsModulesGrid' || parentId.includes('demographic') || parentClass.includes('demographics-modules') || parentClass.includes('demo')) return 'demographic';
             if (parentId.includes('location') || parentClass.includes('location')) return 'location';
             if (parentId.includes('insight') || parentClass.includes('insight')) return 'insight';
             if (parentId.includes('media') || parentClass.includes('media')) return 'media';
