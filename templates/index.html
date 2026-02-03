@@ -31524,7 +31524,7 @@
             
             tbody.innerHTML = rows.map(r => {
                 const titleLink = r.url ? '<a href="' + r.url + '" target="_blank" style="color: var(--accent-cyan);">Watch on Netflix</a>' : 'N/A';
-                const titleDisplay = r.title_id ? 'Title ID: ' + r.title_id : r.url;
+                const titleDisplay = r.show_name || r.title_id || r.url;
                 return '<tr>' +
                     '<td style="font-weight: 600; color: var(--accent-cyan);">#' + r.rank + '</td>' +
                     '<td>' + titleDisplay + '</td>' +

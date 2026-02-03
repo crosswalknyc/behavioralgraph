@@ -4720,11 +4720,12 @@ def get_netflix_live_top10():
         response = s3.get_object(Bucket=NETFLIX_LIVE_TOP10_BUCKET, Key='data_netflix.csv')
         csv_content = response['Body'].read().decode('utf-8')
         
-        # Parse CSV and count URLs
+        # Parse CSV and count URLs, track show names
         import csv
         from io import StringIO
         reader = csv.DictReader(StringIO(csv_content))
         url_counts = Counter()
+        url_to_show_name = {}  # Map URL to NAME_OF_SHOW
         total_rows = 0
         delivered_date = None
         
@@ -4733,6 +4734,11 @@ def get_netflix_live_top10():
             url = row.get('url', '').strip()
             if url:
                 url_counts[url] += 1
+                # Store the show name for this URL (first one wins)
+                if url not in url_to_show_name:
+                    show_name = row.get('NAME_OF_SHOW', '') or row.get('name_of_show', '') or row.get('Show', '') or row.get('show', '')
+                    if show_name:
+                        url_to_show_name[url] = show_name.strip()
             if not delivered_date and row.get('delivered'):
                 delivered_date = row.get('delivered')
         
@@ -4746,6 +4752,9 @@ def get_netflix_live_top10():
             if match:
                 title_id = match.group(1)
             
+            # Get show name for this URL
+            show_name = url_to_show_name.get(url, '')
+            
             # Project views: count / 10M * 329.9M US pop (no 150x boost for live data)
             projected_views = int(count / 10_000_000 * 329_900_000) if count else 0
             
@@ -4753,6 +4762,7 @@ def get_netflix_live_top10():
                 'rank': rank,
                 'url': url,
                 'title_id': title_id,
+                'show_name': show_name,
                 'raw_count': count,
                 'projected_views': projected_views,
                 'pct_of_total': round(count / total_rows * 100, 2) if total_rows else 0
