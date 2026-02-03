@@ -3918,7 +3918,7 @@
         .behavioral-card {
             background: var(--bg-card);
             border-radius: 8px;
-            padding: 1rem;
+            padding: 1rem 0.5rem;
             height: 580px;
             display: flex;
             flex-direction: column;
@@ -4103,10 +4103,10 @@
         /* Behavioral table: single grid with subgrid so header and data columns share exact same widths */
         .behavioral-table {
             display: grid;
-            grid-template-columns: 28px minmax(0, 1fr) 80px 80px 60px;
-            gap: 0.5rem;
+            grid-template-columns: 24px minmax(0, 1fr) 72px 72px 62px;
+            gap: 0.4rem;
             align-items: center;
-            padding-right: 0.5rem;
+            padding: 0 0.15rem 0 0;
             overflow-y: auto;
             max-height: 500px;
             scrollbar-gutter: stable;
@@ -4142,8 +4142,8 @@
         .behavioral-table .behavioral-header-row span.index-col {
             text-align: right !important;
             justify-self: end;
-            padding-left: 0.25rem;
-            padding-right: 0;
+            padding-left: 0.2rem;
+            padding-right: 0.1rem;
         }
         .behavioral-table .behavioral-list {
             display: contents;
@@ -4173,8 +4173,8 @@
         .behavioral-table .behavioral-item .behavioral-index {
             text-align: right !important;
             justify-self: end;
-            padding-left: 0.25rem;
-            padding-right: 0;
+            padding-left: 0.2rem;
+            padding-right: 0.1rem;
             align-self: center;
         }
 
@@ -11858,7 +11858,7 @@
                             <button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('interests', 'Category Heatmap')" data-tooltip="Add to Deck: Save the interest category heatmap to your presentation deck.">➕</button>
                         </span>
                     </h3>
-                    <p class="interests-heatmap-instruction" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Click a segment to see the top 5 categories in that index range.</p>
+                    <p class="interests-heatmap-instruction" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Click a segment to see all interests in that index range (divided into 5 equal-sized quintiles).</p>
                     <div class="interests-heatmap-bar-wrap" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
                         <span style="font-size: 0.7rem; color: var(--text-secondary); flex-shrink: 0;">Under-index</span>
                         <div id="interestsHeatmapBar" class="interests-heatmap-bar" role="slider" aria-label="Index range quintiles" tabindex="0" style="display: flex; height: 28px; flex: 1; max-width: 280px; border-radius: 6px; overflow: hidden; cursor: pointer; box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);">
@@ -11867,7 +11867,7 @@
                         <span style="font-size: 0.7rem; color: var(--text-secondary); flex-shrink: 0;">Over-index</span>
                     </div>
                     <div id="interestsHeatmapResults" class="interests-heatmap-results" style="min-height: 2rem;">
-                        <div class="interests-heatmap-placeholder" style="padding: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.8rem;">Select a segment above to view top 5 categories.</div>
+                        <div class="interests-heatmap-placeholder" style="padding: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.8rem;">Select a segment above to view all interests in that quintile.</div>
                     </div>
                     <div class="interests-heatmap-grid" id="interestsHeatmapGrid" style="display: none;">
                         <!-- Legacy grid hidden; quintile results shown in interestsHeatmapResults -->
@@ -27307,32 +27307,8 @@
             const resultsEl = document.getElementById('interestsHeatmapResults');
             const placeholderEl = resultsEl ? resultsEl.querySelector('.interests-heatmap-placeholder') : null;
             items = (items || []).filter(item => Number(item.index) !== 0);
-            // Group by category
-            const categories = {};
-            items.forEach(item => {
-                if (!categories[item.category]) {
-                    categories[item.category] = { items: [], totalIndex: 0, count: 0 };
-                }
-                categories[item.category].items.push(item);
-                categories[item.category].totalIndex += item.index;
-                categories[item.category].count++;
-            });
-            
-            const categoryData = Object.entries(categories)
-                .map(([name, data]) => {
-                    const sortedItems = data.items.sort((a, b) => b.index - a.index);
-                    return {
-                        name,
-                        avgIndex: Math.round(data.totalIndex / data.count),
-                        count: data.count,
-                        items: sortedItems,
-                        topItem: sortedItems[0],
-                        top3: sortedItems.slice(0, 3)
-                    };
-                });
-            
-            // Sort by avgIndex ascending and split into 5 quintiles
-            const sortedByIndex = [...categoryData].sort((a, b) => a.avgIndex - b.avgIndex);
+            // Sort all interest values by index ascending and split into 5 equal-sized quintiles
+            const sortedByIndex = [...items].sort((a, b) => a.index - b.index);
             const n = sortedByIndex.length;
             const size = Math.ceil(n / 5) || 1;
             interestsHeatmapQuintiles = [];
@@ -27346,7 +27322,7 @@
             const segmentColors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'];
             if (barEl) {
                 barEl.innerHTML = interestsHeatmapQuintiles.map((_, i) =>
-                    `<div class="quintile-segment" data-quintile="${i}" style="background: ${segmentColors[i]};" title="Quintile ${i + 1}: click to see top 5 categories"></div>`
+                    `<div class="quintile-segment" data-quintile="${i}" style="background: ${segmentColors[i]};" title="Quintile ${i + 1}: click to see all interests in this index range"></div>`
                 ).join('');
                 barEl.querySelectorAll('.quintile-segment').forEach(seg => {
                     seg.addEventListener('click', function () {
@@ -27372,8 +27348,8 @@
             const quintile = interestsHeatmapQuintiles[quintileIndex];
             if (!quintile || quintile.length === 0) return;
             
-            // Top 5 in this range (by avgIndex descending)
-            const top5 = [...quintile].sort((a, b) => b.avgIndex - a.avgIndex).slice(0, 5);
+            // Show all items in this quintile, sorted by index descending within the quintile
+            const sortedItems = [...quintile].sort((a, b) => b.index - a.index);
             
             // Highlight selected segment
             if (barEl) {
@@ -27386,31 +27362,30 @@
             const borderColor = segmentColors[quintileIndex];
             const isProjection = dashDisplayMode === 'projection';
             const US_POP = 324700000;
-            function buildHeatmapCategoryTooltip(c) {
-                const lines = [c.name + ' · Avg ' + formatIndex(c.avgIndex) + ' · ' + (c.count || 0) + ' items'];
-                (c.items || []).forEach(item => {
-                    let genPopPct = item.genPopPct || 0;
-                    if (genPopPct > 0 && genPopPct < 1) genPopPct = genPopPct * 100;
-                    const profileDisplay = isProjection
-                        ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || (item.pct / 100) * US_POP)))
-                        : formatValueOrNA(item.pct, true);
-                    const genPopDisplay = isProjection
-                        ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
-                        : formatValueOrNA(genPopPct, true);
-                    const label = isProjection ? 'US# (GP#)' : 'Profile (GP)';
-                    lines.push('  • ' + item.name + ': ' + profileDisplay + ' (' + genPopDisplay + ') · ' + formatIndex(item.index) + ' index');
-                });
-                return lines.join('\n').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            function buildItemTooltip(item) {
+                let genPopPct = item.genPopPct || 0;
+                if (genPopPct > 0 && genPopPct < 1) genPopPct = genPopPct * 100;
+                const profileDisplay = isProjection
+                    ? (item.projection === 0 || item.projection === null ? 'N/A' : formatNumber(Math.round(item.projection || (item.pct / 100) * US_POP)))
+                    : formatValueOrNA(item.pct, true);
+                const genPopDisplay = isProjection
+                    ? (genPopPct === 0 || genPopPct === null ? 'N/A' : formatNumber(Math.round((genPopPct / 100) * US_POP)))
+                    : formatValueOrNA(genPopPct, true);
+                return (item.name || '') + ' · ' + profileDisplay + ' (' + genPopDisplay + ') · ' + formatIndex(item.index) + ' index';
             }
-            resultsEl.innerHTML = top5.map(cat => {
-                const safeName = (cat.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                const safeNameJs = (cat.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                const tooltipSafe = buildHeatmapCategoryTooltip(cat);
-                return `<div class="quintile-result-card has-tooltip" style="border-left: 3px solid ${borderColor};" data-tooltip="${tooltipSafe}" onclick="filterInterestsByCategory('${safeNameJs}')">
+            const headerHtml = '<div class="quintile-result-header" style="margin-bottom: 0.5rem; font-size: 0.75rem; color: var(--text-secondary);">' + sortedItems.length + ' interests in this index range</div>';
+            const listHtml = sortedItems.map(item => {
+                const safeName = (item.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                const safeNameJs = (item.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                const safeCategory = (item.category || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                const tooltipSafe = buildItemTooltip(item).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const idxColor = item.index >= 100 ? '#10b981' : '#ef4444';
+                return `<div class="quintile-result-card has-tooltip" style="border-left: 3px solid ${borderColor};" data-tooltip="${tooltipSafe}" onclick="filterInterestsByCategory('${safeCategory}')">
                     <span class="result-name">${safeName}</span>
-                    <span class="result-stats">${formatIndex(cat.avgIndex)} · ${cat.count} items</span>
+                    <span class="result-stats" style="color: ${idxColor}; font-weight: 600;">${formatIndex(item.index)}</span>
                 </div>`;
             }).join('');
+            resultsEl.innerHTML = headerHtml + '<div class="quintile-result-list" style="max-height: 320px; overflow-y: auto;">' + listHtml + '</div>';
         }
         
         function getHeatmapColor(index) {
