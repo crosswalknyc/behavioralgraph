@@ -3854,8 +3854,42 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
     Includes by_date (series), by_date_season (show+season, type=Show only), by_date_episode (show+season+episode)."""
     try:
         import bg
-        conn = bg.connect_snowflake()
+        import snowflake.connector
+        from config import SNOWFLAKE_CONFIG
+        import os
+        
+        # Connect with explicit timeouts to prevent hanging
+        user = os.environ.get('SNOWFLAKE_USER') or SNOWFLAKE_CONFIG.get('user', '')
+        password = os.environ.get('SNOWFLAKE_PASSWORD') or SNOWFLAKE_CONFIG.get('password', '')
+        account = os.environ.get('SNOWFLAKE_ACCOUNT') or SNOWFLAKE_CONFIG.get('account', '')
+        warehouse = os.environ.get('SNOWFLAKE_WAREHOUSE') or SNOWFLAKE_CONFIG.get('warehouse', 'BEHAVIORGRAPH6X')
+        database = os.environ.get('SNOWFLAKE_DATABASE') or SNOWFLAKE_CONFIG.get('database', 'BEHAVIORALGRAPH')
+        schema = os.environ.get('SNOWFLAKE_SCHEMA') or SNOWFLAKE_CONFIG.get('schema', 'PUBLIC')
+        role = os.environ.get('SNOWFLAKE_ROLE') or SNOWFLAKE_CONFIG.get('role', 'ACCOUNTADMIN')
+        token = os.environ.get('SNOWFLAKE_TOKEN') or SNOWFLAKE_CONFIG.get('token', '')
+        
+        conn_params = {
+            'user': user,
+            'account': account,
+            'warehouse': warehouse,
+            'database': database,
+            'schema': schema,
+            'role': role,
+            'insecure_mode': True,
+            'ocsp_fail_open': True,
+            'login_timeout': 60,  # 60 second login timeout
+            'network_timeout': 180,  # 3 minute network timeout
+        }
+        
+        if token:
+            conn_params['token'] = token
+        else:
+            conn_params['password'] = password
+        
+        conn = snowflake.connector.connect(**conn_params)
         cur = conn.cursor()
+        # Set query timeout to 4 minutes
+        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 240")
     except Exception as e:
         raise RuntimeError(f'Snowflake connection failed: {e}')
     try:
@@ -3954,6 +3988,7 @@ def get_netflix_ranker_data():
     Cached on disk; first request after cache expiry refreshes only the most recent day and merges.
     Pass force_refresh=1 to bypass cache and fetch full data from Snowflake.
     """
+    print(f"[Netflix Ranker] Request received: force_refresh={request.args.get('force_refresh')}")
     try:
         global NETFLIX_RANKER_CACHE
         refresh_today = request.args.get('refresh_today', '').lower() in ('1', 'true', 'yes')
@@ -4017,10 +4052,12 @@ def get_netflix_ranker_data():
                     NETFLIX_RANKER_CACHE['loaded_at'] = datetime.now().timestamp()
                     _save_netflix_ranker_cache(data)
                 except Exception as e:
+                    print(f"[Netflix Ranker] Snowflake fetch failed: {e}")
                     if data is None:
                         # Fall back to cache file if Snowflake failed (avoids empty response)
                         fallback = _load_netflix_ranker_cache()
                         if fallback and (fallback.get('by_date') or fallback.get('date_range')):
+                            print(f"[Netflix Ranker] Using stale cache fallback")
                             out = dict(fallback)
                             out['_stale_fallback'] = True
                             out['_fetch_error'] = str(e)
@@ -4029,8 +4066,10 @@ def get_netflix_ranker_data():
             elif age_hours >= NETFLIX_RANKER_CACHE_MAX_AGE_HOURS and request.args.get('refresh_today') != '1':
                 pass
         payload = data or {}
+        print(f"[Netflix Ranker] Returning payload with {len(payload.get('by_date', {}))} dates")
         return jsonify(payload)
     except Exception as e:
+        print(f"[Netflix Ranker] Unexpected error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
