@@ -4097,81 +4097,84 @@
 
         .behavioral-list {
             flex: 1;
-            overflow-y: auto;
-            max-height: 500px;
             min-height: 0;
-            padding-right: 0.5rem;
-            scrollbar-gutter: stable;
         }
 
-        /* Behavioral table: same grid for header and rows; numeric columns right-aligned */
-        .behavioral-header-row {
-            display: grid !important;
-            grid-template-columns: 28px minmax(0, 1fr) 72px 72px 56px;
+        /* Behavioral table: single grid with subgrid so header and data columns share exact same widths */
+        .behavioral-table {
+            display: grid;
+            grid-template-columns: 28px minmax(0, 1fr) 80px 80px 60px;
             gap: 0.5rem;
             align-items: center;
-            padding: 0.5rem 0.5rem 0.5rem 0;
+            padding-right: 0.5rem;
+            overflow-y: auto;
+            max-height: 500px;
+            scrollbar-gutter: stable;
+        }
+        .behavioral-table .behavioral-header-row {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: subgrid;
+            align-items: center;
+            padding: 0.5rem 0 0.5rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: var(--bg-card);
             margin-bottom: 0;
-            border-bottom: 2px solid var(--border-color);
             font-size: 0.7rem;
             color: var(--accent-cyan);
             text-transform: uppercase;
             letter-spacing: 0.5px;
             font-weight: 600;
             background: rgba(102, 217, 239, 0.05);
+            box-shadow: 0 2px 0 var(--border-color);
         }
-        .behavioral-header-row span {
+        .behavioral-table .behavioral-header-row span {
             text-align: left !important;
             justify-self: start;
             align-self: center;
             min-width: 0;
             box-sizing: border-box;
         }
-        .behavioral-header-row span.profile-col,
-        .behavioral-header-row span.genpop-col,
-        .behavioral-header-row span.index-col {
+        .behavioral-table .behavioral-header-row span.profile-col,
+        .behavioral-table .behavioral-header-row span.genpop-col,
+        .behavioral-table .behavioral-header-row span.index-col {
             text-align: right !important;
             justify-self: end;
-            width: 100%;
-            display: block;
             padding-left: 0.25rem;
-            padding-right: 0.5rem;
+            padding-right: 0;
         }
-        .behavioral-item .behavioral-pct,
-        .behavioral-item .behavioral-index {
-            text-align: right !important;
-            justify-self: end;
-            width: 100%;
-            display: block;
-            padding-left: 0.25rem;
-            padding-right: 0.5rem;
+        .behavioral-table .behavioral-list {
+            display: contents;
         }
-        .behavioral-list {
-            padding-right: 0.5rem;
-        }
-        .behavioral-item {
+        .behavioral-table .behavioral-item {
+            grid-column: 1 / -1;
             display: grid;
-            grid-template-columns: 28px minmax(0, 1fr) 72px 72px 56px;
-            gap: 0.5rem;
+            grid-template-columns: subgrid;
             align-items: start;
-            padding: 0.4rem 0.5rem 0.4rem 0;
+            padding: 0.4rem 0 0.4rem 0;
             border-bottom: 1px solid var(--border-color);
             position: relative;
             text-align: left;
             min-height: 2rem;
         }
-        .behavioral-item > * {
+        .behavioral-table .behavioral-item > * {
             min-width: 0;
             box-sizing: border-box;
         }
-        .behavioral-item .behavioral-rank,
-        .behavioral-item .behavioral-name-wrapper {
+        .behavioral-table .behavioral-item .behavioral-rank,
+        .behavioral-table .behavioral-item .behavioral-name-wrapper {
             justify-self: start;
             align-self: center;
             text-align: left !important;
         }
-        .behavioral-item .behavioral-pct,
-        .behavioral-item .behavioral-index {
+        .behavioral-table .behavioral-item .behavioral-pct,
+        .behavioral-table .behavioral-item .behavioral-index {
+            text-align: right !important;
+            justify-self: end;
+            padding-left: 0.25rem;
+            padding-right: 0;
             align-self: center;
         }
 
@@ -25303,11 +25306,13 @@
             const vw = typeof window !== 'undefined' ? (window.innerWidth || 1200) : 1200;
             const effectiveWidth = Math.max(chartContainerWidth, Math.floor(vw / 4));
             const legendFontSize = Math.max(8, Math.min(12, Math.floor(effectiveWidth / 28)));
+            const legendFontSizeCircular = Math.max(8, Math.min(11, legendFontSize)); // Slightly smaller so long labels (e.g. "TRANS FEMALE 2.38% (GP: 1.23%)") fit
             const axisFontSize = Math.max(10, Math.min(15, Math.floor(effectiveWidth / 22)));
             const dataLabelFontSize = Math.max(9, Math.min(13, axisFontSize));
-            // Reserve enough space for long legend labels (e.g. "PREFER NOT TO SAY 12.37% (GP: 3.xx%)") so text is never cut off
-            const legendPaddingRight = Math.min(480, Math.max(280, Math.floor(chartContainerWidth * 0.6)));
+            // Reserve enough space for long legend labels so text is never cut off; align legend to start of box
+            const legendPaddingRight = Math.min(580, Math.max(340, Math.floor(chartContainerWidth * 0.68)));
             const layoutPaddingCircular = { left: 16, right: legendPaddingRight, top: 12, bottom: 12 };
+            const legendOptionsCircular = { display: true, position: 'right', align: 'start', labels: { color: '#e6f1ff', font: { size: legendFontSizeCircular }, boxWidth: 10, padding: 6 } };
 
             // Age - horizontal bar with Gen Pop in data labels (green/red based on index)
             // Apply sorting based on user selection
@@ -25360,7 +25365,7 @@
                     maintainAspectRatio: false,
                     layout: { padding: ageIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                     plugins: { 
-                        legend: { display: ageIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: legendFontSize }, boxWidth: 10, padding: 5 } },
+                        legend: ageIsCircular ? { ...legendOptionsCircular, display: true, labels: { ...legendOptionsCircular.labels } } : { display: false },
                         datalabels: ageIsCircular ? { display: false } : {
                             anchor: 'end',
                             align: 'end',
@@ -25416,15 +25421,12 @@
                     maintainAspectRatio: false,
                     layout: { padding: genderIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                     plugins: { 
-                        legend: { 
-                            display: genderIsCircular,
-                            position: 'right', 
-                            labels: { 
-                                color: '#e6f1ff', 
-                                font: { size: legendFontSize },
-                                padding: 5,
-                                boxWidth: 10,
-                                generateLabels: genderIsCircular ? (chart) => {
+                        legend: genderIsCircular ? {
+                            ...legendOptionsCircular,
+                            display: true,
+                            labels: {
+                                ...legendOptionsCircular.labels,
+                                generateLabels: (chart) => {
                                     const data = chart.data;
                                     return data.labels.map((label, i) => {
                                         const pct = genderPcts[i] || 0;
@@ -25440,9 +25442,9 @@
                                             index: i
                                         };
                                     });
-                                } : undefined
-                            } 
-                        },
+                                }
+                            }
+                        } : { display: false },
                         datalabels: genderChartType === 'bar' ? {
                             anchor: 'end', align: 'end', font: { size: dataLabelFontSize, weight: 'bold' },
                             color: (ctx) => {
@@ -25530,15 +25532,12 @@
                     maintainAspectRatio: false,
                     layout: { padding: ethnicityIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                     plugins: { 
-                        legend: { 
-                            display: ethnicityIsCircular,
-                            position: 'right', 
-                            labels: { 
-                                color: '#e6f1ff', 
-                                font: { size: legendFontSize },
-                                padding: 5,
-                                boxWidth: 10,
-                                generateLabels: ethnicityIsCircular ? (chart) => {
+                        legend: ethnicityIsCircular ? {
+                            ...legendOptionsCircular,
+                            display: true,
+                            labels: {
+                                ...legendOptionsCircular.labels,
+                                generateLabels: (chart) => {
                                     const data = chart.data;
                                     return data.labels.map((label, i) => {
                                         const pct = ethPcts[i] || 0;
@@ -25554,9 +25553,9 @@
                                             index: i
                                         };
                                     });
-                                } : undefined
-                            } 
-                        },
+                                }
+                            }
+                        } : { display: false },
                         datalabels: ethnicityChartType === 'bar' ? {
                             anchor: 'end', align: 'end', font: { size: dataLabelFontSize, weight: 'bold' },
                             color: (ctx) => {
@@ -25670,7 +25669,7 @@
                     maintainAspectRatio: false,
                         layout: { padding: incomeIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
-                            legend: { display: incomeIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: legendFontSize }, boxWidth: 10, padding: 5 } },
+                            legend: incomeIsCircular ? { ...legendOptionsCircular, display: true, labels: { ...legendOptionsCircular.labels } } : { display: false },
                         datalabels: incomeIsCircular ? { display: false } : {
                             anchor: 'end',
                             align: 'right',
@@ -25750,7 +25749,7 @@
                         indexAxis: educationIsCircular ? 'x' : 'y', responsive: true, maintainAspectRatio: false,
                         layout: { padding: educationIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
-                            legend: { display: educationIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: legendFontSize }, boxWidth: 10, padding: 5 } }, 
+                            legend: educationIsCircular ? { ...legendOptionsCircular, display: true, labels: { ...legendOptionsCircular.labels } } : { display: false },
                             datalabels: educationIsCircular ? { display: false } : { 
                                 anchor: 'end', 
                                 align: 'end', 
@@ -25835,15 +25834,12 @@
                         maintainAspectRatio: false,
                         layout: { padding: relationshipIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
-                            legend: { 
-                                display: relationshipIsCircular,
-                                position: 'right', 
-                                labels: { 
-                                    color: '#e6f1ff', 
-                                    font: { size: legendFontSize },
-                                    padding: 5,
-                                    boxWidth: 10,
-                                    generateLabels: relationshipIsCircular ? (chart) => {
+                            legend: relationshipIsCircular ? {
+                                ...legendOptionsCircular,
+                                display: true,
+                                labels: {
+                                    ...legendOptionsCircular.labels,
+                                    generateLabels: (chart) => {
                                         const data = chart.data;
                                         return data.labels.map((label, i) => {
                                             const pct = relPcts[i] || 0;
@@ -25857,9 +25853,9 @@
                                             const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
-                                    } : undefined
-                                } 
-                            }, 
+                                    }
+                                }
+                            } : { display: false },
                             datalabels: relationshipChartType === 'bar' ? {
                                 anchor: 'end',
                                 align: 'end',
@@ -25950,15 +25946,12 @@
                         maintainAspectRatio: false,
                         layout: { padding: soIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
-                            legend: { 
-                                display: soIsCircular,
-                                position: 'right', 
-                                labels: { 
-                                    color: '#e6f1ff', 
-                                    font: { size: legendFontSize },
-                                    boxWidth: 10,
-                                    padding: 5,
-                                    generateLabels: soIsCircular ? (chart) => {
+                            legend: soIsCircular ? {
+                                ...legendOptionsCircular,
+                                display: true,
+                                labels: {
+                                    ...legendOptionsCircular.labels,
+                                    generateLabels: (chart) => {
                                         const data = chart.data;
                                         return data.labels.map((label, i) => {
                                             const pct = soPcts[i] || 0;
@@ -25972,9 +25965,9 @@
                                             const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
-                                    } : undefined
-                                } 
-                            }, 
+                                    }
+                                }
+                            } : { display: false },
                             datalabels: soChartType === 'bar' ? {
                                 anchor: 'end',
                                 align: 'end',
@@ -26061,15 +26054,12 @@
                         maintainAspectRatio: false,
                         layout: { padding: psIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
-                            legend: { 
-                                display: psIsCircular,
-                                position: 'right', 
-                                labels: { 
-                                    color: '#e6f1ff', 
-                                    font: { size: legendFontSize },
-                                    boxWidth: 10,
-                                    padding: 5,
-                                    generateLabels: psIsCircular ? (chart) => {
+                            legend: psIsCircular ? {
+                                ...legendOptionsCircular,
+                                display: true,
+                                labels: {
+                                    ...legendOptionsCircular.labels,
+                                    generateLabels: (chart) => {
                                         const data = chart.data;
                                         return data.labels.map((label, i) => {
                                             const pct = psPcts[i] || 0;
@@ -26083,9 +26073,9 @@
                                             const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
-                                    } : undefined
-                                } 
-                            }, 
+                                    }
+                                }
+                            } : { display: false },
                             datalabels: psChartType === 'bar' ? {
                                 anchor: 'end',
                                 align: 'end',
@@ -26185,15 +26175,12 @@
                         maintainAspectRatio: false,
                         layout: { padding: occIsCircular ? { ...layoutPaddingCircular, top: 15, bottom: 15 } : { right: 50, top: 15, bottom: 15, left: 10 } },
                         plugins: { 
-                            legend: { 
-                                display: occIsCircular,
-                                position: 'right', 
-                                labels: { 
-                                    color: '#e6f1ff', 
-                                    font: { size: legendFontSize },
-                                    boxWidth: 10,
-                                    padding: 5,
-                                    generateLabels: occIsCircular ? (chart) => {
+                            legend: occIsCircular ? {
+                                ...legendOptionsCircular,
+                                display: true,
+                                labels: {
+                                    ...legendOptionsCircular.labels,
+                                    generateLabels: (chart) => {
                                         const data = chart.data;
                                         return data.labels.map((label, i) => {
                                             const pct = occPcts[i] || 0;
@@ -26202,9 +26189,9 @@
                                             const indexColor = isGenPop ? '#e6f1ff' : ((genPop > 0 && pct >= genPop) ? '#10b981' : (genPop > 0 ? '#ef4444' : '#e6f1ff'));
                                             return { text: `${label} ${valStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
-                                    } : undefined
-                                } 
-                            }, 
+                                    }
+                                }
+                            } : { display: false },
                             datalabels: occChartType === 'bar' ? {
                                 anchor: 'end',
                                 align: 'end',
@@ -27897,6 +27884,14 @@
             // Populate the dropdown
             populateCategoryDropdown(sortedCats);
 
+            // When Amazon Prime Video is selected, put green box around streaming platforms (not WHERE THEY SHOP)
+            const isAmazonPrimeVideo = currentProfileData && (currentProfileData.name || '').toUpperCase().includes('AMAZON PRIME VIDEO');
+            if (isAmazonPrimeVideo && !highlightCategory) {
+                const streamingCats = ['STREAMING VIDEO', 'STREAMING/VIDEO', 'STREAMING/PLATFORM', 'APPS/PLATFORMS', 'APP/PLATFORM', 'APP/PLATFORM USAGE'];
+                highlightCategory = streamingCats.find(c => sortedCats.includes(c)) || null;
+            }
+            const highlightIsForAmazonPrime = isAmazonPrimeVideo && !!highlightCategory;
+
             // Categories that need tooltip
             const tooltipCategories = {
                 'MOST PURCHASED BRANDS': 'Confirmed brands purchased by the panelists as verified by transaction confirmations.',
@@ -28100,7 +28095,7 @@
                 const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
                 const displayItems = itemLimit === 'All' || itemLimit >= sortedItems.length ? sortedItems : sortedItems.slice(0, itemLimit);
                 const maxPct = Math.max(...sortedItems.map(i => i.pct), 1); // Calculate max from all items
-                const has100Pct = items.some(i => (i.pct || 0) >= 99.5);
+                const has100Pct = items.some(i => (i.pct || 0) >= 99.5) && !(isAmazonPrimeVideo && cat === 'WHERE THEY SHOP');
                 const isHighlighted = cat === highlightCategory;
                 const positionBadge = idx === 0 ? '<span style="background: var(--accent-lime); color: #000; padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.55rem;">1ST</span>' : '';
                 const tooltip = tooltipCategories[cat.toUpperCase()] || '';
@@ -28455,15 +28450,17 @@
                             </select>
                             <input type="text" placeholder="Search..." oninput="searchInCard('${catId}', this.value)" style="flex: 2; min-width: 60px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
                         </div>
-                        <div class="behavioral-header-row">
-                            <span>#</span>
-                            <span>Item</span>
-                            <span class="profile-col">${dashDisplayMode === 'projection' ? 'US #' : 'Profile'}</span>
-                            <span class="genpop-col">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
-                            <span class="index-col">Index</span>
-                        </div>
-                        <div class="behavioral-list" id="list-${catId}" data-cat="${cat}">
-                            ${renderBehavioralItems(displayItems, maxPct, 'pct')}
+                        <div class="behavioral-table">
+                            <div class="behavioral-header-row">
+                                <span>#</span>
+                                <span>Item</span>
+                                <span class="profile-col">${dashDisplayMode === 'projection' ? 'US #' : 'Profile'}</span>
+                                <span class="genpop-col">${dashDisplayMode === 'projection' ? 'GP #' : 'Gen Pop'}</span>
+                                <span class="index-col">Index</span>
+                            </div>
+                            <div class="behavioral-list" id="list-${catId}" data-cat="${cat}">
+                                ${renderBehavioralItems(displayItems, maxPct, 'pct')}
+                            </div>
                         </div>
                     </div>
                 `;
@@ -28472,8 +28469,8 @@
             // Re-attach touch event listeners for mobile
             attachTouchDragListeners();
             
-            // Remove highlight after animation
-            if (highlightCategory) {
+            // Remove highlight after animation (keep highlight when it's for Amazon Prime Video / streaming platforms)
+            if (highlightCategory && !highlightIsForAmazonPrime) {
                 setTimeout(() => {
                     document.querySelectorAll('.behavioral-card.highlighted').forEach(el => el.classList.remove('highlighted'));
                 }, 2000);
