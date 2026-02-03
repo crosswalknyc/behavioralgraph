@@ -12201,6 +12201,8 @@
                     <div class="rankers-platform-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
                         <button class="tab-btn active" onclick="showRankerPlatform('netflix')" id="rankerPlatformNetflix"><span class="tab-icon">📺</span> Netflix</button>
                         <button class="tab-btn" onclick="showRankerPlatform('reelshort')" id="rankerPlatformReelshort"><span class="tab-icon">📱</span> ReelShort</button>
+                        <button class="tab-btn" onclick="showRankerPlatform('shortstv')" id="rankerPlatformShortstv"><span class="tab-icon">📱</span> ShortsTV</button>
+                        <button class="tab-btn" onclick="showRankerPlatform('goodshort')" id="rankerPlatformGoodshort"><span class="tab-icon">📱</span> GoodShort</button>
                     </div>
                     <div id="rankerPlatformContent" class="ranker-platform-content">
                         <!-- Netflix sub-view -->
@@ -12330,6 +12332,28 @@
                             <div id="reelshortError" style="padding: 1rem; color: var(--error-color); display: none;"></div>
                         </div>
                         
+                        <!-- ShortsTV ranker panel -->
+                        <div id="ranker-shortstv" class="ranker-platform-panel">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                                <h3 style="margin: 0;">📱 ShortsTV</h3>
+                                <button class="btn btn-primary" onclick="loadShortstvRankerData()" id="shortstvRefreshBtn">🔄 Refresh</button>
+                            </div>
+                            <div id="shortstvInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
+                            <div id="shortstvLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading ShortsTV data...</div>
+                            <div id="shortstvError" style="padding: 1rem; color: var(--error-color); display: none;"></div>
+                        </div>
+                        
+                        <!-- GoodShort ranker panel -->
+                        <div id="ranker-goodshort" class="ranker-platform-panel">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                                <h3 style="margin: 0;">📱 GoodShort</h3>
+                                <button class="btn btn-primary" onclick="loadGoodshortRankerData()" id="goodshortRefreshBtn">🔄 Refresh</button>
+                            </div>
+                            <div id="goodshortInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
+                            <div id="goodshortLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading GoodShort data...</div>
+                            <div id="goodshortError" style="padding: 1rem; color: var(--error-color); display: none;"></div>
+                        </div>
+                        
                     </div>
                     <div id="rankersLoadBlock" style="padding: 2rem; text-align: center; background: var(--bg-card); border-radius: 8px; margin-top: 1rem;">
                         <div id="rankersLoadProgress" style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem;">
@@ -12343,6 +12367,8 @@
                             <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
                                 <button class="btn btn-primary" onclick="loadNetflixRankerData(true)" id="rankersLoadBtnNetflix">📺 Refresh Netflix</button>
                                 <button class="btn btn-primary" onclick="loadReelShortRankerData()">📱 Refresh ReelShort</button>
+                                <button class="btn btn-primary" onclick="loadShortstvRankerData()">📱 Refresh ShortsTV</button>
+                                <button class="btn btn-primary" onclick="loadGoodshortRankerData()">📱 Refresh GoodShort</button>
                             </div>
                         </div>
                     </div>
@@ -13939,6 +13965,7 @@
                             </select>
                             <button class="btn btn-primary btn-small" onclick="createNewWorkspaceDeck()" style="white-space: nowrap; padding: 0.4rem 0.65rem; font-size: 0.75rem;">+ NEW DECK</button>
                             <div id="deckActionButtons" style="display: none; align-items: center; gap: 0.35rem; margin-left: 0.25rem;">
+                                <button type="button" id="deckSaveBtn" class="btn btn-small" onclick="saveAllDecksToServer()" title="Save decks (also auto-saves periodically)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); color: var(--text-primary);">💾 Save</button>
                                 <button class="btn btn-small btn-success" onclick="shareDeckWithTeam()" style="padding: 0.35rem 0.5rem; font-size: 0.7rem;">👥 SHARE</button>
                                 <div class="export-dropdown" style="position: relative;">
                                     <button class="btn btn-small btn-primary" onclick="toggleDeckExportMenu(event)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem;">EXPORT ▾</button>
