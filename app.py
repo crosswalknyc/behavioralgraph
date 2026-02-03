@@ -3772,6 +3772,62 @@ NETFLIX_RANKER_CACHE = {}
 NETFLIX_RANKER_LOCK = threading.Lock()
 NETFLIX_RANKER_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'netflix_ranker_cache.json')
 NETFLIX_RANKER_CACHE_MAX_AGE_HOURS = 24  # refresh today's data if cache older than this
+NETFLIX_RANKER_S3_PREFIX = 'rankers_cache/netflix/'
+NETFLIX_RANKER_S3_INDEX_KEY = 'rankers_cache/netflix/index.json'
+
+
+def _netflix_ranker_s3_list_cached_dates():
+    """Return sorted list of date strings (YYYY-MM-DD) that are cached in S3."""
+    if not s3_client:
+        return []
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=NETFLIX_RANKER_S3_INDEX_KEY)
+        data = json.loads(response['Body'].read().decode('utf-8'))
+        dates = data.get('dates', [])
+        return sorted(dates) if isinstance(dates, list) else []
+    except (ClientError, Exception):
+        return []
+
+
+def _netflix_ranker_s3_load_day(date_str):
+    """Load a single day's ranker payload from S3. Returns None if missing or error."""
+    if not s3_client:
+        return None
+    key = f"{NETFLIX_RANKER_S3_PREFIX}{date_str}.json"
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except (ClientError, Exception):
+        return None
+
+
+def _netflix_ranker_s3_save_day(date_str, day_payload):
+    """Save a single day's ranker payload to S3. Returns True on success."""
+    if not s3_client:
+        return False
+    key = f"{NETFLIX_RANKER_S3_PREFIX}{date_str}.json"
+    try:
+        body = json.dumps(day_payload, indent=0).encode('utf-8')
+        s3_client.put_object(Bucket=S3_BUCKET, Key=key, Body=body, ContentType='application/json')
+        return True
+    except Exception as e:
+        print(f"[Netflix Ranker S3] Save day {date_str} failed: {e}")
+        return False
+
+
+def _netflix_ranker_s3_update_index(cached_dates):
+    """Write the cache index (list of cached date strings) to S3."""
+    if not s3_client:
+        return False
+    try:
+        data = {'dates': sorted(cached_dates), 'updated_at': datetime.utcnow().isoformat() + 'Z'}
+        body = json.dumps(data, indent=2).encode('utf-8')
+        s3_client.put_object(Bucket=S3_BUCKET, Key=NETFLIX_RANKER_S3_INDEX_KEY, Body=body, ContentType='application/json')
+        return True
+    except Exception as e:
+        print(f"[Netflix Ranker S3] Update index failed: {e}")
+        return False
+
 
 def _build_netflix_ranker_payload(rows):
     """Build API payload from raw rows: (visit_date, name_of_show, genre, type, views). Excludes any row where genre contains 'Indian'."""
@@ -3981,6 +4037,123 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
         except Exception:
             pass
 
+
+def _fetch_netflix_ranker_for_single_date(visit_date_str):
+    """Fetch Netflix ranker data for one day from Snowflake. Returns payload with single date in all by_* dicts."""
+    try:
+        import bg
+        conn = bg.connect_snowflake()
+        cur = conn.cursor()
+    except Exception as e:
+        raise RuntimeError(f'Snowflake connection failed: {e}')
+    try:
+        # Single-day filter: DATE(VISIT_TS) = %s
+        sql = """
+            SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views
+            FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+            WHERE DATE(VISIT_TS) = %s
+              AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+            GROUP BY 1, 2, 3, 4
+            ORDER BY 1, 3 DESC
+        """
+        cur.execute(sql, (visit_date_str,))
+        rows = cur.fetchall()
+        payload = _build_netflix_ranker_payload(rows)
+
+        sql_seasons = """
+            SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, COUNT(*) AS views
+            FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+            WHERE DATE(VISIT_TS) = %s
+              AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+              AND UPPER(TRIM(TYPE)) = 'SHOW'
+              AND SEASON IS NOT NULL AND TRIM(SEASON) != ''
+              AND UPPER(TRIM(SEASON)) != UPPER(TRIM(NAME_OF_SHOW))
+              AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%%indian%%')
+            GROUP BY 1, 2, 3
+            ORDER BY 1, 3 DESC
+        """
+        try:
+            cur.execute(sql_seasons, (visit_date_str,))
+            payload['by_date_season'] = _build_netflix_seasons_payload(cur.fetchall())
+        except Exception:
+            payload['by_date_season'] = {}
+
+        sql_episodes = """
+            SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE_NAME, COUNT(*) AS views
+            FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+            WHERE DATE(VISIT_TS) = %s
+              AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+              AND EPISODE_NAME IS NOT NULL AND TRIM(EPISODE_NAME) != ''
+              AND UPPER(TRIM(EPISODE_NAME)) != UPPER(TRIM(NAME_OF_SHOW))
+              AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%%indian%%')
+            GROUP BY 1, 2, 3, 4
+            ORDER BY 1, 4 DESC
+        """
+        try:
+            cur.execute(sql_episodes, (visit_date_str,))
+            payload['by_date_episode'] = _build_netflix_episodes_payload(cur.fetchall())
+        except Exception:
+            payload['by_date_episode'] = {}
+
+        sql_all = """
+            SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views
+            FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+            WHERE DATE(VISIT_TS) = %s
+              AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+              AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%%indian%%')
+            GROUP BY 1, 2, 3, 4, 5
+            ORDER BY 1, 6 DESC
+        """
+        try:
+            cur.execute(sql_all, (visit_date_str,))
+            payload['by_date_all'] = _build_netflix_all_payload(cur.fetchall())
+        except Exception:
+            payload['by_date_all'] = {}
+
+        conn.close()
+        return payload
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _merge_netflix_ranker_day_into(base, day_payload):
+    """Merge a single-day payload into the aggregated base payload (mutates base)."""
+    for dt, rows in (day_payload.get('by_date') or {}).items():
+        base.setdefault('by_date', {}).setdefault(dt, []).extend(rows)
+    for dt, rows in (day_payload.get('by_date_season') or {}).items():
+        base.setdefault('by_date_season', {}).setdefault(dt, []).extend(rows)
+    for dt, rows in (day_payload.get('by_date_episode') or {}).items():
+        base.setdefault('by_date_episode', {}).setdefault(dt, []).extend(rows)
+    for dt, rows in (day_payload.get('by_date_all') or {}).items():
+        base.setdefault('by_date_all', {}).setdefault(dt, []).extend(rows)
+    base.setdefault('daily', []).extend(day_payload.get('daily') or [])
+    for dt, rows in (day_payload.get('genres_by_date') or {}).items():
+        base.setdefault('genres_by_date', {}).setdefault(dt, []).extend(rows)
+    by_show = base.setdefault('by_show', {})
+    for show_name, pts in (day_payload.get('by_show') or {}).items():
+        by_show.setdefault(show_name, []).extend(pts)
+
+
+def _finalize_netflix_ranker_payload(base):
+    """Set dates_sorted, date_range, and top_shows_over_time on merged base payload."""
+    dates_sorted = sorted(base.get('by_date', {}).keys())
+    base['dates_sorted'] = dates_sorted
+    base['date_range'] = {'min': dates_sorted[0], 'max': dates_sorted[-1]} if dates_sorted else {}
+    by_show = base.get('by_show', {})
+    show_totals = [(name, sum(p['views'] for p in pts)) for name, pts in by_show.items()]
+    show_totals.sort(key=lambda x: -x[1])
+    top_20_names = [s[0] for s in show_totals[:20]]
+    top_shows_over_time = []
+    for name in top_20_names:
+        pts = by_show[name]
+        by_date_show = {p['date']: p['views'] for p in pts}
+        top_shows_over_time.append({'show_name': name, 'by_date': by_date_show})
+    base['top_shows_over_time'] = top_shows_over_time
+
+
 def _load_netflix_ranker_cache():
     """Load cache from file if present."""
     global NETFLIX_RANKER_CACHE
@@ -4007,92 +4180,156 @@ def _save_netflix_ranker_cache(data):
 def get_netflix_ranker_data():
     """
     Return Netflix ranker data (day-by-day views by show) from BEHAVIORALGRAPH.PUBLIC.NETFLIX.
-    Cached on disk; first request after cache expiry refreshes only the most recent day and merges.
-    Pass force_refresh=1 to bypass cache and fetch full data from Snowflake.
+    Uses S3 per-day cache when available; fetches only missing days (e.g. today) from Snowflake.
+    Pass force_refresh=1 to rebuild from S3 cache (and fetch today if not cached).
     """
     print(f"[Netflix Ranker] Request received: force_refresh={request.args.get('force_refresh')}")
     try:
         global NETFLIX_RANKER_CACHE
-        refresh_today = request.args.get('refresh_today', '').lower() in ('1', 'true', 'yes')
         force_refresh = request.args.get('force_refresh', '').lower() in ('1', 'true', 'yes')
-        data = None
+        today_str = datetime.now().strftime('%Y-%m-%d')
+
+        if not s3_client:
+            # No S3: keep legacy behavior (in-memory + file cache, fetch 7 days or today from Snowflake)
+            with NETFLIX_RANKER_LOCK:
+                data = None if force_refresh else NETFLIX_RANKER_CACHE.get('data')
+                if data is None and not force_refresh:
+                    data = _load_netflix_ranker_cache()
+                loaded_at = NETFLIX_RANKER_CACHE.get('loaded_at') or 0
+                age_hours = (datetime.now().timestamp() - loaded_at) / 3600.0
+                refresh_today = data is not None and age_hours >= NETFLIX_RANKER_CACHE_MAX_AGE_HOURS
+                if data is None or (refresh_today and data.get('date_range')):
+                    try:
+                        if data and refresh_today and data.get('date_range'):
+                            today_payload = _fetch_netflix_ranker_from_snowflake(refresh_today_only=True)
+                            _merge_netflix_ranker_day_into(data, today_payload)
+                            _finalize_netflix_ranker_payload(data)
+                        else:
+                            data = _fetch_netflix_ranker_from_snowflake(refresh_today_only=False)
+                        NETFLIX_RANKER_CACHE['data'] = data
+                        NETFLIX_RANKER_CACHE['loaded_at'] = datetime.now().timestamp()
+                        _save_netflix_ranker_cache(data)
+                    except Exception as e:
+                        print(f"[Netflix Ranker] Snowflake fetch failed: {e}")
+                        if data is None:
+                            fallback = _load_netflix_ranker_cache()
+                            if fallback and (fallback.get('by_date') or fallback.get('date_range')):
+                                out = dict(fallback)
+                                out['_stale_fallback'] = True
+                                out['_fetch_error'] = str(e)
+                                return jsonify(out)
+                        return jsonify({'error': str(e)}), 500
+            payload = data or {}
+            print(f"[Netflix Ranker] Returning payload with {len(payload.get('by_date', {}))} dates (no S3)")
+            return jsonify(payload)
+
+        # S3 path: use per-day cache, fetch only today if missing
+        cached_dates = _netflix_ranker_s3_list_cached_dates()
+        new_day_payload = None
+        if today_str not in cached_dates:
+            try:
+                new_day_payload = _fetch_netflix_ranker_for_single_date(today_str)
+                if _netflix_ranker_s3_save_day(today_str, new_day_payload):
+                    cached_dates = sorted(set(cached_dates) | {today_str})
+                    _netflix_ranker_s3_update_index(cached_dates)
+                    print(f"[Netflix Ranker] Cached today {today_str} to S3")
+            except Exception as e:
+                print(f"[Netflix Ranker] Fetch today failed: {e}")
+                # continue with existing cache
+
         with NETFLIX_RANKER_LOCK:
             data = None if force_refresh else NETFLIX_RANKER_CACHE.get('data')
-            loaded_at = NETFLIX_RANKER_CACHE.get('loaded_at') or 0
-            age_hours = (datetime.now().timestamp() - loaded_at) / 3600.0
             if data is None and not force_refresh:
                 data = _load_netflix_ranker_cache()
-            # If cache is stale (e.g. >24h), first request refreshes only latest day and merges
-            if data is not None and age_hours >= NETFLIX_RANKER_CACHE_MAX_AGE_HOURS:
-                refresh_today = True
-            if data is None or (refresh_today and data.get('date_range')):
-                try:
-                    if data and refresh_today and data.get('date_range'):
-                        # Refresh only latest day and merge
-                        today_payload = _fetch_netflix_ranker_from_snowflake(refresh_today_only=True)
-                        by_date = data.get('by_date', {})
-                        for dt, rows in (today_payload.get('by_date') or {}).items():
-                            by_date[dt] = rows
-                        data['by_date'] = by_date
-                        data['daily'] = data.get('daily', []) + (today_payload.get('daily') or [])
-                        by_show = data.get('by_show', {})
-                        for show_name, pts in (today_payload.get('by_show') or {}).items():
-                            by_show.setdefault(show_name, []).extend(pts)
-                        data['by_show'] = by_show
-                        _prev_dates = data.get('dates_sorted', [])
-                        _new_dates = list((today_payload.get('by_date') or {}).keys())
-                        dates_sorted = sorted(set(_prev_dates + _new_dates))
-                        data['dates_sorted'] = dates_sorted
-                        if dates_sorted:
-                            data['date_range'] = {'min': dates_sorted[0], 'max': dates_sorted[-1]}
-                        genres_by_date = data.get('genres_by_date', {})
-                        for dt, rows in (today_payload.get('genres_by_date') or {}).items():
-                            genres_by_date[dt] = rows
-                        data['genres_by_date'] = genres_by_date
-                        by_date_season = data.get('by_date_season', {})
-                        for dt, rows in (today_payload.get('by_date_season') or {}).items():
-                            by_date_season[dt] = rows
-                        data['by_date_season'] = by_date_season
-                        by_date_episode = data.get('by_date_episode', {})
-                        for dt, rows in (today_payload.get('by_date_episode') or {}).items():
-                            by_date_episode[dt] = rows
-                        data['by_date_episode'] = by_date_episode
-                        # Rebuild top_shows_over_time from updated by_show
-                        by_show = data['by_show']
-                        show_totals = [(name, sum(p['views'] for p in pts)) for name, pts in by_show.items()]
-                        show_totals.sort(key=lambda x: -x[1])
-                        top_20_names = [s[0] for s in show_totals[:20]]
-                        top_shows_over_time = []
-                        for name in top_20_names:
-                            pts = by_show[name]
-                            by_date_show = {p['date']: p['views'] for p in pts}
-                            top_shows_over_time.append({'show_name': name, 'by_date': by_date_show})
-                        data['top_shows_over_time'] = top_shows_over_time
-                    else:
-                        data = _fetch_netflix_ranker_from_snowflake(refresh_today_only=False)
+
+            if data is None or force_refresh:
+                # Rebuild from S3: load each cached day and merge
+                base = {}
+                for d in cached_dates:
+                    day = new_day_payload if (d == today_str and new_day_payload) else _netflix_ranker_s3_load_day(d)
+                    if day:
+                        _merge_netflix_ranker_day_into(base, day)
+                if base:
+                    _finalize_netflix_ranker_payload(base)
+                    data = base
                     NETFLIX_RANKER_CACHE['data'] = data
                     NETFLIX_RANKER_CACHE['loaded_at'] = datetime.now().timestamp()
                     _save_netflix_ranker_cache(data)
-                except Exception as e:
-                    print(f"[Netflix Ranker] Snowflake fetch failed: {e}")
+                    print(f"[Netflix Ranker] Rebuilt payload from S3 ({len(cached_dates)} days)")
+                else:
                     if data is None:
-                        # Fall back to cache file if Snowflake failed (avoids empty response)
                         fallback = _load_netflix_ranker_cache()
                         if fallback and (fallback.get('by_date') or fallback.get('date_range')):
-                            print(f"[Netflix Ranker] Using stale cache fallback")
-                            out = dict(fallback)
-                            out['_stale_fallback'] = True
-                            out['_fetch_error'] = str(e)
-                            return jsonify(out)
-                    return jsonify({'error': str(e)}), 500
-            elif age_hours >= NETFLIX_RANKER_CACHE_MAX_AGE_HOURS and request.args.get('refresh_today') != '1':
-                pass
+                            data = fallback
+                            print(f"[Netflix Ranker] Using stale file fallback")
+            elif new_day_payload:
+                _merge_netflix_ranker_day_into(data, new_day_payload)
+                _finalize_netflix_ranker_payload(data)
+                NETFLIX_RANKER_CACHE['data'] = data
+                NETFLIX_RANKER_CACHE['loaded_at'] = datetime.now().timestamp()
+                _save_netflix_ranker_cache(data)
+                print(f"[Netflix Ranker] Merged today {today_str} into cache")
+
         payload = data or {}
+        if not payload.get('by_date') and not payload.get('date_range'):
+            return jsonify({'error': 'No Netflix ranker data available. Run backfill or check Snowflake.'}), 503
         print(f"[Netflix Ranker] Returning payload with {len(payload.get('by_date', {}))} dates")
         return jsonify(payload)
     except Exception as e:
         print(f"[Netflix Ranker] Unexpected error: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/rankers/netflix/backfill', methods=['POST'])
+@requires_admin
+def netflix_ranker_backfill():
+    """
+    Preload Netflix ranker cache in S3 from start_date to end_date (default 2026-01-01 to today).
+    Fetches only days not already cached. Call once to build initial cache.
+    """
+    if not s3_client:
+        return jsonify({'error': 'S3 not configured'}), 503
+    start_s = request.args.get('start_date', '2026-01-01').strip()
+    end_s = request.args.get('end_date', '').strip() or datetime.now().strftime('%Y-%m-%d')
+    try:
+        start_d = datetime.strptime(start_s, '%Y-%m-%d').date()
+        end_d = datetime.strptime(end_s, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid start_date or end_date; use YYYY-MM-DD'}), 400
+    if start_d > end_d:
+        return jsonify({'error': 'start_date must be <= end_date'}), 400
+
+    cached = set(_netflix_ranker_s3_list_cached_dates())
+    filled = 0
+    skipped = 0
+    errors = []
+
+    current = start_d
+    while current <= end_d:
+        dt_str = current.strftime('%Y-%m-%d')
+        if dt_str in cached:
+            skipped += 1
+            current += timedelta(days=1)
+            continue
+        try:
+            day_payload = _fetch_netflix_ranker_for_single_date(dt_str)
+            if _netflix_ranker_s3_save_day(dt_str, day_payload):
+                cached.add(dt_str)
+                filled += 1
+        except Exception as e:
+            errors.append({'date': dt_str, 'error': str(e)})
+        current += timedelta(days=1)
+
+    if cached:
+        _netflix_ranker_s3_update_index(sorted(cached))
+    return jsonify({
+        'start_date': start_s,
+        'end_date': end_s,
+        'filled': filled,
+        'skipped': skipped,
+        'errors': errors,
+        'cached_dates_count': len(cached),
+    })
 
 
 @app.route('/api/rankers/netflix/show-details', methods=['GET'])

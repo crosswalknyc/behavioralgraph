@@ -5832,11 +5832,14 @@
                            <span>No Stock Impact</span>
                        </div>`;
                 
+                const s3KeyEsc = (ticker.s3_key || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                const tickerEsc = (ticker.ticker || '').replace(/'/g, "\\'");
                 html += `
-                    <div class="card" style="cursor: pointer; transition: all 0.3s ease; border: 1px solid rgba(90, 154, 217, 0.2); background: linear-gradient(135deg, var(--bg-card) 0%, rgba(13, 33, 55, 0.95) 100%);" 
+                    <div class="card" style="position: relative; cursor: pointer; transition: all 0.3s ease; border: 1px solid rgba(90, 154, 217, 0.2); background: linear-gradient(135deg, var(--bg-card) 0%, rgba(13, 33, 55, 0.95) 100%);" 
                          onclick="showTickerDetail('${ticker.ticker}')"
                          onmouseenter="this.style.transform='translateY(-4px)'; this.style.boxShadow='0 8px 24px rgba(90, 154, 217, 0.15), 0 4px 8px rgba(0,0,0,0.2)'; this.style.borderColor='rgba(90, 154, 217, 0.4)';"
                          onmouseleave="this.style.transform=''; this.style.boxShadow=''; this.style.borderColor='rgba(90, 154, 217, 0.2)';">
+                        <button type="button" class="btn btn-small btn-danger" style="position: absolute; top: 0.5rem; right: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.75rem; z-index: 2;" onclick="event.stopPropagation(); deleteTickerFromCard('${tickerEsc}', '${s3KeyEsc}');" title="Delete ticker">🗑️</button>
                         <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem;">
                             <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
                                 ${ticker.hasImage ? 
@@ -5929,15 +5932,12 @@
             document.getElementById('tickerDetailImageURL').value = '';
         }
         
-        async function deleteTickerFromModal() {
-            if (!currentTickerInModal) return;
-            const ticker = currentTickerInModal.ticker;
-            const s3Key = currentTickerInModal.s3_key;
+        async function deleteTickerFromCard(tickerSymbol, s3Key) {
             if (!s3Key) {
                 showToast('❌ Cannot delete: missing ticker data. Refresh and try again.', true);
                 return;
             }
-            if (!confirm(`Permanently delete ticker "${ticker}"?\n\nThis will remove the CSV from S3 and clear metadata, SEC actuals, and profile mappings. This cannot be undone.`)) {
+            if (!confirm(`Permanently delete ticker "${tickerSymbol}"?\n\nThis will remove the CSV from S3 and clear metadata, SEC actuals, and profile mappings. This cannot be undone.`)) {
                 return;
             }
             try {
@@ -5949,8 +5949,8 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    showToast('✅ Ticker ' + ticker + ' deleted.');
-                    closeTickerDetailModal();
+                    showToast('✅ Ticker ' + tickerSymbol + ' deleted.');
+                    if (currentTickerInModal && currentTickerInModal.ticker === tickerSymbol) closeTickerDetailModal();
                     invalidateTickersCache();
                     await loadTickers();
                 } else {
@@ -5959,6 +5959,11 @@
             } catch (error) {
                 showToast('❌ Error deleting ticker: ' + error.message, true);
             }
+        }
+
+        async function deleteTickerFromModal() {
+            if (!currentTickerInModal) return;
+            await deleteTickerFromCard(currentTickerInModal.ticker, currentTickerInModal.s3_key);
         }
         
         async function saveTickerMetadataFromModal() {
