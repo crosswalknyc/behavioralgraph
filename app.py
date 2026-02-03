@@ -398,23 +398,56 @@ def ensure_metadata_folder():
 # Ensure metadata folder exists at startup
 ensure_metadata_folder()
 
+# Minimum percentage of sample for AI insights/summaries (only use values >= this)
+MIN_PCT_FOR_INSIGHTS = 10
+
+def _filter_demographics_for_insights(demographics):
+    """Return demographics with only values >= MIN_PCT_FOR_INSIGHTS."""
+    if not demographics:
+        return {}
+    out = {}
+    for cat, values in demographics.items():
+        if isinstance(values, dict):
+            out[cat] = {k: v for k, v in values.items() if isinstance(v, (int, float)) and v >= MIN_PCT_FOR_INSIGHTS}
+        else:
+            out[cat] = values
+    return out
+
+def _filter_behavioral_for_insights(behavioral):
+    """Return behavioral with only items where pct >= MIN_PCT_FOR_INSIGHTS."""
+    if not behavioral:
+        return {}
+    out = {}
+    for cat, items in behavioral.items():
+        if isinstance(items, list):
+            out[cat] = [i for i in items if isinstance(i, dict) and (i.get('pct') is not None and i.get('pct', 0) >= MIN_PCT_FOR_INSIGHTS)]
+        else:
+            out[cat] = items
+    return out
+
+def _filter_top_items_for_insights(items, pct_key='pct'):
+    """Filter list of dicts to only those with pct >= MIN_PCT_FOR_INSIGHTS."""
+    if not items or not isinstance(items, list):
+        return items or []
+    return [i for i in items if isinstance(i, dict) and (i.get(pct_key) is not None and i.get(pct_key, 0) >= MIN_PCT_FOR_INSIGHTS)]
+
 def generate_ai_insights(profile_data):
-    """Generate AI-powered insights from profile data."""
+    """Generate AI-powered insights from profile data. Only uses values >= 10% of sample."""
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        # Prepare data summary for GPT
-        demographics = profile_data.get('demographics', {})
-        behavioral = profile_data.get('behavioral', {})
+        # Prepare data summary for GPT - only use values >= 10% of sample
+        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
+        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
         sample_size = profile_data.get('sampleSize', 0)
         profile_name = profile_data.get('name', 'This audience')
         
         # Build context
         demo_summary = []
         for cat, values in demographics.items():
-            if isinstance(values, dict):
+            if isinstance(values, dict) and values:
                 top_items = sorted(values.items(), key=lambda x: x[1], reverse=True)[:3]
                 demo_summary.append(f"{cat}: {', '.join([f'{k} ({v:.1f}%)' for k, v in top_items])}")
         
@@ -431,14 +464,16 @@ def generate_ai_insights(profile_data):
         
         prompt = f"""Analyze this audience profile and provide 5 key insights in bullet points. Be specific and actionable.
 
+CRITICAL: Only use or cite data points that represent at least 10% of the sample. Do not mention or base insights on smaller segments.
+
 Profile: {profile_name}
 Sample Size: {sample_size:,}
 
-Demographics:
-{chr(10).join(demo_summary[:8])}
+Demographics (only segments >= 10%):
+{chr(10).join(demo_summary[:8]) if demo_summary else 'None meeting threshold'}
 
-Top Behaviors:
-{chr(10).join(behavior_summary[:10])}
+Top Behaviors (only >= 10%):
+{chr(10).join(behavior_summary[:10]) if behavior_summary else 'None meeting threshold'}
 
 Provide insights about:
 1. Who this audience is (demographics)
@@ -447,7 +482,7 @@ Provide insights about:
 4. Potential marketing opportunities
 5. Key differentiators
 
-Keep each insight to 1-2 sentences. Be specific with numbers."""
+Keep each insight to 1-2 sentences. Be specific with numbers. Only cite percentages that are 10% or higher."""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -467,17 +502,17 @@ Keep each insight to 1-2 sentences. Be specific with numbers."""
         return {"error": str(e)}
 
 def generate_persona(profile_data):
-    """Generate an AI persona from profile data."""
+    """Generate an AI persona from profile data. Only uses values >= 10% of sample."""
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        demographics = profile_data.get('demographics', {})
-        behavioral = profile_data.get('behavioral', {})
+        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
+        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
         profile_name = profile_data.get('name', 'Audience')
         
-        # Get top demographics
+        # Get top demographics (all already >= 10%)
         gender = demographics.get('gender', {})
         age = demographics.get('age', {})
         income = demographics.get('income', {})
@@ -542,28 +577,28 @@ Format as JSON with keys: name, bio, routine, media, shopping, painPoints, chann
         return {"error": str(e)}
 
 def generate_marketing_strategy(profile_data):
-    """Generate AI marketing recommendations."""
+    """Generate AI marketing recommendations. Only uses values >= 10% of sample."""
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        demographics = profile_data.get('demographics', {})
-        behavioral = profile_data.get('behavioral', {})
+        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
+        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
         profile_name = profile_data.get('name', 'Audience')
         
-        # Compile behavioral insights
+        # Compile behavioral insights (already filtered to >= 10%)
         behavior_list = []
         for cat, items in behavioral.items():
             if isinstance(items, list):
                 for item in items[:3]:
                     behavior_list.append(f"{item.get('name', '')} ({item.get('pct', 0):.1f}%)")
         
-        prompt = f"""Create a comprehensive marketing strategy for reaching this audience.
+        prompt = f"""Create a comprehensive marketing strategy for reaching this audience. Only use data points that represent at least 10% of the sample.
 
 Profile: {profile_name}
-Demographics: {json.dumps(demographics, default=str)[:500]}
-Key Behaviors: {', '.join(behavior_list[:15])}
+Demographics (only >= 10%): {json.dumps(demographics, default=str)[:500]}
+Key Behaviors (only >= 10%): {', '.join(behavior_list[:15])}
 
 Provide:
 1. **Channel Strategy** - Which platforms/channels to prioritize and why
@@ -593,27 +628,28 @@ Be specific and actionable. Reference the actual data provided."""
         return {"error": str(e)}
 
 def chat_with_data(profile_data, user_question):
-    """Answer questions about the profile data."""
+    """Answer questions about the profile data. Only cite values >= 10% of sample."""
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        demographics = profile_data.get('demographics', {})
-        behavioral = profile_data.get('behavioral', {})
+        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
+        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
         locations = profile_data.get('locations', [])
         sample_size = profile_data.get('sampleSize', 0)
         profile_name = profile_data.get('name', 'This audience')
         
-        # Build comprehensive data context
+        # Build comprehensive data context (only >= 10% data)
         data_context = f"""
 Profile: {profile_name}
 Sample Size: {sample_size:,}
+Only use or cite data that represents at least 10% of the sample. Do not mention smaller segments.
 
-DEMOGRAPHICS:
+DEMOGRAPHICS (only segments >= 10%):
 {json.dumps(demographics, indent=2, default=str)[:1500]}
 
-TOP BEHAVIORS BY CATEGORY:
+TOP BEHAVIORS BY CATEGORY (only >= 10%):
 {json.dumps({k: v[:5] if isinstance(v, list) else v for k, v in list(behavioral.items())[:10]}, indent=2, default=str)[:2000]}
 
 TOP LOCATIONS:
@@ -638,14 +674,14 @@ TOP LOCATIONS:
         return {"error": str(e)}
 
 def answer_business_question(profile_data, question, conversation_history=None):
-    """Answer a business question using profile data with follow-up suggestions."""
+    """Answer a business question using profile data with follow-up suggestions. Only cite values >= 10% of sample."""
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        demographics = profile_data.get('demographics', {})
-        behavioral = profile_data.get('behavioral', {})
+        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
+        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
         locations = profile_data.get('locations', [])
         sample_size = profile_data.get('sampleSize', 0)
         profile_name = profile_data.get('name', 'This audience')
@@ -665,8 +701,9 @@ def answer_business_question(profile_data, question, conversation_history=None):
         data_context = f"""
 AUDIENCE PROFILE: {profile_name}
 Sample Size: {sample_size:,}
+Only cite or use data that represents at least 10% of the sample. Do not mention smaller segments.
 
-DEMOGRAPHICS:
+DEMOGRAPHICS (only >= 10%):
 {json.dumps(demographics, indent=2, default=str)[:1500]}
 
 KEY BEHAVIORS:
@@ -721,36 +758,36 @@ Be conversational and helpful."""}
         return {"error": str(e)}
 
 def generate_business_deck(profile_data, business_question, key_findings=None):
-    """Generate a presentation deck outline for a business question."""
+    """Generate a presentation deck outline for a business question. Only uses values >= 10% of sample."""
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        demographics = profile_data.get('demographics', {})
-        behavioral = profile_data.get('behavioral', {})
+        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
+        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
         sample_size = profile_data.get('sampleSize', 0)
         profile_name = profile_data.get('name', 'Audience')
         
-        # Build data summary
+        # Build data summary (already filtered to >= 10%)
         behavior_summary = []
         for cat, items in behavioral.items():
             if isinstance(items, list) and items:
                 behavior_summary.append(f"{cat}: {', '.join([i.get('name', '') for i in items[:3]])}")
         
-        prompt = f"""Create a professional presentation deck outline to answer this business question:
+        prompt = f"""Create a professional presentation deck outline to answer this business question. Only use data points that represent at least 10% of the sample.
 
 BUSINESS QUESTION: {business_question}
 
 AUDIENCE: {profile_name}
 Sample Size: {sample_size:,}
 
-KEY DEMOGRAPHICS:
+KEY DEMOGRAPHICS (only >= 10%):
 - Gender: {json.dumps(demographics.get('gender', {}), default=str)}
 - Age: {json.dumps(demographics.get('age', {}), default=str)}
 - Income: {json.dumps(demographics.get('income', {}), default=str)}
 
-TOP BEHAVIORS:
+TOP BEHAVIORS (only >= 10%):
 {chr(10).join(behavior_summary[:10])}
 
 {f'PREVIOUS FINDINGS: {key_findings}' if key_findings else ''}
@@ -806,7 +843,7 @@ Format as JSON with structure:
         return {"error": str(e)}
 
 def compare_profiles_ai(profiles_data):
-    """AI comparison of multiple profiles."""
+    """AI comparison of multiple profiles. Only uses values >= 10% of sample."""
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
@@ -815,8 +852,8 @@ def compare_profiles_ai(profiles_data):
         profiles_summary = []
         for profile in profiles_data:
             name = profile.get('name', 'Unknown')
-            demo = profile.get('demographics', {})
-            behaviors = profile.get('behavioral', {})
+            demo = _filter_demographics_for_insights(profile.get('demographics', {}))
+            behaviors = _filter_behavioral_for_insights(profile.get('behavioral', {}))
             
             # Get key stats
             top_behaviors = []
@@ -837,10 +874,12 @@ def compare_profiles_ai(profiles_data):
 3. Overlap opportunities (where they might be reached together)
 4. Distinct positioning for each
 
+Only cite or use data points that represent at least 10% of the sample for each profile. Do not mention smaller segments.
+
 Profiles:
 {''.join(profiles_summary)}
 
-Be specific with numbers and percentages."""
+Be specific with numbers and percentages. Only cite percentages that are 10% or higher."""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -2676,7 +2715,7 @@ def get_admin_content():
 @app.route('/api/jobs', methods=['GET'])
 @requires_auth
 def get_jobs():
-    """List all available profiles (S3 result files) for dashboard and admin. Same source as admin content."""
+    """List all available profiles (S3 result files) for dashboard and admin. Required for sidebar profile list; do not remove."""
     active_files, _ = _fetch_content_files()
     if active_files is None:
         return jsonify({'jobs': []})
@@ -2694,20 +2733,6 @@ def get_jobs():
             'last_modified': f.get('last_modified'),
         })
     return jsonify({'jobs': jobs})
-
-@app.route('/api/all-profile-images', methods=['GET'])
-@requires_admin
-def get_all_profile_images():
-    """Return profile image cache for admin preload (key -> { url })."""
-    global profile_image_cache
-    if not profile_image_cache:
-        load_profile_image_cache()
-    images = {}
-    for key, info in (profile_image_cache or {}).items():
-        url = info.get('image_url') if isinstance(info, dict) else None
-        if url:
-            images[key] = {'url': url}
-    return jsonify({'success': True, 'images': images, 'count': len(images)})
 
 @app.route('/api/cached_files', methods=['GET'])
 @requires_admin
@@ -3642,17 +3667,15 @@ def generate_behavioral_summary(profile_data):
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        # Extract demographic data
-        demographics = profile_data.get('demographics', {})
+        # Extract demographic and behavioral data - only use values >= 10% of sample
+        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
         demographics_index = profile_data.get('demographicsIndex', {})
         demographics_gen_pop = profile_data.get('demographicsGenPop', {})
         
-        # Extract behavioral data
-        behavioral = profile_data.get('behavioral', {})
+        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
         behavioral_index = profile_data.get('behavioralIndex', {})
         
-        # Extract top over-indexers
-        top_over_indexers = profile_data.get('topOverIndexers', [])
+        top_over_indexers = _filter_top_items_for_insights(profile_data.get('topOverIndexers', []), pct_key='pct')
         
         # Get profile name
         profile_name = profile_data.get('profileName', 'This audience')
@@ -3697,18 +3720,18 @@ def generate_behavioral_summary(profile_data):
                 for item in top_5
             ])
         
-        prompt = f"""You are an expert consumer behavior analyst. Based on the following audience data, write 4-6 concise bullet points that describe WHO these panelists are BEHAVIORALLY - their lifestyle, interests, habits, and what makes them unique.
+        prompt = f"""You are an expert consumer behavior analyst. Based on the following audience data, write 4-6 concise bullet points that describe WHO these panelists are BEHAVIORALLY - their lifestyle, interests, habits, and what makes them unique. Only use data that represents at least 10% of the sample; all data below is already filtered to >= 10%.
 
 PROFILE: {profile_name}
 
-DEMOGRAPHIC PROFILE:
-{chr(10).join(demo_summary[:6])}
+DEMOGRAPHIC PROFILE (only >= 10%):
+{chr(10).join(demo_summary[:6]) if demo_summary else 'None meeting threshold'}
 
-BEHAVIORAL DATA (what they engage with):
-{chr(10).join(behavior_summary[:12])}
+BEHAVIORAL DATA (only >= 10%):
+{chr(10).join(behavior_summary[:12]) if behavior_summary else 'None meeting threshold'}
 
-TOP OVER-INDEXING BEHAVIORS (where they most differ from general population):
-{top_indexers_str}
+TOP OVER-INDEXING BEHAVIORS (only >= 10%):
+{top_indexers_str if top_indexers_str else 'None meeting threshold'}
 
 INSTRUCTIONS:
 - Write 4-6 bullet points describing this audience's behavioral profile
@@ -7011,16 +7034,24 @@ def analyze_ecosystem_with_ai():
             col = str(record.get('Column', '')).upper()
             val = record.get('Value', '')
             idx = record.get('Index', 0)
+            # Only include values >= 10% of sample for AI insights
+            pct_val = float(val) if isinstance(val, (int, float)) else 0
             
             if 'BEHAVIORAL' in col or 'INTEREST' in col:
-                if isinstance(val, (int, float)) and val > 0:
+                if isinstance(val, (int, float)) and val >= MIN_PCT_FOR_INSIGHTS:
                     behavioral_data.append({
                         'item': str(record.get('Column', '')),
                         'index': float(idx) if idx else 0,
-                        'category': str(record.get('Category', 'Other'))
+                        'category': str(record.get('Category', 'Other')),
+                        'value': pct_val
                     })
             elif 'DEMOGRAPHIC' in col or 'AGE' in col or 'GENDER' in col or 'INCOME' in col:
-                demographic_data[col] = val
+                # Demographics: if value is numeric (pct), only include if >= 10%
+                if isinstance(val, (int, float)):
+                    if val >= MIN_PCT_FOR_INSIGHTS:
+                        demographic_data[col] = val
+                else:
+                    demographic_data[col] = val
         
         # Sort by index and get top items
         behavioral_data.sort(key=lambda x: x.get('index', 0), reverse=True)
@@ -7058,13 +7089,14 @@ def analyze_ecosystem_with_ai():
    - Examples: productivity breaks, micro-celebrations, stress-relief rituals, solo rewards
    - Not "new flavors" — new moments.
 
-BEHAVIORAL DATA (Top 100 items by index):
+BEHAVIORAL DATA (Top 100 items by index; only segments >= 10% of sample):
 {json.dumps(top_items[:100], indent=2)}
 
-DEMOGRAPHIC DATA:
+DEMOGRAPHIC DATA (only >= 10%):
 {json.dumps(demographic_data, indent=2)}
 
 CRITICAL REQUIREMENTS:
+- Only use or cite data that represents at least 10% of the sample. All data above is already filtered to >= 10%.
 - You MUST reference specific data points from the behavioral data provided (brand names, item names, index values, percentages)
 - Include actual numbers, indices, or percentages when making claims
 - Cite specific items from the data to support every insight
@@ -7163,38 +7195,38 @@ def analyze_executive_summary_with_ai():
                 'fallback': True
             }), 503
         
-        # Prepare structured data for AI
+        # Prepare structured data for AI - only include values >= 10% of sample
         summary_data = {
             'primaryProfile': {
                 'name': primary_profile.get('name', 'Unknown'),
                 'sampleSize': primary_profile.get('sampleSize', 0),
                 'projectedUS': primary_profile.get('projectedUS', 0),
                 'medianAge': primary_profile.get('medianAge', 'N/A'),
-                'demographics': primary_profile.get('demographics', {}),
+                'demographics': _filter_demographics_for_insights(primary_profile.get('demographics', {})),
                 'demographicsProjection': primary_profile.get('demographicsProjection', {}),
-                'topCategories': primary_profile.get('topCategories', []),
-                'topInterests': primary_profile.get('topInterests', [])
+                'topCategories': _filter_top_items_for_insights(primary_profile.get('topCategories', [])),
+                'topInterests': _filter_top_items_for_insights(primary_profile.get('topInterests', []))
             },
             'competitors': [
                 {
                     'name': comp.get('name', 'Unknown'),
-                    'demographics': comp.get('demographics', {}),
+                    'demographics': _filter_demographics_for_insights(comp.get('demographics', {})),
                     'demographicsProjection': comp.get('demographicsProjection', {}),
-                    'topCategories': comp.get('topCategories', []),
-                    'topInterests': comp.get('topInterests', [])
+                    'topCategories': _filter_top_items_for_insights(comp.get('topCategories', [])),
+                    'topInterests': _filter_top_items_for_insights(comp.get('topInterests', []))
                 }
                 for comp in competitors
             ],
             'genPop': {
-                'demographics': gen_pop_profile.get('demographics', {}) if gen_pop_profile else {},
+                'demographics': _filter_demographics_for_insights(gen_pop_profile.get('demographics', {})) if gen_pop_profile else {},
                 'demographicsProjection': gen_pop_profile.get('demographicsProjection', {}) if gen_pop_profile else {},
-                'topCategories': gen_pop_profile.get('topCategories', []) if gen_pop_profile else [],
-                'topInterests': gen_pop_profile.get('topInterests', []) if gen_pop_profile else []
+                'topCategories': _filter_top_items_for_insights(gen_pop_profile.get('topCategories', [])) if gen_pop_profile else [],
+                'topInterests': _filter_top_items_for_insights(gen_pop_profile.get('topInterests', [])) if gen_pop_profile else []
             } if gen_pop_profile else None
         }
         
         # Build comprehensive prompt for strategic executive summary
-        prompt = f"""You are a C-suite marketing strategist analyzing competitive consumer data. Generate a high-level, strategic executive summary that transforms raw data into actionable business insights.
+        prompt = f"""You are a C-suite marketing strategist analyzing competitive consumer data. Generate a high-level, strategic executive summary that transforms raw data into actionable business insights. Only use or cite data that represents at least 10% of the sample; all data provided is already filtered to >= 10%.
 
 PRIMARY PROFILE: {summary_data['primaryProfile']['name']}
 - Sample Size: {summary_data['primaryProfile']['sampleSize']:,}
@@ -7308,13 +7340,14 @@ def analyze_key_insights_with_ai():
             }), 503
         
         # Extract focused data: interests, demographics, social media, streaming/platforms, streaming/music, categories (NOT brands)
+        # Only include values >= 10% of sample for key insights
         def extract_focused_data(profile):
             focused = {
                 'name': profile.get('name', 'Unknown'),
                 'sampleSize': profile.get('sampleSize', 0),
                 'projectedUS': profile.get('projectedUS', 0),
                 'medianAge': profile.get('medianAge', 'N/A'),
-                'demographics': profile.get('demographics', {}),
+                'demographics': _filter_demographics_for_insights(profile.get('demographics', {})),
                 'demographicsProjection': profile.get('demographicsProjection', {}),
                 'interests': [],
                 'socialMedia': [],
@@ -7332,10 +7365,12 @@ def analyze_key_insights_with_ai():
                     
                     cat_upper = str(category).upper()
                     
+                    # Only include items that represent >= 10% of sample (key insights / AI summaries)
+                    min_pct = MIN_PCT_FOR_INSIGHTS
                     # Interests
                     if 'INTEREST' in cat_upper:
                         for item in items:
-                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
+                            if item.get('name') and item.get('pct', 0) >= min_pct:
                                 focused['interests'].append({
                                     'name': item.get('name'),
                                     'pct': item.get('pct', 0),
@@ -7345,7 +7380,7 @@ def analyze_key_insights_with_ai():
                     # Social Media
                     elif 'SOCIAL' in cat_upper and ('MEDIA' in cat_upper or 'PLATFORM' in cat_upper):
                         for item in items:
-                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
+                            if item.get('name') and item.get('pct', 0) >= min_pct:
                                 focused['socialMedia'].append({
                                     'name': item.get('name'),
                                     'pct': item.get('pct', 0),
@@ -7355,7 +7390,7 @@ def analyze_key_insights_with_ai():
                     # Streaming Platforms
                     elif 'STREAMING' in cat_upper and 'PLATFORM' in cat_upper:
                         for item in items:
-                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
+                            if item.get('name') and item.get('pct', 0) >= min_pct:
                                 focused['streamingPlatforms'].append({
                                     'name': item.get('name'),
                                     'pct': item.get('pct', 0),
@@ -7365,7 +7400,7 @@ def analyze_key_insights_with_ai():
                     # Streaming Music
                     elif 'STREAMING' in cat_upper and 'MUSIC' in cat_upper:
                         for item in items:
-                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
+                            if item.get('name') and item.get('pct', 0) >= min_pct:
                                 focused['streamingMusic'].append({
                                     'name': item.get('name'),
                                     'pct': item.get('pct', 0),
@@ -7377,7 +7412,7 @@ def analyze_key_insights_with_ai():
                     # "MOST PURCHASED BRANDS" contains brand names - we want to EXCLUDE this
                     elif 'MOST PURCHASED CATEGORIES' in cat_upper or ('PURCHASED' in cat_upper and 'CATEGOR' in cat_upper and 'BRAND' not in cat_upper):
                         for item in items:
-                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
+                            if item.get('name') and item.get('pct', 0) >= min_pct:
                                 item_name = str(item.get('name', '')).upper()
                                 
                                 # Exclude if it's clearly a brand name (common brand indicators or known brands)
@@ -7469,6 +7504,7 @@ Generate a comprehensive SWOT analysis in JSON format:
 }}
 
 CRITICAL REQUIREMENTS:
+- Only use or cite data that represents at least 10% of the sample. All data provided is already filtered to >= 10%. Do not mention smaller segments.
 - Every insight MUST reference specific data (percentages, numbers, categories, platforms)
 - Compare primary brand to BOTH competitors AND Gen Pop
 - Focus on interests, demographics, social media, streaming platforms, streaming music, and categories
@@ -8905,10 +8941,10 @@ def debug_image_cache_for_profile(name):
         'matches': in_memory_entry == s3_entry if (in_memory_entry and s3_entry) else False
     })
 
-@app.route('/api/all-profile-images')
+@app.route('/api/all-profile-images', endpoint='api_all_profile_images')
 @requires_auth
-def get_all_profile_images():
-    """Get all cached profile images at once for instant loading."""
+def api_all_profile_images():
+    """Get all cached profile images at once for instant loading. Unique name to avoid duplicate endpoint with older code."""
     if not profile_image_cache:
         load_profile_image_cache()
     

@@ -74,17 +74,36 @@
             var tree = document.getElementById('dashProfileTree');
             if (!tree) return;
             tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:0.85rem;">Loading profiles...</div>';
-            fetch('/api/jobs', { credentials: 'same-origin' }).then(function(r) { return r.json(); }).then(function(data) {
-                var jobs = (data && data.jobs) || [];
-                window.dashboardProfileList = jobs;
-                var files = jobs.map(function(j) {
-                    return { key: j.key || j.s3_key, s3_key: j.s3_key || j.key, project_name: j.project_name, category: j.category || 'Uncategorized', filename: j.filename };
+            fetch('/api/jobs', { credentials: 'same-origin' })
+                .then(function(r) {
+                    if (!r.ok) {
+                        if (r.status === 404) {
+                            window.dashboardProfileList = [];
+                            if (tree) tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:0.85rem;">Profile list unavailable. Refresh the page after the app has finished updating.</div>';
+                            return { _handled: true };
+                        }
+                        if (r.status === 401) {
+                            window.location.href = '/login';
+                            return { _handled: true };
+                        }
+                        throw new Error('HTTP ' + r.status);
+                    }
+                    return r.json();
+                })
+                .then(function(data) {
+                    if (data && data._handled) return;
+                    if (!data || !data.jobs) return;
+                    var jobs = data.jobs;
+                    window.dashboardProfileList = jobs;
+                    var files = jobs.map(function(j) {
+                        return { key: j.key || j.s3_key, s3_key: j.s3_key || j.key, project_name: j.project_name, category: j.category || 'Uncategorized', filename: j.filename };
+                    });
+                    buildDashboardProfileTree(files);
+                })
+                .catch(function(e) {
+                    if (tree) tree.innerHTML = '<div style="padding:1rem;color:var(--accent-red);font-size:0.85rem;">Failed to load profiles. Try again.</div>';
+                    console.warn('Dashboard profiles load failed:', e);
                 });
-                buildDashboardProfileTree(files);
-            }).catch(function(e) {
-                if (tree) tree.innerHTML = '<div style="padding:1rem;color:var(--accent-red);font-size:0.85rem;">Failed to load profiles. Try again.</div>';
-                console.warn('Dashboard profiles load failed:', e);
-            });
         }
         document.addEventListener('DOMContentLoaded', function() {
             loadDashboardProfiles();
@@ -23108,8 +23127,9 @@
                     window.location.href = '/login';
                     return;
                 }
-                if (!response.ok) {
-                    console.error('API error:', response.status);
+                if (response.status === 404 || !response.ok) {
+                    if (response.status === 404) console.warn('Profile list API not available (update app).');
+                    else console.error('API error:', response.status);
                     return;
                 }
                 const data = await response.json();
@@ -24372,6 +24392,15 @@
                 // Handle authentication errors
                 if (response.status === 401) {
                     window.location.href = '/login';
+                    return;
+                }
+                
+                if (response.status === 404) {
+                    if (dashboardProfilePolling) {
+                        clearInterval(dashboardProfilePolling);
+                        dashboardProfilePolling = null;
+                    }
+                    if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Profile list unavailable. Refresh after the app has finished updating.</div>';
                     return;
                 }
                 
@@ -39401,7 +39430,19 @@
                     return;
                 }
                 
-                // Handle other HTTP errors
+                // 404 = backend may be older build without /api/jobs; show friendly message
+                if (response.status === 404) {
+                    if (cachePollingInterval) {
+                        clearInterval(cachePollingInterval);
+                        cachePollingInterval = null;
+                    }
+                    allJobs = [];
+                    allCategories = [];
+                    cacheInfo = null;
+                    if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Profile list unavailable. Refresh after the app has finished updating.</div>';
+                    return;
+                }
+                
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }

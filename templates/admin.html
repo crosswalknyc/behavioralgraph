@@ -2334,6 +2334,11 @@
             
             try {
                 const response = await fetch('/api/jobs', { credentials: 'same-origin' });
+                if (response.status === 404) {
+                    console.warn('Profile list API not available (backend may need redeploy).');
+                    container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">Profile list unavailable. Refresh after the app has finished updating.</div>';
+                    return;
+                }
                 if (!response.ok) {
                     console.error('Failed to fetch profiles:', response.status, response.statusText);
                     container.innerHTML = '<div style="padding: 1rem; color: var(--accent-red);">Failed to load profiles. Please try again.</div>';
