@@ -3774,6 +3774,32 @@ NETFLIX_RANKER_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'netflix_ran
 NETFLIX_RANKER_CACHE_MAX_AGE_HOURS = 24  # refresh today's data if cache older than this
 NETFLIX_RANKER_S3_PREFIX = 'rankers_cache/netflix/'
 NETFLIX_RANKER_S3_INDEX_KEY = 'rankers_cache/netflix/index.json'
+NETFLIX_RANKER_BACKFILL_RUNNING = False
+
+
+def _run_netflix_ranker_backfill(start_d, end_d):
+    """Run backfill loop for S3 cache from start_d to end_d (date objects). Returns (filled_count, cached_dates_set)."""
+    if not s3_client:
+        return 0, set()
+    cached = set(_netflix_ranker_s3_list_cached_dates())
+    filled = 0
+    current = start_d
+    while current <= end_d:
+        dt_str = current.strftime('%Y-%m-%d')
+        if dt_str in cached:
+            current += timedelta(days=1)
+            continue
+        try:
+            day_payload = _fetch_netflix_ranker_for_single_date(dt_str)
+            if _netflix_ranker_s3_save_day(dt_str, day_payload):
+                cached.add(dt_str)
+                filled += 1
+        except Exception as e:
+            print(f"[Netflix Ranker] Backfill day {dt_str} failed: {e}")
+        current += timedelta(days=1)
+    if cached:
+        _netflix_ranker_s3_update_index(sorted(cached))
+    return filled, cached
 
 
 def _netflix_ranker_s3_list_cached_dates():
@@ -4225,6 +4251,24 @@ def get_netflix_ranker_data():
 
         # S3 path: use per-day cache, fetch only today if missing
         cached_dates = _netflix_ranker_s3_list_cached_dates()
+        # When user clicks Refresh and cache is empty, start backfill in background so one run primes cache for everyone
+        if force_refresh and len(cached_dates) == 0:
+            global NETFLIX_RANKER_BACKFILL_RUNNING
+            if not NETFLIX_RANKER_BACKFILL_RUNNING:
+                NETFLIX_RANKER_BACKFILL_RUNNING = True
+                def _backfill_job():
+                    global NETFLIX_RANKER_BACKFILL_RUNNING
+                    try:
+                        start_d = datetime.strptime('2026-01-01', '%Y-%m-%d').date()
+                        end_d = datetime.now().date()
+                        filled, _ = _run_netflix_ranker_backfill(start_d, end_d)
+                        print(f"[Netflix Ranker] Background backfill finished: {filled} days cached to S3")
+                    except Exception as e:
+                        print(f"[Netflix Ranker] Background backfill error: {e}")
+                    finally:
+                        NETFLIX_RANKER_BACKFILL_RUNNING = False
+                threading.Thread(target=_backfill_job, daemon=True).start()
+                print("[Netflix Ranker] Started background backfill (cache was empty); returning direct Snowflake for now")
         new_day_payload = None
         if today_str not in cached_dates:
             try:
@@ -4272,6 +4316,18 @@ def get_netflix_ranker_data():
 
         payload = data or {}
         if not payload.get('by_date') and not payload.get('date_range'):
+            # No S3 cache (e.g. fresh deploy): fall back to direct Snowflake fetch (last 7 days) like earlier behavior
+            try:
+                print(f"[Netflix Ranker] No cache; fetching directly from Snowflake (last 7 days)")
+                data = _fetch_netflix_ranker_from_snowflake(refresh_today_only=False)
+                if data and (data.get('by_date') or data.get('date_range')):
+                    NETFLIX_RANKER_CACHE['data'] = data
+                    NETFLIX_RANKER_CACHE['loaded_at'] = datetime.now().timestamp()
+                    _save_netflix_ranker_cache(data)
+                    print(f"[Netflix Ranker] Returning direct Snowflake payload with {len(data.get('by_date', {}))} dates")
+                    return jsonify(data)
+            except Exception as e:
+                print(f"[Netflix Ranker] Direct Snowflake fallback failed: {e}")
             return jsonify({'error': 'No Netflix ranker data available. Run backfill or check Snowflake.'}), 503
         print(f"[Netflix Ranker] Returning payload with {len(payload.get('by_date', {}))} dates")
         return jsonify(payload)
@@ -4299,35 +4355,11 @@ def netflix_ranker_backfill():
     if start_d > end_d:
         return jsonify({'error': 'start_date must be <= end_date'}), 400
 
-    cached = set(_netflix_ranker_s3_list_cached_dates())
-    filled = 0
-    skipped = 0
-    errors = []
-
-    current = start_d
-    while current <= end_d:
-        dt_str = current.strftime('%Y-%m-%d')
-        if dt_str in cached:
-            skipped += 1
-            current += timedelta(days=1)
-            continue
-        try:
-            day_payload = _fetch_netflix_ranker_for_single_date(dt_str)
-            if _netflix_ranker_s3_save_day(dt_str, day_payload):
-                cached.add(dt_str)
-                filled += 1
-        except Exception as e:
-            errors.append({'date': dt_str, 'error': str(e)})
-        current += timedelta(days=1)
-
-    if cached:
-        _netflix_ranker_s3_update_index(sorted(cached))
+    filled, cached = _run_netflix_ranker_backfill(start_d, end_d)
     return jsonify({
         'start_date': start_s,
         'end_date': end_s,
         'filled': filled,
-        'skipped': skipped,
-        'errors': errors,
         'cached_dates_count': len(cached),
     })
 
