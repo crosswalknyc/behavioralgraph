@@ -2873,7 +2873,6 @@
             min-width: 0;
         }
         .charts-grid > * { min-width: 0; max-width: 100%; }
-        .demographics-modules-grid .demo-insight-card { min-width: 0; }
         
         @media (max-width: 1200px) {
             .charts-grid {
@@ -3015,8 +3014,8 @@
             min-height: 400px;
             height: auto;
             max-height: min(900px, 75vh);
-            overflow-y: auto;
             overflow-x: auto;
+            overflow-y: auto;
             position: relative;
         }
         @media (min-height: 700px) {
@@ -3321,12 +3320,42 @@
         /* Behavioral Insights Row */
         .behavioral-insights-row {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: 1fr 2fr;
             gap: 1rem;
             margin-bottom: 1.5rem;
         }
         @media (max-width: 1200px) {
             .behavioral-insights-row { grid-template-columns: 1fr; }
+        }
+        .behavioral-data-blocks {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            min-height: 0;
+        }
+        @media (max-width: 900px) {
+            .behavioral-data-blocks { grid-template-columns: 1fr; }
+        }
+        .behavioral-data-block {
+            display: flex;
+            flex-direction: column;
+            min-height: 450px;
+            min-width: 0;
+        }
+        .behavioral-data-block .behavioral-insight-content {
+            flex: 1;
+            min-height: 0;
+        }
+        .behavioral-data-block-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin-bottom: 0.75rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--accent-lime);
         }
         .behavioral-insight-card {
             background: var(--bg-card);
@@ -11468,14 +11497,11 @@
                             </div>
                         </div>
                         
-                        <!-- Demographics Modules Grid - all boxes are draggable and reorderable -->
-                        <div class="charts-grid demographics-modules-grid" id="demographicsModulesGrid">
-                            <div class="demo-insight-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Demographic Profile Summary">
+                        <!-- Demographics: insights row first, then charts grid -->
+                        <div class="demo-insights-row" id="demoInsightsRow">
+                            <div class="demo-insight-card" data-module="Demographic Profile Summary">
                                 <h4 class="has-tooltip" data-tooltip="Demographic Profile Summary: Quick overview of this audience's demographic composition including age skew, gender balance, and income level compared to the general population." style="display: flex; justify-content: space-between; align-items: center;">
-                                    <span style="display: flex; align-items: center;">
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                        <span>🎯 Demographic Profile Summary</span>
-                                    </span>
+                                    <span>🎯 Demographic Profile Summary</span>
                                     <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('demographic-summary')" data-tooltip="Add to Deck" style="margin-left: 0.5rem;">➕</button>
                                 </h4>
                                 <div class="insight-col-header" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
@@ -11488,12 +11514,9 @@
                                     <div class="loading-placeholder">Analyzing demographics...</div>
                                 </div>
                             </div>
-                            <div class="demo-insight-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Key Differentiators">
+                            <div class="demo-insight-card" data-module="Key Differentiators">
                                 <h4 class="has-tooltip" data-tooltip="Key Differentiators vs Gen Pop: Demographic segments where this audience most strongly over-indexes (>1.1x) or under-indexes (<0.8x) compared to the general US population." style="display: flex; justify-content: space-between; align-items: center;">
-                                    <span style="display: flex; align-items: center;">
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                        <span>📊 Key Differentiators vs Gen Pop</span>
-                                    </span>
+                                    <span>📊 Key Differentiators vs Gen Pop</span>
                                     <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('key-differentiators')" data-tooltip="Add to Deck" style="margin-left: 0.5rem;">➕</button>
                                 </h4>
                                 <div class="insight-col-header" style="display: grid; grid-template-columns: 1fr 70px 70px 50px; gap: 0.5rem; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
@@ -11506,12 +11529,9 @@
                                     <div class="loading-placeholder">Loading...</div>
                                 </div>
                             </div>
-                            <div class="demo-insight-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Targeting Recommendations">
+                            <div class="demo-insight-card" data-module="Targeting Recommendations">
                                 <h4 class="has-tooltip" data-tooltip="Targeting Recommendations: Actionable suggestions for media buying and campaign targeting based on this audience's demographic makeup - age ranges, gender focus, income tiers, etc." style="display: flex; justify-content: space-between; align-items: center;">
-                                    <span style="display: flex; align-items: center;">
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                        <span>💡 Targeting Recommendations</span>
-                                    </span>
+                                    <span>💡 Targeting Recommendations</span>
                                     <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('targeting-recommendations')" data-tooltip="Add to Deck" style="margin-left: 0.5rem;">➕</button>
                                 </h4>
                                 <div class="insight-col-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
@@ -11522,10 +11542,11 @@
                                     <div class="loading-placeholder">Loading...</div>
                                 </div>
                             </div>
-                            <div class="chart-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Age">
+                        </div>
+                        <div class="charts-grid">
+                            <div class="chart-card" data-module="Age">
                                 <h3>
                                     <span class="chart-card-title-row">
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Age Distribution: Breakdown by age bracket. Green = your audience over-indexes vs Gen Pop (GP). Red = under-indexes. Hover bars for exact %.">📅 AGE</span>
                                     </span>
                                 </h3>
@@ -11552,10 +11573,9 @@
                                 </h3>
                                 <div class="chart-container"><canvas id="ageChart"></canvas></div>
                             </div>
-                            <div class="chart-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Gender">
+                            <div class="chart-card" data-module="Gender">
                                 <h3>
                                     <span class="chart-card-title-row">
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Gender Distribution: Breakdown by gender identity.">👫 GENDER</span>
                                     </span>
                                 </h3>
@@ -11572,10 +11592,9 @@
                                 </h3>
                                 <div class="chart-container"><canvas id="genderChart"></canvas></div>
                             </div>
-                            <div class="chart-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Ethnicity">
+                            <div class="chart-card" data-module="Ethnicity">
                                 <h3>
                                     <span class="chart-card-title-row">
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Ethnicity Distribution">🌍 ETHNICITY</span>
                                     </span>
                                 </h3>
@@ -11592,10 +11611,9 @@
                                 </h3>
                                 <div class="chart-container"><canvas id="ethnicityChart"></canvas></div>
                             </div>
-                            <div class="chart-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Income">
+                            <div class="chart-card" data-module="Income">
                                 <h3>
                                     <span class="chart-card-title-row">
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Income Distribution">💰 INCOME</span>
                                     </span>
                                 </h3>
@@ -11622,10 +11640,9 @@
                                 </h3>
                                 <div class="chart-container"><canvas id="incomeChart"></canvas></div>
                             </div>
-                            <div class="chart-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Education">
+                            <div class="chart-card" data-module="Education">
                                 <h3>
                                     <span class="chart-card-title-row">
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Education Level">🎓 EDUCATION</span>
                                     </span>
                                 </h3>
@@ -11642,10 +11659,9 @@
                                 </h3>
                                 <div class="chart-container"><canvas id="educationChart"></canvas></div>
                             </div>
-                            <div class="chart-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Relationship Status">
+                            <div class="chart-card" data-module="Relationship Status">
                                 <h3>
                                     <span class="chart-card-title-row">
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Relationship Status">💑 RELATIONSHIP STATUS</span>
                                     </span>
                                 </h3>
@@ -11662,10 +11678,9 @@
                                 </h3>
                                 <div class="chart-container"><canvas id="relationshipChart"></canvas></div>
                             </div>
-                            <div class="chart-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Sexual Orientation">
+                            <div class="chart-card" data-module="Sexual Orientation">
                                 <h3>
                                     <span class="chart-card-title-row">
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Sexual Orientation: Yes = identifies as LGBTQ+, No = does not identify as LGBTQ+">🏳️‍🌈 SEXUAL ORIENTATION</span>
                                     </span>
                                 </h3>
@@ -11682,12 +11697,13 @@
                                 </h3>
                                 <div class="chart-container"><canvas id="sexualOrientationChart"></canvas></div>
                             </div>
-                            <div class="chart-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Parental Status">
+                            <div class="chart-card" data-module="Parental Status">
                                 <h3>
                                     <span class="chart-card-title-row">
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Parental Status">👶 PARENTAL STATUS</span>
                                     </span>
+                                </h3>
+                                <h3>
                                     <span class="chart-card-controls-row">
                                         <select id="parentalStatusChartType" onchange="changeChartType('parentalStatus', this.value)" class="chart-type-select">
                                             <option value="bar">📊</option>
@@ -11700,12 +11716,13 @@
                                 </h3>
                                 <div class="chart-container"><canvas id="parentalStatusChart"></canvas></div>
                             </div>
-                            <div class="chart-card chart-card-occupation" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Occupation">
+                            <div class="chart-card chart-card-occupation" data-module="Occupation">
                                 <h3>
                                     <span class="chart-card-title-row">
-                                        <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
                                         <span class="has-tooltip" data-tooltip="Occupation">💼 OCCUPATION</span>
                                     </span>
+                                </h3>
+                                <h3>
                                     <span class="chart-card-controls-row">
                                         <select id="occupationChartType" onchange="changeChartType('occupation', this.value)" class="chart-type-select">
                                             <option value="bar">📊</option>
@@ -11749,45 +11766,43 @@
                             </div>
                         </div>
                     </div>
-                    <div class="behavioral-insight-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Top Performing Categories">
-                        <h4 class="has-tooltip" data-tooltip="Top Performing Categories: Behavioral categories where this audience most over-indexes vs. Gen Pop. Higher index = stronger affinity. Fire count = number of items in that category with index > 1.5x." style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.35rem;">
-                            <span style="display: flex; align-items: center;">
-                                <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                <span>🏆 Top Performing Categories</span>
-                            </span>
-                            <select id="topCategoriesSortSelect" onchange="sortTopCategories(this.value)" style="padding: 0.2rem 0.35rem; font-size: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;" title="Sort by">
-                                <option value="index">By Index</option>
-                                <option value="profile">By Profile %</option>
-                                <option value="hot">By Hot 🔥</option>
-                            </select>
-                        </h4>
-                        <div class="top-cat-header top-cat-header-left">
-                            <span class="top-cat-col-name">Category</span>
-                            <span class="top-cat-col top-cat-col-pct has-tooltip" data-tooltip="Profile %: Average percentage of this audience engaging with items in this category.">Profile</span>
-                            <span class="top-cat-col top-cat-col-gp genpop-col has-tooltip" data-tooltip="Gen Pop %: Average percentage of general population engaging with items in this category.">GP</span>
-                            <span class="top-cat-col top-cat-col-idx index-col has-tooltip" data-tooltip="Avg Index: Average index across all items in this category. 1.0x = same as Gen Pop, 2.0x = 2x more likely than Gen Pop.">Index</span>
-                            <span class="top-cat-col top-cat-col-hot has-tooltip" data-tooltip="Hot Count: Number of items in this category with index above 1.5x (strong over-indexers).">Hot 🔥</span>
-                        </div>
-                        <div id="behavioralTopCategories" class="behavioral-insight-content">
-                            <div class="behavioral-stat-row">
-                                <span class="icon">⏳</span>
-                                <span class="text">Loading...</span>
+                    <div class="behavioral-data-blocks">
+                        <div class="behavioral-data-block">
+                            <div class="behavioral-data-block-header">
+                                <span class="has-tooltip" data-tooltip="Top Performing Categories: Behavioral categories where this audience most over-indexes vs. Gen Pop.">🏆 Top Performing Categories</span>
+                                <select id="topCategoriesSortSelect" onchange="sortTopCategories(this.value)" style="padding: 0.2rem 0.35rem; font-size: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;" title="Sort by">
+                                    <option value="index">By Index</option>
+                                    <option value="profile">By Profile %</option>
+                                    <option value="genpop">GP ↓</option>
+                                    <option value="hot">By Hot 🔥</option>
+                                </select>
+                            </div>
+                            <div class="top-cat-header top-cat-header-left">
+                                <span class="top-cat-col-name">Category</span>
+                                <span class="top-cat-col top-cat-col-pct has-tooltip" data-tooltip="Profile %: Average percentage of this audience engaging with items in this category.">Profile</span>
+                                <span class="top-cat-col top-cat-col-gp genpop-col has-tooltip" data-tooltip="Gen Pop %: Average percentage of general population engaging with items in this category.">GP</span>
+                                <span class="top-cat-col top-cat-col-idx index-col has-tooltip" data-tooltip="Avg Index: Average index across all items in this category.">Index</span>
+                                <span class="top-cat-col top-cat-col-hot has-tooltip" data-tooltip="Hot Count: Number of items with index above 1.5x.">Hot 🔥</span>
+                            </div>
+                            <div id="behavioralTopCategories" class="behavioral-insight-content">
+                                <div class="behavioral-stat-row">
+                                    <span class="icon">⏳</span>
+                                    <span class="text">Loading...</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="behavioral-insight-card" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Top Performers">
-                        <h4 class="has-tooltip" data-tooltip="Top Performers: Top brands where this audience over-indexes across shopping, content, social media, and entertainment categories.">
-                            <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                            <span>🏷️ Top Performers</span>
-                        </h4>
-                        <div class="insight-col-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
-                            <span class="has-tooltip" data-tooltip="Channel: The marketing channel or category type (Shopping, Content, Social, Sports, etc.).">Channel</span>
-                            <span></span>
-                        </div>
-                        <div id="behavioralActivations" class="behavioral-insight-content">
-                            <div class="behavioral-stat-row">
-                                <span class="icon">⏳</span>
-                                <span class="text">Loading...</span>
+                        <div class="behavioral-data-block">
+                            <div class="behavioral-data-block-header">
+                                <span class="has-tooltip" data-tooltip="Top Performers: Top brands where this audience over-indexes across categories.">🏷️ Top Performers</span>
+                            </div>
+                            <div class="insight-col-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
+                                <span class="has-tooltip" data-tooltip="Channel: The marketing channel or category type.">Channel</span>
+                            </div>
+                            <div id="behavioralActivations" class="behavioral-insight-content">
+                                <div class="behavioral-stat-row">
+                                    <span class="icon">⏳</span>
+                                    <span class="text">Loading...</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -11916,6 +11931,7 @@
                             <select id="interestsSortSelect" onchange="sortInterests(this.value)" class="has-tooltip" data-tooltip="Sort Interests" style="width: auto; min-width: 80px; padding: 0.35rem 2rem 0.35rem 0.75rem; font-size: 0.75rem;">
                                 <option value="pct" selected>% ↓</option>
                                 <option value="index">Idx ↓</option>
+                                <option value="genpop">GP ↓</option>
                                 <option value="alpha">A-Z</option>
                             </select>
                             <input type="text" id="interestsSearchInput" placeholder="Search..." class="has-tooltip" data-tooltip="Search Interests" oninput="filterInterests()" style="flex: 1; min-width: 120px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
@@ -11973,6 +11989,8 @@
                                 <select id="locationSortTop" onchange="sortLocationTableBySelect('top', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by column" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 120px;">
                                     <option value="index-desc">Index ↓</option>
                                     <option value="index-asc">Index ↑</option>
+                                    <option value="genpop-desc">GP ↓</option>
+                                    <option value="genpop-asc">GP ↑</option>
                                     <option value="rank-asc">DMA Rank ↓</option>
                                     <option value="rank-desc">DMA Rank ↑</option>
                                     <option value="profilerank-asc">Profile Rank ↓</option>
@@ -12005,6 +12023,8 @@
                                 <select id="locationSortBottom" onchange="sortLocationTableBySelect('bottom', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by column" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 120px;">
                                     <option value="index-asc">Index ↑</option>
                                     <option value="index-desc">Index ↓</option>
+                                    <option value="genpop-desc">GP ↓</option>
+                                    <option value="genpop-asc">GP ↑</option>
                                     <option value="rank-asc">DMA Rank ↓</option>
                                     <option value="rank-desc">DMA Rank ↑</option>
                                     <option value="profilerank-asc">Profile Rank ↓</option>
@@ -12040,6 +12060,8 @@
                             <select id="locationSortAll" onchange="sortLocationTableBySelect('all', this.value)" class="has-tooltip" data-tooltip="Sort DMAs by column" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 120px;">
                                 <option value="percentage-desc">Profile % ↓</option>
                                 <option value="percentage-asc">Profile % ↑</option>
+                                <option value="genpop-desc">GP ↓</option>
+                                <option value="genpop-asc">GP ↑</option>
                                 <option value="index-desc">Index ↓</option>
                                 <option value="index-asc">Index ↑</option>
                                 <option value="rank-asc">DMA Rank ↓</option>
@@ -13263,6 +13285,8 @@
                                             <option value="index-asc">Index ↑</option>
                                             <option value="profile-desc">Profile % ↓</option>
                                             <option value="profile-asc">Profile % ↑</option>
+                                            <option value="genpop-desc">GP ↓</option>
+                                            <option value="genpop-asc">GP ↑</option>
                                             <option value="name-asc">Name A-Z</option>
                                             <option value="name-desc">Name Z-A</option>
                                         </select>
@@ -13292,6 +13316,8 @@
                                             <option value="index-asc">Index ↑</option>
                                             <option value="profile-desc">Profile % ↓</option>
                                             <option value="profile-asc">Profile % ↑</option>
+                                            <option value="genpop-desc">GP ↓</option>
+                                            <option value="genpop-asc">GP ↑</option>
                                             <option value="name-asc">Name A-Z</option>
                                             <option value="name-desc">Name Z-A</option>
                                         </select>
@@ -22681,11 +22707,6 @@
                 }
             }
             
-            // Restore module order for demographics tab
-            if (tabName === 'demographics') {
-                restoreDemographicsModuleOrder();
-            }
-            
             // Restore module order for interests tab
             if (tabName === 'interests') {
                 restoreInterestsModuleOrder();
@@ -26259,13 +26280,13 @@
                                     padding: 8,
                                     callback: function(value, index, ticks) {
                                         const label = this.getLabelForValue(value);
-                                        // Split long occupation labels at 20 chars for readability
-                                        if (label.length > 20) {
+                                        // Split long occupation labels at 35 chars for readability (avoid truncation)
+                                        if (label.length > 35) {
                                             const words = label.split(' ');
                                             const lines = [];
                                             let currentLine = '';
                                             words.forEach(word => {
-                                                if ((currentLine + ' ' + word).trim().length > 20 && currentLine.length > 0) {
+                                                if ((currentLine + ' ' + word).trim().length > 35 && currentLine.length > 0) {
                                                     lines.push(currentLine.trim());
                                                     currentLine = word;
                                                 } else {
@@ -26279,11 +26300,11 @@
                                     }
                                 },
                                 afterFit: (scale) => {
-                                    // Reserve space for long occupation labels (e.g. "Building and Grounds Cleaning and Maintenance")
+                                    // Reserve enough space for long occupation labels (e.g. "Building and Grounds Cleaning and Maintenance")
                                     const maxLabelLen = occLabels.reduce((m, l) => Math.max(m, String(l).length), 0);
-                                    const charsPerLine = 20;
+                                    const charsPerLine = 35;
                                     const lines = Math.ceil(maxLabelLen / charsPerLine) || 1;
-                                    const minWidth = Math.max(280, Math.min(400, lines * 85));
+                                    const minWidth = Math.max(380, Math.min(520, lines * 140));
                                     scale.width = Math.max(scale.width, minWidth);
                                 }
                             }
@@ -26453,12 +26474,16 @@
             
             sorted.sort((a, b) => {
                 let diff = 0;
+                const gp = (x) => { let v = x.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
                 switch (column) {
                     case 'index':
                         diff = b.index - a.index;
                         break;
                     case 'profile':
                         diff = b.pct - a.pct;
+                        break;
+                    case 'genpop':
+                        diff = gp(b) - gp(a);
                         break;
                     case 'name':
                         diff = a.name.localeCompare(b.name);
@@ -26501,6 +26526,7 @@
             const sorted = [...window.topCategoriesData].sort((a, b) => {
                 const [, sa] = a, [, sb] = b;
                 if (window.topCategoriesSortBy === 'profile') return (sb.avgPct || 0) - (sa.avgPct || 0);
+                if (window.topCategoriesSortBy === 'genpop') return (sb.avgGenPop || 0) - (sa.avgGenPop || 0);
                 if (window.topCategoriesSortBy === 'hot') return (sb.highCount || 0) - (sa.highCount || 0);
                 return (sb.avgIndex || 0) - (sa.avgIndex || 0);
             }).slice(0, 6);
@@ -26563,12 +26589,16 @@
                 
                 dedupedItems.sort((a, b) => {
                     let diff = 0;
+                    const gp = (x) => { let v = x.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
                     switch (column) {
                         case 'index':
                             diff = b.index - a.index;
                             break;
                         case 'profile':
                             diff = b.pct - a.pct;
+                            break;
+                        case 'genpop':
+                            diff = gp(b) - gp(a);
                             break;
                         case 'name':
                             diff = a.name.localeCompare(b.name);
@@ -27504,7 +27534,10 @@
             let sorted = [...filtered];
             if (currentInterestSort === 'index') sorted.sort((a, b) => b.index - a.index);
             else if (currentInterestSort === 'pct') sorted.sort((a, b) => b.pct - a.pct);
-            else if (currentInterestSort === 'alpha') sorted.sort((a, b) => a.name.localeCompare(b.name));
+            else if (currentInterestSort === 'genpop') {
+                const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                sorted.sort((a, b) => gp(b) - gp(a));
+            } else if (currentInterestSort === 'alpha') sorted.sort((a, b) => a.name.localeCompare(b.name));
             
             // Update count
             updateInterestsCount(items);
@@ -28435,6 +28468,7 @@
                             <select class="behavioral-sort-select" onchange="sortBehavioralCard('${catId}', '${cat}', this.value)" style="width: auto; min-width: 55px; padding: 0.35rem 0.5rem; font-size: 0.75rem;">
                                 <option value="pct" selected>${dashDisplayMode === 'projection' ? '# ↓' : '% ↓'}</option>
                                 <option value="index">Idx ↓</option>
+                                <option value="genpop">GP ↓</option>
                                 <option value="alpha">A-Z</option>
                             </select>
                             <input type="text" placeholder="Search..." oninput="searchInCard('${catId}', this.value)" style="flex: 2; min-width: 60px; padding: 0.35rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
@@ -28447,7 +28481,7 @@
                             <span class="index-col">Index</span>
                         </div>
                         <div class="behavioral-list" id="list-${catId}" data-cat="${cat}">
-                            ${renderBehavioralItems(displayItems, maxPct)}
+                            ${renderBehavioralItems(displayItems, maxPct, 'pct')}
                         </div>
                     </div>
                 `;
@@ -28468,8 +28502,9 @@
             const select = document.getElementById('categoryReorderSelect');
             if (!select) return;
             
+            const sorted = [...categories].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
             select.innerHTML = '<option value="">📌 Move to top...</option>' + 
-                categories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+                sorted.map(cat => `<option value="${cat}">${cat}</option>`).join('');
         }
         
         function moveCategoryToTop(category) {
@@ -28786,9 +28821,17 @@
             return value.toFixed(2) + '%';
         }
         
-        function renderBehavioralItems(items, maxPct) {
+        function renderBehavioralItems(items, maxPct, sortMode) {
             const isProjection = dashDisplayMode === 'projection';
             const US_POP = 324700000;
+            sortMode = sortMode || 'pct';
+            const gpVal = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+            // Bar scale: use the sorted column so bar reflects what user is sorting by
+            const maxBarVal = sortMode === 'index' 
+                ? Math.max(...items.map(i => i.index || 0), 1) 
+                : sortMode === 'genpop'
+                    ? Math.max(...items.map(i => gpVal(i)), 1)
+                    : Math.max(...items.map(i => i.pct || 0), 1);
             return items.map((item, idx) => {
                 const index = item.index || 0;
                 let genPopPct = item.genPopPct || 0;
@@ -28813,8 +28856,9 @@
                     ? (normalizedGenPopPct === 0 || normalizedGenPopPct === null ? 'N/A' : formatNumber(Math.round((normalizedGenPopPct / 100) * US_POP)))
                     : formatValueOrNA(normalizedGenPopPct, true);
                 
-                // Bar width should always be based on percentage, not projection numbers
-                const barWidth = (profilePct / maxPct) * 100;
+                // Bar width: reflect the sorted column (pct, index, genpop, or alpha uses pct)
+                const barVal = sortMode === 'index' ? (item.index || 0) : sortMode === 'genpop' ? gpVal(item) : (item.pct || 0);
+                const barWidth = Math.min(100, (barVal / maxBarVal) * 100);
                 
                 return `
                     <div class="behavioral-item">
@@ -28936,6 +28980,9 @@
                     filtered = filtered.sort((a, b) => (b.index || 0) - (a.index || 0));
                 } else if (sortValue === 'pct') {
                     filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                } else if (sortValue === 'genpop') {
+                    const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    filtered = filtered.sort((a, b) => gp(b) - gp(a));
                 } else if (sortValue === 'alpha') {
                     filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                 }
@@ -28945,8 +28992,9 @@
             const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
             const displayItems = itemLimit === 'All' || itemLimit >= filtered.length ? filtered : filtered.slice(0, itemLimit);
             const maxPct = Math.max(...filtered.map(i => i.pct), 1);
+            const sortValue = (listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select') || {}).value || 'pct';
             listEl.innerHTML = displayItems.length > 0 
-                ? renderBehavioralItems(displayItems, maxPct)
+                ? renderBehavioralItems(displayItems, maxPct, sortValue)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found for this slice</div>';
         }
         
@@ -29040,6 +29088,9 @@
                     filtered = filtered.sort((a, b) => (b.index || 0) - (a.index || 0));
                 } else if (sortValue === 'pct') {
                     filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                } else if (sortValue === 'genpop') {
+                    const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    filtered = filtered.sort((a, b) => gp(b) - gp(a));
                 } else if (sortValue === 'alpha') {
                     filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                 }
@@ -29050,8 +29101,9 @@
             const displayItems = searchTerm.trim() || (itemLimit === 'All' || itemLimit >= filtered.length) ? filtered : filtered.slice(0, itemLimit);
             
             const maxPct = Math.max(...filtered.map(i => i.pct), 1);
+            const sortVal = (listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select') || {}).value || 'pct';
             listEl.innerHTML = displayItems.length > 0 
-                ? renderBehavioralItems(displayItems, maxPct)
+                ? renderBehavioralItems(displayItems, maxPct, sortVal)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No matches</div>';
         }
         
@@ -29074,6 +29126,9 @@
                     items = items.sort((a, b) => (b.index || 0) - (a.index || 0));
                 } else if (sortValue === 'pct') {
                     items = items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                } else if (sortValue === 'genpop') {
+                    const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    items = items.sort((a, b) => gp(b) - gp(a));
                 } else if (sortValue === 'alpha') {
                     items = items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                 }
@@ -29091,8 +29146,9 @@
             const displayItems = parsedLimit === 'All' || parsedLimit >= items.length ? items : items.slice(0, parsedLimit);
             
             const maxPct = Math.max(...items.map(i => i.pct), 1);
+            const sortVal = (listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select') || {}).value || 'pct';
             listEl.innerHTML = displayItems.length > 0 
-                ? renderBehavioralItems(displayItems, maxPct)
+                ? renderBehavioralItems(displayItems, maxPct, sortVal)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items</div>';
         }
         
@@ -29172,6 +29228,11 @@
                 case 'alpha':
                     sorted = items.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                     break;
+                case 'genpop': {
+                    const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    sorted = items.sort((a, b) => gp(b) - gp(a));
+                    break;
+                }
                 case 'pct':
                     sorted = items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
                     break;
@@ -29186,7 +29247,7 @@
             const displayItems = itemLimit === 'All' || itemLimit >= sorted.length ? sorted : sorted.slice(0, itemLimit);
             const maxPct = Math.max(...sorted.map(i => i.pct), 1);
             listEl.innerHTML = displayItems.length > 0 
-                ? renderBehavioralItems(displayItems, maxPct)
+                ? renderBehavioralItems(displayItems, maxPct, sortBy)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found</div>';
         }
         
@@ -29258,6 +29319,9 @@
                     filtered = filtered.sort((a, b) => (b.index || 0) - (a.index || 0));
                 } else if (sortValue === 'pct') {
                     filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                } else if (sortValue === 'genpop') {
+                    const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    filtered = filtered.sort((a, b) => gp(b) - gp(a));
                 } else if (sortValue === 'alpha') {
                     filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                 }
@@ -29267,8 +29331,9 @@
             const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
             const displayItems = itemLimit === 'All' || itemLimit >= filtered.length ? filtered : filtered.slice(0, itemLimit);
             const maxPct = Math.max(...filtered.map(i => i.pct), 1);
+            const sortVal = (listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select') || {}).value || 'pct';
             listEl.innerHTML = displayItems.length > 0 
-                ? renderBehavioralItems(displayItems, maxPct)
+                ? renderBehavioralItems(displayItems, maxPct, sortVal)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found</div>';
         }
         
@@ -29321,6 +29386,9 @@
                     filtered = filtered.sort((a, b) => (b.index || 0) - (a.index || 0));
                 } else if (sortValue === 'pct') {
                     filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                } else if (sortValue === 'genpop') {
+                    const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    filtered = filtered.sort((a, b) => gp(b) - gp(a));
                 } else if (sortValue === 'alpha') {
                     filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                 }
@@ -29330,8 +29398,9 @@
             const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
             const displayItems = itemLimit === 'All' || itemLimit >= filtered.length ? filtered : filtered.slice(0, itemLimit);
             const maxPct = Math.max(...filtered.map(i => i.pct), 1);
+            const sortVal = (listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select') || {}).value || 'pct';
             listEl.innerHTML = displayItems.length > 0 
-                ? renderBehavioralItems(displayItems, maxPct)
+                ? renderBehavioralItems(displayItems, maxPct, sortVal)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found</div>';
         }
         
@@ -29432,6 +29501,9 @@
                     filtered = filtered.sort((a, b) => (b.index || 0) - (a.index || 0));
                 } else if (sortValue === 'pct') {
                     filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                } else if (sortValue === 'genpop') {
+                    const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    filtered = filtered.sort((a, b) => gp(b) - gp(a));
                 } else if (sortValue === 'alpha') {
                     filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                 }
@@ -29441,8 +29513,9 @@
             const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
             const displayItems = itemLimit === 'All' || itemLimit >= filtered.length ? filtered : filtered.slice(0, itemLimit);
             const maxPct = Math.max(...filtered.map(i => i.pct), 1);
+            const sortVal = (listEl.closest('.behavioral-card').querySelector('.behavioral-sort-select') || {}).value || 'pct';
             listEl.innerHTML = displayItems.length > 0 
-                ? renderBehavioralItems(displayItems, maxPct)
+                ? renderBehavioralItems(displayItems, maxPct, sortVal)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found</div>';
         }
         
@@ -29485,6 +29558,9 @@
                     filtered = filtered.sort((a, b) => (b.index || 0) - (a.index || 0));
                 } else if (sortValue === 'pct') {
                     filtered = filtered.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                } else if (sortValue === 'genpop') {
+                    const gp = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                    filtered = filtered.sort((a, b) => gp(b) - gp(a));
                 } else if (sortValue === 'alpha') {
                     filtered = filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                 }
@@ -29494,8 +29570,9 @@
             const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
             const displayItems = itemLimit === 'All' || itemLimit >= filtered.length ? filtered : filtered.slice(0, itemLimit);
             const maxPct = Math.max(...filtered.map(i => i.pct), 1);
+            const sortVal = (sortSelect || {}).value || 'pct';
             listEl.innerHTML = displayItems.length > 0 
-                ? renderBehavioralItems(displayItems, maxPct)
+                ? renderBehavioralItems(displayItems, maxPct, sortVal)
                 : '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No items found</div>';
         }
 
@@ -29730,6 +29807,12 @@
                     const diff = b.index - a.index;
                     return topState.direction === 'asc' ? -diff : diff;
                 });
+            } else if (topState.column === 'genpop') {
+                const gp = (loc) => { let v = loc.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                sortedOverIndexing.sort((a, b) => {
+                    const diff = gp(b) - gp(a);
+                    return topState.direction === 'asc' ? -diff : diff;
+                });
             }
             
             // Render over-indexing DMAs (all of them)
@@ -29774,6 +29857,12 @@
                     const diff = b.index - a.index;
                     return bottomState.direction === 'asc' ? -diff : diff;
                 });
+            } else if (bottomState.column === 'genpop') {
+                const gp = (loc) => { let v = loc.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                sortedUnderIndexing.sort((a, b) => {
+                    const diff = gp(b) - gp(a);
+                    return bottomState.direction === 'asc' ? -diff : diff;
+                });
             }
             
             // Render under-indexing DMAs (all of them)
@@ -29816,6 +29905,12 @@
             } else if (allState.column === 'index') {
                 sortedAll.sort((a, b) => {
                     const diff = b.index - a.index;
+                    return allState.direction === 'asc' ? -diff : diff;
+                });
+            } else if (allState.column === 'genpop') {
+                const gp = (loc) => { let v = loc.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                sortedAll.sort((a, b) => {
+                    const diff = gp(b) - gp(a);
                     return allState.direction === 'asc' ? -diff : diff;
                 });
             }
@@ -30641,6 +30736,12 @@
                     const diff = b.index - a.index;
                     return state.direction === 'asc' ? -diff : diff;
                 });
+            } else if (state.column === 'genpop') {
+                const gp = (loc) => { let v = loc.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                sorted.sort((a, b) => {
+                    const diff = gp(b) - gp(a);
+                    return state.direction === 'asc' ? -diff : diff;
+                });
             }
             
             // Render filtered results
@@ -30701,6 +30802,12 @@
             } else if (state.column === 'index') {
                 sorted.sort((a, b) => {
                     const diff = b.index - a.index;
+                    return state.direction === 'asc' ? -diff : diff;
+                });
+            } else if (state.column === 'genpop') {
+                const gp = (loc) => { let v = loc.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
+                sorted.sort((a, b) => {
+                    const diff = gp(b) - gp(a);
                     return state.direction === 'asc' ? -diff : diff;
                 });
             }
