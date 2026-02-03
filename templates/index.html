@@ -30563,9 +30563,9 @@
             if (!cardsEl) return;
             const cards = [
                 { label: 'Active Accounts', value: (data.active_accounts != null ? Number(data.active_accounts).toLocaleString() : '—') },
-                { label: 'Total Cancels', value: (data.total_cancels_pct != null ? data.total_cancels_pct + '%' : '—') },
+                { label: 'Watched Free Content', value: (data.watched_free_content_pct != null ? data.watched_free_content_pct + '%' : '—') },
                 { label: 'Watched Paid Content', value: (data.watched_paid_content_pct != null ? data.watched_paid_content_pct + '%' : '—') },
-                { label: 'Watched Free Content', value: (data.watched_free_content_pct != null ? data.watched_free_content_pct + '%' : '—') }
+                { label: 'Total Cancels', value: (data.total_cancels_pct != null ? data.total_cancels_pct + '%' : '—') }
             ];
             cardsEl.innerHTML = cards.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
         }
@@ -30602,9 +30602,9 @@
             if (!cardsEl) return;
             const cards = [
                 { label: 'Active Accounts', value: (data.active_accounts != null ? Number(data.active_accounts).toLocaleString() : '—') },
-                { label: 'Total Cancels', value: (data.total_cancels_pct != null ? data.total_cancels_pct + '%' : '—') },
+                { label: 'Watched Free Content', value: (data.watched_free_content_pct != null ? data.watched_free_content_pct + '%' : '—') },
                 { label: 'Watched Paid Content', value: (data.watched_paid_content_pct != null ? data.watched_paid_content_pct + '%' : '—') },
-                { label: 'Watched Free Content', value: (data.watched_free_content_pct != null ? data.watched_free_content_pct + '%' : '—') }
+                { label: 'Total Cancels', value: (data.total_cancels_pct != null ? data.total_cancels_pct + '%' : '—') }
             ];
             cardsEl.innerHTML = cards.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
         }
@@ -30641,9 +30641,9 @@
             if (!cardsEl) return;
             const cards = [
                 { label: 'Active Accounts', value: (data.active_accounts != null ? Number(data.active_accounts).toLocaleString() : '—') },
-                { label: 'Total Cancels', value: (data.total_cancels_pct != null ? data.total_cancels_pct + '%' : '—') },
+                { label: 'Watched Free Content', value: (data.watched_free_content_pct != null ? data.watched_free_content_pct + '%' : '—') },
                 { label: 'Watched Paid Content', value: (data.watched_paid_content_pct != null ? data.watched_paid_content_pct + '%' : '—') },
-                { label: 'Watched Free Content', value: (data.watched_free_content_pct != null ? data.watched_free_content_pct + '%' : '—') }
+                { label: 'Total Cancels', value: (data.total_cancels_pct != null ? data.total_cancels_pct + '%' : '—') }
             ];
             cardsEl.innerHTML = cards.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
         }
