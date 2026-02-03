@@ -5681,7 +5681,7 @@ def get_hardcoded_genpop_demographics():
         ],
         'ETHNICITY': [
             ('WHITE', 59.0489, 5904890),
-            ('LATINX', 18.6083, 1860830),
+            ('LATINO', 18.6083, 1860830),
             ('BLACK', 14.3119, 1431190),
             ('OTHER', 5.0001, 500009),
             ('ASIAN', 3.0309, 303090)
