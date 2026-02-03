@@ -40599,7 +40599,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'gender', sortSection === 'gender' ? sortProfileIdx : null, genderLimit, genderSortType, compDisplayMode)}
+                            ${renderDemoComparisonRows(profiles, 'gender', sortSection === 'gender' ? sortProfileIdx : primaryProfileIndex, genderLimit, genderSortType, compDisplayMode)}
                         </tbody>
                     </table>
                 </div>`;
@@ -40640,7 +40640,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'age', sortSection === 'age' ? sortProfileIdx : null, ageLimit, ageSortType, compDisplayMode)}
+                            ${renderDemoComparisonRows(profiles, 'age', sortSection === 'age' ? sortProfileIdx : primaryProfileIndex, ageLimit, ageSortType, compDisplayMode)}
                         </tbody>
                     </table>
                 </div>`;
@@ -40680,7 +40680,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'ethnicity', sortSection === 'ethnicity' ? sortProfileIdx : null, ethnicityLimit, ethnicitySortType, compDisplayMode)}
+                            ${renderDemoComparisonRows(profiles, 'ethnicity', sortSection === 'ethnicity' ? sortProfileIdx : primaryProfileIndex, ethnicityLimit, ethnicitySortType, compDisplayMode)}
                         </tbody>
                     </table>
                 </div>`;
@@ -40720,7 +40720,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, 'income', sortSection === 'income' ? sortProfileIdx : null, incomeLimit, incomeSortType, compDisplayMode)}
+                            ${renderDemoComparisonRows(profiles, 'income', sortSection === 'income' ? sortProfileIdx : primaryProfileIndex, incomeLimit, incomeSortType, compDisplayMode)}
                         </tbody>
                     </table>
                 </div>`;
@@ -40768,7 +40768,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${renderDemoComparisonRows(profiles, key, sortSection === key ? sortProfileIdx : null, limit, sortType, compDisplayMode)}
+                            ${renderDemoComparisonRows(profiles, key, sortSection === key ? sortProfileIdx : primaryProfileIndex, limit, sortType, compDisplayMode)}
                         </tbody>
                     </table>
                 </div>`;
@@ -40822,7 +40822,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${renderBehavioralComparisonRows(profiles, cat, sortSection === catKey ? sortProfileIdx : null, currentLimit, currentSortType, compDisplayMode)}
+                                ${renderBehavioralComparisonRows(profiles, cat, sortSection === catKey ? sortProfileIdx : primaryProfileIndex, currentLimit, currentSortType, compDisplayMode)}
                             </tbody>
                         </table>
                     </div>
@@ -40861,7 +40861,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${renderLocationComparisonRows(profiles, sortSection === 'location' ? sortProfileIdx : null, locationLimit, locationSortType, compDisplayMode)}
+                                ${renderLocationComparisonRows(profiles, sortSection === 'location' ? sortProfileIdx : primaryProfileIndex, locationLimit, locationSortType, compDisplayMode)}
                             </tbody>
                         </table>
                     </div>
@@ -41010,11 +41010,11 @@
                 return row.pctData[idx] || 0;
             };
 
-            // Sort by selected profile column or by max value
-            if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
-                dataRows.sort((a, b) => getSortValue(b, sortByProfileIdx) - getSortValue(a, sortByProfileIdx));
+            // Sort by selected profile column or by primary profile descending
+            const sortIdx = (sortByProfileIdx !== null && sortByProfileIdx >= 0) ? sortByProfileIdx : ((primaryProfileIndex >= 0 && primaryProfileIndex < profiles.length) ? primaryProfileIndex : null);
+            if (sortIdx !== null) {
+                dataRows.sort((a, b) => getSortValue(b, sortIdx) - getSortValue(a, sortIdx));
             } else {
-                // Default: sort by max value across all profiles
                 if (sortType === 'index') {
                     dataRows.sort((a, b) => Math.max(...b.indexData) - Math.max(...a.indexData));
                 } else {
@@ -41115,9 +41115,10 @@
                 return row.pctData[idx] || 0;
             };
 
-            // Sort by selected profile column or by max value
-            if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
-                dataRows.sort((a, b) => getSortValue(b, sortByProfileIdx) - getSortValue(a, sortByProfileIdx));
+            // Sort by selected profile column or by primary profile descending
+            const sortIdx = (sortByProfileIdx !== null && sortByProfileIdx >= 0) ? sortByProfileIdx : ((primaryProfileIndex >= 0 && primaryProfileIndex < profiles.length) ? primaryProfileIndex : null);
+            if (sortIdx !== null) {
+                dataRows.sort((a, b) => getSortValue(b, sortIdx) - getSortValue(a, sortIdx));
             } else {
                 if (sortType === 'index') {
                     dataRows.sort((a, b) => Math.max(...b.indexData) - Math.max(...a.indexData));
@@ -41230,8 +41231,9 @@
                     return numA - numB;
                 });
             } else {
-                // Default sort by first profile's value descending
-                dataRows.sort((a, b) => getSortValue(b, 0) - getSortValue(a, 0));
+                // Default sort by primary profile's value descending
+                const idx = (primaryProfileIndex >= 0 && primaryProfileIndex < profiles.length) ? primaryProfileIndex : 0;
+                dataRows.sort((a, b) => getSortValue(b, idx) - getSortValue(a, idx));
             }
 
             // Apply limit
