@@ -26,6 +26,69 @@
                 }
             } catch (e) { console.warn('showTab:', e); }
         };
+        // Dashboard profile list: load from /api/jobs and populate sidebar tree
+        window.dashboardProfileList = [];
+        window.filterDashboardProfiles = function() {
+            var q = (document.getElementById('dashProfileSearchInput') || {}).value || '';
+            q = q.toLowerCase().trim();
+            var tree = document.getElementById('dashProfileTree');
+            if (!tree) return;
+            var items = tree.querySelectorAll('.profile-select-item, .profile-cat-item');
+            items.forEach(function(el) {
+                var text = (el.textContent || '').toLowerCase();
+                var cat = el.classList.contains('profile-cat-item');
+                var match = !q || text.indexOf(q) !== -1;
+                el.style.display = match ? '' : 'none';
+            });
+        };
+        function buildDashboardProfileTree(files) {
+            var tree = document.getElementById('dashProfileTree');
+            if (!tree) return;
+            if (!files || files.length === 0) {
+                tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:0.85rem;">No profiles found. Run an analysis or check S3.</div>';
+                return;
+            }
+            var byCat = {};
+            files.forEach(function(f) {
+                var cat = f.category || 'Uncategorized';
+                if (!byCat[cat]) byCat[cat] = [];
+                byCat[cat].push(f);
+            });
+            var cats = Object.keys(byCat).sort();
+            var html = '';
+            cats.forEach(function(cat) {
+                var list = byCat[cat];
+                html += '<div class="profile-cat-item open" data-category="' + (cat.replace(/"/g, '&quot;')) + '">';
+                html += '<span class="cat-arrow">▶</span><span class="profile-cat-label">' + (cat.replace(/</g, '&lt;')) + '</span><span class="profile-cat-count">' + list.length + '</span></div>';
+                html += '<div class="profile-cat-children open">';
+                list.forEach(function(f) {
+                    var key = (f.key || f.s3_key || '').replace(/"/g, '&quot;');
+                    var name = (f.project_name || f.filename || key).replace(/</g, '&lt;');
+                    html += '<div class="profile-select-item" data-key="' + key + '" data-category="' + (cat.replace(/"/g, '&quot;')) + '" onclick="typeof window.selectDashboardProfile === \'function\' && window.selectDashboardProfile(\'' + key.replace(/'/g, "\\'") + '\')" style="cursor:pointer;">' + name + '</div>';
+                });
+                html += '</div>';
+            });
+            tree.innerHTML = html;
+        }
+        function loadDashboardProfiles() {
+            var tree = document.getElementById('dashProfileTree');
+            if (!tree) return;
+            tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:0.85rem;">Loading profiles...</div>';
+            fetch('/api/jobs', { credentials: 'same-origin' }).then(function(r) { return r.json(); }).then(function(data) {
+                var jobs = (data && data.jobs) || [];
+                window.dashboardProfileList = jobs;
+                var files = jobs.map(function(j) {
+                    return { key: j.key || j.s3_key, s3_key: j.s3_key || j.key, project_name: j.project_name, category: j.category || 'Uncategorized', filename: j.filename };
+                });
+                buildDashboardProfileTree(files);
+            }).catch(function(e) {
+                if (tree) tree.innerHTML = '<div style="padding:1rem;color:var(--accent-red);font-size:0.85rem;">Failed to load profiles. Try again.</div>';
+                console.warn('Dashboard profiles load failed:', e);
+            });
+        }
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDashboardProfiles();
+        });
     </script>
     <style>
         :root {

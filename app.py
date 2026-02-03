@@ -2503,23 +2503,16 @@ def track_user_activity():
         return jsonify({'success': False, 'error': str(e)})
 
 # ============================================================================
-# ADMIN CONTENT MANAGEMENT
+# ADMIN CONTENT MANAGEMENT + JOBS (profile list for dashboard)
 # ============================================================================
 
-@app.route('/api/admin/content', methods=['GET'])
-@requires_admin
-def get_admin_content():
-    """Get all content files grouped by category, including archived."""
-    print("📂 Admin content request received")
-    
-    # Check AWS credentials
+def _fetch_content_files():
+    """Fetch active and archived file lists from S3. Returns (active_files, archived_files) or (None, None) on error."""
     aws_key = os.environ.get('AWS_ACCESS_KEY_ID')
     aws_secret = os.environ.get('AWS_SECRET_ACCESS_KEY')
-    
     if not aws_key or not aws_secret:
         print("❌ AWS credentials not configured")
-        return jsonify({'success': False, 'error': 'AWS credentials not configured'})
-    
+        return None, None
     try:
         s3 = boto3.client('s3',
                           aws_access_key_id=aws_key,
@@ -2663,18 +2656,44 @@ def get_admin_content():
                 })
         
         print(f"✅ Found {len(archived_files)} archived files")
-        
-        return jsonify({
-            'success': True,
-            'files': active_files,
-            'archived': archived_files
-        })
-        
+        return (active_files, archived_files)
     except Exception as e:
         import traceback
-        print(f"❌ Error getting admin content: {e}")
+        print(f"❌ Error getting content files: {e}")
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)})
+        return None, None
+
+@app.route('/api/admin/content', methods=['GET'])
+@requires_admin
+def get_admin_content():
+    """Get all content files grouped by category, including archived."""
+    print("📂 Admin content request received")
+    active_files, archived_files = _fetch_content_files()
+    if active_files is None:
+        return jsonify({'success': False, 'error': 'AWS credentials not configured or S3 error'})
+    return jsonify({'success': True, 'files': active_files, 'archived': archived_files})
+
+@app.route('/api/jobs', methods=['GET'])
+@requires_auth
+def get_jobs():
+    """List all available profiles (S3 result files) for dashboard and admin. Same source as admin content."""
+    active_files, _ = _fetch_content_files()
+    if active_files is None:
+        return jsonify({'jobs': []})
+    jobs = []
+    for f in active_files:
+        key = f.get('key', '')
+        jobs.append({
+            's3_key': key,
+            'key': key,
+            'job_id': key,
+            'project_name': f.get('project_name', ''),
+            'category': f.get('category', 'Uncategorized'),
+            'status': 'cached',
+            'filename': f.get('filename', ''),
+            'last_modified': f.get('last_modified'),
+        })
+    return jsonify({'jobs': jobs})
 
 @app.route('/api/all-profile-images', methods=['GET'])
 @requires_admin
