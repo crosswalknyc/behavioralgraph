@@ -31181,7 +31181,7 @@
         function renderNetflixShowDetailsContent(contentEl, data) {
             const dmaRows = (data.dma_breakdown || []).slice(0, 15);
             const dmaTable = dmaRows.length > 0 
-                ? '<table class="rankers-table" style="width: 100%; border-collapse: collapse; margin-top: 0.5rem;"><thead><tr><th>DMA (Location)</th><th>Projected Views</th><th>% of Total</th></tr></thead><tbody>' +
+                ? '<table class="rankers-table" style="width: 100%; border-collapse: collapse; margin-top: 0.5rem;"><thead><tr><th>DMA (Location)</th><th>Views</th><th>% of Total</th></tr></thead><tbody>' +
                   dmaRows.map(d => '<tr><td>' + d.dma + '</td><td>' + netflixProjectedViews(d.views).toLocaleString() + '</td><td>' + d.percentage + '%</td></tr>').join('') +
                   '</tbody></table>'
                 : '<p style="color: var(--text-secondary);">No DMA data available</p>';
