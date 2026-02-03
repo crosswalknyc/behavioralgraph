@@ -2996,7 +2996,7 @@
             width: 100%;
             min-width: 0;
             max-width: 100%;
-            height: clamp(200px, 22vw + 100px, 300px);
+            height: clamp(260px, 26vw + 120px, 360px);
             overflow: visible;
             position: relative;
             padding: 0.5rem 0.25rem;
@@ -3018,17 +3018,17 @@
             .occupation-chart-container { min-height: min(550px, 60vh); }
         }
         
-        /* Responsive chart sizing - scales with viewport so text fits */
+        /* Responsive chart sizing - scales with viewport so doughnuts fill the box */
         @media (max-width: 1600px) {
-            .chart-container { height: clamp(190px, 20vw + 80px, 280px); }
+            .chart-container { height: clamp(240px, 24vw + 100px, 320px); }
         }
         
         @media (max-width: 1200px) {
-            .chart-container { height: clamp(180px, 19vw + 70px, 260px); }
+            .chart-container { height: clamp(220px, 22vw + 90px, 300px); }
         }
         
         @media (max-width: 800px) {
-            .chart-container { height: clamp(220px, 38vw + 90px, 320px); }
+            .chart-container { height: clamp(260px, 36vw + 100px, 340px); }
             .chart-card h3 { font-size: clamp(0.75rem, 2.5vw + 0.5rem, 0.9rem); }
         }
         
@@ -25304,10 +25304,10 @@
             const legendFontSizeCircular = Math.max(8, Math.min(11, legendFontSize)); // Slightly smaller so long labels (e.g. "TRANS FEMALE 2.38% (GP: 1.23%)") fit
             const axisFontSize = Math.max(10, Math.min(15, Math.floor(effectiveWidth / 22)));
             const dataLabelFontSize = Math.max(9, Math.min(13, axisFontSize));
-            // Reserve enough space for long legend labels so text is never cut off; align legend to start of box
-            const legendPaddingRight = Math.min(580, Math.max(340, Math.floor(chartContainerWidth * 0.68)));
-            const layoutPaddingCircular = { left: 16, right: legendPaddingRight, top: 12, bottom: 12 };
-            const legendOptionsCircular = { display: true, position: 'right', align: 'start', labels: { color: '#e6f1ff', font: { size: legendFontSizeCircular }, boxWidth: 10, padding: 6 } };
+            // Reserve space for legend so doughnut can still fill most of the box; legend labels wrap if needed
+            const legendPaddingRight = Math.min(320, Math.max(200, Math.floor(chartContainerWidth * 0.42)));
+            const layoutPaddingCircular = { left: 12, right: legendPaddingRight, top: 8, bottom: 8 };
+            const legendOptionsCircular = { display: true, position: 'right', align: 'start', labels: { color: '#e6f1ff', font: { size: legendFontSizeCircular }, boxWidth: 10, padding: 5 } };
 
             // Age - horizontal bar with Gen Pop in data labels (green/red based on index)
             // Apply sorting based on user selection
