@@ -3893,6 +3893,7 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
     except Exception as e:
         raise RuntimeError(f'Snowflake connection failed: {e}')
     try:
+        # Default to last 7 days for fast initial load; use refresh_today_only for just today
         if refresh_today_only:
             sql = """
                 SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views
@@ -3903,10 +3904,11 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
                 ORDER BY 1, 3 DESC
             """
         else:
+            # Load only last 7 days for fast initial load (was 1 year - too slow)
             sql = """
                 SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views
                 FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
-                WHERE VISIT_TS >= DATEADD(year, -1, CURRENT_DATE())
+                WHERE VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())
                   AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
                 GROUP BY 1, 2, 3, 4
                 ORDER BY 1, 3 DESC
@@ -3916,7 +3918,7 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
         payload = _build_netflix_ranker_payload(rows)
 
         # Seasons: TYPE = 'Show' only, group by (date, name_of_show, season). Exclude Indian genre.
-        date_filter = "VISIT_TS >= CURRENT_DATE()" if refresh_today_only else "VISIT_TS >= DATEADD(year, -1, CURRENT_DATE())"
+        date_filter = "VISIT_TS >= CURRENT_DATE()" if refresh_today_only else "VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())"
         try:
             sql_seasons = f"""
                 SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, COUNT(*) AS views
