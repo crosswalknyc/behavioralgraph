@@ -3904,7 +3904,8 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
         except Exception:
             payload['by_date_season'] = {}
 
-        # Episodes: group by (date, name_of_show, season, episode_name). Exclude Indian genre.
+        # Episodes: group by (date, name_of_show, season, episode_name). 
+        # Exclude Indian genre and rows where season equals show name (not real season/episode data).
         try:
             sql_episodes = f"""
                 SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE_NAME, COUNT(*) AS views
@@ -3912,6 +3913,8 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
                 WHERE {date_filter}
                   AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
                   AND EPISODE_NAME IS NOT NULL AND TRIM(EPISODE_NAME) != ''
+                  AND SEASON IS NOT NULL AND TRIM(SEASON) != ''
+                  AND UPPER(TRIM(SEASON)) != UPPER(TRIM(NAME_OF_SHOW))
                   AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%indian%')
                 GROUP BY 1, 2, 3, 4
                 ORDER BY 1, 4 DESC
