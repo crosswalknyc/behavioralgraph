@@ -2999,8 +2999,10 @@
             height: clamp(200px, 22vw + 100px, 300px);
             overflow: visible;
             position: relative;
+            padding: 0.5rem 0.25rem;
+            box-sizing: border-box;
         }
-        .chart-container canvas { max-width: 100%; }
+        .chart-container canvas { max-width: 100%; display: block; }
 
         /* Occupation chart: full width and dynamic height for readable long labels */
         .chart-card-occupation { grid-column: 1 / -1; }
@@ -3358,7 +3360,7 @@
             padding: 1.25rem;
             display: flex;
             flex-direction: column;
-            min-height: 400px;
+            height: auto;
         }
         .behavioral-insight-card.highlight {
             border-color: var(--accent-lime);
@@ -3376,9 +3378,8 @@
         .behavioral-insight-content {
             font-size: 0.85rem;
             line-height: 1.6;
-            overflow-y: auto;
-            flex: 1;
-            min-height: 0;
+            overflow-y: visible;
+            flex: 0 1 auto;
         }
         .behavioral-stat-row {
             display: flex;
@@ -3744,6 +3745,40 @@
             gap: 0.4rem;
         }
         
+        /* Interactive quintile heatmap bar */
+        .interests-heatmap-bar .quintile-segment {
+            flex: 1;
+            min-width: 0;
+            transition: filter 0.15s, transform 0.1s;
+        }
+        .interests-heatmap-bar .quintile-segment:hover {
+            filter: brightness(1.15);
+        }
+        .interests-heatmap-bar .quintile-segment.selected {
+            box-shadow: inset 0 0 0 2px var(--text-primary);
+            filter: brightness(1.1);
+        }
+        .interests-heatmap-results {
+            margin-top: 0.5rem;
+        }
+        .interests-heatmap-results .quintile-result-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 0.35rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            border: 1px solid var(--border-color);
+            background: var(--bg-dark);
+            cursor: pointer;
+        }
+        .interests-heatmap-results .quintile-result-card:hover {
+            background: var(--bg-card);
+        }
+        .interests-heatmap-results .quintile-result-card .result-name { font-weight: 600; color: var(--text-primary); }
+        .interests-heatmap-results .quintile-result-card .result-stats { font-size: 0.75rem; color: var(--text-secondary); }
+        
         /* Interest Category Cards */
         .interests-categories-section {
             margin-bottom: 1rem;
@@ -4069,7 +4104,7 @@
             scrollbar-gutter: stable;
         }
 
-        /* Behavioral table: same grid for header and rows; headers left-aligned directly over values */
+        /* Behavioral table: same grid for header and rows; numeric columns right-aligned */
         .behavioral-header-row {
             display: grid !important;
             grid-template-columns: 28px minmax(0, 1fr) 72px 72px 56px;
@@ -4095,21 +4130,21 @@
         .behavioral-header-row span.profile-col,
         .behavioral-header-row span.genpop-col,
         .behavioral-header-row span.index-col {
-            text-align: left !important;
-            justify-self: stretch;
+            text-align: right !important;
+            justify-self: end;
             width: 100%;
             display: block;
-            padding-left: 0.5rem;
-            padding-right: 0.25rem;
+            padding-left: 0.25rem;
+            padding-right: 0.5rem;
         }
         .behavioral-item .behavioral-pct,
         .behavioral-item .behavioral-index {
-            text-align: left !important;
-            justify-self: stretch;
+            text-align: right !important;
+            justify-self: end;
             width: 100%;
             display: block;
-            padding-left: 0.5rem;
-            padding-right: 0.25rem;
+            padding-left: 0.25rem;
+            padding-right: 0.5rem;
         }
         .behavioral-list {
             padding-right: 0.5rem;
@@ -4118,17 +4153,26 @@
             display: grid;
             grid-template-columns: 28px minmax(0, 1fr) 72px 72px 56px;
             gap: 0.5rem;
-            align-items: center;
+            align-items: start;
             padding: 0.4rem 0.5rem 0.4rem 0;
             border-bottom: 1px solid var(--border-color);
             position: relative;
             text-align: left;
+            min-height: 2rem;
         }
         .behavioral-item > * {
+            min-width: 0;
+            box-sizing: border-box;
+        }
+        .behavioral-item .behavioral-rank,
+        .behavioral-item .behavioral-name-wrapper {
             justify-self: start;
             align-self: center;
-            min-width: 0;
             text-align: left !important;
+        }
+        .behavioral-item .behavioral-pct,
+        .behavioral-item .behavioral-index {
+            align-self: center;
         }
 
         .behavioral-item:hover {
@@ -4145,9 +4189,8 @@
 
         .behavioral-name {
             font-size: 0.85rem;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            white-space: normal;
+            word-break: break-word;
             min-width: 0;
             position: relative;
             z-index: 2;
@@ -4163,26 +4206,6 @@
             align-items: center;
         }
 
-        .behavioral-bar-container {
-            position: absolute;
-            left: 0;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 100%;
-            height: 14px;
-            background: var(--bg-dark);
-            border-radius: 3px;
-            overflow: hidden;
-            z-index: 1;
-        }
-
-        .behavioral-bar {
-            height: 100%;
-            background: linear-gradient(90deg, var(--accent-blue), #4a8ac9);
-            border-radius: 3px;
-            transition: width 0.3s ease;
-        }
-
         .behavioral-pct {
             font-size: 0.8rem;
             font-weight: 500;
@@ -4193,10 +4216,9 @@
         .behavioral-index {
             font-size: 0.8rem;
             font-weight: 700;
-            text-align: left !important;
+            text-align: right !important;
             padding: 3px 6px;
             border-radius: 4px;
-            background: rgba(0, 0, 0, 0.3);
         }
 
         /* AI Panel Styles */
@@ -7022,7 +7044,7 @@
         .legend-gradient {
             width: 150px;
             height: 12px;
-            background: linear-gradient(to right, #ef4444, #f97316, #eab308, #10b981, #3b82f6);
+            background: linear-gradient(to right, #10b981, #84cc16, #eab308, #f97316, #ef4444);
             border-radius: 3px;
         }
         .us-heatmap {
@@ -11833,19 +11855,19 @@
                             <button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('interests', 'Category Heatmap')" data-tooltip="Add to Deck: Save the interest category heatmap to your presentation deck.">➕</button>
                         </span>
                     </h3>
-                    <div class="heatmap-legend" style="margin-bottom: 0.75rem;">
-                        <span style="font-size: 0.7rem; color: var(--text-secondary);">Under-index</span>
-                        <div style="display: flex; height: 12px; width: 150px; border-radius: 4px; overflow: hidden;">
-                            <div style="flex: 1; background: #ef4444;"></div>
-                            <div style="flex: 1; background: #f97316;"></div>
-                            <div style="flex: 1; background: #eab308;"></div>
-                            <div style="flex: 1; background: #84cc16;"></div>
-                            <div style="flex: 1; background: #22c55e;"></div>
+                    <p class="interests-heatmap-instruction" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Click a segment to see the top 5 categories in that index range.</p>
+                    <div class="interests-heatmap-bar-wrap" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                        <span style="font-size: 0.7rem; color: var(--text-secondary); flex-shrink: 0;">Under-index</span>
+                        <div id="interestsHeatmapBar" class="interests-heatmap-bar" role="slider" aria-label="Index range quintiles" tabindex="0" style="display: flex; height: 28px; flex: 1; max-width: 280px; border-radius: 6px; overflow: hidden; cursor: pointer; box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);">
+                            <!-- 5 quintile segments filled by JS -->
                         </div>
-                        <span style="font-size: 0.7rem; color: var(--text-secondary);">Over-index</span>
+                        <span style="font-size: 0.7rem; color: var(--text-secondary); flex-shrink: 0;">Over-index</span>
                     </div>
-                    <div class="interests-heatmap-grid" id="interestsHeatmapGrid">
-                        <div style="padding: 1rem; text-align: center; color: var(--text-secondary);">Loading...</div>
+                    <div id="interestsHeatmapResults" class="interests-heatmap-results" style="min-height: 2rem;">
+                        <div class="interests-heatmap-placeholder" style="padding: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.8rem;">Select a segment above to view top 5 categories.</div>
+                    </div>
+                    <div class="interests-heatmap-grid" id="interestsHeatmapGrid" style="display: none;">
+                        <!-- Legacy grid hidden; quintile results shown in interestsHeatmapResults -->
                     </div>
                 </div>
                 
@@ -11913,6 +11935,7 @@
                         </span>
                         <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('location', 'Regional Breakdown')" data-tooltip="Export CSV: Download regional breakdown data as a CSV file.">CSV</button><button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('location', 'Regional Breakdown')" data-tooltip="Add to Deck: Save the regional breakdown to your presentation deck.">➕</button></span>
                     </h3>
+                    <p style="margin: 0.25rem 0 0.5rem 0; font-size: 0.75rem; color: var(--text-secondary);">Aligned to Neilsen regions</p>
                     <div id="regionalBreakdown" class="regional-grid"></div>
                 </div>
                 
@@ -12046,7 +12069,6 @@
                 <div class="rankers-container">
                     <div class="rankers-platform-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
                         <button class="tab-btn active" onclick="showRankerPlatform('netflix')" id="rankerPlatformNetflix"><span class="tab-icon">📺</span> Netflix</button>
-                        <button class="tab-btn" onclick="showRankerPlatform('youtube')" id="rankerPlatformYouTube"><span class="tab-icon">▶️</span> YouTube</button>
                     </div>
                     <div id="rankerPlatformContent" class="ranker-platform-content">
                         <!-- Netflix sub-view -->
@@ -12171,74 +12193,18 @@
                             </div>
                         </div>
                         
-                        <!-- YouTube sub-view -->
-                        <div id="ranker-youtube" class="ranker-platform-panel">
-                            <div class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin-bottom: 1rem; flex-wrap: wrap;">
-                                <button class="tab-btn active" onclick="showYouTubeSubTab('daily')" id="youtubeSubTabDaily">📅 Daily Ranker</button>
-                                <button class="tab-btn" onclick="showYouTubeSubTab('trends')" id="youtubeSubTabTrends">📈 Trends</button>
-                                <button class="tab-btn" onclick="showYouTubeSubTab('channel')" id="youtubeSubTabChannel">📺 By Channel</button>
-                                <button class="tab-btn" onclick="showYouTubeSubTab('toptitles')" id="youtubeSubTabTopTitles">🏆 Top Titles Over Time</button>
-                                <button class="tab-btn" onclick="showYouTubeSubTab('insights')" id="youtubeSubTabInsights">💡 Insights</button>
-                            </div>
-                            <div id="youtubeSubTabContent">
-                                <div id="youtube-daily" class="netflix-sub-content active">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
-                                        <h3 style="margin: 0;">📅 Daily View Ranker</h3>
-                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
-                                            <input type="date" id="youtubeDailyDate" onchange="renderYouTubeDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                            <button class="module-btn csv-btn" onclick="exportYouTubeDailyCSV()">CSV</button>
-                                        </div>
-                                    </div>
-                                    <div id="youtubeDailyTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Title</th><th>Views</th><th>Channel</th></tr></thead><tbody id="youtubeDailyBody"></tbody></table></div>
-                                    <div id="youtubeDailyLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load YouTube Ranker to view daily data.</div>
-                                </div>
-                                <div id="youtube-trends" class="netflix-sub-content">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
-                                        <h3 style="margin: 0;">📈 Title Trends (Past Year)</h3>
-                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                            <select id="youtubeTrendsTitle" onchange="renderYouTubeTrends()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 200px;"><option value="">Select title...</option></select>
-                                            <button class="module-btn csv-btn" onclick="exportYouTubeTrendsCSV()">CSV</button>
-                                        </div>
-                                    </div>
-                                    <div id="youtubeTrendsChartWrap" style="min-height: 300px;"><canvas id="youtubeTrendsChart"></canvas></div>
-                                    <div id="youtubeTrendsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load YouTube Ranker and select a title.</div>
-                                </div>
-                                <div id="youtube-channel" class="netflix-sub-content">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
-                                        <h3 style="margin: 0;">📺 Views by Channel</h3>
-                                        <input type="date" id="youtubeChannelDate" onchange="renderYouTubeByChannel()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                    </div>
-                                    <div id="youtubeChannelChartWrap" style="min-height: 280px;"><canvas id="youtubeChannelChart"></canvas></div>
-                                    <div id="youtubeChannelTableWrap" style="overflow-x: auto; margin-top: 1rem;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Channel</th><th>Views</th><th>% of Total</th><th>Top Title</th></tr></thead><tbody id="youtubeChannelBody"></tbody></table></div>
-                                    <div id="youtubeChannelLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load YouTube Ranker to view channel breakdown.</div>
-                                </div>
-                                <div id="youtube-toptitles" class="netflix-sub-content">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
-                                        <h3 style="margin: 0;">🏆 Top 20 Titles Over Time</h3>
-                                        <button class="module-btn csv-btn" onclick="exportYouTubeTopTitlesCSV()">CSV</button>
-                                    </div>
-                                    <div id="youtubeTopTitlesChartWrap" style="min-height: 400px;"><canvas id="youtubeTopTitlesChart"></canvas></div>
-                                    <div id="youtubeTopTitlesLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load YouTube Ranker to view top titles over time.</div>
-                                </div>
-                                <div id="youtube-insights" class="netflix-sub-content">
-                                    <h3 style="margin: 0 0 0.75rem 0;">💡 YouTube Ranker Insights</h3>
-                                    <div id="youtubeInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
-                                    <div id="youtubeInsightsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load YouTube Ranker to view insights.</div>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                     <div id="rankersLoadBlock" style="padding: 2rem; text-align: center; background: var(--bg-card); border-radius: 8px; margin-top: 1rem;">
                         <div id="rankersLoadProgress" style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem;">
-                            <div class="spinner" style="margin-bottom: 0;"></div>
-                            <div id="rankersLoadStatus" style="font-size: 0.9rem; color: var(--text-secondary);">Loading rankers...</div>
+                            <div class="rankers-status-indicator" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                                <span class="spinner rankers-spinner" style="margin-bottom: 0;"></span>
+                                <span id="rankersLoadStatus" style="font-size: 0.9rem; color: var(--text-secondary);">Loading ...</span>
+                            </div>
                         </div>
                         <div id="rankersLoadDone" style="display: none;">
-                            <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data loaded. Use the Netflix and YouTube tabs above to view.</p>
+                            <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data loaded. Use the Netflix tab above to view.</p>
                             <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
                                 <button class="btn btn-primary" onclick="loadNetflixRankerData(true)" id="rankersLoadBtnNetflix">📺 Refresh Netflix</button>
-                                <button class="btn btn-primary" onclick="loadYouTubeRankerData()" id="rankersLoadBtnYouTube">▶️ Refresh YouTube</button>
                             </div>
                         </div>
                     </div>
@@ -14959,11 +14925,17 @@
             return isNaN(num) ? null : num;
         }
         
-        // Format index as multiplier with 3 decimal places (e.g., 150 → 1.500x, 100 → 1.000x, 130.456 → 1.305x)
+        // Format index as plain number: no "x". If index < 1, show up to 3 decimal places so it doesn't display as 0 (e.g. 0.023).
+        // Backend sends 100-based scale (100 = 1.0, 150 = 1.5, 23 = 0.23).
         function formatIndex(index) {
             if (index === null || index === undefined || isNaN(index)) return 'N/A';
             const n = Number(index);
-            return (n / 100).toFixed(3) + 'x';
+            const actual = n / 100;
+            if (actual < 1) {
+                return actual.toFixed(3).replace(/\.?0+$/, '') || '0';
+            }
+            if (actual % 1 === 0) return String(Math.round(actual));
+            return actual.toFixed(2).replace(/\.?0+$/, '');
         }
         
         // Normalize a name for deduplication (handles variations like "Patrick Mahomes" vs "patrick-mahomes")
@@ -25333,7 +25305,9 @@
             const legendFontSize = Math.max(8, Math.min(12, Math.floor(effectiveWidth / 28)));
             const axisFontSize = Math.max(10, Math.min(15, Math.floor(effectiveWidth / 22)));
             const dataLabelFontSize = Math.max(9, Math.min(13, axisFontSize));
-            const legendPaddingRight = Math.min(320, Math.max(200, Math.floor(chartContainerWidth * 0.55)));
+            // Reserve enough space for long legend labels (e.g. "PREFER NOT TO SAY 12.37% (GP: 3.xx%)") so text is never cut off
+            const legendPaddingRight = Math.min(480, Math.max(280, Math.floor(chartContainerWidth * 0.6)));
+            const layoutPaddingCircular = { left: 16, right: legendPaddingRight, top: 12, bottom: 12 };
 
             // Age - horizontal bar with Gen Pop in data labels (green/red based on index)
             // Apply sorting based on user selection
@@ -25384,7 +25358,7 @@
                     indexAxis: ageIsCircular || ageChartType === 'line' ? 'x' : 'y', 
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: ageIsCircular ? { right: legendPaddingRight } : { right: 50 } },
+                    layout: { padding: ageIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                     plugins: { 
                         legend: { display: ageIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: legendFontSize }, boxWidth: 10, padding: 5 } },
                         datalabels: ageIsCircular ? { display: false } : {
@@ -25440,7 +25414,7 @@
                     indexAxis: genderChartType === 'bar' ? 'y' : 'x',
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: genderIsCircular ? { right: legendPaddingRight } : { right: 50 } },
+                    layout: { padding: genderIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                     plugins: { 
                         legend: { 
                             display: genderIsCircular,
@@ -25554,7 +25528,7 @@
                     indexAxis: ethnicityChartType === 'bar' ? 'y' : 'x',
                     responsive: true, 
                     maintainAspectRatio: false,
-                    layout: { padding: ethnicityIsCircular ? { right: legendPaddingRight } : { right: 50 } },
+                    layout: { padding: ethnicityIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                     plugins: { 
                         legend: { 
                             display: ethnicityIsCircular,
@@ -25694,7 +25668,7 @@
                     indexAxis: incomeIsCircular || incomeChartType === 'line' ? 'x' : 'y',
                     responsive: true, 
                     maintainAspectRatio: false,
-                        layout: { padding: incomeIsCircular ? { right: legendPaddingRight } : { right: 50 } },
+                        layout: { padding: incomeIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
                             legend: { display: incomeIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: legendFontSize }, boxWidth: 10, padding: 5 } },
                         datalabels: incomeIsCircular ? { display: false } : {
@@ -25774,7 +25748,7 @@
                     data: { labels: eduLabels, datasets: [{ data: eduData, backgroundColor: educationIsCircular ? colors : '#a6e22e', borderRadius: educationIsCircular ? 0 : 4 }] },
                     options: { 
                         indexAxis: educationIsCircular ? 'x' : 'y', responsive: true, maintainAspectRatio: false,
-                        layout: { padding: educationIsCircular ? { right: legendPaddingRight } : { right: 50 } },
+                        layout: { padding: educationIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
                             legend: { display: educationIsCircular, position: 'right', labels: { color: '#e6f1ff', font: { size: legendFontSize }, boxWidth: 10, padding: 5 } }, 
                             datalabels: educationIsCircular ? { display: false } : { 
@@ -25859,7 +25833,7 @@
                         indexAxis: relationshipChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
-                        layout: { padding: relationshipIsCircular ? { right: legendPaddingRight } : { right: 50 } },
+                        layout: { padding: relationshipIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
                             legend: { 
                                 display: relationshipIsCircular,
@@ -25974,7 +25948,7 @@
                         indexAxis: soChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
-                        layout: { padding: soIsCircular ? { right: legendPaddingRight } : { right: 50 } },
+                        layout: { padding: soIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
                             legend: { 
                                 display: soIsCircular,
@@ -26085,7 +26059,7 @@
                         indexAxis: psChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
-                        layout: { padding: psIsCircular ? { right: legendPaddingRight } : { right: 50 } },
+                        layout: { padding: psIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
                         plugins: { 
                             legend: { 
                                 display: psIsCircular,
@@ -26209,7 +26183,7 @@
                         indexAxis: occChartType === 'bar' ? 'y' : 'x',
                         responsive: true, 
                         maintainAspectRatio: false,
-                        layout: { padding: occIsCircular ? { right: legendPaddingRight } : { right: 50, top: 15, bottom: 15, left: 10 } },
+                        layout: { padding: occIsCircular ? { ...layoutPaddingCircular, top: 15, bottom: 15 } : { right: 50, top: 15, bottom: 15, left: 10 } },
                         plugins: { 
                             legend: { 
                                 display: occIsCircular,
@@ -27123,7 +27097,10 @@
             
             if (!interests || Object.keys(interests).length === 0) {
                 container.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-secondary);">No interests data available for this profile</div>';
-                document.getElementById('interestsHeatmapGrid').innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No data</div>';
+                const resultsEl = document.getElementById('interestsHeatmapResults');
+                if (resultsEl) { resultsEl.innerHTML = '<div class="interests-heatmap-placeholder" style="padding: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.8rem;">No data</div>'; }
+                const barEl = document.getElementById('interestsHeatmapBar');
+                if (barEl) barEl.innerHTML = '';
                 document.getElementById('interestsCategoryCards').innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No data</div>';
                 return;
             }
@@ -27337,8 +27314,13 @@
             document.getElementById('underIndexCard').setAttribute('data-tooltip', underTooltipText);
         }
         
+        // Quintile state for interactive heatmap (used by bar click handler)
+        let interestsHeatmapQuintiles = [];
+        
         function renderInterestsHeatmap(items) {
-            const container = document.getElementById('interestsHeatmapGrid');
+            const barEl = document.getElementById('interestsHeatmapBar');
+            const resultsEl = document.getElementById('interestsHeatmapResults');
+            const placeholderEl = resultsEl ? resultsEl.querySelector('.interests-heatmap-placeholder') : null;
             
             // Group by category
             const categories = {};
@@ -27351,7 +27333,6 @@
                 categories[item.category].count++;
             });
             
-            // Calculate averages and get top 3 items for each category
             const categoryData = Object.entries(categories)
                 .map(([name, data]) => {
                     const sortedItems = data.items.sort((a, b) => b.index - a.index);
@@ -27364,58 +27345,68 @@
                     };
                 });
             
-            // Top over-indexing item (same as Top Over-Indexing card): ensure its category appears in Over-Indexing
-            const topItem = items.length ? items.reduce((best, i) => (i.index > (best?.index || 0) ? i : best), items[0]) : null;
-            const topItemCategoryName = topItem ? topItem.category : null;
-            
-            // Split into 3 tiers by percentile so Over / Neutral / Under are consistent and comparable
-            const allIndices = categoryData.map(c => c.avgIndex);
-            const sortedIndices = [...allIndices].sort((a, b) => a - b);
-            const lowThreshold = sortedIndices[Math.floor(sortedIndices.length * 0.33)] ?? Math.min(...allIndices);
-            const highThreshold = sortedIndices[Math.floor(sortedIndices.length * 0.67)] ?? Math.max(...allIndices);
-            
-            let overIndexing = categoryData.filter(c => c.avgIndex >= highThreshold).sort((a, b) => b.avgIndex - a.avgIndex);
-            let neutral = categoryData.filter(c => c.avgIndex >= lowThreshold && c.avgIndex < highThreshold).sort((a, b) => b.avgIndex - a.avgIndex);
-            let underIndexing = categoryData.filter(c => c.avgIndex < lowThreshold).sort((a, b) => b.avgIndex - a.avgIndex);
-            
-            // Ensure the category containing the #1 top over-indexing item is in Over-Indexing (matches Top Over-Indexing card)
-            if (topItemCategoryName && topItem && topItem.index >= 100) {
-                const topCat = categoryData.find(c => c.name === topItemCategoryName);
-                if (topCat && !overIndexing.some(c => c.name === topCat.name)) {
-                    overIndexing = [...overIndexing, topCat].sort((a, b) => b.avgIndex - a.avgIndex);
-                    neutral = neutral.filter(c => c.name !== topCat.name);
-                    underIndexing = underIndexing.filter(c => c.name !== topCat.name);
-                }
+            // Sort by avgIndex ascending and split into 5 quintiles
+            const sortedByIndex = [...categoryData].sort((a, b) => a.avgIndex - b.avgIndex);
+            const n = sortedByIndex.length;
+            const size = Math.ceil(n / 5) || 1;
+            interestsHeatmapQuintiles = [];
+            for (let q = 0; q < 5; q++) {
+                const start = q * size;
+                const end = Math.min(start + size, n);
+                interestsHeatmapQuintiles.push(sortedByIndex.slice(start, end));
             }
             
-            const renderGroup = (items, label, colors) => {
-                if (items.length === 0) return '';
-                return `
-                    <div class="heatmap-group">
-                        <div class="heatmap-group-label" style="color: ${colors.text};">
-                            <span style="font-weight: 600;">${label}</span>
-                            <span style="opacity: 0.7; font-size: 0.7rem; margin-left: 0.5rem;">(${items.length} categories)</span>
-                        </div>
-                        <div class="heatmap-group-items">
-                            ${items.map(cat => {
-                                const top3Text = cat.top3.map((item, i) => `${i + 1}. ${item.name} (${formatIndex(item.index)})`).join(' | ');
-                                const tooltipText = `${cat.name}: Avg ${formatIndex(cat.avgIndex)} | ${cat.count} items | Top 3: ${top3Text}`;
-                                return `
-                                <div class="heatmap-cell has-tooltip" style="background: ${colors.bg}; color: ${colors.text}; border: 1px solid ${colors.border};" onclick="filterInterestsByCategory('${cat.name}')" data-tooltip="${tooltipText.replace(/"/g, '&quot;')}">
-                                    <div class="cell-name">${cat.name}</div>
-                                    <div class="cell-stats">${formatIndex(cat.avgIndex)} · ${cat.count}</div>
-                                </div>
-                            `}).join('')}
-                        </div>
-                    </div>
-                `;
-            };
+            // Bar segment colors (under to over)
+            const segmentColors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'];
+            if (barEl) {
+                barEl.innerHTML = interestsHeatmapQuintiles.map((_, i) =>
+                    `<div class="quintile-segment" data-quintile="${i}" style="background: ${segmentColors[i]};" title="Quintile ${i + 1}: click to see top 5 categories"></div>`
+                ).join('');
+                barEl.querySelectorAll('.quintile-segment').forEach(seg => {
+                    seg.addEventListener('click', function () {
+                        const q = parseInt(this.getAttribute('data-quintile'), 10);
+                        selectInterestsHeatmapQuintile(q);
+                    });
+                });
+            }
             
-            container.innerHTML = `
-                ${renderGroup(overIndexing, '🔥 Over-Indexing', { bg: 'rgba(16, 185, 129, 0.2)', text: '#10b981', border: 'rgba(16, 185, 129, 0.4)' })}
-                ${renderGroup(neutral, '⚖️ Neutral', { bg: 'rgba(234, 179, 8, 0.15)', text: '#eab308', border: 'rgba(234, 179, 8, 0.3)' })}
-                ${renderGroup(underIndexing, '📉 Under-Indexing', { bg: 'rgba(239, 68, 68, 0.15)', text: '#ef4444', border: 'rgba(239, 68, 68, 0.3)' })}
-            `;
+            // Reset results area to placeholder (no segment selected)
+            if (resultsEl && placeholderEl) {
+                resultsEl.innerHTML = '';
+                resultsEl.appendChild(placeholderEl);
+            }
+            if (barEl) barEl.querySelectorAll('.quintile-segment').forEach(s => s.classList.remove('selected'));
+        }
+        
+        function selectInterestsHeatmapQuintile(quintileIndex) {
+            const barEl = document.getElementById('interestsHeatmapBar');
+            const resultsEl = document.getElementById('interestsHeatmapResults');
+            if (!resultsEl || !interestsHeatmapQuintiles.length) return;
+            
+            const quintile = interestsHeatmapQuintiles[quintileIndex];
+            if (!quintile || quintile.length === 0) return;
+            
+            // Top 5 in this range (by avgIndex descending)
+            const top5 = [...quintile].sort((a, b) => b.avgIndex - a.avgIndex).slice(0, 5);
+            
+            // Highlight selected segment
+            if (barEl) {
+                barEl.querySelectorAll('.quintile-segment').forEach((s, i) => {
+                    s.classList.toggle('selected', i === quintileIndex);
+                });
+            }
+            
+            const segmentColors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'];
+            const borderColor = segmentColors[quintileIndex];
+            resultsEl.innerHTML = top5.map(cat => {
+                const safeName = (cat.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                const safeNameJs = (cat.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                const tooltipSafe = (cat.name + ': Avg ' + formatIndex(cat.avgIndex) + ' · ' + cat.count + ' items').replace(/"/g, '&quot;');
+                return `<div class="quintile-result-card has-tooltip" style="border-left: 3px solid ${borderColor};" data-tooltip="${tooltipSafe}" onclick="filterInterestsByCategory('${safeNameJs}')">
+                    <span class="result-name">${safeName}</span>
+                    <span class="result-stats">${formatIndex(cat.avgIndex)} · ${cat.count} items</span>
+                </div>`;
+            }).join('');
         }
         
         function getHeatmapColor(index) {
@@ -28817,8 +28808,6 @@
             const US_POP = 324700000;
             sortMode = sortMode || 'pct';
             const gpVal = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
-            // Bar scale: always use Profile % so the blue bar visually reflects percentage (largest % = longest bar, descending)
-            const maxBarVal = Math.max(...items.map(i => i.pct || 0), 1);
             return items.map((item, idx) => {
                 const index = item.index || 0;
                 let genPopPct = item.genPopPct || 0;
@@ -28843,17 +28832,11 @@
                     ? (normalizedGenPopPct === 0 || normalizedGenPopPct === null ? 'N/A' : formatNumber(Math.round((normalizedGenPopPct / 100) * US_POP)))
                     : formatValueOrNA(normalizedGenPopPct, true);
                 
-                // Bar width: always reflect Profile % so largest % = longest bar, descending by percentage
-                const barWidth = Math.min(100, ((item.pct || 0) / maxBarVal) * 100);
-                
                 return `
                     <div class="behavioral-item">
                         <span class="behavioral-rank">${idx + 1}</span>
                         <div class="behavioral-name-wrapper">
-                            <div class="behavioral-bar-container">
-                                <div class="behavioral-bar" style="width: ${barWidth}%"></div>
-                            </div>
-                            <span class="behavioral-name has-tooltip" data-tooltip="${item.name}">${item.name}</span>
+                            <span class="behavioral-name has-tooltip" data-tooltip="${(item.name || '').replace(/"/g, '&quot;')}">${(item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>
                         </div>
                         <span class="behavioral-pct" style="color: var(--text-primary);">${profileDisplay}</span>
                         <span class="behavioral-pct genpop-col" style="color: var(--text-secondary);">(${genPopDisplay})</span>
@@ -29950,15 +29933,11 @@
             document.querySelectorAll('.ranker-platform-panel').forEach(p => p.classList.remove('active'));
             document.querySelectorAll('.rankers-platform-tabs .tab-btn').forEach(b => b.classList.remove('active'));
             const panel = document.getElementById('ranker-' + id);
-            const btnId = id === 'youtube' ? 'rankerPlatformYouTube' : 'rankerPlatform' + id.charAt(0).toUpperCase() + id.slice(1);
+            const btnId = 'rankerPlatform' + id.charAt(0).toUpperCase() + id.slice(1);
             const btn = document.getElementById(btnId);
             if (panel) panel.classList.add('active');
             if (btn) btn.classList.add('active');
-            if (id === 'netflix') {
-                showNetflixSubTab('daily');
-            } else if (id === 'youtube') {
-                showYouTubeSubTab('daily');
-            }
+            if (id === 'netflix') showNetflixSubTab('daily');
         }
 
         function showNetflixSubTab(id) {
@@ -29992,8 +29971,7 @@
             const progress = document.getElementById('rankersLoadProgress');
             const done = document.getElementById('rankersLoadDone');
             const block = document.getElementById('rankersLoadBlock');
-            const bothLoaded = netflixRankerData && youtubeRankerData;
-            if (bothLoaded) {
+            if (netflixRankerData) {
                 if (progress) progress.style.display = 'none';
                 if (done) done.style.display = 'block';
                 if (block) block.style.display = 'none';
@@ -30001,35 +29979,23 @@
                 if (progress) progress.style.display = 'flex';
                 if (done) done.style.display = 'none';
                 if (block) block.style.display = 'block';
-                const parts = [];
-                if (!netflixRankerData) parts.push('Netflix: loading or error');
-                else parts.push('Netflix: loaded.');
-                if (!youtubeRankerData) parts.push('YouTube: loading...');
-                else parts.push('YouTube: loaded.');
-                updateRankersLoadStatus(parts.join(' '));
+                updateRankersLoadStatus('Netflix: loading or error');
             }
         }
 
         function updateRankersLoadStatus(msg) {
             const status = document.getElementById('rankersLoadStatus');
-            if (status) status.textContent = msg;
+            if (status) status.textContent = 'Loading ...';
         }
 
         function ensureRankersLoaded() {
-            const bothLoaded = netflixRankerData && youtubeRankerData;
-            if (bothLoaded) {
+            if (netflixRankerData) {
                 showRankersDoneBlock();
                 return;
             }
             showRankersProgressBlock();
-            const parts = [];
-            if (!netflixRankerData) parts.push('Netflix: loading...');
-            else parts.push('Netflix: loaded.');
-            if (!youtubeRankerData) parts.push('YouTube: loading...');
-            else parts.push('YouTube: loaded.');
-            updateRankersLoadStatus(parts.join(' '));
+            updateRankersLoadStatus('Netflix: loading...');
             if (!netflixRankerData) loadNetflixRankerData();
-            if (!youtubeRankerData) loadYouTubeRankerData();
         }
 
         function _getLastNetflixDateWithData(data, key) {
@@ -30046,10 +30012,7 @@
         function loadNetflixRankerData(forceRefresh) {
             const btn = document.getElementById('rankersLoadBtnNetflix');
             if (btn) btn.disabled = true;
-            const parts = ['Netflix: loading...'];
-            if (!youtubeRankerData) parts.push('YouTube: loading...');
-            else parts.push('YouTube: loaded.');
-            updateRankersLoadStatus(parts.join(' '));
+            updateRankersLoadStatus('Netflix: loading...');
             const url = '/api/rankers/netflix/data' + (forceRefresh ? '?force_refresh=1' : '');
             // Add timeout controller - 5 minutes for large Netflix dataset (first load can be very slow)
             const controller = new AbortController();
@@ -30079,10 +30042,7 @@
                     if (data.error) throw new Error(data.error);
                     netflixRankerData = data;
                     const rangeStr = data.date_range ? (data.date_range.min + ' to ' + data.date_range.max) : '';
-                    const parts = ['Netflix: loaded' + (rangeStr ? ' (' + rangeStr + ').' : '.')];
-                    if (!youtubeRankerData) parts.push('YouTube: loading...');
-                    else parts.push('YouTube: loaded.');
-                    updateRankersLoadStatus(parts.join(' '));
+                    updateRankersLoadStatus('Netflix: loaded' + (rangeStr ? ' (' + rangeStr + ').' : '.'));
                     // Use last date that actually has data (not just date_range.max which may be stale)
                     const lastDateWithData = _getLastNetflixDateWithData(data);
                     const seasonsLastDate = _getLastNetflixDateWithData(data, 'by_date_season');
@@ -30120,10 +30080,9 @@
                     renderNetflixTopShows();
                     renderNetflixInsights();
                     if (btn) btn.disabled = false;
-                    // Hide load block so Netflix table is visible (data is the focus)
                     const loadBlock = document.getElementById('rankersLoadBlock');
                     if (loadBlock) loadBlock.style.display = 'none';
-                    if (youtubeRankerData) showRankersDoneBlock();
+                    showRankersDoneBlock();
                 })
                 .catch(err => {
                     clearTimeout(timeoutId);
@@ -30131,10 +30090,7 @@
                     if (err.name === 'AbortError') {
                         errMsg = 'Request timed out (5 min). The server may be busy. Try Refresh Netflix again.';
                     }
-                    const parts = ['Netflix: error — ' + errMsg + '.'];
-                    if (!youtubeRankerData) parts.push('YouTube: loading...');
-                    else parts.push('YouTube: loaded.');
-                    updateRankersLoadStatus(parts.join(' '));
+                    updateRankersLoadStatus('Netflix: error — ' + errMsg + '.');
                     if (btn) btn.disabled = false;
                     showRankersProgressBlock();
                 });
@@ -30720,252 +30676,6 @@
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(header + body); a.download = 'netflix_top_shows_over_time.csv'; a.click();
         }
 
-        // --- YouTube Ranker (Rankers tab) ---
-        let youtubeRankerData = null;
-        let youtubeTrendsChartInstance = null;
-        let youtubeChannelChartInstance = null;
-        let youtubeTopTitlesChartInstance = null;
-
-        function showYouTubeSubTab(id) {
-            document.querySelectorAll('#ranker-youtube .netflix-sub-content').forEach(c => c.classList.remove('active'));
-            document.querySelectorAll('#ranker-youtube .netflix-subtabs .tab-btn').forEach(b => b.classList.remove('active'));
-            const content = document.getElementById('youtube-' + id);
-            const btn = document.getElementById('youtubeSubTab' + (id === 'toptitles' ? 'TopTitles' : id.charAt(0).toUpperCase() + id.slice(1)));
-            if (content) content.classList.add('active');
-            if (btn) btn.classList.add('active');
-            if (id === 'daily') renderYouTubeDailyRanker();
-            else if (id === 'trends') renderYouTubeTrends();
-            else if (id === 'channel') renderYouTubeByChannel();
-            else if (id === 'toptitles') renderYouTubeTopTitles();
-            else if (id === 'insights') renderYouTubeInsights();
-        }
-
-        function loadYouTubeRankerData() {
-            const btn = document.getElementById('rankersLoadBtnYouTube');
-            if (btn) btn.disabled = true;
-            const parts = [];
-            if (!netflixRankerData) parts.push('Netflix: loading...');
-            else parts.push('Netflix: loaded.');
-            parts.push('YouTube: loading...');
-            updateRankersLoadStatus(parts.join(' '));
-            fetch('/api/rankers/youtube/data', { credentials: 'same-origin' })
-                .then(r => {
-                    if (!r.ok) throw new Error(r.status + ' ' + (r.statusText || 'Request failed'));
-                    return r.text();
-                })
-                .then(text => {
-                    if (!text || text.trim() === '') throw new Error('Empty response from server');
-                    try {
-                        return JSON.parse(text);
-                    } catch (e) {
-                        throw new Error('Invalid response from server');
-                    }
-                })
-                .then(data => {
-                    if (data.error) throw new Error(data.error);
-                    youtubeRankerData = data;
-                    const rangeStr = data.date_range ? (data.date_range.min + ' to ' + data.date_range.max) : '';
-                    const parts2 = [];
-                    if (!netflixRankerData) parts2.push('Netflix: loading...');
-                    else parts2.push('Netflix: loaded.');
-                    parts2.push('YouTube: loaded' + (rangeStr ? ' (' + rangeStr + ').' : '.'));
-                    updateRankersLoadStatus(parts2.join(' '));
-                    const dateInp = document.getElementById('youtubeDailyDate');
-                    if (dateInp && data.date_range) {
-                        dateInp.min = data.date_range.min;
-                        dateInp.max = data.date_range.max;
-                        dateInp.value = data.date_range.max || data.date_range.min;
-                    }
-                    const channelDate = document.getElementById('youtubeChannelDate');
-                    if (channelDate && data.date_range) {
-                        channelDate.min = data.date_range.min;
-                        channelDate.max = data.date_range.max;
-                        channelDate.value = data.date_range.max || data.date_range.min;
-                    }
-                    renderYouTubeDailyRanker();
-                    populateYouTubeTrendsSelect();
-                    renderYouTubeByChannel();
-                    renderYouTubeTopTitles();
-                    renderYouTubeInsights();
-                    if (btn) btn.disabled = false;
-                    if (netflixRankerData) showRankersDoneBlock();
-                })
-                .catch(err => {
-                    const parts2 = [];
-                    if (!netflixRankerData) parts2.push('Netflix: loading...');
-                    else parts2.push('Netflix: loaded.');
-                    parts2.push('YouTube: error — ' + (err.message || err) + '.');
-                    updateRankersLoadStatus(parts2.join(' '));
-                    if (btn) btn.disabled = false;
-                    if (netflixRankerData) showRankersDoneBlock();
-                });
-        }
-
-        function populateYouTubeTrendsSelect() {
-            if (!youtubeRankerData || !youtubeRankerData.by_title) return;
-            const sel = document.getElementById('youtubeTrendsTitle');
-            if (!sel) return;
-            const titles = Object.keys(youtubeRankerData.by_title).sort();
-            sel.innerHTML = '<option value="">Select title...</option>' + titles.map(s => '<option value="' + s.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '">' + (s.length > 60 ? s.slice(0, 57) + '...' : s) + '</option>').join('');
-        }
-
-        function renderYouTubeDailyRanker() {
-            const wrap = document.getElementById('youtubeDailyTableWrap');
-            const tbody = document.getElementById('youtubeDailyBody');
-            const loading = document.getElementById('youtubeDailyLoading');
-            const dateInp = document.getElementById('youtubeDailyDate');
-            if (!youtubeRankerData || !youtubeRankerData.by_date) {
-                if (loading) loading.style.display = 'block';
-                if (wrap) wrap.style.display = 'none';
-                return;
-            }
-            if (loading) loading.style.display = 'none';
-            if (wrap) wrap.style.display = 'block';
-            const date = dateInp ? dateInp.value : (youtubeRankerData.date_range && youtubeRankerData.date_range.max);
-            const rows = youtubeRankerData.by_date[date] || [];
-            const sorted = rows.slice().sort((a, b) => (b.views - a.views));
-            if (tbody) tbody.innerHTML = sorted.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + (r.channel || '-') + '</td></tr>').join('');
-        }
-
-        function renderYouTubeTrends() {
-            const wrap = document.getElementById('youtubeTrendsChartWrap');
-            const loading = document.getElementById('youtubeTrendsLoading');
-            const sel = document.getElementById('youtubeTrendsTitle');
-            if (!youtubeRankerData || !youtubeRankerData.by_title) {
-                if (loading) loading.style.display = 'block';
-                if (wrap) wrap.style.display = 'none';
-                return;
-            }
-            const titleVal = sel ? sel.value : '';
-            if (!titleVal) {
-                if (loading) loading.style.display = 'block';
-                if (wrap) wrap.style.display = 'none';
-                return;
-            }
-            if (loading) loading.style.display = 'none';
-            if (wrap) wrap.style.display = 'block';
-            const series = youtubeRankerData.by_title[titleVal] || [];
-            const labels = series.map(d => d.date).sort();
-            const values = labels.map(d => { const pt = series.find(p => p.date === d); return pt ? pt.views : 0; });
-            const ctx = document.getElementById('youtubeTrendsChart');
-            if (!ctx) return;
-            if (youtubeTrendsChartInstance) youtubeTrendsChartInstance.destroy();
-            youtubeTrendsChartInstance = typeof Chart !== 'undefined' && new Chart(ctx.getContext('2d'), {
-                type: 'line',
-                data: { labels: labels, datasets: [{ label: 'Views', data: values, borderColor: '#ff0000', backgroundColor: 'rgba(255,0,0,0.1)', fill: true, tension: 0.2 }] },
-                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
-            });
-        }
-
-        function renderYouTubeByChannel() {
-            const wrap = document.getElementById('youtubeChannelChartWrap');
-            const tbody = document.getElementById('youtubeChannelBody');
-            const loading = document.getElementById('youtubeChannelLoading');
-            const dateInp = document.getElementById('youtubeChannelDate');
-            if (!youtubeRankerData || !youtubeRankerData.channels_by_date) {
-                if (loading) loading.style.display = 'block';
-                if (wrap) wrap.style.display = 'none';
-                if (tbody && tbody.parentElement) tbody.parentElement.style.display = 'none';
-                return;
-            }
-            const date = dateInp ? dateInp.value : (youtubeRankerData.date_range && youtubeRankerData.date_range.max);
-            const rows = youtubeRankerData.channels_by_date[date] || [];
-            const total = rows.reduce((s, r) => s + (r.views || 0), 0);
-            if (loading) loading.style.display = 'none';
-            if (wrap) wrap.style.display = 'block';
-            if (tbody) {
-                if (tbody.parentElement) tbody.parentElement.style.display = 'table';
-                tbody.innerHTML = rows.map(r => '<tr><td>' + (r.channel || '-') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + (total ? ((r.views / total * 100).toFixed(1) + '%') : '-') + '</td><td>' + (r.top_title || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</td></tr>').join('');
-            }
-            const ctx = document.getElementById('youtubeChannelChart');
-            if (ctx && typeof Chart !== 'undefined') {
-                if (youtubeChannelChartInstance) youtubeChannelChartInstance.destroy();
-                youtubeChannelChartInstance = new Chart(ctx.getContext('2d'), {
-                    type: 'bar',
-                    data: { labels: rows.map(r => r.channel || 'Other'), datasets: [{ label: 'Views', data: rows.map(r => r.views || 0), backgroundColor: 'rgba(255,0,0,0.6)' }] },
-                    options: { responsive: true, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
-                });
-            }
-        }
-
-        function renderYouTubeTopTitles() {
-            const wrap = document.getElementById('youtubeTopTitlesChartWrap');
-            const loading = document.getElementById('youtubeTopTitlesLoading');
-            if (!youtubeRankerData || !youtubeRankerData.top_titles_over_time || !youtubeRankerData.top_titles_over_time.length) {
-                if (loading) loading.style.display = 'block';
-                if (wrap) wrap.style.display = 'none';
-                return;
-            }
-            if (loading) loading.style.display = 'none';
-            if (wrap) wrap.style.display = 'block';
-            const top = youtubeRankerData.top_titles_over_time.slice(0, 20);
-            const allDates = youtubeRankerData.dates_sorted || [];
-            const colors = ['#ff0000','#ff4444','#ff8844','#ffaa44','#cc0000','#aa4444','#884444','#664444'];
-            const ctx = document.getElementById('youtubeTopTitlesChart');
-            if (ctx && typeof Chart !== 'undefined') {
-                if (youtubeTopTitlesChartInstance) youtubeTopTitlesChartInstance.destroy();
-                youtubeTopTitlesChartInstance = new Chart(ctx.getContext('2d'), {
-                    type: 'line',
-                    data: {
-                        labels: allDates,
-                        datasets: top.map((s, i) => ({ label: (s.title || '').slice(0, 40), data: allDates.map(d => (s.by_date[d] || 0)), borderColor: colors[i % colors.length], fill: false, tension: 0.2 }))
-                    },
-                    options: { responsive: true, interaction: { mode: 'index' }, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
-                });
-            }
-        }
-
-        function renderYouTubeInsights() {
-            const wrap = document.getElementById('youtubeInsightsCards');
-            const loading = document.getElementById('youtubeInsightsLoading');
-            if (!youtubeRankerData) {
-                if (loading) loading.style.display = 'block';
-                if (wrap) wrap.innerHTML = '';
-                return;
-            }
-            if (loading) loading.style.display = 'none';
-            const byDate = youtubeRankerData.by_date || {};
-            const dates = Object.keys(byDate).sort();
-            const latest = dates.length ? byDate[dates[dates.length - 1]] : [];
-            const totalViews = latest.reduce((s, r) => s + (r.views || 0), 0);
-            const topTitle = latest.length ? latest.slice().sort((a, b) => (b.views - a.views))[0] : null;
-            const allViews = youtubeRankerData.daily ? youtubeRankerData.daily.reduce((s, r) => s + (r.views || 0), 0) : 0;
-            const titleCount = youtubeRankerData.by_title ? Object.keys(youtubeRankerData.by_title).length : 0;
-            const cards = [
-                { label: 'Total View Events (Past Year)', value: (allViews || 0).toLocaleString() },
-                { label: 'Unique Titles', value: (titleCount || 0).toLocaleString() },
-                { label: 'Date Range', value: (youtubeRankerData.date_range ? youtubeRankerData.date_range.min + ' – ' + youtubeRankerData.date_range.max : '-') },
-                { label: 'Latest Day Total Views', value: totalViews.toLocaleString() },
-                { label: 'Top Title (Latest Day)', value: topTitle ? (topTitle.title || '').slice(0, 50) : '-' },
-                { label: 'Days of Data', value: (dates.length || 0).toString() }
-            ];
-            if (wrap) wrap.innerHTML = cards.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
-        }
-
-        function exportYouTubeDailyCSV() {
-            if (!youtubeRankerData || !youtubeRankerData.by_date) return;
-            const dateInp = document.getElementById('youtubeDailyDate');
-            const date = dateInp ? dateInp.value : (youtubeRankerData.date_range && youtubeRankerData.date_range.max);
-            const rows = (youtubeRankerData.by_date[date] || []).slice().sort((a, b) => (b.views - a.views));
-            const csv = 'Rank,Title,Views,Channel\n' + rows.map((r, i) => (i + 1) + ',"' + (r.title || '').replace(/"/g, '""') + '",' + (r.views || 0) + ',"' + (r.channel || '').replace(/"/g, '""') + '"').join('\n');
-            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'youtube_daily_ranker_' + date + '.csv'; a.click();
-        }
-        function exportYouTubeTrendsCSV() {
-            const sel = document.getElementById('youtubeTrendsTitle');
-            if (!youtubeRankerData || !sel || !sel.value) return;
-            const series = youtubeRankerData.by_title[sel.value] || [];
-            const csv = 'Date,Views\n' + series.map(p => p.date + ',' + (p.views || 0)).join('\n');
-            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'youtube_trends.csv'; a.click();
-        }
-        function exportYouTubeTopTitlesCSV() {
-            if (!youtubeRankerData || !youtubeRankerData.top_titles_over_time) return;
-            const rows = youtubeRankerData.top_titles_over_time.slice(0, 20);
-            const dates = youtubeRankerData.dates_sorted || [];
-            const header = 'Title,' + dates.join(',') + '\n';
-            const body = rows.map(s => '"' + (s.title || '').replace(/"/g, '""') + '",' + dates.map(d => (s.by_date[d] || 0)).join(',')).join('\n');
-            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(header + body); a.download = 'youtube_top_titles_over_time.csv'; a.click();
-        }
-        
         function filterLocationList(which) {
             const isProjection = dashDisplayMode === 'projection';
             const searchInput = which === 'top' 
@@ -38290,15 +38000,15 @@
         
         function getHeatColor(value, min, max) {
             const normalized = (value - min) / (max - min || 1);
-            // Blue -> Green -> Yellow -> Orange -> Red
+            // Red (low) -> Orange -> Yellow -> Green (high)
             if (normalized < 0.25) {
-                return `rgba(59, 130, 246, ${0.3 + normalized * 2})`; // Blue
+                return `rgba(239, 68, 68, ${0.4 + (1 - normalized) * 0.6})`; // Red
             } else if (normalized < 0.5) {
-                return `rgba(16, 185, 129, ${0.3 + normalized * 1.4})`; // Green
+                return `rgba(249, 115, 22, ${0.5 + normalized * 0.5})`; // Orange
             } else if (normalized < 0.75) {
-                return `rgba(234, 179, 8, ${0.3 + normalized * 1.2})`; // Yellow
+                return `rgba(234, 179, 8, ${0.5 + normalized * 0.5})`; // Yellow
             } else {
-                return `rgba(239, 68, 68, ${0.4 + normalized * 0.6})`; // Red
+                return `rgba(16, 185, 129, ${0.4 + normalized * 0.6})`; // Green
             }
         }
         

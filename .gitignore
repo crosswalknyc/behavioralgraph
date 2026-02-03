@@ -40,4 +40,3 @@ Thumbs.db
 .cache/
 ai_cache/
 netflix_ranker_cache.json
-youtube_ranker_cache.json
