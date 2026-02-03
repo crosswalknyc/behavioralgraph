@@ -2545,8 +2545,9 @@ def track_user_activity():
 # ADMIN CONTENT MANAGEMENT + JOBS (profile list for dashboard)
 # ============================================================================
 
-def _fetch_content_files():
-    """Fetch active and archived file lists from S3. Returns (active_files, archived_files) or (None, None) on error."""
+def _fetch_content_files(include_svod=True):
+    """Fetch active and archived file lists from S3. Returns (active_files, archived_files) or (None, None) on error.
+    When include_svod=False, only returns files from dashboard-inputs (Profile IQ). SVOD files are for Subscriber IQ only."""
     aws_key = os.environ.get('AWS_ACCESS_KEY_ID')
     aws_secret = os.environ.get('AWS_SECRET_ACCESS_KEY')
     if not aws_key or not aws_secret:
@@ -2609,54 +2610,45 @@ def _fetch_content_files():
         
         print(f"✅ Found {len(active_files)} active files")
         
-        # Get SVOD Acquisition files from subscriber bucket
-        svod_files = []
-        try:
-            # Load SVOD metadata for categories
-            svod_metadata = load_svod_metadata()
-            
-            svod_paginator = s3.get_paginator('list_objects_v2')
-            for page in svod_paginator.paginate(Bucket=SUBSCRIBER_S3_BUCKET, Prefix=''):
-                for obj in page.get('Contents', []):
-                    key = obj['Key']
-                    # Skip historic folder and non-CSV files
-                    if key.startswith('historic/') or not key.endswith('.csv'):
-                        continue
-                    
-                    filename = key.split('/')[-1]
-                    # Extract show name from filename
-                    name_without_ext = key.replace('.csv', '')
-                    match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
-                    if match:
-                        show_name = match.group(1).replace('_', ' ')
-                    else:
-                        show_name = name_without_ext.replace('_', ' ')
-                    
-                    last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
-                    
-                    # Get category from metadata, default to 'SVOD Acquisition'
-                    # SVOD files can have subcategories (TALENT, CONTENT, etc.) but they're always under SVOD ACQUISITION master
-                    category = 'SVOD Acquisition'
-                    if key in svod_metadata and svod_metadata[key].get('category'):
-                        category = svod_metadata[key]['category']
-                    
-                    svod_files.append({
-                        'key': f'svod-acquisition/{key}',  # Prefix to identify bucket
-                        'filename': filename,
-                        'project_name': show_name,
-                        'category': category,
-                        'size': obj.get('Size', 0),
-                        'last_modified': last_modified,
-                        'created_at': last_modified,
-                        'bucket': SUBSCRIBER_S3_BUCKET,
-                        's3_key': key,  # Original key in svod bucket
-                        'is_svod': True  # Flag to identify SVOD files
-                    })
-            
-            print(f"✅ Found {len(svod_files)} SVOD Acquisition files")
-            active_files.extend(svod_files)
-        except Exception as svod_err:
-            print(f"⚠️ Error loading SVOD files: {svod_err}")
+        # Get SVOD Acquisition files from subscriber bucket only when requested (e.g. admin content).
+        # Profile IQ dashboard must NOT include SVOD; those appear in Subscriber IQ only.
+        if include_svod:
+            svod_files = []
+            try:
+                svod_metadata = load_svod_metadata()
+                svod_paginator = s3.get_paginator('list_objects_v2')
+                for page in svod_paginator.paginate(Bucket=SUBSCRIBER_S3_BUCKET, Prefix=''):
+                    for obj in page.get('Contents', []):
+                        key = obj['Key']
+                        if key.startswith('historic/') or not key.endswith('.csv'):
+                            continue
+                        filename = key.split('/')[-1]
+                        name_without_ext = key.replace('.csv', '')
+                        match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+                        if match:
+                            show_name = match.group(1).replace('_', ' ')
+                        else:
+                            show_name = name_without_ext.replace('_', ' ')
+                        last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
+                        category = 'SVOD Acquisition'
+                        if key in svod_metadata and svod_metadata[key].get('category'):
+                            category = svod_metadata[key]['category']
+                        svod_files.append({
+                            'key': f'svod-acquisition/{key}',
+                            'filename': filename,
+                            'project_name': show_name,
+                            'category': category,
+                            'size': obj.get('Size', 0),
+                            'last_modified': last_modified,
+                            'created_at': last_modified,
+                            'bucket': SUBSCRIBER_S3_BUCKET,
+                            's3_key': key,
+                            'is_svod': True
+                        })
+                print(f"✅ Found {len(svod_files)} SVOD Acquisition files")
+                active_files.extend(svod_files)
+            except Exception as svod_err:
+                print(f"⚠️ Error loading SVOD files: {svod_err}")
         
         # Load profile image cache to check for custom images
         if not profile_image_cache:
@@ -2715,8 +2707,11 @@ def get_admin_content():
 @app.route('/api/jobs', methods=['GET'])
 @requires_auth
 def get_jobs():
-    """List all available profiles (S3 result files) for dashboard and admin. Required for sidebar profile list; do not remove."""
-    active_files, _ = _fetch_content_files()
+    """List all available profiles (S3 result files). Use source=profile_iq for Profile IQ sidebar (dashboard-inputs only, no SVOD)."""
+    source = (request.args.get('source') or '').strip().lower()
+    # Profile IQ dashboard: only dashboard-inputs bucket (no SVOD Acquisition — those are Subscriber IQ)
+    include_svod = source != 'profile_iq'
+    active_files, _ = _fetch_content_files(include_svod=include_svod)
     if active_files is None:
         return jsonify({'jobs': []})
     jobs = []

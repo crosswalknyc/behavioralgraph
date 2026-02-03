@@ -74,7 +74,7 @@
             var tree = document.getElementById('dashProfileTree');
             if (!tree) return;
             tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:0.85rem;">Loading profiles...</div>';
-            fetch('/api/jobs', { credentials: 'same-origin' })
+            fetch('/api/jobs?source=profile_iq', { credentials: 'same-origin' })
                 .then(function(r) {
                     if (!r.ok) {
                         if (r.status === 404) {
@@ -23122,7 +23122,7 @@
 
         async function populatePreviousFiles() {
             try {
-                const response = await fetch('/api/jobs', { credentials: 'same-origin' });
+                const response = await fetch('/api/jobs?source=profile_iq', { credentials: 'same-origin' });
                 if (response.status === 401) {
                     window.location.href = '/login';
                     return;
@@ -24387,7 +24387,7 @@
             const container = document.getElementById('dashProfileTree');
             
             try {
-                const response = await fetch('/api/jobs', { credentials: 'same-origin' });
+                const response = await fetch('/api/jobs?source=profile_iq', { credentials: 'same-origin' });
                 
                 // Handle authentication errors
                 if (response.status === 401) {
