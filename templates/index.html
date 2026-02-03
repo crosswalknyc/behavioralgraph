@@ -30025,9 +30025,9 @@
             else parts.push('YouTube: loaded.');
             updateRankersLoadStatus(parts.join(' '));
             const url = '/api/rankers/netflix/data' + (forceRefresh ? '?force_refresh=1' : '');
-            // Add timeout controller - 90 seconds for large Netflix dataset
+            // Add timeout controller - 5 minutes (300 seconds) for large Netflix dataset on first load
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 90000);
+            const timeoutId = setTimeout(() => controller.abort(), 300000);
             fetch(url, { credentials: 'same-origin', signal: controller.signal })
                 .then(r => {
                     clearTimeout(timeoutId);
@@ -30103,7 +30103,7 @@
                     clearTimeout(timeoutId);
                     let errMsg = err.message || String(err);
                     if (err.name === 'AbortError') {
-                        errMsg = 'Request timed out (90s). The server may be busy. Try Refresh Netflix again.';
+                        errMsg = 'Request timed out (5 min). The server may be busy loading a large dataset. Try Refresh Netflix again.';
                     }
                     const parts = ['Netflix: error — ' + errMsg + '.'];
                     if (!youtubeRankerData) parts.push('YouTube: loading...');
