@@ -4346,6 +4346,7 @@ def get_netflix_ranker_data():
         payload = data or {}
         if not payload.get('by_date') and not payload.get('date_range'):
             # No S3 cache (e.g. fresh deploy): fall back to direct Snowflake fetch (last 7 days) like earlier behavior
+            snowflake_error = None
             try:
                 print(f"[Netflix Ranker] No cache; fetching directly from Snowflake (last 7 days)")
                 data = _fetch_netflix_ranker_from_snowflake(refresh_today_only=False)
@@ -4356,8 +4357,12 @@ def get_netflix_ranker_data():
                     print(f"[Netflix Ranker] Returning direct Snowflake payload with {len(data.get('by_date', {}))} dates")
                     return jsonify(data)
             except Exception as e:
+                snowflake_error = str(e)
                 print(f"[Netflix Ranker] Direct Snowflake fallback failed: {e}")
-            return jsonify({'error': 'No Netflix ranker data available. Run backfill or check Snowflake.'}), 503
+            err_body = {'error': 'No Netflix ranker data available. Run backfill or check Snowflake.'}
+            if snowflake_error:
+                err_body['detail'] = snowflake_error
+            return jsonify(err_body), 503
         print(f"[Netflix Ranker] Returning payload with {len(payload.get('by_date', {}))} dates")
         return jsonify(payload)
     except Exception as e:
@@ -4777,7 +4782,12 @@ def get_csv_data(s3_key):
         
         # Convert to records
         data = df.to_dict('records')
-        
+        # Normalize Latinx -> Latino for display (never show "Latinx" in UI)
+        for row in data:
+            val = row.get('Value')
+            if isinstance(val, str) and val.strip().lower() == 'latinx':
+                row['Value'] = 'Latino'
+
         print(f"✅ Returning data for brand: {brand_name.upper()}")
         return jsonify({
             'success': True,
@@ -5008,6 +5018,11 @@ def get_segment_data():
                 'ethnicity': {}
             }
             
+            def _display_ethnicity(val):
+                if not val or not isinstance(val, str):
+                    return val
+                return 'Latino' if val.strip().lower() == 'latinx' else val
+
             for row in demo_results:
                 gender, age, income, ethnicity, count = row
                 if gender:
@@ -5017,7 +5032,8 @@ def get_segment_data():
                 if income:
                     demographics['income'][income] = demographics['income'].get(income, 0) + count
                 if ethnicity:
-                    demographics['ethnicity'][ethnicity] = demographics['ethnicity'].get(ethnicity, 0) + count
+                    key = _display_ethnicity(ethnicity)
+                    demographics['ethnicity'][key] = demographics['ethnicity'].get(key, 0) + count
             
             # Convert counts to percentages
             total_demo = sum(demographics['gender'].values()) if demographics['gender'] else actual_segment_size

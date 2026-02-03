@@ -125,6 +125,10 @@
             let sampleSize = 0;
             const demographics = { gender: {}, age: {}, ethnicity: {}, income: {} };
             
+            function displayEthnicityLabel(v) {
+                if (!v || typeof v !== 'string') return v;
+                return v.trim().toLowerCase() === 'latinx' ? 'Latino' : v;
+            }
             csvData.forEach(row => {
                 const col = (row.Column || '').toUpperCase();
                 const val = row.Value || '';
@@ -135,7 +139,7 @@
                 }
                 if (col === 'GENDER' && val) demographics.gender[val] = pct;
                 if (col === 'AGE' && val) demographics.age[val] = pct;
-                if (col === 'ETHNICITY' && val) demographics.ethnicity[val] = pct;
+                if (col === 'ETHNICITY' && val) demographics.ethnicity[displayEthnicityLabel(val)] = pct;
                 if (col === 'INCOME' && val) demographics.income[val] = pct;
             });
             
