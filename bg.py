@@ -503,7 +503,7 @@ GENPOP_DEMOGRAPHICS = [
     ("GENDER", "Prefer not to say", 0.0926),
     ("ETHNICITY", "White", 59.0489),
     ("ETHNICITY", "Black", 14.3119),
-    ("ETHNICITY", "LatinX", 18.6083),
+    ("ETHNICITY", "Latino", 18.6083),
     ("ETHNICITY", "Asian", 3.0309),
     ("ETHNICITY", "Other", 5.0001),
     ("EDUCATION", "Complete College/University", 43.517),
@@ -1327,7 +1327,7 @@ def get_user_inputs():
         fields = {
             "GENDER": "Gender (N for no or Female, Male, Trans Male, Trans Female, Non-binary): ",
             "AGE": "Age group (N for no or <16, 16-18, 18-20, 21-25, 26-30, 31-40, 41-59, 60+): ",
-            "ETHNICITY": "Ethnicity (N for no or White, LatinX, Other, Black, Asian): ",
+            "ETHNICITY": "Ethnicity (N for no or White, Latino, Other, Black, Asian): ",
             "INCOME": "HHI (N for no or $40K - $60K, $60K - $75K, $75K - $100K, $100K - $150K, $150K - $250K, $250K+): ",
             "EDUCATION": "Education (N for no or Complete College/University, Completed HS only, Completed Grad School, None): ",
             "RELATIONSHIP": "Relationship (N for no or Single, In a Relationship, Married, Other, Divorced): ",
@@ -1354,7 +1354,7 @@ def get_user_inputs():
                 "<16", "16-18", "18-20", "21-25", "26-30", "31-40", "41-59", "60+"
             ],
             "ETHNICITY": [
-                "White", "LatinX", "Other", "Black", "Asian"
+                "White", "Latino", "Other", "Black", "Asian"
             ],
             "INCOME": [
                 "$40K - $60K", "$60K - $75K", "$75K - $100K", "$100K - $150K", "$150K - $250K", "$250K+"
@@ -1433,7 +1433,7 @@ def get_user_inputs():
 # Build & normalize cap tables (base 10M)
 ethnicity_age_caps = pd.DataFrame({
     'AGE': ['<16', '16-18', '19-20', '21-25', '26-30', '31-40', '41-59', '60+'] * 5,
-    'ETHNICITY': ['White'] * 8 + ['Black'] * 8 + ['LatinX'] * 8 + ['Asian'] * 8 + ['Other'] * 8,
+    'ETHNICITY': ['White'] * 8 + ['Black'] * 8 + ['Latino'] * 8 + ['Asian'] * 8 + ['Other'] * 8,
     'MAX_COUNT': [
         886395,176361,153117,382102,375845,771541,1464555,1814626,
         244157,46567,39189,95525,89329,170718,287550,233094,
@@ -1617,7 +1617,8 @@ def capitalize_words(text):
     # Special case handling for specific terms
     special_cases = {
         # Demographics
-        'latinx': 'LatinX',
+        'latinx': 'Latino',
+        'latino': 'Latino',
         'lgbt': 'LGBT',
         'lgbtq': 'LGBTQ',
         'lgbtq+': 'LGBTQ+',
@@ -9326,7 +9327,7 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
     # --- ENSURE ALL ETHNICITY CATEGORIES ARE PRESENT ---
     def ensure_all_ethnicity_categories(df_behavior_data, df_demo_final):
         """
-        Ensure all ethnicity categories (White, Asian, LatinX, Black) are always present.
+        Ensure all ethnicity categories (White, Asian, Latino, Black) are always present.
         Add missing ones with random noise while maintaining 100% total.
         """
         # Check if we have demographic data
@@ -9338,7 +9339,7 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
             return df_behavior_data
         
         ethnicity_data = df_demo_final[ethnicity_mask].copy()
-        required_ethnicities = ['white', 'asian', 'latinx', 'black']
+        required_ethnicities = ['white', 'asian', 'latino', 'black']
         existing_ethnicities = ethnicity_data['Value'].str.lower().tolist()
         
         missing_ethnicities = []
@@ -9441,7 +9442,7 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
             'Complete College/University', 'Completed HS only', 'Completed Grad School', 'Other'
         ],
         'ETHNICITY': [
-            'White', 'Latinx', 'Asian', 'Black', 'Other'
+            'White', 'Latino', 'Asian', 'Black', 'Other'
         ]
         # Note: LOCATION is now handled in REQUIRED_DEMOGRAPHICS
     }
@@ -9816,7 +9817,7 @@ REQUIRED_DEMOGRAPHICS = {
         'Complete College/University', 'Completed HS only', 'Completed Grad School'
     ],
     'ETHNICITY': [
-        'White', 'Latinx', 'Asian', 'Black',
+        'White', 'Latino', 'Asian', 'Black',
     ],
     'GENDER': [
         'Female', 'Male', 'Trans Female', 'Trans Male', 'Non-Binary'

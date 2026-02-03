@@ -2866,13 +2866,13 @@
 
         .charts-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
             gap: 0.75rem;
             width: 100%;
             max-width: 100%;
             min-width: 0;
         }
-        .charts-grid > * { min-width: 0; max-width: 100%; }
+        .charts-grid > * { min-width: 0; max-width: 100%; overflow: visible; }
         
         @media (max-width: 1200px) {
             .charts-grid {
@@ -2893,7 +2893,7 @@
             padding: clamp(0.5rem, 1vw, 0.75rem);
             position: relative;
             min-width: 0;
-            overflow: hidden;
+            overflow: visible;
             font-size: clamp(0.7rem, 1.2vw + 0.4rem, 0.9rem);
         }
         
@@ -3317,15 +3317,10 @@
             }
         }
         
-        /* Behavioral Insights Row */
+        /* Behavioral Insights Row - Behavioral Profile Summary fills full width */
         .behavioral-insights-row {
-            display: grid;
-            grid-template-columns: 1fr 2fr;
-            gap: 1rem;
+            display: block;
             margin-bottom: 1.5rem;
-        }
-        @media (max-width: 1200px) {
-            .behavioral-insights-row { grid-template-columns: 1fr; }
         }
         .behavioral-data-blocks {
             display: grid;
@@ -3369,7 +3364,7 @@
             padding: 1.25rem;
             display: flex;
             flex-direction: column;
-            height: 500px;
+            min-height: 400px;
         }
         .behavioral-insight-card.highlight {
             border-color: var(--accent-lime);
@@ -4909,7 +4904,7 @@
             transition: opacity 0.15s ease, visibility 0.15s ease;
             z-index: 2147483647; /* Maximum z-index value */
             pointer-events: none;
-            white-space: normal;
+            white-space: pre-line;
             word-wrap: break-word;
         }
         #globalTooltip.visible {
@@ -10426,7 +10421,7 @@
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Ethnicity</label>
-                                        <select id="ethnicity"><option value="">All</option><option>White</option><option>Black</option><option>LatinX</option><option>Asian</option><option>Other</option></select>
+                                        <select id="ethnicity"><option value="">All</option><option>White</option><option>Black</option><option>Latino</option><option>Asian</option><option>Other</option></select>
                                     </div>
                                     <div class="form-group">
                                         <label>Income</label>
@@ -10474,7 +10469,7 @@
                                 <div class="form-row">
                                     <div class="form-group">
                                         <label>Check Ethnicity</label>
-                                        <select id="skew_ethnicity"><option value="">None</option><option>White</option><option>Black</option><option>LatinX</option><option>Asian</option><option>Other</option></select>
+                                        <select id="skew_ethnicity"><option value="">None</option><option>White</option><option>Black</option><option>Latino</option><option>Asian</option><option>Other</option></select>
                                     </div>
                                     <div class="form-group">
                                         <label>Size</label>
@@ -10777,7 +10772,7 @@
                                         <div class="form-row">
                                             <div class="form-group">
                                                 <label>Ethnicity</label>
-                                                <select id="ethnicity"><option value="">All</option><option>White</option><option>Black</option><option>LatinX</option><option>Asian</option><option>Other</option></select>
+                                                <select id="ethnicity"><option value="">All</option><option>White</option><option>Black</option><option>Latino</option><option>Asian</option><option>Other</option></select>
                                             </div>
                                             <div class="form-group">
                                                 <label>Income</label>
@@ -10825,7 +10820,7 @@
                                         <div class="form-row">
                                             <div class="form-group">
                                                 <label>Check Ethnicity</label>
-                                                <select id="skew_ethnicity"><option value="">None</option><option>White</option><option>Black</option><option>LatinX</option><option>Asian</option><option>Other</option></select>
+                                                <select id="skew_ethnicity"><option value="">None</option><option>White</option><option>Black</option><option>Latino</option><option>Asian</option><option>Other</option></select>
                                             </div>
                                             <div class="form-group">
                                                 <label>Size</label>
@@ -11754,7 +11749,7 @@
                 <div class="metric-legend" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; padding: 0.75rem; background: rgba(90, 154, 217, 0.1); border-radius: 8px; font-size: 0.75rem;">
                     <span class="has-tooltip" data-tooltip="The percentage of this specific audience that engages with each item."><strong style="color: var(--accent-blue);">Profile %</strong> — Audience penetration</span>
                     <span class="has-tooltip" data-tooltip="The percentage of the general US population that engages with each item."><strong style="color: var(--text-secondary);">(GP: X%)</strong> — Gen Pop penetration</span>
-                    <span class="has-tooltip" data-tooltip="Index shows how much more/less likely this audience is to engage vs. Gen Pop. 2.0x = twice as likely, 0.5x = half as likely."><strong style="color: #10b981;">Index (X.Xx)</strong> — Over/under-index multiplier</span>
+                    <span class="has-tooltip" data-tooltip="Index shows how much more/less likely this audience is to engage vs. Gen Pop. 2.0x = twice as likely, 0.5x = half as likely."><strong style="color: #10b981;">Index (X.xxx)</strong> — Over/under-index multiplier</span>
                     <span class="has-tooltip" data-tooltip="Items with index above 1.5x are considered 'hot' - strong over-indexers."><strong>🔥</strong> — Hot (index > 1.5x)</span>
                     <span class="has-tooltip" data-tooltip="N/A indicates that data is not available for this metric."><strong style="color: var(--text-secondary);">N/A</strong> — Data not available</span>
                 </div>
@@ -11771,46 +11766,6 @@
                         <div id="behavioralProfileSummary" class="behavioral-insight-content" style="padding: 0.5rem 0;">
                             <div style="font-size: 0.85rem; color: var(--text-secondary);">
                                 Select a profile to view insights
-                            </div>
-                        </div>
-                    </div>
-                    <div class="behavioral-data-blocks">
-                        <div class="behavioral-data-block">
-                            <div class="behavioral-data-block-header">
-                                <span class="has-tooltip" data-tooltip="Top Performing Categories: Behavioral categories where this audience most over-indexes vs. Gen Pop.">🏆 Top Performing Categories</span>
-                                <select id="topCategoriesSortSelect" onchange="sortTopCategories(this.value)" style="padding: 0.2rem 0.35rem; font-size: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;" title="Sort by">
-                                    <option value="index">By Index</option>
-                                    <option value="profile">By Profile %</option>
-                                    <option value="genpop">GP ↓</option>
-                                    <option value="hot">By Hot 🔥</option>
-                                </select>
-                            </div>
-                            <div class="top-cat-header top-cat-header-left">
-                                <span class="top-cat-col-name">Category</span>
-                                <span class="top-cat-col top-cat-col-pct has-tooltip" data-tooltip="Profile %: Average percentage of this audience engaging with items in this category.">Profile</span>
-                                <span class="top-cat-col top-cat-col-gp genpop-col has-tooltip" data-tooltip="Gen Pop %: Average percentage of general population engaging with items in this category.">GP</span>
-                                <span class="top-cat-col top-cat-col-idx index-col has-tooltip" data-tooltip="Avg Index: Average index across all items in this category.">Index</span>
-                                <span class="top-cat-col top-cat-col-hot has-tooltip" data-tooltip="Hot Count: Number of items with index above 1.5x.">Hot 🔥</span>
-                            </div>
-                            <div id="behavioralTopCategories" class="behavioral-insight-content">
-                                <div class="behavioral-stat-row">
-                                    <span class="icon">⏳</span>
-                                    <span class="text">Loading...</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="behavioral-data-block">
-                            <div class="behavioral-data-block-header">
-                                <span class="has-tooltip" data-tooltip="Top Performers: Top brands where this audience over-indexes across categories.">🏷️ Top Performers</span>
-                            </div>
-                            <div class="insight-col-header" style="display: flex; justify-content: space-between; padding: 0 0.5rem; margin-bottom: 0.35rem; font-size: 0.6rem; color: var(--text-secondary); text-transform: uppercase;">
-                                <span class="has-tooltip" data-tooltip="Channel: The marketing channel or category type.">Channel</span>
-                            </div>
-                            <div id="behavioralActivations" class="behavioral-insight-content">
-                                <div class="behavioral-stat-row">
-                                    <span class="icon">⏳</span>
-                                    <span class="text">Loading...</span>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -13582,7 +13537,7 @@
                                         <option value="">All</option>
                                         <option value="White">White</option>
                                         <option value="Black">Black</option>
-                                        <option value="LatinX">LatinX</option>
+                                        <option value="Latino">Latino</option>
                                         <option value="Asian">Asian</option>
                                         <option value="Other">Other</option>
                                     </select>
@@ -14985,12 +14940,11 @@
             return isNaN(num) ? null : num;
         }
         
-        // Format index as multiplier (e.g., 150 → 1.5x, 100 → 1.0x, 75 → 0.75x)
-        // Format index as whole number (e.g., 334 → 334, 150 → 150, no x suffix)
+        // Format index as multiplier with 3 decimal places (e.g., 150 → 1.500x, 100 → 1.000x, 130.456 → 1.305x)
         function formatIndex(index) {
             if (index === null || index === undefined || isNaN(index)) return 'N/A';
             const n = Number(index);
-            return String(Math.round(n));
+            return (n / 100).toFixed(3) + 'x';
         }
         
         // Normalize a name for deduplication (handles variations like "Patrick Mahomes" vs "patrick-mahomes")
@@ -23372,7 +23326,7 @@
                     'Female': 48.2, 'Male': 47.8, 'Trans Female': 0.8, 'Trans Male': 1.0, 'Non-Binary': 2.1
                 },
                 'ETHNICITY': {
-                    'White': 59.0, 'LatinX': 18.6, 'Black': 14.3, 'Other': 5.0, 'Asian': 3.0
+                    'White': 59.0, 'Latino': 18.6, 'Black': 14.3, 'Other': 5.0, 'Asian': 3.0
                 },
                 'INCOME': {
                     '$40K - $60K': 26.3, '$40K-$60K': 26.3,
@@ -23581,8 +23535,8 @@
                     }
                 }
 
-                // Location/DMA - include genPopPct and projection
-                if (category === 'LOCATION' && value) {
+                // Location/DMA - only include DMAs that have a DMA number (exclude unknown/unnamed markets)
+                if (category === 'LOCATION' && value && getDMARank(value) != null) {
                     result.locations.push({ name: value, pct: pct, index: index, genPopPct: genPopPct, projection: usProjection });
                 }
 
@@ -24389,7 +24343,9 @@
             
             const US_POP_CATS = 324700000;
             const isProjectionCats = dashDisplayMode === 'projection';
-            document.getElementById('behavioralTopCategories').innerHTML = topCategoriesSorted.map(([cat, stats]) => {
+            const topCatContainer = document.getElementById('behavioralTopCategories');
+            if (topCatContainer) {
+            topCatContainer.innerHTML = topCategoriesSorted.map(([cat, stats]) => {
                 const profileDisplay = isProjectionCats 
                     ? formatNumber(Math.round((stats.avgPct / 100) * US_POP_CATS))
                     : stats.avgPct.toFixed(2) + '%';
@@ -24419,7 +24375,9 @@
                     </span>
                 </div>
             `}).join('') || '<p style="color: var(--text-secondary);">No data available</p>';
-            
+            const blockEl = topCatContainer.closest('.behavioral-data-block');
+            if (blockEl) blockEl.classList.toggle('has-100-pct', topCategoriesSorted.some(([, s]) => (s.avgPct || 0) >= 99.5));
+            }
             const topCatSortSelect = document.getElementById('topCategoriesSortSelect');
             if (topCatSortSelect) topCatSortSelect.value = window.topCategoriesSortBy || 'index';
             
@@ -24851,6 +24809,7 @@
             activations.sort((a, b) => Number(b.maxIndex || 0) - Number(a.maxIndex || 0));
             
             const actsContainer = document.getElementById('behavioralActivations');
+            if (actsContainer) {
             actsContainer.innerHTML = activations.slice(0, 15).map(a => {
                 // Escape special characters for onclick attribute
                 const escapedCategory = (a.category || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
@@ -24864,6 +24823,7 @@
             `}).join('');
             const actsBlock = actsContainer.closest('.behavioral-data-block');
             if (actsBlock) actsBlock.classList.toggle('has-100-pct', activations.some(a => /\b100(\.0+)?%/.test(a.text || '')));
+            }
         }
         
         // ============================================================================
@@ -25354,7 +25314,7 @@
             const legendFontSize = Math.max(8, Math.min(13, Math.floor(effectiveWidth / 24)));
             const axisFontSize = Math.max(10, Math.min(15, Math.floor(effectiveWidth / 22)));
             const dataLabelFontSize = Math.max(9, Math.min(13, axisFontSize));
-            const legendPaddingRight = Math.min(120, Math.max(50, Math.floor(chartContainerWidth * 0.22)));
+            const legendPaddingRight = Math.min(220, Math.max(140, Math.floor(chartContainerWidth * 0.45)));
 
             // Age - horizontal bar with Gen Pop in data labels (green/red based on index)
             // Apply sorting based on user selection
@@ -26686,12 +26646,12 @@
             // Analyze each demographic insight
             demoInsights.forEach(d => {
                 const idx = d.index;
-                const idxMultiplier = (idx / 100).toFixed(2);
+                const idxMultiplier = (idx / 100).toFixed(3);
                 const pct = parseFloat(d.sub);
                 
                 if (d.label === 'Dominant Gender') {
                     const idxNorm = idx > 0 && idx < 10 ? idx * 100 : idx;
-                    const mult = (idxNorm / 100).toFixed(2);
+                    const mult = (idxNorm / 100).toFixed(3);
                     if (idxNorm >= 105) {
                         takeaways.push(`<span class="takeaway-over">Gender skews ${d.value.toLowerCase()}</span> — ${d.sub} (${mult}x vs Gen Pop)`);
                     } else if (idxNorm <= 95) {
@@ -28838,12 +28798,8 @@
             const US_POP = 324700000;
             sortMode = sortMode || 'pct';
             const gpVal = (i) => { let v = i.genPopPct || 0; return v > 0 && v < 1 ? v * 100 : v; };
-            // Bar scale: use the sorted column so bar reflects what user is sorting by
-            const maxBarVal = sortMode === 'index' 
-                ? Math.max(...items.map(i => i.index || 0), 1) 
-                : sortMode === 'genpop'
-                    ? Math.max(...items.map(i => gpVal(i)), 1)
-                    : Math.max(...items.map(i => i.pct || 0), 1);
+            // Bar scale: always use Profile % so the blue bar visually reflects percentage (largest % = longest bar, descending)
+            const maxBarVal = Math.max(...items.map(i => i.pct || 0), 1);
             return items.map((item, idx) => {
                 const index = item.index || 0;
                 let genPopPct = item.genPopPct || 0;
@@ -28868,9 +28824,8 @@
                     ? (normalizedGenPopPct === 0 || normalizedGenPopPct === null ? 'N/A' : formatNumber(Math.round((normalizedGenPopPct / 100) * US_POP)))
                     : formatValueOrNA(normalizedGenPopPct, true);
                 
-                // Bar width: reflect the sorted column (pct, index, genpop, or alpha uses pct)
-                const barVal = sortMode === 'index' ? (item.index || 0) : sortMode === 'genpop' ? gpVal(item) : (item.pct || 0);
-                const barWidth = Math.min(100, (barVal / maxBarVal) * 100);
+                // Bar width: always reflect Profile % so largest % = longest bar, descending by percentage
+                const barWidth = Math.min(100, ((item.pct || 0) / maxBarVal) * 100);
                 
                 return `
                     <div class="behavioral-item">
@@ -33766,7 +33721,7 @@
             };
             
             document.getElementById('audienceSnapshot').innerHTML = demoInsights.map(d => {
-                const idxValue = (d.index / 100).toFixed(2);
+                const idxValue = (d.index / 100).toFixed(3);
                 const idxColor = d.index >= 100 ? '#10b981' : '#ef4444';
                 return `
                 <div class="snapshot-item has-tooltip" data-tooltip="${snapshotTooltips[d.label] || d.label}: ${d.value} at ${d.sub} of the audience. Index: ${idxValue}x vs Gen Pop.">
@@ -38128,15 +38083,17 @@
                     ? (data.genPopPct === 0 || data.genPopPct === null ? 'N/A' : formatNumber(Math.round((data.genPopPct / 100) * US_POP)))
                     : formatValueOrNA(data.genPopPct, true));
                 
-                // Build top 5 cities tooltip (Profile % = selected profile; Gen Pop % = same metric from Gen Pop profile when available)
-                const top5Cities = data.cities.slice(0, 5);
+                // Build top 5 cities tooltip - only include cities with DMA numbers
+                const top5Cities = data.cities.filter(c => getDMARank(c.name) != null).slice(0, 5);
                 const citiesText = top5Cities.length > 0 
-                    ? `Top Cities in ${state}: ${top5Cities.map((c, i) => {
+                    ? `Top Cities in ${state}:\n${top5Cities.map((c) => {
                         const gpPct = genPopByDma[(c.name || '').toUpperCase()];
-                        return gpPct != null 
-                            ? `${i + 1}. ${c.name} (Profile: ${c.pct.toFixed(2)}% | Gen Pop: ${gpPct.toFixed(2)}%)`
-                            : `${i + 1}. ${c.name} (${c.pct.toFixed(2)}%)`;
-                    }).join(' | ')}`
+                        const dmaNum = getDMARank(c.name);
+                        const line = gpPct != null 
+                            ? `${c.name} (Profile: ${c.pct.toFixed(2)}% | Gen Pop: ${gpPct.toFixed(2)}%)`
+                            : `${c.name} (${c.pct.toFixed(2)}%)`;
+                        return `${dmaNum}. ${line}`;
+                    }).join('\n')}`
                     : `${state}: No city data`;
                 
                 return `
@@ -38201,15 +38158,17 @@
                         ? (data.genPopPct === 0 || data.genPopPct === null ? 'N/A' : formatNumber(Math.round((data.genPopPct / 100) * US_POP)))
                         : formatValueOrNA(data.genPopPct, true));
                     
-                    // Build top 5 cities tooltip for region (Profile % = selected profile; Gen Pop % = same metric from Gen Pop when available)
-                    const top5Cities = data.cities.slice(0, 5);
+                    // Build top 5 cities tooltip for region - only include cities with DMA numbers
+                    const top5Cities = data.cities.filter(c => getDMARank(c.name) != null).slice(0, 5);
                     const citiesText = top5Cities.length > 0 
-                        ? `Top Cities in ${region}: ${top5Cities.map((c, i) => {
+                        ? `Top Cities in ${region}:\n${top5Cities.map((c) => {
                             const gpPct = genPopByDma[(c.name || '').toUpperCase()];
-                            return gpPct != null 
-                                ? `${i + 1}. ${c.name} (Profile: ${c.pct.toFixed(2)}% | Gen Pop: ${gpPct.toFixed(2)}%)`
-                                : `${i + 1}. ${c.name} (${c.pct.toFixed(2)}%)`;
-                        }).join(' | ')}`
+                            const dmaNum = getDMARank(c.name);
+                            const line = gpPct != null 
+                                ? `${c.name} (Profile: ${c.pct.toFixed(2)}% | Gen Pop: ${gpPct.toFixed(2)}%)`
+                                : `${c.name} (${c.pct.toFixed(2)}%)`;
+                            return `${dmaNum}. ${line}`;
+                        }).join('\n')}`
                         : `${region}: No city data`;
                     
                     return `
@@ -42868,9 +42827,10 @@
                 }
             }
             
+            const mode = profileSelectionMode;
             closeProfileSelectionModal();
             
-            if (profileSelectionMode === 'ecosystem') {
+            if (mode === 'ecosystem') {
                 window.comparisonProfilesData = profiles;
                 window.currentProfileData = { name: primaryTab.name, sampleSize: primaryTab.parsed.sampleSize, projectedUS: primaryTab.parsed.projectedUS, demographics: primaryTab.parsed.demographics, behavioral: primaryTab.parsed.behavioral };
                 window.currentDashboardData = primaryTab.parsed;
@@ -42885,9 +42845,9 @@
             if (typeof primaryProfileIndex !== 'undefined') window.primaryProfileIndex = 0;
             
             try {
-                if (profileSelectionMode === 'execSummary') {
+                if (mode === 'execSummary') {
                     await generateExecutiveSummary();
-                } else if (profileSelectionMode === 'keyInsightBuilder') {
+                } else if (mode === 'keyInsightBuilder') {
                     await generateKeyInsightBuilder();
                 }
             } finally {
