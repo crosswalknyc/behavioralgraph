@@ -3849,6 +3849,40 @@ def _build_netflix_episodes_payload(rows):
         by_date_episode[dt].append({'show_name': show_name, 'season': season, 'episode_name': episode_name, 'views': views})
     return dict(by_date_episode)
 
+def _normalize_netflix_all_field(value, allow_unknown=False):
+    """Normalize Netflix all-ranker fields to avoid null/blank display."""
+    if value is None:
+        return 'Unknown' if allow_unknown else ''
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned or cleaned.lower() == 'null':
+            return 'Unknown' if allow_unknown else ''
+        return cleaned
+    # Normalize numeric/other types to string without trailing .0
+    if isinstance(value, (int, float)) and value == int(value):
+        return str(int(value))
+    return str(value).strip()
+
+def _build_netflix_all_payload(rows):
+    """Build by_date_all from rows (visit_date, name_of_show, season, episode, episode_name, views)."""
+    from collections import defaultdict
+    by_date_all = defaultdict(list)
+    for r in rows:
+        dt = r[0].strftime('%Y-%m-%d') if hasattr(r[0], 'strftime') else str(r[0])[:10]
+        show_name = _normalize_netflix_all_field(r[1], allow_unknown=True)
+        season = _normalize_netflix_all_field(r[2])
+        episode = _normalize_netflix_all_field(r[3])
+        episode_name = _normalize_netflix_all_field(r[4])
+        views = int(r[5] or 0)
+        by_date_all[dt].append({
+            'show_name': show_name,
+            'season': season,
+            'episode': episode,
+            'episode_name': episode_name,
+            'views': views
+        })
+    return dict(by_date_all)
+
 def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
     """Query BEHAVIORALGRAPH.PUBLIC.NETFLIX for past year (or latest day only) and return payload.
     Includes by_date (series), by_date_season (show+season, type=Show only), by_date_episode (show+season+episode)."""

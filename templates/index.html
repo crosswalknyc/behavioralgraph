@@ -30153,6 +30153,16 @@
             return genreStr.split(',').map(s => s.trim()).filter(Boolean);
         }
 
+        function _normalizeNetflixAllField(value) {
+            if (value === null || value === undefined) return '';
+            if (typeof value === 'string') {
+                const cleaned = value.trim();
+                if (!cleaned || cleaned.toLowerCase() === 'null') return '';
+                return cleaned;
+            }
+            return String(value).trim();
+        }
+
         function renderNetflixAllRanker() {
             const wrap = document.getElementById('netflixAllTableWrap');
             const tbody = document.getElementById('netflixAllBody');
@@ -30204,13 +30214,26 @@
             }
             
             let rows = (netflixRankerData.by_date_all[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian'));
+            rows = rows.map(r => ({
+                ...r,
+                show_name: _normalizeNetflixAllField(r.show_name),
+                season: _normalizeNetflixAllField(r.season),
+                episode: _normalizeNetflixAllField(r.episode),
+                episode_name: _normalizeNetflixAllField(r.episode_name)
+            }));
             
             // If no data for selected date, try last available
             const lastDate = _getLastNetflixDateWithData(netflixRankerData, 'by_date_all');
             if (rows.length === 0 && lastDate && netflixRankerData.by_date_all[lastDate]) {
                 date = lastDate;
                 if (dateInp) dateInp.value = date;
-                rows = netflixRankerData.by_date_all[date] || [];
+                rows = (netflixRankerData.by_date_all[date] || []).map(r => ({
+                    ...r,
+                    show_name: _normalizeNetflixAllField(r.show_name),
+                    season: _normalizeNetflixAllField(r.season),
+                    episode: _normalizeNetflixAllField(r.episode),
+                    episode_name: _normalizeNetflixAllField(r.episode_name)
+                }));
             }
             
             // Sort by views descending
@@ -30225,7 +30248,10 @@
                     const seasonEsc = (r.season || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     const episodeEsc = (r.episode_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     const showLink = '<a href="#" onclick="openNetflixShowDetails(\'' + showNameEsc + '\', \'' + seasonEsc + '\', \'' + episodeEsc + '\', \'' + date + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.show_name || 'N/A') + '</a>';
-                    return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (r.season || 'N/A') + '</td><td>' + (r.episode || 'N/A') + '</td><td>' + (r.episode_name || 'N/A') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>';
+                    const seasonCell = r.season || '';
+                    const episodeCell = r.episode || '';
+                    const episodeNameCell = r.episode_name || '';
+                    return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + seasonCell + '</td><td>' + episodeCell + '</td><td>' + episodeNameCell + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>';
                 }).join('');
             }
         }
@@ -30235,7 +30261,14 @@
             const dateInp = document.getElementById('netflixAllDate');
             const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
             let rows = (netflixRankerData.by_date_all[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            const csv = 'Rank,Name of Show,Season,Episode #,Episode Name,Views\n' + rows.map((r, i) => [i + 1, '"' + (r.show_name || 'N/A').replace(/"/g, '""') + '"', '"' + (r.season || 'N/A').replace(/"/g, '""') + '"', '"' + (r.episode || 'N/A').replace(/"/g, '""') + '"', '"' + (r.episode_name || 'N/A').replace(/"/g, '""') + '"', netflixProjectedViews(r.views)].join(',')).join('\n');
+            rows = rows.map(r => ({
+                ...r,
+                show_name: _normalizeNetflixAllField(r.show_name),
+                season: _normalizeNetflixAllField(r.season),
+                episode: _normalizeNetflixAllField(r.episode),
+                episode_name: _normalizeNetflixAllField(r.episode_name)
+            }));
+            const csv = 'Rank,Name of Show,Season,Episode #,Episode Name,Views\n' + rows.map((r, i) => [i + 1, '"' + (r.show_name || 'N/A').replace(/"/g, '""') + '"', '"' + (r.season || '').replace(/"/g, '""') + '"', '"' + (r.episode || '').replace(/"/g, '""') + '"', '"' + (r.episode_name || '').replace(/"/g, '""') + '"', netflixProjectedViews(r.views)].join(',')).join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_all_ranker_' + date + '.csv'; a.click();
         }
 
