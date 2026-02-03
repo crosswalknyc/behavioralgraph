@@ -12052,6 +12052,7 @@
                         <!-- Netflix sub-view -->
                         <div id="ranker-netflix" class="ranker-platform-panel active">
                             <div class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                                <button class="tab-btn" onclick="showNetflixSubTab('all')" id="netflixSubTabAll">📺 All Netflix</button>
                                 <button class="tab-btn" onclick="showNetflixSubTab('daily')" id="netflixSubTabDaily">📅 Daily Ranker by Series</button>
                                 <button class="tab-btn" onclick="showNetflixSubTab('seasons')" id="netflixSubTabSeasons">📅 Daily Ranker by Seasons</button>
                                 <button class="tab-btn" onclick="showNetflixSubTab('episodes')" id="netflixSubTabEpisodes">📅 Daily Ranker by Episodes</button>
@@ -12061,6 +12062,19 @@
                                 <button class="tab-btn" onclick="showNetflixSubTab('insights')" id="netflixSubTabInsights">💡 Insights</button>
                             </div>
                             <div id="netflixSubTabContent">
+                                <div id="netflix-all" class="netflix-sub-content">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">📺 All Netflix</h3>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
+                                            <input type="date" id="netflixAllDate" onchange="renderNetflixAllRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                            <button class="module-btn csv-btn" onclick="exportNetflixAllCSV()">CSV</button>
+                                        </div>
+                                    </div>
+                                    <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">All content ranked by views. Grouped by Show + Season + Episode.</p>
+                                    <div id="netflixAllTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Name of Show</th><th>Season</th><th>Episode</th><th>Views</th></tr></thead><tbody id="netflixAllBody"></tbody></table></div>
+                                    <div id="netflixAllLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
+                                </div>
                                 <div id="netflix-daily" class="netflix-sub-content active">
                                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
                                         <h3 style="margin: 0;">📅 Daily Ranker by Series</h3>
@@ -12146,6 +12160,17 @@
                                 </div>
                             </div>
                         </div>
+                        
+                        <!-- Netflix Show Details Modal -->
+                        <div id="netflixShowDetailsModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; overflow-y: auto;">
+                            <div style="max-width: 900px; margin: 2rem auto; background: var(--bg-card); border-radius: 12px; padding: 1.5rem; position: relative;">
+                                <button onclick="closeNetflixShowDetails()" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer;">&times;</button>
+                                <div id="netflixShowDetailsContent">
+                                    <div style="text-align: center; padding: 3rem;"><div class="loading-spinner"></div><p>Loading show details...</p></div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- YouTube sub-view -->
                         <div id="ranker-youtube" class="ranker-platform-panel">
                             <div class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin-bottom: 1rem; flex-wrap: wrap;">
@@ -29944,7 +29969,8 @@
             const btn = document.getElementById('netflixSubTab' + btnId);
             if (content) content.classList.add('active');
             if (btn) btn.classList.add('active');
-            if (id === 'daily') renderNetflixDailyRanker();
+            if (id === 'all') renderNetflixAllRanker();
+            else if (id === 'daily') renderNetflixDailyRanker();
             else if (id === 'seasons') renderNetflixSeasonsRanker();
             else if (id === 'episodes') renderNetflixEpisodesRanker();
             else if (id === 'trends') renderNetflixTrends();
@@ -30127,6 +30153,92 @@
             return genreStr.split(',').map(s => s.trim()).filter(Boolean);
         }
 
+        function renderNetflixAllRanker() {
+            const wrap = document.getElementById('netflixAllTableWrap');
+            const tbody = document.getElementById('netflixAllBody');
+            const loading = document.getElementById('netflixAllLoading');
+            const dateInp = document.getElementById('netflixAllDate');
+            
+            if (!netflixRankerData || !netflixRankerData.by_date_all) {
+                // Build by_date_all from raw daily data if not present
+                if (netflixRankerData && netflixRankerData.daily) {
+                    // Group by date + show + season + episode
+                    const grouped = {};
+                    netflixRankerData.daily.forEach(r => {
+                        const key = r.date + '|' + (r.show_name || '') + '|' + (r.season || '') + '|' + (r.episode_name || '');
+                        if (!grouped[key]) {
+                            grouped[key] = { date: r.date, show_name: r.show_name || '', season: r.season || '', episode_name: r.episode_name || '', views: 0 };
+                        }
+                        grouped[key].views += (r.views || 0);
+                    });
+                    // Organize by date
+                    const byDateAll = {};
+                    Object.values(grouped).forEach(item => {
+                        if (!byDateAll[item.date]) byDateAll[item.date] = [];
+                        byDateAll[item.date].push(item);
+                    });
+                    netflixRankerData.by_date_all = byDateAll;
+                }
+            }
+            
+            if (!netflixRankerData || !netflixRankerData.by_date_all) {
+                if (loading) loading.style.display = 'none';
+                if (wrap) wrap.style.display = 'none';
+                return;
+            }
+            
+            const loadBlock = document.getElementById('rankersLoadBlock');
+            if (loadBlock) loadBlock.style.display = 'none';
+            if (loading) loading.style.display = 'none';
+            if (wrap) wrap.style.display = 'block';
+            
+            let date = dateInp ? dateInp.value : null;
+            if (!date) date = _getLastNetflixDateWithData(netflixRankerData, 'by_date_all');
+            if (!date) date = (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            
+            // Set date input range
+            if (dateInp && netflixRankerData.date_range) {
+                dateInp.min = netflixRankerData.date_range.min;
+                dateInp.max = netflixRankerData.date_range.max;
+                if (!dateInp.value) dateInp.value = date;
+            }
+            
+            let rows = (netflixRankerData.by_date_all[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian'));
+            
+            // If no data for selected date, try last available
+            const lastDate = _getLastNetflixDateWithData(netflixRankerData, 'by_date_all');
+            if (rows.length === 0 && lastDate && netflixRankerData.by_date_all[lastDate]) {
+                date = lastDate;
+                if (dateInp) dateInp.value = date;
+                rows = netflixRankerData.by_date_all[date] || [];
+            }
+            
+            // Sort by views descending
+            rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            
+            if (!tbody) return;
+            if (rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date' + (date ? ' (' + date + ')' : '') + '.</td></tr>';
+            } else {
+                tbody.innerHTML = rows.map((r, i) => {
+                    const showNameEsc = (r.show_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    const seasonEsc = (r.season || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    const episodeEsc = (r.episode_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    const showLink = '<a href="#" onclick="openNetflixShowDetails(\'' + showNameEsc + '\', \'' + seasonEsc + '\', \'' + episodeEsc + '\', \'' + date + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.show_name || 'N/A') + '</a>';
+                    return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (r.season || 'N/A') + '</td><td>' + (r.episode_name || 'N/A') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>';
+                }).join('');
+            }
+        }
+        
+        function exportNetflixAllCSV() {
+            if (!netflixRankerData || !netflixRankerData.by_date_all) return;
+            const dateInp = document.getElementById('netflixAllDate');
+            const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            let rows = (netflixRankerData.by_date_all[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            const csv = 'Rank,Name of Show,Season,Episode,Views\n' + rows.map((r, i) => [i + 1, '"' + (r.show_name || 'N/A').replace(/"/g, '""') + '"', '"' + (r.season || 'N/A').replace(/"/g, '""') + '"', '"' + (r.episode_name || 'N/A').replace(/"/g, '""') + '"', netflixProjectedViews(r.views)].join(',')).join('\n');
+            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_all_ranker_' + date + '.csv'; a.click();
+        }
+
         function renderNetflixDailyRanker() {
             const wrap = document.getElementById('netflixDailyTableWrap');
             const tbody = document.getElementById('netflixDailyBody');
@@ -30240,6 +30352,111 @@
                     showEpisodes.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.episode_name || '-') + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>').join('');
             }
         }
+        
+        function openNetflixShowDetails(showName, season, episodeName, date) {
+            const modal = document.getElementById('netflixShowDetailsModal');
+            const content = document.getElementById('netflixShowDetailsContent');
+            if (!modal || !content) return;
+            
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            content.innerHTML = '<div style="text-align: center; padding: 3rem;"><div class="loading-spinner"></div><p>Loading show details...</p></div>';
+            
+            // Build query params
+            const params = new URLSearchParams();
+            params.append('show_name', showName);
+            if (season && season !== 'N/A') params.append('season', season);
+            if (episodeName && episodeName !== 'N/A') params.append('episode_name', episodeName);
+            if (date) params.append('date', date);
+            
+            fetch('/api/rankers/netflix/show-details?' + params.toString(), { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        content.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--accent-red);"><p>Error: ' + data.error + '</p></div>';
+                        return;
+                    }
+                    
+                    // Build DMA breakdown table (top 15)
+                    const dmaRows = (data.dma_breakdown || []).slice(0, 15);
+                    const dmaTable = dmaRows.length > 0 
+                        ? '<table class="rankers-table" style="width: 100%; border-collapse: collapse; margin-top: 0.5rem;"><thead><tr><th>DMA (Location)</th><th>Views</th><th>% of Total</th></tr></thead><tbody>' +
+                          dmaRows.map(d => '<tr><td>' + d.dma + '</td><td>' + d.views.toLocaleString() + '</td><td>' + d.percentage + '%</td></tr>').join('') +
+                          '</tbody></table>'
+                        : '<p style="color: var(--text-secondary);">No DMA data available</p>';
+                    
+                    // Format cast (limit to first 5 names if long)
+                    let castDisplay = data.cast || 'N/A';
+                    if (castDisplay !== 'N/A' && castDisplay.length > 200) {
+                        const castNames = castDisplay.split(',').slice(0, 5);
+                        castDisplay = castNames.join(', ') + '...';
+                    }
+                    
+                    content.innerHTML = `
+                        <h2 style="margin: 0 0 0.5rem 0; color: var(--accent-cyan);">${data.show_name}</h2>
+                        ${data.season !== 'N/A' ? '<p style="margin: 0 0 0.25rem 0; color: var(--text-secondary);">Season: ' + data.season + '</p>' : ''}
+                        ${data.episode_name !== 'N/A' ? '<p style="margin: 0 0 0.5rem 0; color: var(--text-secondary);">Episode: ' + data.episode_name + '</p>' : ''}
+                        
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1.5rem 0;">
+                            <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Total Views</div>
+                                <div style="font-size: 1.5rem; font-weight: 600; color: var(--accent-lime);">${netflixProjectedViews(data.total_views).toLocaleString()}</div>
+                            </div>
+                            <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Avg Watch Time</div>
+                                <div style="font-size: 1.5rem; font-weight: 600;">${data.avg_watch_time !== 'N/A' ? data.avg_watch_time + ' min' : 'N/A'}</div>
+                            </div>
+                            <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Run Time</div>
+                                <div style="font-size: 1.5rem; font-weight: 600;">${data.run_time !== 'N/A' ? data.run_time + ' min' : 'N/A'}</div>
+                            </div>
+                            <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">Year Released</div>
+                                <div style="font-size: 1.5rem; font-weight: 600;">${data.year_released}</div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                            <div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">Genre</div>
+                                <div style="font-weight: 500;">${data.genre}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">Type</div>
+                                <div style="font-weight: 500;">${data.type}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">Age Rating</div>
+                                <div style="font-weight: 500;">${data.age_rating}</div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 1.5rem;">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">Cast</div>
+                            <div style="font-size: 0.9rem;">${castDisplay}</div>
+                        </div>
+                        
+                        <div>
+                            <h4 style="margin: 0 0 0.5rem 0;">📍 Viewer Demographics by DMA (Top 15)</h4>
+                            ${dmaTable}
+                        </div>
+                    `;
+                })
+                .catch(err => {
+                    content.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--accent-red);"><p>Error loading details: ' + err.message + '</p></div>';
+                });
+        }
+        
+        function closeNetflixShowDetails() {
+            const modal = document.getElementById('netflixShowDetailsModal');
+            if (modal) modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+        
+        // Close modal on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeNetflixShowDetails();
+        });
 
         function renderNetflixSeasonsRanker() {
             const wrap = document.getElementById('netflixSeasonsTableWrap');
@@ -30262,7 +30479,12 @@
                 rows = (netflixRankerData.by_date_season[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
             }
             if (!tbody) return;
-            tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>').join('');
+            tbody.innerHTML = rows.map((r, i) => {
+                const showNameEsc = (r.show_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const seasonEsc = (r.season || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const showLink = '<a href="#" onclick="openNetflixShowDetails(\'' + showNameEsc + '\', \'' + seasonEsc + '\', \'\', \'' + date + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.show_name || '') + '</a>';
+                return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>';
+            }).join('');
         }
 
         function renderNetflixEpisodesRanker() {
@@ -30286,7 +30508,14 @@
                 rows = (netflixRankerData.by_date_episode[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
             }
             if (!tbody) return;
-            tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.episode_name || '-') + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>').join('');
+            tbody.innerHTML = rows.map((r, i) => {
+                const showNameEsc = (r.show_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const seasonEsc = (r.season || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const episodeEsc = (r.episode_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const showLink = '<a href="#" onclick="openNetflixShowDetails(\'' + showNameEsc + '\', \'' + seasonEsc + '\', \'' + episodeEsc + '\', \'' + date + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.show_name || '') + '</a>';
+                const episodeLink = (r.episode_name && r.episode_name !== '-') ? '<a href="#" onclick="openNetflixShowDetails(\'' + showNameEsc + '\', \'' + seasonEsc + '\', \'' + episodeEsc + '\', \'' + date + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.episode_name || '-') + '</a>' : (r.episode_name || '-');
+                return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + episodeLink + '</td><td>' + (r.season || '-') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>';
+            }).join('');
         }
 
         function renderNetflixTrends() {

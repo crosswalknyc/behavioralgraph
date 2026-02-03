@@ -4045,6 +4045,112 @@ def get_netflix_ranker_data():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/rankers/netflix/show-details', methods=['GET'])
+def get_netflix_show_details():
+    """
+    Get detailed info for a specific Netflix show/episode including:
+    - DMA demographics breakdown (% of viewers by location)
+    - Runtime, age rating, year released, cast, genre
+    - Average watch time (time_on_page or runtime as fallback)
+    """
+    show_name = request.args.get('show_name', '').strip()
+    episode_name = request.args.get('episode_name', '').strip()
+    season = request.args.get('season', '').strip()
+    date = request.args.get('date', '').strip()
+    
+    if not show_name:
+        return jsonify({'error': 'show_name is required'}), 400
+    
+    try:
+        import bg
+        conn = bg.connect_snowflake()
+        cur = conn.cursor()
+        
+        # Build WHERE clause
+        where_parts = ["NAME_OF_SHOW = %s"]
+        params = [show_name]
+        
+        if date:
+            where_parts.append("DATE(VISIT_TS) = %s")
+            params.append(date)
+        else:
+            where_parts.append("VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())")
+        
+        if episode_name and episode_name != 'N/A':
+            where_parts.append("EPISODE_NAME = %s")
+            params.append(episode_name)
+        
+        if season and season != 'N/A':
+            where_parts.append("SEASON = %s")
+            params.append(season)
+        
+        where_clause = " AND ".join(where_parts)
+        
+        # Get show metadata (first row with this show)
+        meta_sql = f"""
+            SELECT 
+                NAME_OF_SHOW, SEASON, EPISODE_NAME, GENRE, TYPE,
+                RUN_TIME, AGE_RATING, YEAR_RELEASED, CAST, 
+                AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) as avg_watch_time,
+                COUNT(*) as total_views
+            FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+            WHERE {where_clause}
+            GROUP BY NAME_OF_SHOW, SEASON, EPISODE_NAME, GENRE, TYPE, RUN_TIME, AGE_RATING, YEAR_RELEASED, CAST
+            LIMIT 1
+        """
+        cur.execute(meta_sql, params)
+        meta_row = cur.fetchone()
+        
+        if not meta_row:
+            conn.close()
+            return jsonify({'error': 'Show not found', 'show_name': show_name}), 404
+        
+        # Get DMA breakdown (% of viewers by location)
+        dma_sql = f"""
+            SELECT 
+                COALESCE(DMA, 'Unknown') as dma,
+                COUNT(*) as views
+            FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+            WHERE {where_clause}
+            GROUP BY DMA
+            ORDER BY views DESC
+            LIMIT 50
+        """
+        cur.execute(dma_sql, params)
+        dma_rows = cur.fetchall()
+        
+        # Calculate total for percentages
+        total_dma_views = sum(r[1] for r in dma_rows) if dma_rows else 1
+        dma_breakdown = [
+            {'dma': r[0] or 'Unknown', 'views': r[1], 'percentage': round((r[1] / total_dma_views) * 100, 2)}
+            for r in dma_rows
+        ]
+        
+        conn.close()
+        
+        # Build response
+        result = {
+            'show_name': meta_row[0] or 'N/A',
+            'season': meta_row[1] or 'N/A',
+            'episode_name': meta_row[2] or 'N/A',
+            'genre': meta_row[3] or 'N/A',
+            'type': meta_row[4] or 'N/A',
+            'run_time': meta_row[5] or 'N/A',
+            'age_rating': meta_row[6] or 'N/A',
+            'year_released': meta_row[7] or 'N/A',
+            'cast': meta_row[8] or 'N/A',
+            'avg_watch_time': round(float(meta_row[9]), 2) if meta_row[9] else 'N/A',
+            'total_views': meta_row[10] or 0,
+            'dma_breakdown': dma_breakdown
+        }
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"[Netflix Show Details] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 # ============================================================================
 # RANKERS - YouTube (BEHAVIORALGRAPH.YOUTUBE.YOUTUBE)
 # Cached system-wide: in-memory per process + JSON file on disk. Same as Netflix.
