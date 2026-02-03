@@ -235,6 +235,51 @@ _metadata_cache = {}
 _cache_timestamps = {}
 CACHE_TTL = 60  # Cache for 60 seconds
 
+# Admin S3 content cache (jobs list + file_count) - used by admin content/archive/delete
+s3_cache = {'jobs': [], 'file_count': 0}
+# Profile/ticker image cache (project name -> { is_custom, image_url })
+profile_image_cache = {}
+cache_loading_complete = True
+
+S3_CONTENT_CACHE_FILE = 'metadata/s3_content_cache.json'
+
+def load_persisted_cache():
+    """Load S3 content cache (jobs) from S3 metadata."""
+    global s3_cache
+    try:
+        data = load_json_from_s3(S3_CONTENT_CACHE_FILE)
+        if isinstance(data, dict) and 'jobs' in data:
+            s3_cache = {'jobs': data.get('jobs', []), 'file_count': data.get('file_count', 0)}
+    except Exception as e:
+        print(f"⚠️ load_persisted_cache: {e}")
+
+def save_persisted_cache():
+    """Persist S3 content cache to S3 metadata."""
+    try:
+        save_json_to_s3(S3_CONTENT_CACHE_FILE, {
+            'jobs': s3_cache.get('jobs', []),
+            'file_count': s3_cache.get('file_count', 0)
+        })
+    except Exception as e:
+        print(f"⚠️ save_persisted_cache: {e}")
+
+def smart_cache_update():
+    """Refresh in-memory S3 content cache from storage (no-op if no persistence)."""
+    load_persisted_cache()
+
+def load_profile_image_cache():
+    """Load profile/ticker image cache from S3 (custom images per project)."""
+    global profile_image_cache
+    try:
+        data = load_json_from_s3(TICKER_IMAGES_FILE)
+        if isinstance(data, dict):
+            profile_image_cache = data
+        else:
+            profile_image_cache = {}
+    except Exception as e:
+        print(f"⚠️ load_profile_image_cache: {e}")
+        profile_image_cache = {}
+
 def load_json_from_s3(filename, use_cache=True):
     """Load JSON data from S3 metadata bucket with in-memory caching."""
     try:
