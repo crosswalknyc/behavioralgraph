@@ -14671,7 +14671,7 @@
         // Subscriber IQ state variables (declared early for tooltip system access)
         let subscriberDisplayMode = 'percent'; // 'percent' or 'projection'
         let subscriberGenPopMode = false; // false = actual numbers, true = gen pop projections
-        let subscriberHoverEnabled = true; // Default to enabled
+        let subscriberHoverEnabled = localStorage.getItem('bg_subscriber_hover_enabled') !== 'false'; // Persist across sessions
         let subscriberProfiles = [];
         let currentSubscriberData = null;
         let openSubscriberTabs = []; // Array of { id, name, dateRange, data }
@@ -19804,11 +19804,12 @@
             }
         }
         
-        // Ticker hover tooltip toggle
-        let tickerHoverEnabled = true;
+        // Ticker hover tooltip toggle (persisted in localStorage)
+        let tickerHoverEnabled = localStorage.getItem('bg_ticker_hover_enabled') !== 'false';
         
         function toggleTickerHoverDescriptors() {
             tickerHoverEnabled = !tickerHoverEnabled;
+            localStorage.setItem('bg_ticker_hover_enabled', tickerHoverEnabled);
             const toggle = document.getElementById('tickerHoverToggle');
             const label = document.getElementById('tickerHoverToggleLabel');
             const tooltip = document.getElementById('globalTooltip');
@@ -20496,6 +20497,7 @@
         
         window.toggleSubscriberHover = function() {
             subscriberHoverEnabled = !subscriberHoverEnabled;
+            localStorage.setItem('bg_subscriber_hover_enabled', subscriberHoverEnabled);
             const label = document.getElementById('subscriberHoverToggleLabel');
             if (label) {
                 label.textContent = subscriberHoverEnabled ? 'HOVER ON' : 'HOVER OFF';
@@ -24235,11 +24237,12 @@
             });
         }
         
-        // Hover tooltip toggle
-        let hoverEnabled = true;
+        // Hover tooltip toggle (persisted in localStorage)
+        let hoverEnabled = localStorage.getItem('bg_hover_enabled') !== 'false';
         
         function toggleHoverDescriptors() {
             hoverEnabled = !hoverEnabled;
+            localStorage.setItem('bg_hover_enabled', hoverEnabled);
             const toggle = document.getElementById('hoverToggle');
             const label = document.getElementById('hoverToggleLabel');
             const tooltip = document.getElementById('globalTooltip');
@@ -24265,6 +24268,29 @@
         
         // Expose to window for onclick handlers
         window.toggleHoverDescriptors = toggleHoverDescriptors;
+        
+        // Apply persisted hover preferences to UI on load (so toggle labels and body class match saved state)
+        function applyPersistedHoverPreferences() {
+            const hoverOn = localStorage.getItem('bg_hover_enabled') !== 'false';
+            const tickerOn = localStorage.getItem('bg_ticker_hover_enabled') !== 'false';
+            const subscriberOn = localStorage.getItem('bg_subscriber_hover_enabled') !== 'false';
+            const toggle = document.getElementById('hoverToggle');
+            const label = document.getElementById('hoverToggleLabel');
+            const tickerToggle = document.getElementById('tickerHoverToggle');
+            const tickerLabel = document.getElementById('tickerHoverToggleLabel');
+            const subLabel = document.getElementById('subscriberHoverToggleLabel');
+            if (!hoverOn && (toggle || label)) {
+                if (toggle) toggle.classList.add('active');
+                if (label) label.textContent = 'HOVER OFF';
+            }
+            if (!tickerOn && (tickerToggle || tickerLabel)) {
+                if (tickerToggle) tickerToggle.classList.add('active');
+                if (tickerLabel) tickerLabel.textContent = 'HOVER OFF';
+            }
+            if (!subscriberOn && subLabel) subLabel.textContent = 'HOVER OFF';
+            if (!hoverOn || !tickerOn) document.body.classList.add('hover-disabled');
+        }
+        document.addEventListener('DOMContentLoaded', applyPersistedHoverPreferences);
         
         // ============================================================================
         // BEHAVIORAL INSIGHTS
@@ -25304,10 +25330,10 @@
             const legendFontSizeCircular = Math.max(8, Math.min(11, legendFontSize)); // Slightly smaller so long labels (e.g. "TRANS FEMALE 2.38% (GP: 1.23%)") fit
             const axisFontSize = Math.max(10, Math.min(15, Math.floor(effectiveWidth / 22)));
             const dataLabelFontSize = Math.max(9, Math.min(13, axisFontSize));
-            // Reserve space for legend so doughnut can still fill most of the box; legend labels wrap if needed
-            const legendPaddingRight = Math.min(320, Math.max(200, Math.floor(chartContainerWidth * 0.42)));
-            const layoutPaddingCircular = { left: 12, right: legendPaddingRight, top: 8, bottom: 8 };
-            const legendOptionsCircular = { display: true, position: 'right', align: 'start', labels: { color: '#e6f1ff', font: { size: legendFontSizeCircular }, boxWidth: 10, padding: 5 } };
+            // Reserve space for legend; doughnut uses rest so it stays larger; legend centered in that space
+            const legendPaddingRight = Math.min(280, Math.max(180, Math.floor(chartContainerWidth * 0.36)));
+            const layoutPaddingCircular = { left: 8, right: legendPaddingRight, top: 6, bottom: 6 };
+            const legendOptionsCircular = { display: true, position: 'right', align: 'center', labels: { color: '#e6f1ff', font: { size: legendFontSizeCircular }, boxWidth: 10, padding: 5 } };
 
             // Age - horizontal bar with Gen Pop in data labels (green/red based on index)
             // Apply sorting based on user selection
@@ -29986,7 +30012,7 @@
 
         function updateRankersLoadStatus(msg) {
             const status = document.getElementById('rankersLoadStatus');
-            if (status) status.textContent = 'Loading ...';
+            if (status) status.textContent = msg || 'Loading ...';
         }
 
         function ensureRankersLoaded() {
@@ -29994,6 +30020,7 @@
                 showRankersDoneBlock();
                 return;
             }
+            console.log('[Rankers] No data yet, starting initial load...');
             showRankersProgressBlock();
             updateRankersLoadStatus('Netflix: loading...');
             if (!netflixRankerData) loadNetflixRankerData();
@@ -30013,15 +30040,20 @@
         function loadNetflixRankerData(forceRefresh) {
             const btn = document.getElementById('rankersLoadBtnNetflix');
             if (btn) btn.disabled = true;
-            updateRankersLoadStatus('Netflix: loading...');
             const url = '/api/rankers/netflix/data' + (forceRefresh ? '?force_refresh=1' : '');
+            console.log('[Rankers] Netflix load started', forceRefresh ? '(force refresh)' : '', '→', url);
+            updateRankersLoadStatus('Netflix: loading...');
             // Add timeout controller - 5 minutes for large Netflix dataset (first load can be very slow)
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 300000);
+            const startTime = Date.now();
             fetch(url, { credentials: 'same-origin', signal: controller.signal })
                 .then(r => {
                     clearTimeout(timeoutId);
-                    return r.text().then(text => ({ ok: r.ok, status: r.status, text: text }));
+                    return r.text().then(text => {
+                        console.log('[Rankers] Response received', r.status, 'after', ((Date.now() - startTime) / 1000).toFixed(1) + 's', 'body length:', (text && text.length) || 0);
+                        return { ok: r.ok, status: r.status, text: text };
+                    });
                 })
                 .then(({ ok, status, text }) => {
                     if (!text || text.trim() === '') {
@@ -30031,18 +30063,21 @@
                     try {
                         data = JSON.parse(text);
                     } catch (e) {
+                        console.error('[Rankers] JSON parse failed', e);
                         throw new Error('Invalid response from server');
                     }
                     if (!ok) {
                         const errMsg = data && data.error ? data.error : (status + ' ' + (data.message || 'Request failed'));
                         throw new Error(errMsg);
                     }
+                    console.log('[Rankers] Data parsed, keys:', data ? Object.keys(data) : []);
                     return data;
                 })
                 .then(data => {
                     if (data.error) throw new Error(data.error);
                     netflixRankerData = data;
                     const rangeStr = data.date_range ? (data.date_range.min + ' to ' + data.date_range.max) : '';
+                    console.log('[Rankers] Netflix load complete', rangeStr ? '(' + rangeStr + ')' : '', 'total', ((Date.now() - startTime) / 1000).toFixed(1) + 's');
                     updateRankersLoadStatus('Netflix: loaded' + (rangeStr ? ' (' + rangeStr + ').' : '.'));
                     // Use last date that actually has data (not just date_range.max which may be stale)
                     const lastDateWithData = _getLastNetflixDateWithData(data);
@@ -30087,6 +30122,7 @@
                 })
                 .catch(err => {
                     clearTimeout(timeoutId);
+                    console.error('[Rankers] Netflix load error', err.name, err.message || err);
                     let errMsg = err.message || String(err);
                     if (err.name === 'AbortError') {
                         errMsg = 'Request timed out (5 min). The server may be busy. Try Refresh Netflix again.';
