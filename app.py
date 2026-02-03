@@ -3883,7 +3883,8 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
         rows = cur.fetchall()
         payload = _build_netflix_ranker_payload(rows)
 
-        # Seasons: TYPE = 'Show' only, group by (date, name_of_show, season). Exclude Indian genre.
+        # Seasons: TYPE = 'Show' only, group by (date, name_of_show, season). 
+        # Exclude Indian genre and rows where season equals show name (those aren't real season data).
         date_filter = "VISIT_TS >= CURRENT_DATE()" if refresh_today_only else "VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())"
         try:
             sql_seasons = f"""
@@ -3893,6 +3894,7 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
                   AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
                   AND UPPER(TRIM(TYPE)) = 'SHOW'
                   AND SEASON IS NOT NULL AND TRIM(SEASON) != ''
+                  AND UPPER(TRIM(SEASON)) != UPPER(TRIM(NAME_OF_SHOW))
                   AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%indian%')
                 GROUP BY 1, 2, 3
                 ORDER BY 1, 3 DESC
