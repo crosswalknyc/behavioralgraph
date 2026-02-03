@@ -4563,6 +4563,12 @@ def get_reelshort_ranker_data():
     except Exception as e:
         return jsonify({'error': f'Snowflake connection failed: {e}'}), 503
     try:
+        # Use 6XL warehouse for fast ReelShort query
+        try:
+            cur.execute("USE WAREHOUSE BEHAVIORGRAPH6X")
+            cur.execute("ALTER WAREHOUSE BEHAVIORGRAPH6X SET WAREHOUSE_SIZE = '6X-LARGE'")
+        except Exception:
+            pass  # Continue with default warehouse if alter fails
         sql = """
             SELECT
                 COUNT(*) AS total,
