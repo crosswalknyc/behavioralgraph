@@ -3357,6 +3357,11 @@
             font-weight: 600;
             color: var(--accent-lime);
         }
+        .behavioral-data-block.has-100-pct {
+            border: 2px solid #10b981;
+            border-radius: 8px;
+            padding: 0.5rem;
+        }
         .behavioral-insight-card {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
@@ -3948,6 +3953,9 @@
         .behavioral-card.highlighted {
             border: 2px solid var(--accent-lime);
             box-shadow: 0 0 20px rgba(200, 255, 0, 0.2);
+        }
+        .behavioral-card.has-100-pct {
+            border: 2px solid #10b981;
         }
 
         .behavioral-card h3.behavioral-card-title-row {
@@ -11418,7 +11426,7 @@
                         <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-feature="keyInsightBuilder" data-tooltip="Key Insight Builder: SWOT analysis and key insights for the primary brand, comparing to comparison profiles and general population." onclick="generateKeyInsightBuilderFromNav()"><span class="tab-icon">🎯</span><span class="tab-label">KEY INSIGHT BUILDER</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-feature="ecosystem" data-tooltip="Ecosystem: Behavioral ecosystem analysis showing life moments, substitution patterns, cultural signals, emotional engagement, relevance shifts, and white-space opportunities." onclick="showProfileSelectionModal('ecosystem')"><span class="tab-icon">🌐</span><span class="tab-label">ECOSYSTEM</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        <button class="tab-btn tool-tab has-tooltip" data-feature="ecosystem" data-tooltip="Ecosystem: Behavioral ecosystem analysis showing life moments, substitution patterns, cultural signals, emotional engagement, relevance shifts, and white-space opportunities." onclick="openEcosystemFromNav()"><span class="tab-icon">🌐</span><span class="tab-label">ECOSYSTEM</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-feature="affinity" data-tooltip="Affinity: Cross-category affinities showing what else this audience engages with across brands and content." onclick="showTab('affinity')"><span class="tab-icon">🔗</span><span class="tab-label">AFFINITY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-feature="sponsorship" data-tooltip="Sponsorship: Sponsorship valuation and partnership opportunity analysis for brand collaborations." onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                         <button class="tab-btn tool-tab has-tooltip" data-feature="media" data-tooltip="Media: Media consumption patterns including TV, streaming, social media, and digital platform preferences." onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">MEDIA</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
@@ -14978,13 +14986,11 @@
         }
         
         // Format index as multiplier (e.g., 150 → 1.5x, 100 → 1.0x, 75 → 0.75x)
-        // Returns N/A for very small values (0.0x)
+        // Format index as whole number (e.g., 334 → 334, 150 → 150, no x suffix)
         function formatIndex(index) {
-            if (index === null || index === undefined || isNaN(index)) return '1.00x';
-            const multiplier = index / 100;
-            // If multiplier would display as 0.00x (less than 0.005), show N/A
-            if (multiplier < 0.005) return 'N/A';
-            return multiplier.toFixed(2) + 'x';
+            if (index === null || index === undefined || isNaN(index)) return 'N/A';
+            const n = Number(index);
+            return String(Math.round(n));
         }
         
         // Normalize a name for deduplication (handles variations like "Patrick Mahomes" vs "patrick-mahomes")
@@ -17682,7 +17688,7 @@
                                             <span style="position: relative; z-index: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; padding: 0.1rem 0.3rem;" title="${item.name}">${item.name}</span>
                                         </div>
                                         <span style="min-width: 50px; text-align: left; color: var(--text-primary);">${pct.toFixed(2)}%</span>
-                                        <span style="min-width: 45px; text-align: left; color: ${indexColor}; font-weight: 600;">${index > 0 ? (index / 100).toFixed(2) + 'x' : '-'}</span>
+                                        <span style="min-width: 45px; text-align: left; color: ${indexColor}; font-weight: 600;">${index > 0 ? formatIndex(index) : '-'}</span>
                                     </div>
                                 `;
                             }).join('')}
@@ -24844,7 +24850,8 @@
             // Sort by highest index first so "Top Performers" shows the actual top 15 highest-indexing brands globally
             activations.sort((a, b) => Number(b.maxIndex || 0) - Number(a.maxIndex || 0));
             
-            document.getElementById('behavioralActivations').innerHTML = activations.slice(0, 15).map(a => {
+            const actsContainer = document.getElementById('behavioralActivations');
+            actsContainer.innerHTML = activations.slice(0, 15).map(a => {
                 // Escape special characters for onclick attribute
                 const escapedCategory = (a.category || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 const escapedSearchTerm = (a.searchTerm || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
@@ -24855,6 +24862,8 @@
                     <span class="text">${a.text}</span>
                 </div>
             `}).join('');
+            const actsBlock = actsContainer.closest('.behavioral-data-block');
+            if (actsBlock) actsBlock.classList.toggle('has-100-pct', activations.some(a => /\b100(\.0+)?%/.test(a.text || '')));
         }
         
         // ============================================================================
@@ -26560,6 +26569,8 @@
                     </span>
                 </div>`;
             }).join('') || '<p style="color: var(--text-secondary);">No data available</p>';
+            const blockEl = container.closest('.behavioral-data-block');
+            if (blockEl) blockEl.classList.toggle('has-100-pct', sorted.some(([, s]) => (s.avgPct || 0) >= 99.5));
         }
         
         function sortTopDifferentiators(sortValue) {
@@ -28119,6 +28130,7 @@
                 const itemLimit = categoryItemLimits[cat] || defaultItemLimit;
                 const displayItems = itemLimit === 'All' || itemLimit >= sortedItems.length ? sortedItems : sortedItems.slice(0, itemLimit);
                 const maxPct = Math.max(...sortedItems.map(i => i.pct), 1); // Calculate max from all items
+                const has100Pct = items.some(i => (i.pct || 0) >= 99.5);
                 const isHighlighted = cat === highlightCategory;
                 const positionBadge = idx === 0 ? '<span style="background: var(--accent-lime); color: #000; padding: 0.1rem 0.3rem; border-radius: 4px; font-size: 0.55rem;">1ST</span>' : '';
                 const tooltip = tooltipCategories[cat.toUpperCase()] || '';
@@ -28316,7 +28328,7 @@
                 const hasSlicers = isMostPurchased || isWhereTheyShop || isSports || isTalent || isAppPlatform || isSearchAI || isQSR || isWhereTheyDine || isTravel || isPets || isPharmacy || isTechDevice || isWorkoutFacility || isGames || isAutomobile || isInvestments || isInsurance || isEducation || isFranchise || isNonProfit;
                 
                 return `
-                    <div class="behavioral-card ${isHighlighted ? 'highlighted' : ''}" 
+                    <div class="behavioral-card ${isHighlighted ? 'highlighted' : ''}${has100Pct ? ' has-100-pct' : ''}" 
                          data-category="${cat}" 
                          data-index="${idx}"
                          draggable="true"
@@ -42715,6 +42727,20 @@
         
         let profileSelectionMode = null; // 'execSummary' | 'keyInsightBuilder' | 'ecosystem'
         
+        function openEcosystemFromNav() {
+            const data = typeof currentDashboardData !== 'undefined' ? currentDashboardData : null;
+            const profileData = typeof currentProfileData !== 'undefined' ? currentProfileData : null;
+            const tabs = typeof openProfileTabs !== 'undefined' ? openProfileTabs : [];
+            if (data && profileData && tabs.length === 0) {
+                window.currentProfileData = { name: profileData.name, sampleSize: data.sampleSize, projectedUS: data.projectedUS, demographics: data.demographics, behavioral: data.behavioral };
+                window.currentDashboardData = data;
+                showTab('ecosystem');
+                if (typeof renderEcosystemInsights === 'function') renderEcosystemInsights(data);
+                return;
+            }
+            showProfileSelectionModal('ecosystem');
+        }
+        
         function showProfileSelectionModal(mode) {
             profileSelectionMode = mode;
             const modal = document.getElementById('profileSelectionModal');
@@ -42724,12 +42750,16 @@
             const titles = { execSummary: '📄 Executive Summary', keyInsightBuilder: '🎯 Key Insight Builder', ecosystem: '🌐 Ecosystem Analysis' };
             if (titleEl) titleEl.textContent = titles[mode] || mode;
             
-            const tabs = typeof openProfileTabs !== 'undefined' ? openProfileTabs : [];
+            let tabs = typeof openProfileTabs !== 'undefined' ? openProfileTabs : [];
+            // If no Compare tabs but we have a dashboard profile loaded from sidebar, use that
+            if (tabs.length === 0 && typeof currentDashboardData !== 'undefined' && currentDashboardData && typeof currentProfileData !== 'undefined' && currentProfileData) {
+                tabs = [{ id: '__CURRENT_DASHBOARD__', name: currentProfileData.name || 'Current Profile', parsed: currentDashboardData }];
+            }
             const activeId = typeof activeProfileTabId !== 'undefined' ? activeProfileTabId : (tabs[0] && tabs[0].id);
             
             if (tabs.length === 0) {
-                primarySelect.innerHTML = '<option value="">Open at least one profile first</option>';
-                compareList.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.85rem; text-align: left;">Open profiles to compare.</div>';
+                primarySelect.innerHTML = '<option value="">Select a profile from the sidebar first</option>';
+                compareList.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.85rem; text-align: left;">Select a profile from the sidebar to generate.</div>';
                 document.getElementById('profileSelectionGenerateBtn').disabled = true;
             } else {
                 const safeLabel = (val) => {
@@ -42768,8 +42798,11 @@
                 alert('Please select a profile.');
                 return;
             }
-            const tabs = typeof openProfileTabs !== 'undefined' ? openProfileTabs : [];
-            const primaryTab = tabs.find(t => t.id === primaryId);
+            let tabs = typeof openProfileTabs !== 'undefined' ? openProfileTabs : [];
+            if (tabs.length === 0 && typeof currentDashboardData !== 'undefined' && currentDashboardData && typeof currentProfileData !== 'undefined' && currentProfileData) {
+                tabs = [{ id: '__CURRENT_DASHBOARD__', name: currentProfileData.name || 'Current Profile', parsed: currentDashboardData }];
+            }
+            let primaryTab = tabs.find(t => t.id === primaryId);
             if (!primaryTab || !primaryTab.parsed) {
                 alert('Selected profile data not loaded.');
                 return;
@@ -42867,8 +42900,65 @@
         // EXECUTIVE SUMMARY GENERATOR
         // ============================================================================
         
-        // Wrapper function for nav bar - always show profile selection modal so user can choose what to compare
+        // Wrapper function for nav bar - generate directly if profile loaded, else show profile selection modal
         async function generateExecutiveSummaryFromNav() {
+            const data = typeof currentDashboardData !== 'undefined' ? currentDashboardData : null;
+            const profileData = typeof currentProfileData !== 'undefined' ? currentProfileData : null;
+            const tabs = typeof openProfileTabs !== 'undefined' ? openProfileTabs : [];
+            if (data && profileData && tabs.length === 0) {
+                const buildProfile = (p) => ({
+                    name: p.name || 'Profile',
+                    sampleSize: p.sampleSize || 0,
+                    projectedUS: p.projectedUS || 0,
+                    medianAge: typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution((p.demographics || {}).age || {}) : 0,
+                    demographics: p.demographics || {},
+                    demographicsProjection: p.demographicsProjection || {},
+                    behavioral: p.behavioral || {},
+                    color: '#4a8ac9'
+                });
+                let profiles = [buildProfile({
+                    name: profileData.name || 'Profile',
+                    sampleSize: data.sampleSize || 0,
+                    projectedUS: data.projectedUS || 0,
+                    demographics: data.demographics || {},
+                    demographicsProjection: data.demographicsProjection || {},
+                    behavioral: data.behavioral || {}
+                })];
+                if (typeof window.dashboardProfiles !== 'undefined' && Array.isArray(window.dashboardProfiles)) {
+                    const gp = window.dashboardProfiles.find(p => {
+                        const n = (p.name || '').toUpperCase();
+                        const k = (p.s3_key || '').toUpperCase();
+                        return n.includes('GEN POP') || n.includes('GENPOP') || k.includes('GEN_POP') || k.includes('GENPOP');
+                    });
+                    if (gp && gp.s3_key) {
+                        try {
+                            const response = await fetch(`/api/get-csv-data/${encodeURIComponent(gp.s3_key)}`);
+                            if (response.ok) {
+                                const res = await response.json();
+                                if (res.success && res.data) {
+                                    const parsed = parseAllData(res.data);
+                                    profiles.push(buildProfile({
+                                        name: gp.name || 'General Population',
+                                        sampleSize: parsed.sampleSize || 0,
+                                        projectedUS: parsed.projectedUS || 0,
+                                        demographics: parsed.demographics || {},
+                                        demographicsProjection: parsed.demographicsProjection || {},
+                                        behavioral: parsed.behavioral || {}
+                                    }));
+                                }
+                            }
+                        } catch (e) { console.warn('Gen Pop load failed', e); }
+                    }
+                }
+                const orig = window.comparisonProfilesData;
+                window.comparisonProfilesData = profiles;
+                try {
+                    await generateExecutiveSummary();
+                } finally {
+                    window.comparisonProfilesData = orig;
+                }
+                return;
+            }
             showProfileSelectionModal('execSummary');
             return;
             
@@ -43386,8 +43476,65 @@
         // KEY INSIGHT BUILDER - SWOT Analysis for Primary Brand
         // ============================================================================
         
-        // Wrapper function for nav bar - always show profile selection modal so user can choose what to compare
+        // Wrapper function for nav bar - generate directly if profile loaded, else show profile selection modal
         async function generateKeyInsightBuilderFromNav() {
+            const data = typeof currentDashboardData !== 'undefined' ? currentDashboardData : null;
+            const profileData = typeof currentProfileData !== 'undefined' ? currentProfileData : null;
+            const tabs = typeof openProfileTabs !== 'undefined' ? openProfileTabs : [];
+            if (data && profileData && tabs.length === 0) {
+                const buildProfile = (p) => ({
+                    name: p.name || 'Profile',
+                    sampleSize: p.sampleSize || 0,
+                    projectedUS: p.projectedUS || 0,
+                    medianAge: typeof calculateMedianAgeFromDistribution === 'function' ? calculateMedianAgeFromDistribution((p.demographics || {}).age || {}) : 0,
+                    demographics: p.demographics || {},
+                    demographicsProjection: p.demographicsProjection || {},
+                    behavioral: p.behavioral || {},
+                    color: '#4a8ac9'
+                });
+                let profiles = [buildProfile({
+                    name: profileData.name || 'Profile',
+                    sampleSize: data.sampleSize || 0,
+                    projectedUS: data.projectedUS || 0,
+                    demographics: data.demographics || {},
+                    demographicsProjection: data.demographicsProjection || {},
+                    behavioral: data.behavioral || {}
+                })];
+                if (typeof window.dashboardProfiles !== 'undefined' && Array.isArray(window.dashboardProfiles)) {
+                    const gp = window.dashboardProfiles.find(p => {
+                        const n = (p.name || '').toUpperCase();
+                        const k = (p.s3_key || '').toUpperCase();
+                        return n.includes('GEN POP') || n.includes('GENPOP') || k.includes('GEN_POP') || k.includes('GENPOP');
+                    });
+                    if (gp && gp.s3_key) {
+                        try {
+                            const response = await fetch(`/api/get-csv-data/${encodeURIComponent(gp.s3_key)}`);
+                            if (response.ok) {
+                                const res = await response.json();
+                                if (res.success && res.data) {
+                                    const parsed = parseAllData(res.data);
+                                    profiles.push(buildProfile({
+                                        name: gp.name || 'General Population',
+                                        sampleSize: parsed.sampleSize || 0,
+                                        projectedUS: parsed.projectedUS || 0,
+                                        demographics: parsed.demographics || {},
+                                        demographicsProjection: parsed.demographicsProjection || {},
+                                        behavioral: parsed.behavioral || {}
+                                    }));
+                                }
+                            }
+                        } catch (e) { console.warn('Gen Pop load failed', e); }
+                    }
+                }
+                const orig = window.comparisonProfilesData;
+                window.comparisonProfilesData = profiles;
+                try {
+                    await generateKeyInsightBuilder();
+                } finally {
+                    window.comparisonProfilesData = orig;
+                }
+                return;
+            }
             showProfileSelectionModal('keyInsightBuilder');
             return;
         }
