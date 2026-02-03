@@ -3867,10 +3867,10 @@ def _build_netflix_ranker_payload(rows):
         genre = (r[2] or '').strip() or '-'
         typ = (r[3] or '').strip() or '-'
         views = int(r[4] or 0)
-        avg_watch_time = round(float(r[5]), 2) if r[5] is not None and r[5] != '' else None
-        run_time = r[6] if len(r) > 6 and r[6] is not None and r[6] != '' else None
-        if run_time is not None and isinstance(run_time, (int, float)):
-            run_time = int(run_time) if run_time == int(run_time) else round(float(run_time), 2)
+        avg_watch_time = round(float(r[5]), 2) if len(r) > 5 and r[5] is not None and r[5] != '' else None
+        run_time = round(float(r[6]), 2) if len(r) > 6 and r[6] is not None and r[6] != '' else None
+        if run_time is not None and run_time == int(run_time):
+            run_time = int(run_time)
         # Exclude Indian genre from all ranker views
         if 'indian' in (genre or '').lower():
             continue
@@ -3921,9 +3921,9 @@ def _build_netflix_seasons_payload(rows):
         season = (r[2] or '').strip() or '-'
         views = int(r[3] or 0)
         avg_watch_time = round(float(r[4]), 2) if len(r) > 4 and r[4] is not None and r[4] != '' else None
-        run_time = r[5] if len(r) > 5 and r[5] is not None and r[5] != '' else None
-        if run_time is not None and isinstance(run_time, (int, float)):
-            run_time = int(run_time) if run_time == int(run_time) else round(float(run_time), 2)
+        run_time = round(float(r[5]), 2) if len(r) > 5 and r[5] is not None and r[5] != '' else None
+        if run_time is not None and run_time == int(run_time):
+            run_time = int(run_time)
         by_date_season[dt].append({'show_name': show_name, 'season': season, 'views': views, 'avg_watch_time': avg_watch_time, 'run_time': run_time})
     return dict(by_date_season)
 
@@ -3939,9 +3939,9 @@ def _build_netflix_episodes_payload(rows):
         episode_name = (r[4] or '').strip() or 'Unknown'
         views = int(r[5] or 0)
         avg_watch_time = round(float(r[6]), 2) if len(r) > 6 and r[6] is not None and r[6] != '' else None
-        run_time = r[7] if len(r) > 7 and r[7] is not None and r[7] != '' else None
-        if run_time is not None and isinstance(run_time, (int, float)):
-            run_time = int(run_time) if run_time == int(run_time) else round(float(run_time), 2)
+        run_time = round(float(r[7]), 2) if len(r) > 7 and r[7] is not None and r[7] != '' else None
+        if run_time is not None and run_time == int(run_time):
+            run_time = int(run_time)
         by_date_episode[dt].append({'show_name': show_name, 'season': season, 'episode': episode, 'episode_name': episode_name, 'views': views, 'avg_watch_time': avg_watch_time, 'run_time': run_time})
     return dict(by_date_episode)
 
@@ -3971,9 +3971,9 @@ def _build_netflix_all_payload(rows):
         episode_name = _normalize_netflix_all_field(r[4])
         views = int(r[5] or 0)
         avg_watch_time = round(float(r[6]), 2) if len(r) > 6 and r[6] is not None and r[6] != '' else None
-        run_time = r[7] if len(r) > 7 and r[7] is not None and r[7] != '' else None
-        if run_time is not None and isinstance(run_time, (int, float)):
-            run_time = int(run_time) if run_time == int(run_time) else round(float(run_time), 2)
+        run_time = round(float(r[7]), 2) if len(r) > 7 and r[7] is not None and r[7] != '' else None
+        if run_time is not None and run_time == int(run_time):
+            run_time = int(run_time)
         by_date_all[dt].append({
             'show_name': show_name,
             'season': season,
@@ -3984,6 +3984,12 @@ def _build_netflix_all_payload(rows):
             'run_time': run_time
         })
     return dict(by_date_all)
+
+# Snowflake: parse "45m", "1h 30m" (h=hours, m=minutes) to total minutes for AVG/MAX
+_NETFLIX_DURATION_MINS = """
+COALESCE(TRY_TO_NUMBER(REGEXP_SUBSTR(COALESCE(TIME_ON_PAGE::VARCHAR, RUN_TIME::VARCHAR), '([0-9]+)h', 1, 1, 'e', 1)), 0) * 60
++ COALESCE(TRY_TO_NUMBER(REGEXP_SUBSTR(COALESCE(TIME_ON_PAGE::VARCHAR, RUN_TIME::VARCHAR), '([0-9]+)m', 1, 1, 'e', 1)), 0)
+"""
 
 def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
     """Query BEHAVIORALGRAPH.PUBLIC.NETFLIX for past year (or latest day only) and return payload.
@@ -3996,24 +4002,32 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
         raise RuntimeError(f'Snowflake connection failed: {e}')
     try:
         # Default to last 7 days for fast initial load; use refresh_today_only for just today
+        # Parse "45m" / "1h 30m" to minutes in subquery so AVG/MAX work (h=hours, m=minutes)
         if refresh_today_only:
-            sql = """
-                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views,
-                    AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
-                FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
-                WHERE VISIT_TS >= CURRENT_DATE()
-                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+            sql = f"""
+                SELECT visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views,
+                    AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
+                FROM (
+                    SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE,
+                        ({_NETFLIX_DURATION_MINS}) AS duration_mins
+                    FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+                    WHERE VISIT_TS >= CURRENT_DATE()
+                      AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                ) sub
                 GROUP BY 1, 2, 3, 4
                 ORDER BY 1, 5 DESC
             """
         else:
-            # Load only last 7 days for fast initial load (was 1 year - too slow)
-            sql = """
-                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views,
-                    AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
-                FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
-                WHERE VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())
-                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+            sql = f"""
+                SELECT visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views,
+                    AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
+                FROM (
+                    SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE,
+                        ({_NETFLIX_DURATION_MINS}) AS duration_mins
+                    FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+                    WHERE VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())
+                      AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                ) sub
                 GROUP BY 1, 2, 3, 4
                 ORDER BY 1, 5 DESC
             """
@@ -4026,15 +4040,19 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
         date_filter = "VISIT_TS >= CURRENT_DATE()" if refresh_today_only else "VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())"
         try:
             sql_seasons = f"""
-                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, COUNT(*) AS views,
-                    AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
-                FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
-                WHERE {date_filter}
-                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
-                  AND UPPER(TRIM(TYPE)) = 'SHOW'
-                  AND SEASON IS NOT NULL AND TRIM(SEASON) != ''
-                  AND UPPER(TRIM(SEASON)) != UPPER(TRIM(NAME_OF_SHOW))
-                  AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%indian%')
+                SELECT visit_date, NAME_OF_SHOW, SEASON, COUNT(*) AS views,
+                    AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
+                FROM (
+                    SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON,
+                        ({_NETFLIX_DURATION_MINS}) AS duration_mins
+                    FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+                    WHERE {date_filter}
+                      AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                      AND UPPER(TRIM(TYPE)) = 'SHOW'
+                      AND SEASON IS NOT NULL AND TRIM(SEASON) != ''
+                      AND UPPER(TRIM(SEASON)) != UPPER(TRIM(NAME_OF_SHOW))
+                      AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%indian%')
+                ) sub
                 GROUP BY 1, 2, 3
                 ORDER BY 1, 4 DESC
             """
@@ -4043,18 +4061,20 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
         except Exception:
             payload['by_date_season'] = {}
 
-        # Episodes: group by (date, name_of_show, season, episode, episode_name). Exclude Indian genre.
-        # Exclude rows where EPISODE_NAME equals NAME_OF_SHOW (not a real episode distinction)
         try:
             sql_episodes = f"""
-                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views,
-                    AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
-                FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
-                WHERE {date_filter}
-                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
-                  AND EPISODE_NAME IS NOT NULL AND TRIM(EPISODE_NAME) != ''
-                  AND UPPER(TRIM(EPISODE_NAME)) != UPPER(TRIM(NAME_OF_SHOW))
-                  AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%indian%')
+                SELECT visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views,
+                    AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
+                FROM (
+                    SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME,
+                        ({_NETFLIX_DURATION_MINS}) AS duration_mins
+                    FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+                    WHERE {date_filter}
+                      AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                      AND EPISODE_NAME IS NOT NULL AND TRIM(EPISODE_NAME) != ''
+                      AND UPPER(TRIM(EPISODE_NAME)) != UPPER(TRIM(NAME_OF_SHOW))
+                      AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%indian%')
+                ) sub
                 GROUP BY 1, 2, 3, 4, 5
                 ORDER BY 1, 6 DESC
             """
@@ -4063,15 +4083,18 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
         except Exception:
             payload['by_date_episode'] = {}
 
-        # All Netflix: group by (date, name_of_show, season, episode, episode_name) for complete view
         try:
             sql_all = f"""
-                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views,
-                    AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
-                FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
-                WHERE {date_filter}
-                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
-                  AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%indian%')
+                SELECT visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views,
+                    AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
+                FROM (
+                    SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME,
+                        ({_NETFLIX_DURATION_MINS}) AS duration_mins
+                    FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+                    WHERE {date_filter}
+                      AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                      AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%indian%')
+                ) sub
                 GROUP BY 1, 2, 3, 4, 5
                 ORDER BY 1, 6 DESC
             """
@@ -4098,13 +4121,17 @@ def _fetch_netflix_ranker_for_single_date(visit_date_str):
     except Exception as e:
         raise RuntimeError(f'Snowflake connection failed: {e}')
     try:
-        # Single-day filter: DATE(VISIT_TS) = %s
-        sql = """
-            SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views,
-                AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
-            FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
-            WHERE DATE(VISIT_TS) = %s
-              AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+        # Single-day: parse "45m" / "1h 30m" to minutes in subquery
+        sql = f"""
+            SELECT visit_date, NAME_OF_SHOW, GENRE, TYPE, COUNT(*) AS views,
+                AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
+            FROM (
+                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, GENRE, TYPE,
+                    ({_NETFLIX_DURATION_MINS}) AS duration_mins
+                FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+                WHERE DATE(VISIT_TS) = %s
+                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+            ) sub
             GROUP BY 1, 2, 3, 4
             ORDER BY 1, 5 DESC
         """
@@ -4112,16 +4139,20 @@ def _fetch_netflix_ranker_for_single_date(visit_date_str):
         rows = cur.fetchall()
         payload = _build_netflix_ranker_payload(rows)
 
-        sql_seasons = """
-            SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, COUNT(*) AS views,
-                AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
-            FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
-            WHERE DATE(VISIT_TS) = %s
-              AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
-              AND UPPER(TRIM(TYPE)) = 'SHOW'
-              AND SEASON IS NOT NULL AND TRIM(SEASON) != ''
-              AND UPPER(TRIM(SEASON)) != UPPER(TRIM(NAME_OF_SHOW))
-              AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%%indian%%')
+        sql_seasons = f"""
+            SELECT visit_date, NAME_OF_SHOW, SEASON, COUNT(*) AS views,
+                AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
+            FROM (
+                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON,
+                    ({_NETFLIX_DURATION_MINS}) AS duration_mins
+                FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+                WHERE DATE(VISIT_TS) = %s
+                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                  AND UPPER(TRIM(TYPE)) = 'SHOW'
+                  AND SEASON IS NOT NULL AND TRIM(SEASON) != ''
+                  AND UPPER(TRIM(SEASON)) != UPPER(TRIM(NAME_OF_SHOW))
+                  AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%%indian%%')
+            ) sub
             GROUP BY 1, 2, 3
             ORDER BY 1, 4 DESC
         """
@@ -4131,15 +4162,19 @@ def _fetch_netflix_ranker_for_single_date(visit_date_str):
         except Exception:
             payload['by_date_season'] = {}
 
-        sql_episodes = """
-            SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views,
-                AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
-            FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
-            WHERE DATE(VISIT_TS) = %s
-              AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
-              AND EPISODE_NAME IS NOT NULL AND TRIM(EPISODE_NAME) != ''
-              AND UPPER(TRIM(EPISODE_NAME)) != UPPER(TRIM(NAME_OF_SHOW))
-              AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%%indian%%')
+        sql_episodes = f"""
+            SELECT visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views,
+                AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
+            FROM (
+                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME,
+                    ({_NETFLIX_DURATION_MINS}) AS duration_mins
+                FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+                WHERE DATE(VISIT_TS) = %s
+                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                  AND EPISODE_NAME IS NOT NULL AND TRIM(EPISODE_NAME) != ''
+                  AND UPPER(TRIM(EPISODE_NAME)) != UPPER(TRIM(NAME_OF_SHOW))
+                  AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%%indian%%')
+            ) sub
             GROUP BY 1, 2, 3, 4, 5
             ORDER BY 1, 6 DESC
         """
@@ -4149,13 +4184,17 @@ def _fetch_netflix_ranker_for_single_date(visit_date_str):
         except Exception:
             payload['by_date_episode'] = {}
 
-        sql_all = """
-            SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views,
-                AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) AS avg_watch_time, MAX(RUN_TIME) AS run_time
-            FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
-            WHERE DATE(VISIT_TS) = %s
-              AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
-              AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%%indian%%')
+        sql_all = f"""
+            SELECT visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views,
+                AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
+            FROM (
+                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME,
+                    ({_NETFLIX_DURATION_MINS}) AS duration_mins
+                FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+                WHERE DATE(VISIT_TS) = %s
+                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                  AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%%indian%%')
+            ) sub
             GROUP BY 1, 2, 3, 4, 5
             ORDER BY 1, 6 DESC
         """
@@ -4439,17 +4478,18 @@ def get_netflix_show_details():
         
         where_clause = " AND ".join(where_parts)
         
-        # Get show metadata (first row with this show)
+        # Get show metadata; parse "45m" / "1h 30m" to minutes for run_time and avg_watch_time
         # Note: CAST is a Snowflake reserved keyword, must be quoted
         meta_sql = f"""
             SELECT 
                 NAME_OF_SHOW, SEASON, EPISODE_NAME, GENRE, TYPE,
-                RUN_TIME, AGE_RATING, YEAR_RELEASED, "CAST", 
-                AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) as avg_watch_time,
+                AGE_RATING, YEAR_RELEASED, "CAST",
+                MAX(({_NETFLIX_DURATION_MINS})) AS run_time_mins,
+                AVG(({_NETFLIX_DURATION_MINS})) AS avg_watch_time_mins,
                 COUNT(*) as total_views
             FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
             WHERE {where_clause}
-            GROUP BY NAME_OF_SHOW, SEASON, EPISODE_NAME, GENRE, TYPE, RUN_TIME, AGE_RATING, YEAR_RELEASED, "CAST"
+            GROUP BY NAME_OF_SHOW, SEASON, EPISODE_NAME, GENRE, TYPE, AGE_RATING, YEAR_RELEASED, "CAST"
             ORDER BY total_views DESC
             LIMIT 1
         """
@@ -4483,18 +4523,20 @@ def get_netflix_show_details():
         
         conn.close()
         
-        # Build response
+        # meta_row: 0=name, 1=season, 2=episode_name, 3=genre, 4=type, 5=age_rating, 6=year_released, 7=cast, 8=run_time_mins, 9=avg_watch_time_mins, 10=total_views
+        run_mins = meta_row[8] if meta_row[8] is not None else None
+        avg_mins = meta_row[9] if meta_row[9] is not None else None
         result = {
             'show_name': meta_row[0] or 'N/A',
             'season': meta_row[1] or 'N/A',
             'episode_name': meta_row[2] or 'N/A',
             'genre': meta_row[3] or 'N/A',
             'type': meta_row[4] or 'N/A',
-            'run_time': meta_row[5] or 'N/A',
-            'age_rating': meta_row[6] or 'N/A',
-            'year_released': meta_row[7] or 'N/A',
-            'cast': meta_row[8] or 'N/A',
-            'avg_watch_time': round(float(meta_row[9]), 2) if meta_row[9] else 'N/A',
+            'run_time': round(run_mins, 2) if run_mins is not None else 'N/A',
+            'age_rating': meta_row[5] or 'N/A',
+            'year_released': meta_row[6] or 'N/A',
+            'cast': meta_row[7] or 'N/A',
+            'avg_watch_time': round(avg_mins, 2) if avg_mins is not None else 'N/A',
             'total_views': meta_row[10] or 0,
             'dma_breakdown': dma_breakdown
         }

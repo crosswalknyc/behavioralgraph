@@ -2935,13 +2935,13 @@
         .chart-card-controls-row {
             display: flex;
             align-items: center;
-            gap: 0.25rem;
+            gap: 0.4rem;
             flex-wrap: wrap;
         }
         
         .chart-card-controls-row select.chart-type-select {
-            padding: 0.2rem 0.3rem;
-            font-size: clamp(0.55rem, 1vw + 0.3rem, 0.7rem);
+            padding: 0.3rem 0.45rem;
+            font-size: clamp(0.75rem, 1.1vw + 0.4rem, 0.9rem);
             background: var(--bg-dark);
             border: 1px solid var(--border-color);
             border-radius: 4px;
@@ -2956,21 +2956,21 @@
             color: var(--text-primary);
         }
         
-        /* Median display styling - dynamic and wrap */
+        /* Median display styling - larger and easier to read */
         .chart-card .median-display {
-            font-size: clamp(0.55rem, 1vw + 0.3rem, 0.65rem);
+            font-size: clamp(0.8rem, 1.2vw + 0.4rem, 0.95rem);
             color: #f0ff00;
             font-weight: 600;
             text-shadow: 0 0 8px rgba(240, 255, 0, 0.5);
             line-height: 1.4;
             text-transform: none;
             background: rgba(200, 255, 0, 0.1);
-            padding: 0.15rem 0.4rem;
-            border-radius: 4px;
+            padding: 0.35rem 0.6rem;
+            border-radius: 6px;
             width: 100%;
             order: 10;
             margin-top: 0.25rem;
-            padding-top: 0.25rem;
+            padding-top: 0.35rem;
             border-top: 1px solid var(--border-color);
             white-space: normal;
             word-wrap: break-word;
@@ -2978,14 +2978,14 @@
         }
         
         .chart-type-select {
-            font-size: clamp(0.5rem, 0.9vw + 0.3rem, 0.6rem);
-            padding: 0.1rem 0.2rem;
+            font-size: clamp(0.7rem, 1vw + 0.35rem, 0.85rem);
+            padding: 0.25rem 0.35rem;
             background: var(--bg-input);
             border: 1px solid var(--border-color);
             border-radius: 4px;
             color: var(--text-secondary);
             cursor: pointer;
-            min-width: 35px;
+            min-width: 42px;
         }
         .chart-type-select:hover {
             border-color: var(--accent-lime);
@@ -3087,12 +3087,12 @@
             background: var(--bg-dark);
             border: 1px solid var(--border-color);
             color: var(--text-secondary);
-            padding: 0.15rem 0.3rem;
-            border-radius: 3px;
+            padding: 0.25rem 0.45rem;
+            border-radius: 4px;
             cursor: pointer;
-            font-size: 0.6rem;
+            font-size: 0.8rem;
             transition: all 0.2s;
-            opacity: 0.7;
+            opacity: 0.85;
         }
         
         .module-btn:hover {
@@ -15049,10 +15049,11 @@
             return String(Math.round(n));
         }
         
-        // Never display "Latinx" in UI — show "Latino" for any case of latinx from raw data.
+        // Never display "Latinx" in UI — show "LATINO" (all caps) for latinx or Latino from raw data.
         function displayDemographicLabel(s) {
             if (s == null || typeof s !== 'string') return s;
-            if (String(s).trim().toLowerCase() === 'latinx') return 'Latino';
+            const v = String(s).trim().toLowerCase();
+            if (v === 'latinx' || v === 'latino') return 'LATINO';
             return s;
         }
         
@@ -17535,16 +17536,17 @@
                 }
             }
             
-            // Ethnicity Chart
+            // Ethnicity Chart (Latino in all caps on demographics)
             if (demographics.ethnicity && Object.keys(demographics.ethnicity).length > 0) {
                 const ethnicityLabels = Object.keys(demographics.ethnicity);
+                const ethnicityDisplayLabels = ethnicityLabels.map(l => (l && l.toLowerCase()) === 'latino' ? 'LATINO' : l);
                 const ethnicityData = Object.values(demographics.ethnicity);
                 const ctx = document.getElementById('tickerEthnicityChart');
                 if (ctx) {
                     tickerCharts.ethnicity = new Chart(ctx, {
                         type: 'doughnut',
                         data: {
-                            labels: ethnicityLabels,
+                            labels: ethnicityDisplayLabels,
                             datasets: [{ data: ethnicityData, backgroundColor: colors }]
                         },
                         options: {
@@ -17632,7 +17634,7 @@
             // Sexual Orientation Chart
             if (demographics.sexual_orientation && Object.keys(demographics.sexual_orientation).length > 0) {
                 const soLabels = Object.keys(demographics.sexual_orientation);
-                const soDisplayLabel = (raw) => { const u = (raw || '').toUpperCase(); if (u === 'NO') return 'Heterosexual'; if (u === 'YES') return 'LGBTQ+'; return raw || ''; };
+                const soDisplayLabel = (raw) => { const u = (raw || '').toUpperCase(); if (u === 'NO') return 'HETEROSEXUAL'; if (u === 'YES') return 'LGBTQ+'; return raw || ''; };
                 const soDisplayLabels = soLabels.map(soDisplayLabel);
                 const soData = Object.values(demographics.sexual_orientation);
                 const ctx = document.getElementById('tickerSexualOrientationChart');
@@ -25447,14 +25449,14 @@
             const chartContainerWidth = ageChartEl?.parentElement?.offsetWidth || 400;
             const vw = typeof window !== 'undefined' ? (window.innerWidth || 1200) : 1200;
             const effectiveWidth = Math.max(chartContainerWidth, Math.floor(vw / 4));
-            const legendFontSize = Math.max(8, Math.min(12, Math.floor(effectiveWidth / 28)));
-            const legendFontSizeCircular = Math.max(8, Math.min(11, legendFontSize)); // Slightly smaller so long labels (e.g. "TRANS FEMALE 2.38% (GP: 1.23%)") fit
+            const legendFontSize = Math.max(10, Math.min(14, Math.floor(effectiveWidth / 24)));
+            const legendFontSizeCircular = Math.max(10, Math.min(13, legendFontSize)); // Readable size for demographics donut legends
             const axisFontSize = Math.max(10, Math.min(15, Math.floor(effectiveWidth / 22)));
             const dataLabelFontSize = Math.max(9, Math.min(13, axisFontSize));
-            // Reserve space for legend; doughnut uses rest so it stays larger; legend centered in that space
-            const legendPaddingRight = Math.min(280, Math.max(180, Math.floor(chartContainerWidth * 0.36)));
-            const layoutPaddingCircular = { left: 8, right: legendPaddingRight, top: 6, bottom: 6 };
-            const legendOptionsCircular = { display: true, position: 'right', align: 'center', labels: { color: '#e6f1ff', font: { size: legendFontSizeCircular }, boxWidth: 10, padding: 5 } };
+            // Reserve space for legend; doughnut uses rest; extra left padding on legend adds gap between donut and text
+            const legendPaddingRight = Math.min(300, Math.max(200, Math.floor(chartContainerWidth * 0.38)));
+            const layoutPaddingCircular = { left: 10, right: legendPaddingRight, top: 8, bottom: 8 };
+            const legendOptionsCircular = { display: true, position: 'right', align: 'center', padding: { left: 24 }, labels: { color: '#e6f1ff', font: { size: legendFontSizeCircular }, boxWidth: 12, padding: 6 } };
 
             // Age - horizontal bar with Gen Pop in data labels (green/red based on index)
             // Apply sorting based on user selection
@@ -25649,8 +25651,9 @@
                 plugins: [ChartDataLabels]
             });
 
-            // Ethnicity - with Gen Pop in legend (green/red based on index)
+            // Ethnicity - with Gen Pop in legend (green/red based on index). Latino in all caps on demographics.
             const ethLabels = Object.keys(demographics.ethnicity);
+            const ethDisplayLabels = ethLabels.map(l => (l && l.toLowerCase()) === 'latino' ? 'LATINO' : l);
             const ethGenPop = ethLabels.map(k => demographicsGenPop.ethnicity?.[k] || 0);
             const ethPcts = Object.values(demographics.ethnicity);
             const ethData = isProjection
@@ -25667,7 +25670,7 @@
             
             charts.ethnicity = new Chart(document.getElementById('ethnicityChart'), {
                 type: ethnicityChartType,
-                data: { labels: ethLabels, datasets: [{ data: ethData, backgroundColor: colors, borderRadius: ethnicityChartType === 'bar' ? 4 : 0 }] },
+                data: { labels: ethDisplayLabels, datasets: [{ data: ethData, backgroundColor: colors, borderRadius: ethnicityChartType === 'bar' ? 4 : 0 }] },
                 options: { 
                     indexAxis: ethnicityChartType === 'bar' ? 'y' : 'x',
                     responsive: true, 
@@ -26065,7 +26068,7 @@
             // Sexual Orientation - doughnut with Gen Pop
             if (demographics.sexual_orientation && Object.keys(demographics.sexual_orientation).length > 0) {
                 const soLabels = Object.keys(demographics.sexual_orientation);
-                const soDisplayLabel = (raw) => { const u = (raw || '').toUpperCase(); if (u === 'NO') return isGenPop ? 'HETEROSEXUAL' : 'Heterosexual'; if (u === 'YES') return 'LGBTQ+'; return raw || ''; };
+                const soDisplayLabel = (raw) => { const u = (raw || '').toUpperCase(); if (u === 'NO') return 'HETEROSEXUAL'; if (u === 'YES') return 'LGBTQ+'; return raw || ''; };
                 const soDisplayLabels = soLabels.map(soDisplayLabel);
                 const soGenPop = soLabels.map(k => demographicsGenPop.sexual_orientation?.[k] || 0);
                 const soPcts = Object.values(demographics.sexual_orientation);
