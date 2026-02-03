@@ -2996,7 +2996,7 @@
             width: 100%;
             min-width: 0;
             max-width: 100%;
-            height: clamp(180px, 20vw + 90px, 260px);
+            height: clamp(200px, 22vw + 100px, 300px);
             overflow: visible;
             position: relative;
         }
@@ -3018,15 +3018,15 @@
         
         /* Responsive chart sizing - scales with viewport so text fits */
         @media (max-width: 1600px) {
-            .chart-container { height: clamp(170px, 18vw + 70px, 240px); }
+            .chart-container { height: clamp(190px, 20vw + 80px, 280px); }
         }
         
         @media (max-width: 1200px) {
-            .chart-container { height: clamp(160px, 17vw + 60px, 220px); }
+            .chart-container { height: clamp(180px, 19vw + 70px, 260px); }
         }
         
         @media (max-width: 800px) {
-            .chart-container { height: clamp(200px, 35vw + 80px, 280px); }
+            .chart-container { height: clamp(220px, 38vw + 90px, 320px); }
             .chart-card h3 { font-size: clamp(0.75rem, 2.5vw + 0.5rem, 0.9rem); }
         }
         
@@ -25305,10 +25305,10 @@
             const chartContainerWidth = ageChartEl?.parentElement?.offsetWidth || 400;
             const vw = typeof window !== 'undefined' ? (window.innerWidth || 1200) : 1200;
             const effectiveWidth = Math.max(chartContainerWidth, Math.floor(vw / 4));
-            const legendFontSize = Math.max(8, Math.min(13, Math.floor(effectiveWidth / 24)));
+            const legendFontSize = Math.max(8, Math.min(12, Math.floor(effectiveWidth / 28)));
             const axisFontSize = Math.max(10, Math.min(15, Math.floor(effectiveWidth / 22)));
             const dataLabelFontSize = Math.max(9, Math.min(13, axisFontSize));
-            const legendPaddingRight = Math.min(220, Math.max(140, Math.floor(chartContainerWidth * 0.45)));
+            const legendPaddingRight = Math.min(320, Math.max(200, Math.floor(chartContainerWidth * 0.55)));
 
             // Age - horizontal bar with Gen Pop in data labels (green/red based on index)
             // Apply sorting based on user selection
