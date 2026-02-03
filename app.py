@@ -3854,42 +3854,8 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
     Includes by_date (series), by_date_season (show+season, type=Show only), by_date_episode (show+season+episode)."""
     try:
         import bg
-        import snowflake.connector
-        from config import SNOWFLAKE_CONFIG
-        import os
-        
-        # Connect with explicit timeouts to prevent hanging
-        user = os.environ.get('SNOWFLAKE_USER') or SNOWFLAKE_CONFIG.get('user', '')
-        password = os.environ.get('SNOWFLAKE_PASSWORD') or SNOWFLAKE_CONFIG.get('password', '')
-        account = os.environ.get('SNOWFLAKE_ACCOUNT') or SNOWFLAKE_CONFIG.get('account', '')
-        warehouse = os.environ.get('SNOWFLAKE_WAREHOUSE') or SNOWFLAKE_CONFIG.get('warehouse', 'BEHAVIORGRAPH6X')
-        database = os.environ.get('SNOWFLAKE_DATABASE') or SNOWFLAKE_CONFIG.get('database', 'BEHAVIORALGRAPH')
-        schema = os.environ.get('SNOWFLAKE_SCHEMA') or SNOWFLAKE_CONFIG.get('schema', 'PUBLIC')
-        role = os.environ.get('SNOWFLAKE_ROLE') or SNOWFLAKE_CONFIG.get('role', 'ACCOUNTADMIN')
-        token = os.environ.get('SNOWFLAKE_TOKEN') or SNOWFLAKE_CONFIG.get('token', '')
-        
-        conn_params = {
-            'user': user,
-            'account': account,
-            'warehouse': warehouse,
-            'database': database,
-            'schema': schema,
-            'role': role,
-            'insecure_mode': True,
-            'ocsp_fail_open': True,
-            'login_timeout': 60,  # 60 second login timeout
-            'network_timeout': 180,  # 3 minute network timeout
-        }
-        
-        if token:
-            conn_params['token'] = token
-        else:
-            conn_params['password'] = password
-        
-        conn = snowflake.connector.connect(**conn_params)
+        conn = bg.connect_snowflake()
         cur = conn.cursor()
-        # Set query timeout to 4 minutes
-        cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 240")
     except Exception as e:
         raise RuntimeError(f'Snowflake connection failed: {e}')
     try:
