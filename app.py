@@ -4687,6 +4687,98 @@ def get_netflix_show_details():
         return jsonify({'error': str(e)}), 500
 
 
+# Netflix Live Top 10 - reads from S3 bucket netflix-liveish
+NETFLIX_LIVE_TOP10_BUCKET = 'netflix-liveish'
+NETFLIX_LIVE_TOP10_CACHE = {}
+NETFLIX_LIVE_TOP10_LOCK = threading.Lock()
+
+@app.route('/api/rankers/netflix/live-top10', methods=['GET'])
+def get_netflix_live_top10():
+    """
+    Get Netflix Live Top 10 data from S3 bucket netflix-liveish.
+    Returns ranked list of Netflix URLs with view counts and projected views.
+    """
+    try:
+        import boto3
+        from collections import Counter
+        
+        # Check cache (refresh every 5 minutes)
+        cache_key = 'data'
+        with NETFLIX_LIVE_TOP10_LOCK:
+            cached = NETFLIX_LIVE_TOP10_CACHE.get(cache_key)
+            cache_time = NETFLIX_LIVE_TOP10_CACHE.get('loaded_at', 0)
+            if cached and (datetime.now().timestamp() - cache_time) < 300:
+                return jsonify(cached)
+        
+        # Fetch from S3
+        s3 = boto3.client('s3',
+                          aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                          aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                          region_name=S3_REGION)
+        
+        # Get the CSV file
+        response = s3.get_object(Bucket=NETFLIX_LIVE_TOP10_BUCKET, Key='data_netflix.csv')
+        csv_content = response['Body'].read().decode('utf-8')
+        
+        # Parse CSV and count URLs
+        import csv
+        from io import StringIO
+        reader = csv.DictReader(StringIO(csv_content))
+        url_counts = Counter()
+        total_rows = 0
+        delivered_date = None
+        
+        for row in reader:
+            total_rows += 1
+            url = row.get('url', '').strip()
+            if url:
+                url_counts[url] += 1
+            if not delivered_date and row.get('delivered'):
+                delivered_date = row.get('delivered')
+        
+        # Build ranked list
+        ranked = []
+        for rank, (url, count) in enumerate(url_counts.most_common(10), 1):
+            # Extract title ID from URL
+            title_id = ''
+            import re
+            match = re.search(r'/watch/(\d+)', url)
+            if match:
+                title_id = match.group(1)
+            
+            # Project views: (count * 150) / 10M * 329.9M US pop
+            projected_views = int((count * 150) / 10_000_000 * 329_900_000) if count else 0
+            
+            ranked.append({
+                'rank': rank,
+                'url': url,
+                'title_id': title_id,
+                'raw_count': count,
+                'projected_views': projected_views,
+                'pct_of_total': round(count / total_rows * 100, 2) if total_rows else 0
+            })
+        
+        payload = {
+            'top10': ranked,
+            'total_rows': total_rows,
+            'delivered_date': delivered_date,
+            'last_updated': datetime.now().isoformat()
+        }
+        
+        # Cache result
+        with NETFLIX_LIVE_TOP10_LOCK:
+            NETFLIX_LIVE_TOP10_CACHE['data'] = payload
+            NETFLIX_LIVE_TOP10_CACHE['loaded_at'] = datetime.now().timestamp()
+        
+        return jsonify(payload)
+        
+    except Exception as e:
+        print(f"[Netflix Live Top 10] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 def _load_reelshort_ranker_cache():
     """Load ReelShort cache from file (by-date). Merges into REELSHORT_RANKER_CACHE."""
     global REELSHORT_RANKER_CACHE

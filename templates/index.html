@@ -12320,6 +12320,7 @@
                         <!-- Netflix sub-view -->
                         <div id="ranker-netflix" class="ranker-platform-panel active">
                             <div class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                                <button class="tab-btn" onclick="showNetflixSubTab('livetop10')" id="netflixSubTabLivetop10">🔴 Live Top 10</button>
                                 <button class="tab-btn" onclick="showNetflixSubTab('all')" id="netflixSubTabAll">📺 All Netflix</button>
                                 <button class="tab-btn" onclick="showNetflixSubTab('daily')" id="netflixSubTabDaily">📅 Daily Ranker by Series</button>
                                 <button class="tab-btn" onclick="showNetflixSubTab('seasons')" id="netflixSubTabSeasons">📅 Daily Ranker by Seasons</button>
@@ -12330,6 +12331,19 @@
                                 <button class="tab-btn" onclick="showNetflixSubTab('insights')" id="netflixSubTabInsights">💡 Insights</button>
                             </div>
                             <div id="netflixSubTabContent">
+                                <div id="netflix-livetop10" class="netflix-sub-content">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                        <h3 style="margin: 0;">🔴 Live Top 10</h3>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <span id="netflixLiveTop10Date" style="font-size: 0.75rem; color: var(--text-secondary);"></span>
+                                            <button class="module-btn" onclick="loadNetflixLiveTop10(true)" style="font-size: 0.75rem; padding: 0.3rem 0.6rem;">🔄 REFRESH</button>
+                                        </div>
+                                    </div>
+                                    <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">Real-time Netflix Top 10 from live clickstream data. Updated throughout the day.</p>
+                                    <div id="netflixLiveTop10Loading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Loading Live Top 10...</div>
+                                    <div id="netflixLiveTop10TableWrap" style="overflow-x: auto; display: none;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Title</th><th>Views</th><th>% of Total</th><th>Link</th></tr></thead><tbody id="netflixLiveTop10Body"></tbody></table></div>
+                                    <div id="netflixLiveTop10Error" style="padding: 1rem; color: var(--error-color); display: none;"></div>
+                                </div>
                                 <div id="netflix-all" class="netflix-sub-content">
                                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
                                         <h3 style="margin: 0;">📺 All Netflix</h3>
@@ -30376,11 +30390,12 @@
             document.querySelectorAll('#ranker-netflix .netflix-sub-content').forEach(c => c.classList.remove('active'));
             document.querySelectorAll('#ranker-netflix .netflix-subtabs .tab-btn').forEach(b => b.classList.remove('active'));
             const content = document.getElementById('netflix-' + id);
-            const btnId = id === 'topshows' ? 'TopShows' : id.charAt(0).toUpperCase() + id.slice(1);
+            const btnId = id === 'topshows' ? 'TopShows' : id === 'livetop10' ? 'Livetop10' : id.charAt(0).toUpperCase() + id.slice(1);
             const btn = document.getElementById('netflixSubTab' + btnId);
             if (content) content.classList.add('active');
             if (btn) btn.classList.add('active');
-            if (id === 'all') renderNetflixAllRanker();
+            if (id === 'livetop10') loadNetflixLiveTop10();
+            else if (id === 'all') renderNetflixAllRanker();
             else if (id === 'daily') renderNetflixDailyRanker();
             else if (id === 'seasons') renderNetflixSeasonsRanker();
             else if (id === 'episodes') renderNetflixEpisodesRanker();
@@ -31449,6 +31464,75 @@
                 { label: 'Days of Data', value: (dates.length || 0).toString() }
             ];
             if (wrap) wrap.innerHTML = cards.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
+        }
+
+        // Netflix Live Top 10
+        let netflixLiveTop10Data = null;
+        
+        function loadNetflixLiveTop10(forceRefresh) {
+            const loadingEl = document.getElementById('netflixLiveTop10Loading');
+            const tableWrap = document.getElementById('netflixLiveTop10TableWrap');
+            const errorEl = document.getElementById('netflixLiveTop10Error');
+            const dateEl = document.getElementById('netflixLiveTop10Date');
+            
+            // If we have cached data and not forcing refresh, just render
+            if (netflixLiveTop10Data && !forceRefresh) {
+                renderNetflixLiveTop10();
+                return;
+            }
+            
+            if (loadingEl) loadingEl.style.display = 'block';
+            if (tableWrap) tableWrap.style.display = 'none';
+            if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+            
+            fetch('/api/rankers/netflix/live-top10', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    if (loadingEl) loadingEl.style.display = 'none';
+                    if (data.error) {
+                        if (errorEl) { errorEl.textContent = data.error; errorEl.style.display = 'block'; }
+                        return;
+                    }
+                    netflixLiveTop10Data = data;
+                    if (dateEl && data.delivered_date) {
+                        dateEl.textContent = 'Data for: ' + data.delivered_date;
+                    }
+                    renderNetflixLiveTop10();
+                })
+                .catch(e => {
+                    if (loadingEl) loadingEl.style.display = 'none';
+                    if (errorEl) { errorEl.textContent = e.message || String(e); errorEl.style.display = 'block'; }
+                });
+        }
+        
+        function renderNetflixLiveTop10() {
+            const tbody = document.getElementById('netflixLiveTop10Body');
+            const tableWrap = document.getElementById('netflixLiveTop10TableWrap');
+            
+            if (!netflixLiveTop10Data || !netflixLiveTop10Data.top10) {
+                if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data available.</td></tr>';
+                return;
+            }
+            
+            if (tableWrap) tableWrap.style.display = 'block';
+            
+            const rows = netflixLiveTop10Data.top10;
+            if (rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data available.</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = rows.map(r => {
+                const titleLink = r.url ? '<a href="' + r.url + '" target="_blank" style="color: var(--accent-cyan);">Watch on Netflix</a>' : 'N/A';
+                const titleDisplay = r.title_id ? 'Title ID: ' + r.title_id : r.url;
+                return '<tr>' +
+                    '<td style="font-weight: 600; color: var(--accent-cyan);">#' + r.rank + '</td>' +
+                    '<td>' + titleDisplay + '</td>' +
+                    '<td style="font-weight: 600;">' + (r.projected_views || 0).toLocaleString() + '</td>' +
+                    '<td>' + (r.pct_of_total || 0) + '%</td>' +
+                    '<td>' + titleLink + '</td>' +
+                '</tr>';
+            }).join('');
         }
 
         function exportNetflixDailyCSV() {
