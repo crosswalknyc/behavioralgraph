@@ -235,37 +235,9 @@ _metadata_cache = {}
 _cache_timestamps = {}
 CACHE_TTL = 60  # Cache for 60 seconds
 
-# Admin S3 content cache (jobs list + file_count) - used by admin content/archive/delete
-s3_cache = {'jobs': [], 'file_count': 0}
-# Profile/ticker image cache (project name -> { is_custom, image_url })
+# Profile/ticker image cache (project name -> { is_custom, image_url }) - loaded later after s3_cache is defined
 profile_image_cache = {}
 cache_loading_complete = True
-
-S3_CONTENT_CACHE_FILE = 'metadata/s3_content_cache.json'
-
-def load_persisted_cache():
-    """Load S3 content cache (jobs) from S3 metadata."""
-    global s3_cache
-    try:
-        data = load_json_from_s3(S3_CONTENT_CACHE_FILE)
-        if isinstance(data, dict) and 'jobs' in data:
-            s3_cache = {'jobs': data.get('jobs', []), 'file_count': data.get('file_count', 0)}
-    except Exception as e:
-        print(f"⚠️ load_persisted_cache: {e}")
-
-def save_persisted_cache():
-    """Persist S3 content cache to S3 metadata."""
-    try:
-        save_json_to_s3(S3_CONTENT_CACHE_FILE, {
-            'jobs': s3_cache.get('jobs', []),
-            'file_count': s3_cache.get('file_count', 0)
-        })
-    except Exception as e:
-        print(f"⚠️ save_persisted_cache: {e}")
-
-def smart_cache_update():
-    """Refresh in-memory S3 content cache from storage (no-op if no persistence)."""
-    load_persisted_cache()
 
 def load_profile_image_cache():
     """Load profile/ticker image cache from S3 (custom images per project)."""
@@ -2704,30 +2676,70 @@ def get_admin_content():
         return jsonify({'success': False, 'error': 'AWS credentials not configured or S3 error'})
     return jsonify({'success': True, 'files': active_files, 'archived': archived_files})
 
-@app.route('/api/jobs', methods=['GET'])
+@app.route('/api/jobs')
 @requires_auth
-def get_jobs():
-    """List all available profiles (S3 result files). Use source=profile_iq for Profile IQ sidebar (dashboard-inputs only, no SVOD)."""
-    source = (request.args.get('source') or '').strip().lower()
-    # Profile IQ dashboard: only dashboard-inputs bucket (no SVOD Acquisition — those are Subscriber IQ)
-    include_svod = source != 'profile_iq'
-    active_files, _ = _fetch_content_files(include_svod=include_svod)
-    if active_files is None:
-        return jsonify({'jobs': []})
-    jobs = []
-    for f in active_files:
-        key = f.get('key', '')
-        jobs.append({
-            's3_key': key,
-            'key': key,
-            'job_id': key,
-            'project_name': f.get('project_name', ''),
-            'category': f.get('category', 'Uncategorized'),
-            'status': 'cached',
-            'filename': f.get('filename', ''),
-            'last_modified': f.get('last_modified'),
+def list_jobs():
+    """List all jobs (local + S3 cached) with caching for performance. Uses persisted cache with proper categories."""
+    import time
+    
+    job_list = []
+    categories = set()
+    
+    # Return quickly if cache is still loading
+    if not cache_loading_complete and not s3_cache.get('jobs'):
+        return jsonify({
+            'jobs': [],
+            'categories': [],
+            'cache_info': {'loading': True, 'message': 'Loading profiles...'},
+            'loading': True
         })
-    return jsonify({'jobs': jobs})
+    
+    # Update user's last activity time (but don't block on it)
+    username = session.get('username')
+    if username:
+        try:
+            users = load_users()
+            if username in users:
+                users[username]['last_activity'] = time.time()
+                save_users(users)
+        except:
+            pass  # Don't block on activity tracking
+    
+    # Add local jobs (always fresh)
+    for job_id, job in jobs.items():
+        job_list.append({
+            'job_id': job_id,
+            'project_name': job['project_name'],
+            'status': job['status'],
+            'progress': job['progress'],
+            'created_at': job['created_at'],
+            'source': 'local',
+            'category': 'LOCAL'
+        })
+        categories.add('LOCAL')
+    
+    # Use persisted cache only - no S3 scanning on page load for speed
+    # If cache is empty, try to load persisted cache
+    if not s3_cache.get('jobs') and s3_client:
+        load_persisted_cache()
+    
+    # Add cached S3 jobs (these have proper categories from CSV files)
+    job_list.extend(s3_cache.get('jobs', []))
+    for cat in s3_cache.get('categories', []):
+        categories.add(cat)
+    
+    # Sort by created_at descending
+    sorted_jobs = sorted(job_list, key=lambda x: x.get('created_at', ''), reverse=True)
+    
+    return jsonify({
+        'jobs': sorted_jobs,
+        'categories': sorted(list(categories)),
+        'cache_info': {
+            'last_updated': s3_cache.get('last_updated'),
+            'file_count': s3_cache.get('file_count', 0),
+            'cached': True
+        }
+    })
 
 @app.route('/api/cached_files', methods=['GET'])
 @requires_admin
@@ -2838,7 +2850,7 @@ def restore_content():
                 print(f"Failed to restore {key}: {e}")
         
         # Refresh cache to pick up restored files
-        smart_cache_update()
+        load_persisted_cache()
         
         return jsonify({
             'success': True,
