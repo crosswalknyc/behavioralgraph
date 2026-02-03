@@ -12071,8 +12071,8 @@
                                             <button class="module-btn csv-btn" onclick="exportNetflixAllCSV()">CSV</button>
                                         </div>
                                     </div>
-                                    <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">All content ranked by views. Grouped by Show + Season + Episode.</p>
-                                    <div id="netflixAllTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Name of Show</th><th>Season</th><th>Episode</th><th>Views</th></tr></thead><tbody id="netflixAllBody"></tbody></table></div>
+                                    <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">All content ranked by views. Grouped by Show + Season + Episode # + Episode Name.</p>
+                                    <div id="netflixAllTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Name of Show</th><th>Season</th><th>Episode #</th><th>Episode Name</th><th>Views</th></tr></thead><tbody id="netflixAllBody"></tbody></table></div>
                                     <div id="netflixAllLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
                                 </div>
                                 <div id="netflix-daily" class="netflix-sub-content active">
@@ -30162,12 +30162,12 @@
             if (!netflixRankerData || !netflixRankerData.by_date_all) {
                 // Build by_date_all from raw daily data if not present
                 if (netflixRankerData && netflixRankerData.daily) {
-                    // Group by date + show + season + episode
+                    // Group by date + show + season + episode + episode_name
                     const grouped = {};
                     netflixRankerData.daily.forEach(r => {
-                        const key = r.date + '|' + (r.show_name || '') + '|' + (r.season || '') + '|' + (r.episode_name || '');
+                        const key = r.date + '|' + (r.show_name || '') + '|' + (r.season || '') + '|' + (r.episode || '') + '|' + (r.episode_name || '');
                         if (!grouped[key]) {
-                            grouped[key] = { date: r.date, show_name: r.show_name || '', season: r.season || '', episode_name: r.episode_name || '', views: 0 };
+                            grouped[key] = { date: r.date, show_name: r.show_name || '', season: r.season || '', episode: r.episode || '', episode_name: r.episode_name || '', views: 0 };
                         }
                         grouped[key].views += (r.views || 0);
                     });
@@ -30218,14 +30218,14 @@
             
             if (!tbody) return;
             if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date' + (date ? ' (' + date + ')' : '') + '.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date' + (date ? ' (' + date + ')' : '') + '.</td></tr>';
             } else {
                 tbody.innerHTML = rows.map((r, i) => {
                     const showNameEsc = (r.show_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     const seasonEsc = (r.season || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     const episodeEsc = (r.episode_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                     const showLink = '<a href="#" onclick="openNetflixShowDetails(\'' + showNameEsc + '\', \'' + seasonEsc + '\', \'' + episodeEsc + '\', \'' + date + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.show_name || 'N/A') + '</a>';
-                    return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (r.season || 'N/A') + '</td><td>' + (r.episode_name || 'N/A') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>';
+                    return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (r.season || 'N/A') + '</td><td>' + (r.episode || 'N/A') + '</td><td>' + (r.episode_name || 'N/A') + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td></tr>';
                 }).join('');
             }
         }
@@ -30235,7 +30235,7 @@
             const dateInp = document.getElementById('netflixAllDate');
             const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
             let rows = (netflixRankerData.by_date_all[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            const csv = 'Rank,Name of Show,Season,Episode,Views\n' + rows.map((r, i) => [i + 1, '"' + (r.show_name || 'N/A').replace(/"/g, '""') + '"', '"' + (r.season || 'N/A').replace(/"/g, '""') + '"', '"' + (r.episode_name || 'N/A').replace(/"/g, '""') + '"', netflixProjectedViews(r.views)].join(',')).join('\n');
+            const csv = 'Rank,Name of Show,Season,Episode #,Episode Name,Views\n' + rows.map((r, i) => [i + 1, '"' + (r.show_name || 'N/A').replace(/"/g, '""') + '"', '"' + (r.season || 'N/A').replace(/"/g, '""') + '"', '"' + (r.episode || 'N/A').replace(/"/g, '""') + '"', '"' + (r.episode_name || 'N/A').replace(/"/g, '""') + '"', netflixProjectedViews(r.views)].join(',')).join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_all_ranker_' + date + '.csv'; a.click();
         }
 
@@ -30380,8 +30380,8 @@
                     // Build DMA breakdown table (top 15)
                     const dmaRows = (data.dma_breakdown || []).slice(0, 15);
                     const dmaTable = dmaRows.length > 0 
-                        ? '<table class="rankers-table" style="width: 100%; border-collapse: collapse; margin-top: 0.5rem;"><thead><tr><th>DMA (Location)</th><th>Views</th><th>% of Total</th></tr></thead><tbody>' +
-                          dmaRows.map(d => '<tr><td>' + d.dma + '</td><td>' + d.views.toLocaleString() + '</td><td>' + d.percentage + '%</td></tr>').join('') +
+                        ? '<table class="rankers-table" style="width: 100%; border-collapse: collapse; margin-top: 0.5rem;"><thead><tr><th>DMA (Location)</th><th>Projected Views</th><th>% of Total</th></tr></thead><tbody>' +
+                          dmaRows.map(d => '<tr><td>' + d.dma + '</td><td>' + netflixProjectedViews(d.views).toLocaleString() + '</td><td>' + d.percentage + '%</td></tr>').join('') +
                           '</tbody></table>'
                         : '<p style="color: var(--text-secondary);">No DMA data available</p>';
                     
@@ -30629,10 +30629,10 @@
             const allViews = netflixRankerData.daily ? netflixRankerData.daily.reduce((s, r) => s + (r.views || 0), 0) : 0;
             const showCount = netflixRankerData.by_show ? Object.keys(netflixRankerData.by_show).length : 0;
             const cards = [
-                { label: 'Total View Events (Past Year)', value: (allViews || 0).toLocaleString() },
+                { label: 'Total Projected Views (Past Year)', value: netflixProjectedViews(allViews || 0).toLocaleString() },
                 { label: 'Unique Shows', value: (showCount || 0).toLocaleString() },
                 { label: 'Date Range', value: (netflixRankerData.date_range ? netflixRankerData.date_range.min + ' – ' + netflixRankerData.date_range.max : '-') },
-                { label: 'Latest Day Total Views', value: totalViews.toLocaleString() },
+                { label: 'Latest Day Projected Views', value: netflixProjectedViews(totalViews).toLocaleString() },
                 { label: 'Top Show (Latest Day)', value: topShow ? topShow.show_name : '-' },
                 { label: 'Days of Data', value: (dates.length || 0).toString() }
             ];

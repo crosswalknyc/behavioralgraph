@@ -1179,6 +1179,9 @@
                         </div>
                     </div>
                 </div>
+                <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end;">
+                    <button type="button" class="btn btn-danger" onclick="deleteTickerFromModal()" id="deleteTickerBtn">🗑️ Delete Ticker</button>
+                </div>
             </div>
         </div>
 
@@ -5924,6 +5927,38 @@
             // Clear form
             document.getElementById('tickerDetailImageFile').value = '';
             document.getElementById('tickerDetailImageURL').value = '';
+        }
+        
+        async function deleteTickerFromModal() {
+            if (!currentTickerInModal) return;
+            const ticker = currentTickerInModal.ticker;
+            const s3Key = currentTickerInModal.s3_key;
+            if (!s3Key) {
+                showToast('❌ Cannot delete: missing ticker data. Refresh and try again.', true);
+                return;
+            }
+            if (!confirm(`Permanently delete ticker "${ticker}"?\n\nThis will remove the CSV from S3 and clear metadata, SEC actuals, and profile mappings. This cannot be undone.`)) {
+                return;
+            }
+            try {
+                const response = await fetch('/api/hedge-fund-iq/delete-ticker', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ s3_key: s3Key })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showToast('✅ Ticker ' + ticker + ' deleted.');
+                    closeTickerDetailModal();
+                    invalidateTickersCache();
+                    await loadTickers();
+                } else {
+                    showToast('❌ Error: ' + (data.error || 'Unknown error'), true);
+                }
+            } catch (error) {
+                showToast('❌ Error deleting ticker: ' + error.message, true);
+            }
         }
         
         async function saveTickerMetadataFromModal() {

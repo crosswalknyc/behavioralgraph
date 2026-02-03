@@ -3923,6 +3923,22 @@ def _fetch_netflix_ranker_from_snowflake(refresh_today_only=False):
         except Exception:
             payload['by_date_episode'] = {}
 
+        # All Netflix: group by (date, name_of_show, season, episode, episode_name) for complete view
+        try:
+            sql_all = f"""
+                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views
+                FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
+                WHERE {date_filter}
+                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
+                  AND (GENRE IS NULL OR LOWER(TRIM(GENRE)) NOT LIKE '%indian%')
+                GROUP BY 1, 2, 3, 4, 5
+                ORDER BY 1, 6 DESC
+            """
+            cur.execute(sql_all)
+            payload['by_date_all'] = _build_netflix_all_payload(cur.fetchall())
+        except Exception:
+            payload['by_date_all'] = {}
+
         conn.close()
         return payload
     finally:
@@ -4087,15 +4103,17 @@ def get_netflix_show_details():
         where_clause = " AND ".join(where_parts)
         
         # Get show metadata (first row with this show)
+        # Note: CAST is a Snowflake reserved keyword, must be quoted
         meta_sql = f"""
             SELECT 
                 NAME_OF_SHOW, SEASON, EPISODE_NAME, GENRE, TYPE,
-                RUN_TIME, AGE_RATING, YEAR_RELEASED, CAST, 
+                RUN_TIME, AGE_RATING, YEAR_RELEASED, "CAST", 
                 AVG(COALESCE(TIME_ON_PAGE, RUN_TIME)) as avg_watch_time,
                 COUNT(*) as total_views
             FROM BEHAVIORALGRAPH.PUBLIC.NETFLIX
             WHERE {where_clause}
-            GROUP BY NAME_OF_SHOW, SEASON, EPISODE_NAME, GENRE, TYPE, RUN_TIME, AGE_RATING, YEAR_RELEASED, CAST
+            GROUP BY NAME_OF_SHOW, SEASON, EPISODE_NAME, GENRE, TYPE, RUN_TIME, AGE_RATING, YEAR_RELEASED, "CAST"
+            ORDER BY total_views DESC
             LIMIT 1
         """
         cur.execute(meta_sql, params)
@@ -5638,6 +5656,83 @@ def list_hedge_fund_tickers():
         
     except Exception as e:
         print(f"❌ Error listing hedge fund tickers: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _ticker_symbol_from_s3_key(key):
+    """Derive ticker symbol from S3 key (e.g. VZ_Daily.csv -> VZ, TMUSphone_Daily.csv -> TMUSPHONE)."""
+    if not key or not key.endswith('.csv'):
+        return None
+    filename = key.replace('.csv', '').replace('_Daily', '')
+    parts = filename.split('_')
+    if not parts:
+        return None
+    ticker_symbol = parts[0].upper()
+    if len(parts) >= 2 and parts[1].lower() in ['phone', 'broadband']:
+        ticker_symbol = (parts[0] + parts[1]).upper()
+    return ticker_symbol
+
+
+@app.route('/api/hedge-fund-iq/delete-ticker', methods=['POST'])
+@requires_auth
+@requires_admin
+def delete_hedge_fund_ticker():
+    """Delete a ticker: remove CSV from S3 and clear metadata, SEC actuals, profile mappings, and ticker image."""
+    try:
+        data = request.get_json() or {}
+        s3_key = (data.get('s3_key') or '').strip()
+        if not s3_key:
+            return jsonify({'success': False, 'error': 's3_key is required'}), 400
+
+        ticker_symbol = _ticker_symbol_from_s3_key(s3_key)
+        if not ticker_symbol:
+            return jsonify({'success': False, 'error': 'Invalid s3_key'}), 400
+
+        if not hedge_fund_s3_client:
+            return jsonify({'success': False, 'error': 'Hedge Fund S3 not configured'}), 500
+
+        # 1. Delete CSV from aggregated-tickers bucket
+        try:
+            hedge_fund_s3_client.delete_object(Bucket=HEDGE_FUND_S3_BUCKET, Key=s3_key)
+            print(f"🗑️ Deleted S3 object: {HEDGE_FUND_S3_BUCKET}/{s3_key}")
+        except Exception as e:
+            print(f"⚠️ S3 delete object: {e}")
+            # Continue to clean metadata even if object was already missing
+
+        # 2. Remove from ticker metadata (keyed by s3_key)
+        metadata = load_ticker_metadata()
+        if s3_key in metadata:
+            del metadata[s3_key]
+            save_ticker_metadata(metadata)
+            print(f"🗑️ Removed ticker metadata for {s3_key}")
+
+        # 3. Remove from SEC actuals (keyed by ticker symbol)
+        all_actuals = load_json_from_s3(SEC_ACTUALS_FILE)
+        if ticker_symbol in all_actuals:
+            del all_actuals[ticker_symbol]
+            save_json_to_s3(SEC_ACTUALS_FILE, all_actuals)
+            print(f"🗑️ Removed SEC actuals for {ticker_symbol}")
+
+        # 4. Remove ticker image (keyed by ticker symbol)
+        ticker_images = load_json_from_s3(TICKER_IMAGES_FILE)
+        if ticker_symbol in ticker_images:
+            del ticker_images[ticker_symbol]
+            save_json_to_s3(TICKER_IMAGES_FILE, ticker_images)
+            print(f"🗑️ Removed ticker image for {ticker_symbol}")
+
+        # 5. Remove profile mapping (keyed by ticker symbol)
+        mappings = load_json_from_s3(TICKER_PROFILES_FILE)
+        if ticker_symbol in mappings:
+            del mappings[ticker_symbol]
+            save_json_to_s3(TICKER_PROFILES_FILE, mappings)
+            print(f"🗑️ Removed profile mapping for {ticker_symbol}")
+
+        invalidate_cache()
+        return jsonify({'success': True, 'message': f'Ticker {ticker_symbol} deleted'})
+    except Exception as e:
+        print(f"❌ Error deleting ticker: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
