@@ -42225,19 +42225,24 @@
             const genPopProfile = profiles.find(p => p.name.toUpperCase() === 'GEN POP' || p.name.toUpperCase() === 'GENPOP');
             const nonGenPopProfiles = profiles.filter(p => p.name.toUpperCase() !== 'GEN POP' && p.name.toUpperCase() !== 'GENPOP');
             
-            // Collect ALL behaviors across all profiles with their indices
+            // Collect behaviors from demographics and TELECOM category only
             const allBehaviors = {};
             const overIndexThreshold = 110; // Consider over-indexing at 110+
             
             profiles.forEach(p => {
-                if (p.behavioral) {
-                    Object.entries(p.behavioral).forEach(([cat, items]) => {
-                        items.forEach(item => {
-                            const key = cat + '|' + item.name;
+                // Add demographics data
+                if (p.demographics && p.demographicsIndex) {
+                    const demoCategories = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'];
+                    demoCategories.forEach(cat => {
+                        const catData = p.demographics[cat] || {};
+                        const catIndex = p.demographicsIndex[cat] || {};
+                        Object.entries(catData).forEach(([value, pct]) => {
+                            const key = cat.toUpperCase() + '|' + value;
+                            const index = catIndex[value] || 100;
                             if (!allBehaviors[key]) {
                                 allBehaviors[key] = { 
-                                    name: item.name, 
-                                    category: cat, 
+                                    name: value, 
+                                    category: cat.toUpperCase(), 
                                     profileData: {},
                                     overIndexingProfiles: [],
                                     totalIndex: 0,
@@ -42246,16 +42251,44 @@
                             }
                             // Store data for each profile
                             allBehaviors[key].profileData[p.name] = {
-                                index: item.index || 100,
-                                pct: item.pct || item.percentage || 0
+                                index: index,
+                                pct: pct || 0
                             };
                             // Track which non-GenPop profiles over-index
-                            if (item.index >= overIndexThreshold && p.name.toUpperCase() !== 'GEN POP' && p.name.toUpperCase() !== 'GENPOP') {
+                            if (index >= overIndexThreshold && p.name.toUpperCase() !== 'GEN POP' && p.name.toUpperCase() !== 'GENPOP') {
                                 allBehaviors[key].overIndexingProfiles.push(p.name);
-                                allBehaviors[key].totalIndex += item.index;
+                                allBehaviors[key].totalIndex += index;
                                 allBehaviors[key].count++;
                             }
                         });
+                    });
+                }
+                
+                // Add TELECOM behavioral data only
+                if (p.behavioral && p.behavioral.TELECOM) {
+                    p.behavioral.TELECOM.forEach(item => {
+                        const key = 'TELECOM|' + item.name;
+                        if (!allBehaviors[key]) {
+                            allBehaviors[key] = { 
+                                name: item.name, 
+                                category: 'TELECOM', 
+                                profileData: {},
+                                overIndexingProfiles: [],
+                                totalIndex: 0,
+                                count: 0
+                            };
+                        }
+                        // Store data for each profile
+                        allBehaviors[key].profileData[p.name] = {
+                            index: item.index || 100,
+                            pct: item.pct || item.percentage || 0
+                        };
+                        // Track which non-GenPop profiles over-index
+                        if (item.index >= overIndexThreshold && p.name.toUpperCase() !== 'GEN POP' && p.name.toUpperCase() !== 'GENPOP') {
+                            allBehaviors[key].overIndexingProfiles.push(p.name);
+                            allBehaviors[key].totalIndex += item.index;
+                            allBehaviors[key].count++;
+                        }
                     });
                 }
             });
