@@ -24105,15 +24105,21 @@
             const profileInfo = document.getElementById('dashProfileInfo');
             if (profileInfo && brandName) {
                 profileInfo.style.display = 'flex';
-                document.getElementById('dashBrandNameHeader').textContent = displayTitle.toUpperCase();
-                document.getElementById('dashDateRangeHeader').textContent = dateRange ? `Date Range: ${dateRange}` : '';
-                document.getElementById('dashDateRangeHeader').style.display = dateRange ? 'block' : 'none';
+                const brandNameEl = document.getElementById('dashBrandNameHeader');
+                const dateRangeEl = document.getElementById('dashDateRangeHeader');
+                if (brandNameEl) brandNameEl.textContent = displayTitle.toUpperCase();
+                if (dateRangeEl) {
+                    dateRangeEl.textContent = dateRange ? `Date Range: ${dateRange}` : '';
+                    dateRangeEl.style.display = dateRange ? 'block' : 'none';
+                }
                 
                 // Fetch profile image from Wikipedia (use base name for image lookup)
                 fetchProfileImage(brandName);
             }
-            document.getElementById('dashSampleSize').textContent = formatNumber(parsed.sampleSize);
-            document.getElementById('dashProjectedUS').textContent = formatNumber(parsed.projectedUS);
+            const sampleSizeEl = document.getElementById('dashSampleSize');
+            const projectedUSEl = document.getElementById('dashProjectedUS');
+            if (sampleSizeEl) sampleSizeEl.textContent = formatNumber(parsed.sampleSize);
+            if (projectedUSEl) projectedUSEl.textContent = formatNumber(parsed.projectedUS);
             
             // Store profile data for AI features
             currentProfileData = {
