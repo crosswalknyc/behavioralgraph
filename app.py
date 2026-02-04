@@ -8159,7 +8159,7 @@ def submit_analysis():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/status/<job_id>')
+@app.route('/api/status/<job_id>', strict_slashes=False)
 @requires_auth
 def get_job_status(job_id):
     """Get simplified status of a specific job."""
@@ -8180,7 +8180,7 @@ def get_job_status(job_id):
     })
 
 
-@app.route('/api/download/<job_id>')
+@app.route('/api/download/<job_id>', strict_slashes=False)
 @requires_auth
 def download_result(job_id):
     """Download the result CSV file for a completed job."""
@@ -11433,7 +11433,7 @@ def post_comment():
 # ATTRIBUTION IQ ENDPOINTS
 # ============================================================================
 
-@app.route('/api/attribution/talent-search', methods=['POST'])
+@app.route('/api/attribution/talent-search', methods=['POST'], strict_slashes=False)
 @requires_auth
 def submit_talent_search():
     """Submit a Talent Search IQ analysis job."""
@@ -11503,7 +11503,7 @@ def submit_talent_search():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/attribution/talent-theater', methods=['POST'])
+@app.route('/api/attribution/talent-theater', methods=['POST'], strict_slashes=False)
 @requires_auth
 def submit_talent_theater():
     """Submit a Talent Ticket Sale IQ analysis job."""
