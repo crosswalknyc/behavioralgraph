@@ -1855,6 +1855,20 @@
             transition: transform 0.3s ease;
         }
         
+        /* Profile header row - collapses with toolbar */
+        .profile-header-row {
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+        
+        .profile-header-row.collapsed {
+            max-height: 0;
+            opacity: 0;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        
         /* Tab section labels */
         .tab-section-label {
             font-size: 0.65rem;
@@ -11702,8 +11716,8 @@
             <div class="profile-tabs-bar" id="profileTabsBar">
             </div>
             
-            <!-- Row 1: Profile Info -->
-            <div class="dash-header-row">
+            <!-- Row 1: Profile Info (collapses with toolbar) -->
+            <div class="dash-header-row profile-header-row" id="profileHeaderRow">
                 <div class="dash-profile-info" id="dashProfileInfo" style="display: none;">
                     <div class="dash-profile-image" id="dashProfileImage"><img src="" alt="Profile" onerror="this.parentElement.classList.remove('loaded')"></div>
                     <div class="dash-brand-container">
@@ -24263,6 +24277,7 @@
         
         function toggleToolbar() {
             const toolbarRow = document.getElementById('toolbarRow');
+            const profileHeaderRow = document.getElementById('profileHeaderRow');
             if (!toolbarRow) return;
             
             toolbarCollapsed = !toolbarCollapsed;
@@ -24270,16 +24285,20 @@
             
             if (toolbarCollapsed) {
                 toolbarRow.classList.add('collapsed');
+                if (profileHeaderRow) profileHeaderRow.classList.add('collapsed');
             } else {
                 toolbarRow.classList.remove('collapsed');
+                if (profileHeaderRow) profileHeaderRow.classList.remove('collapsed');
             }
         }
         
         // Initialize toolbar state on page load
         function initToolbarState() {
             const toolbarRow = document.getElementById('toolbarRow');
-            if (toolbarRow && toolbarCollapsed) {
-                toolbarRow.classList.add('collapsed');
+            const profileHeaderRow = document.getElementById('profileHeaderRow');
+            if (toolbarCollapsed) {
+                if (toolbarRow) toolbarRow.classList.add('collapsed');
+                if (profileHeaderRow) profileHeaderRow.classList.add('collapsed');
             }
         }
         
