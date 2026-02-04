@@ -8,115 +8,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script>
-        // Define showTab early so tab buttons never throw "showTab is not defined" (main script may load later or fail)
-        window.showTab = function(tabName) {
-            try {
-                document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
-                document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
-                var el = document.getElementById('tab-' + tabName);
-                if (el) el.classList.add('active');
-                var btns = document.querySelectorAll('.tab-btn');
-                for (var i = 0; i < btns.length; i++) {
-                    var onclick = btns[i].getAttribute('onclick') || '';
-                    if (onclick.indexOf("showTab('" + tabName + "')") !== -1 || onclick.indexOf('showTab("' + tabName + '")') !== -1) {
-                        btns[i].classList.add('active');
-                        break;
-                    }
-                }
-            } catch (e) { console.warn('showTab:', e); }
-        };
-        // Dashboard profile list: load from /api/jobs and populate sidebar tree
-        window.dashboardProfileList = [];
-        window.filterDashboardProfiles = function() {
-            var q = (document.getElementById('dashProfileSearchInput') || {}).value || '';
-            q = q.toLowerCase().trim();
-            var tree = document.getElementById('dashProfileTree');
-            if (!tree) return;
-            var items = tree.querySelectorAll('.profile-select-item, .profile-cat-item');
-            items.forEach(function(el) {
-                var text = (el.textContent || '').toLowerCase();
-                var cat = el.classList.contains('profile-cat-item');
-                var match = !q || text.indexOf(q) !== -1;
-                el.style.display = match ? '' : 'none';
-            });
-        };
-        function buildDashboardProfileTree(files) {
-            var tree = document.getElementById('dashProfileTree');
-            if (!tree) return;
-            if (!files || files.length === 0) {
-                tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:0.85rem;">No profiles found. Run an analysis or check S3.</div>';
-                return;
-            }
-            var byCat = {};
-            files.forEach(function(f) {
-                var cat = f.category || 'Uncategorized';
-                if (!byCat[cat]) byCat[cat] = [];
-                byCat[cat].push(f);
-            });
-            var cats = Object.keys(byCat).sort();
-            var html = '';
-            cats.forEach(function(cat) {
-                var list = byCat[cat];
-                html += '<div class="profile-cat-item open" data-category="' + (cat.replace(/"/g, '&quot;')) + '">';
-                html += '<span class="cat-arrow">▶</span><span class="profile-cat-label">' + (cat.replace(/</g, '&lt;')) + '</span><span class="profile-cat-count">' + list.length + '</span></div>';
-                html += '<div class="profile-cat-children open">';
-                list.forEach(function(f) {
-                    var key = (f.key || f.s3_key || '').replace(/"/g, '&quot;');
-                    var name = (f.project_name || f.filename || key).replace(/</g, '&lt;');
-                    html += '<div class="profile-select-item" data-key="' + key + '" data-category="' + (cat.replace(/"/g, '&quot;')) + '" onclick="typeof window.selectDashboardProfile === \'function\' && window.selectDashboardProfile(\'' + key.replace(/'/g, "\\'") + '\')" style="cursor:pointer;">' + name + '</div>';
-                });
-                html += '</div>';
-            });
-            tree.innerHTML = html;
-        }
-        function loadDashboardProfiles() {
-            var tree = document.getElementById('dashProfileTree');
-            if (!tree) return;
-            tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:0.85rem;">Loading profiles...</div>';
-            fetch('/api/jobs', { credentials: 'same-origin' })
-                .then(function(r) {
-                    if (!r.ok) {
-                        if (r.status === 404) {
-                            window.dashboardProfileList = [];
-                            if (tree) tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:0.85rem;">Profile list unavailable. Refresh the page after the app has finished updating.</div>';
-                            return { _handled: true };
-                        }
-                        if (r.status === 401) {
-                            window.location.href = '/login';
-                            return { _handled: true };
-                        }
-                        throw new Error('HTTP ' + r.status);
-                    }
-                    return r.json();
-                })
-                .then(function(data) {
-                    if (data && data._handled) return;
-                    if (!data || !data.jobs) return;
-                    // Filter out SVOD Acquisition files - those belong in Subscriber IQ only
-                    var jobs = data.jobs.filter(function(j) {
-                        if (j.is_svod) return false;
-                        if (j.key && j.key.indexOf('svod-acquisition/') === 0) return false;
-                        if (j.s3_key && j.s3_key.indexOf('svod-acquisition/') === 0) return false;
-                        var cat = (j.category || '').toUpperCase();
-                        if (cat === 'SVOD ACQUISITION' || cat === 'SVOD_ACQUISITION') return false;
-                        return true;
-                    });
-                    window.dashboardProfileList = jobs;
-                    var files = jobs.map(function(j) {
-                        return { key: j.key || j.s3_key, s3_key: j.s3_key || j.key, project_name: j.project_name, category: j.category || 'Uncategorized', filename: j.filename };
-                    });
-                    buildDashboardProfileTree(files);
-                })
-                .catch(function(e) {
-                    if (tree) tree.innerHTML = '<div style="padding:1rem;color:var(--accent-red);font-size:0.85rem;">Failed to load profiles. Try again.</div>';
-                    console.warn('Dashboard profiles load failed:', e);
-                });
-        }
-        document.addEventListener('DOMContentLoaded', function() {
-            loadDashboardProfiles();
-        });
-    </script>
     <style>
         :root {
             --bg-dark: #0a1929;
@@ -626,6 +517,7 @@
             color: var(--text-secondary);
         }
         #subscriberIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+        #rankerIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; padding: 1.5rem; overflow-y: auto; }
         #talentSearchIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         #talentTheaterIQView { display: none; flex-direction: column; flex: 1; overflow: hidden; }
         
@@ -2819,35 +2711,11 @@
         @keyframes pulse-live {
             0%, 100% {
                 opacity: 1;
-                transform: scale(1);
                 text-shadow: 0 0 5px rgba(255, 68, 68, 0.5);
             }
             50% {
-                opacity: 0.7;
-                transform: scale(1.08);
-                text-shadow: 0 0 12px rgba(255, 68, 68, 0.9);
-            }
-        }
-        
-        /* Live tab icon pulse (🔴 in Live Top 10 / Live Data buttons) */
-        .live-tab-icon {
-            display: inline-block;
-            animation: pulse-live 1.5s ease-in-out infinite;
-        }
-        
-        /* Top 3 values in Live Data tab - pulse animation */
-        .live-top-value-pulse {
-            animation: live-value-pulse 2s ease-in-out infinite;
-        }
-        
-        @keyframes live-value-pulse {
-            0%, 100% {
-                opacity: 1;
-                text-shadow: 0 0 0 transparent;
-            }
-            50% {
-                opacity: 0.9;
-                text-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+                opacity: 0.6;
+                text-shadow: 0 0 10px rgba(255, 68, 68, 0.8);
             }
         }
         
@@ -7891,8 +7759,6 @@
             text-align: left;
             font-weight: 500;
             background: var(--bg-input);
-            min-width: 55px;
-            white-space: nowrap;
         }
 
         .comp-bar-cell {
@@ -10491,6 +10357,7 @@
                 <div class="view-toggle" id="iqTabsContainer">
                     <button class="view-btn active {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" {% if not has_profile_iq_access %}disabled{% endif %}>🎯 Profile IQ</button>
                     <button class="view-btn {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</button>
+                    <button class="view-btn" id="rankerIQTab">📊 Ranker</button>
                     <button class="view-btn {% if not has_hedge_fund_iq_access %}disabled{% endif %}" id="hedgeFundIQTab" {% if not has_hedge_fund_iq_access %}disabled{% endif %}>📈 Hedge Fund IQ</button>
                     <button class="view-btn" id="dashboardViewBtn" style="display: none;">📊 Dashboard</button>
                     {% if role == 'super_admin' or role == 'admin' or role == 'enterprise' or has_analysis_iq_access %}
@@ -11693,7 +11560,6 @@
                         <button class="tab-btn has-tooltip" data-tooltip="Behavioral: Analysis of consumer behaviors, brand preferences, purchase patterns, and lifestyle activities." onclick="showTab('behavioral')"><span class="tab-icon">📈</span><span class="tab-label">BEHAVIORAL</span></button>
                         <button class="tab-btn has-tooltip" data-tooltip="Interests: Top interests and passions of this audience, categorized by topic area with index scores." onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
                         <button class="tab-btn has-tooltip" data-tooltip="Location: Geographic distribution showing where this audience is concentrated by state and metro area." onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
-                        <button class="tab-btn has-tooltip" data-feature="rankers" data-tooltip="Rankers: Day-by-day view counts and rankings for streaming content (Netflix, etc.)." onclick="showTab('rankers')"><span class="tab-icon">📊</span><span class="tab-label">RANKERS</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                     </div>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 0.25rem;">
@@ -12335,16 +12201,11 @@
                 <div class="rankers-container">
                     <div class="rankers-platform-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
                         <button class="tab-btn active" onclick="showRankerPlatform('netflix')" id="rankerPlatformNetflix"><span class="tab-icon">📺</span> Netflix</button>
-                        <button class="tab-btn" onclick="showRankerPlatform('rokufast')" id="rankerPlatformRokufast"><span class="tab-icon">📺</span> Roku FAST</button>
-                        <button class="tab-btn" onclick="showRankerPlatform('reelshort')" id="rankerPlatformReelshort"><span class="tab-icon">📱</span> ReelShort</button>
-                        <button class="tab-btn" onclick="showRankerPlatform('shortstv')" id="rankerPlatformShortstv"><span class="tab-icon">📱</span> ShortsTV</button>
-                        <button class="tab-btn" onclick="showRankerPlatform('goodshort')" id="rankerPlatformGoodshort"><span class="tab-icon">📱</span> GoodShort</button>
                     </div>
                     <div id="rankerPlatformContent" class="ranker-platform-content">
                         <!-- Netflix sub-view -->
                         <div id="ranker-netflix" class="ranker-platform-panel active">
                             <div class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin-bottom: 1rem; flex-wrap: wrap;">
-                                <button class="tab-btn" onclick="showNetflixSubTab('livetop10')" id="netflixSubTabLivetop10"><span class="live-tab-icon">🔴</span> Live Top 10</button>
                                 <button class="tab-btn" onclick="showNetflixSubTab('all')" id="netflixSubTabAll">📺 All Netflix</button>
                                 <button class="tab-btn" onclick="showNetflixSubTab('daily')" id="netflixSubTabDaily">📅 Daily Ranker by Series</button>
                                 <button class="tab-btn" onclick="showNetflixSubTab('seasons')" id="netflixSubTabSeasons">📅 Daily Ranker by Seasons</button>
@@ -12355,19 +12216,6 @@
                                 <button class="tab-btn" onclick="showNetflixSubTab('insights')" id="netflixSubTabInsights">💡 Insights</button>
                             </div>
                             <div id="netflixSubTabContent">
-                                <div id="netflix-livetop10" class="netflix-sub-content">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
-                                        <h3 style="margin: 0;"><span class="live-tab-icon">🔴</span> Live Top 10</h3>
-                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                            <span id="netflixLiveTop10Date" style="font-size: 0.75rem; color: var(--text-secondary);"></span>
-                                            <button class="module-btn" onclick="loadNetflixLiveTop10(true)" style="font-size: 0.75rem; padding: 0.3rem 0.6rem;">🔄 REFRESH</button>
-                                        </div>
-                                    </div>
-                                    <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">Real-time Netflix Top 10 from live clickstream data. Updated throughout the day.</p>
-                                    <div id="netflixLiveTop10Loading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Loading Live Top 10...</div>
-                                    <div id="netflixLiveTop10TableWrap" style="overflow-x: auto; display: none;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Title</th><th>Views</th><th>Link</th></tr></thead><tbody id="netflixLiveTop10Body"></tbody></table></div>
-                                    <div id="netflixLiveTop10Error" style="padding: 1rem; color: var(--error-color); display: none;"></div>
-                                </div>
                                 <div id="netflix-all" class="netflix-sub-content">
                                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
                                         <h3 style="margin: 0;">📺 All Netflix</h3>
@@ -12391,6 +12239,12 @@
                                         </div>
                                     </div>
                                     <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem;">
+                                        <span style="font-size: 0.75rem; color: var(--text-secondary);">Sort by:</span>
+                                        <select id="netflixDailySortBy" onchange="renderNetflixDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 140px;">
+                                            <option value="views">Views (high to low)</option>
+                                            <option value="type-movie">Movie</option>
+                                            <option value="type-show">Show</option>
+                                        </select>
                                         <span style="font-size: 0.75rem; color: var(--text-secondary);">Genre:</span>
                                         <select id="netflixDailyGenreFilter" onchange="renderNetflixDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 180px;">
                                             <option value="">All genres</option>
@@ -12471,124 +12325,6 @@
                             </div>
                         </div>
                         
-                        <!-- ReelShort ranker panel -->
-                        <div id="ranker-reelshort" class="ranker-platform-panel">
-                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                                <h3 style="margin: 0;">📱 ReelShort</h3>
-                                <button class="module-btn" onclick="loadReelShortRankerData()" id="reelshortRefreshBtn" style="font-size: 0.75rem; padding: 0.3rem 0.6rem;">🔄 REFRESH</button>
-                            </div>
-                            <div id="reelshortInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
-                            <div id="reelshortLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading ReelShort data...</div>
-                            <div id="reelshortError" style="padding: 1rem; color: var(--error-color); display: none;"></div>
-                        </div>
-                        
-                        <!-- ShortsTV ranker panel -->
-                        <div id="ranker-shortstv" class="ranker-platform-panel">
-                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                                <h3 style="margin: 0;">📱 ShortsTV</h3>
-                                <button class="module-btn" onclick="loadShortstvRankerData()" id="shortstvRefreshBtn" style="font-size: 0.75rem; padding: 0.3rem 0.6rem;">🔄 REFRESH</button>
-                            </div>
-                            <div id="shortstvInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
-                            <div id="shortstvLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading ShortsTV data...</div>
-                            <div id="shortstvError" style="padding: 1rem; color: var(--error-color); display: none;"></div>
-                        </div>
-                        
-                        <!-- GoodShort ranker panel -->
-                        <div id="ranker-goodshort" class="ranker-platform-panel">
-                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                                <h3 style="margin: 0;">📱 GoodShort</h3>
-                                <button class="module-btn" onclick="loadGoodshortRankerData()" id="goodshortRefreshBtn" style="font-size: 0.75rem; padding: 0.3rem 0.6rem;">🔄 REFRESH</button>
-                            </div>
-                            <div id="goodshortInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
-                            <div id="goodshortLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading GoodShort data...</div>
-                            <div id="goodshortError" style="padding: 1rem; color: var(--error-color); display: none;"></div>
-                        </div>
-                        
-                        <!-- Roku FAST ranker panel -->
-                        <div id="ranker-rokufast" class="ranker-platform-panel">
-                            <div class="rokufast-subtabs" style="display: flex; gap: 0.35rem; margin-bottom: 1rem; flex-wrap: wrap;">
-                                <button class="tab-btn active" onclick="showRokuFastSubTab('daily')" id="rokufastSubTabDaily">📅 Daily by Series</button>
-                                <button class="tab-btn" onclick="showRokuFastSubTab('seasons')" id="rokufastSubTabSeasons">📅 By Seasons</button>
-                                <button class="tab-btn" onclick="showRokuFastSubTab('episodes')" id="rokufastSubTabEpisodes">📅 By Episodes</button>
-                                <button class="tab-btn" onclick="showRokuFastSubTab('all')" id="rokufastSubTabAll">📺 All</button>
-                                <button class="tab-btn" onclick="showRokuFastSubTab('trends')" id="rokufastSubTabTrends">📈 Trends</button>
-                                <button class="tab-btn" onclick="showRokuFastSubTab('genre')" id="rokufastSubTabGenre">🎬 By Genre</button>
-                                <button class="tab-btn" onclick="showRokuFastSubTab('topshows')" id="rokufastSubTabTopShows">🏆 Top Shows</button>
-                                <button class="tab-btn" onclick="showRokuFastSubTab('insights')" id="rokufastSubTabInsights">💡 Insights</button>
-                            </div>
-                            <div id="rokufastSubTabContent">
-                                <div id="rokufast-daily" class="rokufast-sub-content active">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
-                                        <h3 style="margin: 0;">📅 Daily Ranker by Series</h3>
-                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
-                                            <input type="date" id="rokufastDailyDate" onchange="renderRokuFastDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                        </div>
-                                    </div>
-                                    <div id="rokufastDailyTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Views</th><th>Genre</th><th>Avg Watch Time</th><th>Run Time</th></tr></thead><tbody id="rokufastDailyBody"></tbody></table></div>
-                                </div>
-                                <div id="rokufast-seasons" class="rokufast-sub-content">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
-                                        <h3 style="margin: 0;">📅 Daily Ranker by Seasons</h3>
-                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
-                                            <input type="date" id="rokufastSeasonsDate" onchange="renderRokuFastSeasonsRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                        </div>
-                                    </div>
-                                    <div id="rokufastSeasonsTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Season</th><th>Views</th><th>Avg Watch Time</th><th>Run Time</th></tr></thead><tbody id="rokufastSeasonsBody"></tbody></table></div>
-                                </div>
-                                <div id="rokufast-episodes" class="rokufast-sub-content">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
-                                        <h3 style="margin: 0;">📅 Daily Ranker by Episodes</h3>
-                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
-                                            <input type="date" id="rokufastEpisodesDate" onchange="renderRokuFastEpisodesRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                        </div>
-                                    </div>
-                                    <div id="rokufastEpisodesTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Episode #</th><th>Episode Name</th><th>Season</th><th>Views</th><th>Avg Watch Time</th><th>Run Time</th></tr></thead><tbody id="rokufastEpisodesBody"></tbody></table></div>
-                                </div>
-                                <div id="rokufast-all" class="rokufast-sub-content">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
-                                        <h3 style="margin: 0;">📺 All Roku FAST</h3>
-                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
-                                            <input type="date" id="rokufastAllDate" onchange="renderRokuFastAllRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                        </div>
-                                    </div>
-                                    <div id="rokufastAllTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Season</th><th>Episode #</th><th>Episode Name</th><th>Views</th><th>Avg Watch Time</th><th>Run Time</th></tr></thead><tbody id="rokufastAllBody"></tbody></table></div>
-                                </div>
-                                <div id="rokufast-trends" class="rokufast-sub-content">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
-                                        <h3 style="margin: 0;">📈 Trends</h3>
-                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Show:</label>
-                                            <select id="rokufastTrendsShow" onchange="renderRokuFastTrends()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 200px;"><option value="">Select show...</option></select>
-                                        </div>
-                                    </div>
-                                    <div id="rokufastTrendsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Load Rankers and select a show.</div>
-                                    <div id="rokufastTrendsChartWrap" style="display: none; height: 300px;"><canvas id="rokufastTrendsChart"></canvas></div>
-                                </div>
-                                <div id="rokufast-genre" class="rokufast-sub-content">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
-                                        <h3 style="margin: 0;">🎬 By Genre</h3>
-                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                            <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
-                                            <input type="date" id="rokufastGenreDate" onchange="renderRokuFastByGenre()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                                        </div>
-                                    </div>
-                                    <div id="rokufastGenreTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Genre</th><th>Views</th><th>% of Total</th><th>Shows</th></tr></thead><tbody id="rokufastGenreBody"></tbody></table></div>
-                                </div>
-                                <div id="rokufast-topshows" class="rokufast-sub-content">
-                                    <div style="margin-bottom: 0.75rem;"><h3 style="margin: 0;">🏆 Top Shows Over Time</h3></div>
-                                    <div id="rokufastTopShowsChartWrap" style="height: 350px;"><canvas id="rokufastTopShowsChart"></canvas></div>
-                                </div>
-                                <div id="rokufast-insights" class="rokufast-sub-content">
-                                    <div style="margin-bottom: 0.75rem;"><h3 style="margin: 0;">💡 Insights</h3></div>
-                                    <div id="rokufastInsightsContent" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;"></div>
-                                </div>
-                            </div>
-                        </div>
-                        
                     </div>
                     <div id="rankersLoadBlock" style="padding: 2rem; text-align: center; background: var(--bg-card); border-radius: 8px; margin-top: 1rem;">
                         <div id="rankersLoadProgress" style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem;">
@@ -12598,13 +12334,9 @@
                             </div>
                         </div>
                         <div id="rankersLoadDone" style="display: none;">
-                            <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data loaded. Use the tabs above to view.</p>
-                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
-                                <button class="module-btn" onclick="loadNetflixRankerData(true)" id="rankersLoadBtnNetflix" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;">📺 Netflix</button>
-                                <button class="module-btn" onclick="loadRokuFastRankerData(true)" id="rankersLoadBtnRokuFast" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;">📺 Roku</button>
-                                <button class="module-btn" onclick="loadReelShortRankerData()" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;">📱 ReelShort</button>
-                                <button class="module-btn" onclick="loadShortstvRankerData()" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;">📱 ShortsTV</button>
-                                <button class="module-btn" onclick="loadGoodshortRankerData()" style="font-size: 0.7rem; padding: 0.25rem 0.5rem;">📱 GoodShort</button>
+                            <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data loaded. Use the Netflix tab above to view.</p>
+                            <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
+                                <button class="btn btn-primary" onclick="loadNetflixRankerData(true)" id="rankersLoadBtnNetflix">📺 Refresh Netflix</button>
                             </div>
                         </div>
                     </div>
@@ -14201,7 +13933,6 @@
                             </select>
                             <button class="btn btn-primary btn-small" onclick="createNewWorkspaceDeck()" style="white-space: nowrap; padding: 0.4rem 0.65rem; font-size: 0.75rem;">+ NEW DECK</button>
                             <div id="deckActionButtons" style="display: none; align-items: center; gap: 0.35rem; margin-left: 0.25rem;">
-                                <button type="button" id="deckSaveBtn" class="btn btn-small" onclick="saveAllDecksToServer()" title="Save decks (also auto-saves periodically)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); color: var(--text-primary);">💾 Save</button>
                                 <button class="btn btn-small btn-success" onclick="shareDeckWithTeam()" style="padding: 0.35rem 0.5rem; font-size: 0.7rem;">👥 SHARE</button>
                                 <div class="export-dropdown" style="position: relative;">
                                     <button class="btn btn-small btn-primary" onclick="toggleDeckExportMenu(event)" style="padding: 0.35rem 0.5rem; font-size: 0.7rem;">EXPORT ▾</button>
@@ -14491,6 +14222,154 @@
             </div>
         </div><!-- End subscriberIQView -->
 
+        <!-- RANKER IQ VIEW -->
+        <div id="rankerIQView">
+            <h2 style="margin: 0 0 1rem 0; font-size: 1.5rem;">📊 Ranker</h2>
+            <div class="rankers-container">
+                <div class="rankers-platform-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                    <button class="tab-btn active" onclick="showRankerPlatform('netflix')" id="rankerIQPlatformNetflix"><span class="tab-icon">📺</span> Netflix</button>
+                </div>
+                <div id="rankerIQPlatformContent" class="ranker-platform-content">
+                    <!-- Netflix sub-view -->
+                    <div id="rankeriq-netflix" class="ranker-platform-panel active">
+                        <div class="netflix-subtabs" style="display: flex; gap: 0.35rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                            <button class="tab-btn" onclick="showNetflixSubTab('all')" id="rankerIQNetflixSubTabAll">📺 All Netflix</button>
+                            <button class="tab-btn active" onclick="showNetflixSubTab('daily')" id="rankerIQNetflixSubTabDaily">📅 Daily Ranker by Series</button>
+                            <button class="tab-btn" onclick="showNetflixSubTab('seasons')" id="rankerIQNetflixSubTabSeasons">📅 Daily Ranker by Seasons</button>
+                            <button class="tab-btn" onclick="showNetflixSubTab('episodes')" id="rankerIQNetflixSubTabEpisodes">📅 Daily Ranker by Episodes</button>
+                            <button class="tab-btn" onclick="showNetflixSubTab('trends')" id="rankerIQNetflixSubTabTrends">📈 Trends</button>
+                            <button class="tab-btn" onclick="showNetflixSubTab('genre')" id="rankerIQNetflixSubTabGenre">🎬 By Genre</button>
+                            <button class="tab-btn" onclick="showNetflixSubTab('topshows')" id="rankerIQNetflixSubTabTopShows">🏆 Top Shows Over Time</button>
+                            <button class="tab-btn" onclick="showNetflixSubTab('insights')" id="rankerIQNetflixSubTabInsights">💡 Insights</button>
+                        </div>
+                        <div id="rankerIQNetflixSubTabContent">
+                            <div id="rankeriq-netflix-all" class="netflix-sub-content">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                    <h3 style="margin: 0;">📺 All Netflix</h3>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
+                                        <input type="date" id="rankerIQNetflixAllDate" onchange="renderRankerIQNetflixAllRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <button class="module-btn csv-btn" onclick="exportRankerIQNetflixAllCSV()">CSV</button>
+                                    </div>
+                                </div>
+                                <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">All content ranked by views. Grouped by Show + Season + Episode # + Episode Name.</p>
+                                <div id="rankerIQNetflixAllTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Name of Show</th><th>Season</th><th>Episode #</th><th>Episode Name</th><th>Views</th><th>Avg Watch Time</th><th>Run Time</th></tr></thead><tbody id="rankerIQNetflixAllBody"></tbody></table></div>
+                                <div id="rankerIQNetflixAllLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
+                            </div>
+                            <div id="rankeriq-netflix-daily" class="netflix-sub-content active">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                    <h3 style="margin: 0;">📅 Daily Ranker by Series</h3>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
+                                        <input type="date" id="rankerIQNetflixDailyDate" onchange="renderRankerIQNetflixDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <button class="module-btn csv-btn" onclick="exportRankerIQNetflixDailyCSV()">CSV</button>
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem;">
+                                    <span style="font-size: 0.75rem; color: var(--text-secondary);">Sort by:</span>
+                                    <select id="rankerIQNetflixDailySortBy" onchange="renderRankerIQNetflixDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 140px;">
+                                        <option value="views">Views (high to low)</option>
+                                        <option value="type-movie">Movie</option>
+                                        <option value="type-show">Show</option>
+                                    </select>
+                                    <span style="font-size: 0.75rem; color: var(--text-secondary);">Genre:</span>
+                                    <select id="rankerIQNetflixDailyGenreFilter" onchange="renderRankerIQNetflixDailyRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 180px;">
+                                        <option value="">All genres</option>
+                                    </select>
+                                </div>
+                                <div id="rankerIQNetflixDailyTableWrap" style="overflow-x: auto;"><table id="rankerIQNetflixDailyTable" class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Views</th><th>Genre</th><th>Avg Watch Time</th><th>Run Time</th></tr></thead><tbody id="rankerIQNetflixDailyBody"></tbody></table></div>
+                                <div id="rankerIQNetflixDailyLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
+                            </div>
+                            <div id="rankeriq-netflix-seasons" class="netflix-sub-content">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                    <h3 style="margin: 0;">📅 Daily Ranker by Seasons</h3>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
+                                        <input type="date" id="rankerIQNetflixSeasonsDate" onchange="renderRankerIQNetflixSeasonsRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <button class="module-btn csv-btn" onclick="exportRankerIQNetflixSeasonsCSV()">CSV</button>
+                                    </div>
+                                </div>
+                                <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">Shows only (no movies). Ranked by Show + Season combined.</p>
+                                <div id="rankerIQNetflixSeasonsTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Name of Show</th><th>Season</th><th>Views</th><th>Avg Watch Time</th><th>Run Time</th></tr></thead><tbody id="rankerIQNetflixSeasonsBody"></tbody></table></div>
+                                <div id="rankerIQNetflixSeasonsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
+                            </div>
+                            <div id="rankeriq-netflix-episodes" class="netflix-sub-content">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                    <h3 style="margin: 0;">📅 Daily Ranker by Episodes</h3>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <label style="font-size: 0.75rem; color: var(--text-secondary);">Date:</label>
+                                        <input type="date" id="rankerIQNetflixEpisodesDate" onchange="renderRankerIQNetflixEpisodesRanker()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                        <button class="module-btn csv-btn" onclick="exportRankerIQNetflixEpisodesCSV()">CSV</button>
+                                    </div>
+                                </div>
+                                <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">Ranked by episode.</p>
+                                <div id="rankerIQNetflixEpisodesTableWrap" style="overflow-x: auto;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Rank</th><th>Show</th><th>Episode #</th><th>Episode</th><th>Season</th><th>Views</th><th>Avg Watch Time</th><th>Run Time</th></tr></thead><tbody id="rankerIQNetflixEpisodesBody"></tbody></table></div>
+                                <div id="rankerIQNetflixEpisodesLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
+                            </div>
+                            <div id="rankeriq-netflix-trends" class="netflix-sub-content">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                    <h3 style="margin: 0;">📈 Show Trends (Past Year)</h3>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <select id="rankerIQNetflixTrendsShow" onchange="renderRankerIQNetflixTrends()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 200px;"><option value="">Select show...</option></select>
+                                        <button class="module-btn csv-btn" onclick="exportRankerIQNetflixTrendsCSV()">CSV</button>
+                                    </div>
+                                </div>
+                                <div id="rankerIQNetflixTrendsChartWrap" style="min-height: 300px;"><canvas id="rankerIQNetflixTrendsChart"></canvas></div>
+                                <div id="rankerIQNetflixTrendsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary);">Loading ranker data...</div>
+                            </div>
+                            <div id="rankeriq-netflix-genre" class="netflix-sub-content">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                    <h3 style="margin: 0;">🎬 Views by Genre</h3>
+                                    <input type="date" id="rankerIQNetflixGenreDate" onchange="renderRankerIQNetflixByGenre()" style="padding: 0.35rem 0.5rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                                </div>
+                                <div id="rankerIQNetflixGenreChartWrap" style="min-height: 280px;"><canvas id="rankerIQNetflixGenreChart"></canvas></div>
+                                <div id="rankerIQNetflixGenreTableWrap" style="overflow-x: auto; margin-top: 1rem;"><table class="rankers-table" style="width: 100%; border-collapse: collapse;"><thead><tr><th>Genre</th><th>Views</th><th>% of Total</th><th>Top Show</th></tr></thead><tbody id="rankerIQNetflixGenreBody"></tbody></table></div>
+                                <div id="rankerIQNetflixGenreLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
+                            </div>
+                            <div id="rankeriq-netflix-topshows" class="netflix-sub-content">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                    <h3 style="margin: 0;">🏆 Top 20 Shows Over Time</h3>
+                                    <button class="module-btn csv-btn" onclick="exportRankerIQNetflixTopShowsCSV()">CSV</button>
+                                </div>
+                                <div id="rankerIQNetflixTopShowsChartWrap" style="min-height: 400px;"><canvas id="rankerIQNetflixTopShowsChart"></canvas></div>
+                                <div id="rankerIQNetflixTopShowsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
+                            </div>
+                            <div id="rankeriq-netflix-insights" class="netflix-sub-content">
+                                <h3 style="margin: 0 0 0.75rem 0;">💡 Netflix Ranker Insights</h3>
+                                <div id="rankerIQNetflixInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
+                                <div id="rankerIQNetflixInsightsLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Netflix Show Details Modal -->
+                    <div id="rankerIQNetflixShowDetailsModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; overflow-y: auto;">
+                        <div style="max-width: 900px; margin: 2rem auto; background: var(--bg-card); border-radius: 12px; padding: 1.5rem; position: relative;">
+                            <button onclick="closeRankerIQNetflixShowDetails()" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer;">&times;</button>
+                            <div id="rankerIQNetflixShowDetailsContent">
+                                <div style="text-align: center; padding: 3rem;"><div class="loading-spinner"></div><p>Loading show details...</p></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+                <div id="rankerIQLoadBlock" style="padding: 2rem; text-align: center; background: var(--bg-card); border-radius: 8px; margin-top: 1rem;">
+                    <div id="rankerIQLoadProgress" style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem;">
+                        <div class="rankers-status-indicator" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                            <span class="spinner rankers-spinner" style="margin-bottom: 0;"></span>
+                            <span id="rankerIQLoadStatus" style="font-size: 0.9rem; color: var(--text-secondary);">Loading ranker data...</span>
+                        </div>
+                    </div>
+                    <div id="rankerIQLoadDone" style="display: none;">
+                        <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data loaded. Use the tabs above to view.</p>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
+                            <button class="btn btn-primary" onclick="loadRankerIQNetflixData(true)" id="rankerIQLoadBtnNetflix">📺 Refresh Netflix</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div><!-- End rankerIQView -->
+
         <!-- HEDGE FUND IQ VIEW -->
         <div id="hedgeFundIQView" style="display: none;">
             <div class="dashboard-layout">
@@ -14551,7 +14430,7 @@
                             <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
                                 <!-- Ticker Dashboard Tabs -->
                                 <div class="dashboard-tabs" style="margin: 0;">
-                                    <button class="tab-btn active" onclick="showTickerTab('livedata')">📊 <span class="live-tab-icon">🔴</span> Live Data</button>
+                                    <button class="tab-btn active" onclick="showTickerTab('livedata')">📊 Live Data</button>
                                     <button class="tab-btn" onclick="showTickerTab('trends')">📈 Trends</button>
                                     <button class="tab-btn" onclick="showTickerTab('daily')">📋 Daily Metrics</button>
                                     <button class="tab-btn" onclick="showTickerTab('historic')">📅 Historic Performance</button>
@@ -14587,7 +14466,7 @@
                                     <!-- Projected Growth Rate and KPI -->
                                     <div style="display: flex; flex-direction: column;">
                                         <div class="stat-label" id="projectedGrowthLabel" style="font-size: 0.75rem; margin-bottom: 0.5rem;">🔮 Q1 2026 Projected Net Growth Rate</div>
-                                        <div class="stat-value pulsing-number live-top-value-pulse" id="projectedGrowth" style="display: block; margin: 0.25rem 0;">--</div>
+                                        <div class="stat-value pulsing-number" id="projectedGrowth" style="display: block; margin: 0.25rem 0;">--</div>
                                         <div class="stat-label" id="projectedGrowthKPI" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">--</div>
                                     </div>
                                     <!-- Accuracy Section - below the number -->
@@ -14625,11 +14504,11 @@
                             <div class="ticker-cards-grid four-columns" style="margin-bottom: 0.75rem;">
                                 <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 80px; padding: 0.6rem 1rem;" data-tooltip="">
                                     <div class="stat-label" style="font-size: 0.7rem;">💹 QTD Net Growth %</div>
-                                    <div class="stat-value live-top-value-pulse" id="netGrowth" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
+                                    <div class="stat-value" id="netGrowth" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
                                 <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 80px; padding: 0.6rem 1rem;" data-tooltip="">
                                     <div class="stat-label" style="font-size: 0.7rem;">📊 Current Consumers QTD</div>
-                                    <div class="stat-value live-top-value-pulse" id="currentConsumers" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
+                                    <div class="stat-value" id="currentConsumers" style="font-size: clamp(1rem, 2.5vw, 1.3rem);">--</div>
                                 </div>
                                 <div class="stat-card has-tooltip" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 80px; padding: 0.6rem 1rem;" data-tooltip="">
                                     <div class="stat-label" style="font-size: 0.7rem;">📈 Total Subs QTD</div>
@@ -15215,6 +15094,7 @@
             const navButtons = [
                 { id: 'profileIQTab', handler: showProfileIQ },
                 { id: 'subscriberIQTab', handler: showSubscriberIQ },
+                { id: 'rankerIQTab', handler: showRankerIQ },
                 { id: 'hedgeFundIQTab', handler: showHedgeFundIQ },
                 { id: 'dashboardViewBtn', handler: showDashboardView },
                 { id: 'customAnalysisBtn', handler: showCustomAnalysis }
@@ -15691,6 +15571,8 @@
             // Update tab active states
             document.getElementById('profileIQTab').classList.add('active');
             document.getElementById('subscriberIQTab').classList.remove('active');
+            const rankerIQTab = document.getElementById('rankerIQTab');
+            if (rankerIQTab) rankerIQTab.classList.remove('active');
             const hedgeFundTab = document.getElementById('hedgeFundIQTab');
             if (hedgeFundTab) hedgeFundTab.classList.remove('active');
             const talentSearchTab = document.getElementById('talentSearchIQTab');
@@ -15705,6 +15587,8 @@
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'flex';
             document.getElementById('subscriberIQView').style.display = 'none';
+            const rankerIQView = document.getElementById('rankerIQView');
+            if (rankerIQView) rankerIQView.style.display = 'none';
             const hedgeFundView = document.getElementById('hedgeFundIQView');
             if (hedgeFundView) hedgeFundView.style.display = 'none';
             const talentSearchView = document.getElementById('talentSearchIQView');
@@ -15727,6 +15611,8 @@
             // Update tab active states
             document.getElementById('profileIQTab').classList.remove('active');
             document.getElementById('subscriberIQTab').classList.add('active');
+            const rankerIQTab = document.getElementById('rankerIQTab');
+            if (rankerIQTab) rankerIQTab.classList.remove('active');
             const hedgeFundTab = document.getElementById('hedgeFundIQTab');
             if (hedgeFundTab) hedgeFundTab.classList.remove('active');
             const talentSearchTab = document.getElementById('talentSearchIQTab');
@@ -15741,6 +15627,8 @@
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'flex';
+            const rankerIQView = document.getElementById('rankerIQView');
+            if (rankerIQView) rankerIQView.style.display = 'none';
             const hedgeFundView = document.getElementById('hedgeFundIQView');
             if (hedgeFundView) hedgeFundView.style.display = 'none';
             const talentSearchView = document.getElementById('talentSearchIQView');
@@ -15761,6 +15649,43 @@
             }
         }
         
+        window.showRankerIQ = function() {
+            // Update tab active states
+            document.getElementById('profileIQTab').classList.remove('active');
+            document.getElementById('subscriberIQTab').classList.remove('active');
+            const rankerIQTab = document.getElementById('rankerIQTab');
+            if (rankerIQTab) rankerIQTab.classList.add('active');
+            const hedgeFundTab = document.getElementById('hedgeFundIQTab');
+            if (hedgeFundTab) hedgeFundTab.classList.remove('active');
+            const talentSearchTab = document.getElementById('talentSearchIQTab');
+            if (talentSearchTab) talentSearchTab.classList.remove('active');
+            const talentTheaterTab = document.getElementById('talentTheaterIQTab');
+            if (talentTheaterTab) talentTheaterTab.classList.remove('active');
+            const formBtn = document.getElementById('formViewBtn');
+            if (formBtn) formBtn.classList.remove('active');
+            const customAnalysisBtn = document.getElementById('customAnalysisBtn');
+            if (customAnalysisBtn) customAnalysisBtn.classList.remove('active');
+            
+            // Show/hide views
+            document.getElementById('dashboardView').style.display = 'none';
+            document.getElementById('subscriberIQView').style.display = 'none';
+            const rankerIQView = document.getElementById('rankerIQView');
+            if (rankerIQView) rankerIQView.style.display = 'flex';
+            const hedgeFundView = document.getElementById('hedgeFundIQView');
+            if (hedgeFundView) hedgeFundView.style.display = 'none';
+            const talentSearchView = document.getElementById('talentSearchIQView');
+            if (talentSearchView) talentSearchView.style.display = 'none';
+            const talentTheaterView = document.getElementById('talentTheaterIQView');
+            if (talentTheaterView) talentTheaterView.style.display = 'none';
+            const formView = document.getElementById('formView');
+            if (formView) formView.style.display = 'none';
+            const customAnalysisView = document.getElementById('customAnalysisView');
+            if (customAnalysisView) customAnalysisView.style.display = 'none';
+            
+            // Load ranker data
+            loadRankerIQNetflixData();
+        }
+        
         window.showHedgeFundIQ = function() {
             const hedgeFundTab = document.getElementById('hedgeFundIQTab');
             if (hedgeFundTab.classList.contains('disabled')) return;
@@ -15768,6 +15693,8 @@
             // Update tab active states
             document.getElementById('profileIQTab').classList.remove('active');
             document.getElementById('subscriberIQTab').classList.remove('active');
+            const rankerIQTab = document.getElementById('rankerIQTab');
+            if (rankerIQTab) rankerIQTab.classList.remove('active');
             if (hedgeFundTab) hedgeFundTab.classList.add('active');
             const talentSearchTab = document.getElementById('talentSearchIQTab');
             if (talentSearchTab) talentSearchTab.classList.remove('active');
@@ -15781,6 +15708,8 @@
             // Show/hide views
             document.getElementById('dashboardView').style.display = 'none';
             document.getElementById('subscriberIQView').style.display = 'none';
+            const rankerIQView = document.getElementById('rankerIQView');
+            if (rankerIQView) rankerIQView.style.display = 'none';
             const hedgeFundView = document.getElementById('hedgeFundIQView');
             if (hedgeFundView) hedgeFundView.style.display = 'flex';
             const talentSearchView = document.getElementById('talentSearchIQView');
@@ -23262,9 +23191,8 @@
                     window.location.href = '/login';
                     return;
                 }
-                if (response.status === 404 || !response.ok) {
-                    if (response.status === 404) console.warn('Profile list API not available (update app).');
-                    else console.error('API error:', response.status);
+                if (!response.ok) {
+                    console.error('API error:', response.status);
                     return;
                 }
                 const data = await response.json();
@@ -24527,15 +24455,6 @@
                 // Handle authentication errors
                 if (response.status === 401) {
                     window.location.href = '/login';
-                    return;
-                }
-                
-                if (response.status === 404) {
-                    if (dashboardProfilePolling) {
-                        clearInterval(dashboardProfilePolling);
-                        dashboardProfilePolling = null;
-                    }
-                    if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Profile list unavailable. Refresh after the app has finished updating.</div>';
                     return;
                 }
                 
@@ -30376,11 +30295,6 @@
         let netflixGenreChartInstance = null;
         let netflixTopShowsChartInstance = null;
 
-        // --- Roku FAST Ranker ---
-        let rokufastRankerData = null;
-        let rokufastTrendsChartInstance = null;
-        let rokufastTopShowsChartInstance = null;
-
         /** Project raw views to US Gen Pop: multiply by 150, then (boosted / 100M) * 324,838,700 */
         function netflixProjectedViews(rawViews) {
             const v = Number(rawViews) || 0;
@@ -30404,22 +30318,17 @@
             if (panel) panel.classList.add('active');
             if (btn) btn.classList.add('active');
             if (id === 'netflix') showNetflixSubTab('daily');
-            else if (id === 'rokufast') { showRokuFastSubTab('daily'); loadRokuFastRankerData(); }
-            else if (id === 'reelshort') loadReelShortRankerData();
-            else if (id === 'shortstv') loadShortstvRankerData();
-            else if (id === 'goodshort') loadGoodshortRankerData();
         }
 
         function showNetflixSubTab(id) {
             document.querySelectorAll('#ranker-netflix .netflix-sub-content').forEach(c => c.classList.remove('active'));
             document.querySelectorAll('#ranker-netflix .netflix-subtabs .tab-btn').forEach(b => b.classList.remove('active'));
             const content = document.getElementById('netflix-' + id);
-            const btnId = id === 'topshows' ? 'TopShows' : id === 'livetop10' ? 'Livetop10' : id.charAt(0).toUpperCase() + id.slice(1);
+            const btnId = id === 'topshows' ? 'TopShows' : id.charAt(0).toUpperCase() + id.slice(1);
             const btn = document.getElementById('netflixSubTab' + btnId);
             if (content) content.classList.add('active');
             if (btn) btn.classList.add('active');
-            if (id === 'livetop10') loadNetflixLiveTop10();
-            else if (id === 'all') renderNetflixAllRanker();
+            if (id === 'all') renderNetflixAllRanker();
             else if (id === 'daily') renderNetflixDailyRanker();
             else if (id === 'seasons') renderNetflixSeasonsRanker();
             else if (id === 'episodes') renderNetflixEpisodesRanker();
@@ -30427,91 +30336,6 @@
             else if (id === 'genre') renderNetflixByGenre();
             else if (id === 'topshows') renderNetflixTopShows();
             else if (id === 'insights') renderNetflixInsights();
-        }
-
-        function rokufastFormatMin(val) {
-            if (val === null || val === undefined || val === '') return 'N/A';
-            const n = Number(val);
-            if (isNaN(n)) return 'N/A';
-            return (n === Math.floor(n) ? Math.floor(n) : Math.round(n * 100) / 100) + ' min';
-        }
-
-        function showRokuFastSubTab(id) {
-            document.querySelectorAll('#ranker-rokufast .rokufast-sub-content').forEach(c => c.classList.remove('active'));
-            document.querySelectorAll('#ranker-rokufast .rokufast-subtabs .tab-btn').forEach(b => b.classList.remove('active'));
-            const content = document.getElementById('rokufast-' + id);
-            const btnId = id === 'topshows' ? 'TopShows' : id.charAt(0).toUpperCase() + id.slice(1);
-            const btn = document.getElementById('rokufastSubTab' + btnId);
-            if (content) content.classList.add('active');
-            if (btn) btn.classList.add('active');
-            if (id === 'all') renderRokuFastAllRanker();
-            else if (id === 'daily') renderRokuFastDailyRanker();
-            else if (id === 'seasons') renderRokuFastSeasonsRanker();
-            else if (id === 'episodes') renderRokuFastEpisodesRanker();
-            else if (id === 'trends') renderRokuFastTrends();
-            else if (id === 'genre') renderRokuFastByGenre();
-            else if (id === 'topshows') renderRokuFastTopShows();
-            else if (id === 'insights') renderRokuFastInsights();
-        }
-
-        function _getLastRokuFastDateWithData(data, key) {
-            if (!data) return null;
-            const byDate = data[key || 'by_date'] || {};
-            const dates = data.dates_sorted || Object.keys(byDate).sort();
-            for (let i = dates.length - 1; i >= 0; i--) {
-                const dt = dates[i];
-                if (byDate[dt] && byDate[dt].length > 0) return dt;
-            }
-            return data.date_range ? (data.date_range.max || data.date_range.min) : null;
-        }
-
-        function loadRokuFastRankerData(forceRefresh) {
-            const btn = document.getElementById('rankersLoadBtnRokuFast');
-            if (btn) btn.disabled = true;
-            const url = '/api/rankers/rokufast/data' + (forceRefresh ? '?force_refresh=1' : '');
-            fetch(url, { credentials: 'same-origin' })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.error) throw new Error(data.error);
-                    rokufastRankerData = data;
-                    const rangeStr = data.date_range ? (data.date_range.min + ' to ' + data.date_range.max) : '';
-                    // Set date to most recent day that has data so table populates immediately
-                    const mostRecentDate = _getLastRokuFastDateWithData(data) || (data.date_range && (data.date_range.max || data.date_range.min));
-                    const dateInp = document.getElementById('rokufastDailyDate');
-                    if (dateInp && data.date_range) {
-                        dateInp.min = data.date_range.min;
-                        dateInp.max = data.date_range.max;
-                        dateInp.value = mostRecentDate || '';
-                    }
-                    ['rokufastSeasonsDate', 'rokufastEpisodesDate', 'rokufastAllDate', 'rokufastGenreDate'].forEach(id => {
-                        const el = document.getElementById(id);
-                        if (el && data.date_range) {
-                            el.min = data.date_range.min;
-                            el.max = data.date_range.max;
-                            el.value = _getLastRokuFastDateWithData(data, id === 'rokufastSeasonsDate' ? 'by_date_season' : id === 'rokufastEpisodesDate' ? 'by_date_episode' : id === 'rokufastGenreDate' ? 'genres_by_date' : 'by_date_all') || data.date_range.max || data.date_range.min;
-                        }
-                    });
-                    renderRokuFastDailyRanker();
-                    renderRokuFastSeasonsRanker();
-                    renderRokuFastEpisodesRanker();
-                    populateRokuFastTrendsShowSelect();
-                    renderRokuFastByGenre();
-                    renderRokuFastTopShows();
-                    renderRokuFastInsights();
-                    if (btn) btn.disabled = false;
-                })
-                .catch(err => {
-                    console.error('[Roku FAST] Load error', err);
-                    if (btn) btn.disabled = false;
-                });
-        }
-
-        function populateRokuFastTrendsShowSelect() {
-            if (!rokufastRankerData || !rokufastRankerData.by_show) return;
-            const sel = document.getElementById('rokufastTrendsShow');
-            if (!sel) return;
-            const shows = Object.keys(rokufastRankerData.by_show).sort();
-            sel.innerHTML = '<option value="">Select show...</option>' + shows.map(s => '<option value="' + s.replace(/"/g, '&quot;') + '">' + s + '</option>').join('');
         }
 
         function showRankersProgressBlock() {
@@ -30553,328 +30377,6 @@
             showRankersProgressBlock();
             updateRankersLoadStatus('Netflix: loading...');
             if (!netflixRankerData) loadNetflixRankerData();
-        }
-
-        function loadReelShortRankerData() {
-            const loadingEl = document.getElementById('reelshortLoading');
-            const cardsEl = document.getElementById('reelshortInsightsCards');
-            const errEl = document.getElementById('reelshortError');
-            const btn = document.getElementById('reelshortRefreshBtn');
-            if (loadingEl) loadingEl.style.display = 'block';
-            if (cardsEl) cardsEl.innerHTML = '';
-            if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
-            if (btn) btn.disabled = true;
-            fetch('/api/rankers/reelshort/data', { credentials: 'same-origin' })
-                .then(r => r.json())
-                .then(data => {
-                    if (loadingEl) loadingEl.style.display = 'none';
-                    if (btn) btn.disabled = false;
-                    if (data.error) {
-                        if (errEl) { errEl.textContent = data.error; errEl.style.display = 'block'; }
-                        return;
-                    }
-                    renderReelShortRanker(data);
-                })
-                .catch(e => {
-                    if (loadingEl) loadingEl.style.display = 'none';
-                    if (btn) btn.disabled = false;
-                    if (errEl) { errEl.textContent = e.message || String(e); errEl.style.display = 'block'; }
-                });
-        }
-
-        function renderReelShortRanker(data) {
-            const cardsEl = document.getElementById('reelshortInsightsCards');
-            if (!cardsEl) return;
-            const cards = [
-                { label: 'Active Accounts', value: (data.active_accounts != null ? Number(data.active_accounts).toLocaleString() : '—') },
-                { label: 'Watched Free Content', value: (data.watched_free_content_pct != null ? data.watched_free_content_pct + '%' : '—') },
-                { label: 'Watched Paid Content', value: (data.watched_paid_content_pct != null ? data.watched_paid_content_pct + '%' : '—') },
-                { label: 'Total Cancels', value: (data.total_cancels_pct != null ? data.total_cancels_pct + '%' : '—') }
-            ];
-            cardsEl.innerHTML = cards.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
-        }
-
-        function loadShortstvRankerData() {
-            const loadingEl = document.getElementById('shortstvLoading');
-            const cardsEl = document.getElementById('shortstvInsightsCards');
-            const errEl = document.getElementById('shortstvError');
-            const btn = document.getElementById('shortstvRefreshBtn');
-            if (loadingEl) loadingEl.style.display = 'block';
-            if (cardsEl) cardsEl.innerHTML = '';
-            if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
-            if (btn) btn.disabled = true;
-            fetch('/api/rankers/shortstv/data', { credentials: 'same-origin' })
-                .then(r => r.json())
-                .then(data => {
-                    if (loadingEl) loadingEl.style.display = 'none';
-                    if (btn) btn.disabled = false;
-                    if (data.error) {
-                        if (errEl) { errEl.textContent = data.error; errEl.style.display = 'block'; }
-                        return;
-                    }
-                    renderShortstvRanker(data);
-                })
-                .catch(e => {
-                    if (loadingEl) loadingEl.style.display = 'none';
-                    if (btn) btn.disabled = false;
-                    if (errEl) { errEl.textContent = e.message || String(e); errEl.style.display = 'block'; }
-                });
-        }
-
-        function renderShortstvRanker(data) {
-            const cardsEl = document.getElementById('shortstvInsightsCards');
-            if (!cardsEl) return;
-            const cards = [
-                { label: 'Active Accounts', value: (data.active_accounts != null ? Number(data.active_accounts).toLocaleString() : '—') },
-                { label: 'Watched Free Content', value: (data.watched_free_content_pct != null ? data.watched_free_content_pct + '%' : '—') },
-                { label: 'Watched Paid Content', value: (data.watched_paid_content_pct != null ? data.watched_paid_content_pct + '%' : '—') },
-                { label: 'Total Cancels', value: (data.total_cancels_pct != null ? data.total_cancels_pct + '%' : '—') }
-            ];
-            cardsEl.innerHTML = cards.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
-        }
-
-        function loadGoodshortRankerData() {
-            const loadingEl = document.getElementById('goodshortLoading');
-            const cardsEl = document.getElementById('goodshortInsightsCards');
-            const errEl = document.getElementById('goodshortError');
-            const btn = document.getElementById('goodshortRefreshBtn');
-            if (loadingEl) loadingEl.style.display = 'block';
-            if (cardsEl) cardsEl.innerHTML = '';
-            if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
-            if (btn) btn.disabled = true;
-            fetch('/api/rankers/goodshort/data', { credentials: 'same-origin' })
-                .then(r => r.json())
-                .then(data => {
-                    if (loadingEl) loadingEl.style.display = 'none';
-                    if (btn) btn.disabled = false;
-                    if (data.error) {
-                        if (errEl) { errEl.textContent = data.error; errEl.style.display = 'block'; }
-                        return;
-                    }
-                    renderGoodshortRanker(data);
-                })
-                .catch(e => {
-                    if (loadingEl) loadingEl.style.display = 'none';
-                    if (btn) btn.disabled = false;
-                    if (errEl) { errEl.textContent = e.message || String(e); errEl.style.display = 'block'; }
-                });
-        }
-
-        function renderGoodshortRanker(data) {
-            const cardsEl = document.getElementById('goodshortInsightsCards');
-            if (!cardsEl) return;
-            const cards = [
-                { label: 'Active Accounts', value: (data.active_accounts != null ? Number(data.active_accounts).toLocaleString() : '—') },
-                { label: 'Watched Free Content', value: (data.watched_free_content_pct != null ? data.watched_free_content_pct + '%' : '—') },
-                { label: 'Watched Paid Content', value: (data.watched_paid_content_pct != null ? data.watched_paid_content_pct + '%' : '—') },
-                { label: 'Total Cancels', value: (data.total_cancels_pct != null ? data.total_cancels_pct + '%' : '—') }
-            ];
-            cardsEl.innerHTML = cards.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
-        }
-
-        function renderRokuFastDailyRanker() {
-            const tbody = document.getElementById('rokufastDailyBody');
-            if (!rokufastRankerData || !rokufastRankerData.by_date) { if (tbody) tbody.innerHTML = ''; return; }
-            const dateInp = document.getElementById('rokufastDailyDate');
-            // Default to most recent date that has data (ignore empty or invalid date input)
-            const lastDateWithData = _getLastRokuFastDateWithData(rokufastRankerData);
-            let date = (dateInp && dateInp.value) ? dateInp.value : lastDateWithData;
-            if (!date) date = rokufastRankerData.date_range && rokufastRankerData.date_range.max;
-            let rows = (rokufastRankerData.by_date[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            // If selected date has no data, show most recent day that does
-            if (rows.length === 0 && lastDateWithData && rokufastRankerData.by_date[lastDateWithData] && rokufastRankerData.by_date[lastDateWithData].length) {
-                date = lastDateWithData;
-                if (dateInp) dateInp.value = date;
-                rows = (rokufastRankerData.by_date[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            }
-            if (dateInp && date && !dateInp.value) dateInp.value = date;
-            if (!tbody) return;
-            if (rows.length === 0) tbody.innerHTML = '<tr><td colspan="6" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date.</td></tr>';
-            else tbody.innerHTML = rows.map((r, i) => {
-                const showLink = '<a href="#" onclick="openRokuFastShowDetails(\'' + (r.show_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\', \'\', \'\', \'' + date + '\'); return false;" style="color: var(--accent-cyan);">' + (r.show_name || 'N/A') + '</a>';
-                return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>N/A</td><td>' + rokufastFormatMin(r.avg_watch_time) + '</td><td>' + rokufastFormatMin(r.run_time) + '</td></tr>';
-            }).join('');
-        }
-
-        function renderRokuFastAllRanker() {
-            const tbody = document.getElementById('rokufastAllBody');
-            if (!rokufastRankerData || !rokufastRankerData.by_date_all) { if (tbody) tbody.innerHTML = ''; return; }
-            const dateInp = document.getElementById('rokufastAllDate');
-            let date = dateInp ? dateInp.value : _getLastRokuFastDateWithData(rokufastRankerData, 'by_date_all');
-            let rows = (rokufastRankerData.by_date_all[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            if (!tbody) return;
-            if (rows.length === 0) tbody.innerHTML = '<tr><td colspan="8" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date.</td></tr>';
-            else tbody.innerHTML = rows.map((r, i) => {
-                const showLink = '<a href="#" onclick="openRokuFastShowDetails(\'' + (r.show_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\', \'' + (r.season || '') + '\', \'' + (r.episode_name || '').replace(/'/g, "\\'") + '\', \'' + date + '\'); return false;" style="color: var(--accent-cyan);">' + (r.show_name || 'N/A') + '</a>';
-                return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (r.season || '') + '</td><td>' + (r.episode || '') + '</td><td>' + (r.episode_name || 'N/A') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + rokufastFormatMin(r.avg_watch_time) + '</td><td>' + rokufastFormatMin(r.run_time) + '</td></tr>';
-            }).join('');
-        }
-
-        function renderRokuFastSeasonsRanker() {
-            const tbody = document.getElementById('rokufastSeasonsBody');
-            if (!rokufastRankerData || !rokufastRankerData.by_date_season) { if (tbody) tbody.innerHTML = ''; return; }
-            const dateInp = document.getElementById('rokufastSeasonsDate');
-            let date = dateInp ? dateInp.value : _getLastRokuFastDateWithData(rokufastRankerData, 'by_date_season');
-            let rows = (rokufastRankerData.by_date_season[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            if (!tbody) return;
-            if (rows.length === 0) tbody.innerHTML = '<tr><td colspan="6" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date.</td></tr>';
-            else tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || 'N/A') + '</td><td>' + (r.season || '') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + rokufastFormatMin(r.avg_watch_time) + '</td><td>' + rokufastFormatMin(r.run_time) + '</td></tr>').join('');
-        }
-
-        function renderRokuFastEpisodesRanker() {
-            const tbody = document.getElementById('rokufastEpisodesBody');
-            if (!rokufastRankerData || !rokufastRankerData.by_date_episode) { if (tbody) tbody.innerHTML = ''; return; }
-            const dateInp = document.getElementById('rokufastEpisodesDate');
-            let date = dateInp ? dateInp.value : _getLastRokuFastDateWithData(rokufastRankerData, 'by_date_episode');
-            let rows = (rokufastRankerData.by_date_episode[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            if (!tbody) return;
-            if (rows.length === 0) tbody.innerHTML = '<tr><td colspan="8" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date.</td></tr>';
-            else tbody.innerHTML = rows.map((r, i) => {
-                const showLink = '<a href="#" onclick="openRokuFastShowDetails(\'' + (r.show_name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\', \'' + (r.season || '') + '\', \'' + (r.episode_name || '').replace(/'/g, "\\'") + '\', \'' + date + '\'); return false;" style="color: var(--accent-cyan);">' + (r.show_name || 'N/A') + '</a>';
-                return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (r.episode || '') + '</td><td>' + (r.episode_name || 'N/A') + '</td><td>' + (r.season || '') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + rokufastFormatMin(r.avg_watch_time) + '</td><td>' + rokufastFormatMin(r.run_time) + '</td></tr>';
-            }).join('');
-        }
-
-        function renderRokuFastTrends() {
-            const wrap = document.getElementById('rokufastTrendsChartWrap');
-            const loading = document.getElementById('rokufastTrendsLoading');
-            const showId = document.getElementById('rokufastTrendsShow');
-            const showName = showId ? showId.value : '';
-            if (!rokufastRankerData || !rokufastRankerData.by_show || !showName) {
-                if (loading) loading.textContent = 'Load Rankers and select a show.';
-                if (wrap) wrap.style.display = 'none';
-                return;
-            }
-            const pts = rokufastRankerData.by_show[showName] || [];
-            const sortedDates = pts.map(p => p.date).sort();
-            if (sortedDates.length === 0) { if (loading) loading.textContent = 'No data for this show.'; if (wrap) wrap.style.display = 'none'; return; }
-            if (loading) loading.style.display = 'none';
-            if (wrap) wrap.style.display = 'block';
-            const ctx = document.getElementById('rokufastTrendsChart');
-            if (!ctx || !ctx.getContext) return;
-            if (rokufastTrendsChartInstance) rokufastTrendsChartInstance.destroy();
-            const viewsByDate = {}; pts.forEach(p => { viewsByDate[p.date] = p.views; });
-            rokufastTrendsChartInstance = new Chart(ctx.getContext('2d'), {
-                type: 'line',
-                data: { labels: sortedDates, datasets: [{ label: 'Views', data: sortedDates.map(d => viewsByDate[d] || 0), borderColor: '#66d9ef', backgroundColor: 'rgba(102,217,239,0.1)', fill: true }] },
-                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
-            });
-        }
-
-        function renderRokuFastByGenre() {
-            const tbody = document.getElementById('rokufastGenreBody');
-            if (!rokufastRankerData || !rokufastRankerData.genres_by_date) { if (tbody) tbody.innerHTML = ''; return; }
-            const dateInp = document.getElementById('rokufastGenreDate');
-            let date = dateInp ? dateInp.value : _getLastRokuFastDateWithData(rokufastRankerData, 'genres_by_date');
-            let rows = (rokufastRankerData.genres_by_date[date] || []);
-            const total = rows.reduce((s, r) => s + (r.views || 0), 0);
-            if (!tbody) return;
-            if (rows.length === 0) tbody.innerHTML = '<tr><td colspan="4" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data.</td></tr>';
-            else tbody.innerHTML = rows.map(r => '<tr><td>' + (r.genre || 'N/A') + '</td><td>' + (r.views || 0).toLocaleString() + '</td><td>' + (total ? ((r.views / total) * 100).toFixed(1) : 0) + '%</td><td>' + (r.top_show || 'N/A') + '</td></tr>').join('');
-        }
-
-        function renderRokuFastTopShows() {
-            const wrap = document.getElementById('rokufastTopShowsChartWrap');
-            const loading = document.getElementById('rokufastTopShowsLoading');
-            if (!rokufastRankerData || !rokufastRankerData.top_shows_over_time || rokufastRankerData.top_shows_over_time.length === 0) {
-                if (loading) loading.textContent = 'No data.'; if (wrap) wrap.style.display = 'none';
-                return;
-            }
-            if (loading) loading.style.display = 'none';
-            if (wrap) wrap.style.display = 'block';
-            const allDates = new Set();
-            rokufastRankerData.top_shows_over_time.forEach(s => Object.keys(s.by_date || {}).forEach(d => allDates.add(d)));
-            const sortedDates = Array.from(allDates).sort();
-            const ctx = document.getElementById('rokufastTopShowsChart');
-            if (!ctx || !ctx.getContext) return;
-            if (rokufastTopShowsChartInstance) rokufastTopShowsChartInstance.destroy();
-            const datasets = rokufastRankerData.top_shows_over_time.slice(0, 20).map((s, i) => ({
-                label: s.show_name,
-                data: sortedDates.map(d => (s.by_date && s.by_date[d]) || 0),
-                borderColor: ['#66d9ef','#a6e22e','#f92672','#fd971f','#ae81ff'][i % 5],
-                backgroundColor: 'transparent',
-                fill: false
-            }));
-            rokufastTopShowsChartInstance = new Chart(ctx.getContext('2d'), { type: 'line', data: { labels: sortedDates, datasets }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
-        }
-
-        function renderRokuFastInsights() {
-            const cards = document.getElementById('rokufastInsightsCards');
-            if (!rokufastRankerData || !cards) return;
-            const byDate = rokufastRankerData.by_date || {};
-            const dates = rokufastRankerData.dates_sorted || Object.keys(byDate).sort();
-            const lastDate = dates.length ? dates[dates.length - 1] : null;
-            const lastRows = lastDate ? (byDate[lastDate] || []) : [];
-            const totalViews = lastRows.reduce((s, r) => s + (r.views || 0), 0);
-            const topShow = lastRows.length ? lastRows[0].show_name : 'N/A';
-            const items = [
-                { label: 'Last date', value: lastDate || '—' },
-                { label: 'Total views (last date)', value: totalViews.toLocaleString() },
-                { label: 'Top show (last date)', value: topShow },
-                { label: 'Shows (last date)', value: lastRows.length + '' }
-            ];
-            cards.innerHTML = items.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
-        }
-
-        function exportRokuFastDailyCSV() {
-            if (!rokufastRankerData || !rokufastRankerData.by_date) return;
-            const dateInp = document.getElementById('rokufastDailyDate');
-            const date = dateInp ? dateInp.value : (rokufastRankerData.date_range && rokufastRankerData.date_range.max);
-            let rows = (rokufastRankerData.by_date[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            const csv = 'Rank,Show,Views,Genre,Avg Watch Time,Run Time\n' + rows.map((r, i) => [i + 1, '"' + (r.show_name || '').replace(/"/g, '""') + '"', r.views, 'N/A', r.avg_watch_time != null ? r.avg_watch_time : '', r.run_time != null ? r.run_time : ''].join(',')).join('\n');
-            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'rokufast_daily_' + date + '.csv'; a.click();
-        }
-        function exportRokuFastAllCSV() {
-            if (!rokufastRankerData || !rokufastRankerData.by_date_all) return;
-            const dateInp = document.getElementById('rokufastAllDate');
-            const date = dateInp ? dateInp.value : (rokufastRankerData.date_range && rokufastRankerData.date_range.max);
-            let rows = (rokufastRankerData.by_date_all[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            const csv = 'Rank,Show,Season,Episode #,Episode Name,Views,Avg Watch Time,Run Time\n' + rows.map((r, i) => [i + 1, '"' + (r.show_name || '').replace(/"/g, '""') + '"', '"' + (r.season || '').replace(/"/g, '""') + '"', '"' + (r.episode || '').replace(/"/g, '""') + '"', '"' + (r.episode_name || '').replace(/"/g, '""') + '"', r.views, r.avg_watch_time != null ? r.avg_watch_time : '', r.run_time != null ? r.run_time : ''].join(',')).join('\n');
-            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'rokufast_all_' + date + '.csv'; a.click();
-        }
-        function exportRokuFastSeasonsCSV() {
-            if (!rokufastRankerData || !rokufastRankerData.by_date_season) return;
-            const dateInp = document.getElementById('rokufastSeasonsDate');
-            const date = dateInp ? dateInp.value : (rokufastRankerData.date_range && rokufastRankerData.date_range.max);
-            let rows = (rokufastRankerData.by_date_season[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            const csv = 'Rank,Show,Season,Views,Avg Watch Time,Run Time\n' + rows.map((r, i) => [i + 1, '"' + (r.show_name || '').replace(/"/g, '""') + '"', '"' + (r.season || '').replace(/"/g, '""') + '"', r.views, r.avg_watch_time != null ? r.avg_watch_time : '', r.run_time != null ? r.run_time : ''].join(',')).join('\n');
-            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'rokufast_seasons_' + date + '.csv'; a.click();
-        }
-        function exportRokuFastEpisodesCSV() {
-            if (!rokufastRankerData || !rokufastRankerData.by_date_episode) return;
-            const dateInp = document.getElementById('rokufastEpisodesDate');
-            const date = dateInp ? dateInp.value : (rokufastRankerData.date_range && rokufastRankerData.date_range.max);
-            let rows = (rokufastRankerData.by_date_episode[date] || []).slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            const csv = 'Rank,Show,Episode #,Episode,Season,Views,Avg Watch Time,Run Time\n' + rows.map((r, i) => [i + 1, '"' + (r.show_name || '').replace(/"/g, '""') + '"', '"' + (r.episode || '').replace(/"/g, '""') + '"', '"' + (r.episode_name || '').replace(/"/g, '""') + '"', '"' + (r.season || '').replace(/"/g, '""') + '"', r.views, r.avg_watch_time != null ? r.avg_watch_time : '', r.run_time != null ? r.run_time : ''].join(',')).join('\n');
-            const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'rokufast_episodes_' + date + '.csv'; a.click();
-        }
-        function exportRokuFastTrendsCSV() { if (!rokufastRankerData || !rokufastRankerData.by_show) return; const sel = document.getElementById('rokufastTrendsShow'); const showName = sel ? sel.value : ''; if (!showName) return; const pts = (rokufastRankerData.by_show[showName] || []).slice().sort((a, b) => a.date.localeCompare(b.date)); const csv = 'Date,Views\n' + pts.map(p => p.date + ',' + p.views).join('\n'); const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'rokufast_trends_' + (showName.replace(/\W/g, '_')) + '.csv'; a.click(); }
-        function exportRokuFastTopShowsCSV() { if (!rokufastRankerData || !rokufastRankerData.top_shows_over_time) return; const lines = ['Show,' + (rokufastRankerData.dates_sorted || []).join(',')]; rokufastRankerData.top_shows_over_time.slice(0, 20).forEach(s => { const byDate = s.by_date || {}; lines.push('"' + (s.show_name || '').replace(/"/g, '""') + '",' + (rokufastRankerData.dates_sorted || []).map(d => byDate[d] || 0).join(',')); }); const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(lines.join('\n')); a.download = 'rokufast_top_shows.csv'; a.click(); }
-
-        function openRokuFastShowDetails(showName, season, episodeName, date) {
-            const modal = document.getElementById('rokufastShowDetailsModal');
-            const content = document.getElementById('rokufastShowDetailsContent');
-            if (!modal || !content) return;
-            content.innerHTML = '<div style="text-align: center; padding: 3rem;"><div class="loading-spinner"></div><p>Loading show details...</p></div>';
-            modal.style.display = 'block';
-            const params = new URLSearchParams({ show_name: showName });
-            if (date) params.set('date', date);
-            if (season && season !== 'N/A') params.set('season', season);
-            fetch('/api/rankers/rokufast/show-details?' + params.toString(), { credentials: 'same-origin' })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.error) { content.innerHTML = '<p style="color: var(--error-color);">' + (data.error || 'Not found') + '</p>'; return; }
-                    let html = '<h3>' + (data.show_name || 'N/A') + '</h3><p><strong>Season:</strong> ' + (data.season || 'N/A') + ' &nbsp; <strong>Episode:</strong> ' + (data.episode_name || 'N/A') + '</p>';
-                    html += '<p><strong>Views:</strong> ' + (data.total_views || 0).toLocaleString() + ' &nbsp; <strong>Avg watch time:</strong> ' + (data.avg_watch_time !== undefined && data.avg_watch_time !== 'N/A' ? data.avg_watch_time + ' min' : 'N/A') + ' &nbsp; <strong>Run time:</strong> ' + (data.run_time !== undefined && data.run_time !== 'N/A' ? data.run_time + ' min' : 'N/A') + '</p>';
-                    html += '<p><strong>Genre:</strong> N/A &nbsp; <strong>Type:</strong> N/A &nbsp; <strong>DMA:</strong> N/A (not available for Roku FAST)</p>';
-                    if (data.dma_breakdown && data.dma_breakdown.length) html += '<h4>DMA breakdown</h4><ul>' + data.dma_breakdown.map(d => '<li>' + d.dma + ': ' + d.percentage + '%</li>').join('') + '</ul>';
-                    content.innerHTML = html;
-                })
-                .catch(() => { content.innerHTML = '<p style="color: var(--error-color);">Failed to load details.</p>'; });
-        }
-        function closeRokuFastShowDetails() {
-            const modal = document.getElementById('rokufastShowDetailsModal');
-            if (modal) modal.style.display = 'none';
         }
 
         function _getLastNetflixDateWithData(data, key) {
@@ -31122,6 +30624,7 @@
             const tbody = document.getElementById('netflixDailyBody');
             const loading = document.getElementById('netflixDailyLoading');
             const dateInp = document.getElementById('netflixDailyDate');
+            const sortSelect = document.getElementById('netflixDailySortBy');
             const genreSelect = document.getElementById('netflixDailyGenreFilter');
             if (!netflixRankerData || !netflixRankerData.by_date) {
                 if (loading) loading.style.display = 'none';
@@ -31160,8 +30663,29 @@
                 rows = rows.filter(r => _netflixDailyGenreList(r.genre).includes(selectedGenre));
             }
 
-            // Sort by views (high to low)
-            rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            // Sort
+            const sortBy = sortSelect ? sortSelect.value : 'views';
+            if (sortBy === 'views') {
+                rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            } else if (sortBy === 'type-movie') {
+                rows = rows.slice().sort((a, b) => {
+                    const ta = (a.type || '').toLowerCase();
+                    const tb = (b.type || '').toLowerCase();
+                    const orderA = ta === 'movie' ? 0 : 1;
+                    const orderB = tb === 'movie' ? 0 : 1;
+                    if (orderA !== orderB) return orderA - orderB;
+                    return (b.views || 0) - (a.views || 0);
+                });
+            } else if (sortBy === 'type-show') {
+                rows = rows.slice().sort((a, b) => {
+                    const ta = (a.type || '').toLowerCase();
+                    const tb = (b.type || '').toLowerCase();
+                    const orderA = ta === 'show' ? 0 : 1;
+                    const orderB = tb === 'show' ? 0 : 1;
+                    if (orderA !== orderB) return orderA - orderB;
+                    return (b.views || 0) - (a.views || 0);
+                });
+            }
 
             if (!tbody) return;
             if (rows.length === 0) {
@@ -31220,7 +30744,7 @@
         function renderNetflixShowDetailsContent(contentEl, data) {
             const dmaRows = (data.dma_breakdown || []).slice(0, 15);
             const dmaTable = dmaRows.length > 0 
-                ? '<table class="rankers-table" style="width: 100%; border-collapse: collapse; margin-top: 0.5rem;"><thead><tr><th>DMA (Location)</th><th>Views</th><th>% of Total</th></tr></thead><tbody>' +
+                ? '<table class="rankers-table" style="width: 100%; border-collapse: collapse; margin-top: 0.5rem;"><thead><tr><th>DMA (Location)</th><th>Projected Views</th><th>% of Total</th></tr></thead><tbody>' +
                   dmaRows.map(d => '<tr><td>' + d.dma + '</td><td>' + netflixProjectedViews(d.views).toLocaleString() + '</td><td>' + d.percentage + '%</td></tr>').join('') +
                   '</tbody></table>'
                 : '<p style="color: var(--text-secondary);">No DMA data available</p>';
@@ -31490,83 +31014,19 @@
             if (wrap) wrap.innerHTML = cards.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
         }
 
-        // Netflix Live Top 10
-        let netflixLiveTop10Data = null;
-        
-        function loadNetflixLiveTop10(forceRefresh) {
-            const loadingEl = document.getElementById('netflixLiveTop10Loading');
-            const tableWrap = document.getElementById('netflixLiveTop10TableWrap');
-            const errorEl = document.getElementById('netflixLiveTop10Error');
-            const dateEl = document.getElementById('netflixLiveTop10Date');
-            
-            // If we have cached data and not forcing refresh, just render
-            if (netflixLiveTop10Data && !forceRefresh) {
-                renderNetflixLiveTop10();
-                return;
-            }
-            
-            if (loadingEl) loadingEl.style.display = 'block';
-            if (tableWrap) tableWrap.style.display = 'none';
-            if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
-            
-            fetch('/api/rankers/netflix/live-top10', { credentials: 'same-origin' })
-                .then(r => r.json())
-                .then(data => {
-                    if (loadingEl) loadingEl.style.display = 'none';
-                    if (data.error) {
-                        if (errorEl) { errorEl.textContent = data.error; errorEl.style.display = 'block'; }
-                        return;
-                    }
-                    netflixLiveTop10Data = data;
-                    if (dateEl && data.delivered_date) {
-                        dateEl.textContent = 'Data for: ' + data.delivered_date;
-                    }
-                    renderNetflixLiveTop10();
-                })
-                .catch(e => {
-                    if (loadingEl) loadingEl.style.display = 'none';
-                    if (errorEl) { errorEl.textContent = e.message || String(e); errorEl.style.display = 'block'; }
-                });
-        }
-        
-        function renderNetflixLiveTop10() {
-            const tbody = document.getElementById('netflixLiveTop10Body');
-            const tableWrap = document.getElementById('netflixLiveTop10TableWrap');
-            
-            if (!netflixLiveTop10Data || !netflixLiveTop10Data.top10) {
-                if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data available.</td></tr>';
-                return;
-            }
-            
-            if (tableWrap) tableWrap.style.display = 'block';
-            
-            const rows = netflixLiveTop10Data.top10;
-            if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data available.</td></tr>';
-                return;
-            }
-            
-            tbody.innerHTML = rows.map(r => {
-                const titleLink = r.url ? '<a href="' + r.url + '" target="_blank" style="color: var(--accent-cyan);">Watch on Netflix</a>' : 'N/A';
-                const titleDisplay = r.show_name || r.title_id || r.url;
-                return '<tr>' +
-                    '<td style="font-weight: 600; color: var(--accent-cyan);">#' + r.rank + '</td>' +
-                    '<td>' + titleDisplay + '</td>' +
-                    '<td style="font-weight: 600;">' + (r.projected_views || 0).toLocaleString() + '</td>' +
-                    '<td>' + titleLink + '</td>' +
-                '</tr>';
-            }).join('');
-        }
-
         function exportNetflixDailyCSV() {
             if (!netflixRankerData || !netflixRankerData.by_date) return;
             const dateInp = document.getElementById('netflixDailyDate');
             const genreSelect = document.getElementById('netflixDailyGenreFilter');
+            const sortSelect = document.getElementById('netflixDailySortBy');
             const date = dateInp ? dateInp.value : (netflixRankerData.date_range && netflixRankerData.date_range.max);
             let rows = (netflixRankerData.by_date[date] || []).filter(r => !(r.genre || '').toLowerCase().includes('indian'));
             const selectedGenre = genreSelect ? genreSelect.value : '';
             if (selectedGenre) rows = rows.filter(r => _netflixDailyGenreList(r.genre).includes(selectedGenre));
-            rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            const sortBy = sortSelect ? sortSelect.value : 'views';
+            if (sortBy === 'views') rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            else if (sortBy === 'type-movie') rows = rows.slice().sort((a, b) => { const oa = ((a.type || '').toLowerCase() === 'movie') ? 0 : 1; const ob = ((b.type || '').toLowerCase() === 'movie') ? 0 : 1; if (oa !== ob) return oa - ob; return (b.views || 0) - (a.views || 0); });
+            else if (sortBy === 'type-show') rows = rows.slice().sort((a, b) => { const oa = ((a.type || '').toLowerCase() === 'show') ? 0 : 1; const ob = ((b.type || '').toLowerCase() === 'show') ? 0 : 1; if (oa !== ob) return oa - ob; return (b.views || 0) - (a.views || 0); });
             const csv = 'Rank,Show,Views,Genre,Type,Avg Watch Time,Run Time\n' + rows.map((r, i) => (i + 1) + ',"' + (r.show_name || '').replace(/"/g, '""') + '",' + netflixProjectedViews(r.views) + ',"' + (r.genre || '').replace(/"/g, '""') + '","' + (r.type || '').replace(/"/g, '""') + '",' + (r.avg_watch_time != null && r.avg_watch_time !== '' ? r.avg_watch_time : '') + ',' + (r.run_time != null && r.run_time !== '' ? r.run_time : '')).join('\n');
             const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv); a.download = 'netflix_daily_ranker_' + date + '.csv'; a.click();
         }
@@ -39720,19 +39180,7 @@
                     return;
                 }
                 
-                // 404 = backend may be older build without /api/jobs; show friendly message
-                if (response.status === 404) {
-                    if (cachePollingInterval) {
-                        clearInterval(cachePollingInterval);
-                        cachePollingInterval = null;
-                    }
-                    allJobs = [];
-                    allCategories = [];
-                    cacheInfo = null;
-                    if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">Profile list unavailable. Refresh after the app has finished updating.</div>';
-                    return;
-                }
-                
+                // Handle other HTTP errors
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -39914,17 +39362,8 @@
                 return;
             }
             
-            // Load regular profiles from allJobs, excluding SVOD Acquisition (those belong in Subscriber IQ only)
-            comparisonProfiles = allJobs.filter(j => {
-                if (j.status !== 'cached' && j.status !== 'completed') return false;
-                // Exclude SVOD files - they have is_svod flag, or key starts with svod-acquisition/, or category is SVOD Acquisition
-                if (j.is_svod) return false;
-                if (j.key && j.key.startsWith('svod-acquisition/')) return false;
-                if (j.s3_key && j.s3_key.startsWith('svod-acquisition/')) return false;
-                const cat = (j.category || '').toUpperCase();
-                if (cat === 'SVOD ACQUISITION' || cat === 'SVOD_ACQUISITION') return false;
-                return true;
-            });
+            // Load regular profiles from allJobs
+            comparisonProfiles = allJobs.filter(j => j.status === 'cached' || j.status === 'completed');
             
             // Re-add any segment profiles from persistent storage
             segmentProfilesForComparison.forEach(seg => {
@@ -41669,10 +41108,9 @@
                                 <option value="50" ${incomeLimit == 50 ? 'selected' : ''}>Top 50</option>
                                 <option value="All" ${incomeLimit === 'All' ? 'selected' : ''}>All</option>
                             </select>
-                            <select onchange="setComparisonSectionSortType('demo_income', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 95px;">
+                            <select onchange="setComparisonSectionSortType('demo_income', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
                                 <option value="pct" ${incomeSortType === 'pct' ? 'selected' : ''}>By ${compDisplayMode === 'projection' ? '#' : '%'}</option>
                                 <option value="index" ${incomeSortType === 'index' ? 'selected' : ''}>By Index</option>
-                                <option value="income" ${incomeSortType === 'income' ? 'selected' : ''}>By Income ↑ (lowest first)</option>
                             </select>
                         </span>
                     </div>
@@ -42174,49 +41612,28 @@
                 return row.pctData[idx] || 0;
             };
 
-            // Sort: dropdown "By Age" / "By Income" take precedence; then column click; then by %/index for primary
-            if (demoType === 'age' && sortType === 'age') {
-                // By age ascending: <16 at top, then 16-18, 18-20, 21-25, 26-30, 31-40, 41-59, 60+ at bottom (include 13-17, 18-24, 25-34, etc.)
-                const ageOrder = ['<16', 'under 16', '13-17', '16-18', '17-18', '18-20', '19-20', '18-24', '21-25', '25-34', '26-30', '31-40', '35-44', '41-59', '45-54', '55-64', '60+', '65+', 'over 65'];
+            // Sort by selected profile column or default sort
+            if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
+                dataRows.sort((a, b) => getSortValue(b, sortByProfileIdx) - getSortValue(a, sortByProfileIdx));
+            } else if (demoType === 'age' && sortType === 'age') {
+                // By age ascending (youngest first): <16 at top, then 17-18, 19-20, ..., 60+ at bottom
                 const getAgeSortKey = (val) => {
-                    const s = (val || '').toString().trim().toLowerCase();
-                    for (let i = 0; i < ageOrder.length; i++) {
-                        const o = ageOrder[i].toLowerCase();
-                        if (s === o || s.startsWith(o) || o.startsWith(s) || (s.includes(o.replace(/\s/g, '')) && s.length <= o.length + 2)) return i;
-                    }
-                    if (/^<\s*16|under\s*16/.test(s)) return 0;
-                    if (/^13[-–]17/.test(s)) return 2;
-                    if (/^16[-–]18|17[-–]18/.test(s)) return 3;
-                    if (/^18[-–]20|19[-–]20/.test(s)) return 5;
-                    if (/^18[-–]24/.test(s)) return 7;
-                    if (/^21[-–]25/.test(s)) return 8;
-                    if (/^25[-–]34/.test(s)) return 9;
-                    if (/^26[-–]30/.test(s)) return 10;
-                    if (/^31[-–]40/.test(s)) return 11;
-                    if (/^35[-–]44/.test(s)) return 12;
-                    if (/^41[-–]59/.test(s)) return 13;
-                    if (/^45[-–]54/.test(s)) return 14;
-                    if (/^55[-–]64/.test(s)) return 15;
-                    if (/60\+|65\+|over\s*65/.test(s)) return 16;
+                    const s = (val || '').toString().trim();
+                    if (/^<\d+/.test(s)) return 0; // e.g. <16 -> 0 so it sorts first
+                    if (s.includes('+')) return parseInt(s.replace(/[^0-9]/g, '')) || 99;
                     const nums = s.match(/\d+/g);
-                    return nums && nums[0] ? parseInt(nums[0], 10) : 999;
+                    return nums && nums[0] ? parseInt(nums[0]) : 0;
                 };
                 dataRows.sort((a, b) => getAgeSortKey(a.value) - getAgeSortKey(b.value));
-            } else if (demoType === 'income' && sortType === 'income') {
-                // By income ascending: lowest bracket first (Under $25k, $25k-$50k, ... $250k+)
-                const getIncomeSortKey = (val) => {
-                    const s = (val || '').toString().replace(/,/g, '').toLowerCase();
-                    if (/under|less|<\s*\d|^\$?\s*0/.test(s)) return 0;
-                    const nums = s.match(/\d+/g);
-                    if (!nums || nums.length === 0) return 0;
-                    const first = parseInt(nums[0], 10);
-                    return first >= 200 ? 250 : first; // $250k+ at end
-                };
-                dataRows.sort((a, b) => getIncomeSortKey(a.value) - getIncomeSortKey(b.value));
-            } else if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
-                dataRows.sort((a, b) => getSortValue(b, sortByProfileIdx) - getSortValue(a, sortByProfileIdx));
+            } else if (demoType === 'age' && sortType === 'pct') {
+                // For age with pct sort, use natural age order (ascending)
+                dataRows.sort((a, b) => {
+                    const numA = parseInt(a.value.replace(/[^0-9]/g, '')) || 0;
+                    const numB = parseInt(b.value.replace(/[^0-9]/g, '')) || 0;
+                    return numA - numB;
+                });
             } else {
-                // By % or By Index: sort by primary profile's value descending
+                // Default sort by primary profile's value descending
                 const idx = (primaryProfileIndex >= 0 && primaryProfileIndex < profiles.length) ? primaryProfileIndex : 0;
                 dataRows.sort((a, b) => getSortValue(b, idx) - getSortValue(a, idx));
             }
@@ -50355,6 +49772,177 @@
         
         // Make openChatWith available for team member clicks
         window.openChatWith = openChatWith;
+        
+        // ============================================================================
+        // RANKER IQ VIEW - Separate dashboard for ranker functionality
+        // ============================================================================
+        let rankerIQNetflixData = null;
+        let rankerIQTrendsChartInstance = null;
+        let rankerIQTopShowsChartInstance = null;
+        let rankerIQGenreChartInstance = null;
+        
+        function loadRankerIQNetflixData(forceRefresh) {
+            const btn = document.getElementById('rankerIQLoadBtnNetflix');
+            if (btn) btn.disabled = true;
+            const loadProgress = document.getElementById('rankerIQLoadProgress');
+            const loadDone = document.getElementById('rankerIQLoadDone');
+            const loadStatus = document.getElementById('rankerIQLoadStatus');
+            
+            if (loadProgress) loadProgress.style.display = 'flex';
+            if (loadDone) loadDone.style.display = 'none';
+            if (loadStatus) loadStatus.textContent = 'Loading Netflix ranker data...';
+            
+            const url = '/api/rankers/netflix/data' + (forceRefresh ? '?force_refresh=1' : '');
+            
+            fetch(url, { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) throw new Error(data.error);
+                    rankerIQNetflixData = data;
+                    
+                    // Set date inputs
+                    const dateRange = data.date_range || {};
+                    const lastDate = dateRange.max || '';
+                    
+                    ['rankerIQNetflixDailyDate', 'rankerIQNetflixSeasonsDate', 'rankerIQNetflixEpisodesDate', 'rankerIQNetflixAllDate', 'rankerIQNetflixGenreDate'].forEach(id => {
+                        const inp = document.getElementById(id);
+                        if (inp && dateRange.min) inp.min = dateRange.min;
+                        if (inp && dateRange.max) inp.max = dateRange.max;
+                        if (inp && lastDate) inp.value = lastDate;
+                    });
+                    
+                    // Render all views
+                    renderRankerIQNetflixDailyRanker();
+                    renderRankerIQNetflixSeasonsRanker();
+                    renderRankerIQNetflixEpisodesRanker();
+                    renderRankerIQNetflixAllRanker();
+                    renderRankerIQNetflixByGenre();
+                    renderRankerIQNetflixTopShows();
+                    renderRankerIQNetflixInsights();
+                    populateRankerIQNetflixTrendsShowSelect();
+                    
+                    if (loadProgress) loadProgress.style.display = 'none';
+                    if (loadDone) loadDone.style.display = 'block';
+                    if (btn) btn.disabled = false;
+                })
+                .catch(err => {
+                    console.error('[RankerIQ] Netflix load error', err);
+                    if (loadStatus) loadStatus.textContent = 'Error: ' + (err.message || err);
+                    if (btn) btn.disabled = false;
+                });
+        }
+        
+        function renderRankerIQNetflixDailyRanker() {
+            const tbody = document.getElementById('rankerIQNetflixDailyBody');
+            if (!tbody || !rankerIQNetflixData) return;
+            const dateInp = document.getElementById('rankerIQNetflixDailyDate');
+            const date = dateInp ? dateInp.value : (rankerIQNetflixData.date_range && rankerIQNetflixData.date_range.max);
+            let rows = (rankerIQNetflixData.by_date && rankerIQNetflixData.by_date[date]) || [];
+            rows = rows.filter(r => !(r.genre || '').toLowerCase().includes('indian'));
+            rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            tbody.innerHTML = rows.slice(0, 100).map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + ((r.views || 0) * 4949).toLocaleString() + '</td><td>' + (r.genre || '') + '</td><td>' + (r.avg_watch_time || '') + '</td><td>' + (r.run_time || '') + '</td></tr>').join('');
+        }
+        
+        function renderRankerIQNetflixSeasonsRanker() {
+            const tbody = document.getElementById('rankerIQNetflixSeasonsBody');
+            if (!tbody || !rankerIQNetflixData) return;
+            const dateInp = document.getElementById('rankerIQNetflixSeasonsDate');
+            const date = dateInp ? dateInp.value : (rankerIQNetflixData.date_range && rankerIQNetflixData.date_range.max);
+            let rows = (rankerIQNetflixData.by_date_season && rankerIQNetflixData.by_date_season[date]) || [];
+            rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            tbody.innerHTML = rows.slice(0, 100).map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.season || '') + '</td><td>' + ((r.views || 0) * 4949).toLocaleString() + '</td><td>' + (r.avg_watch_time || '') + '</td><td>' + (r.run_time || '') + '</td></tr>').join('');
+        }
+        
+        function renderRankerIQNetflixEpisodesRanker() {
+            const tbody = document.getElementById('rankerIQNetflixEpisodesBody');
+            if (!tbody || !rankerIQNetflixData) return;
+            const dateInp = document.getElementById('rankerIQNetflixEpisodesDate');
+            const date = dateInp ? dateInp.value : (rankerIQNetflixData.date_range && rankerIQNetflixData.date_range.max);
+            let rows = (rankerIQNetflixData.by_date_episode && rankerIQNetflixData.by_date_episode[date]) || [];
+            rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            tbody.innerHTML = rows.slice(0, 100).map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.episode || '') + '</td><td>' + (r.episode_name || '') + '</td><td>' + (r.season || '') + '</td><td>' + ((r.views || 0) * 4949).toLocaleString() + '</td><td>' + (r.avg_watch_time || '') + '</td><td>' + (r.run_time || '') + '</td></tr>').join('');
+        }
+        
+        function renderRankerIQNetflixAllRanker() {
+            const tbody = document.getElementById('rankerIQNetflixAllBody');
+            if (!tbody || !rankerIQNetflixData) return;
+            const dateInp = document.getElementById('rankerIQNetflixAllDate');
+            const date = dateInp ? dateInp.value : (rankerIQNetflixData.date_range && rankerIQNetflixData.date_range.max);
+            let rows = (rankerIQNetflixData.by_date_all && rankerIQNetflixData.by_date_all[date]) || [];
+            if (!rows.length && rankerIQNetflixData.by_date && rankerIQNetflixData.by_date[date]) {
+                rows = rankerIQNetflixData.by_date[date];
+            }
+            rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
+            tbody.innerHTML = rows.slice(0, 100).map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.season || '') + '</td><td>' + (r.episode || '') + '</td><td>' + (r.episode_name || '') + '</td><td>' + ((r.views || 0) * 4949).toLocaleString() + '</td><td>' + (r.avg_watch_time || '') + '</td><td>' + (r.run_time || '') + '</td></tr>').join('');
+        }
+        
+        function renderRankerIQNetflixByGenre() {
+            const tbody = document.getElementById('rankerIQNetflixGenreBody');
+            if (!tbody || !rankerIQNetflixData) return;
+            // Simple genre aggregation
+            const genreTotals = {};
+            const daily = rankerIQNetflixData.daily || [];
+            daily.forEach(r => {
+                const genre = r.genre || 'Unknown';
+                if (!genreTotals[genre]) genreTotals[genre] = { views: 0, topShow: '', topViews: 0 };
+                genreTotals[genre].views += (r.views || 0);
+                if ((r.views || 0) > genreTotals[genre].topViews) {
+                    genreTotals[genre].topViews = r.views || 0;
+                    genreTotals[genre].topShow = r.show_name || '';
+                }
+            });
+            const totalViews = Object.values(genreTotals).reduce((s, g) => s + g.views, 0);
+            const sorted = Object.entries(genreTotals).sort((a, b) => b[1].views - a[1].views);
+            tbody.innerHTML = sorted.slice(0, 20).map(([genre, data]) => '<tr><td>' + genre + '</td><td>' + (data.views * 4949).toLocaleString() + '</td><td>' + (totalViews ? ((data.views / totalViews) * 100).toFixed(1) : 0) + '%</td><td>' + data.topShow + '</td></tr>').join('');
+        }
+        
+        function renderRankerIQNetflixTopShows() {
+            const tbody = document.getElementById('rankerIQNetflixTopShowsBody');
+            // Chart-based view - simplified for now
+        }
+        
+        function renderRankerIQNetflixInsights() {
+            const cards = document.getElementById('rankerIQNetflixInsightsCards');
+            if (!cards || !rankerIQNetflixData) return;
+            const daily = rankerIQNetflixData.daily || [];
+            const totalViews = daily.reduce((s, r) => s + (r.views || 0), 0);
+            const showCount = rankerIQNetflixData.by_show ? Object.keys(rankerIQNetflixData.by_show).length : 0;
+            const dateRange = rankerIQNetflixData.date_range || {};
+            cards.innerHTML = [
+                { label: 'Total Projected Views', value: (totalViews * 4949).toLocaleString() },
+                { label: 'Unique Shows', value: showCount.toLocaleString() },
+                { label: 'Date Range', value: (dateRange.min || '') + ' – ' + (dateRange.max || '') }
+            ].map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
+        }
+        
+        function populateRankerIQNetflixTrendsShowSelect() {
+            if (!rankerIQNetflixData || !rankerIQNetflixData.by_show) return;
+            const sel = document.getElementById('rankerIQNetflixTrendsShow');
+            if (!sel) return;
+            const shows = Object.keys(rankerIQNetflixData.by_show).sort();
+            sel.innerHTML = '<option value="">Select show...</option>' + shows.map(s => '<option value="' + s.replace(/"/g, '&quot;') + '">' + s + '</option>').join('');
+        }
+        
+        function showRankerIQNetflixSubTab(id) {
+            document.querySelectorAll('#rankerIQNetflixSubTabContent .netflix-sub-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('#rankeriq-netflix .netflix-subtabs .tab-btn').forEach(b => b.classList.remove('active'));
+            const content = document.getElementById('rankeriq-netflix-' + id);
+            const btnId = id === 'topshows' ? 'TopShows' : id.charAt(0).toUpperCase() + id.slice(1);
+            const btn = document.getElementById('rankerIQNetflixSubTab' + btnId);
+            if (content) content.classList.add('active');
+            if (btn) btn.classList.add('active');
+        }
+        
+        // Override showNetflixSubTab to work in Ranker IQ view when that view is active
+        const originalShowNetflixSubTab = window.showNetflixSubTab || function() {};
+        window.showNetflixSubTab = function(id) {
+            const rankerIQView = document.getElementById('rankerIQView');
+            if (rankerIQView && rankerIQView.style.display !== 'none') {
+                showRankerIQNetflixSubTab(id);
+            } else {
+                originalShowNetflixSubTab(id);
+            }
+        };
     </script>
     
     <!-- Profile Picture Upload Modal -->

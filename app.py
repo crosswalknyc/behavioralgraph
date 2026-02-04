@@ -235,23 +235,6 @@ _metadata_cache = {}
 _cache_timestamps = {}
 CACHE_TTL = 60  # Cache for 60 seconds
 
-# Profile/ticker image cache (project name -> { is_custom, image_url }) - loaded later after s3_cache is defined
-profile_image_cache = {}
-cache_loading_complete = True
-
-def load_profile_image_cache():
-    """Load profile/ticker image cache from S3 (custom images per project)."""
-    global profile_image_cache
-    try:
-        data = load_json_from_s3(TICKER_IMAGES_FILE)
-        if isinstance(data, dict):
-            profile_image_cache = data
-        else:
-            profile_image_cache = {}
-    except Exception as e:
-        print(f"⚠️ load_profile_image_cache: {e}")
-        profile_image_cache = {}
-
 def load_json_from_s3(filename, use_cache=True):
     """Load JSON data from S3 metadata bucket with in-memory caching."""
     try:
@@ -370,56 +353,23 @@ def ensure_metadata_folder():
 # Ensure metadata folder exists at startup
 ensure_metadata_folder()
 
-# Minimum percentage of sample for AI insights/summaries (only use values >= this)
-MIN_PCT_FOR_INSIGHTS = 10
-
-def _filter_demographics_for_insights(demographics):
-    """Return demographics with only values >= MIN_PCT_FOR_INSIGHTS."""
-    if not demographics:
-        return {}
-    out = {}
-    for cat, values in demographics.items():
-        if isinstance(values, dict):
-            out[cat] = {k: v for k, v in values.items() if isinstance(v, (int, float)) and v >= MIN_PCT_FOR_INSIGHTS}
-        else:
-            out[cat] = values
-    return out
-
-def _filter_behavioral_for_insights(behavioral):
-    """Return behavioral with only items where pct >= MIN_PCT_FOR_INSIGHTS."""
-    if not behavioral:
-        return {}
-    out = {}
-    for cat, items in behavioral.items():
-        if isinstance(items, list):
-            out[cat] = [i for i in items if isinstance(i, dict) and (i.get('pct') is not None and i.get('pct', 0) >= MIN_PCT_FOR_INSIGHTS)]
-        else:
-            out[cat] = items
-    return out
-
-def _filter_top_items_for_insights(items, pct_key='pct'):
-    """Filter list of dicts to only those with pct >= MIN_PCT_FOR_INSIGHTS."""
-    if not items or not isinstance(items, list):
-        return items or []
-    return [i for i in items if isinstance(i, dict) and (i.get(pct_key) is not None and i.get(pct_key, 0) >= MIN_PCT_FOR_INSIGHTS)]
-
 def generate_ai_insights(profile_data):
-    """Generate AI-powered insights from profile data. Only uses values >= 10% of sample."""
+    """Generate AI-powered insights from profile data."""
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        # Prepare data summary for GPT - only use values >= 10% of sample
-        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
-        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
+        # Prepare data summary for GPT
+        demographics = profile_data.get('demographics', {})
+        behavioral = profile_data.get('behavioral', {})
         sample_size = profile_data.get('sampleSize', 0)
         profile_name = profile_data.get('name', 'This audience')
         
         # Build context
         demo_summary = []
         for cat, values in demographics.items():
-            if isinstance(values, dict) and values:
+            if isinstance(values, dict):
                 top_items = sorted(values.items(), key=lambda x: x[1], reverse=True)[:3]
                 demo_summary.append(f"{cat}: {', '.join([f'{k} ({v:.1f}%)' for k, v in top_items])}")
         
@@ -436,16 +386,14 @@ def generate_ai_insights(profile_data):
         
         prompt = f"""Analyze this audience profile and provide 5 key insights in bullet points. Be specific and actionable.
 
-CRITICAL: Only use or cite data points that represent at least 10% of the sample. Do not mention or base insights on smaller segments.
-
 Profile: {profile_name}
 Sample Size: {sample_size:,}
 
-Demographics (only segments >= 10%):
-{chr(10).join(demo_summary[:8]) if demo_summary else 'None meeting threshold'}
+Demographics:
+{chr(10).join(demo_summary[:8])}
 
-Top Behaviors (only >= 10%):
-{chr(10).join(behavior_summary[:10]) if behavior_summary else 'None meeting threshold'}
+Top Behaviors:
+{chr(10).join(behavior_summary[:10])}
 
 Provide insights about:
 1. Who this audience is (demographics)
@@ -454,7 +402,7 @@ Provide insights about:
 4. Potential marketing opportunities
 5. Key differentiators
 
-Keep each insight to 1-2 sentences. Be specific with numbers. Only cite percentages that are 10% or higher."""
+Keep each insight to 1-2 sentences. Be specific with numbers."""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -474,17 +422,17 @@ Keep each insight to 1-2 sentences. Be specific with numbers. Only cite percenta
         return {"error": str(e)}
 
 def generate_persona(profile_data):
-    """Generate an AI persona from profile data. Only uses values >= 10% of sample."""
+    """Generate an AI persona from profile data."""
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
-        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
+        demographics = profile_data.get('demographics', {})
+        behavioral = profile_data.get('behavioral', {})
         profile_name = profile_data.get('name', 'Audience')
         
-        # Get top demographics (all already >= 10%)
+        # Get top demographics
         gender = demographics.get('gender', {})
         age = demographics.get('age', {})
         income = demographics.get('income', {})
@@ -549,28 +497,28 @@ Format as JSON with keys: name, bio, routine, media, shopping, painPoints, chann
         return {"error": str(e)}
 
 def generate_marketing_strategy(profile_data):
-    """Generate AI marketing recommendations. Only uses values >= 10% of sample."""
+    """Generate AI marketing recommendations."""
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
-        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
+        demographics = profile_data.get('demographics', {})
+        behavioral = profile_data.get('behavioral', {})
         profile_name = profile_data.get('name', 'Audience')
         
-        # Compile behavioral insights (already filtered to >= 10%)
+        # Compile behavioral insights
         behavior_list = []
         for cat, items in behavioral.items():
             if isinstance(items, list):
                 for item in items[:3]:
                     behavior_list.append(f"{item.get('name', '')} ({item.get('pct', 0):.1f}%)")
         
-        prompt = f"""Create a comprehensive marketing strategy for reaching this audience. Only use data points that represent at least 10% of the sample.
+        prompt = f"""Create a comprehensive marketing strategy for reaching this audience.
 
 Profile: {profile_name}
-Demographics (only >= 10%): {json.dumps(demographics, default=str)[:500]}
-Key Behaviors (only >= 10%): {', '.join(behavior_list[:15])}
+Demographics: {json.dumps(demographics, default=str)[:500]}
+Key Behaviors: {', '.join(behavior_list[:15])}
 
 Provide:
 1. **Channel Strategy** - Which platforms/channels to prioritize and why
@@ -600,28 +548,27 @@ Be specific and actionable. Reference the actual data provided."""
         return {"error": str(e)}
 
 def chat_with_data(profile_data, user_question):
-    """Answer questions about the profile data. Only cite values >= 10% of sample."""
+    """Answer questions about the profile data."""
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
-        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
+        demographics = profile_data.get('demographics', {})
+        behavioral = profile_data.get('behavioral', {})
         locations = profile_data.get('locations', [])
         sample_size = profile_data.get('sampleSize', 0)
         profile_name = profile_data.get('name', 'This audience')
         
-        # Build comprehensive data context (only >= 10% data)
+        # Build comprehensive data context
         data_context = f"""
 Profile: {profile_name}
 Sample Size: {sample_size:,}
-Only use or cite data that represents at least 10% of the sample. Do not mention smaller segments.
 
-DEMOGRAPHICS (only segments >= 10%):
+DEMOGRAPHICS:
 {json.dumps(demographics, indent=2, default=str)[:1500]}
 
-TOP BEHAVIORS BY CATEGORY (only >= 10%):
+TOP BEHAVIORS BY CATEGORY:
 {json.dumps({k: v[:5] if isinstance(v, list) else v for k, v in list(behavioral.items())[:10]}, indent=2, default=str)[:2000]}
 
 TOP LOCATIONS:
@@ -646,14 +593,14 @@ TOP LOCATIONS:
         return {"error": str(e)}
 
 def answer_business_question(profile_data, question, conversation_history=None):
-    """Answer a business question using profile data with follow-up suggestions. Only cite values >= 10% of sample."""
+    """Answer a business question using profile data with follow-up suggestions."""
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
-        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
+        demographics = profile_data.get('demographics', {})
+        behavioral = profile_data.get('behavioral', {})
         locations = profile_data.get('locations', [])
         sample_size = profile_data.get('sampleSize', 0)
         profile_name = profile_data.get('name', 'This audience')
@@ -673,9 +620,8 @@ def answer_business_question(profile_data, question, conversation_history=None):
         data_context = f"""
 AUDIENCE PROFILE: {profile_name}
 Sample Size: {sample_size:,}
-Only cite or use data that represents at least 10% of the sample. Do not mention smaller segments.
 
-DEMOGRAPHICS (only >= 10%):
+DEMOGRAPHICS:
 {json.dumps(demographics, indent=2, default=str)[:1500]}
 
 KEY BEHAVIORS:
@@ -730,36 +676,36 @@ Be conversational and helpful."""}
         return {"error": str(e)}
 
 def generate_business_deck(profile_data, business_question, key_findings=None):
-    """Generate a presentation deck outline for a business question. Only uses values >= 10% of sample."""
+    """Generate a presentation deck outline for a business question."""
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
-        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
+        demographics = profile_data.get('demographics', {})
+        behavioral = profile_data.get('behavioral', {})
         sample_size = profile_data.get('sampleSize', 0)
         profile_name = profile_data.get('name', 'Audience')
         
-        # Build data summary (already filtered to >= 10%)
+        # Build data summary
         behavior_summary = []
         for cat, items in behavioral.items():
             if isinstance(items, list) and items:
                 behavior_summary.append(f"{cat}: {', '.join([i.get('name', '') for i in items[:3]])}")
         
-        prompt = f"""Create a professional presentation deck outline to answer this business question. Only use data points that represent at least 10% of the sample.
+        prompt = f"""Create a professional presentation deck outline to answer this business question:
 
 BUSINESS QUESTION: {business_question}
 
 AUDIENCE: {profile_name}
 Sample Size: {sample_size:,}
 
-KEY DEMOGRAPHICS (only >= 10%):
+KEY DEMOGRAPHICS:
 - Gender: {json.dumps(demographics.get('gender', {}), default=str)}
 - Age: {json.dumps(demographics.get('age', {}), default=str)}
 - Income: {json.dumps(demographics.get('income', {}), default=str)}
 
-TOP BEHAVIORS (only >= 10%):
+TOP BEHAVIORS:
 {chr(10).join(behavior_summary[:10])}
 
 {f'PREVIOUS FINDINGS: {key_findings}' if key_findings else ''}
@@ -815,7 +761,7 @@ Format as JSON with structure:
         return {"error": str(e)}
 
 def compare_profiles_ai(profiles_data):
-    """AI comparison of multiple profiles. Only uses values >= 10% of sample."""
+    """AI comparison of multiple profiles."""
     client = get_openai_client()
     if not client:
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
@@ -824,8 +770,8 @@ def compare_profiles_ai(profiles_data):
         profiles_summary = []
         for profile in profiles_data:
             name = profile.get('name', 'Unknown')
-            demo = _filter_demographics_for_insights(profile.get('demographics', {}))
-            behaviors = _filter_behavioral_for_insights(profile.get('behavioral', {}))
+            demo = profile.get('demographics', {})
+            behaviors = profile.get('behavioral', {})
             
             # Get key stats
             top_behaviors = []
@@ -846,12 +792,10 @@ def compare_profiles_ai(profiles_data):
 3. Overlap opportunities (where they might be reached together)
 4. Distinct positioning for each
 
-Only cite or use data points that represent at least 10% of the sample for each profile. Do not mention smaller segments.
-
 Profiles:
 {''.join(profiles_summary)}
 
-Be specific with numbers and percentages. Only cite percentages that are 10% or higher."""
+Be specific with numbers and percentages."""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -1143,19 +1087,6 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 def normalize_brand_for_search(brand):
     """Normalize brand name for consistent matching."""
     return brand.lower().strip().replace(' ', '_').replace('.', '')
-
-def remove_timestamp_from_name(name):
-    """Remove trailing timestamp pattern _MM_DD_YYYY_HH_MM from filename (e.g. brand_01_02_2024_12_30 -> brand)."""
-    if not name:
-        return name
-    # Match trailing _DD_MM_YYYY_HH_MM or _MM_DD_YYYY_HH_MM
-    return re.sub(r'_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$', '', name)
-
-def smart_title_case(s):
-    """Title-case a string (e.g. 'some name' -> 'Some Name')."""
-    if not s or not isinstance(s, str):
-        return s or ''
-    return s.title()
 
 def parse_metadata_from_csv(csv_content):
     """Extract metadata from the INPUT_METADATA row of a CSV."""
@@ -2514,17 +2445,23 @@ def track_user_activity():
         return jsonify({'success': False, 'error': str(e)})
 
 # ============================================================================
-# ADMIN CONTENT MANAGEMENT + JOBS (profile list for dashboard)
+# ADMIN CONTENT MANAGEMENT
 # ============================================================================
 
-def _fetch_content_files(include_svod=True):
-    """Fetch active and archived file lists from S3. Returns (active_files, archived_files) or (None, None) on error.
-    When include_svod=False, only returns files from dashboard-inputs (Profile IQ). SVOD files are for Subscriber IQ only."""
+@app.route('/api/admin/content', methods=['GET'])
+@requires_admin
+def get_admin_content():
+    """Get all content files grouped by category, including archived."""
+    print("📂 Admin content request received")
+    
+    # Check AWS credentials
     aws_key = os.environ.get('AWS_ACCESS_KEY_ID')
     aws_secret = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    
     if not aws_key or not aws_secret:
         print("❌ AWS credentials not configured")
-        return None, None
+        return jsonify({'success': False, 'error': 'AWS credentials not configured'})
+    
     try:
         s3 = boto3.client('s3',
                           aws_access_key_id=aws_key,
@@ -2582,45 +2519,54 @@ def _fetch_content_files(include_svod=True):
         
         print(f"✅ Found {len(active_files)} active files")
         
-        # Get SVOD Acquisition files from subscriber bucket only when requested (e.g. admin content).
-        # Profile IQ dashboard must NOT include SVOD; those appear in Subscriber IQ only.
-        if include_svod:
-            svod_files = []
-            try:
-                svod_metadata = load_svod_metadata()
-                svod_paginator = s3.get_paginator('list_objects_v2')
-                for page in svod_paginator.paginate(Bucket=SUBSCRIBER_S3_BUCKET, Prefix=''):
-                    for obj in page.get('Contents', []):
-                        key = obj['Key']
-                        if key.startswith('historic/') or not key.endswith('.csv'):
-                            continue
-                        filename = key.split('/')[-1]
-                        name_without_ext = key.replace('.csv', '')
-                        match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
-                        if match:
-                            show_name = match.group(1).replace('_', ' ')
-                        else:
-                            show_name = name_without_ext.replace('_', ' ')
-                        last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
-                        category = 'SVOD Acquisition'
-                        if key in svod_metadata and svod_metadata[key].get('category'):
-                            category = svod_metadata[key]['category']
-                        svod_files.append({
-                            'key': f'svod-acquisition/{key}',
-                            'filename': filename,
-                            'project_name': show_name,
-                            'category': category,
-                            'size': obj.get('Size', 0),
-                            'last_modified': last_modified,
-                            'created_at': last_modified,
-                            'bucket': SUBSCRIBER_S3_BUCKET,
-                            's3_key': key,
-                            'is_svod': True
-                        })
-                print(f"✅ Found {len(svod_files)} SVOD Acquisition files")
-                active_files.extend(svod_files)
-            except Exception as svod_err:
-                print(f"⚠️ Error loading SVOD files: {svod_err}")
+        # Get SVOD Acquisition files from subscriber bucket
+        svod_files = []
+        try:
+            # Load SVOD metadata for categories
+            svod_metadata = load_svod_metadata()
+            
+            svod_paginator = s3.get_paginator('list_objects_v2')
+            for page in svod_paginator.paginate(Bucket=SUBSCRIBER_S3_BUCKET, Prefix=''):
+                for obj in page.get('Contents', []):
+                    key = obj['Key']
+                    # Skip historic folder and non-CSV files
+                    if key.startswith('historic/') or not key.endswith('.csv'):
+                        continue
+                    
+                    filename = key.split('/')[-1]
+                    # Extract show name from filename
+                    name_without_ext = key.replace('.csv', '')
+                    match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+                    if match:
+                        show_name = match.group(1).replace('_', ' ')
+                    else:
+                        show_name = name_without_ext.replace('_', ' ')
+                    
+                    last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
+                    
+                    # Get category from metadata, default to 'SVOD Acquisition'
+                    # SVOD files can have subcategories (TALENT, CONTENT, etc.) but they're always under SVOD ACQUISITION master
+                    category = 'SVOD Acquisition'
+                    if key in svod_metadata and svod_metadata[key].get('category'):
+                        category = svod_metadata[key]['category']
+                    
+                    svod_files.append({
+                        'key': f'svod-acquisition/{key}',  # Prefix to identify bucket
+                        'filename': filename,
+                        'project_name': show_name,
+                        'category': category,
+                        'size': obj.get('Size', 0),
+                        'last_modified': last_modified,
+                        'created_at': last_modified,
+                        'bucket': SUBSCRIBER_S3_BUCKET,
+                        's3_key': key,  # Original key in svod bucket
+                        'is_svod': True  # Flag to identify SVOD files
+                    })
+            
+            print(f"✅ Found {len(svod_files)} SVOD Acquisition files")
+            active_files.extend(svod_files)
+        except Exception as svod_err:
+            print(f"⚠️ Error loading SVOD files: {svod_err}")
         
         # Load profile image cache to check for custom images
         if not profile_image_cache:
@@ -2659,149 +2605,18 @@ def _fetch_content_files(include_svod=True):
                 })
         
         print(f"✅ Found {len(archived_files)} archived files")
-        return (active_files, archived_files)
-    except Exception as e:
-        import traceback
-        print(f"❌ Error getting content files: {e}")
-        traceback.print_exc()
-        return None, None
-
-@app.route('/api/admin/content', methods=['GET'])
-@requires_admin
-def get_admin_content():
-    """Get all content files grouped by category, including archived."""
-    print("📂 Admin content request received")
-    active_files, archived_files = _fetch_content_files()
-    if active_files is None:
-        return jsonify({'success': False, 'error': 'AWS credentials not configured or S3 error'})
-    return jsonify({'success': True, 'files': active_files, 'archived': archived_files})
-
-@app.route('/api/jobs')
-@requires_auth
-def list_jobs():
-    """List all jobs (local + S3) - always scans S3 directly for reliability."""
-    import time
-    
-    job_list = []
-    categories = set()
-    
-    # Update user's last activity time (but don't block on it)
-    username = session.get('username')
-    if username:
-        try:
-            users = load_users()
-            if username in users:
-                users[username]['last_activity'] = time.time()
-                save_users(users)
-        except:
-            pass  # Don't block on activity tracking
-    
-    # Add local jobs (always fresh)
-    for job_id, job in jobs.items():
-        job_list.append({
-            'job_id': job_id,
-            'project_name': job['project_name'],
-            'status': job['status'],
-            'progress': job['progress'],
-            'created_at': job['created_at'],
-            'source': 'local',
-            'category': 'LOCAL'
+        
+        return jsonify({
+            'success': True,
+            'files': active_files,
+            'archived': archived_files
         })
-        categories.add('LOCAL')
-    
-    # Always scan S3 directly for profiles (fast list operation)
-    try:
-        s3 = boto3.client('s3',
-                          aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-                          aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-                          region_name=S3_REGION)
-        
-        bucket_name = 'dashboard-inputs'
-        
-        # Build a map of existing cached jobs by key for category lookup
-        cached_jobs_by_key = {}
-        for j in s3_cache.get('jobs', []):
-            cached_jobs_by_key[j.get('key') or j.get('s3_key', '')] = j
-        
-        s3_jobs = []
-        paginator = s3.get_paginator('list_objects_v2')
-        for page in paginator.paginate(Bucket=bucket_name, Prefix=''):
-            for obj in page.get('Contents', []):
-                key = obj['Key']
-                # Skip historic folder, system folder, and non-CSV files
-                if key.startswith('historic/') or key.startswith('system/') or not key.endswith('.csv'):
-                    continue
-                
-                filename = key.split('/')[-1]
-                last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
-                
-                # Use cached category if available, otherwise mark as needs-category
-                cached_job = cached_jobs_by_key.get(key)
-                if cached_job and cached_job.get('category') and cached_job.get('category') not in ('', 'Uncategorized', 'OTHER'):
-                    category = cached_job.get('category')
-                else:
-                    # Read category from file (first 4KB)
-                    try:
-                        response = s3.get_object(Bucket=bucket_name, Key=key, Range='bytes=0-4096')
-                        content = response['Body'].read().decode('utf-8', errors='ignore')
-                        category = extract_category_from_csv(content) or 'Uncategorized'
-                    except:
-                        category = 'Uncategorized'
-                
-                # Generate display name
-                name_without_ext = filename.replace('.csv', '')
-                name_without_timestamp = remove_timestamp_from_name(name_without_ext)
-                project_name = smart_title_case(name_without_timestamp.replace('_', ' '))
-                
-                s3_jobs.append({
-                    'key': key,
-                    's3_key': key,
-                    'filename': filename,
-                    'project_name': project_name,
-                    'category': category,
-                    'size': obj.get('Size', 0),
-                    'last_modified': last_modified,
-                    'created_at': last_modified,
-                    'status': 'cached',
-                    'source': 's3'
-                })
-                categories.add(category)
-        
-        # Update cache
-        s3_cache['jobs'] = s3_jobs
-        s3_cache['categories'] = sorted(list(categories))
-        s3_cache['file_count'] = len(s3_jobs)
-        s3_cache['last_updated'] = datetime.now().timestamp()
-        
-        job_list.extend(s3_jobs)
         
     except Exception as e:
-        print(f"⚠️ Error scanning S3: {e}")
         import traceback
+        print(f"❌ Error getting admin content: {e}")
         traceback.print_exc()
-        # Fall back to cached jobs if S3 scan fails
-        job_list.extend(s3_cache.get('jobs', []))
-        for cat in s3_cache.get('categories', []):
-            categories.add(cat)
-    
-    # Sort by created_at descending
-    sorted_jobs = sorted(job_list, key=lambda x: x.get('created_at', ''), reverse=True)
-    
-    return jsonify({
-        'jobs': sorted_jobs,
-        'categories': sorted(list(categories)),
-        'cache_info': {
-            'last_updated': s3_cache.get('last_updated'),
-            'file_count': s3_cache.get('file_count', 0),
-            'fresh_scan': True
-        }
-    })
-
-@app.route('/api/cached_files', methods=['GET'])
-@requires_admin
-def get_cached_files():
-    """Return same file list as admin content (for admin categories/runs)."""
-    return get_admin_content()
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/admin/content/archive', methods=['POST'])
 @requires_admin
@@ -2906,7 +2721,7 @@ def restore_content():
                 print(f"Failed to restore {key}: {e}")
         
         # Refresh cache to pick up restored files
-        load_persisted_cache()
+        smart_cache_update()
         
         return jsonify({
             'success': True,
@@ -3730,15 +3545,17 @@ def generate_behavioral_summary(profile_data):
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        # Extract demographic and behavioral data - only use values >= 10% of sample
-        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
+        # Extract demographic data
+        demographics = profile_data.get('demographics', {})
         demographics_index = profile_data.get('demographicsIndex', {})
         demographics_gen_pop = profile_data.get('demographicsGenPop', {})
         
-        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
+        # Extract behavioral data
+        behavioral = profile_data.get('behavioral', {})
         behavioral_index = profile_data.get('behavioralIndex', {})
         
-        top_over_indexers = _filter_top_items_for_insights(profile_data.get('topOverIndexers', []), pct_key='pct')
+        # Extract top over-indexers
+        top_over_indexers = profile_data.get('topOverIndexers', [])
         
         # Get profile name
         profile_name = profile_data.get('profileName', 'This audience')
@@ -3783,18 +3600,18 @@ def generate_behavioral_summary(profile_data):
                 for item in top_5
             ])
         
-        prompt = f"""You are an expert consumer behavior analyst. Based on the following audience data, write 4-6 concise bullet points that describe WHO these panelists are BEHAVIORALLY - their lifestyle, interests, habits, and what makes them unique. Only use data that represents at least 10% of the sample; all data below is already filtered to >= 10%.
+        prompt = f"""You are an expert consumer behavior analyst. Based on the following audience data, write 4-6 concise bullet points that describe WHO these panelists are BEHAVIORALLY - their lifestyle, interests, habits, and what makes them unique.
 
 PROFILE: {profile_name}
 
-DEMOGRAPHIC PROFILE (only >= 10%):
-{chr(10).join(demo_summary[:6]) if demo_summary else 'None meeting threshold'}
+DEMOGRAPHIC PROFILE:
+{chr(10).join(demo_summary[:6])}
 
-BEHAVIORAL DATA (only >= 10%):
-{chr(10).join(behavior_summary[:12]) if behavior_summary else 'None meeting threshold'}
+BEHAVIORAL DATA (what they engage with):
+{chr(10).join(behavior_summary[:12])}
 
-TOP OVER-INDEXING BEHAVIORS (only >= 10%):
-{top_indexers_str if top_indexers_str else 'None meeting threshold'}
+TOP OVER-INDEXING BEHAVIORS (where they most differ from general population):
+{top_indexers_str}
 
 INSTRUCTIONS:
 - Write 4-6 bullet points describing this audience's behavioral profile
@@ -3958,18 +3775,6 @@ NETFLIX_RANKER_CACHE_MAX_AGE_HOURS = 24  # refresh today's data if cache older t
 NETFLIX_RANKER_S3_PREFIX = 'rankers_cache/netflix/'
 NETFLIX_RANKER_S3_INDEX_KEY = 'rankers_cache/netflix/index.json'
 NETFLIX_RANKER_BACKFILL_RUNNING = False
-
-# ReelShort / ShortsTV / GoodShort rankers: cache by date (first request of the day runs query; that day's data cached forever for all users)
-REELSHORT_RANKER_CACHE = {}  # date_str -> payload
-REELSHORT_RANKER_LOCK = threading.Lock()
-REELSHORT_RANKER_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'reelshort_ranker_cache.json')
-SHORTSTV_RANKER_CACHE = {}
-SHORTSTV_RANKER_LOCK = threading.Lock()
-SHORTSTV_RANKER_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'shortstv_ranker_cache.json')
-GOODSHORT_RANKER_CACHE = {}
-GOODSHORT_RANKER_LOCK = threading.Lock()
-GOODSHORT_RANKER_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'goodshort_ranker_cache.json')
-CLICKSTREAM_RANKER_WAREHOUSE = os.environ.get('SNOWFLAKE_WAREHOUSE', 'BEHAVIORGRAPH6X')  # 6XL for speed
 
 
 def _run_netflix_ranker_backfill(start_d, end_d):
@@ -4743,252 +4548,11 @@ def get_netflix_show_details():
         return jsonify({'error': str(e)}), 500
 
 
-# Netflix Live Top 10 - reads from S3 bucket netflix-liveish
-NETFLIX_LIVE_TOP10_BUCKET = 'netflix-liveish'
-NETFLIX_LIVE_TOP10_CACHE = {}
-NETFLIX_LIVE_TOP10_LOCK = threading.Lock()
-
-@app.route('/api/rankers/netflix/live-top10', methods=['GET'])
-def get_netflix_live_top10():
-    """
-    Get Netflix Live Top 10 data from S3 bucket netflix-liveish.
-    Returns ranked list of Netflix URLs with view counts and projected views.
-    """
-    try:
-        import boto3
-        from collections import Counter
-        
-        # Check cache (refresh every 5 minutes)
-        cache_key = 'data'
-        with NETFLIX_LIVE_TOP10_LOCK:
-            cached = NETFLIX_LIVE_TOP10_CACHE.get(cache_key)
-            cache_time = NETFLIX_LIVE_TOP10_CACHE.get('loaded_at', 0)
-            if cached and (datetime.now().timestamp() - cache_time) < 300:
-                return jsonify(cached)
-        
-        # Fetch from S3
-        s3 = boto3.client('s3',
-                          aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-                          aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-                          region_name=S3_REGION)
-        
-        # Get the CSV file
-        response = s3.get_object(Bucket=NETFLIX_LIVE_TOP10_BUCKET, Key='data_netflix.csv')
-        csv_content = response['Body'].read().decode('utf-8')
-        
-        # Parse CSV and count URLs, track show names
-        import csv
-        from io import StringIO
-        reader = csv.DictReader(StringIO(csv_content))
-        url_counts = Counter()
-        url_to_show_name = {}  # Map URL to NAME_OF_SHOW
-        total_rows = 0
-        delivered_date = None
-        
-        for row in reader:
-            total_rows += 1
-            url = row.get('url', '').strip()
-            if url:
-                url_counts[url] += 1
-                # Store the show name for this URL (first one wins)
-                if url not in url_to_show_name:
-                    show_name = row.get('NAME_OF_SHOW', '') or row.get('name_of_show', '') or row.get('Show', '') or row.get('show', '')
-                    if show_name:
-                        url_to_show_name[url] = show_name.strip()
-            if not delivered_date and row.get('delivered'):
-                delivered_date = row.get('delivered')
-        
-        # Build ranked list
-        ranked = []
-        for rank, (url, count) in enumerate(url_counts.most_common(10), 1):
-            # Extract title ID from URL
-            title_id = ''
-            import re
-            match = re.search(r'/watch/(\d+)', url)
-            if match:
-                title_id = match.group(1)
-            
-            # Get show name for this URL
-            show_name = url_to_show_name.get(url, '')
-            
-            # Project views: count / 10M * 329.9M US pop (no 150x boost for live data)
-            projected_views = int(count / 10_000_000 * 329_900_000) if count else 0
-            
-            ranked.append({
-                'rank': rank,
-                'url': url,
-                'title_id': title_id,
-                'show_name': show_name,
-                'raw_count': count,
-                'projected_views': projected_views,
-                'pct_of_total': round(count / total_rows * 100, 2) if total_rows else 0
-            })
-        
-        payload = {
-            'top10': ranked,
-            'total_rows': total_rows,
-            'delivered_date': delivered_date,
-            'last_updated': datetime.now().isoformat()
-        }
-        
-        # Cache result
-        with NETFLIX_LIVE_TOP10_LOCK:
-            NETFLIX_LIVE_TOP10_CACHE['data'] = payload
-            NETFLIX_LIVE_TOP10_CACHE['loaded_at'] = datetime.now().timestamp()
-        
-        return jsonify(payload)
-        
-    except Exception as e:
-        print(f"[Netflix Live Top 10] Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-
-
-def _load_reelshort_ranker_cache():
-    """Load ReelShort cache from file (by-date). Merges into REELSHORT_RANKER_CACHE."""
-    global REELSHORT_RANKER_CACHE
-    if not os.path.exists(REELSHORT_RANKER_CACHE_FILE):
-        return
-    try:
-        with open(REELSHORT_RANKER_CACHE_FILE, 'r') as f:
-            data = json.load(f)
-        if isinstance(data, dict):
-            REELSHORT_RANKER_CACHE.update(data)
-    except Exception as e:
-        print(f"[ReelShort Ranker] Cache load failed: {e}")
-
-
-def _save_reelshort_ranker_cache(date_str, payload):
-    """Save one day's payload to file and memory."""
-    global REELSHORT_RANKER_CACHE
-    REELSHORT_RANKER_CACHE[date_str] = payload
-    try:
-        existing = {}
-        if os.path.exists(REELSHORT_RANKER_CACHE_FILE):
-            with open(REELSHORT_RANKER_CACHE_FILE, 'r') as f:
-                existing = json.load(f)
-        if not isinstance(existing, dict):
-            existing = {}
-        existing[date_str] = payload
-        with open(REELSHORT_RANKER_CACHE_FILE, 'w') as f:
-            json.dump(existing, f, indent=0)
-    except Exception as e:
-        print(f"[ReelShort Ranker] Cache save failed: {e}")
-
-
-def _fetch_clickstream_ranker_payload(common_name_substring, today_str):
-    """Run clickstream ranker query for COMMON_NAME containing common_name_substring (case insensitive). Returns payload dict."""
-    import bg
-    conn = bg.connect_snowflake()
-    cur = conn.cursor()
-    cur.execute(f"USE WAREHOUSE {CLICKSTREAM_RANKER_WAREHOUSE}")
-    pattern = f"%{common_name_substring}%"
-    
-    # First try today's data
-    sql = """
-        SELECT
-            COUNT(*) AS total,
-            COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%%con%%' OR LOWER(COALESCE(URL, '')) LIKE '%%paid%%' OR LOWER(COALESCE(URL, '')) LIKE '%%thank%%' THEN 1 END) AS new_subs,
-            COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%%stop%%' OR LOWER(COALESCE(URL, '')) LIKE '%%cancel%%' THEN 1 END) AS cancels,
-            COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%%dashboard%%' THEN 1 END) AS paid_content
-        FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-        WHERE DELIVERED = CURRENT_DATE()
-          AND LOWER(COALESCE(COMMON_NAME, '')) LIKE %s
-    """
-    cur.execute(sql, (pattern,))
-    row = cur.fetchone()
-    total = row[0] or 0
-    
-    # If no data for today, try the most recent date with data
-    actual_date = today_str
-    if total == 0:
-        print(f"[Clickstream Ranker] No data for today, checking recent dates for {common_name_substring}")
-        sql_recent = """
-            SELECT MAX(DELIVERED) 
-            FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-            WHERE DELIVERED >= DATEADD(day, -7, CURRENT_DATE())
-              AND LOWER(COALESCE(COMMON_NAME, '')) LIKE %s
-        """
-        cur.execute(sql_recent, (pattern,))
-        recent_row = cur.fetchone()
-        if recent_row and recent_row[0]:
-            recent_date = recent_row[0]
-            actual_date = recent_date.strftime('%Y-%m-%d') if hasattr(recent_date, 'strftime') else str(recent_date)[:10]
-            print(f"[Clickstream Ranker] Using recent date: {actual_date}")
-            sql_fallback = """
-                SELECT
-                    COUNT(*) AS total,
-                    COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%%con%%' OR LOWER(COALESCE(URL, '')) LIKE '%%paid%%' OR LOWER(COALESCE(URL, '')) LIKE '%%thank%%' THEN 1 END) AS new_subs,
-                    COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%%stop%%' OR LOWER(COALESCE(URL, '')) LIKE '%%cancel%%' THEN 1 END) AS cancels,
-                    COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%%dashboard%%' THEN 1 END) AS paid_content
-                FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
-                WHERE DELIVERED = %s
-                  AND LOWER(COALESCE(COMMON_NAME, '')) LIKE %s
-            """
-            cur.execute(sql_fallback, (recent_date, pattern))
-            row = cur.fetchone()
-            total = row[0] or 0
-    
-    conn.close()
-    new_subs = row[1] or 0
-    cancels = row[2] or 0
-    paid_content = row[3] or 0
-    active_accounts = (total * 150) / 10_000_000 * 329_900_000 if total else 0
-    new_subscriptions_pct = (new_subs / total * 100) if total else 0
-    total_cancels_pct = (cancels / total * 100) if total else 0
-    watched_paid_pct = (paid_content / total * 100) if total else 0
-    display_paid_pct = watched_paid_pct if watched_paid_pct > 0 else new_subscriptions_pct
-    watched_free_pct = 100.0 - display_paid_pct
-    return {
-        'date': actual_date,
-        'total_rows': total,
-        'active_accounts': round(active_accounts, 2),
-        'new_subscriptions_pct': round(new_subscriptions_pct, 2),
-        'total_cancels_pct': round(total_cancels_pct, 2),
-        'watched_paid_content_pct': round(display_paid_pct, 2),
-        'watched_free_content_pct': round(watched_free_pct, 2),
-    }
-
-
-@app.route('/api/rankers/reelshort/data', methods=['GET'])
-def get_reelshort_ranker_data():
-    """
-    ReelShort ranker: query PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL for today's rows
-    where COMMON_NAME contains 'reelshort' (case insensitive). Uses 6XL warehouse. First request
-    of the day runs the query and caches that day's data forever for all other users.
-    """
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    with REELSHORT_RANKER_LOCK:
-        cached = REELSHORT_RANKER_CACHE.get(today_str)
-        if cached is None and os.path.exists(REELSHORT_RANKER_CACHE_FILE):
-            try:
-                with open(REELSHORT_RANKER_CACHE_FILE, 'r') as f:
-                    by_date = json.load(f)
-                cached = by_date.get(today_str) if isinstance(by_date, dict) else None
-                if cached is not None:
-                    REELSHORT_RANKER_CACHE[today_str] = cached
-            except Exception:
-                pass
-        if cached is not None:
-            return jsonify(cached)
-
-    try:
-        payload = _fetch_clickstream_ranker_payload('reelshort', today_str)
-        with REELSHORT_RANKER_LOCK:
-            _save_reelshort_ranker_cache(today_str, payload)
-        return jsonify(payload)
-    except Exception as e:
-        print(f"[ReelShort Ranker] Error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
 # Eager-load ranker caches from disk at startup so first request in each worker is fast
 def _preload_ranker_caches():
     try:
         if os.path.exists(NETFLIX_RANKER_CACHE_FILE):
             _load_netflix_ranker_cache()
-        _load_reelshort_ranker_cache()
     except Exception:
         pass
 
@@ -7232,24 +6796,16 @@ def analyze_ecosystem_with_ai():
             col = str(record.get('Column', '')).upper()
             val = record.get('Value', '')
             idx = record.get('Index', 0)
-            # Only include values >= 10% of sample for AI insights
-            pct_val = float(val) if isinstance(val, (int, float)) else 0
             
             if 'BEHAVIORAL' in col or 'INTEREST' in col:
-                if isinstance(val, (int, float)) and val >= MIN_PCT_FOR_INSIGHTS:
+                if isinstance(val, (int, float)) and val > 0:
                     behavioral_data.append({
                         'item': str(record.get('Column', '')),
                         'index': float(idx) if idx else 0,
-                        'category': str(record.get('Category', 'Other')),
-                        'value': pct_val
+                        'category': str(record.get('Category', 'Other'))
                     })
             elif 'DEMOGRAPHIC' in col or 'AGE' in col or 'GENDER' in col or 'INCOME' in col:
-                # Demographics: if value is numeric (pct), only include if >= 10%
-                if isinstance(val, (int, float)):
-                    if val >= MIN_PCT_FOR_INSIGHTS:
-                        demographic_data[col] = val
-                else:
-                    demographic_data[col] = val
+                demographic_data[col] = val
         
         # Sort by index and get top items
         behavioral_data.sort(key=lambda x: x.get('index', 0), reverse=True)
@@ -7287,14 +6843,13 @@ def analyze_ecosystem_with_ai():
    - Examples: productivity breaks, micro-celebrations, stress-relief rituals, solo rewards
    - Not "new flavors" — new moments.
 
-BEHAVIORAL DATA (Top 100 items by index; only segments >= 10% of sample):
+BEHAVIORAL DATA (Top 100 items by index):
 {json.dumps(top_items[:100], indent=2)}
 
-DEMOGRAPHIC DATA (only >= 10%):
+DEMOGRAPHIC DATA:
 {json.dumps(demographic_data, indent=2)}
 
 CRITICAL REQUIREMENTS:
-- Only use or cite data that represents at least 10% of the sample. All data above is already filtered to >= 10%.
 - You MUST reference specific data points from the behavioral data provided (brand names, item names, index values, percentages)
 - Include actual numbers, indices, or percentages when making claims
 - Cite specific items from the data to support every insight
@@ -7393,38 +6948,38 @@ def analyze_executive_summary_with_ai():
                 'fallback': True
             }), 503
         
-        # Prepare structured data for AI - only include values >= 10% of sample
+        # Prepare structured data for AI
         summary_data = {
             'primaryProfile': {
                 'name': primary_profile.get('name', 'Unknown'),
                 'sampleSize': primary_profile.get('sampleSize', 0),
                 'projectedUS': primary_profile.get('projectedUS', 0),
                 'medianAge': primary_profile.get('medianAge', 'N/A'),
-                'demographics': _filter_demographics_for_insights(primary_profile.get('demographics', {})),
+                'demographics': primary_profile.get('demographics', {}),
                 'demographicsProjection': primary_profile.get('demographicsProjection', {}),
-                'topCategories': _filter_top_items_for_insights(primary_profile.get('topCategories', [])),
-                'topInterests': _filter_top_items_for_insights(primary_profile.get('topInterests', []))
+                'topCategories': primary_profile.get('topCategories', []),
+                'topInterests': primary_profile.get('topInterests', [])
             },
             'competitors': [
                 {
                     'name': comp.get('name', 'Unknown'),
-                    'demographics': _filter_demographics_for_insights(comp.get('demographics', {})),
+                    'demographics': comp.get('demographics', {}),
                     'demographicsProjection': comp.get('demographicsProjection', {}),
-                    'topCategories': _filter_top_items_for_insights(comp.get('topCategories', [])),
-                    'topInterests': _filter_top_items_for_insights(comp.get('topInterests', []))
+                    'topCategories': comp.get('topCategories', []),
+                    'topInterests': comp.get('topInterests', [])
                 }
                 for comp in competitors
             ],
             'genPop': {
-                'demographics': _filter_demographics_for_insights(gen_pop_profile.get('demographics', {})) if gen_pop_profile else {},
+                'demographics': gen_pop_profile.get('demographics', {}) if gen_pop_profile else {},
                 'demographicsProjection': gen_pop_profile.get('demographicsProjection', {}) if gen_pop_profile else {},
-                'topCategories': _filter_top_items_for_insights(gen_pop_profile.get('topCategories', [])) if gen_pop_profile else [],
-                'topInterests': _filter_top_items_for_insights(gen_pop_profile.get('topInterests', [])) if gen_pop_profile else []
+                'topCategories': gen_pop_profile.get('topCategories', []) if gen_pop_profile else [],
+                'topInterests': gen_pop_profile.get('topInterests', []) if gen_pop_profile else []
             } if gen_pop_profile else None
         }
         
         # Build comprehensive prompt for strategic executive summary
-        prompt = f"""You are a C-suite marketing strategist analyzing competitive consumer data. Generate a high-level, strategic executive summary that transforms raw data into actionable business insights. Only use or cite data that represents at least 10% of the sample; all data provided is already filtered to >= 10%.
+        prompt = f"""You are a C-suite marketing strategist analyzing competitive consumer data. Generate a high-level, strategic executive summary that transforms raw data into actionable business insights.
 
 PRIMARY PROFILE: {summary_data['primaryProfile']['name']}
 - Sample Size: {summary_data['primaryProfile']['sampleSize']:,}
@@ -7538,14 +7093,13 @@ def analyze_key_insights_with_ai():
             }), 503
         
         # Extract focused data: interests, demographics, social media, streaming/platforms, streaming/music, categories (NOT brands)
-        # Only include values >= 10% of sample for key insights
         def extract_focused_data(profile):
             focused = {
                 'name': profile.get('name', 'Unknown'),
                 'sampleSize': profile.get('sampleSize', 0),
                 'projectedUS': profile.get('projectedUS', 0),
                 'medianAge': profile.get('medianAge', 'N/A'),
-                'demographics': _filter_demographics_for_insights(profile.get('demographics', {})),
+                'demographics': profile.get('demographics', {}),
                 'demographicsProjection': profile.get('demographicsProjection', {}),
                 'interests': [],
                 'socialMedia': [],
@@ -7563,12 +7117,10 @@ def analyze_key_insights_with_ai():
                     
                     cat_upper = str(category).upper()
                     
-                    # Only include items that represent >= 10% of sample (key insights / AI summaries)
-                    min_pct = MIN_PCT_FOR_INSIGHTS
                     # Interests
                     if 'INTEREST' in cat_upper:
                         for item in items:
-                            if item.get('name') and item.get('pct', 0) >= min_pct:
+                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
                                 focused['interests'].append({
                                     'name': item.get('name'),
                                     'pct': item.get('pct', 0),
@@ -7578,7 +7130,7 @@ def analyze_key_insights_with_ai():
                     # Social Media
                     elif 'SOCIAL' in cat_upper and ('MEDIA' in cat_upper or 'PLATFORM' in cat_upper):
                         for item in items:
-                            if item.get('name') and item.get('pct', 0) >= min_pct:
+                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
                                 focused['socialMedia'].append({
                                     'name': item.get('name'),
                                     'pct': item.get('pct', 0),
@@ -7588,7 +7140,7 @@ def analyze_key_insights_with_ai():
                     # Streaming Platforms
                     elif 'STREAMING' in cat_upper and 'PLATFORM' in cat_upper:
                         for item in items:
-                            if item.get('name') and item.get('pct', 0) >= min_pct:
+                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
                                 focused['streamingPlatforms'].append({
                                     'name': item.get('name'),
                                     'pct': item.get('pct', 0),
@@ -7598,7 +7150,7 @@ def analyze_key_insights_with_ai():
                     # Streaming Music
                     elif 'STREAMING' in cat_upper and 'MUSIC' in cat_upper:
                         for item in items:
-                            if item.get('name') and item.get('pct', 0) >= min_pct:
+                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
                                 focused['streamingMusic'].append({
                                     'name': item.get('name'),
                                     'pct': item.get('pct', 0),
@@ -7610,7 +7162,7 @@ def analyze_key_insights_with_ai():
                     # "MOST PURCHASED BRANDS" contains brand names - we want to EXCLUDE this
                     elif 'MOST PURCHASED CATEGORIES' in cat_upper or ('PURCHASED' in cat_upper and 'CATEGOR' in cat_upper and 'BRAND' not in cat_upper):
                         for item in items:
-                            if item.get('name') and item.get('pct', 0) >= min_pct:
+                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
                                 item_name = str(item.get('name', '')).upper()
                                 
                                 # Exclude if it's clearly a brand name (common brand indicators or known brands)
@@ -7702,7 +7254,6 @@ Generate a comprehensive SWOT analysis in JSON format:
 }}
 
 CRITICAL REQUIREMENTS:
-- Only use or cite data that represents at least 10% of the sample. All data provided is already filtered to >= 10%. Do not mention smaller segments.
 - Every insight MUST reference specific data (percentages, numbers, categories, platforms)
 - Compare primary brand to BOTH competitors AND Gen Pop
 - Focus on interests, demographics, social media, streaming platforms, streaming music, and categories
@@ -7791,25 +7342,6 @@ def refresh_metadata_cache():
         
     except Exception as e:
         print(f"❌ Error refreshing cache: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/admin/rebuild-profile-cache', methods=['POST'])
-@requires_admin
-def rebuild_profile_cache():
-    """Rebuild the profile cache by reading BRAND CATEGORY from each CSV file in S3."""
-    try:
-        success = rebuild_s3_cache_with_categories()
-        if success:
-            return jsonify({
-                'success': True,
-                'message': f'Profile cache rebuilt with {len(s3_cache.get("jobs", []))} files',
-                'categories': s3_cache.get('categories', []),
-                'file_count': s3_cache.get('file_count', 0)
-            })
-        else:
-            return jsonify({'success': False, 'error': 'Failed to rebuild cache'}), 500
-    except Exception as e:
-        print(f"❌ Error rebuilding profile cache: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -9158,10 +8690,10 @@ def debug_image_cache_for_profile(name):
         'matches': in_memory_entry == s3_entry if (in_memory_entry and s3_entry) else False
     })
 
-@app.route('/api/all-profile-images', endpoint='api_all_profile_images')
+@app.route('/api/all-profile-images')
 @requires_auth
-def api_all_profile_images():
-    """Get all cached profile images at once for instant loading. Unique name to avoid duplicate endpoint with older code."""
+def get_all_profile_images():
+    """Get all cached profile images at once for instant loading."""
     if not profile_image_cache:
         load_profile_image_cache()
     
@@ -9194,20 +8726,10 @@ def load_persisted_cache():
         s3_cache['last_updated'] = cached_data.get('last_updated')
         s3_cache['file_count'] = cached_data.get('file_count', 0)
         s3_cache['last_full_scan'] = cached_data.get('last_full_scan')
-        print(f"✅ Loaded persisted cache: {len(s3_cache['jobs'])} files, categories: {s3_cache['categories']}")
-        
-        # Check if cache has proper categories - if all jobs are Uncategorized, rebuild
-        jobs = s3_cache.get('jobs', [])
-        if jobs:
-            uncategorized_count = sum(1 for j in jobs if j.get('category', '').upper() in ('UNCATEGORIZED', 'OTHER', ''))
-            if uncategorized_count > len(jobs) * 0.8:  # More than 80% uncategorized
-                print(f"⚠️ Cache has {uncategorized_count}/{len(jobs)} uncategorized files, triggering rebuild...")
-                rebuild_s3_cache_with_categories()
-        
+        print(f"✅ Loaded persisted cache: {len(s3_cache['jobs'])} files")
         return True
     except s3_client.exceptions.NoSuchKey:
         print("📂 No persisted cache found, will do full scan")
-        rebuild_s3_cache_with_categories()
         return False
     except Exception as e:
         print(f"⚠️ Error loading persisted cache: {e}")
@@ -9219,504 +8741,3502 @@ def save_persisted_cache():
         return
     try:
         cache_data = {
-            'jobs': s3_cache.get('jobs', []),
-            'categories': s3_cache.get('categories', []),
-            'last_updated': s3_cache.get('last_updated'),
-            'file_count': s3_cache.get('file_count', 0),
-            'last_full_scan': s3_cache.get('last_full_scan')
+            'jobs': s3_cache['jobs'],
+            'categories': s3_cache['categories'],
+            'last_updated': s3_cache['last_updated'],
+            'file_count': s3_cache['file_count'],
+            'last_full_scan': s3_cache['last_full_scan']
         }
         s3_client.put_object(
             Bucket=S3_BUCKET,
             Key=S3_CACHE_KEY,
-            Body=json.dumps(cache_data, default=str).encode('utf-8'),
+            Body=json.dumps(cache_data),
             ContentType='application/json'
         )
-        print(f"✅ Saved persisted cache: {len(s3_cache.get('jobs', []))} files")
+        print(f"💾 Saved cache to S3: {len(s3_cache['jobs'])} files")
     except Exception as e:
         print(f"⚠️ Error saving persisted cache: {e}")
 
-def extract_category_from_csv(csv_content):
-    """Extract BRAND CATEGORY from CSV content."""
-    lines = csv_content.split('\n')
-    for line in lines[:50]:  # Check first 50 lines for metadata
-        if re.match(r'^\s*BRAND\s*CATEGORY\s*,', line, re.IGNORECASE):
-            parts = line.split(',', 1)
-            if len(parts) > 1:
-                return parts[1].strip().upper()
-    return None
 
-def rebuild_s3_cache_with_categories():
-    """Rebuild the S3 cache by reading BRAND CATEGORY from each CSV file."""
-    global s3_cache
+def load_demographics_cache():
+    """Load pre-computed demographics summaries from S3."""
+    global demographics_cache
     if not s3_client:
-        print("❌ S3 client not configured")
         return False
-    
     try:
-        print("🔄 Rebuilding S3 cache with categories from CSV files...")
-        
-        s3 = boto3.client('s3',
-                          aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-                          aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-                          region_name=S3_REGION)
-        
-        bucket_name = 'dashboard-inputs'
-        jobs = []
-        categories = set()
-        
-        # Scan all CSV files in the bucket
-        paginator = s3.get_paginator('list_objects_v2')
-        for page in paginator.paginate(Bucket=bucket_name, Prefix=''):
-            for obj in page.get('Contents', []):
-                key = obj['Key']
-                # Skip historic folder, system folder, and non-CSV files
-                if key.startswith('historic/') or key.startswith('system/') or not key.endswith('.csv'):
-                    continue
-                
-                filename = key.split('/')[-1]
-                last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
-                
-                # Read first 4KB of file to extract category (metadata is at the top)
-                try:
-                    response = s3.get_object(Bucket=bucket_name, Key=key, Range='bytes=0-4096')
-                    content = response['Body'].read().decode('utf-8', errors='ignore')
-                    category = extract_category_from_csv(content) or 'Uncategorized'
-                except Exception as e:
-                    print(f"⚠️ Could not read category from {key}: {e}")
-                    category = 'Uncategorized'
-                
-                # Generate display name with timestamp removal
-                name_without_ext = filename.replace('.csv', '')
-                name_without_timestamp = remove_timestamp_from_name(name_without_ext)
-                project_name = smart_title_case(name_without_timestamp.replace('_', ' '))
-                
-                jobs.append({
-                    'key': key,
-                    's3_key': key,
-                    'filename': filename,
-                    'project_name': project_name,
-                    'category': category,
-                    'size': obj.get('Size', 0),
-                    'last_modified': last_modified,
-                    'created_at': last_modified,
-                    'status': 'cached',
-                    'source': 's3'
-                })
-                categories.add(category)
-                
-        print(f"✅ Found {len(jobs)} files with categories: {sorted(categories)}")
-        
-        # Update cache
-        s3_cache['jobs'] = jobs
-        s3_cache['categories'] = sorted(list(categories))
-        s3_cache['last_updated'] = datetime.now().timestamp()
-        s3_cache['file_count'] = len(jobs)
-        s3_cache['last_full_scan'] = datetime.now().isoformat()
-        
-        # Save to S3
-        save_persisted_cache()
-        
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_DEMO_CACHE_KEY)
+        demographics_cache = json.loads(response['Body'].read().decode('utf-8'))
+        print(f"✅ Loaded demographics cache: {len(demographics_cache)} profiles")
         return True
+    except s3_client.exceptions.NoSuchKey:
+        print("📂 No demographics cache found")
+        return False
     except Exception as e:
-        import traceback
-        print(f"❌ Error rebuilding cache: {e}")
-        traceback.print_exc()
+        print(f"⚠️ Error loading demographics cache: {e}")
         return False
 
-def _load_clickstream_ranker_cache(cache_file, cache_dict, lock):
-    """Load cache from file into cache_dict."""
-    if not os.path.exists(cache_file):
+
+def save_demographics_cache():
+    """Save demographics cache to S3."""
+    if not s3_client or not demographics_cache:
         return
     try:
-        with open(cache_file, 'r') as f:
-            data = json.load(f)
-        if isinstance(data, dict):
-            with lock:
-                cache_dict.update(data)
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=S3_DEMO_CACHE_KEY,
+            Body=json.dumps(demographics_cache),
+            ContentType='application/json'
+        )
+        print(f"💾 Saved demographics cache: {len(demographics_cache)} profiles")
     except Exception as e:
-        print(f"[Clickstream Ranker] Cache load failed for {cache_file}: {e}")
+        print(f"⚠️ Error saving demographics cache: {e}")
 
 
-def _save_clickstream_ranker_cache(date_str, payload, cache_file, cache_dict, lock, log_name):
-    """Save one day's payload to file and memory."""
-    with lock:
-        cache_dict[date_str] = payload
+def extract_demographics_summary(csv_content):
+    """Extract demographic summary from CSV content."""
     try:
-        existing = {}
-        if os.path.exists(cache_file):
-            with open(cache_file, 'r') as f:
-                existing = json.load(f)
-        if not isinstance(existing, dict):
-            existing = {}
-        existing[date_str] = payload
-        with open(cache_file, 'w') as f:
-            json.dump(existing, f, indent=0)
-    except Exception as e:
-        print(f"[{log_name}] Cache save failed: {e}")
-
-
-@app.route('/api/rankers/shortstv/data', methods=['GET'])
-def get_shortstv_ranker_data():
-    """ShortsTV ranker: same as ReelShort but COMMON_NAME contains 'shortstv'."""
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    with SHORTSTV_RANKER_LOCK:
-        cached = SHORTSTV_RANKER_CACHE.get(today_str)
-        if cached is None and os.path.exists(SHORTSTV_RANKER_CACHE_FILE):
-            try:
-                with open(SHORTSTV_RANKER_CACHE_FILE, 'r') as f:
-                    by_date = json.load(f)
-                cached = by_date.get(today_str) if isinstance(by_date, dict) else None
-                if cached is not None:
-                    SHORTSTV_RANKER_CACHE[today_str] = cached
-            except Exception:
-                pass
-        if cached is not None:
-            return jsonify(cached)
-    try:
-        payload = _fetch_clickstream_ranker_payload('shortstv', today_str)
-        _save_clickstream_ranker_cache(today_str, payload, SHORTSTV_RANKER_CACHE_FILE, SHORTSTV_RANKER_CACHE, SHORTSTV_RANKER_LOCK, 'ShortsTV Ranker')
-        return jsonify(payload)
-    except Exception as e:
-        print(f"[ShortsTV Ranker] Error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/rankers/goodshort/data', methods=['GET'])
-def get_goodshort_ranker_data():
-    """GoodShort ranker: same as ReelShort but COMMON_NAME contains 'goodshort'."""
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    with GOODSHORT_RANKER_LOCK:
-        cached = GOODSHORT_RANKER_CACHE.get(today_str)
-        if cached is None and os.path.exists(GOODSHORT_RANKER_CACHE_FILE):
-            try:
-                with open(GOODSHORT_RANKER_CACHE_FILE, 'r') as f:
-                    by_date = json.load(f)
-                cached = by_date.get(today_str) if isinstance(by_date, dict) else None
-                if cached is not None:
-                    GOODSHORT_RANKER_CACHE[today_str] = cached
-            except Exception:
-                pass
-        if cached is not None:
-            return jsonify(cached)
-    try:
-        payload = _fetch_clickstream_ranker_payload('goodshort', today_str)
-        _save_clickstream_ranker_cache(today_str, payload, GOODSHORT_RANKER_CACHE_FILE, GOODSHORT_RANKER_CACHE, GOODSHORT_RANKER_LOCK, 'GoodShort Ranker')
-        return jsonify(payload)
-    except Exception as e:
-        print(f"[GoodShort Ranker] Error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-# ============================================================================
-# ROKU FAST RANKER - queries BEHAVIORALGRAPH.PUBLIC.FAST_CHANNEL_FINAL
-# ============================================================================
-
-ROKUFAST_RANKER_CACHE = {}
-ROKUFAST_RANKER_LOCK = threading.Lock()
-ROKUFAST_RANKER_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'rokufast_ranker_cache.json')
-
-# Duration parsing for FAST_CHANNEL_FINAL (TIME_ON_PAGE format like "45m" or "1h 30m")
-_ROKUFAST_DURATION_MINS = """
-COALESCE(TRY_TO_NUMBER(REGEXP_SUBSTR(COALESCE(TIME_ON_PAGE::VARCHAR, ''), '([0-9]+)h', 1, 1, 'e', 1)), 0) * 60
-+ COALESCE(TRY_TO_NUMBER(REGEXP_SUBSTR(COALESCE(TIME_ON_PAGE::VARCHAR, ''), '([0-9]+)m', 1, 1, 'e', 1)), 0)
-"""
-
-def _build_rokufast_ranker_payload(rows):
-    """Build API payload from raw rows: (visit_date, show_name, views, avg_watch_time, run_time)."""
-    from collections import defaultdict
-    by_date = defaultdict(list)
-    by_show = defaultdict(list)
-    for r in rows:
-        dt = r[0].strftime('%Y-%m-%d') if hasattr(r[0], 'strftime') else str(r[0])[:10]
-        show_name = (r[1] or '').strip() or 'Unknown'
-        views = int(r[2] or 0)
-        avg_watch_time = round(float(r[3]), 2) if len(r) > 3 and r[3] is not None else None
-        run_time = round(float(r[4]), 2) if len(r) > 4 and r[4] is not None else None
-        if run_time is not None and run_time == int(run_time):
-            run_time = int(run_time)
-        item = {'show_name': show_name, 'views': views, 'avg_watch_time': avg_watch_time, 'run_time': run_time}
-        by_date[dt].append(item)
-        by_show[show_name].append({'date': dt, 'views': views})
-    dates_sorted = sorted(by_date.keys())
-    date_range = {'min': dates_sorted[0], 'max': dates_sorted[-1]} if dates_sorted else {}
-    # Top shows over time (top 20 by total views)
-    show_totals = {s: sum(p['views'] for p in pts) for s, pts in by_show.items()}
-    top_shows = sorted(show_totals.items(), key=lambda x: -x[1])[:20]
-    top_shows_over_time = []
-    for show_name, _ in top_shows:
-        by_date_dict = {p['date']: p['views'] for p in by_show[show_name]}
-        top_shows_over_time.append({'show_name': show_name, 'by_date': by_date_dict})
-    return {
-        'by_date': dict(by_date),
-        'by_show': dict(by_show),
-        'dates_sorted': dates_sorted,
-        'date_range': date_range,
-        'top_shows_over_time': top_shows_over_time
-    }
-
-def _build_rokufast_seasons_payload(rows):
-    """Build seasons payload: (visit_date, show_name, season, views, avg_watch_time, run_time)."""
-    from collections import defaultdict
-    by_date_season = defaultdict(list)
-    for r in rows:
-        dt = r[0].strftime('%Y-%m-%d') if hasattr(r[0], 'strftime') else str(r[0])[:10]
-        show_name = (r[1] or '').strip() or 'Unknown'
-        season = (r[2] or '').strip() or ''
-        views = int(r[3] or 0)
-        avg_watch_time = round(float(r[4]), 2) if len(r) > 4 and r[4] is not None else None
-        run_time = round(float(r[5]), 2) if len(r) > 5 and r[5] is not None else None
-        by_date_season[dt].append({'show_name': show_name, 'season': season, 'views': views, 'avg_watch_time': avg_watch_time, 'run_time': run_time})
-    return dict(by_date_season)
-
-def _build_rokufast_episodes_payload(rows):
-    """Build episodes payload: (visit_date, show_name, season, episode, episode_name, views, avg_watch_time, run_time)."""
-    from collections import defaultdict
-    by_date_episode = defaultdict(list)
-    for r in rows:
-        dt = r[0].strftime('%Y-%m-%d') if hasattr(r[0], 'strftime') else str(r[0])[:10]
-        show_name = (r[1] or '').strip() or 'Unknown'
-        season = (r[2] or '').strip() or ''
-        episode = (r[3] or '').strip() or ''
-        episode_name = (r[4] or '').strip() or ''
-        views = int(r[5] or 0)
-        avg_watch_time = round(float(r[6]), 2) if len(r) > 6 and r[6] is not None else None
-        run_time = round(float(r[7]), 2) if len(r) > 7 and r[7] is not None else None
-        by_date_episode[dt].append({'show_name': show_name, 'season': season, 'episode': episode, 'episode_name': episode_name, 'views': views, 'avg_watch_time': avg_watch_time, 'run_time': run_time})
-    return dict(by_date_episode)
-
-def _build_rokufast_all_payload(rows):
-    """Build all payload (same as episodes): (visit_date, show_name, season, episode, episode_name, views, avg_watch_time, run_time)."""
-    return _build_rokufast_episodes_payload(rows)
-
-def _fetch_rokufast_ranker_from_snowflake():
-    """Query BEHAVIORALGRAPH.PUBLIC.FAST_CHANNEL_FINAL for past 7 days and return payload."""
-    try:
-        import bg
-        conn = bg.connect_snowflake()
-        cur = conn.cursor()
-    except Exception as e:
-        raise RuntimeError(f'Snowflake connection failed: {e}')
-    try:
-        # Daily by series
-        sql = f"""
-            SELECT visit_date, NAME_OF_SHOW, COUNT(*) AS views,
-                AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
-            FROM (
-                SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW,
-                    ({_ROKUFAST_DURATION_MINS}) AS duration_mins
-                FROM BEHAVIORALGRAPH.PUBLIC.FAST_CHANNEL_FINAL
-                WHERE VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())
-                  AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
-            ) sub
-            GROUP BY 1, 2
-            ORDER BY 1, 3 DESC
-        """
-        cur.execute(sql)
-        rows = cur.fetchall()
-        payload = _build_rokufast_ranker_payload(rows)
-
-        # By seasons
-        try:
-            sql_seasons = f"""
-                SELECT visit_date, NAME_OF_SHOW, SEASON, COUNT(*) AS views,
-                    AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
-                FROM (
-                    SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON,
-                        ({_ROKUFAST_DURATION_MINS}) AS duration_mins
-                    FROM BEHAVIORALGRAPH.PUBLIC.FAST_CHANNEL_FINAL
-                    WHERE VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())
-                      AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
-                      AND SEASON IS NOT NULL AND TRIM(SEASON) != ''
-                ) sub
-                GROUP BY 1, 2, 3
-                ORDER BY 1, 4 DESC
-            """
-            cur.execute(sql_seasons)
-            payload['by_date_season'] = _build_rokufast_seasons_payload(cur.fetchall())
-        except Exception as e:
-            print(f"[Roku FAST] Seasons query failed: {e}")
-            payload['by_date_season'] = {}
-
-        # By episodes
-        try:
-            sql_episodes = f"""
-                SELECT visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views,
-                    AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
-                FROM (
-                    SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME,
-                        ({_ROKUFAST_DURATION_MINS}) AS duration_mins
-                    FROM BEHAVIORALGRAPH.PUBLIC.FAST_CHANNEL_FINAL
-                    WHERE VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())
-                      AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
-                      AND EPISODE_NAME IS NOT NULL AND TRIM(EPISODE_NAME) != ''
-                ) sub
-                GROUP BY 1, 2, 3, 4, 5
-                ORDER BY 1, 6 DESC
-            """
-            cur.execute(sql_episodes)
-            payload['by_date_episode'] = _build_rokufast_episodes_payload(cur.fetchall())
-        except Exception as e:
-            print(f"[Roku FAST] Episodes query failed: {e}")
-            payload['by_date_episode'] = {}
-
-        # All (same as episodes but includes rows without episode_name)
-        try:
-            sql_all = f"""
-                SELECT visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME, COUNT(*) AS views,
-                    AVG(duration_mins) AS avg_watch_time, MAX(duration_mins) AS run_time
-                FROM (
-                    SELECT DATE(VISIT_TS) AS visit_date, NAME_OF_SHOW, SEASON, EPISODE, EPISODE_NAME,
-                        ({_ROKUFAST_DURATION_MINS}) AS duration_mins
-                    FROM BEHAVIORALGRAPH.PUBLIC.FAST_CHANNEL_FINAL
-                    WHERE VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())
-                      AND NAME_OF_SHOW IS NOT NULL AND TRIM(NAME_OF_SHOW) != ''
-                ) sub
-                GROUP BY 1, 2, 3, 4, 5
-                ORDER BY 1, 6 DESC
-            """
-            cur.execute(sql_all)
-            payload['by_date_all'] = _build_rokufast_all_payload(cur.fetchall())
-        except Exception as e:
-            print(f"[Roku FAST] All query failed: {e}")
-            payload['by_date_all'] = {}
-
-        conn.close()
-        return payload
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
-
-@app.route('/api/rankers/rokufast/data', methods=['GET'])
-def get_rokufast_ranker_data():
-    """
-    Return Roku FAST ranker data from BEHAVIORALGRAPH.PUBLIC.FAST_CHANNEL_FINAL.
-    Similar to Netflix ranker but without DMA data.
-    """
-    print(f"[Roku FAST Ranker] Request received: force_refresh={request.args.get('force_refresh')}")
-    try:
-        force_refresh = request.args.get('force_refresh', '').lower() in ('1', 'true', 'yes')
-        today_str = datetime.now().strftime('%Y-%m-%d')
+        df = pd.read_csv(io.StringIO(csv_content))
         
-        with ROKUFAST_RANKER_LOCK:
-            cached = None if force_refresh else ROKUFAST_RANKER_CACHE.get('data')
-            if cached is None and not force_refresh and os.path.exists(ROKUFAST_RANKER_CACHE_FILE):
-                try:
-                    with open(ROKUFAST_RANKER_CACHE_FILE, 'r') as f:
-                        cached = json.load(f)
-                    if cached:
-                        ROKUFAST_RANKER_CACHE['data'] = cached
-                        ROKUFAST_RANKER_CACHE['loaded_at'] = datetime.now().timestamp()
-                except Exception:
-                    pass
-            
-            # Check if cache is stale (older than 24 hours)
-            loaded_at = ROKUFAST_RANKER_CACHE.get('loaded_at') or 0
-            age_hours = (datetime.now().timestamp() - loaded_at) / 3600.0
-            
-            if cached is None or force_refresh or age_hours >= 24:
-                try:
-                    data = _fetch_rokufast_ranker_from_snowflake()
-                    ROKUFAST_RANKER_CACHE['data'] = data
-                    ROKUFAST_RANKER_CACHE['loaded_at'] = datetime.now().timestamp()
-                    # Save to file cache
-                    try:
-                        with open(ROKUFAST_RANKER_CACHE_FILE, 'w') as f:
-                            json.dump(data, f, indent=0)
-                    except Exception as e:
-                        print(f"[Roku FAST] Cache save failed: {e}")
-                    return jsonify(data)
-                except Exception as e:
-                    print(f"[Roku FAST Ranker] Snowflake fetch failed: {e}")
-                    if cached:
-                        return jsonify(cached)
-                    return jsonify({'error': str(e)}), 500
-            
-            return jsonify(cached)
-    except Exception as e:
-        print(f"[Roku FAST Ranker] Error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/rankers/rokufast/show-details', methods=['GET'])
-def get_rokufast_show_details():
-    """
-    Get detailed info for a specific Roku FAST show/episode.
-    No DMA data available for Roku FAST.
-    """
-    show_name = request.args.get('show_name', '').strip()
-    episode_name = request.args.get('episode_name', '').strip()
-    season = request.args.get('season', '').strip()
-    date = request.args.get('date', '').strip()
-    
-    if not show_name:
-        return jsonify({'error': 'show_name is required'}), 400
-    
-    try:
-        import bg
-        conn = bg.connect_snowflake()
-        cur = conn.cursor()
-        
-        # Build WHERE clause
-        where_parts = ["NAME_OF_SHOW = %s"]
-        params = [show_name]
-        
-        if date:
-            where_parts.append("DATE(VISIT_TS) = %s")
-            params.append(date)
-        else:
-            where_parts.append("VISIT_TS >= DATEADD(day, -7, CURRENT_DATE())")
-        
-        if episode_name and episode_name != 'N/A':
-            where_parts.append("EPISODE_NAME = %s")
-            params.append(episode_name)
-        
-        if season and season != 'N/A':
-            where_parts.append("SEASON = %s")
-            params.append(season)
-        
-        where_clause = " AND ".join(where_parts)
-        
-        # Get show metadata
-        meta_sql = f"""
-            SELECT 
-                NAME_OF_SHOW, SEASON, EPISODE_NAME,
-                MAX(({_ROKUFAST_DURATION_MINS})) AS run_time_mins,
-                AVG(({_ROKUFAST_DURATION_MINS})) AS avg_watch_time_mins,
-                COUNT(*) as total_views
-            FROM BEHAVIORALGRAPH.PUBLIC.FAST_CHANNEL_FINAL
-            WHERE {where_clause}
-            GROUP BY NAME_OF_SHOW, SEASON, EPISODE_NAME
-            ORDER BY total_views DESC
-            LIMIT 1
-        """
-        cur.execute(meta_sql, params)
-        meta_row = cur.fetchone()
-        
-        if not meta_row:
-            conn.close()
-            return jsonify({'error': 'Show not found', 'show_name': show_name}), 404
-        
-        result = {
-            'show_name': meta_row[0] or show_name,
-            'season': meta_row[1] or 'N/A',
-            'episode_name': meta_row[2] or 'N/A',
-            'run_time': round(meta_row[3], 2) if meta_row[3] else 'N/A',
-            'avg_watch_time': round(meta_row[4], 2) if meta_row[4] else 'N/A',
-            'total_views': int(meta_row[5] or 0),
-            'genre': 'N/A',
-            'type': 'N/A',
-            'age_rating': 'N/A',
-            'year_released': 'N/A',
-            'cast': 'N/A',
-            'dma_breakdown': []  # No DMA data for Roku FAST
+        summary = {
+            'gender': {},
+            'age': {},
+            'income': {},
+            'ethnicity': {},
+            'sampleSize': 0,
+            'projectedUS': 0
         }
         
-        conn.close()
-        return jsonify(result)
+        for _, row in df.iterrows():
+            category = str(row.get('Column', '')).upper()
+            value = row.get('Value', '')
+            pct = float(row.get('Brand Penetration (Row)', 0) or 0)
+            
+            if category == 'SAMPLE SIZE':
+                summary['sampleSize'] = int(row.get('Original Raw Numbers', 0) or row.get('Category Share', 0) or 0)
+            elif category == 'BRAND INPUT':
+                summary['projectedUS'] = int(row.get('US Gen Pop Projection', 0) or 0)
+            elif category == 'GENDER' and value:
+                summary['gender'][value] = pct
+            elif category == 'AGE' and value:
+                summary['age'][value] = pct
+            elif category == 'INCOME' and value:
+                summary['income'][value] = pct
+            elif category == 'ETHNICITY' and value:
+                summary['ethnicity'][value] = pct
+        
+        return summary
+    except Exception as e:
+        print(f"Error extracting demographics: {e}")
+        return None
+
+# Cache loading is handled in background thread - see quick_startup_cache()
+
+
+@app.route('/api/jobs')
+@requires_auth
+def list_jobs():
+    """List all jobs (local + S3 cached) with caching for performance."""
+    import time
+    
+    job_list = []
+    categories = set()
+    
+    # Return quickly if cache is still loading
+    if not cache_loading_complete and not s3_cache.get('jobs'):
+        return jsonify({
+            'jobs': [],
+            'categories': [],
+            'cache_info': {'loading': True, 'message': 'Loading profiles...'},
+            'loading': True
+        })
+    
+    # Update user's last activity time (but don't block on it)
+    username = session.get('username')
+    if username:
+        try:
+            users = load_users()
+            if username in users:
+                users[username]['last_activity'] = time.time()
+                save_users(users)
+        except:
+            pass  # Don't block on activity tracking
+    
+    # Add local jobs (always fresh)
+    for job_id, job in jobs.items():
+        job_list.append({
+            'job_id': job_id,
+            'project_name': job['project_name'],
+            'status': job['status'],
+            'progress': job['progress'],
+            'created_at': job['created_at'],
+            'source': 'local',
+            'category': 'LOCAL'
+        })
+        categories.add('LOCAL')
+    
+    # Use persisted cache only - no S3 scanning on page load for speed
+    # If cache is empty, try to load persisted cache
+    if not s3_cache['jobs'] and s3_client:
+        load_persisted_cache()
+    
+    # Don't auto-refresh - user can manually refresh if needed
+    # This makes page loads instant
+    
+    # Add cached S3 jobs
+    job_list.extend(s3_cache['jobs'])
+    for cat in s3_cache['categories']:
+        categories.add(cat)
+    
+    # Sort by created_at descending
+    sorted_jobs = sorted(job_list, key=lambda x: x['created_at'], reverse=True)
+    
+    return jsonify({
+        'jobs': sorted_jobs,
+        'categories': sorted(list(categories)),
+        'cache_info': {
+            'last_updated': s3_cache.get('last_updated'),
+            'file_count': s3_cache.get('file_count', 0),
+            'cached': True
+        }
+    })
+
+
+@app.route('/api/refresh-cache')
+@requires_auth
+def force_refresh_cache():
+    """Smart refresh - adds new, updates modified, removes deleted files."""
+    if s3_client:
+        result = smart_cache_update()
+        return jsonify({
+            'success': True,
+            'new_files': result.get('new', 0),
+            'updated_files': result.get('updated', 0),
+            'deleted_files': result.get('deleted', 0),
+            'total': result.get('total', 0),
+            'message': f"Added {result.get('new', 0)}, updated {result.get('updated', 0)}, removed {result.get('deleted', 0)} files"
+        })
+    return jsonify({'success': False, 'error': 'S3 not configured'})
+
+
+@app.route('/api/full-refresh-cache')
+@requires_auth  
+def full_refresh_cache():
+    """Full scan - rebuilds entire cache (slow, use sparingly)."""
+    if s3_client:
+        result = refresh_s3_cache(incremental=False)
+        return jsonify({
+            'success': True,
+            'total': result.get('total', 0),
+            'message': f"Full rebuild: {result.get('total', 0)} files cached"
+        })
+    return jsonify({'success': False, 'error': 'S3 not configured'})
+
+
+@app.route('/api/cached_files')
+@requires_auth
+def get_cached_files():
+    """Get list of cached S3 files for admin panel."""
+    # Make sure cache is loaded
+    if not s3_cache['jobs'] and s3_client:
+        load_persisted_cache()
+    
+    files = []
+    for job in s3_cache.get('jobs', []):
+        files.append({
+            'key': job.get('s3_key', job.get('job_id')),
+            'project_name': job.get('project_name', 'Unknown'),
+            'category': job.get('category', 'Uncategorized'),
+            'created_at': job.get('created_at', ''),
+            'status': job.get('status', 'cached')
+        })
+    
+    return jsonify({
+        'success': True,
+        'files': files,
+        'count': len(files)
+    })
+
+
+@app.route('/api/demographics-cache')
+@requires_auth
+def get_demographics_cache():
+    """Get all cached demographics for fast Content Dev analysis."""
+    global demographics_cache
+    
+    # Load from S3 if empty
+    if not demographics_cache:
+        load_demographics_cache()
+    
+    # Also return the jobs list with categories
+    if not s3_cache['jobs']:
+        load_persisted_cache()
+    
+    # Merge jobs with demographics
+    profiles_with_demo = []
+    for job in s3_cache.get('jobs', []):
+        key = job.get('s3_key', job.get('job_id', ''))
+        demo = demographics_cache.get(key, {})
+        profiles_with_demo.append({
+            'key': key,
+            'name': job.get('project_name', 'Unknown'),
+            'category': job.get('category', 'Uncategorized'),
+            'demographics': demo.get('gender', {}),
+            'age': demo.get('age', {}),
+            'income': demo.get('income', {}),
+            'sampleSize': demo.get('sampleSize', 0),
+            'projectedUS': demo.get('projectedUS', 0),
+            'hasDemoData': bool(demo)
+        })
+    
+    return jsonify({
+        'success': True,
+        'profiles': profiles_with_demo,
+        'cacheSize': len(demographics_cache),
+        'totalProfiles': len(profiles_with_demo)
+    })
+
+
+@app.route('/api/build-demographics-cache', methods=['POST'])
+@requires_auth
+def build_demographics_cache():
+    """Build/update demographics cache for all profiles - processes in batches to avoid timeout."""
+    global demographics_cache
+    
+    if not s3_client:
+        return jsonify({'error': 'S3 not configured'}), 500
+    
+    # Get batch size from request (default 50 to avoid timeout)
+    batch_size = request.args.get('batch', 50, type=int)
+    
+    # Load existing cache
+    load_demographics_cache()
+    
+    # Get all jobs
+    if not s3_cache['jobs']:
+        load_persisted_cache()
+    
+    # Find jobs that need caching
+    jobs_to_process = []
+    for job in s3_cache.get('jobs', []):
+        key = job.get('s3_key')
+        if not key or key.startswith('system/'):
+            continue
+        if key not in demographics_cache:
+            jobs_to_process.append(job)
+    
+    # Process only a batch to avoid timeout
+    batch = jobs_to_process[:batch_size]
+    updated = 0
+    errors = 0
+    
+    for job in batch:
+        key = job.get('s3_key')
+        try:
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+            csv_content = response['Body'].read().decode('utf-8')
+            summary = extract_demographics_summary(csv_content)
+            if summary:
+                demographics_cache[key] = summary
+                updated += 1
+        except Exception as e:
+            print(f"Error caching {key}: {e}")
+            errors += 1
+    
+    # Save updated cache
+    if updated > 0:
+        save_demographics_cache()
+    
+    remaining = len(jobs_to_process) - len(batch)
+    
+    return jsonify({
+        'success': True,
+        'updated': updated,
+        'errors': errors,
+        'totalCached': len(demographics_cache),
+        'remaining': remaining,
+        'needsMore': remaining > 0
+    })
+
+
+def smart_cache_update():
+    """
+    Smart incremental cache update - adds NEW, updates MODIFIED, removes DELETED files.
+    
+    How it works:
+    1. Cache stores last_modified timestamp for each file
+    2. S3 list checks all current files
+    3. New files are added, modified files are updated
+    4. Files in cache but NOT in S3 are REMOVED
+    
+    This keeps cache in sync with actual S3 contents.
+    Preserves existing metadata (custom images, categories) when updating files.
+    """
+    import time
+    from datetime import datetime, timezone, timedelta
+    
+    if not s3_client:
+        return {'new': 0, 'updated': 0, 'deleted': 0, 'total': 0}
+    
+    # Ensure profile image cache is loaded for matching images to new files
+    if not profile_image_cache:
+        load_profile_image_cache()
+    
+    # Build lookup of existing files by key -> last_modified
+    existing = {job['s3_key']: job.get('last_modified', '') for job in s3_cache.get('jobs', []) if job.get('s3_key')}
+    
+    # Track which S3 keys we see (to detect deleted files)
+    current_s3_keys = set()
+    
+    new_count = 0
+    updated_count = 0
+    deleted_count = 0
+    
+    try:
+        paginator = s3_client.get_paginator('list_objects_v2')
+        
+        for page in paginator.paginate(Bucket=S3_BUCKET):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                if not key.endswith('.csv') or key.startswith('system/') or key.startswith('historic/'):
+                    continue
+                
+                current_s3_keys.add(key)
+                obj_modified = obj['LastModified'].isoformat()
+                
+                # Check if this is a new or modified file
+                if key not in existing:
+                    # NEW file
+                    job_data = process_s3_file_metadata(key, obj)
+                    job_data['last_modified'] = obj_modified
+                    
+                    # Check if there's an existing profile image for this project name
+                    if profile_image_cache:
+                        cache_key = job_data.get('project_name', '').lower().strip()
+                        if cache_key in profile_image_cache:
+                            cached_img = profile_image_cache[cache_key]
+                            if cached_img.get('is_custom'):
+                                job_data['custom_image'] = cached_img.get('image_url')
+                    
+                    s3_cache['jobs'].append(job_data)
+                    if job_data['category'] not in s3_cache['categories']:
+                        s3_cache['categories'].append(job_data['category'])
+                    new_count += 1
+                    print(f"   ➕ New: {key}")
+                    
+                elif existing[key] != obj_modified:
+                    # MODIFIED file - preserve existing metadata
+                    job_data = process_s3_file_metadata(key, obj)
+                    job_data['last_modified'] = obj_modified
+                    # Update in place, preserving custom metadata
+                    for i, job in enumerate(s3_cache['jobs']):
+                        if job.get('s3_key') == key:
+                            # Preserve custom image and manually set category if they exist
+                            if job.get('custom_image'):
+                                job_data['custom_image'] = job['custom_image']
+                            # Keep existing category if it was manually set (not UNCATEGORIZED)
+                            if job.get('category') and job.get('category') != 'UNCATEGORIZED':
+                                job_data['category'] = job['category']
+                            s3_cache['jobs'][i] = job_data
+                            break
+                    updated_count += 1
+                    print(f"   🔄 Updated: {key}")
+        
+        # REMOVE files that are in cache but NOT in S3 (deleted files)
+        original_count = len(s3_cache['jobs'])
+        s3_cache['jobs'] = [job for job in s3_cache['jobs'] if job.get('s3_key') in current_s3_keys or job.get('source') == 'local']
+        deleted_count = original_count - len(s3_cache['jobs'])
+        
+        if deleted_count > 0:
+            print(f"   🗑️ Removed {deleted_count} deleted files from cache")
+        
+        # Rebuild categories from remaining jobs
+        s3_cache['categories'] = list(set(job.get('category', 'Uncategorized') for job in s3_cache['jobs']))
+        
+        # Update cache metadata
+        s3_cache['last_updated'] = time.time()
+        s3_cache['file_count'] = len(s3_cache['jobs'])
+        
+        # Save if there were any changes
+        if new_count > 0 or updated_count > 0 or deleted_count > 0:
+            save_persisted_cache()
+            print(f"✅ Smart update: {new_count} new, {updated_count} modified, {deleted_count} removed, {len(s3_cache['jobs'])} total")
+        else:
+            print(f"✅ No changes detected ({len(s3_cache['jobs'])} files cached)")
+        
+        return {'new': new_count, 'updated': updated_count, 'deleted': deleted_count, 'total': len(s3_cache['jobs'])}
         
     except Exception as e:
-        print(f"[Roku FAST Show Details] Error: {e}")
+        print(f"Error in smart cache update: {e}")
+        return {'new': 0, 'updated': 0, 'total': len(s3_cache.get('jobs', [])), 'error': str(e)}
+
+
+def refresh_s3_cache(incremental=True):
+    """Refresh cache - uses smart update for speed."""
+    if incremental:
+        return smart_cache_update()
+    
+    # Full scan (only when explicitly requested)
+    import time
+    print("🔄 Doing full S3 scan...")
+    
+    job_list = []
+    categories = set()
+    
+    try:
+        paginator = s3_client.get_paginator('list_objects_v2')
+        
+        for page in paginator.paginate(Bucket=S3_BUCKET):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                if not key.endswith('.csv') or key.startswith('system/'):
+                    continue
+                
+                job_data = process_s3_file_metadata(key, obj)
+                job_data['last_modified'] = obj['LastModified'].isoformat()
+                job_list.append(job_data)
+                categories.add(job_data['category'])
+        
+        s3_cache['jobs'] = job_list
+        s3_cache['categories'] = list(categories)
+        s3_cache['last_updated'] = time.time()
+        s3_cache['file_count'] = len(job_list)
+        
+        save_persisted_cache()
+        print(f"✅ Full scan complete: {len(job_list)} files")
+        
+        return {'new': len(job_list), 'updated': 0, 'total': len(job_list)}
+        
+    except Exception as e:
+        print(f"Error in full scan: {e}")
+        return {'error': str(e)}
+
+def remove_timestamp_from_name(name):
+    """Remove various timestamp patterns from filename.
+    
+    Handles patterns like:
+    - Taylor_Swift_09_22_2025_20_22 -> Taylor_Swift
+    - Cleveland_Browns_01_23_2026 -> Cleveland_Browns
+    - HBO_Max_11_07_2025_16_46 -> HBO_Max
+    """
+    import re
+    
+    # Remove timestamp patterns at the end:
+    # Pattern 1: _MM_DD_YYYY_HH_MM (e.g., _09_22_2025_20_22)
+    name = re.sub(r'_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$', '', name)
+    
+    # Pattern 2: _MM_DD_YYYY (e.g., _01_23_2026)
+    name = re.sub(r'_\d{2}_\d{2}_\d{4}$', '', name)
+    
+    # Pattern 3: _YYYY_MM_DD_HH_MM (e.g., _2025_09_22_20_22)
+    name = re.sub(r'_\d{4}_\d{2}_\d{2}_\d{2}_\d{2}$', '', name)
+    
+    # Pattern 4: _YYYY_MM_DD (e.g., _2025_09_22)
+    name = re.sub(r'_\d{4}_\d{2}_\d{2}$', '', name)
+    
+    # Pattern 5: _DD_MM_YYYY (European format)
+    name = re.sub(r'_\d{2}_\d{2}_\d{4}$', '', name)
+    
+    return name
+
+def smart_title_case(text):
+    """Convert to title case but preserve all-caps words (like JD, AOC, NFL, etc.)"""
+    words = text.split(' ')
+    result = []
+    for word in words:
+        # If word is all uppercase and 2-4 chars, keep it uppercase (likely an acronym/initials)
+        if word.isupper() and 2 <= len(word) <= 4:
+            result.append(word)
+        # If word has mixed case already, keep it
+        elif not word.islower() and not word.isupper():
+            result.append(word)
+        else:
+            # Otherwise apply title case
+            result.append(word.title())
+    return ' '.join(result)
+
+def process_s3_file_metadata(key, obj):
+    """Process a single S3 file and extract metadata."""
+    import re
+    
+    # Extract project name from filename - use smart title case for display
+    filename = key.split('/')[-1]  # Get just the filename, not the full path
+    name_without_ext = filename.replace('.csv', '')
+    
+    # Remove timestamp patterns
+    name_without_timestamp = remove_timestamp_from_name(name_without_ext)
+    
+    # Replace underscores with spaces
+    raw_name = name_without_timestamp.replace('_', ' ')
+    
+    project_name = smart_title_case(raw_name)
+    
+    # Try to get category from BRAND CATEGORY row in CSV
+    category = 'UNCATEGORIZED'
+    try:
+        head_response = s3_client.head_object(Bucket=S3_BUCKET, Key=key)
+        file_size = head_response['ContentLength']
+        
+        # Read last 200KB where BRAND CATEGORY row usually is (increased for safety)
+        start_byte = max(0, file_size - 200000)
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key, Range=f'bytes={start_byte}-{file_size}')
+        content = response['Body'].read().decode('utf-8', errors='ignore')
+        
+        for line in content.split('\n'):
+            line_upper = line.strip().upper()
+            # Check multiple variations of BRAND CATEGORY
+            if line_upper.startswith('BRAND CATEGORY,') or line_upper.startswith('BRAND CATEGORY ') or line_upper.startswith('"BRAND CATEGORY"'):
+                parts = line.split(',')
+                if len(parts) >= 2:
+                    cat = parts[1].strip().strip('"').upper()
+                    if cat and cat != 'BRAND CATEGORY':
+                        category = cat
+                        break
+            # Also check for BRAND_CATEGORY variant
+            elif line_upper.startswith('BRAND_CATEGORY,'):
+                parts = line.split(',')
+                if len(parts) >= 2:
+                    cat = parts[1].strip().strip('"').upper()
+                    if cat:
+                        category = cat
+                        break
+    except Exception as e:
+        print(f"Error reading category from {key}: {e}")
+    
+    return {
+        'job_id': key,
+        'project_name': project_name,
+        'status': 'cached',
+        'progress': 100,
+        'created_at': obj['LastModified'].isoformat(),
+        'source': 's3',
+        's3_key': key,
+        'category': category
+    }
+
+
+# ============================================================================
+# ANALYSIS RUNNER
+# ============================================================================
+
+def update_job_status(job_id, status=None, progress=None, message=None, error=None, result_file=None, demographic_validation=None):
+    """Update job status - simplified to avoid verbose terminal output."""
+    if job_id in jobs:
+        if status:
+            jobs[job_id]['status'] = status
+        if progress is not None:
+            jobs[job_id]['progress'] = progress
+        if message:
+            jobs[job_id]['message'] = message
+            # Only keep last 5 log entries for cleaner display
+            jobs[job_id]['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+            jobs[job_id]['logs'] = jobs[job_id]['logs'][-5:]
+        if error:
+            jobs[job_id]['error'] = error
+        if result_file:
+            jobs[job_id]['result_file'] = result_file
+        if demographic_validation:
+            jobs[job_id]['demographic_validation'] = demographic_validation
+
+
+def run_analysis(job_id, project_name, brands, sample_start, sample_end, 
+                 behavior_start, behavior_end, filters, skew_settings, 
+                 is_genpop, purchasers_only, brand_category,
+                 include_frequency=False, is_listener_watcher=False, platform_name=None, 
+                 previous_file_path=None, reference_demographics=None, reference_sample_size=None,
+                 reference_file_key=None):
+    """Run the behavioral graph analysis pipeline with demographic consistency validation."""
+    try:
+        update_job_status(job_id, status='running', progress=5, message='Initializing...')
+        
+        # Import the bg module
+        try:
+            import bg
+            import random
+            import numpy as np
+            from config import SNOWFLAKE_CONFIG
+        except ImportError as e:
+            update_job_status(job_id, status='failed', error=f'Module import failed: {str(e)}')
+            return
+        
+        # ========== DETERMINISTIC SEEDING (matches terminal behavior) ==========
+        # Create consistent random seed based on inputs for reproducible results
+        seed_string = f"{brands[0]}_{sample_start}_{sample_end}_{behavior_start}_{behavior_end}" if brands else f"{sample_start}_{sample_end}_{behavior_start}_{behavior_end}"
+        deterministic_seed = hash(seed_string) % (2**32)  # Convert to 32-bit integer
+        random.seed(deterministic_seed)
+        np.random.seed(deterministic_seed)
+        print(f"🎲 Deterministic seed set: {deterministic_seed}")
+        
+        # If we have a reference file from S3, download it for consistency enforcement
+        actual_previous_file = previous_file_path
+        if reference_file_key and s3_client and not previous_file_path:
+            try:
+                update_job_status(job_id, progress=8, message='Loading reference file for consistency...')
+                print(f"📥 Downloading reference file: {reference_file_key}")
+                
+                # Download reference file to temp location
+                import tempfile
+                temp_dir = tempfile.gettempdir()
+                ref_filename = os.path.basename(reference_file_key)
+                ref_local_path = os.path.join(temp_dir, f"ref_{ref_filename}")
+                
+                s3_client.download_file(S3_BUCKET, reference_file_key, ref_local_path)
+                actual_previous_file = ref_local_path
+                print(f"✅ Reference file downloaded: {ref_local_path}")
+                print(f"   Will enforce ±2% consistency with this reference")
+            except Exception as e:
+                print(f"⚠️ Could not download reference file: {e}")
+        
+        # Connect to Snowflake
+        update_job_status(job_id, progress=15, message='Connecting to database...')
+        
+        try:
+            conn = bg.connect_snowflake()
+        except Exception as e:
+            update_job_status(job_id, status='failed', error=f'Database connection failed: {str(e)}')
+            return
+        
+        # ========== UNIVERSE SCAN (matches terminal behavior) ==========
+        # This is critical for getting correct sample sizes
+        update_job_status(job_id, progress=18, message='Performing universe scan...')
+        
+        try:
+            if hasattr(bg, 'perform_full_universe_scan'):
+                print("🔍 Performing full universe scan (matching terminal behavior)...")
+                universe_results = bg.perform_full_universe_scan(conn, brands, sample_start, sample_end, purchasers_only)
+                if universe_results:
+                    print(f"🌍 Universe scan complete. True universe size: {universe_results['total_universe']:,} users")
+                    # Store universe size for use in pipeline (same as terminal)
+                    bg.run_full_pipeline.universe_size = universe_results['total_universe']
+                else:
+                    print("⚠️ Universe scan returned no results, using default")
+                    bg.run_full_pipeline.universe_size = 1000000
+            else:
+                print("⚠️ perform_full_universe_scan not available in bg module")
+                bg.run_full_pipeline.universe_size = 1000000
+        except Exception as e:
+            print(f"⚠️ Universe scan error: {e}, proceeding with default size")
+            bg.run_full_pipeline.universe_size = 1000000
+        
+        update_job_status(job_id, progress=25, message='Running analysis...')
+        
+        # Run the full pipeline with reference file for consistency
+        try:
+            result_file = bg.run_full_pipeline(
+                conn=conn,
+                project_name=project_name,
+                brands=brands,
+                sample_start=sample_start,
+                sample_end=sample_end,
+                behavior_start=behavior_start,
+                behavior_end=behavior_end,
+                filters=filters,
+                skew_settings=skew_settings,
+                is_genpop=is_genpop,
+                purchasers_only=purchasers_only,
+                previous_file_path=actual_previous_file,
+                brand_category=brand_category
+            )
+            
+            update_job_status(job_id, progress=85, message='Processing results...')
+            
+            if result_file and os.path.exists(result_file):
+                # Apply frequency analysis if requested (matches bg.py terminal behavior EXACTLY)
+                if include_frequency and not is_genpop:
+                    try:
+                        print("📊 Adding frequency metrics (matching terminal behavior)...")
+                        update_job_status(job_id, progress=87, message='Adding frequency analysis...')
+                        
+                        import pandas as pd
+                        df = pd.read_csv(result_file)
+                        
+                        # Use calculate_frequency_metrics like terminal version does
+                        if hasattr(bg, 'calculate_frequency_metrics'):
+                            frequency_df = bg.calculate_frequency_metrics(conn, brands, behavior_start, behavior_end, purchasers_only)
+                            if frequency_df is not None and not frequency_df.empty:
+                                # Add frequency columns to main df like terminal
+                                if hasattr(bg, 'add_frequency_columns_to_main_df'):
+                                    df = bg.add_frequency_columns_to_main_df(df, frequency_df)
+                                else:
+                                    # Fallback to merge if add_frequency_columns_to_main_df not available
+                                    if hasattr(bg, 'merge_frequency_data'):
+                                        df = bg.merge_frequency_data(df, frequency_df)
+                        elif hasattr(bg, 'get_frequency_data'):
+                            # Fallback to old method
+                            freq_df = bg.get_frequency_data(conn, brands, sample_start, sample_end)
+                            if freq_df is not None and not freq_df.empty:
+                                df = bg.merge_frequency_data(df, freq_df) if hasattr(bg, 'merge_frequency_data') else df
+                        
+                        # Apply listener/watcher/player adjustments
+                        if is_listener_watcher:
+                            if hasattr(bg, 'set_brand_input_to_csv'):
+                                df = bg.set_brand_input_to_csv(df)
+                            if platform_name and hasattr(bg, 'adjust_platform_to_100_percent'):
+                                df = bg.adjust_platform_to_100_percent(df, platform_name)
+                        
+                        df.to_csv(result_file, index=False)
+                        print("✅ Frequency analysis complete")
+                    except Exception as e:
+                        print(f"⚠️ Frequency analysis error: {e}")
+                        import traceback
+                        traceback.print_exc()
+                
+                # Apply listener/watcher adjustments even without frequency analysis
+                elif is_listener_watcher:
+                    try:
+                        import pandas as pd
+                        df = pd.read_csv(result_file)
+                        if hasattr(bg, 'set_brand_input_to_csv'):
+                            df = bg.set_brand_input_to_csv(df)
+                        if platform_name and hasattr(bg, 'adjust_platform_to_100_percent'):
+                            df = bg.adjust_platform_to_100_percent(df, platform_name)
+                        df.to_csv(result_file, index=False)
+                    except Exception as e:
+                        print(f"⚠️ Listener/watcher adjustment error: {e}")
+                
+                # ========== POST-PROCESSING (matches terminal behavior exactly) ==========
+                update_job_status(job_id, progress=88, message='Applying final processing...')
+                
+                try:
+                    import pandas as pd
+                    df = pd.read_csv(result_file)
+                    
+                    # 1. Enforce input brand to 100% (skip for GenPop)
+                    if not is_genpop and hasattr(bg, 'enforce_input_brand_100'):
+                        print("🎯 Enforcing input brand 100%...")
+                        df = bg.enforce_input_brand_100(df, brands)
+                    
+                    # 2. Add input metadata to dataframe
+                    if hasattr(bg, 'add_input_metadata_to_dataframe'):
+                        print("📋 Adding input metadata...")
+                        df = bg.add_input_metadata_to_dataframe(df, brands, sample_start, sample_end, behavior_start, behavior_end, deterministic_seed)
+                    
+                    # 3. Add unique purchase confirmations column
+                    if hasattr(bg, 'add_unique_purchase_confirmations_column'):
+                        try:
+                            print("🛒 Adding unique purchase confirmations...")
+                            df = bg.add_unique_purchase_confirmations_column(df, conn)
+                        except Exception as e:
+                            print(f"⚠️ Purchase confirmations error: {e}")
+                    
+                    # 4. Enforce cross-category brand consistency
+                    if hasattr(bg, 'enforce_cross_category_brand_consistency'):
+                        print("🔄 Enforcing cross-category brand consistency...")
+                        df = bg.enforce_cross_category_brand_consistency(df)
+                    
+                    # 5. Remove dash variants from output
+                    if hasattr(bg, 'remove_dash_variants_from_output'):
+                        print("🗑️ Removing dash variants...")
+                        df = bg.remove_dash_variants_from_output(df, brands)
+                    
+                    # 6. Convert all text values to uppercase
+                    print("⬆️ Converting to uppercase...")
+                    df['Column'] = df['Column'].astype(str).str.upper()
+                    df['Value'] = df['Value'].astype(str).str.upper()
+                    
+                    # 7. Final sort by category order (matches terminal exactly)
+                    print("📊 Final sorting by category order...")
+                    CATEGORY_ORDER = [
+                        "INPUT_METADATA", "BRAND INPUT", "SAMPLE SIZE", "AVID FAN", "CASUAL FAN",
+                        "AGE", "EDUCATION", "ETHNICITY", "GENDER", "INCOME", "RELATIONSHIP", 
+                        "SEXUAL_ORIENTATION", "PARENTAL_STATUS", "OCCUPATION", "LOCATION",
+                        "INTEREST", "AMUSEMENT PARKS", "APP/PLATFORM USAGE", "AUTOMOBILE", "BANKING",
+                        "DIGITAL BANKING", "CREDIT PROVIDER", "INVESTMENTS", "BETTING", "EDUCATION & LEARNING",
+                        "FRANCHISE", "GAMES", "HEALTH & WELLNESS", "HEAVY MACHINERY", "INSURANCE", "MEDIA",
+                        "MOST PURCHASED BRANDS", "MOVIE THEATER", "NON PROFIT/CHARITY", "PHARMACY", "TOYS",
+                        "TRAVEL", "QSR", "WHERE THEY DINE", "WHERE THEY SHOP", "SEARCH ENGINE/AI", "SEARCH ENGINE",
+                        "SOCIAL MEDIA", "BROADCAST/CABLE", "STREAMING/MUSIC", "STREAMING/PLATFORM", "STREAMING/CHANNEL",
+                        "VIRTUAL MVPD FAST", "PORN MEDIA", "TECHNOLOGY/DEVICE", "TELECOM", "WORKOUT FACILITY",
+                        "EVENTS", "VENUE", "TICKETING", "ACTOR", "ATHLETE", "HOST/PERSONALITY", "INFLUENCER/CREATOR",
+                        "MLB ATHLETE", "MUSICIAN/BAND", "NBA ATHLETE", "NFL ATHLETE", "POLITICS/ACTIVIST",
+                        "SOCCER ATHLETE", "WNBA ATHLETE", "TALENT", "SPORTS ORGANIZATIONS", "SPORTS TEAM",
+                        "WNBA", "NBA", "NFL", "NFC", "NFC EAST", "NFC NORTH", "NFC SOUTH", "NFC WEST",
+                        "NHL", "NWSL", "MLS", "ATLANTIC DIVISION", "PACIFIC DIVISION", "PREMIER LEAGUE",
+                        "METROPOLITAN DIVISION", "MLB", "LA LIGA", "GOLF", "EASTERN CONFERENCE", "CENTRAL DIVISION",
+                        "AFC", "AFC EAST", "AFC NORTH", "AFC SOUTH", "AFC WEST", "AL", "AL CENTRAL", "AL EAST",
+                        "AL WEST", "SERIE A", "SOCCER", "TENNIS", "UEFA", "WESTERN CONFERENCE", "SPORTS",
+                        "RUGBY", "VOLLEYBALL", "COLLEGE/UNIVERSITY", "ACCESSORIES", "APPAREL/FOOTWEAR",
+                        "BEAUTY/WELLNESS", "BRAND CATEGORY", "HOME/OUTDOOR", "MOST PURCHASED CATEGORIES", 
+                        "PETS", "TECHNOLOGY BRAND"
+                    ]
+                    
+                    def get_category_priority(col):
+                        """Define sort priority for categories"""
+                        col_upper = str(col).upper()
+                        try:
+                            return CATEGORY_ORDER.index(col_upper)
+                        except ValueError:
+                            return 1000  # Category not in predefined order - put at end
+                    
+                    df['__sort_priority'] = df['Column'].apply(get_category_priority)
+                    
+                    # Convert Category Share to numeric for proper sorting
+                    sort_col = 'Category Share' if 'Category Share' in df.columns else 'Percentage'
+                    df['__sort_value'] = pd.to_numeric(df[sort_col], errors='coerce').fillna(0)
+                    
+                    # Sort by: priority (asc), category name (asc), value (desc)
+                    df = df.sort_values(
+                        by=['__sort_priority', 'Column', '__sort_value'], 
+                        ascending=[True, True, False]
+                    )
+                    
+                    # Clean up temporary columns
+                    df = df.drop(columns=['__sort_priority', '__sort_value'])
+                    
+                    # Save the fully processed file
+                    df.to_csv(result_file, index=False)
+                    print("✅ All post-processing complete (matching terminal behavior)")
+                    
+                except Exception as e:
+                    print(f"⚠️ Post-processing error (non-fatal): {e}")
+                    import traceback
+                    traceback.print_exc()
+                
+                # Validate demographics against reference if provided
+                demographic_validation = None
+                if reference_demographics:
+                    try:
+                        with open(result_file, 'r') as f:
+                            new_csv_content = f.read()
+                        new_demographics = extract_demographics_from_csv(new_csv_content)
+                        new_sample_size = extract_sample_size_from_csv(new_csv_content)
+                        
+                        is_valid, discrepancies = validate_demographics_consistency(
+                            new_demographics, reference_demographics, tolerance=2
+                        )
+                        
+                        # Check sample size tolerance (+/- 2%)
+                        sample_valid = True
+                        sample_diff = 0
+                        if reference_sample_size and new_sample_size:
+                            sample_diff = abs(new_sample_size - reference_sample_size) / reference_sample_size * 100
+                            sample_valid = sample_diff <= 2
+                        
+                        demographic_validation = {
+                            'demographics_valid': is_valid,
+                            'sample_size_valid': sample_valid,
+                            'sample_size_diff_pct': round(sample_diff, 2),
+                            'discrepancies': discrepancies[:10] if discrepancies else []
+                        }
+                    except Exception as e:
+                        print(f"Demographic validation error: {e}")
+                
+                # Copy result to outputs directory
+                output_filename = f"{job_id}_{project_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                output_path = os.path.join(OUTPUT_DIR, output_filename)
+                
+                import shutil
+                shutil.copy2(result_file, output_path)
+                
+                # Upload to S3
+                update_job_status(job_id, progress=95, message='Saving to cache...')
+                s3_key = upload_to_s3(output_path, brands[0] if brands else project_name, sample_start, sample_end)
+                
+                update_job_status(
+                    job_id, 
+                    status='completed', 
+                    progress=100, 
+                    message='Complete!',
+                    result_file=output_path,
+                    demographic_validation=demographic_validation
+                )
+            else:
+                update_job_status(job_id, status='failed', error='No output file generated')
+                
+        except Exception as e:
+            error_msg = f'Analysis error: {str(e)}'
+            update_job_status(job_id, status='failed', error=error_msg)
+            
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+                
+    except Exception as e:
+        update_job_status(job_id, status='failed', error=str(e))
+
+
+# ============================================================================
+# STARTUP CACHE LOADING (Async - doesn't block app startup)
+# ============================================================================
+
+import threading
+import time as time_module
+
+cache_loading_complete = False
+BACKGROUND_CHECK_INTERVAL = 300  # Check for new files every 5 minutes
+
+def async_cache_loader():
+    """Load cache in background - doesn't block app startup."""
+    global cache_loading_complete
+    import time
+    
+    # Small delay to ensure app is ready
+    time_module.sleep(1)
+    
+    start = time.time()
+    print("🚀 Background cache loading started...")
+    
+    # Load persisted file list cache (single JSON file)
+    if s3_client:
+        try:
+            load_persisted_cache()
+            print(f"   ✅ Loaded {len(s3_cache.get('jobs', []))} profiles in {time.time()-start:.2f}s")
+        except Exception as e:
+            print(f"   ⚠️ Cache load error: {e}")
+        
+        # Load profile image cache
+        try:
+            load_profile_image_cache()
+            print(f"   ✅ Loaded {len(profile_image_cache)} cached images")
+        except Exception as e:
+            print(f"   ⚠️ Image cache load error: {e}")
+        
+        # IMMEDIATELY pre-fetch images for all profiles
+        print("🖼️ Starting automatic image prefetch...")
+        try:
+            prefetch_profile_images()
+        except Exception as e:
+            print(f"   ⚠️ Image prefetch error: {e}")
+    
+    cache_loading_complete = True
+    print(f"🎉 Cache ready in {time.time()-start:.2f}s")
+
+
+def prefetch_profile_images():
+    """Pre-fetch and cache images for all profiles."""
+    import urllib.parse
+    import urllib.request
+    import re
+    from datetime import datetime
+    global profile_image_cache, profile_image_cache_dirty
+    
+    if not s3_cache.get('jobs'):
+        print("   ⚠️ No profiles to fetch images for")
+        return
+    
+    print(f"🖼️ Pre-fetching profile images for {len(s3_cache['jobs'])} profiles...")
+    
+    fetched = 0
+    skipped = 0
+    failed = 0
+    
+    for job in s3_cache.get('jobs', []):
+        profile_name = job.get('project_name', '')
+        if not profile_name:
+            continue
+        
+        cache_key = profile_name.lower().strip()
+        
+        # Skip if already cached
+        if cache_key in profile_image_cache:
+            skipped += 1
+            continue
+        
+        try:
+            # Check for social media handle
+            handle_match = re.search(r'@(\w+)', profile_name)
+            image_url = None
+            source = None
+            title = profile_name
+            
+            if handle_match:
+                handle = handle_match.group(1)
+                
+                # Try TikTok
+                try:
+                    tiktok_url = f"https://www.tiktok.com/@{handle}"
+                    req = urllib.request.Request(tiktok_url, headers={
+                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+                    })
+                    with urllib.request.urlopen(req, timeout=5) as response:
+                        html = response.read().decode('utf-8', errors='ignore')
+                        og_match = re.search(r'<meta[^>]*property=["\']og:image["\'][^>]*content=["\']([^"\']+)["\']', html)
+                        if not og_match:
+                            og_match = re.search(r'<meta[^>]*content=["\']([^"\']+)["\'][^>]*property=["\']og:image["\']', html)
+                        if og_match:
+                            img = og_match.group(1)
+                            if img and 'tiktok' not in img.lower().split('/')[-1] and 'logo' not in img.lower():
+                                image_url = img
+                                source = 'tiktok'
+                                title = f'@{handle}'
+                except:
+                    pass
+                
+                # Try Instagram if TikTok failed
+                if not image_url:
+                    try:
+                        instagram_url = f"https://www.instagram.com/{handle}/"
+                        req = urllib.request.Request(instagram_url, headers={
+                            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+                        })
+                        with urllib.request.urlopen(req, timeout=5) as response:
+                            html = response.read().decode('utf-8', errors='ignore')
+                            og_match = re.search(r'<meta[^>]*property=["\']og:image["\'][^>]*content=["\']([^"\']+)["\']', html)
+                            if not og_match:
+                                og_match = re.search(r'<meta[^>]*content=["\']([^"\']+)["\'][^>]*property=["\']og:image["\']', html)
+                            if og_match:
+                                image_url = og_match.group(1)
+                                source = 'instagram'
+                                title = f'@{handle}'
+                    except:
+                        pass
+            
+            # Try Wikipedia
+            if not image_url:
+                search_name = re.sub(r'@\w+', '', profile_name).replace('_', ' ').replace('-', ' ').strip()
+                if search_name:
+                    try:
+                        wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(search_name)}"
+                        req = urllib.request.Request(wiki_url, headers={'User-Agent': 'CrosswalkIQ/1.0'})
+                        with urllib.request.urlopen(req, timeout=3) as response:
+                            data = json.loads(response.read().decode())
+                            if 'thumbnail' in data:
+                                image_url = data['thumbnail'].get('source')
+                                source = 'wikipedia'
+                                title = data.get('title', profile_name)
+                            elif 'originalimage' in data:
+                                image_url = data['originalimage'].get('source')
+                                source = 'wikipedia'
+                                title = data.get('title', profile_name)
+                    except:
+                        pass
+            
+            # Try Clearbit for brands
+            if not image_url:
+                search_name = re.sub(r'@\w+', '', profile_name).replace('_', ' ').replace('-', ' ').strip()
+                if search_name:
+                    domain = search_name.lower().replace(' ', '') + '.com'
+                    clearbit_url = f"https://logo.clearbit.com/{domain}"
+                    try:
+                        req = urllib.request.Request(clearbit_url, method='HEAD', headers={'User-Agent': 'CrosswalkIQ/1.0'})
+                        with urllib.request.urlopen(req, timeout=2) as response:
+                            if response.status == 200:
+                                image_url = clearbit_url
+                                source = 'clearbit'
+                    except:
+                        pass
+            
+            # Cache the result
+            if image_url:
+                profile_image_cache[cache_key] = {
+                    'image_url': image_url,
+                    'title': title,
+                    'source': source,
+                    'cached_at': datetime.now().isoformat()
+                }
+                fetched += 1
+                if fetched % 10 == 0:
+                    print(f"   ✅ Fetched {fetched} images...")
+            else:
+                profile_image_cache[cache_key] = {
+                    'not_found': True,
+                    'cached_at': datetime.now().isoformat()
+                }
+                failed += 1
+            
+            profile_image_cache_dirty = True
+            
+            # Save every 20 fetches to persist progress
+            if (fetched + failed) % 20 == 0:
+                save_profile_image_cache()
+            
+            # Small delay to be nice to APIs
+            time_module.sleep(0.3)
+            
+        except Exception as e:
+            failed += 1
+            if failed <= 5:  # Only log first few failures
+                print(f"   ❌ {profile_name}: {e}")
+    
+    # Final save
+    save_profile_image_cache()
+    print(f"🖼️ Image prefetch complete: {fetched} found, {skipped} already cached, {failed} not found")
+
+
+def background_cache_checker():
+    """Background thread that checks for new/modified files every 5 minutes."""
+    # Wait for initial cache load
+    while not cache_loading_complete:
+        time_module.sleep(1)
+    
+    # Pre-fetch profile images after startup
+    time_module.sleep(5)  # Wait a bit before starting
+    try:
+        prefetch_profile_images()
+    except Exception as e:
+        print(f"   ⚠️ Image prefetch error: {e}")
+    
+    print("🔄 Starting background cache checker (every 5 min)...")
+    while True:
+        time_module.sleep(BACKGROUND_CHECK_INTERVAL)
+        try:
+            print("🔍 Background check for new files...")
+            result = smart_cache_update()
+            if result.get('new', 0) > 0 or result.get('updated', 0) > 0:
+                print(f"   📥 Found {result.get('new', 0)} new, {result.get('updated', 0)} modified")
+                # Also fetch images for new profiles
+                prefetch_profile_images()
+        except Exception as e:
+            print(f"   ⚠️ Background check error: {e}")
+
+
+# Load image cache synchronously on startup (small, fast operation)
+# Start cache loader in background (doesn't block startup!)
+# All cache loading happens in background thread to ensure fast startup
+# Threads are daemon so they won't prevent app shutdown
+print("🚀 App starting - cache will load in background...")
+cache_thread = threading.Thread(target=async_cache_loader, daemon=True)
+cache_thread.start()
+
+# Start background checker thread
+bg_checker = threading.Thread(target=background_cache_checker, daemon=True)
+bg_checker.start()
+
+# Start user initialization in background (non-blocking)
+users_thread = threading.Thread(target=async_init_users, daemon=True)
+users_thread.start()
+
+
+# ============================================================================
+# DECK BUILDER API
+# ============================================================================
+
+DECKS_S3_KEY = 'system/decks/'
+
+@app.route('/api/decks', methods=['GET'])
+@requires_auth
+def get_user_decks():
+    """Get all decks for the current user and their team."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    username = session.get('username')
+    user_email = user.get('email', '').lower()
+    company = user.get('company', '')
+    
+    try:
+        decks = []
+        # List all deck files
+        paginator = s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=DECKS_S3_KEY):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                if key.endswith('.json'):
+                    try:
+                        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+                        deck_data = json.loads(response['Body'].read().decode('utf-8'))
+                        
+                        # Show if owned by user, shared with user, collaborator, or same company
+                        owner = deck_data.get('owner', '')
+                        shared_with = deck_data.get('shared_with', [])
+                        collaborators = deck_data.get('collaborators', [])
+                        deck_company = deck_data.get('company', '')
+                        is_team_deck = deck_data.get('is_team_deck', False)
+                        
+                        # Check if user is a collaborator
+                        is_collaborator = any(
+                            c.get('user_id') == username or 
+                            c.get('email', '').lower() == user_email 
+                            for c in collaborators
+                        )
+                        
+                        can_view = (
+                            owner == username or
+                            username in shared_with or
+                            is_collaborator or
+                            (is_team_deck and deck_company == company)
+                        )
+                        
+                        if can_view:
+                            decks.append({
+                                'id': deck_data.get('id'),
+                                'name': deck_data.get('name', 'Untitled Deck'),
+                                'owner': owner,
+                                'is_mine': owner == username,
+                                'is_team_deck': is_team_deck,
+                                'is_collaborator': is_collaborator,
+                                'slides_count': len(deck_data.get('slides', [])),
+                                'created_at': deck_data.get('created_at'),
+                                'updated_at': deck_data.get('updated_at'),
+                                'shared_with': shared_with,
+                                'collaborators': collaborators
+                            })
+                    except:
+                        continue
+        
+        # Sort by updated date
+        decks.sort(key=lambda x: x.get('updated_at', ''), reverse=True)
+        
+        return jsonify({'success': True, 'decks': decks})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/decks', methods=['POST'])
+@requires_auth
+def create_deck():
+    """Create a new deck."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        data = request.get_json()
+        deck_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+        
+        deck = {
+            'id': deck_id,
+            'name': data.get('name', 'Untitled Deck'),
+            'description': data.get('description', ''),
+            'owner': session.get('username'),
+            'company': user.get('company', ''),
+            'is_team_deck': data.get('is_team_deck', False),
+            'shared_with': data.get('shared_with', []),
+            'slides': data.get('slides', []),
+            'template': data.get('template', 'default'),
+            'created_at': now,
+            'updated_at': now
+        }
+        
+        # Save to S3
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(deck),
+            ContentType='application/json'
+        )
+        
+        return jsonify({'success': True, 'deck': deck})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/decks/<deck_id>', methods=['GET'])
+@requires_auth
+def get_deck(deck_id):
+    """Get a specific deck by ID."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        deck = json.loads(response['Body'].read().decode('utf-8'))
+        
+        # Check permission (owner, shared_with, collaborator, or team)
+        username = session.get('username')
+        user_email = user.get('email', '').lower()
+        company = user.get('company', '')
+        owner = deck.get('owner', '')
+        shared_with = deck.get('shared_with', [])
+        collaborators = deck.get('collaborators', [])
+        deck_company = deck.get('company', '')
+        is_team_deck = deck.get('is_team_deck', False)
+        is_collaborator = any(
+            c.get('user_id') == username or c.get('email', '').lower() == user_email
+            for c in collaborators
+        )
+        
+        can_view = (
+            owner == username or
+            username in shared_with or
+            is_collaborator or
+            (is_team_deck and deck_company == company)
+        )
+        
+        if not can_view:
+            return jsonify({'success': False, 'error': 'Permission denied'})
+        
+        deck['can_edit'] = owner == username or username in shared_with or is_collaborator
+        
+        return jsonify({'success': True, 'deck': deck})
+    except s3_client.exceptions.NoSuchKey:
+        return jsonify({'success': False, 'error': 'Deck not found'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/decks/<deck_id>', methods=['PUT'])
+@requires_auth
+def update_deck(deck_id):
+    """Update an existing deck."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        
+        # Get existing deck
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        deck = json.loads(response['Body'].read().decode('utf-8'))
+        
+        # Check permission (owner, shared_with, or collaborator with edit role)
+        username = session.get('username')
+        user_email = user.get('email', '').lower()
+        owner = deck.get('owner', '')
+        shared_with = deck.get('shared_with', [])
+        collaborators = deck.get('collaborators', [])
+        is_collaborator = any(
+            c.get('user_id') == username or c.get('email', '').lower() == user_email
+            for c in collaborators
+        )
+        
+        can_edit = owner == username or username in shared_with or is_collaborator
+        if not can_edit:
+            return jsonify({'success': False, 'error': 'Permission denied'})
+        
+        # Update deck
+        data = request.get_json() or {}
+        if 'name' in data:
+            deck['name'] = data['name']
+        if 'description' in data:
+            deck['description'] = data['description']
+        if 'slides' in data:
+            deck['slides'] = data['slides']
+        if 'titleSlide' in data:
+            deck['titleSlide'] = data['titleSlide']
+        if 'is_team_deck' in data and owner == username:
+            deck['is_team_deck'] = data['is_team_deck']
+        if 'shared_with' in data and owner == username:
+            deck['shared_with'] = data['shared_with']
+        if 'template' in data:
+            deck['template'] = data['template']
+        
+        deck['updated_at'] = datetime.now().isoformat()
+        deck['last_editor'] = username
+        
+        # Save to S3
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(deck),
+            ContentType='application/json'
+        )
+        
+        return jsonify({'success': True, 'deck': deck})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/decks/<deck_id>', methods=['DELETE'])
+@requires_auth
+def delete_deck(deck_id):
+    """Delete a deck (owner only)."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        
+        # Get existing deck
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        deck = json.loads(response['Body'].read().decode('utf-8'))
+        
+        # Only owner can delete
+        if deck.get('owner') != session.get('username'):
+            return jsonify({'success': False, 'error': 'Only the deck owner can delete it'})
+        
+        # Delete from S3
+        s3_client.delete_object(Bucket=S3_BUCKET, Key=s3_key)
+        
+        return jsonify({'success': True, 'message': 'Deck deleted'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/decks/<deck_id>/share', methods=['POST'])
+@requires_auth
+def share_deck(deck_id):
+    """Share a deck with team members."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        data = request.get_json()
+        share_with = data.get('share_with', [])
+        is_team_deck = data.get('is_team_deck', False)
+        
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        deck = json.loads(response['Body'].read().decode('utf-8'))
+        
+        # Only owner can share
+        if deck.get('owner') != session.get('username'):
+            return jsonify({'success': False, 'error': 'Only the deck owner can share it'})
+        
+        # Update sharing settings
+        deck['shared_with'] = list(set(deck.get('shared_with', []) + share_with))
+        deck['is_team_deck'] = is_team_deck
+        deck['updated_at'] = datetime.now().isoformat()
+        
+        # Save
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(deck),
+            ContentType='application/json'
+        )
+        
+        return jsonify({'success': True, 'deck': deck})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/decks/<deck_id>/duplicate', methods=['POST'])
+@requires_auth
+def duplicate_deck(deck_id):
+    """Duplicate an existing deck."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        original = json.loads(response['Body'].read().decode('utf-8'))
+        
+        # Create new deck
+        new_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+        
+        new_deck = {
+            'id': new_id,
+            'name': f"Copy of {original.get('name', 'Untitled')}",
+            'description': original.get('description', ''),
+            'owner': session.get('username'),
+            'company': user.get('company', ''),
+            'is_team_deck': False,
+            'shared_with': [],
+            'slides': original.get('slides', []),
+            'template': original.get('template', 'default'),
+            'created_at': now,
+            'updated_at': now
+        }
+        
+        # Save new deck
+        new_key = f"{DECKS_S3_KEY}{new_id}.json"
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=new_key,
+            Body=json.dumps(new_deck),
+            ContentType='application/json'
+        )
+        
+        return jsonify({'success': True, 'deck': new_deck})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
+# DECK COLLABORATORS API
+# ============================================================================
+
+@app.route('/api/decks/<deck_id>/collaborators', methods=['GET'])
+@requires_auth
+def get_deck_collaborators(deck_id):
+    """Get collaborators for a deck."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        deck = json.loads(response['Body'].read().decode('utf-8'))
+        
+        collaborators = deck.get('collaborators', [])
+        return jsonify({'success': True, 'collaborators': collaborators})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/decks/<deck_id>/collaborators', methods=['POST'])
+@requires_auth
+def add_deck_collaborator(deck_id):
+    """Add a collaborator to a deck."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        data = request.get_json()
+        email = data.get('email', '').strip().lower()
+        user_id = data.get('user_id', '')
+        name = data.get('name', '')
+        role = data.get('role', 'editor')  # editor or viewer
+        
+        if not email and not user_id:
+            return jsonify({'success': False, 'error': 'Email or user_id required'})
+        
+        # Get existing deck
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        deck = json.loads(response['Body'].read().decode('utf-8'))
+        
+        # Check ownership
+        username = session.get('username')
+        if deck.get('owner') != username:
+            # Check if user is a collaborator with edit rights
+            collaborators = deck.get('collaborators', [])
+            is_editor = any(c.get('user_id') == username and c.get('role') == 'editor' for c in collaborators)
+            if not is_editor:
+                return jsonify({'success': False, 'error': 'Only the owner or editors can add collaborators'})
+        
+        # Initialize collaborators list if needed
+        if 'collaborators' not in deck:
+            deck['collaborators'] = []
+        
+        # Check if already a collaborator
+        existing = next((c for c in deck['collaborators'] if c.get('email') == email or c.get('user_id') == user_id), None)
+        if existing:
+            return jsonify({'success': False, 'error': 'User is already a collaborator'})
+        
+        # Add new collaborator
+        new_collaborator = {
+            'user_id': user_id or email,
+            'email': email,
+            'name': name,
+            'role': role,
+            'added_at': datetime.now().isoformat(),
+            'added_by': username
+        }
+        deck['collaborators'].append(new_collaborator)
+        deck['updated_at'] = datetime.now().isoformat()
+        
+        # Save updated deck
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(deck),
+            ContentType='application/json'
+        )
+        
+        # TODO: Send email notification to the collaborator
+        
+        return jsonify({'success': True, 'collaborator': new_collaborator, 'deck': deck})
+    except s3_client.exceptions.NoSuchKey:
+        return jsonify({'success': False, 'error': 'Deck not found'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/decks/<deck_id>/collaborators/<collaborator_id>', methods=['DELETE'])
+@requires_auth
+def remove_deck_collaborator(deck_id, collaborator_id):
+    """Remove a collaborator from a deck."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        # Get existing deck
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        deck = json.loads(response['Body'].read().decode('utf-8'))
+        
+        # Check ownership
+        username = session.get('username')
+        if deck.get('owner') != username:
+            return jsonify({'success': False, 'error': 'Only the owner can remove collaborators'})
+        
+        # Remove collaborator
+        collaborators = deck.get('collaborators', [])
+        deck['collaborators'] = [c for c in collaborators if c.get('user_id') != collaborator_id and c.get('email') != collaborator_id]
+        deck['updated_at'] = datetime.now().isoformat()
+        
+        # Save updated deck
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(deck),
+            ContentType='application/json'
+        )
+        
+        return jsonify({'success': True, 'deck': deck})
+    except s3_client.exceptions.NoSuchKey:
+        return jsonify({'success': False, 'error': 'Deck not found'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
+# DECK SYNC (Workspace -> S3 for real-time collaboration)
+# ============================================================================
+
+@app.route('/api/decks/sync', methods=['POST'])
+@requires_auth
+def sync_workspace_deck():
+    """Sync a workspace deck to S3 so it can be shared and collaborated on in real-time."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+
+    try:
+        data = request.get_json()
+        deck = data.get('deck', {})
+        deck_id = deck.get('id') or deck.get('serverDeckId') or str(uuid.uuid4())
+        is_new = not deck.get('serverDeckId')
+
+        # Use UUID for S3-backed decks (not deck_timestamp)
+        if deck_id.startswith('deck_'):
+            deck_id = str(uuid.uuid4())
+
+        now = datetime.now().isoformat()
+        username = session.get('username')
+
+        deck_data = {
+            'id': deck_id,
+            'name': deck.get('name', 'Untitled Deck'),
+            'description': deck.get('description', ''),
+            'owner': deck.get('owner') or username,
+            'company': user.get('company', ''),
+            'is_team_deck': deck.get('is_team_deck', False),
+            'shared_with': deck.get('shared_with', []),
+            'collaborators': deck.get('collaborators', []),
+            'slides': deck.get('slides', []),
+            'titleSlide': deck.get('titleSlide', {}),
+            'template': deck.get('template', 'default'),
+            'created_at': deck.get('created_at') or now,
+            'updated_at': now,
+            'last_editor': username,
+        }
+
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(deck_data),
+            ContentType='application/json'
+        )
+
+        return jsonify({
+            'success': True,
+            'deck': deck_data,
+            'serverDeckId': deck_id,
+            'is_new': is_new
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
+# DECK SLIDE AI ANALYSIS
+# ============================================================================
+
+@app.route('/api/decks/analyze-slide', methods=['POST'])
+@requires_auth
+def analyze_slide_with_ai():
+    """Use ChatGPT to analyze slide data and return key points and takeaways."""
+    client = get_openai_client()
+    if not client:
+        return jsonify({'success': False, 'error': 'OpenAI not configured'}), 500
+
+    try:
+        data = request.get_json()
+        content = data.get('content', '') or data.get('slideContent', '')
+        slide_title = data.get('title', data.get('slideTitle', 'Slide'))
+
+        if not content or not content.strip():
+            return jsonify({'success': False, 'error': 'No content to analyze'}), 400
+
+        prompt = f"""Analyze the following slide content and provide:
+1. **Key Points** - 3-5 bullet points summarizing the most important data/insights
+2. **Takeaways** - 2-4 actionable takeaways or conclusions for the audience
+
+Slide title: {slide_title}
+
+Content:
+{content[:8000]}
+
+Format your response as JSON:
+{{
+  "key_points": ["point 1", "point 2", ...],
+  "takeaways": ["takeaway 1", "takeaway 2", ...]
+}}
+
+Respond ONLY with valid JSON, no additional text."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an analyst summarizing data for executives. Be concise and insightful. Respond only with valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=600
+        )
+
+        result_text = response.choices[0].message.content.strip()
+        if '```json' in result_text:
+            result_text = result_text.split('```json')[1].split('```')[0].strip()
+        elif '```' in result_text:
+            result_text = result_text.split('```')[1].split('```')[0].strip()
+
+        result = json.loads(result_text)
+        key_points = result.get('key_points', [])
+        takeaways = result.get('takeaways', [])
+
+        combined = []
+        if key_points:
+            combined.append('**Key Points**')
+            combined.extend(f"• {p}" for p in key_points)
+        if takeaways:
+            combined.append('')
+            combined.append('**Takeaways**')
+            combined.extend(f"• {t}" for t in takeaways)
+
+        analysis_text = '\n'.join(combined)
+
+        return jsonify({
+            'success': True,
+            'key_points': key_points,
+            'takeaways': takeaways,
+            'analysis': analysis_text
+        })
+    except json.JSONDecodeError as e:
+        return jsonify({'success': False, 'error': f'Invalid AI response: {str(e)}'}), 500
+    except Exception as e:
+        print(f"❌ Error in analyze_slide_with_ai: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================================
+# DECK COMMIT TO GITHUB
+# ============================================================================
+
+@app.route('/api/decks/<deck_id>/commit-github', methods=['POST'])
+@requires_auth
+def commit_deck_to_github(deck_id):
+    """Commit deck to the behavioral graph GitHub repository."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+
+    try:
+        data = request.get_json() or {}
+        repo_name = data.get('repo', os.environ.get('GITHUB_REPO', 'behavioral-graph/decks'))
+        branch = data.get('branch', 'main')
+        file_path = data.get('path', f'decks/{deck_id}.json')
+
+        github_token = os.environ.get('GITHUB_TOKEN')
+        if not github_token:
+            return jsonify({
+                'success': False,
+                'error': 'GitHub integration not configured. Set GITHUB_TOKEN and GITHUB_REPO environment variables.'
+            })
+
+        # Get deck data - try S3 first
+        try:
+            s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+            deck_data = json.loads(response['Body'].read().decode('utf-8'))
+        except Exception:
+            return jsonify({'success': False, 'error': 'Deck not found in cloud. Sync deck first by sharing it.'})
+
+        try:
+            from github import Github
+            g = Github(github_token)
+            repo = g.get_repo(repo_name)
+
+            content = json.dumps(deck_data, indent=2)
+            try:
+                existing = repo.get_contents(file_path, ref=branch)
+                repo.update_file(file_path, f'Update deck: {deck_data.get("name", "Untitled")}', content, existing.sha, branch=branch)
+                message = f'Updated {file_path}'
+            except Exception:
+                repo.create_file(file_path, f'Add deck: {deck_data.get("name", "Untitled")}', content, branch=branch)
+                message = f'Created {file_path}'
+
+            return jsonify({
+                'success': True,
+                'message': message,
+                'file_path': file_path,
+                'repo': repo_name,
+                'branch': branch
+            })
+        except ImportError:
+            return jsonify({
+                'success': False,
+                'error': 'PyGithub not installed. Run: pip install PyGithub'
+            })
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
+# DECK REAL-TIME COLLABORATION (WebSocket)
+# ============================================================================
+
+if SOCKETIO_AVAILABLE and socketio:
+    @socketio.on('join_deck')
+    def handle_join_deck(data):
+        """Join a deck collaboration room."""
+        deck_id = data.get('deck_id')
+        user = data.get('user', 'Anonymous')
+        color = data.get('color', '#c8e600')
+        if deck_id:
+            join_room(f'deck_{deck_id}')
+            emit('user_joined', {'user': user, 'color': color}, room=f'deck_{deck_id}', include_self=False)
+            emit('joined', {'deck_id': deck_id})
+
+    @socketio.on('leave_deck')
+    def handle_leave_deck(data):
+        """Leave a deck collaboration room."""
+        deck_id = data.get('deck_id')
+        user = data.get('user', 'Anonymous')
+        if deck_id:
+            leave_room(f'deck_{deck_id}')
+            emit('user_left', {'user': user}, room=f'deck_{deck_id}')
+
+    @socketio.on('slide_update')
+    def handle_slide_update(data):
+        """Broadcast slide update to other collaborators."""
+        deck_id = data.get('deck_id')
+        slide_idx = data.get('slide_idx')
+        slide_data = data.get('slide_data')
+        user = data.get('user', 'Anonymous')
+        if deck_id and slide_data is not None:
+            emit('slide_update', {
+                'deckId': deck_id,
+                'slideIdx': slide_idx,
+                'slideData': slide_data,
+                'user': user
+            }, room=f'deck_{deck_id}', include_self=False)
+
+    @socketio.on('cursor')
+    def handle_cursor(data):
+        """Broadcast cursor position to other collaborators."""
+        deck_id = data.get('deck_id')
+        x = data.get('x', 0)
+        y = data.get('y', 0)
+        user = data.get('user', 'Anonymous')
+        color = data.get('color', '#c8e600')
+        if deck_id:
+            emit('cursor', {'user': user, 'x': x, 'y': y, 'color': color}, room=f'deck_{deck_id}', include_self=False)
+
+
+# ============================================================================
+# CANVA INTEGRATION API
+# ============================================================================
+
+CANVA_CLIENT_ID = os.environ.get('CANVA_CLIENT_ID', '')
+CANVA_CLIENT_SECRET = os.environ.get('CANVA_CLIENT_SECRET', '')
+CANVA_REDIRECT_URI = os.environ.get('CANVA_REDIRECT_URI', '')
+CANVA_TOKENS_KEY = 'system/canva_tokens.json'
+
+def load_canva_tokens():
+    """Load Canva OAuth tokens from S3."""
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=CANVA_TOKENS_KEY)
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except:
+        return {}
+
+def save_canva_tokens(tokens):
+    """Save Canva OAuth tokens to S3."""
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=CANVA_TOKENS_KEY,
+            Body=json.dumps(tokens),
+            ContentType='application/json'
+        )
+    except Exception as e:
+        print(f"Error saving Canva tokens: {e}")
+
+
+@app.route('/api/canva/auth')
+@requires_auth
+def canva_auth():
+    """Initiate Canva OAuth flow."""
+    if not CANVA_CLIENT_ID:
+        return jsonify({'success': False, 'error': 'Canva integration not configured'})
+    
+    # Generate state token for security
+    state = str(uuid.uuid4())
+    session['canva_oauth_state'] = state
+    
+    auth_url = f"https://www.canva.com/api/oauth/authorize?" + \
+               f"client_id={CANVA_CLIENT_ID}&" + \
+               f"redirect_uri={CANVA_REDIRECT_URI}&" + \
+               f"response_type=code&" + \
+               f"scope=design:read design:write&" + \
+               f"state={state}"
+    
+    return jsonify({'success': True, 'auth_url': auth_url})
+
+
+@app.route('/api/canva/callback')
+def canva_callback():
+    """Handle Canva OAuth callback."""
+    code = request.args.get('code')
+    state = request.args.get('state')
+    error = request.args.get('error')
+    
+    if error:
+        return redirect('/?canva_error=' + error)
+    
+    if state != session.get('canva_oauth_state'):
+        return redirect('/?canva_error=invalid_state')
+    
+    # Exchange code for tokens
+    try:
+        import urllib.request
+        import urllib.parse
+        
+        token_url = 'https://api.canva.com/rest/v1/oauth/token'
+        data = urllib.parse.urlencode({
+            'grant_type': 'authorization_code',
+            'code': code,
+            'redirect_uri': CANVA_REDIRECT_URI,
+            'client_id': CANVA_CLIENT_ID,
+            'client_secret': CANVA_CLIENT_SECRET
+        }).encode()
+        
+        req = urllib.request.Request(token_url, data=data, method='POST')
+        req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+        
+        with urllib.request.urlopen(req) as response:
+            tokens = json.loads(response.read().decode())
+            
+            # Save tokens for user
+            username = session.get('username')
+            all_tokens = load_canva_tokens()
+            all_tokens[username] = {
+                'access_token': tokens.get('access_token'),
+                'refresh_token': tokens.get('refresh_token'),
+                'expires_at': (datetime.now() + timedelta(seconds=tokens.get('expires_in', 3600))).isoformat()
+            }
+            save_canva_tokens(all_tokens)
+        
+        return redirect('/?canva_connected=true')
+    except Exception as e:
+        print(f"Canva OAuth error: {e}")
+        return redirect('/?canva_error=token_exchange_failed')
+
+
+@app.route('/api/canva/status')
+@requires_auth
+def canva_status():
+    """Check if Canva is connected for current user."""
+    username = session.get('username')
+    tokens = load_canva_tokens()
+    
+    if username in tokens:
+        # Check if token is expired
+        expires_at = tokens[username].get('expires_at', '')
+        if expires_at:
+            try:
+                exp_date = datetime.fromisoformat(expires_at)
+                if exp_date > datetime.now():
+                    return jsonify({
+                        'success': True,
+                        'connected': True,
+                        'expires_at': expires_at
+                    })
+            except:
+                pass
+    
+    return jsonify({
+        'success': True,
+        'connected': False
+    })
+
+
+@app.route('/api/canva/disconnect', methods=['POST'])
+@requires_auth
+def canva_disconnect():
+    """Disconnect Canva for current user."""
+    username = session.get('username')
+    tokens = load_canva_tokens()
+    
+    if username in tokens:
+        del tokens[username]
+        save_canva_tokens(tokens)
+    
+    return jsonify({'success': True, 'message': 'Canva disconnected'})
+
+
+@app.route('/api/canva/export-deck', methods=['POST'])
+@requires_auth
+def export_deck_to_canva():
+    """Export a deck to Canva as a new design."""
+    username = session.get('username')
+    tokens = load_canva_tokens()
+    
+    if username not in tokens:
+        return jsonify({'success': False, 'error': 'Canva not connected'})
+    
+    access_token = tokens[username].get('access_token')
+    if not access_token:
+        return jsonify({'success': False, 'error': 'Invalid Canva token'})
+    
+    try:
+        data = request.get_json()
+        deck_id = data.get('deck_id')
+        
+        # Get deck data
+        s3_key = f"{DECKS_S3_KEY}{deck_id}.json"
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        deck = json.loads(response['Body'].read().decode('utf-8'))
+        
+        # Create Canva design via API
+        # Note: This is a simplified example - actual Canva API requires more setup
+        import urllib.request
+        
+        create_url = 'https://api.canva.com/rest/v1/designs'
+        design_data = json.dumps({
+            'design_type': 'presentation',
+            'title': deck.get('name', 'Crosswalk Deck'),
+            'preset_id': '16x9'  # Standard presentation size
+        }).encode()
+        
+        req = urllib.request.Request(create_url, data=design_data, method='POST')
+        req.add_header('Authorization', f'Bearer {access_token}')
+        req.add_header('Content-Type', 'application/json')
+        
+        with urllib.request.urlopen(req) as response:
+            result = json.loads(response.read().decode())
+            design_id = result.get('design', {}).get('id')
+            edit_url = result.get('design', {}).get('urls', {}).get('edit_url')
+            
+            return jsonify({
+                'success': True,
+                'design_id': design_id,
+                'edit_url': edit_url,
+                'message': 'Deck exported to Canva! Click to open in Canva.'
+            })
+    except Exception as e:
+        print(f"Canva export error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/team-members')
+@requires_auth
+def get_team_members():
+    """Get team members in the same company."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    company = user.get('company', '')
+    if not company:
+        return jsonify({'success': True, 'members': []})
+    
+    users_data = load_users()
+    members = []
+    
+    for username, user_data in users_data.get('users', {}).items():
+        if user_data.get('company', '') == company:
+            members.append({
+                'username': username,
+                'department': user_data.get('department', ''),
+                'profile_picture': user_data.get('profile_picture')
+            })
+    
+    return jsonify({'success': True, 'members': members})
+
+
+# ============================================================================
+# COLLABORATION API ENDPOINTS
+# ============================================================================
+
+COLLAB_S3_KEY = 'system/collaboration/'
+
+@app.route('/api/collab/share-profile', methods=['POST'])
+@requires_auth
+def share_profile():
+    """Share a profile with workspace or team."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        data = request.get_json()
+        username = session.get('username')
+        company = user.get('company', '')
+        
+        share_data = {
+            'id': data.get('id', f"sp_{int(datetime.now().timestamp())}"),
+            'profileKey': data.get('profileKey'),
+            'profileName': data.get('profileName'),
+            'sharedBy': username,
+            'sharedAt': datetime.now().isoformat(),
+            'workspace': data.get('workspace', 'default'),
+            'company': company,
+            'comments': []
+        }
+        
+        # Save to S3
+        s3_key = f"{COLLAB_S3_KEY}shares/{share_data['id']}.json"
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(share_data),
+            ContentType='application/json'
+        )
+        
+        # Track activity
+        track_user_activity(username, 'shared_profile', share_data['profileName'])
+        
+        return jsonify({'success': True, 'share': share_data})
+    except Exception as e:
+        print(f"Share profile error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/collab/shared-profiles')
+@requires_auth
+def get_shared_profiles():
+    """Get shared profiles for user's company."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    company = user.get('company', '')
+    
+    try:
+        shares = []
+        prefix = f"{COLLAB_S3_KEY}shares/"
+        
+        paginator = s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for obj in page.get('Contents', []):
+                try:
+                    response = s3_client.get_object(Bucket=S3_BUCKET, Key=obj['Key'])
+                    share = json.loads(response['Body'].read().decode('utf-8'))
+                    # Only return shares from same company
+                    if share.get('company', '') == company:
+                        shares.append(share)
+                except:
+                    continue
+        
+        # Sort by date descending
+        shares.sort(key=lambda x: x.get('sharedAt', ''), reverse=True)
+        
+        return jsonify({'success': True, 'shares': shares})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'shares': []})
+
+
+@app.route('/api/collab/notification', methods=['POST'])
+@requires_auth
+def send_notification():
+    """Send a notification to team members."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        data = request.get_json()
+        notification = {
+            'id': f"n_{int(datetime.now().timestamp())}",
+            'type': data.get('type', 'general'),
+            'message': data.get('message', ''),
+            'recipients': data.get('recipients', []),
+            'sender': session.get('username'),
+            'createdAt': datetime.now().isoformat(),
+            'read': False,
+            'data': data.get('data', {})
+        }
+        
+        # Save notification
+        s3_key = f"{COLLAB_S3_KEY}notifications/{notification['id']}.json"
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(notification),
+            ContentType='application/json'
+        )
+        
+        return jsonify({'success': True, 'notification': notification})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/collab/notifications')
+@requires_auth
+def get_notifications():
+    """Get notifications for current user."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    username = session.get('username')
+    
+    try:
+        notifications = []
+        prefix = f"{COLLAB_S3_KEY}notifications/"
+        
+        paginator = s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for obj in page.get('Contents', []):
+                try:
+                    response = s3_client.get_object(Bucket=S3_BUCKET, Key=obj['Key'])
+                    notif = json.loads(response['Body'].read().decode('utf-8'))
+                    # Only return notifications for this user
+                    if username in notif.get('recipients', []):
+                        notifications.append(notif)
+                except:
+                    continue
+        
+        # Sort by date descending
+        notifications.sort(key=lambda x: x.get('createdAt', ''), reverse=True)
+        
+        return jsonify({'success': True, 'notifications': notifications[:50]})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'notifications': []})
+
+
+@app.route('/api/collab/workspaces', methods=['GET'])
+@requires_auth
+def get_workspaces():
+    """Get workspaces for user's company."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    username = session.get('username')
+    company = user.get('company', '')
+    
+    try:
+        workspaces = []
+        prefix = f"{COLLAB_S3_KEY}workspaces/"
+        
+        paginator = s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for obj in page.get('Contents', []):
+                try:
+                    response = s3_client.get_object(Bucket=S3_BUCKET, Key=obj['Key'])
+                    ws = json.loads(response['Body'].read().decode('utf-8'))
+                    # Return workspaces user has access to
+                    if ws.get('company', '') == company or username in ws.get('members', []) or ws.get('createdBy') == username:
+                        workspaces.append(ws)
+                except:
+                    continue
+        
+        return jsonify({'success': True, 'workspaces': workspaces})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'workspaces': []})
+
+
+@app.route('/api/collab/workspaces', methods=['POST'])
+@requires_auth
+def create_workspace():
+    """Create a new workspace."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        data = request.get_json()
+        username = session.get('username')
+        company = user.get('company', '')
+        
+        workspace = {
+            'id': f"ws_{int(datetime.now().timestamp())}",
+            'name': data.get('name', 'New Workspace'),
+            'description': data.get('description', ''),
+            'members': data.get('members', []),
+            'createdBy': username,
+            'createdAt': datetime.now().isoformat(),
+            'company': company,
+            'profiles': []
+        }
+        
+        # Save workspace
+        s3_key = f"{COLLAB_S3_KEY}workspaces/{workspace['id']}.json"
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(workspace),
+            ContentType='application/json'
+        )
+        
+        return jsonify({'success': True, 'workspace': workspace})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/collab/team-assignments', methods=['GET'])
+@requires_auth
+def get_team_assignments():
+    """Get custom team assignments for user's company."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    company = user.get('company', '')
+    if not company:
+        return jsonify({'success': True, 'team_members': []})
+    
+    try:
+        s3_key = f"{COLLAB_S3_KEY}teams/{company.replace(' ', '_').lower()}.json"
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        team_data = json.loads(response['Body'].read().decode('utf-8'))
+        return jsonify({'success': True, 'team_members': team_data.get('members', [])})
+    except s3_client.exceptions.NoSuchKey:
+        return jsonify({'success': True, 'team_members': []})
+    except Exception as e:
+        return jsonify({'success': True, 'team_members': []})
+
+
+@app.route('/api/collab/team-assignments', methods=['POST'])
+@requires_admin
+def save_team_assignments():
+    """Save custom team assignments for company (admin only)."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    company = user.get('company', '')
+    if not company:
+        return jsonify({'success': False, 'error': 'No company assigned'})
+    
+    try:
+        data = request.get_json()
+        team_members = data.get('team_members', [])
+        
+        team_data = {
+            'company': company,
+            'members': team_members,
+            'updated_by': session.get('username'),
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        s3_key = f"{COLLAB_S3_KEY}teams/{company.replace(' ', '_').lower()}.json"
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(team_data),
+            ContentType='application/json'
+        )
+        
+        return jsonify({'success': True, 'team_members': team_members})
+    except Exception as e:
+        print(f"Save team assignments error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/collab/comments', methods=['GET'])
+@requires_auth
+def get_comments():
+    """Get comments for user's workspaces."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    company = user.get('company', '')
+    
+    try:
+        comments = []
+        prefix = f"{COLLAB_S3_KEY}comments/"
+        
+        paginator = s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_BUCKET, Prefix=prefix):
+            for obj in page.get('Contents', []):
+                try:
+                    response = s3_client.get_object(Bucket=S3_BUCKET, Key=obj['Key'])
+                    comment = json.loads(response['Body'].read().decode('utf-8'))
+                    if comment.get('company', '') == company:
+                        comments.append(comment)
+                except:
+                    continue
+        
+        # Sort by date descending
+        comments.sort(key=lambda x: x.get('time', ''), reverse=True)
+        
+        return jsonify({'success': True, 'comments': comments[:100]})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'comments': []})
+
+
+@app.route('/api/collab/comments', methods=['POST'])
+@requires_auth
+def post_comment():
+    """Post a new comment."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    try:
+        data = request.get_json()
+        username = session.get('username')
+        company = user.get('company', '')
+        
+        comment = {
+            'id': f"c_{int(datetime.now().timestamp())}",
+            'author': username,
+            'text': data.get('text', ''),
+            'time': datetime.now().isoformat(),
+            'profile': data.get('profile', 'General'),
+            'profileKey': data.get('profileKey'),
+            'workspace': data.get('workspace', 'default'),
+            'company': company,
+            'mention': data.get('mention'),
+            'replies': []
+        }
+        
+        # Save comment
+        s3_key = f"{COLLAB_S3_KEY}comments/{comment['id']}.json"
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=s3_key,
+            Body=json.dumps(comment),
+            ContentType='application/json'
+        )
+        
+        # Track activity
+        track_user_activity(username, 'posted_comment', comment['profile'])
+        
+        return jsonify({'success': True, 'comment': comment})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# ============================================================================
+# ATTRIBUTION IQ ENDPOINTS
+# ============================================================================
+
+@app.route('/api/attribution/talent-search', methods=['POST'])
+@requires_auth
+def submit_talent_search():
+    """Submit a Talent Search IQ analysis job."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Check access
+        role = user.get('role', 'user')
+        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+            return jsonify({'error': 'Attribution IQ access required'}), 403
+        
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate required fields
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        search_terms = data.get('search_terms', [])
+        platforms = data.get('platforms', [])
+        
+        if not start_date or not end_date:
+            return jsonify({'error': 'Start date and end date are required'}), 400
+        if not search_terms:
+            return jsonify({'error': 'At least one search term is required'}), 400
+        if not platforms:
+            return jsonify({'error': 'At least one platform is required'}), 400
+        
+        # Create job
+        job_id = str(uuid.uuid4())
+        username = user.get('username', 'unknown')
+        
+        jobs[job_id] = {
+            'job_id': job_id,
+            'username': username,
+            'type': 'talent_search',
+            'status': 'queued',
+            'progress': 0,
+            'message': 'Job queued...',
+            'created_at': datetime.now().isoformat(),
+            'error': None,
+            'result_file': None,
+            'logs': [],
+            'params': {
+                'start_date': start_date,
+                'end_date': end_date,
+                'search_terms': search_terms,
+                'platforms': platforms,
+                'before_common_name': data.get('before_common_name')
+            }
+        }
+        
+        # Start job in background thread
+        thread = threading.Thread(target=run_talent_search, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'job_id': job_id,
+            'message': 'Talent Search IQ job submitted successfully',
+            'status': 'queued'
+        })
+        
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/attribution/talent-theater', methods=['POST'])
+@requires_auth
+def submit_talent_theater():
+    """Submit a Talent Ticket Sale IQ analysis job."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Check access
+        role = user.get('role', 'user')
+        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+            return jsonify({'error': 'Attribution IQ access required'}), 403
+        
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate required fields
+        talent_name = data.get('talent_name')
+        movie_name = data.get('movie_name')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        
+        if not talent_name:
+            return jsonify({'error': 'Talent name is required'}), 400
+        if not movie_name:
+            return jsonify({'error': 'Movie name is required'}), 400
+        if not start_date or not end_date:
+            return jsonify({'error': 'Start date and end date are required'}), 400
+        
+        # Create job
+        job_id = str(uuid.uuid4())
+        username = user.get('username', 'unknown')
+        
+        jobs[job_id] = {
+            'job_id': job_id,
+            'username': username,
+            'type': 'talent_theater',
+            'status': 'queued',
+            'progress': 0,
+            'message': 'Job queued...',
+            'created_at': datetime.now().isoformat(),
+            'error': None,
+            'result_file': None,
+            'logs': [],
+            'params': {
+                'talent_name': talent_name,
+                'competitive_talents': data.get('competitive_talents', []),
+                'movie_name': movie_name,
+                'start_date': start_date,
+                'end_date': end_date
+            }
+        }
+        
+        # Start job in background thread
+        thread = threading.Thread(target=run_talent_theater, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'job_id': job_id,
+            'message': 'Talent Ticket Sale IQ job submitted successfully',
+            'status': 'queued'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def run_talent_search(job_id):
+    """Run the platform_search_tracker.py script."""
+    try:
+        update_job_status(job_id, progress=10, message='Initializing...')
+        
+        # Import the script module
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'platform_search_tracker.py')
+        if not os.path.exists(script_path):
+            update_job_status(job_id, status='failed', error=f'Script not found: {script_path}')
+            return
+        
+        # Get job parameters
+        job = jobs[job_id]
+        params = job['params']
+        
+        update_job_status(job_id, progress=30, message='Running analysis...')
+        
+        # Import and run the script
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("platform_search_tracker", script_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, os.path.dirname(script_path))
+        spec.loader.exec_module(module)
+        
+        # Prepare parameters for the script
+        from datetime import datetime
+        start_date = datetime.strptime(params['start_date'], '%Y-%m-%d')
+        end_date = datetime.strptime(params['end_date'], '%Y-%m-%d')
+        
+        # Run the analysis function
+        conn = module.connect_snowflake()
+        try:
+            script_params = {
+                'start_date': start_date,
+                'end_date': end_date,
+                'search_terms': params['search_terms'],
+                'platforms': params['platforms'],
+                'before_common_name': params.get('before_common_name')
+            }
+            results = module.run_analysis(conn, script_params)
+            update_job_status(job_id, progress=80, message='Writing output...')
+            
+            # Write output and capture path
+            module.write_output(results)
+            
+            # Find the output file (it's written to Desktop/attribution folder)
+            from pathlib import Path
+            output_folder = Path.home() / "Desktop" / "attribution"
+            if output_folder.exists():
+                # Find the most recent CSV file in the folder
+                csv_files = list(output_folder.glob("platform_search_tracker_*.csv"))
+                if csv_files:
+                    # Sort by modification time, get most recent
+                    csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    output_file = str(csv_files[0])
+                    if os.path.exists(output_file):
+                        jobs[job_id]['result_file'] = output_file
+                        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
+                    else:
+                        update_job_status(job_id, status='failed', error='Output file not found')
+                else:
+                    update_job_status(job_id, status='failed', error='No output file created')
+            else:
+                update_job_status(job_id, status='failed', error='Output folder not found')
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+                
+    except Exception as e:
+        import traceback
+        error_msg = f"Error running talent search: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        update_job_status(job_id, status='failed', error=error_msg)
+
+
+@app.route('/api/admin/fix-csv-genpop', methods=['POST'])
+@requires_auth
+def fix_csv_genpop():
+    """Admin endpoint to fix US Gen Pop Projection for SAMPLE SIZE in all CSV files."""
+    from flask import session
+    user = session.get('user')
+    if user.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Admin access required'}), 403
+    
+    try:
+        import subprocess
+        import sys
+        
+        # Run the fix script
+        script_path = os.path.join(os.path.dirname(__file__), 'fix_s3_csv_genpop.py')
+        result = subprocess.run(
+            [sys.executable, script_path],
+            capture_output=True,
+            text=True,
+            timeout=3600  # 1 hour timeout
+        )
+        
+        if result.returncode == 0:
+            return jsonify({
+                'success': True,
+                'output': result.stdout,
+                'message': 'CSV files fixed successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.stderr or 'Script execution failed',
+                'output': result.stdout
+            }), 500
+            
+    except subprocess.TimeoutExpired:
+        return jsonify({'success': False, 'error': 'Script execution timed out'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def run_talent_theater(job_id):
+    """Run the Talent_Theater_Attribution.py script."""
+    try:
+        update_job_status(job_id, progress=10, message='Initializing...')
+        
+        # Import the script module
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Talent_Theater_Attribution.py')
+        if not os.path.exists(script_path):
+            update_job_status(job_id, status='failed', error=f'Script not found: {script_path}')
+            return
+        
+        # Get job parameters
+        job = jobs[job_id]
+        params = job['params']
+        
+        update_job_status(job_id, progress=30, message='Running analysis...')
+        
+        # Import and run the script
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("talent_theater_attribution", script_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, os.path.dirname(script_path))
+        spec.loader.exec_module(module)
+        
+        # Prepare parameters for the script
+        from datetime import datetime
+        start_date = datetime.strptime(params['start_date'], '%Y-%m-%d')
+        end_date = datetime.strptime(params['end_date'], '%Y-%m-%d')
+        
+        # Run the query function
+        conn = module.connect_snowflake()
+        try:
+            script_params = {
+                'talent_name': params['talent_name'],
+                'competitive_talents': params.get('competitive_talents', []),
+                'movie_name': params['movie_name'],
+                'start_date': start_date,
+                'end_date': end_date
+            }
+            results = module.run_query(conn, script_params)
+            update_job_status(job_id, progress=80, message='Writing output...')
+            
+            # Write output
+            module.write_output(results, script_params)
+            
+            # Find the output file (it's written to Desktop/attribution folder)
+            from pathlib import Path
+            output_folder = Path.home() / "Desktop" / "attribution"
+            if output_folder.exists():
+                # Find the most recent CSV file matching the pattern (movie_talent_timestamp.csv)
+                # The file name format is: {safe_movie_name}_{safe_talent_name}_{timestamp}.csv
+                csv_files = list(output_folder.glob("*.csv"))
+                # Filter to files that match the pattern (have timestamp at end)
+                csv_files = [f for f in csv_files if len(f.stem.split('_')) >= 3]
+                if csv_files:
+                    # Sort by modification time, get most recent
+                    csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    output_file = str(csv_files[0])
+                    if os.path.exists(output_file):
+                        jobs[job_id]['result_file'] = output_file
+                        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
+                    else:
+                        update_job_status(job_id, status='failed', error='Output file not found')
+                else:
+                    update_job_status(job_id, status='failed', error='No output file created')
+            else:
+                update_job_status(job_id, status='failed', error='Output folder not found')
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+                
+    except Exception as e:
+        import traceback
+        error_msg = f"Error running talent theater: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        update_job_status(job_id, status='failed', error=error_msg)
+
+
+@app.route('/api/attribution/svod-acquisition', methods=['POST'])
+@requires_auth
+def submit_svod_acquisition():
+    """Submit a SVOD Acquisition IQ analysis job."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Check access
+        role = user.get('role', 'user')
+        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+            return jsonify({'error': 'Attribution IQ access required'}), 403
+        
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate required fields
+        project_name = data.get('project_name')
+        campaign_start = data.get('campaign_start')
+        campaign_end = data.get('campaign_end')
+        exclusion_days = data.get('exclusion_days')
+        attribution_window = data.get('attribution_window')
+        show_search_terms = data.get('show_search_terms', [])
+        platform_name = data.get('platform_name')
+        platform_url_patterns = data.get('platform_url_patterns', [])
+        
+        if not project_name:
+            return jsonify({'error': 'Project name is required'}), 400
+        if not campaign_start or not campaign_end:
+            return jsonify({'error': 'Campaign start and end dates are required'}), 400
+        if not exclusion_days or not attribution_window:
+            return jsonify({'error': 'Exclusion days and attribution window are required'}), 400
+        if not show_search_terms:
+            return jsonify({'error': 'At least one show search term is required'}), 400
+        if not platform_name:
+            return jsonify({'error': 'Platform name is required'}), 400
+        if not platform_url_patterns:
+            return jsonify({'error': 'At least one platform URL pattern is required'}), 400
+        
+        # Create job
+        job_id = str(uuid.uuid4())
+        username = user.get('username', 'unknown')
+        
+        jobs[job_id] = {
+            'job_id': job_id,
+            'username': username,
+            'type': 'svod_acquisition',
+            'status': 'queued',
+            'progress': 0,
+            'message': 'Job queued...',
+            'created_at': datetime.now().isoformat(),
+            'error': None,
+            'result_file': None,
+            'logs': [],
+            'params': {
+                'project_name': project_name,
+                'campaign_start': campaign_start,
+                'campaign_end': campaign_end,
+                'exclusion_days': exclusion_days,
+                'attribution_window': attribution_window,
+                'show_search_terms': show_search_terms,
+                'is_new_show': data.get('is_new_show', False),
+                'platform_name': platform_name,
+                'platform_url_patterns': platform_url_patterns
+            }
+        }
+        
+        # Start job in background thread
+        thread = threading.Thread(target=run_svod_acquisition, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'job_id': job_id,
+            'message': 'SVOD Acquisition IQ job submitted successfully',
+            'status': 'queued'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/attribution/campaign-roi', methods=['POST'])
+@requires_auth
+def submit_campaign_roi():
+    """Submit a Campaign ROI IQ analysis job."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Check access
+        role = user.get('role', 'user')
+        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+            return jsonify({'error': 'Attribution IQ access required'}), 403
+        
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate required fields
+        project_name = data.get('project_name')
+        campaign_start = data.get('campaign_start')
+        campaign_end = data.get('campaign_end')
+        pre_campaign_days = data.get('pre_campaign_days')
+        attribution_window = data.get('attribution_window')
+        action_urls = data.get('action_urls', [])
+        post_domains = data.get('post_domains', [])
+        
+        if not project_name:
+            return jsonify({'error': 'Project name is required'}), 400
+        if not campaign_start or not campaign_end:
+            return jsonify({'error': 'Campaign start and end dates are required'}), 400
+        if not pre_campaign_days or not attribution_window:
+            return jsonify({'error': 'Pre campaign days and attribution window are required'}), 400
+        if not action_urls:
+            return jsonify({'error': 'At least one action URL is required'}), 400
+        if not post_domains:
+            return jsonify({'error': 'At least one post domain is required'}), 400
+        
+        # Create job
+        job_id = str(uuid.uuid4())
+        username = user.get('username', 'unknown')
+        
+        jobs[job_id] = {
+            'job_id': job_id,
+            'username': username,
+            'type': 'campaign_roi',
+            'status': 'queued',
+            'progress': 0,
+            'message': 'Job queued...',
+            'created_at': datetime.now().isoformat(),
+            'error': None,
+            'result_file': None,
+            'logs': [],
+            'params': {
+                'project_name': project_name,
+                'campaign_start': campaign_start,
+                'campaign_end': campaign_end,
+                'pre_campaign_days': pre_campaign_days,
+                'attribution_window': attribution_window,
+                'pre_domains': data.get('pre_domains', []),
+                'action_urls': action_urls,
+                'post_domains': post_domains,
+                'post_metrics': data.get('post_metrics', []),
+                'competitive_brands': data.get('competitive_brands', [])
+            }
+        }
+        
+        # Start job in background thread
+        thread = threading.Thread(target=run_campaign_roi, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'job_id': job_id,
+            'message': 'Campaign ROI IQ job submitted successfully',
+            'status': 'queued'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def run_svod_acquisition(job_id):
+    """Run the SVOD_Churn_Attribution.py script."""
+    try:
+        update_job_status(job_id, progress=10, message='Initializing...')
+        
+        # Import the script module
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'SVOD_Churn_Attribution.py')
+        if not os.path.exists(script_path):
+            update_job_status(job_id, status='failed', error=f'Script not found: {script_path}')
+            return
+        
+        # Get job parameters
+        job = jobs[job_id]
+        params = job['params']
+        
+        update_job_status(job_id, progress=30, message='Running analysis...')
+        
+        # Import and run the script
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("svod_churn_attribution", script_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, os.path.dirname(script_path))
+        spec.loader.exec_module(module)
+        
+        # Prepare parameters for the script
+        from datetime import datetime
+        campaign_start = datetime.strptime(params['campaign_start'], '%Y-%m-%d')
+        campaign_end = datetime.strptime(params['campaign_end'], '%Y-%m-%d')
+        
+        # Build script parameters dict (matching what get_user_input returns)
+        script_params = {
+            'project_name': params['project_name'],
+            'auto_format': True,
+            'campaign_start': campaign_start,
+            'campaign_end': campaign_end,
+            'exclusion_days': int(params['exclusion_days']),
+            'attribution_window': int(params['attribution_window']),
+            'show_search_terms': params['show_search_terms'],
+            'is_new_show': params.get('is_new_show', False),
+            'track_episodes': False,  # Simplified - can be enhanced later
+            'tracking_mode': None,
+            'episode_dates': [],
+            'platform_name': params['platform_name'],
+            'platform_url_patterns': params['platform_url_patterns']
+        }
+        
+        # Run the analysis function
+        conn = module.connect_snowflake()
+        try:
+            update_job_status(job_id, progress=50, message='Executing analysis...')
+            
+            # Call run_query directly with our params
+            if hasattr(module, 'run_query'):
+                summary_df, comp_df, demo_df, timing_df, episode_df, monthly_df, episode_timing_df, churn_df, post_signup_touchpoints_df = module.run_query(conn, script_params)
+            else:
+                update_job_status(job_id, status='failed', error='Script does not have run_query function')
+                return
+            
+            update_job_status(job_id, progress=80, message='Writing output...')
+            
+            # Call write_output
+            if hasattr(module, 'write_output'):
+                module.write_output(summary_df, comp_df, demo_df, timing_df, episode_df, monthly_df, episode_timing_df, churn_df, post_signup_touchpoints_df, script_params)
+            else:
+                update_job_status(job_id, status='failed', error='Script does not have write_output function')
+                return
+            
+            # Find the output file (it's written to Desktop/attribution folder)
+            from pathlib import Path
+            output_folder = Path.home() / "Desktop" / "attribution"
+            if output_folder.exists():
+                # Find the most recent CSV file matching the project name
+                csv_files = list(output_folder.glob(f"{params['project_name']}*.csv"))
+                if csv_files:
+                    csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    output_file = str(csv_files[0])
+                    if os.path.exists(output_file):
+                        jobs[job_id]['result_file'] = output_file
+                        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
+                    else:
+                        update_job_status(job_id, status='failed', error='Output file not found')
+                else:
+                    update_job_status(job_id, status='failed', error='No output file created')
+            else:
+                update_job_status(job_id, status='failed', error='Output folder not found')
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+                
+    except Exception as e:
+        import traceback
+        error_msg = f"Error running SVOD acquisition: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        update_job_status(job_id, status='failed', error=error_msg)
+
+
+def run_campaign_roi(job_id):
+    """Run the campaign_attribution.py script."""
+    try:
+        update_job_status(job_id, progress=10, message='Initializing...')
+        
+        # Import the script module
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'campaign_attribution.py')
+        if not os.path.exists(script_path):
+            update_job_status(job_id, status='failed', error=f'Script not found: {script_path}')
+            return
+        
+        # Get job parameters
+        job = jobs[job_id]
+        params = job['params']
+        
+        update_job_status(job_id, progress=30, message='Running analysis...')
+        
+        # Import and run the script
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("campaign_attribution", script_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, os.path.dirname(script_path))
+        spec.loader.exec_module(module)
+        
+        # Prepare parameters for the script
+        from datetime import datetime
+        campaign_start = datetime.strptime(params['campaign_start'], '%Y-%m-%d')
+        campaign_end = datetime.strptime(params['campaign_end'], '%Y-%m-%d')
+        
+        # Build script parameters dict (matching what get_user_input returns)
+        script_params = {
+            'project_name': params['project_name'],
+            'campaign_start': campaign_start,
+            'campaign_end': campaign_end,
+            'pre_campaign_days': int(params['pre_campaign_days']),
+            'attribution_window': int(params['attribution_window']),
+            'pre_domains': params.get('pre_domains', []),
+            'action_urls': params['action_urls'],
+            'post_domains': params['post_domains'],
+            'post_metrics': params.get('post_metrics', []),
+            'competitive_brands': params.get('competitive_brands', [])
+        }
+        
+        # Run the analysis function
+        conn = module.connect_snowflake()
+        try:
+            update_job_status(job_id, progress=50, message='Executing analysis...')
+            
+            # Call run_query directly with our params
+            if hasattr(module, 'run_query'):
+                summary_df, comp_df, demo_df, hours_action_df, hours_post_df = module.run_query(conn, script_params)
+            else:
+                update_job_status(job_id, status='failed', error='Script does not have run_query function')
+                return
+            
+            update_job_status(job_id, progress=80, message='Writing output...')
+            
+            # Call write_output
+            if hasattr(module, 'write_output'):
+                module.write_output(summary_df, comp_df, demo_df, hours_action_df, hours_post_df, script_params)
+            else:
+                update_job_status(job_id, status='failed', error='Script does not have write_output function')
+                return
+            
+            # Find the output file (it's written to Desktop/attribution folder)
+            from pathlib import Path
+            output_folder = Path.home() / "Desktop" / "attribution"
+            if output_folder.exists():
+                # Find the most recent CSV file matching the project name
+                csv_files = list(output_folder.glob(f"{params['project_name']}*.csv"))
+                if csv_files:
+                    csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    output_file = str(csv_files[0])
+                    if os.path.exists(output_file):
+                        jobs[job_id]['result_file'] = output_file
+                        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
+                    else:
+                        update_job_status(job_id, status='failed', error='Output file not found')
+                else:
+                    update_job_status(job_id, status='failed', error='No output file created')
+            else:
+                update_job_status(job_id, status='failed', error='Output folder not found')
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+                
+    except Exception as e:
+        import traceback
+        error_msg = f"Error running campaign ROI: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        update_job_status(job_id, status='failed', error=error_msg)
+
+
+@app.route('/api/attribution/cross-show', methods=['POST'])
+@requires_auth
+def submit_cross_show():
+    """Submit a Cross Show Watching analysis job."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Check access
+        role = user.get('role', 'user')
+        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+            return jsonify({'error': 'Attribution IQ access required'}), 403
+        
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate required fields
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        show_title = data.get('show_title')
+        platform = data.get('platform')
+        
+        if not start_date or not end_date:
+            return jsonify({'error': 'Start date and end date are required'}), 400
+        if not show_title:
+            return jsonify({'error': 'Show title is required'}), 400
+        if not platform:
+            return jsonify({'error': 'Platform is required'}), 400
+        
+        # Create job
+        job_id = str(uuid.uuid4())
+        username = user.get('username', 'unknown')
+        
+        jobs[job_id] = {
+            'job_id': job_id,
+            'username': username,
+            'type': 'cross_show',
+            'status': 'queued',
+            'progress': 0,
+            'message': 'Job queued...',
+            'created_at': datetime.now().isoformat(),
+            'error': None,
+            'result_file': None,
+            'logs': [],
+            'params': {
+                'start_date': start_date,
+                'end_date': end_date,
+                'show_title': show_title,
+                'platform': platform,
+                'other_properties': data.get('other_properties', [])
+            }
+        }
+        
+        # Start job in background thread
+        thread = threading.Thread(target=run_cross_show, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'job_id': job_id,
+            'message': 'Cross Show Watching job submitted successfully',
+            'status': 'queued'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/attribution/watch-time', methods=['POST'])
+@requires_auth
+def submit_watch_time():
+    """Submit a Watch Time IQ analysis job."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        
+        # Check access
+        role = user.get('role', 'user')
+        if role != 'admin' and role != 'super_admin' and role != 'enterprise' and not user.get('has_attribution_iq_access', False):
+            return jsonify({'error': 'Attribution IQ access required'}), 403
+        
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate required fields
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        show_names = data.get('show_names', [])
+        
+        if not start_date or not end_date:
+            return jsonify({'error': 'Start date and end date are required'}), 400
+        if not show_names:
+            return jsonify({'error': 'At least one show name is required'}), 400
+        
+        # Create job
+        job_id = str(uuid.uuid4())
+        username = user.get('username', 'unknown')
+        
+        jobs[job_id] = {
+            'job_id': job_id,
+            'username': username,
+            'type': 'watch_time',
+            'status': 'queued',
+            'progress': 0,
+            'message': 'Job queued...',
+            'created_at': datetime.now().isoformat(),
+            'error': None,
+            'result_file': None,
+            'logs': [],
+            'params': {
+                'start_date': start_date,
+                'end_date': end_date,
+                'show_names': show_names,
+                'show_lengths': data.get('show_lengths', {})
+            }
+        }
+        
+        # Start job in background thread
+        thread = threading.Thread(target=run_watch_time, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'job_id': job_id,
+            'message': 'Watch Time IQ job submitted successfully',
+            'status': 'queued'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def run_cross_show(job_id):
+    """Run the show_platform_tracker.py script."""
+    try:
+        update_job_status(job_id, progress=10, message='Initializing...')
+        
+        # Import the script module
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'show_platform_tracker.py')
+        if not os.path.exists(script_path):
+            update_job_status(job_id, status='failed', error=f'Script not found: {script_path}')
+            return
+        
+        # Get job parameters
+        job = jobs[job_id]
+        params = job['params']
+        
+        update_job_status(job_id, progress=30, message='Running analysis...')
+        
+        # Import and run the script
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("show_platform_tracker", script_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, os.path.dirname(script_path))
+        spec.loader.exec_module(module)
+        
+        # Prepare parameters for the script
+        from datetime import datetime
+        start_date = datetime.strptime(params['start_date'], '%Y-%m-%d')
+        end_date = datetime.strptime(params['end_date'], '%Y-%m-%d')
+        
+        # Build script parameters dict (matching what get_user_input returns)
+        script_params = {
+            'show_title': params['show_title'],
+            'platform': params['platform'],
+            'start_date': start_date,
+            'end_date': end_date,
+            'other_properties': params.get('other_properties', [])
+        }
+        
+        # Run the analysis function
+        conn = module.connect_snowflake()
+        try:
+            update_job_status(job_id, progress=50, message='Executing analysis...')
+            
+            # Call run_analysis directly with our params
+            if hasattr(module, 'run_analysis'):
+                results = module.run_analysis(conn, script_params)
+            else:
+                update_job_status(job_id, status='failed', error='Script does not have run_analysis function')
+                return
+            
+            update_job_status(job_id, progress=80, message='Writing output...')
+            
+            # Call write_output
+            if hasattr(module, 'write_output'):
+                module.write_output(results)
+            else:
+                update_job_status(job_id, status='failed', error='Script does not have write_output function')
+                return
+            
+            # Find the output file (it's written to Desktop folder)
+            from pathlib import Path
+            output_folder = Path.home() / "Desktop"
+            if output_folder.exists():
+                # Find the most recent CSV file (the script creates files with show title in name)
+                csv_files = list(output_folder.glob("*.csv"))
+                if csv_files:
+                    csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    output_file = str(csv_files[0])
+                    if os.path.exists(output_file):
+                        jobs[job_id]['result_file'] = output_file
+                        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
+                    else:
+                        update_job_status(job_id, status='failed', error='Output file not found')
+                else:
+                    update_job_status(job_id, status='failed', error='No output file created')
+            else:
+                update_job_status(job_id, status='failed', error='Output folder not found')
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+                
+    except Exception as e:
+        import traceback
+        error_msg = f"Error running cross show watching: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        update_job_status(job_id, status='failed', error=error_msg)
+
+
+def run_watch_time(job_id):
+    """Run the multi_show_time_tracker.py script."""
+    try:
+        update_job_status(job_id, progress=10, message='Initializing...')
+        
+        # Import the script module
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'multi_show_time_tracker.py')
+        if not os.path.exists(script_path):
+            update_job_status(job_id, status='failed', error=f'Script not found: {script_path}')
+            return
+        
+        # Get job parameters
+        job = jobs[job_id]
+        params = job['params']
+        
+        update_job_status(job_id, progress=30, message='Running analysis...')
+        
+        # Import and run the script
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("multi_show_time_tracker", script_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, os.path.dirname(script_path))
+        spec.loader.exec_module(module)
+        
+        # Prepare parameters for the script
+        from datetime import datetime
+        start_date = datetime.strptime(params['start_date'], '%Y-%m-%d')
+        end_date = datetime.strptime(params['end_date'], '%Y-%m-%d')
+        
+        # Build script parameters dict (matching what get_user_input returns)
+        script_params = {
+            'show_names': params['show_names'],
+            'start_date': start_date,
+            'end_date': end_date,
+            'show_lengths': params.get('show_lengths', {})
+        }
+        
+        # Run the analysis function
+        conn = module.connect_snowflake()
+        try:
+            update_job_status(job_id, progress=50, message='Executing analysis...')
+            
+            # Call run_analysis directly with our params
+            if hasattr(module, 'run_analysis'):
+                results = module.run_analysis(conn, script_params)
+            else:
+                update_job_status(job_id, status='failed', error='Script does not have run_analysis function')
+                return
+            
+            update_job_status(job_id, progress=80, message='Writing output...')
+            
+            # Call write_output
+            if hasattr(module, 'write_output'):
+                module.write_output(results)
+            else:
+                update_job_status(job_id, status='failed', error='Script does not have write_output function')
+                return
+            
+            # Find the output file (it's written to Desktop folder)
+            from pathlib import Path
+            output_folder = Path.home() / "Desktop"
+            if output_folder.exists():
+                # Find the most recent CSV file
+                csv_files = list(output_folder.glob("*.csv"))
+                if csv_files:
+                    csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    output_file = str(csv_files[0])
+                    if os.path.exists(output_file):
+                        jobs[job_id]['result_file'] = output_file
+                        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
+                    else:
+                        update_job_status(job_id, status='failed', error='Output file not found')
+                else:
+                    update_job_status(job_id, status='failed', error='No output file created')
+            else:
+                update_job_status(job_id, status='failed', error='Output folder not found')
+        finally:
+            try:
+                conn.close()
+            except:
+                pass
+                
+    except Exception as e:
+        import traceback
+        error_msg = f"Error running watch time IQ: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        update_job_status(job_id, status='failed', error=error_msg)
+
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
+# Print startup completion message
+print("=" * 60)
+print("✅ Flask app fully initialized and ready to serve requests")
+print("✅ Health check available at /health and /healthz")
+print("✅ Background initialization started (users, cache)")
+print("=" * 60)
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+    if SOCKETIO_AVAILABLE and socketio:
+        socketio.run(app, host='0.0.0.0', port=port, debug=debug)
+    else:
+        app.run(host='0.0.0.0', port=port, debug=debug)
