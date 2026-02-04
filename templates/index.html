@@ -9455,8 +9455,24 @@
             border: none;
             color: var(--text-secondary);
             cursor: pointer;
-            font-size: 0.9rem;
+            font-size: 0.75rem;
             transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .data-points-toggle .toggle-label {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            font-size: 0.7rem;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+        
+        .data-points-sidebar:not(.collapsed) .data-points-toggle .toggle-label {
+            display: none;
         }
         
         .data-points-toggle:hover {
@@ -13561,6 +13577,7 @@
                                     <div class="data-points-sidebar collapsed" id="dataPointsSidebar" style="grid-column: 3;">
                                         <button class="data-points-toggle" onclick="toggleDataPointsSidebar()" title="Toggle Data Points Panel">
                                             <span id="dataPointsToggleIcon">◀</span>
+                                            <span class="toggle-label">📦 Data Points</span>
                                         </button>
                                         <div class="data-points-header-content" style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                                             <h4 style="margin: 0; font-size: 0.8rem; color: var(--text-secondary);">📦 Data Points</h4>
