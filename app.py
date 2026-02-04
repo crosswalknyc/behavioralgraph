@@ -3050,9 +3050,10 @@ def index():
     role = user.get('role', 'user') if user else 'user'
     
     # Load quick-select behavioral exclusions (applies to all users globally)
+    # Bypass cache so admin changes propagate to all users immediately across workers
     quick_select_behaviors_exclusions = []
     try:
-        quick_selects = load_json_from_s3(QUICK_SELECTS_FILE)
+        quick_selects = load_json_from_s3(QUICK_SELECTS_FILE, use_cache=False)
         behaviors = quick_selects.get('behaviors', {})
         quick_select_behaviors_exclusions = [cat for cat, val in behaviors.items() if val is False]
     except Exception as e:
