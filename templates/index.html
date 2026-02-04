@@ -9349,24 +9349,67 @@
             color: var(--text-secondary);
         }
         
-        .slide-toolbar {
+        /* Ribbon-style toolbar */
+        .slide-toolbar-ribbon {
             display: flex;
-            gap: 0.5rem;
-            padding: 0.6rem;
+            flex-direction: column;
             background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30, 41, 59, 0.98) 100%);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            margin-bottom: 0.75rem;
+            margin-bottom: 0.5rem;
+            overflow: hidden;
+        }
+        
+        .ribbon-tabs {
+            display: flex;
+            gap: 0;
+            background: rgba(0,0,0,0.2);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .ribbon-tab {
+            padding: 0.35rem 0.75rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.7rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            transition: all 0.15s;
+            border-bottom: 2px solid transparent;
+        }
+        
+        .ribbon-tab:hover {
+            color: var(--text-primary);
+            background: rgba(255,255,255,0.05);
+        }
+        
+        .ribbon-tab.active {
+            color: var(--accent-cyan);
+            background: rgba(6, 182, 212, 0.1);
+            border-bottom-color: var(--accent-cyan);
+        }
+        
+        .ribbon-content {
+            display: none;
+            padding: 0.4rem 0.5rem;
+            gap: 0.35rem;
             flex-wrap: wrap;
-            justify-content: center;
             align-items: center;
+        }
+        
+        .ribbon-content.active {
+            display: flex;
         }
         
         .slide-toolbar-group {
             display: flex;
-            gap: 0.25rem;
-            padding-right: 0.5rem;
+            gap: 0.2rem;
+            padding-right: 0.4rem;
             border-right: 1px solid var(--border-color);
+            align-items: center;
         }
         
         .slide-toolbar-group:last-child {
@@ -9378,10 +9421,10 @@
             background: transparent;
             border: 1px solid transparent;
             border-radius: 4px;
-            padding: 0.4rem 0.6rem;
+            padding: 0.25rem 0.4rem;
             color: var(--text-primary);
             cursor: pointer;
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             transition: all 0.15s;
         }
         
@@ -9393,6 +9436,60 @@
         .toolbar-btn.active {
             background: var(--accent-blue);
             border-color: var(--accent-blue);
+        }
+        
+        /* Data points sidebar collapsed state */
+        .data-points-sidebar.collapsed {
+            width: 40px !important;
+            min-width: 40px !important;
+        }
+        
+        .data-points-sidebar.collapsed .data-points-header-content,
+        .data-points-sidebar.collapsed .data-points-drag-list {
+            display: none;
+        }
+        
+        .data-points-toggle {
+            width: 100%;
+            padding: 0.5rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        
+        .data-points-toggle:hover {
+            color: var(--accent-cyan);
+            background: rgba(6, 182, 212, 0.1);
+        }
+        
+        /* Slide thumbnail delete button */
+        .slide-thumb-delete {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 18px;
+            height: 18px;
+            background: rgba(239, 68, 68, 0.9);
+            border: none;
+            border-radius: 3px;
+            color: white;
+            cursor: pointer;
+            font-size: 0.6rem;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        
+        .slide-thumb-item {
+            position: relative;
+        }
+        
+        .slide-thumb-item:hover .slide-thumb-delete {
+            display: flex;
         }
         
         .slide-canvas-zoom-wrapper {
@@ -13983,7 +14080,7 @@
                         
                         <div id="collab-tab-decks" class="collab-tab-content active">
                             <div class="workspace-deck-builder">
-                                <div class="deck-builder-container" style="grid-template-columns: 200px 1fr 280px;">
+                                <div class="deck-builder-container" style="grid-template-columns: 200px 1fr 40px;">
                                     <!-- Left: Slide Thumbnails -->
                                     <div class="slide-thumbnails-panel" id="slideThumbnailsPanel" style="grid-column: 1;">
                                         <div id="slideThumbnailsList" style="padding: 0.5rem; overflow-y: auto; flex: 1;">
@@ -14021,9 +14118,12 @@
                                         </div>
                                     </div>
                                     
-                                    <!-- Right: Data Points (draggable to slides) -->
-                                    <div class="data-points-sidebar" id="dataPointsSidebar" style="grid-column: 3;">
-                                        <div style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                                    <!-- Right: Data Points (draggable to slides) - collapsed by default -->
+                                    <div class="data-points-sidebar collapsed" id="dataPointsSidebar" style="grid-column: 3;">
+                                        <button class="data-points-toggle" onclick="toggleDataPointsSidebar()" title="Toggle Data Points Panel">
+                                            <span id="dataPointsToggleIcon">◀</span>
+                                        </button>
+                                        <div class="data-points-header-content" style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                                             <h4 style="margin: 0; font-size: 0.8rem; color: var(--text-secondary);">📦 Data Points</h4>
                                             <button class="btn btn-small" onclick="clearAllDataPoints()" style="font-size: 0.65rem; padding: 0.2rem 0.4rem; background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary);">Clear</button>
                                         </div>
@@ -46302,6 +46402,7 @@
                          ondrop="handleSlideThumbDrop(event, ${idx})">
                         <div class="thumb-number">${idx + 1}</div>
                         <div class="thumb-title">${idx === 0 ? '📑 Title' : (slide.title || slide.customTitle || slide.category || 'Slide')}</div>
+                        ${idx > 0 ? `<button class="slide-thumb-delete" onclick="event.stopPropagation(); deleteSlide(${idx})" title="Delete slide">🗑️</button>` : ''}
                     </div>
                 `).join('')}
                 <div class="slide-drop-zone" 
@@ -46312,6 +46413,47 @@
                 </div>
                 <button class="add-slide-btn" onclick="showAddSlideOptions()" style="width: 100%; padding: 0.5rem; margin-top: 0.5rem; background: var(--bg-input); border: 1px dashed var(--border-color); border-radius: 6px; color: var(--text-secondary); cursor: pointer; font-size: 0.75rem;">+ Add Slide</button>
             `;
+        }
+        
+        function deleteSlide(slideIdx) {
+            if (!currentEditingDeck || slideIdx <= 0) return;
+            
+            const slide = currentEditingDeck.slides[slideIdx - 1];
+            const slideName = slide?.title || slide?.customTitle || slide?.category || 'this slide';
+            
+            if (!confirm(`Delete "${slideName}"? This cannot be undone.`)) return;
+            
+            // Remove the slide (slideIdx - 1 because index 0 is title slide)
+            currentEditingDeck.slides.splice(slideIdx - 1, 1);
+            
+            // Adjust current editing slide if needed
+            if (currentEditingSlide >= slideIdx) {
+                currentEditingSlide = Math.max(0, currentEditingSlide - 1);
+            }
+            
+            saveDeckChanges();
+            renderSlideThumbnails();
+            renderSlideEditor();
+            showNotification('🗑️ Slide deleted', 'success');
+        }
+        
+        function toggleDataPointsSidebar() {
+            const sidebar = document.getElementById('dataPointsSidebar');
+            const icon = document.getElementById('dataPointsToggleIcon');
+            if (!sidebar) return;
+            
+            sidebar.classList.toggle('collapsed');
+            
+            if (sidebar.classList.contains('collapsed')) {
+                icon.textContent = '◀';
+                // Adjust grid to give more space to editor
+                const container = sidebar.closest('.deck-builder-container');
+                if (container) container.style.gridTemplateColumns = '200px 1fr 40px';
+            } else {
+                icon.textContent = '▶';
+                const container = sidebar.closest('.deck-builder-container');
+                if (container) container.style.gridTemplateColumns = '200px 1fr 280px';
+            }
         }
         
         function handleSlideThumbDragOver(event) {
@@ -46748,134 +46890,131 @@
             
             contentEl.innerHTML = `
                 <div class="slide-editor-wrapper">
-                    <!-- Slide Toolbar -->
-                    <div class="slide-toolbar" id="slideToolbar">
-                        <div class="slide-toolbar-group">
-                            <select class="toolbar-btn" onchange="setSlideViewZoom(this.value)" title="Slide view size" style="padding: 0.3rem; min-width: 90px;">
-                                <option value="fit" ${slideEditorZoom === 'fit' ? 'selected' : ''}>Fit to area</option>
-                                <option value="50" ${slideEditorZoom === 50 ? 'selected' : ''}>50%</option>
-                                <option value="75" ${slideEditorZoom === 75 ? 'selected' : ''}>75%</option>
-                                <option value="100" ${slideEditorZoom === 100 ? 'selected' : ''}>100%</option>
-                                <option value="125" ${slideEditorZoom === 125 ? 'selected' : ''}>125%</option>
-                                <option value="150" ${slideEditorZoom === 150 ? 'selected' : ''}>150%</option>
-                            </select>
-                            <button class="toolbar-btn ${deckEditorExpanded ? 'active' : ''}" id="expandSlideBtn" onclick="toggleDeckEditorExpanded()" title="${deckEditorExpanded ? 'Exit expanded view' : 'Expand slide to full area'}">${deckEditorExpanded ? '⊡ Exit expand' : '⊞ Expand'}</button>
+                    <!-- Ribbon-style Toolbar -->
+                    <div class="slide-toolbar-ribbon" id="slideToolbar">
+                        <div class="ribbon-tabs">
+                            <button class="ribbon-tab active" onclick="switchRibbonTab('view')" data-tab="view">👁️ View</button>
+                            <button class="ribbon-tab" onclick="switchRibbonTab('insert')" data-tab="insert">➕ Insert</button>
+                            <button class="ribbon-tab" onclick="switchRibbonTab('format')" data-tab="format">🎨 Format</button>
+                            <button class="ribbon-tab" onclick="switchRibbonTab('shapes')" data-tab="shapes">⬛ Shapes</button>
+                            <button class="ribbon-tab" onclick="switchRibbonTab('analysis')" data-tab="analysis">🤖 Analysis</button>
                         </div>
-                        <div class="slide-toolbar-group">
-                            <button class="toolbar-btn" onclick="addSlideElement('text')" title="Add Text">📝 Text</button>
-                            <button class="toolbar-btn" onclick="addSlideElement('image')" title="Add Image (upload)">🖼️ Image</button>
-                            <button class="toolbar-btn" onclick="addSlideElement('imageUrl')" title="Add Image from URL">🔗 Image URL</button>
-                            <button class="toolbar-btn" onclick="addSlideElement('shape')" title="Add Shape">⬛ Shape</button>
-                            <button class="toolbar-btn" onclick="addSlideElement('line')" title="Add Line/Divider">➖ Line</button>
+                        
+                        <!-- View Tab -->
+                        <div class="ribbon-content active" id="ribbonView">
+                            <div class="slide-toolbar-group">
+                                <select class="toolbar-btn" onchange="setSlideViewZoom(this.value)" title="Zoom" style="padding: 0.2rem; min-width: 75px;">
+                                    <option value="fit" ${slideEditorZoom === 'fit' ? 'selected' : ''}>Fit</option>
+                                    <option value="50" ${slideEditorZoom === 50 ? 'selected' : ''}>50%</option>
+                                    <option value="75" ${slideEditorZoom === 75 ? 'selected' : ''}>75%</option>
+                                    <option value="100" ${slideEditorZoom === 100 ? 'selected' : ''}>100%</option>
+                                    <option value="150" ${slideEditorZoom === 150 ? 'selected' : ''}>150%</option>
+                                </select>
+                                <button class="toolbar-btn ${deckEditorExpanded ? 'active' : ''}" onclick="toggleDeckEditorExpanded()" title="Expand">${deckEditorExpanded ? '⊡' : '⊞'}</button>
+                            </div>
+                            <div class="slide-toolbar-group">
+                                <button class="toolbar-btn ${speakerNotesVisible ? 'active' : ''}" onclick="toggleSpeakerNotes()" title="Notes">📝</button>
+                            </div>
+                            <div class="slide-toolbar-group">
+                                <button class="toolbar-btn" onclick="duplicateSelectedElement()" title="Duplicate">📋</button>
+                                <button class="toolbar-btn" onclick="bringToFront()" title="Front">⬆️</button>
+                                <button class="toolbar-btn" onclick="sendToBack()" title="Back">⬇️</button>
+                                <button class="toolbar-btn" onclick="deleteSelectedElement()" title="Delete" style="color: #ef4444;">🗑️</button>
+                            </div>
                         </div>
-                        <div class="slide-toolbar-group">
-                            <button class="toolbar-btn" onclick="formatText('bold')" title="Bold"><b>B</b></button>
-                            <button class="toolbar-btn" onclick="formatText('italic')" title="Italic"><i>I</i></button>
-                            <button class="toolbar-btn" onclick="formatText('underline')" title="Underline"><u>U</u></button>
-                            <button class="toolbar-btn" onclick="formatText('strikeThrough')" title="Strikethrough"><s>S</s></button>
-                            <button class="toolbar-btn" onclick="formatText('insertUnorderedList')" title="Bullet List">• List</button>
-                            <button class="toolbar-btn" onclick="formatText('insertOrderedList')" title="Numbered List">1. List</button>
+                        
+                        <!-- Insert Tab -->
+                        <div class="ribbon-content" id="ribbonInsert">
+                            <div class="slide-toolbar-group">
+                                <button class="toolbar-btn" onclick="addSlideElement('text')" title="Text">📝 Text</button>
+                                <button class="toolbar-btn" onclick="addSlideElement('image')" title="Image">🖼️ Image</button>
+                                <button class="toolbar-btn" onclick="addSlideElement('imageUrl')" title="URL">🔗 URL</button>
+                                <button class="toolbar-btn" onclick="addSlideElement('shape')" title="Shape">⬛ Shape</button>
+                                <button class="toolbar-btn" onclick="addSlideElement('line')" title="Line">➖ Line</button>
+                            </div>
                         </div>
-                        <div class="slide-toolbar-group">
-                            <select class="toolbar-btn" onchange="setFontFamily(this.value)" style="padding: 0.3rem; min-width: 110px;" title="Font">
-                                <option value="inherit" ${!selFontFamily||selFontFamily==='inherit'?'selected':''}>Default</option>
-                                <option value="'DM Sans', sans-serif" ${selFontFamily==="'DM Sans', sans-serif"?'selected':''}>DM Sans</option>
-                                <option value="'Space Mono', monospace" ${selFontFamily==="'Space Mono', monospace"?'selected':''}>Space Mono</option>
-                                <option value="'Roboto', sans-serif" ${selFontFamily==="'Roboto', sans-serif"?'selected':''}>Roboto</option>
-                                <option value="'Open Sans', sans-serif" ${selFontFamily==="'Open Sans', sans-serif"?'selected':''}>Open Sans</option>
-                                <option value="'Montserrat', sans-serif" ${selFontFamily==="'Montserrat', sans-serif"?'selected':''}>Montserrat</option>
-                                <option value="'Playfair Display', serif" ${selFontFamily==="'Playfair Display', serif"?'selected':''}>Playfair Display</option>
-                                <option value="'Lato', sans-serif" ${selFontFamily==="'Lato', sans-serif"?'selected':''}>Lato</option>
-                                <option value="Arial, sans-serif" ${selFontFamily==='Arial, sans-serif'?'selected':''}>Arial</option>
-                                <option value="Georgia, serif" ${selFontFamily==='Georgia, serif'?'selected':''}>Georgia</option>
-                                <option value="'Times New Roman', serif" ${selFontFamily==="'Times New Roman', serif"?'selected':''}>Times New Roman</option>
-                                <option value="Verdana, sans-serif" ${selFontFamily==='Verdana, sans-serif'?'selected':''}>Verdana</option>
-                                <option value="'Trebuchet MS', sans-serif" ${selFontFamily==="'Trebuchet MS', sans-serif"?'selected':''}>Trebuchet MS</option>
-                                <option value="'Courier New', monospace" ${selFontFamily==="'Courier New', monospace"?'selected':''}>Courier New</option>
-                                <option value="Impact, sans-serif" ${selFontFamily==='Impact, sans-serif'?'selected':''}>Impact</option>
-                            </select>
-                            <select class="toolbar-btn" onchange="setFontSize(this.value)" style="padding: 0.3rem; min-width: 70px;" title="Font Size">
-                                <option value="12" ${selFontSize==12?'selected':''}>12px</option>
-                                <option value="14" ${selFontSize==14?'selected':''}>14px</option>
-                                <option value="18" ${selFontSize==18?'selected':''}>18px</option>
-                                <option value="24" ${selFontSize==24?'selected':''}>24px</option>
-                                <option value="32" ${selFontSize==32?'selected':''}>32px</option>
-                                <option value="36" ${selFontSize==36?'selected':''}>36px</option>
-                                <option value="48" ${selFontSize==48?'selected':''}>48px</option>
-                                <option value="64" ${selFontSize==64?'selected':''}>64px</option>
-                                <option value="72" ${selFontSize==72?'selected':''}>72px</option>
-                                <option value="96" ${selFontSize==96?'selected':''}>96px</option>
-                            </select>
-                            <select class="toolbar-btn" onchange="setFontWeight(this.value)" style="padding: 0.3rem; min-width: 75px;" title="Font Weight">
-                                <option value="300" ${selFontWeight=='300'?'selected':''}>Light</option>
-                                <option value="normal" ${(selFontWeight=='normal'||!selFontWeight)?'selected':''}>Regular</option>
-                                <option value="600" ${selFontWeight=='600'?'selected':''}>Semi Bold</option>
-                                <option value="bold" ${selFontWeight=='bold'?'selected':''}>Bold</option>
-                            </select>
-                            <input type="color" class="toolbar-btn" id="textColorPicker" onchange="setTextColor(this.value)" value="${selColor}" title="Text Color" style="width: 32px; height: 28px; padding: 2px; cursor: pointer;">
-                            <span style="display: flex; gap: 2px;" title="Preset colors">
-                                <button class="toolbar-btn" onclick="setTextColor('#ffffff')" style="width: 22px; height: 22px; padding: 0; background: #ffffff; border-radius: 3px;" title="White"></button>
-                                <button class="toolbar-btn" onclick="setTextColor('#c8e600')" style="width: 22px; height: 22px; padding: 0; background: #c8e600; border-radius: 3px;" title="Lime"></button>
-                                <button class="toolbar-btn" onclick="setTextColor('#66d9ef')" style="width: 22px; height: 22px; padding: 0; background: #66d9ef; border-radius: 3px;" title="Cyan"></button>
-                                <button class="toolbar-btn" onclick="setTextColor('#5a9ad9')" style="width: 22px; height: 22px; padding: 0; background: #5a9ad9; border-radius: 3px;" title="Blue"></button>
-                                <button class="toolbar-btn" onclick="setTextColor('#000000')" style="width: 22px; height: 22px; padding: 0; background: #000000; border-radius: 3px; border: 1px solid #444;" title="Black"></button>
-                            </span>
-                            <input type="color" class="toolbar-btn" id="textBgColorPicker" onchange="setTextBackgroundColor(this.value)" value="${selEl&&selEl.type==='text'&&selEl.background?selEl.background:'#132f4c'}" title="Text Background" style="width: 32px; height: 28px; padding: 2px; cursor: pointer;">
-                            <button class="toolbar-btn" onclick="setTextBackgroundColor('')" title="Remove background" style="font-size: 0.75rem;">✕ BG</button>
+                        
+                        <!-- Format Tab -->
+                        <div class="ribbon-content" id="ribbonFormat">
+                            <div class="slide-toolbar-group">
+                                <button class="toolbar-btn" onclick="formatText('bold')" title="Bold"><b>B</b></button>
+                                <button class="toolbar-btn" onclick="formatText('italic')" title="Italic"><i>I</i></button>
+                                <button class="toolbar-btn" onclick="formatText('underline')" title="Underline"><u>U</u></button>
+                                <button class="toolbar-btn" onclick="formatText('strikeThrough')" title="Strike"><s>S</s></button>
+                            </div>
+                            <div class="slide-toolbar-group">
+                                <select class="toolbar-btn" onchange="setFontFamily(this.value)" style="padding: 0.2rem; min-width: 90px;" title="Font">
+                                    <option value="inherit" ${!selFontFamily||selFontFamily==='inherit'?'selected':''}>Default</option>
+                                    <option value="'DM Sans', sans-serif" ${selFontFamily==="'DM Sans', sans-serif"?'selected':''}>DM Sans</option>
+                                    <option value="'Roboto', sans-serif" ${selFontFamily==="'Roboto', sans-serif"?'selected':''}>Roboto</option>
+                                    <option value="'Montserrat', sans-serif" ${selFontFamily==="'Montserrat', sans-serif"?'selected':''}>Montserrat</option>
+                                    <option value="Arial, sans-serif" ${selFontFamily==='Arial, sans-serif'?'selected':''}>Arial</option>
+                                    <option value="Georgia, serif" ${selFontFamily==='Georgia, serif'?'selected':''}>Georgia</option>
+                                </select>
+                                <select class="toolbar-btn" onchange="setFontSize(this.value)" style="padding: 0.2rem; min-width: 55px;" title="Size">
+                                    <option value="12" ${selFontSize==12?'selected':''}>12</option>
+                                    <option value="14" ${selFontSize==14?'selected':''}>14</option>
+                                    <option value="18" ${selFontSize==18?'selected':''}>18</option>
+                                    <option value="24" ${selFontSize==24?'selected':''}>24</option>
+                                    <option value="32" ${selFontSize==32?'selected':''}>32</option>
+                                    <option value="48" ${selFontSize==48?'selected':''}>48</option>
+                                    <option value="72" ${selFontSize==72?'selected':''}>72</option>
+                                </select>
+                            </div>
+                            <div class="slide-toolbar-group">
+                                <input type="color" class="toolbar-btn" onchange="setTextColor(this.value)" value="${selColor}" title="Color" style="width: 26px; height: 22px; padding: 1px;">
+                                <button class="toolbar-btn" onclick="setTextColor('#ffffff')" style="width: 18px; height: 18px; padding: 0; background: #fff; border-radius: 2px;" title="White"></button>
+                                <button class="toolbar-btn" onclick="setTextColor('#c8e600')" style="width: 18px; height: 18px; padding: 0; background: #c8e600; border-radius: 2px;" title="Lime"></button>
+                                <button class="toolbar-btn" onclick="setTextColor('#66d9ef')" style="width: 18px; height: 18px; padding: 0; background: #66d9ef; border-radius: 2px;" title="Cyan"></button>
+                            </div>
+                            <div class="slide-toolbar-group">
+                                <button class="toolbar-btn" onclick="alignElement('left')" title="Left">⬅</button>
+                                <button class="toolbar-btn" onclick="alignElement('center')" title="Center">⬌</button>
+                                <button class="toolbar-btn" onclick="alignElement('right')" title="Right">➡</button>
+                            </div>
+                            <div class="slide-toolbar-group">
+                                <button class="toolbar-btn" onclick="formatText('insertUnorderedList')" title="Bullets">•</button>
+                                <button class="toolbar-btn" onclick="formatText('insertOrderedList')" title="Numbers">1.</button>
+                            </div>
                         </div>
-                        <div class="slide-toolbar-group">
-                            <select class="toolbar-btn" onchange="setTextTransform(this.value)" style="padding: 0.3rem; min-width: 85px;" title="Text Transform">
-                                <option value="none" ${(!selEl||selEl.type!=='text'||!selEl.textTransform||selEl.textTransform==='none')?'selected':''}>Transform</option>
-                                <option value="uppercase" ${(selEl&&selEl.type==='text'&&selEl.textTransform==='uppercase')?'selected':''}>UPPERCASE</option>
-                                <option value="lowercase" ${(selEl&&selEl.type==='text'&&selEl.textTransform==='lowercase')?'selected':''}>lowercase</option>
-                                <option value="capitalize" ${(selEl&&selEl.type==='text'&&selEl.textTransform==='capitalize')?'selected':''}>Capitalize</option>
-                            </select>
-                            <button class="toolbar-btn" onclick="alignElement('left')" title="Align Left">⬅</button>
-                            <button class="toolbar-btn" onclick="alignElement('center')" title="Align Center">⬌</button>
-                            <button class="toolbar-btn" onclick="alignElement('right')" title="Align Right">➡</button>
-                            <button class="toolbar-btn" onclick="alignElement('justify')" title="Justify">≡</button>
-                            <select class="toolbar-btn" onchange="setElementOpacity(this.value)" style="padding: 0.3rem; min-width: 60px;" title="Opacity">
-                                <option value="1" ${(!selEl||selEl.opacity===undefined||selEl.opacity===1)?'selected':''}>100%</option>
-                                <option value="0.9" ${(selEl&&selEl.opacity===0.9)?'selected':''}>90%</option>
-                                <option value="0.75" ${(selEl&&selEl.opacity===0.75)?'selected':''}>75%</option>
-                                <option value="0.5" ${(selEl&&selEl.opacity===0.5)?'selected':''}>50%</option>
-                                <option value="0.25" ${(selEl&&selEl.opacity===0.25)?'selected':''}>25%</option>
-                            </select>
+                        
+                        <!-- Shapes Tab -->
+                        <div class="ribbon-content" id="ribbonShapes">
+                            <div class="slide-toolbar-group">
+                                <input type="color" class="toolbar-btn" onchange="setShapeOrLineColor(this.value)" value="${selShapeFill}" title="Fill" style="width: 26px; height: 22px; padding: 1px;">
+                                <button class="toolbar-btn" onclick="setShapeOrLineColor('#4a8ac9')" style="width: 18px; height: 18px; padding: 0; background: #4a8ac9; border-radius: 2px;"></button>
+                                <button class="toolbar-btn" onclick="setShapeOrLineColor('#66d9ef')" style="width: 18px; height: 18px; padding: 0; background: #66d9ef; border-radius: 2px;"></button>
+                                <button class="toolbar-btn" onclick="setShapeOrLineColor('#c8e600')" style="width: 18px; height: 18px; padding: 0; background: #c8e600; border-radius: 2px;"></button>
+                                <button class="toolbar-btn" onclick="setShapeOrLineColor('#132f4c')" style="width: 18px; height: 18px; padding: 0; background: #132f4c; border-radius: 2px; border: 1px solid #444;"></button>
+                            </div>
+                            <div class="slide-toolbar-group">
+                                <select class="toolbar-btn" onchange="setShapeBorderRadius(this.value)" style="padding: 0.2rem; min-width: 60px;" title="Corners">
+                                    <option value="0">Sharp</option>
+                                    <option value="4">4px</option>
+                                    <option value="8">8px</option>
+                                    <option value="50">Round</option>
+                                </select>
+                                <select class="toolbar-btn" onchange="setLineThickness(this.value)" style="padding: 0.2rem; min-width: 50px;" title="Line">
+                                    <option value="1">1px</option>
+                                    <option value="2">2px</option>
+                                    <option value="4">4px</option>
+                                </select>
+                            </div>
+                            <div class="slide-toolbar-group">
+                                <select class="toolbar-btn" onchange="setElementOpacity(this.value)" style="padding: 0.2rem; min-width: 55px;" title="Opacity">
+                                    <option value="1">100%</option>
+                                    <option value="0.75">75%</option>
+                                    <option value="0.5">50%</option>
+                                    <option value="0.25">25%</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="slide-toolbar-group" id="shapeFormatGroup">
-                            <input type="color" class="toolbar-btn" id="shapeFillPicker" onchange="setShapeOrLineColor(this.value)" value="${selShapeFill}" title="Shape/Line Color" style="width: 32px; height: 28px; padding: 2px; cursor: pointer;">
-                            <span style="display: flex; gap: 2px;" title="Color presets">
-                                <button class="toolbar-btn" onclick="setShapeOrLineColor('#4a8ac9')" style="width: 22px; height: 22px; padding: 0; background: #4a8ac9; border-radius: 3px;" title="Blue"></button>
-                                <button class="toolbar-btn" onclick="setShapeOrLineColor('#66d9ef')" style="width: 22px; height: 22px; padding: 0; background: #66d9ef; border-radius: 3px;" title="Cyan"></button>
-                                <button class="toolbar-btn" onclick="setShapeOrLineColor('#c8e600')" style="width: 22px; height: 22px; padding: 0; background: #c8e600; border-radius: 3px;" title="Lime"></button>
-                                <button class="toolbar-btn" onclick="setShapeOrLineColor('#132f4c')" style="width: 22px; height: 22px; padding: 0; background: #132f4c; border-radius: 3px; border: 1px solid #2a4a6e;" title="Dark"></button>
-                                <button class="toolbar-btn" onclick="setShapeOrLineColor('#1e3a5f')" style="width: 22px; height: 22px; padding: 0; background: #1e3a5f; border-radius: 3px;" title="Border"></button>
-                            </span>
-                            <select class="toolbar-btn" onchange="setShapeBorderRadius(this.value)" style="padding: 0.3rem; min-width: 70px;" title="Shape corners">
-                                <option value="0" ${(selEl&&selEl.type==='shape'&&selEl.borderRadius===0)?'selected':''}>Sharp</option>
-                                <option value="4" ${(selEl&&selEl.type==='shape'&&(selEl.borderRadius===4||!selEl.borderRadius))?'selected':''}>4px</option>
-                                <option value="8" ${(selEl&&selEl.type==='shape'&&selEl.borderRadius===8)?'selected':''}>8px</option>
-                                <option value="12" ${(selEl&&selEl.type==='shape'&&selEl.borderRadius===12)?'selected':''}>12px</option>
-                                <option value="50" ${(selEl&&selEl.type==='shape'&&selEl.borderRadius===50)?'selected':''}>Round</option>
-                            </select>
-                            <select class="toolbar-btn" onchange="setLineThickness(this.value)" style="padding: 0.3rem; min-width: 65px;" title="Line thickness">
-                                <option value="1" ${(selEl&&selEl.type==='line'&&selEl.strokeWidth===1)?'selected':''}>1px</option>
-                                <option value="2" ${(!selEl||selEl.type!=='line'||selEl.strokeWidth===2||!selEl.strokeWidth)?'selected':''}>2px</option>
-                                <option value="4" ${(selEl&&selEl.type==='line'&&selEl.strokeWidth===4)?'selected':''}>4px</option>
-                                <option value="6" ${(selEl&&selEl.type==='line'&&selEl.strokeWidth===6)?'selected':''}>6px</option>
-                            </select>
-                        </div>
-                        <div class="slide-toolbar-group">
-                            <button class="toolbar-btn" onclick="analyzeSlideWithAI()" title="Analyze slide data with AI and add key points & takeaways" style="background: var(--accent-cyan); color: var(--bg-dark);">🤖 Analyze with AI</button>
-                        </div>
-                        <div class="slide-toolbar-group">
-                            <button class="toolbar-btn ${speakerNotesVisible ? 'active' : ''}" id="toggleNotesBtn" onclick="toggleSpeakerNotes()" title="${speakerNotesVisible ? 'Hide Speaker Notes' : 'Show Speaker Notes'}">📝 ${speakerNotesVisible ? 'Notes' : 'Show notes'}</button>
-                        </div>
-                        <div class="slide-toolbar-group">
-                            <button class="toolbar-btn" onclick="duplicateSelectedElement()" title="Duplicate">📋 Duplicate</button>
-                            <button class="toolbar-btn" onclick="bringToFront()" title="Bring to Front">⬆️</button>
-                            <button class="toolbar-btn" onclick="sendToBack()" title="Send to Back">⬇️</button>
-                            <button class="toolbar-btn" onclick="deleteSelectedElement()" title="Delete" style="color: #ef4444;">🗑️</button>
+                        
+                        <!-- Analysis Tab -->
+                        <div class="ribbon-content" id="ribbonAnalysis">
+                            <div class="slide-toolbar-group">
+                                <button class="toolbar-btn" onclick="analyzeSlideWithAI()" title="AI Analysis" style="background: var(--accent-cyan); color: var(--bg-dark);">🤖 Analyze with AI</button>
+                            </div>
                         </div>
                     </div>
                     
@@ -46977,6 +47116,25 @@
                 btn.textContent = deckEditorExpanded ? '⊡ Exit expand' : '⊞ Expand';
             }
             setTimeout(updateSlideCanvasScale, 100);
+        }
+        
+        let currentRibbonTab = 'view';
+        
+        function switchRibbonTab(tabName) {
+            currentRibbonTab = tabName;
+            
+            // Update tab buttons
+            document.querySelectorAll('.ribbon-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.tab === tabName);
+            });
+            
+            // Update content panels
+            document.querySelectorAll('.ribbon-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            const targetContent = document.getElementById('ribbon' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
+            if (targetContent) targetContent.classList.add('active');
         }
         
         function toggleSpeakerNotes() {
