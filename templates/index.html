@@ -24403,15 +24403,18 @@
             
             // === PROFILE SUMMARY - AI Generated ===
             // Show loading state
-            document.getElementById('behavioralProfileSummary').innerHTML = `
-                <div style="font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="loading-spinner" style="width: 14px; height: 14px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: spin 1s linear infinite;"></span>
-                    Analyzing behavioral patterns...
-                </div>
-            `;
-            
-            // Fetch AI-generated behavioral summary for this card (non-blocking)
-            fetchBehavioralProfileSummary(fullData, allItems);
+            const behavioralProfileSummaryEl = document.getElementById('behavioralProfileSummary');
+            if (behavioralProfileSummaryEl) {
+                behavioralProfileSummaryEl.innerHTML = `
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem;">
+                        <span class="loading-spinner" style="width: 14px; height: 14px; border: 2px solid var(--border-color); border-top-color: var(--accent-cyan); border-radius: 50%; animation: spin 1s linear infinite;"></span>
+                        Analyzing behavioral patterns...
+                    </div>
+                `;
+                
+                // Fetch AI-generated behavioral summary for this card (non-blocking)
+                fetchBehavioralProfileSummary(fullData, allItems);
+            }
             
             // === TOP CATEGORIES ===
             const categoryStats = {};
