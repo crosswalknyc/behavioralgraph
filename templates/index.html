@@ -9943,6 +9943,52 @@
             opacity: 0.6;
         }
         
+        /* Draggable slide sections */
+        .slide-draggable-section {
+            cursor: move;
+            transition: outline 0.15s ease, box-shadow 0.15s ease;
+        }
+        
+        .slide-draggable-section:hover {
+            outline: 1px dashed rgba(200, 230, 0, 0.4);
+            outline-offset: 2px;
+        }
+        
+        .slide-draggable-section.dragging {
+            outline: 2px solid var(--accent-lime);
+            outline-offset: 2px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            z-index: 100 !important;
+            cursor: grabbing;
+        }
+        
+        .slide-draggable-section .drag-handle {
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(200, 230, 0, 0.9);
+            color: #000;
+            font-size: 0.55rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 3px;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 10;
+        }
+        
+        .slide-draggable-section:hover .drag-handle {
+            opacity: 1;
+        }
+        
+        .slide-draggable-section.dragging .drag-handle {
+            opacity: 1;
+            background: var(--accent-lime);
+        }
+        
         /* Title slide large text style */
         .slide-title-large {
             font-size: 4rem;
@@ -35449,6 +35495,113 @@
             }, 100);
         }
         
+        // ============================================================================
+        // DRAGGABLE SLIDE SECTIONS (Title, Content, Image)
+        // ============================================================================
+        let draggedSlideSection = null;
+        let slideSectionStartX = 0;
+        let slideSectionStartY = 0;
+        let slideSectionOrigX = 0;
+        let slideSectionOrigY = 0;
+        let slideSectionType = null;
+        let slideSectionSlideIdx = null;
+        
+        function startDragSlideSection(event, slideIdx, sectionType) {
+            // Don't drag if clicking on editable content or buttons
+            if (event.target.closest('[contenteditable="true"]') || 
+                event.target.closest('button') || 
+                event.target.closest('input') ||
+                event.target.closest('.viz-control-toggle') ||
+                event.target.closest('.viz-control-panel')) {
+                return;
+            }
+            
+            const section = event.currentTarget;
+            draggedSlideSection = section;
+            slideSectionType = sectionType;
+            slideSectionSlideIdx = slideIdx;
+            
+            // Get canvas for percentage calculations
+            const canvas = document.getElementById('slideCanvas');
+            if (!canvas) return;
+            const canvasRect = canvas.getBoundingClientRect();
+            
+            slideSectionStartX = event.clientX;
+            slideSectionStartY = event.clientY;
+            
+            // Parse current position (handle both % and px)
+            const style = section.style;
+            slideSectionOrigX = parseFloat(style.left) || 5;
+            slideSectionOrigY = parseFloat(style.top) || 8;
+            
+            section.classList.add('dragging');
+            
+            document.addEventListener('mousemove', dragSlideSection);
+            document.addEventListener('mouseup', stopDragSlideSection);
+            
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        
+        function dragSlideSection(event) {
+            if (!draggedSlideSection) return;
+            
+            const canvas = document.getElementById('slideCanvas');
+            if (!canvas) return;
+            const canvasRect = canvas.getBoundingClientRect();
+            
+            // Calculate delta in percentage of canvas
+            const deltaX = ((event.clientX - slideSectionStartX) / canvasRect.width) * 100;
+            const deltaY = ((event.clientY - slideSectionStartY) / canvasRect.height) * 100;
+            
+            // Calculate new position
+            let newX = slideSectionOrigX + deltaX;
+            let newY = slideSectionOrigY + deltaY;
+            
+            // Constrain to canvas bounds (with some margin)
+            newX = Math.max(1, Math.min(newX, 90));
+            newY = Math.max(1, Math.min(newY, 85));
+            
+            // Apply new position
+            draggedSlideSection.style.left = newX + '%';
+            draggedSlideSection.style.top = newY + '%';
+            draggedSlideSection.style.right = 'auto';
+            draggedSlideSection.style.bottom = 'auto';
+            
+            event.preventDefault();
+        }
+        
+        function stopDragSlideSection(event) {
+            if (draggedSlideSection) {
+                draggedSlideSection.classList.remove('dragging');
+                
+                // Save the new position to slide data
+                const slide = currentEditingDeck?.slides?.[slideSectionSlideIdx - 1];
+                if (slide) {
+                    if (!slide.sectionPositions) slide.sectionPositions = {};
+                    slide.sectionPositions[slideSectionType] = {
+                        left: draggedSlideSection.style.left,
+                        top: draggedSlideSection.style.top
+                    };
+                    saveDeckChanges();
+                }
+                
+                draggedSlideSection = null;
+                slideSectionType = null;
+                slideSectionSlideIdx = null;
+            }
+            document.removeEventListener('mousemove', dragSlideSection);
+            document.removeEventListener('mouseup', stopDragSlideSection);
+        }
+        
+        // Helper to get saved section position or default
+        function getSectionPosition(slide, sectionType, defaults) {
+            if (slide?.sectionPositions?.[sectionType]) {
+                return slide.sectionPositions[sectionType];
+            }
+            return defaults;
+        }
+        
         // Close viz panels when clicking outside
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.viz-control-panel') && !e.target.closest('.viz-control-toggle')) {
@@ -49080,7 +49233,12 @@
                     
                     // Layout A: Content left (50%), Image right (38%) with 2% gap - Default
                     if (layoutIndex === 1) {
-                        const contentHeight = `calc(87% - ${contentTop})`;
+                        const contentHeight = '65%';
+                        // Get saved positions or use defaults
+                        const titlePos = slide.sectionPositions?.title || { left: '55%', top: '8%' };
+                        const contentPos = slide.sectionPositions?.content || { left: '5%', top: '22%' };
+                        const imagePos = slide.sectionPositions?.image || { left: '55%', top: '22%' };
+                        
                         return `
                         <!-- Header bar -->
                         <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5); z-index: 3;">
@@ -49088,13 +49246,21 @@
                             <span>${dateStr}</span>
                         </div>
                         
-                        <!-- Section title -->
-                        <div contenteditable="true" style="position: absolute; left: 5%; top: ${titleTop}; width: 48%; font-size: ${titleFontSize}; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word; z-index: 2;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' ')); renderSlideEditor();">
-                            ${formatTitleWithBreaks(title)}
+                        <!-- Section title - DRAGGABLE -->
+                        <div class="slide-draggable-section" 
+                             style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 40%; z-index: 4;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'title')">
+                            <div class="drag-handle">⋮⋮ DRAG TITLE</div>
+                            <div contenteditable="true" style="font-size: ${titleFontSize}; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' ')); renderSlideEditor();">
+                                ${formatTitleWithBreaks(title)}
+                            </div>
                         </div>
                         
-                        <!-- Content area left -->
-                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: ${contentTop}; width: 48%; height: ${contentHeight}; overflow: hidden; padding: 0.5rem; z-index: 1; position: relative;">
+                        <!-- Content area - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-module-content" data-slide-idx="${idx}" 
+                             style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 48%; height: ${contentHeight}; overflow: hidden; padding: 0.5rem; z-index: 2;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'content')">
+                            <div class="drag-handle">⋮⋮ DRAG DATA</div>
                             ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 1rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; padding-right: 70px;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
@@ -49104,11 +49270,13 @@
                         </div>
                         
                         ${!hasImage ? `
-                        <!-- Image placeholder right -->
-                        <div class="slide-image-placeholder" 
-                             style="position: absolute; right: 5%; top: ${contentTop}; width: 37%; height: ${contentHeight}; z-index: 1;"
-                             onclick="uploadSlideImage(${idx})"
+                        <!-- Image placeholder - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-image-placeholder" 
+                             style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 37%; height: ${contentHeight}; z-index: 1;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'image')"
+                             onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
@@ -49122,6 +49290,11 @@
                     
                     // Layout B: Content left (42%), Large image right (48%)
                     if (layoutIndex === 2) {
+                        // Get saved positions or use defaults
+                        const titlePos = slide.sectionPositions?.title || { left: '5%', top: '8%' };
+                        const contentPos = slide.sectionPositions?.content || { left: '5%', top: '22%' };
+                        const imagePos = slide.sectionPositions?.image || { left: '48%', top: '8%' };
+                        
                         return `
                         <!-- Header bar -->
                         <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
@@ -49129,13 +49302,21 @@
                             <span>${dateStr}</span>
                         </div>
                         
-                        <!-- Section title -->
-                        <div contenteditable="true" style="position: absolute; left: 5%; top: 8%; width: 36%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
-                            ${formatTitleWithBreaks(title)}
+                        <!-- Section title - DRAGGABLE -->
+                        <div class="slide-draggable-section" 
+                             style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 36%; z-index: 4;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'title')">
+                            <div class="drag-handle">⋮⋮ DRAG TITLE</div>
+                            <div contenteditable="true" style="font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                                ${formatTitleWithBreaks(title)}
+                            </div>
                         </div>
                         
-                        <!-- Content area left -->
-                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 22%; width: 36%; height: 65%; overflow: hidden; padding: 0.5rem; z-index: 1; position: relative;">
+                        <!-- Content area - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-module-content" data-slide-idx="${idx}" 
+                             style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 40%; height: 65%; overflow: hidden; padding: 0.5rem; z-index: 2;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'content')">
+                            <div class="drag-handle">⋮⋮ DRAG DATA</div>
                             ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 1rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; padding-right: 70px;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
@@ -49145,11 +49326,13 @@
                         </div>
                         
                         ${!hasImage ? `
-                        <!-- Large image placeholder right -->
-                        <div class="slide-image-placeholder" 
-                             style="position: absolute; right: 5%; top: 8%; width: 46%; height: 79%;"
-                             onclick="uploadSlideImage(${idx})"
+                        <!-- Large image placeholder - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-image-placeholder" 
+                             style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 46%; height: 79%; z-index: 1;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'image')"
+                             onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
@@ -49163,6 +49346,11 @@
                     
                     // Layout C: Large image left (58%), Content right (32%)
                     if (layoutIndex === 3) {
+                        // Get saved positions or use defaults
+                        const titlePos = slide.sectionPositions?.title || { left: '62%', top: '8%' };
+                        const contentPos = slide.sectionPositions?.content || { left: '62%', top: '28%' };
+                        const imagePos = slide.sectionPositions?.image || { left: '5%', top: '18%' };
+                        
                         return `
                         <!-- Header bar -->
                         <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
@@ -49171,24 +49359,34 @@
                         </div>
                         
                         ${!hasImage ? `
-                        <!-- Large image placeholder left -->
-                        <div class="slide-image-placeholder" 
-                             style="position: absolute; left: 5%; top: 18%; width: 54%; height: 69%;"
-                             onclick="uploadSlideImage(${idx})"
+                        <!-- Large image placeholder - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-image-placeholder" 
+                             style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 54%; height: 69%; z-index: 1;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'image')"
+                             onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
                         </div>
                         ` : ''}
                         
-                        <!-- Section title right -->
-                        <div contenteditable="true" style="position: absolute; right: 5%; top: 8%; width: 30%; font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
-                            ${formatTitleWithBreaks(title)}
+                        <!-- Section title - DRAGGABLE -->
+                        <div class="slide-draggable-section" 
+                             style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 33%; z-index: 4;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'title')">
+                            <div class="drag-handle">⋮⋮ DRAG TITLE</div>
+                            <div contenteditable="true" style="font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                                ${formatTitleWithBreaks(title)}
+                            </div>
                         </div>
                         
-                        <!-- Content area right -->
-                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; right: 5%; top: 35%; width: 30%; height: 52%; overflow: hidden; padding: 0.5rem; z-index: 1; position: relative;">
+                        <!-- Content area - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-module-content" data-slide-idx="${idx}" 
+                             style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 33%; height: 58%; overflow: hidden; padding: 0.5rem; z-index: 2;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'content')">
+                            <div class="drag-handle">⋮⋮ DRAG DATA</div>
                             ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 0.75rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; padding-right: 70px;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
@@ -49204,6 +49402,11 @@
                     
                     // Layout D: Extra large image left (63%), Title and content stacked right (27%)
                     if (layoutIndex === 4) {
+                        // Get saved positions or use defaults
+                        const titlePos = slide.sectionPositions?.title || { left: '70%', top: '20%' };
+                        const contentPos = slide.sectionPositions?.content || { left: '70%', top: '42%' };
+                        const imagePos = slide.sectionPositions?.image || { left: '5%', top: '8%' };
+                        
                         return `
                         <!-- Header bar -->
                         <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
@@ -49212,24 +49415,34 @@
                         </div>
                         
                         ${!hasImage ? `
-                        <!-- Extra large image placeholder left -->
-                        <div class="slide-image-placeholder" 
-                             style="position: absolute; left: 5%; top: 8%; width: 63%; height: 79%;"
-                             onclick="uploadSlideImage(${idx})"
+                        <!-- Extra large image placeholder - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-image-placeholder" 
+                             style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 63%; height: 79%; z-index: 1;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'image')"
+                             onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
                         </div>
                         ` : ''}
                         
-                        <!-- Section title right top -->
-                        <div contenteditable="true" style="position: absolute; right: 5%; top: 25%; width: 26%; font-size: 1.8rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
-                            ${formatTitleWithBreaks(title)}
+                        <!-- Section title - DRAGGABLE -->
+                        <div class="slide-draggable-section" 
+                             style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 26%; z-index: 4;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'title')">
+                            <div class="drag-handle">⋮⋮ DRAG TITLE</div>
+                            <div contenteditable="true" style="font-size: 1.8rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                                ${formatTitleWithBreaks(title)}
+                            </div>
                         </div>
                         
-                        <!-- Content area right bottom -->
-                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; right: 5%; top: 50%; width: 26%; height: 37%; overflow: hidden; padding: 0.5rem; z-index: 1; position: relative;">
+                        <!-- Content area - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-module-content" data-slide-idx="${idx}" 
+                             style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 26%; height: 45%; overflow: hidden; padding: 0.5rem; z-index: 2;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'content')">
+                            <div class="drag-handle">⋮⋮ DRAG DATA</div>
                             ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; margin-bottom: 0.5rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; padding-right: 70px;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
@@ -49245,6 +49458,11 @@
                     
                     // Layout E: Full width content with small image top right corner
                     if (layoutIndex === 5) {
+                        // Get saved positions or use defaults
+                        const titlePos = slide.sectionPositions?.title || { left: '5%', top: '12%' };
+                        const contentPos = slide.sectionPositions?.content || { left: '5%', top: '35%' };
+                        const imagePos = slide.sectionPositions?.image || { left: '70%', top: '8%' };
+                        
                         return `
                         <!-- Header bar -->
                         <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
@@ -49253,23 +49471,33 @@
                         </div>
                         
                         ${!hasImage ? `
-                        <!-- Small image placeholder top right -->
-                        <div class="slide-image-placeholder" 
-                             style="position: absolute; right: 5%; top: 8%; width: 25%; height: 30%;"
-                             onclick="uploadSlideImage(${idx})"
+                        <!-- Small image placeholder - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-image-placeholder" 
+                             style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 25%; height: 25%; z-index: 1;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'image')"
+                             onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Add image</span>
                         </div>
                         ` : ''}
                         
-                        <!-- Large title left -->
-                        <div contenteditable="true" style="position: absolute; left: 5%; top: 12%; width: 60%; font-size: 2.5rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
-                            ${formatTitleWithBreaks(title)}
+                        <!-- Large title - DRAGGABLE -->
+                        <div class="slide-draggable-section" 
+                             style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 60%; z-index: 4;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'title')">
+                            <div class="drag-handle">⋮⋮ DRAG TITLE</div>
+                            <div contenteditable="true" style="font-size: 2.5rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                                ${formatTitleWithBreaks(title)}
+                            </div>
                         </div>
                         
-                        <!-- Full width content below -->
-                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 40%; width: 90%; height: 47%; overflow: hidden; padding: 0.5rem; z-index: 1; position: relative;">
+                        <!-- Full width content - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-module-content" data-slide-idx="${idx}" 
+                             style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 90%; height: 52%; overflow: hidden; padding: 0.5rem; z-index: 2;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'content')">
+                            <div class="drag-handle">⋮⋮ DRAG DATA</div>
                             ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 0.75rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; max-width: 65%; padding-right: 70px;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
@@ -49285,6 +49513,11 @@
                     
                     // Layout F: Centered content with images on both sides
                     if (layoutIndex === 6) {
+                        // Get saved positions or use defaults
+                        const titlePos = slide.sectionPositions?.title || { left: '30%', top: '10%' };
+                        const contentPos = slide.sectionPositions?.content || { left: '30%', top: '28%' };
+                        const imagePos = slide.sectionPositions?.image || { left: '5%', top: '15%' };
+                        
                         return `
                         <!-- Header bar -->
                         <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
@@ -49293,23 +49526,33 @@
                         </div>
                         
                         ${!hasImage ? `
-                        <!-- Left image placeholder -->
-                        <div class="slide-image-placeholder" 
-                             style="position: absolute; left: 5%; top: 15%; width: 22%; height: 70%;"
-                             onclick="uploadSlideImage(${idx})"
+                        <!-- Left image placeholder - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-image-placeholder" 
+                             style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 22%; height: 70%; z-index: 1;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'image')"
+                             onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Add image</span>
                         </div>
                         ` : ''}
                         
-                        <!-- Centered title -->
-                        <div contenteditable="true" style="position: absolute; left: 30%; top: 15%; width: 40%; font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.2; text-align: center; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
-                            ${formatTitleWithBreaks(title)}
+                        <!-- Centered title - DRAGGABLE -->
+                        <div class="slide-draggable-section" 
+                             style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 40%; z-index: 4;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'title')">
+                            <div class="drag-handle">⋮⋮ DRAG TITLE</div>
+                            <div contenteditable="true" style="font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.2; text-align: center; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                                ${formatTitleWithBreaks(title)}
+                            </div>
                         </div>
                         
-                        <!-- Centered content -->
-                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 30%; top: 35%; width: 40%; height: 50%; overflow: hidden; padding: 0.5rem; z-index: 1; position: relative;">
+                        <!-- Centered content - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-module-content" data-slide-idx="${idx}" 
+                             style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 40%; height: 58%; overflow: hidden; padding: 0.5rem; z-index: 2;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'content')">
+                            <div class="drag-handle">⋮⋮ DRAG DATA</div>
                             ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; margin-bottom: 0.5rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; text-align: center; padding-right: 70px;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
@@ -49325,6 +49568,11 @@
                     
                     // Layout G: Split screen - Title and image top, content bottom
                     if (layoutIndex === 7) {
+                        // Get saved positions or use defaults
+                        const titlePos = slide.sectionPositions?.title || { left: '5%', top: '10%' };
+                        const contentPos = slide.sectionPositions?.content || { left: '5%', top: '48%' };
+                        const imagePos = slide.sectionPositions?.image || { left: '52%', top: '10%' };
+                        
                         return `
                         <!-- Header bar -->
                         <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
@@ -49332,24 +49580,34 @@
                             <span>${dateStr}</span>
                         </div>
                         
-                        <!-- Title left top -->
-                        <div contenteditable="true" style="position: absolute; left: 5%; top: 12%; width: 45%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
-                            ${formatTitleWithBreaks(title)}
+                        <!-- Title - DRAGGABLE -->
+                        <div class="slide-draggable-section" 
+                             style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 45%; z-index: 4;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'title')">
+                            <div class="drag-handle">⋮⋮ DRAG TITLE</div>
+                            <div contenteditable="true" style="font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                                ${formatTitleWithBreaks(title)}
+                            </div>
                         </div>
                         
                         ${!hasImage ? `
-                        <!-- Image placeholder right top -->
-                        <div class="slide-image-placeholder" 
-                             style="position: absolute; right: 5%; top: 12%; width: 42%; height: 35%;"
-                             onclick="uploadSlideImage(${idx})"
+                        <!-- Image placeholder - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-image-placeholder" 
+                             style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 42%; height: 35%; z-index: 1;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'image')"
+                             onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                         </div>
                         ` : ''}
                         
-                        <!-- Full width content bottom -->
-                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 52%; width: 90%; height: 35%; overflow: hidden; padding: 0.5rem; z-index: 1; position: relative;">
+                        <!-- Full width content - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-module-content" data-slide-idx="${idx}" 
+                             style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 90%; height: 40%; overflow: hidden; padding: 0.5rem; z-index: 2;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'content')">
+                            <div class="drag-handle">⋮⋮ DRAG DATA</div>
                             ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 0.75rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; padding-right: 70px;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
@@ -49365,6 +49623,11 @@
                     
                     // Layout H: Asymmetric - Small content left, large image right with overlay title
                     if (layoutIndex === 8) {
+                        // Get saved positions or use defaults
+                        const titlePos = slide.sectionPositions?.title || { left: '40%', top: '70%' };
+                        const contentPos = slide.sectionPositions?.content || { left: '5%', top: '15%' };
+                        const imagePos = slide.sectionPositions?.image || { left: '40%', top: '8%' };
+                        
                         return `
                         <!-- Header bar -->
                         <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
@@ -49373,24 +49636,34 @@
                         </div>
                         
                         ${!hasImage ? `
-                        <!-- Large image placeholder right -->
-                        <div class="slide-image-placeholder" 
-                             style="position: absolute; right: 5%; top: 8%; width: 55%; height: 79%;"
-                             onclick="uploadSlideImage(${idx})"
+                        <!-- Large image placeholder - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-image-placeholder" 
+                             style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 55%; height: 79%; z-index: 1;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'image')"
+                             onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
+                            <div class="drag-handle">⋮⋮ DRAG IMAGE</div>
                             <span class="placeholder-icon">🖼️</span>
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
                         </div>
                         ` : ''}
                         
-                        <!-- Title overlay on image (right side) -->
-                        <div contenteditable="true" style="position: absolute; right: 8%; top: 70%; width: 48%; font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 8px 12px; border-radius: 4px; line-height: 1.1; background: linear-gradient(90deg, transparent, rgba(0,0,0,0.7)); word-wrap: break-word; overflow-wrap: break-word; z-index: 2;" onfocus="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.8))'" onblur="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.7))'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
-                            ${formatTitleWithBreaks(title)}
+                        <!-- Title overlay - DRAGGABLE -->
+                        <div class="slide-draggable-section" 
+                             style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 48%; z-index: 4;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'title')">
+                            <div class="drag-handle">⋮⋮ DRAG TITLE</div>
+                            <div contenteditable="true" style="font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 8px 12px; border-radius: 4px; line-height: 1.1; background: linear-gradient(90deg, transparent, rgba(0,0,0,0.7)); word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.8))'" onblur="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.7))'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                                ${formatTitleWithBreaks(title)}
+                            </div>
                         </div>
                         
-                        <!-- Compact content left -->
-                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 15%; width: 32%; height: 70%; overflow: hidden; padding: 0.5rem; z-index: 1; position: relative;">
+                        <!-- Compact content - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-module-content" data-slide-idx="${idx}" 
+                             style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 32%; height: 70%; overflow: hidden; padding: 0.5rem; z-index: 2;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'content')">
+                            <div class="drag-handle">⋮⋮ DRAG DATA</div>
                             ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; margin-bottom: 0.5rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; padding-right: 70px;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
