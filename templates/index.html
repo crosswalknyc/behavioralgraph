@@ -3316,11 +3316,6 @@
             }
         }
         
-        /* Behavioral Insights Row - Behavioral Profile Summary fills full width */
-        .behavioral-insights-row {
-            display: block;
-            margin-bottom: 1.5rem;
-        }
         .behavioral-data-blocks {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -11998,24 +11993,6 @@
                     <span class="has-tooltip" data-tooltip="Items with index above 1.5x are considered 'hot' - strong over-indexers."><strong>🔥</strong> — Hot (index > 1.5x)</span>
                     <span class="has-tooltip" data-tooltip="N/A indicates that data is not available for this metric."><strong style="color: var(--text-secondary);">N/A</strong> — Data not available</span>
                 </div>
-                <!-- Behavioral Insights Row -->
-                <div class="behavioral-insights-row" id="behavioralInsightsRow">
-                    <div class="behavioral-insight-card highlight" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Behavioral Profile Summary">
-                        <h4 class="has-tooltip" data-tooltip="Behavioral Profile Summary: AI-generated analysis of this audience's lifestyle, interests, habits, and unique characteristics based on their behavioral data." style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="display: flex; align-items: center;">
-                                <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
-                                <span>🧠 Behavioral Profile Summary</span>
-                            </span>
-                            <button class="module-btn deck-btn has-tooltip" onclick="addInsightToDeck('behavioral-summary')" data-tooltip="Add to Deck" style="margin-left: 0.5rem;">➕</button>
-                        </h4>
-                        <div id="behavioralProfileSummary" class="behavioral-insight-content" style="padding: 0.5rem 0;">
-                            <div style="font-size: 0.85rem; color: var(--text-secondary);">
-                                Select a profile to view insights
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
                 <!-- Category Reorder Controls -->
                 <div class="behavioral-controls">
                     <select id="categoryReorderSelect" onchange="moveCategoryToTop(this.value)" class="has-tooltip" data-tooltip="Move Category to Top: Select a behavioral category to move it to the top of the list for easier viewing." style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
