@@ -32031,9 +32031,20 @@
                     return;
                 }
                 
-                // Add to deck slides
+                // Add to deck slides (insert before closing slide if it exists)
                 if (!deck.slides) deck.slides = [];
-                deck.slides.push(item);
+                
+                // Find closing slide index
+                const closingSlideIndex = deck.slides.findIndex(s => s.type === 'closing');
+                
+                if (closingSlideIndex !== -1) {
+                    // Insert before closing slide
+                    deck.slides.splice(closingSlideIndex, 0, item);
+                } else {
+                    // No closing slide, add to end
+                    deck.slides.push(item);
+                }
+                
                 deck.updatedAt = new Date().toISOString();
                 itemAdded = true; // Mark that item was successfully added
                 
@@ -32307,9 +32318,20 @@
                     return;
                 }
                 
-                // Add to deck slides
+                // Add to deck slides (insert before closing slide if it exists)
                 if (!deck.slides) deck.slides = [];
-                deck.slides.push(item);
+                
+                // Find closing slide index
+                const closingSlideIndex = deck.slides.findIndex(s => s.type === 'closing');
+                
+                if (closingSlideIndex !== -1) {
+                    // Insert before closing slide
+                    deck.slides.splice(closingSlideIndex, 0, item);
+                } else {
+                    // No closing slide, add to end
+                    deck.slides.push(item);
+                }
+                
                 deck.updatedAt = new Date().toISOString();
                 itemAdded = true; // Mark that item was successfully added
                 
@@ -48285,7 +48307,7 @@
                 `;
             }
             
-            // For Closing/Thank You slide
+            // For Closing/Thank You slide - Minimalist elegant design
             if (slide.type === 'closing') {
                 const today = new Date();
                 const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -48298,45 +48320,43 @@
                 const presenterEmail = currentUserEmail || '';
                 
                 return `
-                    <!-- Header bar -->
-                    <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                        <span>Crosswalk Profile IQ</span>
-                        <span>${dateStr}</span>
-                    </div>
-                    
-                    <!-- Large Thank You centered - EDITABLE -->
-                    <div contenteditable="true" 
-                         style="position: absolute; left: 50%; top: 35%; transform: translateX(-50%); font-size: 4rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.03em; text-align: center; line-height: 1; cursor: text; padding: 8px 16px; border-radius: 4px;"
-                         onfocus="this.style.background='rgba(255,255,255,0.1)'" 
-                         onblur="this.style.background='transparent'; updateClosingTitle(this.textContent)">
-                        ${escapeHtml(slide.customTitle || slide.title || 'THANK YOU')}
-                    </div>
-                    
-                    <!-- Accent line -->
-                    <div style="position: absolute; left: 50%; top: 52%; transform: translateX(-50%); width: 120px; height: 3px; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-lime));"></div>
-                    
-                    <!-- Contact info centered - EDITABLE -->
-                    <div style="position: absolute; left: 50%; top: 60%; transform: translateX(-50%); text-align: center;">
+                    <!-- Minimalist elegant thank you slide -->
+                    <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%);">
+                        
+                        <!-- Large Thank You - EDITABLE -->
                         <div contenteditable="true" 
-                             style="font-size: 1.1rem; font-weight: 600; color: #ffffff; margin-bottom: 0.5rem; cursor: text; padding: 2px 4px; border-radius: 3px; display: inline-block;"
-                             onfocus="this.style.background='rgba(255,255,255,0.1)'" 
-                             onblur="this.style.background='transparent'; updateClosingPresenterName(this.textContent)">${escapeHtml(slide.presenterName || presenterName)}</div>
+                             style="font-size: 5rem; font-weight: 300; color: #ffffff; text-transform: uppercase; letter-spacing: 0.2em; text-align: center; line-height: 1; cursor: text; padding: 8px 16px; border-radius: 4px; margin-bottom: 2rem;"
+                             onfocus="this.style.background='rgba(255,255,255,0.05)'" 
+                             onblur="this.style.background='transparent'; updateClosingTitle(this.textContent)">
+                            ${escapeHtml(slide.customTitle || slide.title || 'THANK YOU')}
+                        </div>
+                        
+                        <!-- Thin accent line -->
+                        <div style="width: 80px; height: 1px; background: var(--accent-lime); margin-bottom: 3rem; opacity: 0.6;"></div>
+                        
+                        <!-- Contact info - EDITABLE -->
+                        <div style="text-align: center; line-height: 2;">
+                            <div contenteditable="true" 
+                                 style="font-size: 1.2rem; font-weight: 400; color: #ffffff; cursor: text; padding: 2px 8px; border-radius: 3px; display: inline-block;"
+                                 onfocus="this.style.background='rgba(255,255,255,0.05)'" 
+                                 onblur="this.style.background='transparent'; updateClosingPresenterName(this.textContent)">${escapeHtml(slide.presenterName || presenterName)}</div>
+                            <div contenteditable="true" 
+                                 style="font-size: 0.9rem; font-weight: 300; color: rgba(255,255,255,0.6); cursor: text; padding: 2px 8px; border-radius: 3px; display: inline-block;"
+                                 onfocus="this.style.background='rgba(255,255,255,0.05)'" 
+                                 onblur="this.style.background='transparent'; updateClosingPresenterCompany(this.textContent)">${escapeHtml(slide.presenterCompany || presenterCompany)}</div>
+                            <div contenteditable="true" 
+                                 style="font-size: 0.85rem; font-weight: 300; color: var(--accent-lime); cursor: text; padding: 2px 8px; border-radius: 3px; display: inline-block; opacity: 0.8;"
+                                 onfocus="this.style.background='rgba(255,255,255,0.05)'" 
+                                 onblur="this.style.background='transparent'; updateClosingPresenterEmail(this.textContent)">${escapeHtml(slide.presenterEmail || presenterEmail || 'your@email.com')}</div>
+                        </div>
+                        
+                        <!-- Subtle footer - EDITABLE -->
                         <div contenteditable="true" 
-                             style="font-size: 0.85rem; color: rgba(255,255,255,0.7); margin-bottom: 0.25rem; cursor: text; padding: 2px 4px; border-radius: 3px; display: inline-block;"
-                             onfocus="this.style.background='rgba(255,255,255,0.1)'" 
-                             onblur="this.style.background='transparent'; updateClosingPresenterCompany(this.textContent)">${escapeHtml(slide.presenterCompany || presenterCompany)}</div>
-                        <div contenteditable="true" 
-                             style="font-size: 0.75rem; color: var(--accent-cyan); margin-top: 0.5rem; cursor: text; padding: 2px 4px; border-radius: 3px; display: inline-block;"
-                             onfocus="this.style.background='rgba(255,255,255,0.1)'" 
-                             onblur="this.style.background='transparent'; updateClosingPresenterEmail(this.textContent)">${escapeHtml(slide.presenterEmail || presenterEmail || 'your@email.com')}</div>
-                    </div>
-                    
-                    <!-- Powered by footer - EDITABLE -->
-                    <div contenteditable="true" 
-                         style="position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); font-size: 0.7rem; color: rgba(255,255,255,0.4); text-align: center; cursor: text; padding: 2px 4px; border-radius: 3px;"
-                         onfocus="this.style.background='rgba(255,255,255,0.1)'" 
-                         onblur="this.style.background='transparent'; updateClosingFooter(this.textContent)">
-                        ${escapeHtml(slide.footer || 'Powered by Crosswalk Profile IQ')}
+                             style="position: absolute; bottom: 5%; font-size: 0.65rem; font-weight: 300; color: rgba(255,255,255,0.3); text-align: center; cursor: text; padding: 2px 8px; border-radius: 3px; letter-spacing: 0.05em;"
+                             onfocus="this.style.background='rgba(255,255,255,0.05)'" 
+                             onblur="this.style.background='transparent'; updateClosingFooter(this.textContent)">
+                            ${escapeHtml(slide.footer || 'POWERED BY CROSSWALK PROFILE IQ')}
+                        </div>
                     </div>
                     
                     ${footerHtml}
