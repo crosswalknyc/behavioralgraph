@@ -9669,8 +9669,8 @@
         /* Data Visualization Control Panel */
         .viz-control-toggle {
             position: absolute;
-            top: 0;
-            right: 0;
+            top: -8px;
+            right: -8px;
             display: flex;
             align-items: center;
             gap: 3px;
@@ -9678,18 +9678,31 @@
             border: none;
             border-radius: 6px;
             padding: 4px 8px;
-            z-index: 101;
-            cursor: pointer;
+            z-index: 200;
+            cursor: grab;
             font-size: 0.65rem;
             font-weight: 600;
             color: #000;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+            transition: background 0.2s ease, box-shadow 0.2s ease;
+            user-select: none;
         }
         
         .viz-control-toggle:hover {
             background: var(--accent-lime);
-            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+        
+        .viz-control-toggle:active {
+            cursor: grabbing;
+        }
+        
+        .viz-control-toggle.dragging {
+            cursor: grabbing;
+            opacity: 0.9;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+            z-index: 10001;
+            pointer-events: auto;
         }
         
         .viz-control-panel {
@@ -35197,7 +35210,9 @@
             const showOverflow = currentCount === 'all' && totalItems > maxFit;
             
             return `
-                <button class="viz-control-toggle" onclick="toggleVizPanel(${slideIdx}); event.stopPropagation();">
+                <button class="viz-control-toggle" id="vizToggle${slideIdx}" 
+                        onmousedown="startDragVizToggle(event, ${slideIdx})"
+                        onclick="if(!window.vizToggleDragged) toggleVizPanel(${slideIdx}); event.stopPropagation();">
                     <span>⚙️</span>
                     <span>Chart</span>
                 </button>
@@ -35359,6 +35374,79 @@
             }
             document.removeEventListener('mousemove', dragVizPanel);
             document.removeEventListener('mouseup', stopDragVizPanel);
+        }
+        
+        // Drag functionality for viz control toggle button (yellow Chart button)
+        let draggedVizToggle = null;
+        let vizToggleOffsetX = 0;
+        let vizToggleOffsetY = 0;
+        let vizToggleStartX = 0;
+        let vizToggleStartY = 0;
+        window.vizToggleDragged = false;
+        
+        function startDragVizToggle(event, slideIdx) {
+            const toggle = document.getElementById(`vizToggle${slideIdx}`);
+            if (!toggle) return;
+            
+            // Store start position to detect if it was a click or drag
+            vizToggleStartX = event.clientX;
+            vizToggleStartY = event.clientY;
+            window.vizToggleDragged = false;
+            
+            draggedVizToggle = toggle;
+            const rect = toggle.getBoundingClientRect();
+            vizToggleOffsetX = event.clientX - rect.left;
+            vizToggleOffsetY = event.clientY - rect.top;
+            
+            // Convert to fixed positioning for free movement
+            toggle.style.position = 'fixed';
+            toggle.style.left = rect.left + 'px';
+            toggle.style.top = rect.top + 'px';
+            toggle.style.right = 'auto';
+            toggle.classList.add('dragging');
+            
+            document.addEventListener('mousemove', dragVizToggle);
+            document.addEventListener('mouseup', stopDragVizToggle);
+            
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        
+        function dragVizToggle(event) {
+            if (!draggedVizToggle) return;
+            
+            // Check if moved enough to be considered a drag (5px threshold)
+            const moveX = Math.abs(event.clientX - vizToggleStartX);
+            const moveY = Math.abs(event.clientY - vizToggleStartY);
+            if (moveX > 5 || moveY > 5) {
+                window.vizToggleDragged = true;
+            }
+            
+            const newX = event.clientX - vizToggleOffsetX;
+            const newY = event.clientY - vizToggleOffsetY;
+            
+            // Keep within viewport bounds
+            const maxX = window.innerWidth - draggedVizToggle.offsetWidth - 10;
+            const maxY = window.innerHeight - draggedVizToggle.offsetHeight - 10;
+            
+            draggedVizToggle.style.left = Math.max(10, Math.min(newX, maxX)) + 'px';
+            draggedVizToggle.style.top = Math.max(10, Math.min(newY, maxY)) + 'px';
+            
+            event.preventDefault();
+        }
+        
+        function stopDragVizToggle() {
+            if (draggedVizToggle) {
+                draggedVizToggle.classList.remove('dragging');
+                draggedVizToggle = null;
+            }
+            document.removeEventListener('mousemove', dragVizToggle);
+            document.removeEventListener('mouseup', stopDragVizToggle);
+            
+            // Reset drag flag after a short delay to allow click handler to check it
+            setTimeout(() => {
+                window.vizToggleDragged = false;
+            }, 100);
         }
         
         // Close viz panels when clicking outside
