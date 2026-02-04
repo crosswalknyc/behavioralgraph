@@ -9668,7 +9668,10 @@
         
         /* Data Visualization Control Panel */
         .viz-control-toggle {
-            display: inline-flex;
+            position: absolute;
+            top: 0;
+            right: 0;
+            display: flex;
             align-items: center;
             gap: 3px;
             background: var(--accent-cyan);
@@ -9682,8 +9685,6 @@
             color: #000;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
             transition: all 0.2s ease;
-            margin-left: 8px;
-            vertical-align: middle;
         }
         
         .viz-control-toggle:hover {
@@ -48777,7 +48778,7 @@
                 `;
             }
             
-            // For Closing/Thank You slide - Minimalist elegant design
+            // For Closing/Thank You slide - Bold typography design matching inspiration
             if (slide.type === 'closing') {
                 const today = new Date();
                 const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -48786,46 +48787,56 @@
                 const presenterName = (currentUserFirstName && currentUserLastName) 
                     ? `${currentUserFirstName} ${currentUserLastName}` 
                     : currentUsername || 'Your Name';
-                const presenterCompany = currentUserCompany || 'Your Company';
-                const presenterEmail = currentUserEmail || '';
+                const presenterCompany = currentUserCompany || 'Creative Presentation';
+                const presenterEmail = currentUserEmail || 'hello@crosswalknyc.com';
                 
                 return `
-                    <!-- Minimalist elegant thank you slide -->
-                    <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%);">
+                    <!-- Bold Thank You slide - matching inspiration design -->
+                    <div style="position: absolute; inset: 0; background: #1a1a1a; overflow: hidden;">
                         
-                        <!-- Large Thank You - EDITABLE -->
+                        <!-- Giant THANK text - fills most of width -->
                         <div contenteditable="true" 
-                             style="font-size: 5rem; font-weight: 300; color: #ffffff; text-transform: uppercase; letter-spacing: 0.2em; text-align: center; line-height: 1; cursor: text; padding: 8px 16px; border-radius: 4px; margin-bottom: 2rem;"
+                             style="position: absolute; top: 3%; left: 2%; font-size: clamp(4rem, 18vw, 12rem); font-weight: 900; color: rgba(180, 180, 180, 0.95); text-transform: uppercase; letter-spacing: -0.03em; line-height: 0.85; cursor: text; padding: 4px 8px; border-radius: 4px; font-family: 'Arial Black', 'Helvetica Neue', sans-serif;"
                              onfocus="this.style.background='rgba(255,255,255,0.05)'" 
                              onblur="this.style.background='transparent'; updateClosingTitle(this.textContent)">
-                            ${escapeHtml(slide.customTitle || slide.title || 'THANK YOU')}
+                            ${escapeHtml(slide.customTitle || 'THANK')}
                         </div>
                         
-                        <!-- Thin accent line -->
-                        <div style="width: 80px; height: 1px; background: var(--accent-lime); margin-bottom: 3rem; opacity: 0.6;"></div>
+                        <!-- Giant YOU. text - below THANK -->
+                        <div contenteditable="true" 
+                             style="position: absolute; top: 42%; left: 2%; font-size: clamp(4rem, 18vw, 12rem); font-weight: 900; color: rgba(180, 180, 180, 0.95); text-transform: uppercase; letter-spacing: -0.03em; line-height: 0.85; cursor: text; padding: 4px 8px; border-radius: 4px; font-family: 'Arial Black', 'Helvetica Neue', sans-serif;"
+                             onfocus="this.style.background='rgba(255,255,255,0.05)'" 
+                             onblur="this.style.background='transparent'; updateClosingSubtitle(this.textContent)">
+                            ${escapeHtml(slide.customSubtitle || 'YOU.')}
+                        </div>
                         
-                        <!-- Contact info - EDITABLE -->
-                        <div style="text-align: center; line-height: 2;">
+                        <!-- Right side info panel -->
+                        <div style="position: absolute; top: 4%; right: 4%; text-align: right;">
+                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">${dateStr}</div>
                             <div contenteditable="true" 
-                                 style="font-size: 1.2rem; font-weight: 400; color: #ffffff; cursor: text; padding: 2px 8px; border-radius: 3px; display: inline-block;"
-                                 onfocus="this.style.background='rgba(255,255,255,0.05)'" 
-                                 onblur="this.style.background='transparent'; updateClosingPresenterName(this.textContent)">${escapeHtml(slide.presenterName || presenterName)}</div>
-                            <div contenteditable="true" 
-                                 style="font-size: 0.9rem; font-weight: 300; color: rgba(255,255,255,0.6); cursor: text; padding: 2px 8px; border-radius: 3px; display: inline-block;"
+                                 style="font-size: 0.85rem; font-weight: 700; color: #ffffff; cursor: text; padding: 2px 6px; border-radius: 3px;"
                                  onfocus="this.style.background='rgba(255,255,255,0.05)'" 
                                  onblur="this.style.background='transparent'; updateClosingPresenterCompany(this.textContent)">${escapeHtml(slide.presenterCompany || presenterCompany)}</div>
                             <div contenteditable="true" 
-                                 style="font-size: 0.85rem; font-weight: 300; color: var(--accent-lime); cursor: text; padding: 2px 8px; border-radius: 3px; display: inline-block; opacity: 0.8;"
+                                 style="font-size: 0.65rem; color: rgba(255,255,255,0.6); cursor: text; padding: 2px 6px; border-radius: 3px;"
                                  onfocus="this.style.background='rgba(255,255,255,0.05)'" 
-                                 onblur="this.style.background='transparent'; updateClosingPresenterEmail(this.textContent)">${escapeHtml(slide.presenterEmail || presenterEmail || 'your@email.com')}</div>
+                                 onblur="this.style.background='transparent'; updateClosingPresenterName(this.textContent)">Presented By: ${escapeHtml(slide.presenterName || presenterName)}</div>
                         </div>
                         
-                        <!-- Subtle footer - EDITABLE -->
-                        <div contenteditable="true" 
-                             style="position: absolute; bottom: 5%; font-size: 0.65rem; font-weight: 300; color: rgba(255,255,255,0.3); text-align: center; cursor: text; padding: 2px 8px; border-radius: 3px; letter-spacing: 0.05em;"
-                             onfocus="this.style.background='rgba(255,255,255,0.05)'" 
-                             onblur="this.style.background='transparent'; updateClosingFooter(this.textContent)">
-                            ${escapeHtml(slide.footer || 'POWERED BY CROSSWALK PROFILE IQ')}
+                        <!-- Bottom left source info -->
+                        <div style="position: absolute; bottom: 4%; left: 2%;">
+                            <div contenteditable="true" 
+                                 style="font-size: 0.6rem; font-style: italic; color: rgba(255,255,255,0.5); cursor: text; padding: 2px 6px; border-radius: 3px; margin-bottom: 0.2rem;"
+                                 onfocus="this.style.background='rgba(255,255,255,0.05)'" 
+                                 onblur="this.style.background='transparent'; updateClosingFooter(this.textContent)">
+                                ${escapeHtml(slide.footer || 'Source: Crosswalk Profile IQ, Prior 12 Months from a 10M Gen Pop Digital Behavioral Panel')}
+                            </div>
+                            <div contenteditable="true" 
+                                 style="font-size: 0.6rem; color: #ef4444; text-decoration: underline; cursor: text; padding: 2px 6px; border-radius: 3px;"
+                                 onfocus="this.style.background='rgba(255,255,255,0.05)'" 
+                                 onblur="this.style.background='transparent'; updateClosingPresenterEmail(this.textContent)">
+                                ${escapeHtml(slide.presenterEmail || presenterEmail)}
+                            </div>
                         </div>
                     </div>
                     
@@ -48998,11 +49009,9 @@
                         
                         <!-- Content area left -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: ${contentTop}; width: 48%; height: ${contentHeight}; overflow: hidden; padding: 0.5rem; z-index: 1;">
-                            <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 0.5rem;">
-                                <div contenteditable="true" style="flex: 1; font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                    ${escapeHtml(description)}
-                                </div>
-                                ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 1rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
                             </div>
                             ${content}
                             ${analysisBlock}
@@ -49041,11 +49050,9 @@
                         
                         <!-- Content area left -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 22%; width: 36%; height: 65%; overflow: hidden; padding: 0.5rem; z-index: 1;">
-                            <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 0.5rem;">
-                                <div contenteditable="true" style="flex: 1; font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                    ${escapeHtml(description)}
-                                </div>
-                                ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 1rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
                             </div>
                             ${content}
                             ${analysisBlock}
@@ -49096,11 +49103,9 @@
                         
                         <!-- Content area right -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; right: 5%; top: 35%; width: 30%; height: 52%; overflow: hidden; padding: 0.5rem; z-index: 1;">
-                            <div style="display: flex; align-items: flex-start; gap: 6px; margin-bottom: 0.5rem;">
-                                <div contenteditable="true" style="flex: 1; font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                    ${escapeHtml(description)}
-                                </div>
-                                ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 0.75rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
                             </div>
                             ${content}
                             ${analysisBlock}
@@ -49139,11 +49144,9 @@
                         
                         <!-- Content area right bottom -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; right: 5%; top: 50%; width: 26%; height: 37%; overflow: hidden; padding: 0.5rem; z-index: 1;">
-                            <div style="display: flex; align-items: flex-start; gap: 6px; margin-bottom: 0.5rem;">
-                                <div contenteditable="true" style="flex: 1; font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                    ${escapeHtml(description)}
-                                </div>
-                                ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; margin-bottom: 0.5rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
                             </div>
                             ${content}
                             ${analysisBlock}
@@ -49181,11 +49184,9 @@
                         
                         <!-- Full width content below -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 40%; width: 90%; height: 47%; overflow: hidden; padding: 0.5rem; z-index: 1;">
-                            <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 0.5rem;">
-                                <div contenteditable="true" style="flex: 1; max-width: 65%; font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                    ${escapeHtml(description)}
-                                </div>
-                                ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 0.75rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; max-width: 65%;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
                             </div>
                             ${content}
                             ${analysisBlock}
@@ -49223,11 +49224,9 @@
                         
                         <!-- Centered content -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 30%; top: 35%; width: 40%; height: 50%; overflow: hidden; padding: 0.5rem; z-index: 1;">
-                            <div style="display: flex; align-items: flex-start; gap: 6px; margin-bottom: 0.5rem; justify-content: center;">
-                                <div contenteditable="true" style="flex: 1; font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; text-align: center;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                    ${escapeHtml(description)}
-                                </div>
-                                ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; margin-bottom: 0.5rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; text-align: center;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
                             </div>
                             ${content}
                             ${analysisBlock}
@@ -49265,11 +49264,9 @@
                         
                         <!-- Full width content bottom -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 52%; width: 90%; height: 35%; overflow: hidden; padding: 0.5rem; z-index: 1;">
-                            <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 0.5rem;">
-                                <div contenteditable="true" style="flex: 1; font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                    ${escapeHtml(description)}
-                                </div>
-                                ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 0.75rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
                             </div>
                             ${content}
                             ${analysisBlock}
@@ -49308,11 +49305,9 @@
                         
                         <!-- Compact content left -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 15%; width: 32%; height: 70%; overflow: hidden; padding: 0.5rem; z-index: 1;">
-                            <div style="display: flex; align-items: flex-start; gap: 6px; margin-bottom: 0.5rem;">
-                                <div contenteditable="true" style="flex: 1; font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                    ${escapeHtml(description)}
-                                </div>
-                                ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; margin-bottom: 0.5rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
                             </div>
                             ${content}
                             ${analysisBlock}
