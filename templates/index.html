@@ -10858,7 +10858,7 @@
                 <div class="view-toggle" id="iqTabsContainer">
                     <button class="view-btn active {% if not has_profile_iq_access %}disabled{% endif %}" id="profileIQTab" {% if not has_profile_iq_access %}disabled{% endif %}>🎯 Profile IQ</button>
                     <button class="view-btn {% if not has_subscriber_iq_access %}disabled{% endif %}" id="subscriberIQTab" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</button>
-                    <button class="view-btn" id="rankerIQTab">📊 Ranker</button>
+                    <button class="view-btn {% if not has_rankers_iq_access %}disabled{% endif %}" id="rankerIQTab" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Ranker</button>
                     <button class="view-btn {% if not has_hedge_fund_iq_access %}disabled{% endif %}" id="hedgeFundIQTab" {% if not has_hedge_fund_iq_access %}disabled{% endif %}>📈 Hedge Fund IQ</button>
                     <button class="view-btn" id="dashboardViewBtn" style="display: none;">📊 Dashboard</button>
                     {% if role == 'super_admin' or role == 'admin' or role == 'enterprise' or has_analysis_iq_access %}
@@ -14958,6 +14958,11 @@
         // Allowed behavioral categories for this user (controls which categories show in Behavioral tab)
         const allowedBehavioralCategories = {{ allowed_behavioral_categories | tojson | safe }};
         const hasAllBehavioralCategories = allowedBehavioralCategories.includes('*');
+        
+        // Rankers IQ access control
+        const hasRankersIQAccess = {{ 'true' if has_rankers_iq_access else 'false' }};
+        const rankersIQOptions = {{ rankers_iq_options | tojson | safe }};
+        const hasAllRankerOptions = rankersIQOptions.includes('*');
         let liveFeatures = {
             compare: true,
             segment: true,
@@ -15678,6 +15683,31 @@
             if (talentTheaterView) talentTheaterView.style.display = 'none';
             const formView = document.getElementById('formView');
             if (formView) formView.style.display = 'none';
+            
+            // Apply ranker access control - hide tabs user doesn't have access to
+            if (!isSuperAdmin && !hasAllRankerOptions) {
+                const rankerTabMap = {
+                    'all_netflix': 'netflixSubTabAll',
+                    'daily_series': 'netflixSubTabDaily',
+                    'daily_seasons': 'netflixSubTabSeasons',
+                    'daily_episodes': 'netflixSubTabEpisodes',
+                    'trends': 'netflixSubTabTrends',
+                    'genre': 'netflixSubTabGenre',
+                    'top_shows': 'netflixSubTabTopShows',
+                    'insights': 'netflixSubTabInsights'
+                };
+                
+                Object.entries(rankerTabMap).forEach(([option, tabId]) => {
+                    const tab = document.getElementById(tabId);
+                    if (tab) {
+                        if (rankersIQOptions.includes(option)) {
+                            tab.style.display = '';
+                        } else {
+                            tab.style.display = 'none';
+                        }
+                    }
+                });
+            }
             const customAnalysisView = document.getElementById('customAnalysisView');
             if (customAnalysisView) customAnalysisView.style.display = 'none';
             

@@ -1973,7 +1973,9 @@ def create_user():
             'hedge_fund_iq_tabs': req_data.get('hedge_fund_iq_tabs', []),
             'hedge_fund_iq_tickers': req_data.get('hedge_fund_iq_tickers', []),
             'has_analysis_iq_access': req_data.get('has_analysis_iq_access', False),
-            'analysis_iq_modules': req_data.get('analysis_iq_modules', [])
+            'analysis_iq_modules': req_data.get('analysis_iq_modules', []),
+            'has_rankers_iq_access': req_data.get('has_rankers_iq_access', False),
+            'rankers_iq_options': req_data.get('rankers_iq_options', [])
         }
         
         save_users(data)
@@ -2055,6 +2057,10 @@ def update_user(username):
             user['has_analysis_iq_access'] = req_data['has_analysis_iq_access']
         if 'analysis_iq_modules' in req_data:
             user['analysis_iq_modules'] = req_data['analysis_iq_modules']
+        if 'has_rankers_iq_access' in req_data:
+            user['has_rankers_iq_access'] = req_data['has_rankers_iq_access']
+        if 'rankers_iq_options' in req_data:
+            user['rankers_iq_options'] = req_data['rankers_iq_options']
         
         # Handle username change
         new_username = req_data.get('new_username', '').strip().lower()
@@ -3052,6 +3058,8 @@ def index():
         has_analysis_iq = True
         analysis_iq_modules = ['profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign', 'cross_show', 'watch_time']
         allowed_behavioral_categories = ['*']
+        has_rankers_iq = True
+        rankers_iq_options = ['*']
     else:
         has_profile_iq = user.get('has_profile_iq_access', True) if user else True  # Default True for backward compat
         has_subscriber_iq = user.get('has_subscriber_iq_access', False) if user else False
@@ -3060,6 +3068,8 @@ def index():
         has_analysis_iq = user.get('has_analysis_iq_access', False) if user else False
         analysis_iq_modules = user.get('analysis_iq_modules', []) if user else []
         allowed_behavioral_categories = user.get('allowed_behavioral_categories', ['*']) if user else ['*']
+        has_rankers_iq = user.get('has_rankers_iq_access', False) if user else False
+        rankers_iq_options = user.get('rankers_iq_options', []) if user else []
     
     # Get user info for credits request
     first_name = user.get('first_name', '') if user else ''
@@ -3080,6 +3090,8 @@ def index():
                            has_analysis_iq_access=has_analysis_iq,
                            analysis_iq_modules=analysis_iq_modules,
                            allowed_behavioral_categories=allowed_behavioral_categories,
+                           has_rankers_iq_access=has_rankers_iq,
+                           rankers_iq_options=rankers_iq_options,
                            first_name=first_name,
                            last_name=last_name,
                            company=company,
