@@ -17809,12 +17809,16 @@
                 window.currentDashboardData = rows;
                 window.currentProfileName = profileFilename;
                 
-                // Fetch display name from jobs metadata
+                // Fetch display name from jobs metadata (use session cache if available)
                 let displayName = null;
                 try {
-                    const jobsResponse = await fetch('/api/jobs');
-                    const jobsData = await jobsResponse.json();
-                    if (jobsData.jobs) {
+                    let jobsData = getSessionJobsCache();
+                    if (!jobsData || !jobsData.jobs) {
+                        const jobsResponse = await fetch('/api/jobs');
+                        jobsData = await jobsResponse.json();
+                        if (!jobsData.loading) setSessionJobsCache(jobsData);
+                    }
+                    if (jobsData && jobsData.jobs) {
                         const job = jobsData.jobs.find(j => j.s3_key === profileFilename || j.s3_key === `dashboard-inputs/${profileFilename}`);
                         if (job) {
                             displayName = job.display_name || job.name || job.project_name;
@@ -23551,17 +23555,24 @@
 
         async function populatePreviousFiles() {
             try {
-                const response = await fetch('/api/jobs', { credentials: 'same-origin' });
-                if (response.status === 401) {
-                    window.location.href = '/login';
-                    return;
+                let jobs = [];
+                const cached = getSessionJobsCache();
+                if (cached && cached.jobs.length > 0) {
+                    jobs = cached.jobs;
+                } else {
+                    const response = await fetch('/api/jobs', { credentials: 'same-origin' });
+                    if (response.status === 401) {
+                        window.location.href = '/login';
+                        return;
+                    }
+                    if (!response.ok) {
+                        console.error('API error:', response.status);
+                        return;
+                    }
+                    const data = await response.json();
+                    jobs = data.jobs || [];
+                    setSessionJobsCache(data);
                 }
-                if (!response.ok) {
-                    console.error('API error:', response.status);
-                    return;
-                }
-                const data = await response.json();
-                const jobs = data.jobs || [];
                 
                 const select = document.getElementById('previous_file');
                 select.innerHTML = '<option value="">Select a previous run...</option>';
@@ -24820,10 +24831,43 @@
         // Load profiles when dashboard tab is shown
         let dashboardProfilePolling = null;
         
+        const SESSION_JOBS_CACHE_KEY = 'bg_jobs_session_cache';
+        function getSessionJobsCache() {
+            try {
+                const raw = sessionStorage.getItem(SESSION_JOBS_CACHE_KEY);
+                if (!raw) return null;
+                const data = JSON.parse(raw);
+                if (data.loading || !Array.isArray(data.jobs)) return null;
+                return data;
+            } catch (e) { return null; }
+        }
+        function setSessionJobsCache(data) {
+            if (!data || data.loading) return;
+            try {
+                sessionStorage.setItem(SESSION_JOBS_CACHE_KEY, JSON.stringify({
+                    jobs: data.jobs || [],
+                    categories: data.categories || [],
+                    cache_info: data.cache_info || null,
+                    loading: false
+                }));
+            } catch (e) { /* quota or parse */ }
+        }
+        function clearSessionJobsCache() {
+            try { sessionStorage.removeItem(SESSION_JOBS_CACHE_KEY); } catch (e) {}
+        }
+        
         async function loadDashboardProfiles() {
             const container = document.getElementById('dashProfileTree');
             
             try {
+                // Use session cache if available (skip fetch for rest of session)
+                const cached = getSessionJobsCache();
+                if (cached && cached.jobs.length > 0) {
+                    renderDashboardProfileTree(cached.jobs);
+                    if (openProfileTabs.length === 0) restoreSavedTabs();
+                    return;
+                }
+                
                 const response = await fetch('/api/jobs', { credentials: 'same-origin' });
                 
                 // Handle authentication errors
@@ -24858,6 +24902,7 @@
                     dashboardProfilePolling = null;
                 }
                 
+                setSessionJobsCache(data);
                 const profiles = data.jobs || [];
                 renderDashboardProfileTree(profiles);
                 
@@ -41075,6 +41120,48 @@
             }
             
             try {
+                // Use session cache if available (skip fetch for rest of session)
+                const cached = getSessionJobsCache();
+                if (cached && cached.jobs.length > 0) {
+                    allJobs = cached.jobs;
+                    allCategories = cached.categories || [];
+                    cacheInfo = cached.cache_info || null;
+                    if (cachePollingInterval) {
+                        clearInterval(cachePollingInterval);
+                        cachePollingInterval = null;
+                    }
+                    if (cacheStatus && cacheInfo) {
+                        const lastUpdated = cacheInfo.last_updated ? new Date(cacheInfo.last_updated * 1000) : null;
+                        const timeAgo = lastUpdated ? getTimeAgo(lastUpdated) : 'never';
+                        cacheStatus.innerHTML = `<span style="color: var(--text-secondary); font-size: 0.7rem;">⚡ ${cacheInfo.file_count || 0} files • Updated ${timeAgo}</span>`;
+                    }
+                    const categorySelect = document.getElementById('categoryFilter');
+                    if (categorySelect) {
+                        let categoryOptions = '<option value="">All Categories</option>';
+                        const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
+                        const categoriesByMaster = {};
+                        allCategories.forEach(cat => {
+                            const master = getMasterCategory(cat);
+                            if (!categoriesByMaster[master]) categoriesByMaster[master] = [];
+                            categoriesByMaster[master].push(cat);
+                        });
+                        masterOrder.forEach(master => {
+                            const cats = categoriesByMaster[master];
+                            if (!cats || cats.length === 0) return;
+                            const icon = MASTER_CATEGORY_ICONS[master] || '📁';
+                            categoryOptions += `<optgroup label="${icon} ${master}">`;
+                            cats.sort().forEach(cat => {
+                                categoryOptions += `<option value="${cat}">${cat}</option>`;
+                            });
+                            categoryOptions += '</optgroup>';
+                        });
+                        categorySelect.innerHTML = categoryOptions;
+                    }
+                    jobsDisplayLimit = 50;
+                    renderJobs(allJobs);
+                    return;
+                }
+                
                 const response = await fetch('/api/jobs', { credentials: 'same-origin' });
                 
                 // Handle authentication errors
@@ -41115,6 +41202,7 @@
                     cachePollingInterval = null;
                 }
                 
+                setSessionJobsCache(data);
                 allJobs = data.jobs || [];
                 allCategories = data.categories || [];
                 cacheInfo = data.cache_info || null;
@@ -52851,6 +52939,7 @@
                     cacheStatus.innerHTML = `<span style="color: var(--text-secondary); font-size: 0.7rem;">✅ No new files (${data.total} cached)</span>`;
                 }
                 
+                clearSessionJobsCache();
                 await loadJobs();
             } catch (error) {
                 console.error('Refresh failed:', error);
