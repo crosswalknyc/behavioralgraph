@@ -3065,6 +3065,7 @@ def index():
     first_name = user.get('first_name', '') if user else ''
     last_name = user.get('last_name', '') if user else ''
     email = user.get('email', '') if user else ''
+    company = user.get('company', '') if user else ''
     
     return render_template('index.html', 
                            username=session.get('username'),
@@ -3081,6 +3082,7 @@ def index():
                            allowed_behavioral_categories=allowed_behavioral_categories,
                            first_name=first_name,
                            last_name=last_name,
+                           company=company,
                            user_email=email)
 
 

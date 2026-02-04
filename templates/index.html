@@ -31359,10 +31359,16 @@
             document.body.appendChild(modal);
         }
         
+        // Collaborator list for Add to Deck modal
+        let pendingCollaborators = [];
+        
         function showDeckSelectionPopup(type, category) {
             const modal = document.createElement('div');
             modal.className = 'deck-workspace-modal';
             modal.id = 'deckSelectionModal';
+            
+            // Reset pending collaborators
+            pendingCollaborators = [];
             
             // Build workspace and deck options
             let workspaceOptions = '';
@@ -31371,7 +31377,7 @@
             });
             
             modal.innerHTML = `
-                <div class="deck-workspace-content" style="max-width: 450px;">
+                <div class="deck-workspace-content" style="max-width: 480px;">
                     <div class="deck-workspace-header">
                         <h2>➕ Add to Deck</h2>
                         <button onclick="document.getElementById('deckSelectionModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
@@ -31389,7 +31395,7 @@
                             </select>
                         </div>
                         
-                        <div style="margin-bottom: 1.5rem;">
+                        <div style="margin-bottom: 1rem;">
                             <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.8rem; color: var(--text-secondary);">SELECT DECK</label>
                             <select id="deckSelectDeck" style="width: 100%; padding: 0.6rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary);">
                                 <option value="">-- Select a deck --</option>
@@ -31397,9 +31403,26 @@
                             <button onclick="quickCreateDeck()" style="margin-top: 0.5rem; padding: 0.4rem 0.75rem; font-size: 0.75rem; background: transparent; border: 1px dashed var(--border-color); color: var(--text-secondary); border-radius: 4px; cursor: pointer;">+ Create New Deck</button>
                         </div>
                         
+                        <!-- Collaborate Section -->
+                        <div style="margin-bottom: 1.5rem; padding: 1rem; background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 8px;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; font-weight: 600; font-size: 0.8rem; color: #c4b5fd;">
+                                <span>👥</span> COLLABORATE (Optional)
+                            </label>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Invite team members to work on this deck with you.</p>
+                            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <input type="email" id="deckCollabEmail" placeholder="Enter email address" 
+                                       style="flex: 1; padding: 0.5rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.85rem;"
+                                       onkeypress="if(event.key==='Enter'){event.preventDefault();addCollaboratorToList();}">
+                                <button onclick="addCollaboratorToList()" class="btn btn-small" style="padding: 0.5rem 0.75rem; background: rgba(139, 92, 246, 0.3); border: 1px solid rgba(139, 92, 246, 0.5); color: #c4b5fd;">Add</button>
+                            </div>
+                            <div id="deckCollabList" style="display: flex; flex-wrap: wrap; gap: 0.35rem; min-height: 24px;">
+                                <span style="font-size: 0.7rem; color: var(--text-secondary); font-style: italic;">No collaborators added yet</span>
+                            </div>
+                        </div>
+                        
                         <div style="display: flex; gap: 0.75rem;">
-                            <button class="btn btn-secondary" onclick="document.getElementById('deckSelectionModal').remove()" style="flex: 1;">Cancel</button>
-                            <button class="btn btn-primary" onclick="confirmAddToDeck('${type}', '${category}')" style="flex: 1;">Add to Deck</button>
+                            <button class="btn btn-secondary" onclick="document.getElementById('deckSelectionModal').remove()" style="flex: 1;">CANCEL</button>
+                            <button class="btn btn-primary" onclick="confirmAddToDeck('${type}', '${category}')" style="flex: 1;">ADD TO DECK</button>
                         </div>
                     </div>
                 </div>
@@ -31480,13 +31503,39 @@
             deck.slides.push(item);
             deck.updatedAt = new Date().toISOString();
             
+            // Add collaborators if any were specified
+            if (pendingCollaborators.length > 0) {
+                if (!deck.collaborators) deck.collaborators = [];
+                pendingCollaborators.forEach(email => {
+                    if (!deck.collaborators.find(c => c.email === email)) {
+                        deck.collaborators.push({
+                            email: email,
+                            addedAt: new Date().toISOString(),
+                            addedBy: currentUsername || 'unknown'
+                        });
+                    }
+                });
+                
+                // Send invitations to collaborators
+                inviteDeckCollaborators(deck.id, deck.name, pendingCollaborators);
+            }
+            
             localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
             
             // Also save to data points for easy access
             saveToDataPoints({...item, workspaceId: wsId});
             
+            // Clear pending collaborators
+            const collabCount = pendingCollaborators.length;
+            pendingCollaborators = [];
+            
             document.getElementById('deckSelectionModal')?.remove();
-            showNotification(`✅ Added "${item.title}" to ${deck.name}`, 'success');
+            
+            let message = `✅ Added "${item.title}" to ${deck.name}`;
+            if (collabCount > 0) {
+                message += ` and invited ${collabCount} collaborator(s)`;
+            }
+            showNotification(message, 'success');
             trackActivity('add_module_to_deck', `${type}:${category}:${deck.name}`);
         }
         
@@ -31515,6 +31564,9 @@
             modal.className = 'deck-workspace-modal';
             modal.id = 'deckSelectionModal';
             
+            // Reset pending collaborators
+            pendingCollaborators = [];
+            
             // Build workspace and deck options
             let workspaceOptions = '';
             Object.entries(workspaces || {}).forEach(([wsId, ws]) => {
@@ -31535,7 +31587,7 @@
             const displayName = insightNames[insightType] || insightType;
             
             modal.innerHTML = `
-                <div class="deck-workspace-content" style="max-width: 450px;">
+                <div class="deck-workspace-content" style="max-width: 480px;">
                     <div class="deck-workspace-header">
                         <h2>➕ Add to Deck</h2>
                         <button onclick="document.getElementById('deckSelectionModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
@@ -31553,7 +31605,7 @@
                             </select>
                         </div>
                         
-                        <div style="margin-bottom: 1.5rem;">
+                        <div style="margin-bottom: 1rem;">
                             <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.8rem; color: var(--text-secondary);">SELECT DECK</label>
                             <select id="deckSelectDeck" style="width: 100%; padding: 0.6rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary);">
                                 <option value="">-- Select a deck --</option>
@@ -31561,9 +31613,25 @@
                             <button onclick="quickCreateDeck()" style="margin-top: 0.5rem; padding: 0.4rem 0.75rem; font-size: 0.75rem; background: transparent; border: 1px dashed var(--border-color); color: var(--text-secondary); border-radius: 4px; cursor: pointer;">+ Create New Deck</button>
                         </div>
                         
+                        <!-- Collaborate Section -->
+                        <div style="margin-bottom: 1.5rem; padding: 1rem; background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 8px;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; font-weight: 600; font-size: 0.8rem; color: #c4b5fd;">
+                                <span>👥</span> COLLABORATE (Optional)
+                            </label>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">Invite team members to work on this deck with you.</p>
+                            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <input type="email" id="deckCollabEmail" placeholder="Enter email address" 
+                                       style="flex: 1; padding: 0.5rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.85rem;">
+                                <button onclick="addCollaboratorToList()" class="btn btn-small" style="padding: 0.5rem 0.75rem; background: rgba(139, 92, 246, 0.3); border: 1px solid rgba(139, 92, 246, 0.5); color: #c4b5fd;">Add</button>
+                            </div>
+                            <div id="deckCollabList" style="display: flex; flex-wrap: wrap; gap: 0.35rem; min-height: 24px;">
+                                <!-- Collaborator chips will appear here -->
+                            </div>
+                        </div>
+                        
                         <div style="display: flex; gap: 0.75rem;">
-                            <button class="btn btn-secondary" onclick="document.getElementById('deckSelectionModal').remove()" style="flex: 1;">Cancel</button>
-                            <button class="btn btn-primary" onclick="confirmAddInsightToDeck('${insightType}')" style="flex: 1;">Add to Deck</button>
+                            <button class="btn btn-secondary" onclick="document.getElementById('deckSelectionModal').remove()" style="flex: 1;">CANCEL</button>
+                            <button class="btn btn-primary" onclick="confirmAddInsightToDeck('${insightType}')" style="flex: 1;">ADD TO DECK</button>
                         </div>
                     </div>
                 </div>
@@ -31572,6 +31640,46 @@
             
             // Initialize deck options for first workspace
             updateDeckOptions();
+        }
+        
+        function addCollaboratorToList() {
+            const emailInput = document.getElementById('deckCollabEmail');
+            const email = emailInput?.value?.trim();
+            if (!email || !email.includes('@')) {
+                showNotification('Please enter a valid email address', 'error');
+                return;
+            }
+            
+            if (pendingCollaborators.includes(email)) {
+                showNotification('This collaborator is already added', 'info');
+                return;
+            }
+            
+            pendingCollaborators.push(email);
+            emailInput.value = '';
+            renderCollaboratorChips();
+        }
+        
+        function removeCollaboratorFromList(email) {
+            pendingCollaborators = pendingCollaborators.filter(e => e !== email);
+            renderCollaboratorChips();
+        }
+        
+        function renderCollaboratorChips() {
+            const container = document.getElementById('deckCollabList');
+            if (!container) return;
+            
+            if (pendingCollaborators.length === 0) {
+                container.innerHTML = '<span style="font-size: 0.7rem; color: var(--text-secondary); font-style: italic;">No collaborators added yet</span>';
+                return;
+            }
+            
+            container.innerHTML = pendingCollaborators.map(email => `
+                <span style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.5rem; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 12px; font-size: 0.7rem; color: #c4b5fd;">
+                    ${email.split('@')[0]}
+                    <button onclick="removeCollaboratorFromList('${email}')" style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 0; font-size: 0.8rem; line-height: 1;">×</button>
+                </span>
+            `).join('');
         }
         
         function confirmAddInsightToDeck(insightType) {
@@ -31599,11 +31707,51 @@
             deck.slides.push(item);
             deck.updatedAt = new Date().toISOString();
             
+            // Add collaborators if any were specified
+            if (pendingCollaborators.length > 0) {
+                if (!deck.collaborators) deck.collaborators = [];
+                pendingCollaborators.forEach(email => {
+                    if (!deck.collaborators.find(c => c.email === email)) {
+                        deck.collaborators.push({
+                            email: email,
+                            addedAt: new Date().toISOString(),
+                            addedBy: currentUsername || 'unknown'
+                        });
+                    }
+                });
+                
+                // Send invitations to collaborators
+                inviteDeckCollaborators(deck.id, deck.name, pendingCollaborators);
+            }
+            
             localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
             
+            // Clear pending collaborators
+            pendingCollaborators = [];
+            
             document.getElementById('deckSelectionModal')?.remove();
-            showNotification(`✅ Added "${item.title}" to ${deck.name}`, 'success');
+            
+            let message = `✅ Added "${item.title}" to ${deck.name}`;
+            if (pendingCollaborators.length > 0) {
+                message += ` and invited ${pendingCollaborators.length} collaborator(s)`;
+            }
+            showNotification(message, 'success');
             trackActivity('add_insight_to_deck', `${insightType}:${deck.name}`);
+        }
+        
+        async function inviteDeckCollaborators(deckId, deckName, emails) {
+            try {
+                const response = await fetch('/api/decks/invite', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deckId, deckName, emails })
+                });
+                if (response.ok) {
+                    console.log('Collaborator invitations sent');
+                }
+            } catch (e) {
+                console.error('Error sending invitations:', e);
+            }
         }
         
         function createInsightItem(insightType) {
@@ -44806,6 +44954,9 @@
             notifications: JSON.parse(localStorage.getItem('collabNotifications') || '[]')
         };
         let currentUsername = '{{ username }}';
+        let currentUserFirstName = '{{ first_name | default("") }}';
+        let currentUserLastName = '{{ last_name | default("") }}';
+        let currentUserCompany = '{{ company | default("") }}';
         let collabTeamMembers = [];
         
         function showCollabTab(tabName) {
@@ -46832,6 +46983,12 @@
                 const today = new Date();
                 const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
                 
+                // Get presenter info - user's name and company
+                const presenterName = (currentUserFirstName && currentUserLastName) 
+                    ? `${currentUserFirstName} ${currentUserLastName}` 
+                    : currentUsername || 'Your Name';
+                const presenterCompany = currentUserCompany || 'Your Company';
+                
                 return `
                     <div style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: flex; flex-direction: column;">
                         <!-- Large profile name -->
@@ -46842,8 +46999,9 @@
                         <!-- Right side info -->
                         <div style="position: absolute; right: 5%; top: 12%; text-align: right; font-size: 0.7rem; color: rgba(255,255,255,0.7);">
                             <div>${dateStr}</div>
-                            <div style="margin-top: 0.25rem;">Crosswalk Profile IQ</div>
-                            <div style="margin-top: 0.25rem;">Presented By: ${escapeHtml(slide.subtitle || 'Your Company')}</div>
+                            <div style="margin-top: 0.5rem;">Crosswalk Profile IQ</div>
+                            <div style="margin-top: 0.75rem; font-size: 0.8rem; color: rgba(255,255,255,0.9); font-weight: 500;">${escapeHtml(presenterName)}</div>
+                            <div style="margin-top: 0.15rem; font-size: 0.7rem; color: rgba(255,255,255,0.6);">${escapeHtml(presenterCompany)}</div>
                         </div>
                         
                         <!-- Bottom description -->
@@ -49325,6 +49483,9 @@
                     const userData = await userResponse.json();
                     if (userData.success) {
                         currentUsername = userData.username;
+                        currentUserFirstName = userData.first_name || '';
+                        currentUserLastName = userData.last_name || '';
+                        currentUserCompany = userData.company || '';
                         
                         // Display user's company and department
                         document.getElementById('userCompany').textContent = userData.company || 'Not assigned';
