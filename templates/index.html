@@ -25288,9 +25288,23 @@
             const axisFontSize = Math.max(10, Math.min(15, Math.floor(effectiveWidth / 22)));
             const dataLabelFontSize = Math.max(9, Math.min(13, axisFontSize));
             // Reserve space for legend; doughnut uses rest; extra left padding on legend adds gap between donut and text
-            const legendPaddingRight = Math.min(350, Math.max(240, Math.floor(chartContainerWidth * 0.45)));
-            const layoutPaddingCircular = { left: 10, right: legendPaddingRight, top: 8, bottom: 8 };
-            const legendOptionsCircular = { display: true, position: 'right', align: 'center', padding: { left: 40 }, labels: { color: '#e6f1ff', font: { size: legendFontSizeCircular }, boxWidth: 12, padding: 8 } };
+            // Calculate legend width based on container - leave room for chart (50%) and some padding
+            const legendAreaWidth = Math.floor(chartContainerWidth * 0.48);
+            const layoutPaddingCircular = { left: 10, right: legendAreaWidth, top: 8, bottom: 8 };
+            const legendOptionsCircular = { 
+                display: true, 
+                position: 'right', 
+                align: 'center', 
+                maxWidth: legendAreaWidth - 20,
+                padding: { left: 30, right: 10 }, 
+                labels: { 
+                    color: '#e6f1ff', 
+                    font: { size: legendFontSizeCircular }, 
+                    boxWidth: 12, 
+                    padding: 6,
+                    textAlign: 'left'
+                } 
+            };
 
             // Age - horizontal bar with Gen Pop in data labels (green/red based on index)
             // Apply sorting based on user selection
