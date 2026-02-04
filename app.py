@@ -8161,9 +8161,10 @@ def submit_analysis():
 
 
 @app.route('/api/status/<job_id>', strict_slashes=False)
+@app.route('/api/job-status/<job_id>', strict_slashes=False)
 @requires_auth
 def get_job_status(job_id):
-    """Get simplified status of a specific job."""
+    """Get simplified status of a specific job. /api/status/ and /api/job-status/ both supported."""
     if job_id not in jobs:
         return jsonify({'error': 'Job not found'}), 404
     
