@@ -1403,38 +1403,6 @@
                         </div>
                     </div>
                     
-                    <!-- Profile Selector Section (formerly Behavioral Categories) -->
-                    <div class="dashboard-access-item" style="margin-bottom: 1.5rem;">
-                        <div class="dashboard-access-header" onclick="toggleQuickSelectSection('behaviors')">
-                            <label class="checkbox-group" onclick="event.stopPropagation()">
-                                <span style="font-weight: 600; font-size: 1rem;">🎯 Profile Selector</span>
-                            </label>
-                            <span class="collapse-icon rotated" id="quickSelectBehaviorsIcon">▼</span>
-                        </div>
-                        <div id="quickSelectBehaviorsSection" class="dashboard-access-content" style="display: none;">
-                            <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
-                                <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="quickSelectAllBehaviors" checked onchange="toggleAllQuickSelectBehaviors()">
-                                        <span>Select All Categories</span>
-                                    </label>
-                                    <button class="btn btn-small btn-primary" onclick="saveQuickSelects()">💾 Save Quick Selects</button>
-                                </div>
-                                <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 0.75rem;">
-                                    Control which behavioral categories are available by default when granting user access. Unselected categories will be hidden from the Behavioral tab.
-                                </p>
-                                <div style="max-height: 400px; overflow-y: auto;">
-                                    <input type="text" id="quickSelectBehaviorSearch" placeholder="🔍 Search categories..." 
-                                           style="width: 100%; padding: 0.5rem; margin-bottom: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);"
-                                           onkeyup="filterQuickSelectBehaviors()">
-                                    <div id="quickSelectBehaviorsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5rem;">
-                                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading categories...</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
                     <!-- Behavioral Categories Access Control Section -->
                     <div class="dashboard-access-item">
                         <div class="dashboard-access-header" onclick="toggleQuickSelectSection('categoryAccess')">
@@ -1659,7 +1627,7 @@
 
     <!-- Add/Edit User Modal -->
     <div class="modal" id="userModal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 1200px; width: 95vw;">
             <div class="modal-header">
                 <h2 id="modalTitle">Add New User</h2>
                 <button class="modal-close" onclick="closeModal()">&times;</button>
@@ -2436,11 +2404,9 @@
                     // Expand sections by default when tab is shown
                     const profilesSection = document.getElementById('quickSelectProfilesSection');
                     const tickersSection = document.getElementById('quickSelectTickersSection');
-                    const behaviorsSection = document.getElementById('quickSelectBehaviorsSection');
                     const categoryAccessSection = document.getElementById('quickSelectCategoryAccessSection');
                     const profilesIcon = document.getElementById('quickSelectProfilesIcon');
                     const tickersIcon = document.getElementById('quickSelectTickersIcon');
-                    const behaviorsIcon = document.getElementById('quickSelectBehaviorsIcon');
                     const categoryAccessIcon = document.getElementById('quickSelectCategoryAccessIcon');
                     
                         if (profilesSection && profilesSection.style.display === 'none') {
@@ -2451,10 +2417,6 @@
                         tickersSection.style.display = 'block';
                         if (tickersIcon) tickersIcon.classList.remove('rotated');
                     }
-                    if (behaviorsSection && behaviorsSection.style.display === 'none') {
-                        behaviorsSection.style.display = 'block';
-                        if (behaviorsIcon) behaviorsIcon.classList.remove('rotated');
-                    }
                     if (categoryAccessSection && categoryAccessSection.style.display === 'none') {
                         categoryAccessSection.style.display = 'block';
                         if (categoryAccessIcon) categoryAccessIcon.classList.remove('rotated');
@@ -2462,7 +2424,6 @@
                     
                     loadQuickSelectProfiles();
                     loadQuickSelectTickers();
-                    loadQuickSelectBehaviors();
                     loadCategoryAccess();
                 })();
             }

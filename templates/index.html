@@ -11175,7 +11175,9 @@
                                 <textarea id="brands" placeholder="nike, adidas, puma" required></textarea>
                             </div>
                             <div class="form-row">
+                                {% if role == 'super_admin' %}
                                 <label class="checkbox-group"><input type="checkbox" id="is_genpop" onchange="toggleGenPopOptions()"><span>Updating GenPop?</span></label>
+                                {% endif %}
                                 <label class="checkbox-group" id="purchasers_group"><input type="checkbox" id="purchasers_only"><span>Purchasers Only</span></label>
                             </div>
                         </div>
@@ -11194,6 +11196,7 @@
                                     <input type="text" id="platform_name" placeholder="e.g., spotify, netflix, hulu">
                                 </div>
                             </div>
+                            {% if role == 'super_admin' %}
                             <div class="form-row">
                                 <label class="checkbox-group"><input type="checkbox" id="is_update" onchange="toggleUpdateOptions()"><span>Are you updating a previous run?</span></label>
                             </div>
@@ -11248,8 +11251,10 @@
                                     </div>
                                 </div>
                             </div>
+                            {% endif %}
                         </div>
 
+                        {% if role == 'super_admin' %}
                         <div class="collapsible">
                             <div class="collapsible-header" onclick="toggleCollapsible(this)">
                                 <span>🎯 Demographic Filters</span><span>▼</span>
@@ -11325,6 +11330,7 @@
                                 </div>
                             </div>
                         </div>
+                        {% endif %}
 
                         <button type="submit" class="btn btn-primary" id="submitBtn">🚀 Run Analysis</button>
                     </form>
@@ -11526,7 +11532,9 @@
                                         <textarea id="brands" placeholder="nike, adidas, puma" required></textarea>
                                     </div>
                                     <div class="form-row">
+                                        {% if role == 'super_admin' %}
                                         <label class="checkbox-group"><input type="checkbox" id="is_genpop" onchange="toggleGenPopOptions()"><span>Updating GenPop?</span></label>
+                                        {% endif %}
                                         <label class="checkbox-group" id="purchasers_group"><input type="checkbox" id="purchasers_only"><span>Purchasers Only</span></label>
                                     </div>
                                 </div>
@@ -11545,6 +11553,7 @@
                                             <input type="text" id="platform_name" placeholder="e.g., spotify, netflix, hulu">
                                         </div>
                                     </div>
+                                    {% if role == 'super_admin' %}
                                     <div class="form-row">
                                         <label class="checkbox-group"><input type="checkbox" id="is_update" onchange="toggleUpdateOptions()"><span>Are you updating a previous run?</span></label>
                                     </div>
@@ -11556,6 +11565,7 @@
                                             </select>
                                         </div>
                                     </div>
+                                    {% endif %}
                                 </div>
 
                                 <div class="form-section">
@@ -11601,6 +11611,7 @@
                                     </div>
                                 </div>
 
+                                {% if role == 'super_admin' %}
                                 <div class="collapsible">
                                     <div class="collapsible-header" onclick="toggleCollapsible(this)">
                                         <span>🎯 Demographic Filters</span><span>▼</span>
@@ -11676,6 +11687,7 @@
                                         </div>
                                     </div>
                                 </div>
+                                {% endif %}
 
                                 <button type="submit" class="btn btn-primary" id="submitBtn">🚀 Run Analysis</button>
                             </form>
