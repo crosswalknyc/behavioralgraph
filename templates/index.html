@@ -47624,7 +47624,7 @@
                 x: 60, y: 22,
                 width: 35, height: 65,
                 src: src,
-                borderRadius: 4
+                borderRadius: 0
             });
             
             saveDeckChanges();
@@ -47746,9 +47746,9 @@
                 return `
                     <div class="slide-element image-element ${isSelected ? 'selected' : ''}"
                          data-element-id="${el.id}"
-                         style="${baseStyle}"
+                         style="${baseStyle} overflow: hidden;"
                          onmousedown="startElementDrag(event, '${el.id}')">
-                        <img src="${el.src}" style="border-radius: ${el.borderRadius || 8}px; background: white; padding: 0.5rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                        <img src="${el.src}" style="width: 100%; height: 100%; object-fit: cover; border-radius: ${el.borderRadius || 0}px; display: block;">
                         ${resizeHandles}
                     </div>
                 `;
