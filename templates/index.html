@@ -34345,7 +34345,17 @@
         }
         
         function renderTopInsights(data) {
-            if (!data || !data.behavioral) return;
+            if (!data || !data.behavioral) {
+                console.warn('renderTopInsights: Missing data or behavioral data');
+                return;
+            }
+            
+            // Check if elements exist
+            const audienceSnapshotEl = document.getElementById('audienceSnapshot');
+            if (!audienceSnapshotEl) {
+                console.warn('renderTopInsights: audienceSnapshot element not found');
+                return;
+            }
             
             // Collect all items with indexes
             const allItems = [];
