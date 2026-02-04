@@ -1799,6 +1799,62 @@
             border: 1px dashed rgba(239, 68, 68, 0.5);
         }
         
+        /* Toolbar Row - Collapsible */
+        .toolbar-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            transition: all 0.3s ease;
+        }
+        
+        .toolbar-content {
+            display: flex;
+            gap: 2rem;
+            flex: 1;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .toolbar-row.collapsed .toolbar-content {
+            max-height: 0;
+            opacity: 0;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+        
+        .toolbar-collapse-btn {
+            background: rgba(139, 92, 246, 0.2);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            border-radius: 4px;
+            color: #c4b5fd;
+            cursor: pointer;
+            padding: 0.35rem 0.5rem;
+            font-size: 0.7rem;
+            transition: all 0.2s;
+            flex-shrink: 0;
+            align-self: center;
+        }
+        
+        .toolbar-collapse-btn:hover {
+            background: rgba(139, 92, 246, 0.35);
+            border-color: #8b5cf6;
+            color: #e9d5ff;
+        }
+        
+        .toolbar-row.collapsed .toolbar-collapse-btn {
+            align-self: flex-start;
+        }
+        
+        .toolbar-row.collapsed #toolbarCollapseIcon {
+            transform: rotate(180deg);
+        }
+        
+        #toolbarCollapseIcon {
+            display: inline-block;
+            transition: transform 0.3s ease;
+        }
+        
         /* Tab section labels */
         .tab-section-label {
             font-size: 0.65rem;
@@ -11724,32 +11780,37 @@
                 </div>
             </div>
 
-            <!-- Row 2: Tab Navigation + Action Buttons -->
-            <div style="display: flex; gap: 1.5rem; align-items: flex-end;">
-                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                    <div style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); padding-left: 0.25rem;">Data</div>
-                    <div class="dashboard-tabs">
-                        <button class="tab-btn active has-tooltip" data-tooltip="Insights: Executive summary with key audience statistics, demographic highlights, and behavioral patterns at a glance." onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
-                        <button class="tab-btn has-tooltip" data-tooltip="Demographics: Detailed breakdown of age, gender, ethnicity, income, education, and other demographic characteristics." onclick="showTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
-                        <button class="tab-btn has-tooltip" data-tooltip="Behavioral: Analysis of consumer behaviors, brand preferences, purchase patterns, and lifestyle activities." onclick="showTab('behavioral')"><span class="tab-icon">📈</span><span class="tab-label">BEHAVIORAL</span></button>
-                        <button class="tab-btn has-tooltip" data-tooltip="Interests: Top interests and passions of this audience, categorized by topic area with index scores." onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
-                        <button class="tab-btn has-tooltip" data-tooltip="Location: Geographic distribution showing where this audience is concentrated by state and metro area." onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
+            <!-- Row 2: Tab Navigation + Action Buttons (Collapsible) -->
+            <div id="toolbarRow" class="toolbar-row">
+                <div class="toolbar-content" id="toolbarContent">
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <div style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); padding-left: 0.25rem;">Data</div>
+                        <div class="dashboard-tabs">
+                            <button class="tab-btn active has-tooltip" data-tooltip="Insights: Executive summary with key audience statistics, demographic highlights, and behavioral patterns at a glance." onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
+                            <button class="tab-btn has-tooltip" data-tooltip="Demographics: Detailed breakdown of age, gender, ethnicity, income, education, and other demographic characteristics." onclick="showTab('demographics')"><span class="tab-icon">👥</span><span class="tab-label">DEMOGRAPHICS</span></button>
+                            <button class="tab-btn has-tooltip" data-tooltip="Behavioral: Analysis of consumer behaviors, brand preferences, purchase patterns, and lifestyle activities." onclick="showTab('behavioral')"><span class="tab-icon">📈</span><span class="tab-label">BEHAVIORAL</span></button>
+                            <button class="tab-btn has-tooltip" data-tooltip="Interests: Top interests and passions of this audience, categorized by topic area with index scores." onclick="showTab('interests')"><span class="tab-icon">🎯</span><span class="tab-label">INTERESTS</span></button>
+                            <button class="tab-btn has-tooltip" data-tooltip="Location: Geographic distribution showing where this audience is concentrated by state and metro area." onclick="showTab('location')"><span class="tab-icon">📍</span><span class="tab-label">LOCATION</span></button>
+                        </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                        <div style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); padding-left: 0.25rem;">Analysis Tools</div>
+                        <div class="dashboard-tabs" id="analysisToolsTabs">
+                            <button class="tab-btn tool-tab has-tooltip" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                            <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                            <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                            <button class="tab-btn tool-tab has-tooltip" data-feature="keyInsightBuilder" data-tooltip="Key Insight Builder: SWOT analysis and key insights for the primary brand, comparing to comparison profiles and general population." onclick="generateKeyInsightBuilderFromNav()"><span class="tab-icon">🎯</span><span class="tab-label">KEY INSIGHT BUILDER</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                            <button class="tab-btn tool-tab has-tooltip" data-feature="ecosystem" data-tooltip="Ecosystem: Behavioral ecosystem analysis showing life moments, substitution patterns, cultural signals, emotional engagement, relevance shifts, and white-space opportunities." onclick="openEcosystemFromNav()"><span class="tab-icon">🌐</span><span class="tab-label">ECOSYSTEM</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                            <button class="tab-btn tool-tab has-tooltip" data-feature="sponsorship" data-tooltip="Sponsorship: Sponsorship valuation and partnership opportunity analysis for brand collaborations." onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                            <button class="tab-btn tool-tab has-tooltip" data-feature="media" data-tooltip="Media: Media consumption patterns including TV, streaming, social media, and digital platform preferences." onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">MEDIA</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                            <button class="tab-btn tool-tab has-tooltip" data-feature="content" data-tooltip="Content: Content consumption preferences including genres, formats, and viewing habits." onclick="showTab('content')"><span class="tab-icon">🎬</span><span class="tab-label">CONTENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                            <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Workspace: Collaborate with team members, share profiles, build presentation decks, and manage workspaces." onclick="showTab('collaboration')"><span class="tab-icon">🗂️</span><span class="tab-label">WORKSPACE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
+                        </div>
                     </div>
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                    <div style="font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); padding-left: 0.25rem;">Analysis Tools</div>
-                    <div class="dashboard-tabs" id="analysisToolsTabs">
-                        <button class="tab-btn tool-tab has-tooltip" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-feature="keyInsightBuilder" data-tooltip="Key Insight Builder: SWOT analysis and key insights for the primary brand, comparing to comparison profiles and general population." onclick="generateKeyInsightBuilderFromNav()"><span class="tab-icon">🎯</span><span class="tab-label">KEY INSIGHT BUILDER</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-feature="ecosystem" data-tooltip="Ecosystem: Behavioral ecosystem analysis showing life moments, substitution patterns, cultural signals, emotional engagement, relevance shifts, and white-space opportunities." onclick="openEcosystemFromNav()"><span class="tab-icon">🌐</span><span class="tab-label">ECOSYSTEM</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-feature="sponsorship" data-tooltip="Sponsorship: Sponsorship valuation and partnership opportunity analysis for brand collaborations." onclick="showTab('sponsorship')"><span class="tab-icon">💰</span><span class="tab-label">SPONSORSHIP</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-feature="media" data-tooltip="Media: Media consumption patterns including TV, streaming, social media, and digital platform preferences." onclick="showTab('media')"><span class="tab-icon">📺</span><span class="tab-label">MEDIA</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-feature="content" data-tooltip="Content: Content consumption preferences including genres, formats, and viewing habits." onclick="showTab('content')"><span class="tab-icon">🎬</span><span class="tab-label">CONTENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Workspace: Collaborate with team members, share profiles, build presentation decks, and manage workspaces." onclick="showTab('collaboration')"><span class="tab-icon">🗂️</span><span class="tab-label">WORKSPACE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                    </div>
-                </div>
+                <button class="toolbar-collapse-btn" id="toolbarCollapseBtn" onclick="toggleToolbar()" title="Collapse/Expand Toolbar">
+                    <span id="toolbarCollapseIcon">▲</span>
+                </button>
             </div>
             
             <!-- Action Buttons Row with Tab Title -->
@@ -14706,6 +14767,9 @@
             loadDashboardProfiles();
             // Initialize deck count from localStorage
             updateDeckCount();
+            
+            // Initialize toolbar collapsed state
+            initToolbarState();
             
             // Initialize global tooltip system
             initGlobalTooltip();
@@ -24192,6 +24256,31 @@
                     pctOption.textContent = newLabel;
                 }
             });
+        }
+        
+        // Toolbar collapse toggle (persisted in localStorage)
+        let toolbarCollapsed = localStorage.getItem('bg_toolbar_collapsed') === 'true';
+        
+        function toggleToolbar() {
+            const toolbarRow = document.getElementById('toolbarRow');
+            if (!toolbarRow) return;
+            
+            toolbarCollapsed = !toolbarCollapsed;
+            localStorage.setItem('bg_toolbar_collapsed', toolbarCollapsed);
+            
+            if (toolbarCollapsed) {
+                toolbarRow.classList.add('collapsed');
+            } else {
+                toolbarRow.classList.remove('collapsed');
+            }
+        }
+        
+        // Initialize toolbar state on page load
+        function initToolbarState() {
+            const toolbarRow = document.getElementById('toolbarRow');
+            if (toolbarRow && toolbarCollapsed) {
+                toolbarRow.classList.add('collapsed');
+            }
         }
         
         // Hover tooltip toggle (persisted in localStorage)
