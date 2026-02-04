@@ -49283,14 +49283,14 @@
                     // Check if slide has any image elements
                     const hasImage = slide.elements && slide.elements.some(el => el.type === 'image');
                     
-                    // Layout A: Content left (50%), Image right (38%) with 2% gap - Default
+                    // Layout A: Image left, Title + Description + Data right - Default
                     if (layoutIndex === 1) {
-                        const contentHeight = '58%';
-                        // Get saved positions or use defaults
-                        const titlePos = slide.sectionPositions?.title || { left: '55%', top: '8%' };
-                        const descPos = slide.sectionPositions?.description || { left: '5%', top: '8%' };
-                        const contentPos = slide.sectionPositions?.content || { left: '5%', top: '28%' };
-                        const imagePos = slide.sectionPositions?.image || { left: '55%', top: '28%' };
+                        const contentHeight = '52%';
+                        // Get saved positions or use defaults - Image LEFT, content RIGHT
+                        const titlePos = slide.sectionPositions?.title || { left: '48%', top: '8%' };
+                        const descPos = slide.sectionPositions?.description || { left: '48%', top: '22%' };
+                        const contentPos = slide.sectionPositions?.content || { left: '48%', top: '38%' };
+                        const imagePos = slide.sectionPositions?.image || { left: '5%', top: '8%' };
                         
                         return `
                         <!-- Header bar -->
@@ -49299,40 +49299,10 @@
                             <span>${dateStr}</span>
                         </div>
                         
-                        <!-- Section title - DRAGGABLE -->
-                        <div class="slide-draggable-section" 
-                             style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 40%; z-index: 5;"
-                             onmousedown="startDragSlideSection(event, ${idx}, 'title')">
-                            <div class="drag-handle">⋮⋮ DRAG TITLE</div>
-                            <div contenteditable="true" style="font-size: ${titleFontSize}; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' ')); renderSlideEditor();">
-                                ${formatTitleWithBreaks(title)}
-                            </div>
-                        </div>
-                        
-                        <!-- Description text - DRAGGABLE (separate from data) -->
-                        <div class="slide-draggable-section" 
-                             style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 48%; z-index: 4;"
-                             onmousedown="startDragSlideSection(event, ${idx}, 'description')">
-                            <div class="drag-handle">⋮⋮ DRAG TEXT</div>
-                            <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                ${escapeHtml(description)}
-                            </div>
-                        </div>
-                        
-                        <!-- Data content area - DRAGGABLE -->
-                        <div class="slide-draggable-section slide-module-content" data-slide-idx="${idx}" 
-                             style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 48%; height: ${contentHeight}; overflow: visible; padding: 0.5rem; z-index: 2;"
-                             onmousedown="startDragSlideSection(event, ${idx}, 'content')">
-                            <div class="drag-handle">⋮⋮ DRAG DATA</div>
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
-                            ${content}
-                            ${analysisBlock}
-                        </div>
-                        
                         ${!hasImage ? `
-                        <!-- Image placeholder - DRAGGABLE -->
+                        <!-- Image placeholder LEFT - DRAGGABLE -->
                         <div class="slide-draggable-section slide-image-placeholder" 
-                             style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 40%; height: ${contentHeight}; z-index: 1;"
+                             style="position: absolute; left: ${imagePos.left}; top: ${imagePos.top}; width: 40%; height: 78%; z-index: 1;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'image')"
                              onclick="if(!event.defaultPrevented) uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
@@ -49342,6 +49312,36 @@
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
                         </div>
                         ` : ''}
+                        
+                        <!-- Section title RIGHT - DRAGGABLE -->
+                        <div class="slide-draggable-section" 
+                             style="position: absolute; left: ${titlePos.left}; top: ${titlePos.top}; width: 48%; z-index: 5;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'title')">
+                            <div class="drag-handle">⋮⋮ DRAG TITLE</div>
+                            <div contenteditable="true" style="font-size: ${titleFontSize}; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' ')); renderSlideEditor();">
+                                ${formatTitleWithBreaks(title)}
+                            </div>
+                        </div>
+                        
+                        <!-- Description text RIGHT - DRAGGABLE -->
+                        <div class="slide-draggable-section" 
+                             style="position: absolute; left: ${descPos.left}; top: ${descPos.top}; width: 48%; z-index: 4;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'description')">
+                            <div class="drag-handle">⋮⋮ DRAG TEXT</div>
+                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; cursor: text; padding: 4px 8px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
+                            </div>
+                        </div>
+                        
+                        <!-- Data content area RIGHT - DRAGGABLE -->
+                        <div class="slide-draggable-section slide-module-content" data-slide-idx="${idx}" 
+                             style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 48%; height: ${contentHeight}; overflow: visible; padding: 0.5rem; z-index: 2;"
+                             onmousedown="startDragSlideSection(event, ${idx}, 'content')">
+                            <div class="drag-handle">⋮⋮ DRAG DATA</div>
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${content}
+                            ${analysisBlock}
+                        </div>
                         
                         ${overlayElements}
                         ${footerHtml}
@@ -51395,25 +51395,25 @@
                 // Strategy 3: If 13-18 items, use 2 columns
                 if (vizPrefs.type === 'table' || (vizPrefs.type === 'auto' && displayCount >= 13 && displayCount < 19)) {
                     return `
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem; font-size: 0.75rem;">
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.35rem; font-size: 0.7rem; max-width: 100%;">
                             ${entries.map(([key, val], i) => `
-                                <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.5rem; background: #1a1f2e; border-radius: 4px; font-family: 'Poppins', sans-serif;">
-                                    <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0;">${i + 1}</span>
-                                    <span style="flex: 1; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(key || '').replace(/</g, '&lt;')}</span>
-                                    <span style="font-weight: 600; color: var(--accent-lime); flex-shrink: 0;">${parseFloat(val || 0).toFixed(1)}%</span>
+                                <div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.35rem 0.4rem; background: #1a1f2e; border-radius: 4px; font-family: 'Poppins', sans-serif; min-width: 0; overflow: hidden;">
+                                    <span style="font-size: 0.6rem; color: var(--text-secondary); width: 14px; flex-shrink: 0;">${i + 1}</span>
+                                    <span style="flex: 1; font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;">${(key || '').replace(/</g, '&lt;')}</span>
+                                    <span style="font-weight: 600; color: var(--accent-lime); flex-shrink: 0; font-size: 0.7rem;">${parseFloat(val || 0).toFixed(1)}%</span>
                                 </div>
                             `).join('')}
                         </div>
                     `;
                 }
                 
-                // Strategy 4: If 12 or fewer items, use single column with normal font
+                // Strategy 4: If 12 or fewer items, use 2 columns for better fit
                 return `
-                    <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem;">
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem; font-size: 0.75rem; max-width: 100%;">
                         ${entries.map(([key, val], i) => `
-                            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; background: #1a1f2e; border-radius: 4px; font-family: 'Poppins', sans-serif;">
-                                <span style="font-size: 0.7rem; color: var(--text-secondary); width: 18px; flex-shrink: 0;">${i + 1}</span>
-                                <span style="flex: 1; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(key || '').replace(/</g, '&lt;')}</span>
+                            <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.5rem; background: #1a1f2e; border-radius: 4px; font-family: 'Poppins', sans-serif; min-width: 0; overflow: hidden;">
+                                <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0;">${i + 1}</span>
+                                <span style="flex: 1; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;">${(key || '').replace(/</g, '&lt;')}</span>
                                 <span style="font-weight: 600; color: var(--accent-lime); flex-shrink: 0;">${parseFloat(val || 0).toFixed(1)}%</span>
                             </div>
                         `).join('')}
