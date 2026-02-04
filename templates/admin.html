@@ -1319,7 +1319,7 @@
                     </div>
                     
                     <!-- Tickers Section -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" style="margin-bottom: 1.5rem;">
                         <div class="dashboard-access-header" onclick="toggleQuickSelectSection('tickers')">
                             <label class="checkbox-group" onclick="event.stopPropagation()">
                                 <span style="font-weight: 600; font-size: 1rem;">📈 Tickers</span>
@@ -1341,6 +1341,38 @@
                                            onkeyup="filterQuickSelectTickers()">
                                     <div id="quickSelectTickersList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.5rem;">
                                         <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading tickers...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Behavioral Categories Section -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header" onclick="toggleQuickSelectSection('behaviors')">
+                            <label class="checkbox-group" onclick="event.stopPropagation()">
+                                <span style="font-weight: 600; font-size: 1rem;">🧬 Behavioral Categories</span>
+                            </label>
+                            <span class="collapse-icon rotated" id="quickSelectBehaviorsIcon">▼</span>
+                        </div>
+                        <div id="quickSelectBehaviorsSection" class="dashboard-access-content" style="display: none;">
+                            <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
+                                <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="quickSelectAllBehaviors" checked onchange="toggleAllQuickSelectBehaviors()">
+                                        <span>Select All Categories</span>
+                                    </label>
+                                    <button class="btn btn-small btn-primary" onclick="saveQuickSelects()">💾 Save Quick Selects</button>
+                                </div>
+                                <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 0.75rem;">
+                                    Control which behavioral categories are available by default when granting user access. Unselected categories will be hidden from the Behavioral tab.
+                                </p>
+                                <div style="max-height: 400px; overflow-y: auto;">
+                                    <input type="text" id="quickSelectBehaviorSearch" placeholder="🔍 Search categories..." 
+                                           style="width: 100%; padding: 0.5rem; margin-bottom: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);"
+                                           onkeyup="filterQuickSelectBehaviors()">
+                                    <div id="quickSelectBehaviorsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5rem;">
+                                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading categories...</div>
                                     </div>
                                 </div>
                             </div>
@@ -1714,13 +1746,26 @@
                                         <!-- Populated by JS -->
                                     </div>
                                 </div>
-                                <div>
+                                <div style="margin-bottom: 1rem;">
                                     <h5 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--accent-cyan);">📊 Run Access</h5>
                                     <label class="checkbox-group">
                                         <input type="checkbox" id="allRuns" checked onchange="toggleAllRuns()">
                                         <span>All Runs</span>
                                     </label>
                                     <div id="runCheckboxes" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;">
+                                        <!-- Populated by JS -->
+                                    </div>
+                                </div>
+                                <div>
+                                    <h5 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--accent-cyan);">🧬 Behavioral Category Access</h5>
+                                    <p style="color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 0.5rem;">
+                                        Control which behavioral categories this user can see in the Behavioral tab.
+                                    </p>
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="allBehavioralCategories" checked onchange="toggleAllBehavioralCategories()">
+                                        <span>All Behavioral Categories</span>
+                                    </label>
+                                    <div id="behavioralCategoryCheckboxes" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.25rem;">
                                         <!-- Populated by JS -->
                                     </div>
                                 </div>
@@ -2281,8 +2326,10 @@
                 // Expand sections by default when tab is shown
                 const profilesSection = document.getElementById('quickSelectProfilesSection');
                 const tickersSection = document.getElementById('quickSelectTickersSection');
+                const behaviorsSection = document.getElementById('quickSelectBehaviorsSection');
                 const profilesIcon = document.getElementById('quickSelectProfilesIcon');
                 const tickersIcon = document.getElementById('quickSelectTickersIcon');
+                const behaviorsIcon = document.getElementById('quickSelectBehaviorsIcon');
                 
                 if (profilesSection && profilesSection.style.display === 'none') {
                     profilesSection.style.display = 'block';
@@ -2292,9 +2339,14 @@
                     tickersSection.style.display = 'block';
                     if (tickersIcon) tickersIcon.classList.remove('rotated');
                 }
+                if (behaviorsSection && behaviorsSection.style.display === 'none') {
+                    behaviorsSection.style.display = 'block';
+                    if (behaviorsIcon) behaviorsIcon.classList.remove('rotated');
+                }
                 
                 loadQuickSelectProfiles();
                 loadQuickSelectTickers();
+                loadQuickSelectBehaviors();
             }
             
             if (tabName === 'liveFeatures') {
@@ -2305,8 +2357,34 @@
         // Quick Selects Variables
         let quickSelectProfiles = [];
         let quickSelectTickers = [];
+        let quickSelectBehaviors = [];
         let quickSelectProfilesData = {}; // Store selected profiles
         let quickSelectTickersData = {}; // Store selected tickers
+        let quickSelectBehaviorsData = {}; // Store selected behavioral categories
+        
+        // Master list of all behavioral categories
+        const MASTER_BEHAVIORAL_CATEGORIES = [
+            // Brands
+            'AIRLINE', 'ALCOHOL', 'APPAREL', 'AUTO', 'BEAUTY', 'BEVERAGE', 'CASINO', 'CPG', 'CREDIT CARD',
+            'CRUISE', 'DATING', 'DELIVERY', 'ELECTRONICS', 'FINANCIAL SERVICES', 'FITNESS', 'FOOD',
+            'GROCERY', 'HEALTH', 'HOME', 'HOSPITALITY', 'INSURANCE', 'INTERNET SERVICE', 'JEWELRY',
+            'LEGAL', 'LUXURY', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS',
+            'SECURITY', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY',
+            // Content
+            'GAME PLAYERS', 'GAMES', 'GAMES - PLAYERS', 'PODCAST', 'SERIES - APPLE', 'SERIES - FXP',
+            'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS',
+            'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD', 'PODCASTER',
+            // Platforms
+            'APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'MOVIE THEATER', 'PLATFORMS', 'SEARCH ENGINE/AI',
+            'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING VIDEO', 'VIRTUAL MVPD/FAST',
+            // Sports (aggregated)
+            'SPORTS', 'MLB', 'NBA', 'NFL', 'WNBA', 'MLS', 'NHL', 'MILB', 'NWSL', 'SPORTS ORGANIZATIONS',
+            // Talent (aggregated)
+            'TALENT', 'ACTOR', 'ATHLETE', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT',
+            'HOST/PERSONALITY', 'MUSICIAN/BAND', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST',
+            // Other
+            'GEN POP', 'INTERESTS', 'WHERE THEY SHOP', 'WHAT THEY BUY'
+        ].sort();
         
         // Toggle Quick Select Section
         function toggleQuickSelectSection(sectionName) {
@@ -2549,7 +2627,8 @@
             try {
                 console.log('Saving quick selects:', {
                     profiles: Object.keys(quickSelectProfilesData).length,
-                    tickers: Object.keys(quickSelectTickersData).length
+                    tickers: Object.keys(quickSelectTickersData).length,
+                    behaviors: Object.keys(quickSelectBehaviorsData).length
                 });
                 
                 const response = await fetch('/api/admin/quick-selects', {
@@ -2558,7 +2637,8 @@
                     credentials: 'same-origin',
                     body: JSON.stringify({
                         profiles: quickSelectProfilesData,
-                        tickers: quickSelectTickersData
+                        tickers: quickSelectTickersData,
+                        behaviors: quickSelectBehaviorsData
                     })
                 });
                 
@@ -2589,6 +2669,7 @@
                     // If endpoint doesn't exist yet, use defaults (all selected)
                     quickSelectProfilesData = {};
                     quickSelectTickersData = {};
+                    quickSelectBehaviorsData = {};
                     return;
                 }
                 
@@ -2596,12 +2677,14 @@
                 if (data.success) {
                     quickSelectProfilesData = data.profiles || {};
                     quickSelectTickersData = data.tickers || {};
+                    quickSelectBehaviorsData = data.behaviors || {};
                 }
             } catch (error) {
                 console.error('Error loading quick selects:', error);
                 // Use defaults (all selected)
                 quickSelectProfilesData = {};
                 quickSelectTickersData = {};
+                quickSelectBehaviorsData = {};
             }
         }
         
@@ -2619,6 +2702,95 @@
                 const ticker = t.ticker;
                 return quickSelectTickersData[ticker] !== false; // Include if not explicitly excluded
             });
+        }
+        
+        // Get Quick Select Behaviors (for use in "Add All" functionality)
+        function getQuickSelectBehaviors() {
+            return MASTER_BEHAVIORAL_CATEGORIES.filter(cat => {
+                return quickSelectBehaviorsData[cat] !== false; // Include if not explicitly excluded
+            });
+        }
+        
+        // Load Quick Select Behaviors
+        async function loadQuickSelectBehaviors() {
+            const container = document.getElementById('quickSelectBehaviorsList');
+            if (!container) {
+                console.error('quickSelectBehaviorsList container not found');
+                return;
+            }
+            
+            // Use the master list
+            quickSelectBehaviors = [...MASTER_BEHAVIORAL_CATEGORIES];
+            
+            // Load saved selections
+            await loadQuickSelects();
+            
+            renderQuickSelectBehaviors();
+        }
+        
+        // Render Quick Select Behaviors
+        function renderQuickSelectBehaviors() {
+            const container = document.getElementById('quickSelectBehaviorsList');
+            const searchTerm = (document.getElementById('quickSelectBehaviorSearch')?.value || '').toLowerCase();
+            
+            const filtered = quickSelectBehaviors.filter(cat => {
+                return cat.toLowerCase().includes(searchTerm);
+            });
+            
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); text-align: center;">No categories match your search</div>';
+                return;
+            }
+            
+            container.innerHTML = filtered.map(cat => {
+                const isSelected = quickSelectBehaviorsData[cat] !== false; // Default to true if not explicitly set to false
+                
+                return `
+                    <label class="checkbox-group" style="padding: 0.5rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);">
+                        <input type="checkbox" class="quick-select-behavior-checkbox" value="${cat}" ${isSelected ? 'checked' : ''} onchange="updateQuickSelectBehavior('${cat}', this.checked)">
+                        <span style="font-size: 0.8rem;">${cat}</span>
+                    </label>
+                `;
+            }).join('');
+            
+            // Update "Select All" checkbox
+            const allChecked = filtered.every(cat => quickSelectBehaviorsData[cat] !== false);
+            document.getElementById('quickSelectAllBehaviors').checked = allChecked;
+        }
+        
+        // Update Quick Select Behavior
+        function updateQuickSelectBehavior(category, isSelected) {
+            if (isSelected) {
+                delete quickSelectBehaviorsData[category]; // Remove from exclusions (default is selected)
+            } else {
+                quickSelectBehaviorsData[category] = false; // Explicitly exclude
+            }
+            
+            // Update "Select All" checkbox
+            const allChecked = quickSelectBehaviors.every(cat => quickSelectBehaviorsData[cat] !== false);
+            document.getElementById('quickSelectAllBehaviors').checked = allChecked;
+        }
+        
+        // Toggle All Quick Select Behaviors
+        function toggleAllQuickSelectBehaviors() {
+            const selectAll = document.getElementById('quickSelectAllBehaviors').checked;
+            
+            if (selectAll) {
+                // Clear all exclusions (all selected)
+                quickSelectBehaviorsData = {};
+            } else {
+                // Mark all as excluded
+                quickSelectBehaviors.forEach(cat => {
+                    quickSelectBehaviorsData[cat] = false;
+                });
+            }
+            
+            renderQuickSelectBehaviors();
+        }
+        
+        // Filter Quick Select Behaviors
+        function filterQuickSelectBehaviors() {
+            renderQuickSelectBehaviors();
         }
         
         // ============ LIVE FEATURES ============
@@ -3364,6 +3536,7 @@
             document.getElementById('unlimitedCredits').checked = user.credits === -1;
             document.getElementById('allCategories').checked = user.allowed_categories?.includes('*');
             document.getElementById('allRuns').checked = user.allowed_runs?.includes('*');
+            document.getElementById('allBehavioralCategories').checked = user.allowed_behavioral_categories?.includes('*') ?? true; // Default true
             document.getElementById('hasProfileIQAccess').checked = user.has_profile_iq_access !== false; // Default true
             document.getElementById('hasSubscriberIQAccess').checked = user.has_subscriber_iq_access === true; // Default false
             document.getElementById('hasHedgeFundIQAccess').checked = user.has_hedge_fund_iq_access === true; // Default false
@@ -3392,6 +3565,7 @@
 
             populateCategoryCheckboxes(user.allowed_categories);
             populateRunCheckboxes(user.allowed_runs);
+            populateBehavioralCategoryCheckboxes(user.allowed_behavioral_categories);
             
             // Load team members for this user
             currentEditingUserTeam = user.collab_team || [];
@@ -4161,6 +4335,36 @@
                 container.innerHTML += `<p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">+ ${allRuns.length - 20} more runs...</p>`;
             }
         }
+        
+        // Populate Behavioral Category Checkboxes in user modal
+        function populateBehavioralCategoryCheckboxes(selected = ['*']) {
+            const container = document.getElementById('behavioralCategoryCheckboxes');
+            if (!container) return;
+            
+            const isAll = selected?.includes('*') ?? true; // Default to all if not set
+            
+            // Use the quick select behaviors if available, otherwise use master list
+            const categories = getQuickSelectBehaviors().length > 0 ? getQuickSelectBehaviors() : MASTER_BEHAVIORAL_CATEGORIES;
+            
+            container.innerHTML = categories.map(cat => `
+                <label class="checkbox-group" style="font-size: 0.8rem;">
+                    <input type="checkbox" class="behavioral-cat-checkbox" value="${cat}" ${isAll || selected?.includes(cat) ? 'checked' : ''} ${isAll ? 'disabled' : ''}>
+                    <span>${cat}</span>
+                </label>
+            `).join('');
+            
+            // Update the "All" checkbox state
+            document.getElementById('allBehavioralCategories').checked = isAll;
+        }
+        
+        // Toggle All Behavioral Categories
+        function toggleAllBehavioralCategories() {
+            const allChecked = document.getElementById('allBehavioralCategories').checked;
+            document.querySelectorAll('#behavioralCategoryCheckboxes input[type="checkbox"]').forEach(cb => {
+                cb.checked = allChecked;
+                cb.disabled = allChecked;
+            });
+        }
 
         // Form submission
         document.getElementById('userForm').addEventListener('submit', async function(e) {
@@ -4183,6 +4387,8 @@
                     Array.from(document.querySelectorAll('#categoryCheckboxes .cat-checkbox:checked')).map(cb => cb.value),
                 allowed_runs: document.getElementById('allRuns').checked ? ['*'] : 
                     Array.from(document.querySelectorAll('#runCheckboxes input:checked')).map(cb => cb.value),
+                allowed_behavioral_categories: document.getElementById('allBehavioralCategories').checked ? ['*'] : 
+                    Array.from(document.querySelectorAll('#behavioralCategoryCheckboxes input:checked')).map(cb => cb.value),
                 has_profile_iq_access: document.getElementById('hasProfileIQAccess').checked,
                 has_subscriber_iq_access: document.getElementById('hasSubscriberIQAccess').checked,
                 has_hedge_fund_iq_access: document.getElementById('hasHedgeFundIQAccess').checked,

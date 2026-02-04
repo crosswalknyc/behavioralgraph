@@ -15062,6 +15062,10 @@
         const userRole = '{{ role }}';
         const isSuperAdmin = userRole === 'super_admin';
         const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+        
+        // Allowed behavioral categories for this user (controls which categories show in Behavioral tab)
+        const allowedBehavioralCategories = {{ allowed_behavioral_categories | tojson | safe }};
+        const hasAllBehavioralCategories = allowedBehavioralCategories.includes('*');
         let liveFeatures = {
             compare: true,
             segment: true,
@@ -28564,6 +28568,18 @@
                     if (aIdx !== -1) return -1;
                     if (bIdx !== -1) return 1;
                     return a.localeCompare(b);
+                });
+            }
+            
+            // Filter categories based on user permissions
+            if (!hasAllBehavioralCategories && allowedBehavioralCategories.length > 0) {
+                sortedCats = sortedCats.filter(cat => {
+                    const upperCat = cat.toUpperCase();
+                    return allowedBehavioralCategories.some(allowed => {
+                        const upperAllowed = allowed.toUpperCase();
+                        // Exact match or category contains allowed term
+                        return upperCat === upperAllowed || upperCat.includes(upperAllowed) || upperAllowed.includes(upperCat);
+                    });
                 });
             }
             

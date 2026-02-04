@@ -1966,6 +1966,7 @@ def create_user():
             'access_expires': req_data.get('access_expires'),  # None = unlimited
             'allowed_categories': req_data.get('allowed_categories', ['*']),
             'allowed_runs': req_data.get('allowed_runs', ['*']),
+            'allowed_behavioral_categories': req_data.get('allowed_behavioral_categories', ['*']),
             'has_profile_iq_access': req_data.get('has_profile_iq_access', True),
             'has_subscriber_iq_access': req_data.get('has_subscriber_iq_access', False),
             'has_hedge_fund_iq_access': req_data.get('has_hedge_fund_iq_access', False),
@@ -2038,6 +2039,8 @@ def update_user(username):
             user['allowed_categories'] = req_data['allowed_categories']
         if 'allowed_runs' in req_data:
             user['allowed_runs'] = req_data['allowed_runs']
+        if 'allowed_behavioral_categories' in req_data:
+            user['allowed_behavioral_categories'] = req_data['allowed_behavioral_categories']
         if 'has_profile_iq_access' in req_data:
             user['has_profile_iq_access'] = req_data['has_profile_iq_access']
         if 'has_subscriber_iq_access' in req_data:
@@ -3048,6 +3051,7 @@ def index():
         hedge_fund_iq_tickers = ['*']
         has_analysis_iq = True
         analysis_iq_modules = ['profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign', 'cross_show', 'watch_time']
+        allowed_behavioral_categories = ['*']
     else:
         has_profile_iq = user.get('has_profile_iq_access', True) if user else True  # Default True for backward compat
         has_subscriber_iq = user.get('has_subscriber_iq_access', False) if user else False
@@ -3055,6 +3059,7 @@ def index():
         hedge_fund_iq_tickers = user.get('hedge_fund_iq_tickers', ['*']) if user else ['*']
         has_analysis_iq = user.get('has_analysis_iq_access', False) if user else False
         analysis_iq_modules = user.get('analysis_iq_modules', []) if user else []
+        allowed_behavioral_categories = user.get('allowed_behavioral_categories', ['*']) if user else ['*']
     
     # Get user info for credits request
     first_name = user.get('first_name', '') if user else ''
@@ -3073,6 +3078,7 @@ def index():
                            hedge_fund_iq_tickers=hedge_fund_iq_tickers,
                            has_analysis_iq_access=has_analysis_iq,
                            analysis_iq_modules=analysis_iq_modules,
+                           allowed_behavioral_categories=allowed_behavioral_categories,
                            first_name=first_name,
                            last_name=last_name,
                            user_email=email)
@@ -6803,14 +6809,16 @@ def get_quick_selects():
         return jsonify({
             'success': True,
             'profiles': quick_selects.get('profiles', {}),
-            'tickers': quick_selects.get('tickers', {})
+            'tickers': quick_selects.get('tickers', {}),
+            'behaviors': quick_selects.get('behaviors', {})
         })
     except Exception as e:
         print(f"❌ Error loading quick selects: {e}")
         return jsonify({
             'success': True,  # Return success with empty data if file doesn't exist
             'profiles': {},
-            'tickers': {}
+            'tickers': {},
+            'behaviors': {}
         })
 
 
@@ -6825,10 +6833,12 @@ def save_quick_selects():
         
         profiles = data.get('profiles', {})
         tickers = data.get('tickers', {})
+        behaviors = data.get('behaviors', {})
         
         quick_selects = {
             'profiles': profiles,
             'tickers': tickers,
+            'behaviors': behaviors,
             'updated_at': datetime.now().isoformat()
         }
         
