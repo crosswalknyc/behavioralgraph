@@ -41853,31 +41853,27 @@
             
             // Get sort direction (use global currentSortDirection)
             const sortDir = currentSortDirection || 'desc';
+            
+            // Helper for age sorting by age range (youngest first)
+            const getAgeSortKey = (val) => {
+                const s = (val || '').toString().trim();
+                if (/^<\d+/.test(s)) return 0; // e.g. <16 -> 0 so it sorts first
+                if (s.includes('+')) return parseInt(s.replace(/[^0-9]/g, '')) || 99;
+                const nums = s.match(/\d+/g);
+                return nums && nums[0] ? parseInt(nums[0]) : 0;
+            };
 
-            // Sort by selected profile column or default sort
-            if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
+            // Sort logic - dropdown sortType takes priority for special sorts like 'age'
+            if (demoType === 'age' && sortType === 'age') {
+                // By age ascending (youngest first): <16 at top, then 17-18, 19-20, ..., 60+ at bottom
+                dataRows.sort((a, b) => getAgeSortKey(a.value) - getAgeSortKey(b.value));
+            } else if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
+                // Sort by selected profile column
                 if (sortDir === 'asc') {
                     dataRows.sort((a, b) => getSortValue(a, sortByProfileIdx) - getSortValue(b, sortByProfileIdx));
                 } else {
                     dataRows.sort((a, b) => getSortValue(b, sortByProfileIdx) - getSortValue(a, sortByProfileIdx));
                 }
-            } else if (demoType === 'age' && sortType === 'age') {
-                // By age ascending (youngest first): <16 at top, then 17-18, 19-20, ..., 60+ at bottom
-                const getAgeSortKey = (val) => {
-                    const s = (val || '').toString().trim();
-                    if (/^<\d+/.test(s)) return 0; // e.g. <16 -> 0 so it sorts first
-                    if (s.includes('+')) return parseInt(s.replace(/[^0-9]/g, '')) || 99;
-                    const nums = s.match(/\d+/g);
-                    return nums && nums[0] ? parseInt(nums[0]) : 0;
-                };
-                dataRows.sort((a, b) => getAgeSortKey(a.value) - getAgeSortKey(b.value));
-            } else if (demoType === 'age' && sortType === 'pct') {
-                // For age with pct sort, use natural age order (ascending)
-                dataRows.sort((a, b) => {
-                    const numA = parseInt(a.value.replace(/[^0-9]/g, '')) || 0;
-                    const numB = parseInt(b.value.replace(/[^0-9]/g, '')) || 0;
-                    return numA - numB;
-                });
             } else {
                 // Default sort by primary profile's value descending
                 const idx = (primaryProfileIndex >= 0 && primaryProfileIndex < profiles.length) ? primaryProfileIndex : 0;
