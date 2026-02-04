@@ -32675,35 +32675,35 @@
                     html: snapshotEl?.innerHTML || '',
                     takeaways: takeawaysEl?.innerHTML || ''
                 };
-                item.title = `${item.profileName} - Audience Snapshot`;
+                item.title = `Audience Snapshot`;
             } else if (insightType === 'behavioral-profile') {
                 const profileEl = document.getElementById('behavioralProfileCard');
                 item.data = { html: profileEl?.innerHTML || '' };
-                item.title = `${item.profileName} - Behavioral Profile`;
+                item.title = `Behavioral Profile`;
             } else if (insightType === 'demographic-summary') {
                 const summaryEl = document.getElementById('demoProfileSummary');
                 item.data = { html: summaryEl?.innerHTML || '' };
-                item.title = `${item.profileName} - Demographic Profile Summary`;
+                item.title = `Demographic Profile Summary`;
             } else if (insightType === 'key-differentiators') {
                 const diffEl = document.getElementById('demoDifferentiators');
                 item.data = { html: diffEl?.innerHTML || '' };
-                item.title = `${item.profileName} - Key Differentiators`;
+                item.title = `Key Differentiators`;
             } else if (insightType === 'targeting-recommendations') {
                 const recsEl = document.getElementById('demoTargetingRecs');
                 item.data = { html: recsEl?.innerHTML || '' };
-                item.title = `${item.profileName} - Targeting Recommendations`;
+                item.title = `Targeting Recommendations`;
             } else if (insightType === 'interest-highlights') {
                 const highlightsEl = document.getElementById('interestHighlights');
                 item.data = { html: highlightsEl?.innerHTML || '' };
-                item.title = `${item.profileName} - Interest Highlights`;
+                item.title = `Interest Highlights`;
             } else if (insightType === 'top-differentiators') {
                 const topDiffEl = document.getElementById('topDifferentiators');
                 item.data = { html: topDiffEl?.innerHTML || '' };
-                item.title = `${item.profileName} - Top Differentiators`;
+                item.title = `Top Differentiators`;
             } else if (insightType === 'behavioral-summary') {
                 const behavioralSummaryEl = document.getElementById('behavioralProfileSummary');
                 item.data = { html: behavioralSummaryEl?.innerHTML || '' };
-                item.title = `${item.profileName} - Behavioral Profile Summary`;
+                item.title = `Behavioral Profile Summary`;
             }
             
             return item;
@@ -32771,7 +32771,7 @@
                 } else {
                     item.data = { locations: currentDashboardData.locations || [] };
                 }
-                item.title = `${item.profileName} - ${category}`;
+                item.title = category;
             } else if (type === 'affinity') {
                 const elementId = {
                     'Content & Entertainment': 'affinityContent',
@@ -32791,14 +32791,14 @@
                     });
                 }
                 item.data = { items };
-                item.title = `${item.profileName} - ${category}`;
+                item.title = category;
             } else if (type === 'chart') {
                 // Capture chart as image
                 const canvas = document.querySelector(`#${category}Chart`);
                 if (canvas) {
                     item.data = { chartImage: canvas.toDataURL('image/png') };
                 }
-                item.title = `${item.profileName} - ${category} Chart`;
+                item.title = `${category} Chart`;
             }
             
             return item;
@@ -33219,19 +33219,19 @@
                     demographicsGenPop: currentDashboardData.demographicsGenPop,
                     sampleSize: currentDashboardData.sampleSize
                 };
-                item.title = `${item.profileName} - Demographics`;
+                item.title = `Demographics`;
             } else if (tabName === 'behavioral') {
                 item.data = {
                     behavioral: currentDashboardData.behavioral,
                     sampleSize: currentDashboardData.sampleSize
                 };
-                item.title = `${item.profileName} - Behavioral`;
+                item.title = `Behavioral`;
             } else if (tabName === 'location') {
                 item.data = {
                     locations: currentDashboardData.locations,
                     sampleSize: currentDashboardData.sampleSize
                 };
-                item.title = `${item.profileName} - Location`;
+                item.title = `Location`;
             }
             
             deckWorkspaceItems.push(item);
