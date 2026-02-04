@@ -35372,63 +35372,147 @@
         }
         
         function toggleVizPanel(slideIdx) {
-            let panel = document.getElementById(`vizPanel${slideIdx}`);
-            const toggle = document.getElementById(`vizToggle${slideIdx}`);
+            console.log('toggleVizPanel called with slideIdx:', slideIdx);
             
-            console.log('toggleVizPanel called:', slideIdx, 'panel found:', !!panel);
+            // Check if a floating panel already exists
+            let floatingPanel = document.getElementById('floatingVizPanel');
             
-            if (!panel) {
-                console.warn('Panel not found for slideIdx:', slideIdx);
-                // Try to find any viz panel as fallback
-                const allPanels = document.querySelectorAll('.viz-control-panel');
-                console.log('All panels found:', allPanels.length);
+            // If panel exists and is for the same slide, toggle it off
+            if (floatingPanel && floatingPanel.dataset.slideIdx === String(slideIdx)) {
+                console.log('Closing existing panel');
+                floatingPanel.remove();
                 return;
             }
             
-            // Close all other panels first
-            document.querySelectorAll('.viz-control-panel').forEach(p => {
-                if (p.id !== `vizPanel${slideIdx}`) {
-                    p.classList.remove('expanded');
+            // Remove any existing floating panel
+            if (floatingPanel) {
+                floatingPanel.remove();
+            }
+            
+            // Get the original panel to copy its content
+            const originalPanel = document.getElementById(`vizPanel${slideIdx}`);
+            if (!originalPanel) {
+                console.warn('Original panel not found for slideIdx:', slideIdx);
+                return;
+            }
+            
+            // Create a new floating panel at the top level of the DOM
+            floatingPanel = document.createElement('div');
+            floatingPanel.id = 'floatingVizPanel';
+            floatingPanel.dataset.slideIdx = slideIdx;
+            floatingPanel.className = 'viz-control-panel expanded';
+            floatingPanel.innerHTML = originalPanel.innerHTML;
+            floatingPanel.onclick = (e) => e.stopPropagation();
+            
+            // Apply critical inline styles to ensure visibility
+            floatingPanel.style.cssText = `
+                position: fixed !important;
+                top: 100px !important;
+                right: 50px !important;
+                left: auto !important;
+                bottom: auto !important;
+                z-index: 2147483647 !important;
+                display: block !important;
+                opacity: 1 !important;
+                visibility: visible !important;
+                pointer-events: auto !important;
+                background: rgba(13, 33, 55, 0.99) !important;
+                border: 3px solid #c8e600 !important;
+                border-radius: 10px !important;
+                min-width: 320px !important;
+                max-width: 360px !important;
+                max-height: 520px !important;
+                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9), 0 0 0 2px rgba(200, 230, 0, 0.5), 0 0 60px rgba(0, 200, 255, 0.3) !important;
+            `;
+            
+            // Append to body
+            document.body.appendChild(floatingPanel);
+            
+            // Re-attach event handlers for the header drag
+            const header = floatingPanel.querySelector('.viz-control-panel-header');
+            if (header) {
+                header.onmousedown = (e) => startDragFloatingVizPanel(e);
+            }
+            
+            // Re-attach close button handler
+            const closeBtn = floatingPanel.querySelector('.viz-control-panel-header button');
+            if (closeBtn) {
+                closeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    floatingPanel.remove();
+                };
+            }
+            
+            // Re-attach all button click handlers in the panel
+            floatingPanel.querySelectorAll('.viz-type-btn').forEach(btn => {
+                const onclickAttr = btn.getAttribute('onclick');
+                if (onclickAttr) {
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        eval(onclickAttr);
+                    };
                 }
             });
             
-            // Toggle this panel
-            const isExpanding = !panel.classList.contains('expanded');
-            console.log('isExpanding:', isExpanding);
-            
-            if (isExpanding) {
-                // Clone panel and move to body to ensure visibility
-                const clonedPanel = panel.cloneNode(true);
-                clonedPanel.id = `vizPanel${slideIdx}`;
-                
-                // Remove old panel if it exists in body
-                const existingInBody = document.body.querySelector(`#vizPanel${slideIdx}`);
-                if (existingInBody && existingInBody.parentElement === document.body) {
-                    existingInBody.remove();
+            floatingPanel.querySelectorAll('.viz-count-btn').forEach(btn => {
+                const onclickAttr = btn.getAttribute('onclick');
+                if (onclickAttr) {
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        eval(onclickAttr);
+                    };
                 }
-                
-                // Add to body
-                document.body.appendChild(clonedPanel);
-                panel = clonedPanel;
-                
-                // Position the panel - ALWAYS in a visible fixed position
-                panel.style.position = 'fixed';
-                panel.style.top = '100px';
-                panel.style.right = '50px';
-                panel.style.left = 'auto';
-                panel.style.bottom = 'auto';
-                panel.style.zIndex = '999999';
-                panel.style.display = 'block';
-                panel.style.opacity = '1';
-                panel.style.visibility = 'visible';
-                panel.style.pointerEvents = 'auto';
-                
-                panel.classList.add('expanded');
-                console.log('Panel should now be visible at top:100px, right:50px');
-            } else {
-                panel.classList.remove('expanded');
-                panel.style.display = 'none';
+            });
+            
+            console.log('Floating panel created and appended to body');
+        }
+        
+        // Drag functionality for the floating viz panel
+        let floatingPanelDragging = false;
+        let floatingPanelOffsetX = 0;
+        let floatingPanelOffsetY = 0;
+        
+        function startDragFloatingVizPanel(event) {
+            const panel = document.getElementById('floatingVizPanel');
+            if (!panel) return;
+            
+            // Don't drag if clicking buttons or inputs
+            if (event.target.closest('button') || event.target.closest('input') || event.target.closest('select')) return;
+            
+            floatingPanelDragging = true;
+            const rect = panel.getBoundingClientRect();
+            floatingPanelOffsetX = event.clientX - rect.left;
+            floatingPanelOffsetY = event.clientY - rect.top;
+            
+            panel.style.cursor = 'grabbing';
+            event.preventDefault();
+            
+            document.addEventListener('mousemove', dragFloatingVizPanel);
+            document.addEventListener('mouseup', stopDragFloatingVizPanel);
+        }
+        
+        function dragFloatingVizPanel(event) {
+            if (!floatingPanelDragging) return;
+            
+            const panel = document.getElementById('floatingVizPanel');
+            if (!panel) return;
+            
+            const newX = event.clientX - floatingPanelOffsetX;
+            const newY = event.clientY - floatingPanelOffsetY;
+            
+            panel.style.left = newX + 'px';
+            panel.style.top = newY + 'px';
+            panel.style.right = 'auto';
+        }
+        
+        function stopDragFloatingVizPanel() {
+            floatingPanelDragging = false;
+            const panel = document.getElementById('floatingVizPanel');
+            if (panel) {
+                panel.style.cursor = '';
             }
+            document.removeEventListener('mousemove', dragFloatingVizPanel);
+            document.removeEventListener('mouseup', stopDragFloatingVizPanel);
         }
         
         // Drag functionality for viz control panels
@@ -35671,10 +35755,9 @@
         
         // Close viz panels when clicking outside
         document.addEventListener('click', (e) => {
-            if (!e.target.closest('.viz-control-panel') && !e.target.closest('.viz-control-toggle')) {
-                document.querySelectorAll('.viz-control-panel').forEach(p => {
-                    p.classList.remove('expanded');
-                });
+            const floatingPanel = document.getElementById('floatingVizPanel');
+            if (floatingPanel && !e.target.closest('#floatingVizPanel') && !e.target.closest('.viz-control-toggle')) {
+                floatingPanel.remove();
             }
         });
         
