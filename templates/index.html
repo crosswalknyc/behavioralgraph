@@ -3185,6 +3185,41 @@
         .module-btn.spotlight-btn { font-size: 0.7rem; }
         .module-btn.spotlight-btn:hover { background: #fbbf24; color: #000; border-color: #fbbf24; }
         
+        /* Behavioral Deck Menu Dropdown */
+        .behavioral-deck-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 0.25rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+            min-width: 180px;
+            overflow: hidden;
+        }
+        .behavioral-deck-menu button {
+            display: block;
+            width: 100%;
+            padding: 0.65rem 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            text-align: left;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: background 0.2s;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .behavioral-deck-menu button:last-child {
+            border-bottom: none;
+        }
+        .behavioral-deck-menu button:hover {
+            background: var(--bg-input);
+            color: var(--accent-lime);
+        }
+        
         /* Spotlight Modal */
         .spotlight-modal {
             position: fixed;
@@ -28658,7 +28693,13 @@
                             <span class="module-action-btns">
                                 <button class="module-btn csv-btn has-tooltip" onclick="event.stopPropagation(); exportModuleCSV('behavioral', '${cat}')" data-tooltip="Export CSV: Download this behavioral category data as a CSV file.">CSV</button>
                                 <button class="module-btn png-btn has-tooltip" onclick="event.stopPropagation(); exportModulePNG('behavioral', '${cat}')" data-tooltip="Export PNG: Download this behavioral category chart as a PNG image.">PNG</button>
-                                <button class="module-btn deck-btn has-tooltip" onclick="event.stopPropagation(); addModuleToDeck('behavioral', '${cat}')" data-tooltip="Add to Deck: Save this behavioral category to your presentation deck.">➕</button>
+                                <div style="position: relative; display: inline-block;">
+                                    <button class="module-btn deck-btn has-tooltip" onclick="event.stopPropagation(); toggleBehavioralDeckMenu('${cat}')" data-tooltip="Add to Deck: Save this behavioral category to your presentation deck.">➕ ▾</button>
+                                    <div id="deckMenu-${catId}" class="behavioral-deck-menu" style="display: none;">
+                                        <button onclick="event.stopPropagation(); addModuleToDeck('behavioral', '${cat}'); closeBehavioralDeckMenu('${catId}')">Add All</button>
+                                        <button onclick="event.stopPropagation(); showBehavioralValueSelector('${cat}'); closeBehavioralDeckMenu('${catId}')">Select Values to Add</button>
+                                    </div>
+                                </div>
                                 <button class="module-btn spotlight-btn has-tooltip" onclick="event.stopPropagation(); openBehavioralSpotlight('${cat}')" data-tooltip="Spotlight: Expand this category to view all data in a larger popup window.">🔍</button>
                                 <select class="item-limit-select has-tooltip" id="limit-${catId}" onchange="event.stopPropagation(); setCategoryItemLimit('${catId}', '${cat}', this.value)" data-tooltip="How many items to show in this list">
                                     ${generateItemLimitOptions(cat, items.length)}
@@ -31336,7 +31377,143 @@
         let deckWorkspaceItems = JSON.parse(localStorage.getItem('deckWorkspaceItems') || '[]');
         let workspaceDecks = JSON.parse(localStorage.getItem('workspaceDecks') || '{}');
         
-        function addModuleToDeck(type, category) {
+        // Behavioral deck menu functions
+        function toggleBehavioralDeckMenu(category) {
+            const catId = category.replace(/[^a-zA-Z0-9]/g, '');
+            const menu = document.getElementById(`deckMenu-${catId}`);
+            
+            // Close all other menus first
+            document.querySelectorAll('.behavioral-deck-menu').forEach(m => {
+                if (m.id !== `deckMenu-${catId}`) {
+                    m.style.display = 'none';
+                }
+            });
+            
+            if (menu) {
+                menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+        
+        function closeBehavioralDeckMenu(catId) {
+            const menu = document.getElementById(`deckMenu-${catId}`);
+            if (menu) {
+                menu.style.display = 'none';
+            }
+        }
+        
+        function toggleSpotlightDeckMenu(category) {
+            const menu = document.getElementById('spotlightDeckMenu');
+            if (menu) {
+                menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+        
+        // Close menus when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.behavioral-deck-menu') && !e.target.closest('.module-btn.deck-btn')) {
+                document.querySelectorAll('.behavioral-deck-menu').forEach(m => {
+                    m.style.display = 'none';
+                });
+            }
+        });
+        
+        function showBehavioralValueSelector(category) {
+            if (!currentDashboardData || !currentProfileData) {
+                alert('Please select a profile first');
+                return;
+            }
+            
+            // Get the behavioral data for this category
+            const behavioral = currentDashboardData.behavioral || {};
+            const catData = behavioral[category] || behavioral[category.toUpperCase()] || {};
+            const items = Object.entries(catData).map(([name, pct]) => ({
+                name,
+                pct: parseFloat(pct) || 0
+            })).sort((a, b) => b.pct - a.pct);
+            
+            if (items.length === 0) {
+                alert('No data available for this category');
+                return;
+            }
+            
+            // Create modal
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'behavioralValueSelectorModal';
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 600px; max-height: 80vh;">
+                    <div class="deck-workspace-header">
+                        <h2>Select Values to Add</h2>
+                        <button onclick="document.getElementById('behavioralValueSelectorModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1.5rem; overflow-y: auto; max-height: calc(80vh - 200px);">
+                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-dark); border-radius: 8px; border-left: 3px solid var(--accent-lime);">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Category:</div>
+                            <div style="font-weight: 600;">${category}</div>
+                        </div>
+                        
+                        <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
+                            <button onclick="selectAllBehavioralValues(true)" class="btn btn-small" style="padding: 0.4rem 0.75rem; font-size: 0.75rem;">Select All</button>
+                            <button onclick="selectAllBehavioralValues(false)" class="btn btn-small" style="padding: 0.4rem 0.75rem; font-size: 0.75rem;">Deselect All</button>
+                            <span id="selectedCount" style="margin-left: auto; font-size: 0.75rem; color: var(--text-secondary);">0 selected</span>
+                        </div>
+                        
+                        <div id="behavioralValuesList" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            ${items.map((item, idx) => `
+                                <label style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: var(--bg-input); border-radius: 6px; cursor: pointer; transition: background 0.2s;" onchange="updateSelectedCount()">
+                                    <input type="checkbox" value="${idx}" style="width: 18px; height: 18px; cursor: pointer;">
+                                    <span style="flex: 1; font-size: 0.9rem;">${escapeHtml(item.name)}</span>
+                                    <span style="font-weight: 600; color: var(--accent-lime); font-size: 0.85rem;">${item.pct.toFixed(1)}%</span>
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div style="padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; gap: 0.75rem;">
+                        <button class="btn btn-secondary" onclick="document.getElementById('behavioralValueSelectorModal').remove()" style="flex: 1;">Cancel</button>
+                        <button class="btn btn-primary" onclick="confirmBehavioralValueSelection('${category.replace(/'/g, "\\'")}', ${JSON.stringify(items).replace(/'/g, "\\'")})" style="flex: 1;">Add Selected to Deck</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function selectAllBehavioralValues(select) {
+            const checkboxes = document.querySelectorAll('#behavioralValuesList input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = select);
+            updateSelectedCount();
+        }
+        
+        function updateSelectedCount() {
+            const checkboxes = document.querySelectorAll('#behavioralValuesList input[type="checkbox"]');
+            const selected = Array.from(checkboxes).filter(cb => cb.checked).length;
+            const countEl = document.getElementById('selectedCount');
+            if (countEl) {
+                countEl.textContent = `${selected} selected`;
+            }
+        }
+        
+        function confirmBehavioralValueSelection(category, allItems) {
+            const checkboxes = document.querySelectorAll('#behavioralValuesList input[type="checkbox"]');
+            const selectedIndices = Array.from(checkboxes)
+                .filter(cb => cb.checked)
+                .map(cb => parseInt(cb.value));
+            
+            if (selectedIndices.length === 0) {
+                alert('Please select at least one value');
+                return;
+            }
+            
+            // Filter items to only selected ones
+            const selectedItems = selectedIndices.map(idx => allItems[idx]);
+            
+            // Close the selector modal
+            document.getElementById('behavioralValueSelectorModal')?.remove();
+            
+            // Now show the deck selection popup with the filtered items
+            addModuleToDeck('behavioral', category, selectedItems);
+        }
+        
+        function addModuleToDeck(type, category, selectedItems = null) {
             if (!currentDashboardData || !currentProfileData) {
                 alert('Please select a profile first');
                 return;
@@ -31354,7 +31531,7 @@
             }
             
             // Show workspace/deck selection popup
-            showDeckSelectionPopup(type, category);
+            showDeckSelectionPopup(type, category, selectedItems);
         }
         
         function showCreateWorkspaceDeckPrompt(type, category) {
@@ -31384,14 +31561,16 @@
         
         // Collaborator list for Add to Deck modal
         let pendingCollaborators = [];
+        let pendingSelectedItems = null;
         
-        function showDeckSelectionPopup(type, category) {
+        function showDeckSelectionPopup(type, category, selectedItems = null) {
             const modal = document.createElement('div');
             modal.className = 'deck-workspace-modal';
             modal.id = 'deckSelectionModal';
             
-            // Reset pending collaborators
+            // Reset pending collaborators and store selected items
             pendingCollaborators = [];
+            pendingSelectedItems = selectedItems;
             
             // Build workspace and deck options
             let workspaceOptions = '';
@@ -31519,7 +31698,7 @@
             }
             
             // Create the slide/module item
-            const item = createModuleItem(type, category);
+            const item = createModuleItem(type, category, pendingSelectedItems);
             
             // Add to deck slides
             if (!deck.slides) deck.slides = [];
@@ -31836,7 +32015,7 @@
             return item;
         }
         
-        function createModuleItem(type, category) {
+        function createModuleItem(type, category, selectedItems = null) {
             const item = {
                 id: 'slide_' + Date.now(),
                 type: type,
@@ -31858,12 +32037,25 @@
                     genPop: currentDashboardData.demographicsGenPop[catLower] || {},
                     projection: currentDashboardData.demographicsProjection?.[catLower] || {}
                 };
-                item.title = `${item.profileName} - ${category}`;
+                item.title = category;
             } else if (type === 'behavioral') {
+                // If selectedItems is provided, use only those items
+                let behavioralData;
+                if (selectedItems && Array.isArray(selectedItems)) {
+                    // Convert selected items array to object format
+                    behavioralData = {};
+                    selectedItems.forEach(item => {
+                        behavioralData[item.name] = item.pct;
+                    });
+                } else {
+                    // Use all items from the category
+                    behavioralData = currentDashboardData.behavioral[category] || [];
+                }
+                
                 item.data = {
-                    items: currentDashboardData.behavioral[category] || []
+                    items: behavioralData
                 };
-                item.title = `${item.profileName} - ${category}`;
+                item.title = category;
             } else if (type === 'location') {
                 if (category === 'Regional Breakdown') {
                     const regions = [];
@@ -32022,7 +32214,13 @@
                             <span class="spotlight-stats">${items.length} items | Profile: ${currentProfileData.name || 'Unknown'}</span>
                             <span class="module-action-btns">
                                 <button class="module-btn csv-btn" onclick="exportSpotlightCSV('${category.replace(/'/g, "\\'")}')">Export CSV</button>
-                                <button class="module-btn deck-btn" onclick="addModuleToDeck('behavioral', '${category.replace(/'/g, "\\'")}'); closeSpotlightModal();">Add to Deck</button>
+                                <div style="position: relative; display: inline-block;">
+                                    <button class="module-btn deck-btn" onclick="event.stopPropagation(); toggleSpotlightDeckMenu('${category.replace(/'/g, "\\'")}')">➕ Add to Deck ▾</button>
+                                    <div id="spotlightDeckMenu" class="behavioral-deck-menu" style="display: none;">
+                                        <button onclick="event.stopPropagation(); addModuleToDeck('behavioral', '${category.replace(/'/g, "\\'")}'); closeSpotlightModal();">Add All</button>
+                                        <button onclick="event.stopPropagation(); showBehavioralValueSelector('${category.replace(/'/g, "\\'")}'); closeSpotlightModal();">Select Values to Add</button>
+                                    </div>
+                                </div>
                             </span>
                         </div>
                     </div>
@@ -47185,45 +47383,167 @@
                 const today = new Date();
                 const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
                 const analysisBlock = slide.aiAnalysis ? `<div style="margin-top: 1rem; padding: 1rem; background: rgba(74, 138, 201, 0.1); border-radius: 8px; border-left: 3px solid var(--accent-cyan); font-size: 0.9rem; line-height: 1.5;"><div style="font-size: 0.8rem; font-weight: 600; color: var(--accent-cyan); margin-bottom: 0.5rem;">🤖 AI Key Points & Takeaways</div><div>${slide.aiAnalysis}</div></div>` : '';
+                
+                // Determine layout variant (rotate through 4 layouts, skipping layout 0 which is title slide and layout 1 which is TOC)
+                const layoutIndex = ((idx - 1) % 4) + 1; // Results in 1, 2, 3, 4, 1, 2, 3, 4...
+                
                 try {
                     const content = renderSlideContent(slide);
                     const overlayElements = (slide.elements && slide.elements.length > 0) 
                         ? slide.elements.map(el => renderSingleElement(el)).join('') 
                         : '';
-                    return `
-                    <!-- Header bar -->
-                    <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
-                        <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
-                        <span>${dateStr}</span>
-                    </div>
                     
-                    <!-- Section title -->
-                    <div contenteditable="true" style="position: absolute; left: 5%; top: 8%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
-                        ${escapeHtml(title)}
-                    </div>
-                    
-                    <!-- Content area with placeholder for image on right -->
-                    <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 22%; width: 55%; height: 65%; overflow-y: auto; padding: 0.5rem; z-index: 1;">
-                        <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 1rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                            ${escapeHtml(description)}
+                    // Layout A: Content left (55%), Image right (35%) - Default
+                    if (layoutIndex === 1) {
+                        return `
+                        <!-- Header bar -->
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                            <span>${dateStr}</span>
                         </div>
-                        ${content}
-                        ${analysisBlock}
-                    </div>
+                        
+                        <!-- Section title -->
+                        <div contenteditable="true" style="position: absolute; left: 5%; top: 8%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
+                            ${escapeHtml(title)}
+                        </div>
+                        
+                        <!-- Content area left -->
+                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 22%; width: 52%; height: 65%; overflow-y: auto; padding: 0.5rem; z-index: 1;">
+                            <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 1rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
+                            </div>
+                            ${content}
+                            ${analysisBlock}
+                        </div>
+                        
+                        <!-- Image placeholder right -->
+                        <div class="slide-image-placeholder" 
+                             style="position: absolute; right: 5%; top: 22%; width: 38%; height: 65%;"
+                             onclick="uploadSlideImage(${idx})"
+                             title="Click to upload image or paste URL">
+                            <span class="placeholder-icon">🖼️</span>
+                            <span>Click to add image</span>
+                            <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
+                        </div>
+                        
+                        ${overlayElements}
+                        ${footerHtml}
+                        `;
+                    }
                     
-                    <!-- Image placeholder on right -->
-                    <div class="slide-image-placeholder" 
-                         style="position: absolute; right: 5%; top: 22%; width: 35%; height: 65%;"
-                         onclick="uploadSlideImage(${idx})"
-                         title="Click to upload image or paste URL">
-                        <span class="placeholder-icon">🖼️</span>
-                        <span>Click to add image</span>
-                        <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
-                    </div>
+                    // Layout B: Content left (42%), Large image right (48%)
+                    if (layoutIndex === 2) {
+                        return `
+                        <!-- Header bar -->
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                            <span>${dateStr}</span>
+                        </div>
+                        
+                        <!-- Section title -->
+                        <div contenteditable="true" style="position: absolute; left: 5%; top: 8%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
+                            ${escapeHtml(title)}
+                        </div>
+                        
+                        <!-- Content area left -->
+                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 22%; width: 40%; height: 65%; overflow-y: auto; padding: 0.5rem; z-index: 1;">
+                            <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 1rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
+                            </div>
+                            ${content}
+                            ${analysisBlock}
+                        </div>
+                        
+                        <!-- Large image placeholder right -->
+                        <div class="slide-image-placeholder" 
+                             style="position: absolute; right: 5%; top: 8%; width: 50%; height: 79%;"
+                             onclick="uploadSlideImage(${idx})"
+                             title="Click to upload image or paste URL">
+                            <span class="placeholder-icon">🖼️</span>
+                            <span>Click to add image</span>
+                            <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
+                        </div>
+                        
+                        ${overlayElements}
+                        ${footerHtml}
+                        `;
+                    }
                     
-                    ${overlayElements}
-                    ${footerHtml}
-                    `;
+                    // Layout C: Large image left (58%), Content right (32%)
+                    if (layoutIndex === 3) {
+                        return `
+                        <!-- Header bar -->
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                            <span>${dateStr}</span>
+                        </div>
+                        
+                        <!-- Large image placeholder left -->
+                        <div class="slide-image-placeholder" 
+                             style="position: absolute; left: 5%; top: 18%; width: 58%; height: 69%;"
+                             onclick="uploadSlideImage(${idx})"
+                             title="Click to upload image or paste URL">
+                            <span class="placeholder-icon">🖼️</span>
+                            <span>Click to add image</span>
+                            <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
+                        </div>
+                        
+                        <!-- Section title right -->
+                        <div contenteditable="true" style="position: absolute; right: 5%; top: 8%; width: 32%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
+                            ${escapeHtml(title)}
+                        </div>
+                        
+                        <!-- Content area right -->
+                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; right: 5%; top: 35%; width: 32%; height: 52%; overflow-y: auto; padding: 0.5rem; z-index: 1;">
+                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 0.75rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
+                            </div>
+                            ${content}
+                            ${analysisBlock}
+                        </div>
+                        
+                        ${overlayElements}
+                        ${footerHtml}
+                        `;
+                    }
+                    
+                    // Layout D: Extra large image left (63%), Title and content stacked right (27%)
+                    if (layoutIndex === 4) {
+                        return `
+                        <!-- Header bar -->
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                            <span>${dateStr}</span>
+                        </div>
+                        
+                        <!-- Extra large image placeholder left -->
+                        <div class="slide-image-placeholder" 
+                             style="position: absolute; left: 5%; top: 8%; width: 63%; height: 79%;"
+                             onclick="uploadSlideImage(${idx})"
+                             title="Click to upload image or paste URL">
+                            <span class="placeholder-icon">🖼️</span>
+                            <span>Click to add image</span>
+                            <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
+                        </div>
+                        
+                        <!-- Section title right top -->
+                        <div contenteditable="true" style="position: absolute; right: 5%; top: 25%; width: 27%; font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.2;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
+                            ${escapeHtml(title)}
+                        </div>
+                        
+                        <!-- Content area right bottom -->
+                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; right: 5%; top: 50%; width: 27%; height: 37%; overflow-y: auto; padding: 0.5rem; z-index: 1;">
+                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; margin-bottom: 0.5rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
+                            </div>
+                            ${content}
+                            ${analysisBlock}
+                        </div>
+                        
+                        ${overlayElements}
+                        ${footerHtml}
+                        `;
+                    }
                 } catch (e) {
                     console.warn('renderSlideContent error:', e);
                 }
@@ -48495,19 +48815,55 @@
             if (slideType === 'behavioral') {
                 const items = slide.data.items || [];
                 const entries = Array.isArray(items)
-                    ? items.map(i => [i.name, i.pct]).filter(([k]) => k).sort((a, b) => (parseFloat(b[1]) || 0) - (parseFloat(a[1]) || 0)).slice(0, 10)
-                    : Object.entries(items).sort((a, b) => (parseFloat(b[1]) || 0) - (parseFloat(a[1]) || 0)).slice(0, 10);
-                return `
-                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                        ${entries.map(([key, val], i) => `
-                            <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem; background: #000000; border-radius: 4px; font-family: 'Poppins', sans-serif;">
-                                <span style="font-size: 0.75rem; color: var(--text-secondary); width: 20px;">${i + 1}</span>
-                                <span style="flex: 1; font-size: 0.85rem;">${(key || '').replace(/</g, '&lt;')}</span>
-                                <span style="font-weight: 600; color: var(--accent-lime);">${parseFloat(val || 0).toFixed(1)}%</span>
+                    ? items.map(i => [i.name, i.pct]).filter(([k]) => k).sort((a, b) => (parseFloat(b[1]) || 0) - (parseFloat(a[1]) || 0))
+                    : Object.entries(items).sort((a, b) => (parseFloat(b[1]) || 0) - (parseFloat(a[1]) || 0));
+                
+                // Calculate how many items fit on one page (assuming ~60% height available, ~2rem per row)
+                const maxItemsPerPage = 18; // Approximate fit for the content area
+                const totalPages = Math.ceil(entries.length / maxItemsPerPage);
+                
+                if (totalPages === 1) {
+                    // All items fit on one page - use multi-column layout if needed
+                    const useColumns = entries.length > 12;
+                    return `
+                        <div style="display: grid; grid-template-columns: ${useColumns ? 'repeat(2, 1fr)' : '1fr'}; gap: 0.4rem; font-size: ${entries.length > 15 ? '0.8rem' : '0.85rem'};">
+                            ${entries.map(([key, val], i) => `
+                                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem; background: #1a1f2e; border-radius: 4px; font-family: 'Poppins', sans-serif;">
+                                    <span style="font-size: 0.7rem; color: var(--text-secondary); width: 18px; flex-shrink: 0;">${i + 1}</span>
+                                    <span style="flex: 1; font-size: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(key || '').replace(/</g, '&lt;')}</span>
+                                    <span style="font-weight: 600; color: var(--accent-lime); flex-shrink: 0;">${parseFloat(val || 0).toFixed(1)}%</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                } else {
+                    // Need multiple pages - store in slide data for pagination
+                    if (!slide.behavioralPages) {
+                        slide.behavioralPages = [];
+                        for (let p = 0; p < totalPages; p++) {
+                            const start = p * maxItemsPerPage;
+                            const pageEntries = entries.slice(start, start + maxItemsPerPage);
+                            slide.behavioralPages.push(pageEntries);
+                        }
+                    }
+                    
+                    // Render first page with pagination indicator
+                    const pageEntries = slide.behavioralPages[0];
+                    return `
+                        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                            ${pageEntries.map(([key, val], i) => `
+                                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem; background: #1a1f2e; border-radius: 4px; font-family: 'Poppins', sans-serif;">
+                                    <span style="font-size: 0.7rem; color: var(--text-secondary); width: 18px;">${i + 1}</span>
+                                    <span style="flex: 1; font-size: 0.85rem;">${(key || '').replace(/</g, '&lt;')}</span>
+                                    <span style="font-weight: 600; color: var(--accent-lime);">${parseFloat(val || 0).toFixed(1)}%</span>
+                                </div>
+                            `).join('')}
+                            <div style="margin-top: 0.5rem; padding: 0.5rem; text-align: center; font-size: 0.75rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
+                                📄 Page 1 of ${totalPages} • ${entries.length} total items
                             </div>
-                        `).join('')}
-                    </div>
-                `;
+                        </div>
+                    `;
+                }
             }
             
             if (slideType === 'location') {
@@ -48515,7 +48871,7 @@
                 return `
                     <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
                         ${locations.slice(0, 12).map(loc => `
-                            <div style="padding: 0.5rem; background: #000000; border-radius: 4px; font-size: 0.8rem; font-family: 'Poppins', sans-serif;">
+                            <div style="padding: 0.5rem; background: #1a1f2e; border-radius: 4px; font-size: 0.8rem; font-family: 'Poppins', sans-serif;">
                                 ${loc.name || loc.dma || loc.region} - ${loc.value || loc.pct?.toFixed(1) + '%' || ''}
                             </div>
                         `).join('')}
