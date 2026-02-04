@@ -9351,23 +9351,25 @@
         /* Ribbon-style toolbar */
         .slide-toolbar-ribbon {
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
+            align-items: center;
             background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30, 41, 59, 0.98) 100%);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            margin-bottom: 0.5rem;
             overflow: hidden;
+            gap: 0;
         }
         
         .ribbon-tabs {
             display: flex;
             gap: 0;
             background: rgba(0,0,0,0.2);
-            border-bottom: 1px solid var(--border-color);
+            border-right: 1px solid var(--border-color);
+            flex-shrink: 0;
         }
         
         .ribbon-tab {
-            padding: 0.35rem 0.75rem;
+            padding: 0.35rem 0.6rem;
             background: transparent;
             border: none;
             color: var(--text-secondary);
@@ -13532,6 +13534,9 @@
                             </div>
                             <button onclick="showWorkspaceActions()" class="btn btn-small btn-secondary" style="padding: 0.35rem 0.5rem; font-size: 0.75rem; margin-left: auto;" title="Workspace settings">⚙️</button>
                         </div>
+                        
+                        <!-- Ribbon Toolbar Row (populated by JS when deck is selected) -->
+                        <div id="ribbonToolbarRow" style="display: none; margin-bottom: 0.5rem;"></div>
                         
                         <div id="collab-tab-decks" class="collab-tab-content active">
                             <div class="workspace-deck-builder">
@@ -46326,6 +46331,9 @@
                 // Hide header controls when no deck selected
                 if (titleControls) titleControls.style.display = 'none';
                 if (actionButtons) actionButtons.style.display = 'none';
+                // Hide ribbon toolbar
+                const ribbonRow = document.getElementById('ribbonToolbarRow');
+                if (ribbonRow) ribbonRow.style.display = 'none';
                 return;
             }
             
@@ -46356,20 +46364,22 @@
             const selFontWeight = (selEl && selEl.type === 'text') ? (selEl.fontWeight || 'normal') : 'normal';
             const selShapeFill = (selEl && (selEl.type === 'shape' || selEl.type === 'line')) ? (selEl.fill || selEl.stroke || '#4a8ac9') : '#4a8ac9';
             
-            contentEl.innerHTML = `
-                <div class="slide-editor-wrapper">
-                    <!-- Ribbon-style Toolbar -->
+            // Render ribbon toolbar in header row
+            const ribbonRow = document.getElementById('ribbonToolbarRow');
+            if (ribbonRow) {
+                ribbonRow.style.display = 'block';
+                ribbonRow.innerHTML = `
                     <div class="slide-toolbar-ribbon" id="slideToolbar">
                         <div class="ribbon-tabs">
-                            <button class="ribbon-tab active" onclick="switchRibbonTab('view')" data-tab="view">👁️ View</button>
-                            <button class="ribbon-tab" onclick="switchRibbonTab('insert')" data-tab="insert">➕ Insert</button>
-                            <button class="ribbon-tab" onclick="switchRibbonTab('format')" data-tab="format">🎨 Format</button>
-                            <button class="ribbon-tab" onclick="switchRibbonTab('shapes')" data-tab="shapes">⬛ Shapes</button>
-                            <button class="ribbon-tab" onclick="switchRibbonTab('analysis')" data-tab="analysis">🤖 Analysis</button>
+                            <button class="ribbon-tab ${currentRibbonTab === 'view' ? 'active' : ''}" onclick="switchRibbonTab('view')" data-tab="view">👁️ View</button>
+                            <button class="ribbon-tab ${currentRibbonTab === 'insert' ? 'active' : ''}" onclick="switchRibbonTab('insert')" data-tab="insert">➕ Insert</button>
+                            <button class="ribbon-tab ${currentRibbonTab === 'format' ? 'active' : ''}" onclick="switchRibbonTab('format')" data-tab="format">🎨 Format</button>
+                            <button class="ribbon-tab ${currentRibbonTab === 'shapes' ? 'active' : ''}" onclick="switchRibbonTab('shapes')" data-tab="shapes">⬛ Shapes</button>
+                            <button class="ribbon-tab ${currentRibbonTab === 'analysis' ? 'active' : ''}" onclick="switchRibbonTab('analysis')" data-tab="analysis">🤖 Analysis</button>
                         </div>
                         
                         <!-- View Tab -->
-                        <div class="ribbon-content active" id="ribbonView">
+                        <div class="ribbon-content ${currentRibbonTab === 'view' ? 'active' : ''}" id="ribbonView">
                             <div class="slide-toolbar-group">
                                 <select class="toolbar-btn" onchange="setSlideViewZoom(this.value)" title="Zoom" style="padding: 0.2rem; min-width: 75px;">
                                     <option value="fit" ${slideEditorZoom === 'fit' ? 'selected' : ''}>Fit</option>
@@ -46392,7 +46402,7 @@
                         </div>
                         
                         <!-- Insert Tab -->
-                        <div class="ribbon-content" id="ribbonInsert">
+                        <div class="ribbon-content ${currentRibbonTab === 'insert' ? 'active' : ''}" id="ribbonInsert">
                             <div class="slide-toolbar-group">
                                 <button class="toolbar-btn" onclick="addSlideElement('text')" title="Text">📝 Text</button>
                                 <button class="toolbar-btn" onclick="addSlideElement('image')" title="Image">🖼️ Image</button>
@@ -46403,7 +46413,7 @@
                         </div>
                         
                         <!-- Format Tab -->
-                        <div class="ribbon-content" id="ribbonFormat">
+                        <div class="ribbon-content ${currentRibbonTab === 'format' ? 'active' : ''}" id="ribbonFormat">
                             <div class="slide-toolbar-group">
                                 <button class="toolbar-btn" onclick="formatText('bold')" title="Bold"><b>B</b></button>
                                 <button class="toolbar-btn" onclick="formatText('italic')" title="Italic"><i>I</i></button>
@@ -46447,7 +46457,7 @@
                         </div>
                         
                         <!-- Shapes Tab -->
-                        <div class="ribbon-content" id="ribbonShapes">
+                        <div class="ribbon-content ${currentRibbonTab === 'shapes' ? 'active' : ''}" id="ribbonShapes">
                             <div class="slide-toolbar-group">
                                 <input type="color" class="toolbar-btn" onchange="setShapeOrLineColor(this.value)" value="${selShapeFill}" title="Fill" style="width: 26px; height: 22px; padding: 1px;">
                                 <button class="toolbar-btn" onclick="setShapeOrLineColor('#4a8ac9')" style="width: 18px; height: 18px; padding: 0; background: #4a8ac9; border-radius: 2px;"></button>
@@ -46479,13 +46489,17 @@
                         </div>
                         
                         <!-- Analysis Tab -->
-                        <div class="ribbon-content" id="ribbonAnalysis">
+                        <div class="ribbon-content ${currentRibbonTab === 'analysis' ? 'active' : ''}" id="ribbonAnalysis">
                             <div class="slide-toolbar-group">
                                 <button class="toolbar-btn" onclick="analyzeSlideWithAI()" title="AI Analysis" style="background: var(--accent-cyan); color: var(--bg-dark);">🤖 Analyze with AI</button>
                             </div>
                         </div>
                     </div>
-                    
+                `;
+            }
+            
+            contentEl.innerHTML = `
+                <div class="slide-editor-wrapper">
                     <!-- Slide Canvas -->
                     <div class="slide-canvas-zoom-wrapper" id="slideCanvasZoomWrapper">
                         <div class="slide-canvas-container" id="slideCanvas"
