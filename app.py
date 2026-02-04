@@ -8788,19 +8788,30 @@ def save_persisted_cache():
         print(f"⚠️ Error saving persisted cache: {e}")
 
 
-def extract_category_from_csv(csv_content):
-    """Extract BRAND CATEGORY from CSV content (checks first 50 lines)."""
+def extract_category_from_csv_content(csv_content):
+    """Extract BRAND CATEGORY from CSV content (checks all lines)."""
     lines = csv_content.split('\n')
-    for line in lines[:50]:
-        if re.match(r'^\s*BRAND\s*CATEGORY\s*,', line, re.IGNORECASE):
-            parts = line.split(',', 1)
-            if len(parts) > 1:
-                return parts[1].strip().strip('"').upper()
+    for line in lines:
+        line_upper = line.strip().upper()
+        # Check multiple variations of BRAND CATEGORY
+        if line_upper.startswith('BRAND CATEGORY,') or line_upper.startswith('BRAND CATEGORY ') or line_upper.startswith('"BRAND CATEGORY"'):
+            parts = line.split(',')
+            if len(parts) >= 2:
+                cat = parts[1].strip().strip('"').upper()
+                if cat and cat != 'BRAND CATEGORY':
+                    return cat
+        # Also check for BRAND_CATEGORY variant
+        elif line_upper.startswith('BRAND_CATEGORY,'):
+            parts = line.split(',')
+            if len(parts) >= 2:
+                cat = parts[1].strip().strip('"').upper()
+                if cat:
+                    return cat
     return None
 
 
 def rebuild_s3_cache_with_categories():
-    """Rebuild the S3 cache by reading BRAND CATEGORY from each CSV file."""
+    """Rebuild the S3 cache by reading BRAND CATEGORY from each CSV file (reads from end of file)."""
     global s3_cache
     if not s3_client:
         print("❌ S3 client not configured")
@@ -8829,15 +8840,19 @@ def rebuild_s3_cache_with_categories():
                 
                 filename = key.split('/')[-1]
                 last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
+                file_size = obj.get('Size', 0)
                 
-                # Read first 4KB of file to extract category (metadata is at the top)
+                # Read last 200KB of file to extract category (BRAND CATEGORY is at the END of the file)
+                category = 'Uncategorized'
                 try:
-                    response = s3.get_object(Bucket=bucket_name, Key=key, Range='bytes=0-4096')
+                    start_byte = max(0, file_size - 200000)
+                    response = s3.get_object(Bucket=bucket_name, Key=key, Range=f'bytes={start_byte}-{file_size}')
                     content = response['Body'].read().decode('utf-8', errors='ignore')
-                    category = extract_category_from_csv(content) or 'Uncategorized'
+                    extracted = extract_category_from_csv_content(content)
+                    if extracted:
+                        category = extracted
                 except Exception as e:
                     print(f"⚠️ Could not read category from {key}: {e}")
-                    category = 'Uncategorized'
                 
                 # Generate display name with timestamp removal
                 name_without_ext = filename.replace('.csv', '')
@@ -8850,7 +8865,7 @@ def rebuild_s3_cache_with_categories():
                     'filename': filename,
                     'project_name': project_name,
                     'category': category,
-                    'size': obj.get('Size', 0),
+                    'size': file_size,
                     'last_modified': last_modified,
                     'created_at': last_modified,
                     'status': 'cached',
