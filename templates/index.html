@@ -34523,6 +34523,26 @@
             return div.innerHTML;
         }
         
+        function formatTitleWithBreaks(text) {
+            if (!text) return '';
+            // Split on -, |, or / and create line breaks
+            // Match the delimiter and the text around it
+            const parts = text.split(/(\s*[-|/]\s*)/);
+            let result = '';
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i].trim();
+                if (part && !part.match(/^[-|/]$/)) {
+                    // It's actual text, not just a delimiter
+                    result += escapeHtml(part);
+                    // If there's a next part and it's a delimiter, add line break after this text
+                    if (i + 1 < parts.length && parts[i + 1].match(/[-|/]/)) {
+                        result += '<br>';
+                    }
+                }
+            }
+            return result;
+        }
+        
         // Reset business conversation when switching profiles
         function resetBusinessConversation() {
             businessConversationHistory = [];
@@ -47849,8 +47869,8 @@
                         </div>
                         
                         <!-- Section title -->
-                        <div contenteditable="true" style="position: absolute; left: 5%; top: 8%; width: 52%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
-                            ${escapeHtml(title)}
+                        <div contenteditable="true" style="position: absolute; left: 5%; top: 8%; width: 52%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            ${formatTitleWithBreaks(title)}
                         </div>
                         
                         <!-- Content area left -->
@@ -47889,8 +47909,8 @@
                         </div>
                         
                         <!-- Section title -->
-                        <div contenteditable="true" style="position: absolute; left: 5%; top: 8%; width: 40%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
-                            ${escapeHtml(title)}
+                        <div contenteditable="true" style="position: absolute; left: 5%; top: 8%; width: 40%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            ${formatTitleWithBreaks(title)}
                         </div>
                         
                         <!-- Content area left -->
@@ -47941,8 +47961,8 @@
                         ` : ''}
                         
                         <!-- Section title right -->
-                        <div contenteditable="true" style="position: absolute; right: 5%; top: 8%; width: 32%; font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
-                            ${escapeHtml(title)}
+                        <div contenteditable="true" style="position: absolute; right: 5%; top: 8%; width: 32%; font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            ${formatTitleWithBreaks(title)}
                         </div>
                         
                         <!-- Content area right -->
@@ -47981,8 +48001,8 @@
                         ` : ''}
                         
                         <!-- Section title right top -->
-                        <div contenteditable="true" style="position: absolute; right: 5%; top: 25%; width: 27%; font-size: 1.8rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
-                            ${escapeHtml(title)}
+                        <div contenteditable="true" style="position: absolute; right: 5%; top: 25%; width: 27%; font-size: 1.8rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            ${formatTitleWithBreaks(title)}
                         </div>
                         
                         <!-- Content area right bottom -->
@@ -48020,8 +48040,8 @@
                         ` : ''}
                         
                         <!-- Large title left -->
-                        <div contenteditable="true" style="position: absolute; left: 5%; top: 12%; width: 60%; font-size: 2.5rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
-                            ${escapeHtml(title)}
+                        <div contenteditable="true" style="position: absolute; left: 5%; top: 12%; width: 60%; font-size: 2.5rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            ${formatTitleWithBreaks(title)}
                         </div>
                         
                         <!-- Full width content below -->
@@ -48059,8 +48079,8 @@
                         ` : ''}
                         
                         <!-- Centered title -->
-                        <div contenteditable="true" style="position: absolute; left: 30%; top: 15%; width: 40%; font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.2; text-align: center; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
-                            ${escapeHtml(title)}
+                        <div contenteditable="true" style="position: absolute; left: 30%; top: 15%; width: 40%; font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.2; text-align: center; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            ${formatTitleWithBreaks(title)}
                         </div>
                         
                         <!-- Centered content -->
@@ -48087,8 +48107,8 @@
                         </div>
                         
                         <!-- Title left top -->
-                        <div contenteditable="true" style="position: absolute; left: 5%; top: 12%; width: 45%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
-                            ${escapeHtml(title)}
+                        <div contenteditable="true" style="position: absolute; left: 5%; top: 12%; width: 45%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            ${formatTitleWithBreaks(title)}
                         </div>
                         
                         ${!hasImage ? `
@@ -48138,8 +48158,8 @@
                         ` : ''}
                         
                         <!-- Title overlay on image (right side) -->
-                        <div contenteditable="true" style="position: absolute; right: 8%; top: 70%; width: 48%; font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 8px 12px; border-radius: 4px; line-height: 1.1; background: linear-gradient(90deg, transparent, rgba(0,0,0,0.7)); word-wrap: break-word; overflow-wrap: break-word; z-index: 2;" onfocus="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.8))'" onblur="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.7))'; updateSlideTitle(${idx}, this.textContent)">
-                            ${escapeHtml(title)}
+                        <div contenteditable="true" style="position: absolute; right: 8%; top: 70%; width: 48%; font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 8px 12px; border-radius: 4px; line-height: 1.1; background: linear-gradient(90deg, transparent, rgba(0,0,0,0.7)); word-wrap: break-word; overflow-wrap: break-word; z-index: 2;" onfocus="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.8))'" onblur="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.7))'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                            ${formatTitleWithBreaks(title)}
                         </div>
                         
                         <!-- Compact content left -->
