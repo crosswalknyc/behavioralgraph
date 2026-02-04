@@ -17461,9 +17461,25 @@
                 window.currentDashboardData = rows;
                 window.currentProfileName = profileFilename;
                 
+                // Fetch display name from jobs metadata
+                let displayName = null;
+                try {
+                    const jobsResponse = await fetch('/api/jobs');
+                    const jobsData = await jobsResponse.json();
+                    if (jobsData.jobs) {
+                        const job = jobsData.jobs.find(j => j.s3_key === profileFilename || j.s3_key === `dashboard-inputs/${profileFilename}`);
+                        if (job) {
+                            displayName = job.display_name || job.name || job.project_name;
+                            console.log('✅ Found display name from jobs:', displayName);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Could not fetch display name from jobs:', e);
+                }
+                
                 // Render the profile with dropdown if multiple profiles
                 console.log('🎨 Rendering profile insights...');
-                renderProfileInsights(rows);
+                renderProfileInsights(rows, displayName);
                 console.log('✅ Profile loaded successfully');
                 
             } catch (error) {
@@ -17479,7 +17495,7 @@
             }
         }
         
-        function renderProfileInsights(csvData) {
+        function renderProfileInsights(csvData, displayNameOverride = null) {
             console.log('🎨 renderProfileInsights called with', csvData.length, 'rows');
             
             const container = document.getElementById('tickerProfileContent');
@@ -17489,9 +17505,15 @@
                 return;
             }
             
-            // Extract brand name from current profile filename
-            const brandName = currentProfileFilename ? currentProfileFilename.replace(/_/g, ' ').replace(/\.csv$/, '').replace(/\d{2}_\d{2}_\d{4}_\d{2}_\d{2}/, '').trim() : 'Profile';
-            console.log('📝 Brand name extracted:', brandName);
+            // Use display name override if provided, otherwise extract from filename
+            let brandName;
+            if (displayNameOverride) {
+                brandName = displayNameOverride;
+                console.log('📝 Using display name from jobs metadata:', brandName);
+            } else {
+                brandName = currentProfileFilename ? currentProfileFilename.replace(/_/g, ' ').replace(/\.csv$/, '').replace(/\d{2}_\d{2}_\d{4}_\d{2}_\d{2}/, '').trim() : 'Profile';
+                console.log('📝 Brand name extracted from filename:', brandName);
+            }
             
             // Parse the CSV data
             const parsed = parseAllData(csvData);
