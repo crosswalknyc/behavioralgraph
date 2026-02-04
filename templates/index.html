@@ -1842,6 +1842,13 @@
             color: #e9d5ff;
         }
         
+        .toolbar-collapse-wrapper {
+            flex-shrink: 0;
+            align-self: center;
+        }
+        .toolbar-row.collapsed .toolbar-collapse-wrapper {
+            align-self: flex-start;
+        }
         .toolbar-row.collapsed .toolbar-collapse-btn {
             align-self: flex-start;
         }
@@ -10956,9 +10963,11 @@
                 console.log('No vizPanel found for slideIdx:', slideIdx);
             }
             
-            // Show the panel
-            overlay.style.display = 'block';
-            panel.style.display = 'block';
+            // Defer showing to next tick so the click event is fully processed (prevents overlay from immediately capturing a stray click)
+            requestAnimationFrame(() => {
+                overlay.style.display = 'block';
+                panel.style.display = 'block';
+            });
         }
         
         function closeChartEditor() {
@@ -12288,9 +12297,12 @@
                         </div>
                     </div>
                 </div>
-                <button class="toolbar-collapse-btn" id="toolbarCollapseBtn" onclick="toggleToolbar()" title="Collapse/Expand Toolbar">
-                    <span id="toolbarCollapseIcon">▲</span>
-                </button>
+                <div class="toolbar-collapse-wrapper" style="display: flex; flex-direction: column; align-items: center; gap: 0.2rem;">
+                    <button class="toolbar-collapse-btn has-tooltip" id="toolbarCollapseBtn" onclick="toggleToolbar()" data-tooltip="Collapse/Expand Toolbar">
+                        <span id="toolbarCollapseIcon">▲</span>
+                    </button>
+                    <span id="toolbarCollapseLabel" style="font-size: 0.65rem; color: var(--text-secondary); font-weight: 600;">HIDE</span>
+                </div>
             </div>
             
             <!-- Action Buttons Row with Tab Title -->
@@ -25072,15 +25084,21 @@
                 toolbarRow.classList.remove('collapsed');
                 if (profileHeaderRow) profileHeaderRow.classList.remove('collapsed');
             }
+            const labelEl = document.getElementById('toolbarCollapseLabel');
+            if (labelEl) labelEl.textContent = toolbarCollapsed ? 'SHOW' : 'HIDE';
         }
         
         // Initialize toolbar state on page load
         function initToolbarState() {
             const toolbarRow = document.getElementById('toolbarRow');
             const profileHeaderRow = document.getElementById('profileHeaderRow');
+            const labelEl = document.getElementById('toolbarCollapseLabel');
             if (toolbarCollapsed) {
                 if (toolbarRow) toolbarRow.classList.add('collapsed');
                 if (profileHeaderRow) profileHeaderRow.classList.add('collapsed');
+                if (labelEl) labelEl.textContent = 'SHOW';
+            } else {
+                if (labelEl) labelEl.textContent = 'HIDE';
             }
         }
         
@@ -32683,6 +32701,7 @@
                 
                 deck.updatedAt = new Date().toISOString();
                 itemAdded = true; // Mark that item was successfully added
+                populateDeckSlidesWithProfileImage(deck);
                 
                 // Save last used workspace and deck for pre-selection next time
                 lastUsedWorkspace = wsId;
@@ -35580,6 +35599,7 @@
         let vizToggleOffsetY = 0;
         let vizToggleStartX = 0;
         let vizToggleStartY = 0;
+        let vizToggleSlideIdx = null;
         window.vizToggleDragged = false;
         
         function startDragVizToggle(event, slideIdx) {
@@ -35589,6 +35609,7 @@
             // Store start position to detect if it was a click or drag
             vizToggleStartX = event.clientX;
             vizToggleStartY = event.clientY;
+            vizToggleSlideIdx = slideIdx;
             window.vizToggleDragged = false;
             
             draggedVizToggle = toggle;
@@ -35634,14 +35655,20 @@
         }
         
         function stopDragVizToggle() {
+            const wasDrag = window.vizToggleDragged;
+            const slideIdx = vizToggleSlideIdx;
             if (draggedVizToggle) {
                 draggedVizToggle.classList.remove('dragging');
                 draggedVizToggle = null;
             }
+            vizToggleSlideIdx = null;
             document.removeEventListener('mousemove', dragVizToggle);
             document.removeEventListener('mouseup', stopDragVizToggle);
             
-            // Reset drag flag after a short delay to allow click handler to check it
+            // If it was a click (not a drag), open the chart panel - mousedown preventDefault blocks native click
+            if (!wasDrag && slideIdx != null) {
+                toggleVizPanel(slideIdx);
+            }
             setTimeout(() => {
                 window.vizToggleDragged = false;
             }, 100);
@@ -47106,6 +47133,7 @@
             if (!deck.slides) deck.slides = [];
             deck.slides.push(slide);
             deck.updatedAt = new Date().toISOString();
+            populateDeckSlidesWithProfileImage(deck);
             
             localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
             document.getElementById('addToDeckModal')?.remove();
@@ -48642,6 +48670,7 @@
             
             currentEditingDeck = deck;
             currentEditingSlide = 0;
+            populateDeckSlidesWithProfileImage(deck);
             
             renderWorkspaceDecks();
             renderSlideEditor();
@@ -48992,6 +49021,49 @@
             const dashImg = document.querySelector('#dashProfileImage img');
             if (dashImg?.src && !dashImg.src.endsWith('/')) return dashImg.src;
             return null;
+        }
+        
+        function getProfileImageForDeck() {
+            return getDeckTitleSlideProfileImage({});
+        }
+        
+        function getImageConfigForLayout(layoutIndex) {
+            if (layoutIndex === 1) return { x: 57, y: 22, width: 38, height: 65 };
+            if (layoutIndex === 2) return { x: 45, y: 8, width: 50, height: 79 };
+            if (layoutIndex === 3) return { x: 5, y: 18, width: 58, height: 69 };
+            if (layoutIndex === 4) return { x: 5, y: 8, width: 63, height: 79 };
+            if (layoutIndex === 5) return { x: 70, y: 8, width: 25, height: 30 };
+            if (layoutIndex === 6) return { x: 5, y: 15, width: 22, height: 70 };
+            if (layoutIndex === 7) return { x: 53, y: 12, width: 42, height: 35 };
+            if (layoutIndex === 8) return { x: 40, y: 8, width: 55, height: 79 };
+            return { x: 45, y: 8, width: 50, height: 79 }; // default
+        }
+        
+        function populateDeckSlidesWithProfileImage(deck) {
+            if (!deck?.slides) return;
+            const profileSrc = getProfileImageForDeck();
+            if (!profileSrc) return;
+            const slides = deck.slides;
+            for (let i = 0; i < slides.length; i++) {
+                const slide = slides[i];
+                if (slide.type === 'toc' || slide.type === 'closing') continue;
+                if (slide.chartImage) continue; // chart slides have their own image
+                const hasImage = (slide.elements || []).some(el => el.type === 'image');
+                if (hasImage) continue;
+                const layoutIndex = (i % 8) + 1;
+                const cfg = getImageConfigForLayout(layoutIndex);
+                if (!slide.elements) slide.elements = [];
+                slide.elements.push({
+                    id: 'img_' + Date.now() + '_' + i,
+                    type: 'image',
+                    x: cfg.x,
+                    y: cfg.y,
+                    width: cfg.width,
+                    height: cfg.height,
+                    src: profileSrc,
+                    borderRadius: 8
+                });
+            }
         }
         
         // Source footer text for all slides
