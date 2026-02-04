@@ -47452,7 +47452,7 @@
                 
                 // Profile image HTML
                 const profileImageHtml = profileImage 
-                    ? `<img src="${profileImage}" alt="${escapeHtml(profileName)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">`
+                    ? `<img src="${profileImage}" alt="${escapeHtml(profileName)}" style="width: 100%; height: 100%; object-fit: cover; object-position: center top; border-radius: 8px;">`
                     : `<div style="width: 100%; height: 100%; background: linear-gradient(135deg, #374151, #1f2937); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 3rem; color: rgba(255,255,255,0.3);">📊</div>`;
                 
                 return `
@@ -47544,7 +47544,7 @@
                     <!-- Left image - Profile image -->
                     ${profileImage ? `
                         <div style="position: absolute; left: 0; bottom: 0; width: 45%; height: 45%;">
-                            <img src="${profileImage}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0 8px 0 0;">
+                            <img src="${profileImage}" style="width: 100%; height: 100%; object-fit: cover; object-position: center top; border-radius: 0 8px 0 0;">
                         </div>
                     ` : `
                         <div class="slide-image-placeholder" style="position: absolute; left: 0; bottom: 0; width: 45%; height: 45%; border-radius: 0 8px 0 0;" onclick="uploadTocLeftImage()" title="Profile image placeholder">
