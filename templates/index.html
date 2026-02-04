@@ -31592,6 +31592,10 @@
         let pendingCollaborators = [];
         let pendingSelectedItems = null;
         
+        // Track last used workspace and deck for pre-selection
+        let lastUsedWorkspace = null;
+        let lastUsedDeck = null;
+        
         function showDeckSelectionPopup(type, category, selectedItems = null) {
             const modal = document.createElement('div');
             modal.className = 'deck-workspace-modal';
@@ -31601,10 +31605,11 @@
             pendingCollaborators = [];
             pendingSelectedItems = selectedItems;
             
-            // Build workspace and deck options
+            // Build workspace and deck options with last used pre-selected
             let workspaceOptions = '';
             Object.entries(workspaces || {}).forEach(([wsId, ws]) => {
-                workspaceOptions += `<option value="${wsId}">${ws.name || wsId}</option>`;
+                const selected = (lastUsedWorkspace && wsId === lastUsedWorkspace) ? 'selected' : '';
+                workspaceOptions += `<option value="${wsId}" ${selected}>${ws.name || wsId}</option>`;
             });
             
             modal.innerHTML = `
@@ -31670,9 +31675,15 @@
             if (!deckSelect || !wsId) return;
             
             const decks = workspaceDecks[wsId] || [];
-            deckSelect.innerHTML = decks.length === 0 
-                ? '<option value="">No decks - create one first</option>'
-                : decks.map(d => `<option value="${d.id}">${d.name} (${d.slides?.length || 0} slides)</option>`).join('');
+            if (decks.length === 0) {
+                deckSelect.innerHTML = '<option value="">No decks - create one first</option>';
+            } else {
+                // Pre-select last used deck if it exists in this workspace
+                deckSelect.innerHTML = decks.map(d => {
+                    const selected = (lastUsedDeck && d.id === lastUsedDeck && wsId === lastUsedWorkspace) ? 'selected' : '';
+                    return `<option value="${d.id}" ${selected}>${d.name} (${d.slides?.length || 0} slides)</option>`;
+                }).join('');
+            }
         }
         
         function quickCreateDeck() {
@@ -31756,6 +31767,10 @@
                 deck.slides.push(item);
                 deck.updatedAt = new Date().toISOString();
                 itemAdded = true; // Mark that item was successfully added
+                
+                // Save last used workspace and deck for pre-selection next time
+                lastUsedWorkspace = wsId;
+                lastUsedDeck = deckId;
                 
                 // Add collaborators if any were specified
                 if (pendingCollaborators && pendingCollaborators.length > 0) {
@@ -32028,6 +32043,10 @@
                 deck.slides.push(item);
                 deck.updatedAt = new Date().toISOString();
                 itemAdded = true; // Mark that item was successfully added
+                
+                // Save last used workspace and deck for pre-selection next time
+                lastUsedWorkspace = wsId;
+                lastUsedDeck = deckId;
                 
                 // Add collaborators if any were specified
                 const collabCount = pendingCollaborators ? pendingCollaborators.length : 0;
