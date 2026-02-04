@@ -4330,12 +4330,13 @@
             min-height: 0;
         }
 
-        /* Behavioral table: single grid with subgrid so header and data columns share exact same widths */
+        /* Behavioral table: single grid with subgrid so header and data columns share exact same widths.
+           Name column uses minmax(100px, 1fr) so long names (e.g. team names) always have room to wrap. */
         .behavioral-table {
             display: grid;
-            grid-template-columns: 24px minmax(0, 1fr) 72px 72px 62px;
+            grid-template-columns: 28px minmax(100px, 1fr) 78px 78px 64px;
             gap: 0.4rem;
-            align-items: center;
+            align-items: start;
             padding: 0 0.15rem 0 0;
             overflow-y: auto;
             max-height: 500px;
@@ -4394,6 +4395,12 @@
             position: relative;
             text-align: left;
             min-height: 2rem;
+            overflow: visible;
+            background: var(--bg-card);
+            z-index: 0;
+        }
+        .behavioral-table .behavioral-item:hover {
+            z-index: 1;
         }
         .behavioral-table .behavioral-item > * {
             min-width: 0;
@@ -4437,6 +4444,7 @@
             white-space: normal;
             word-break: break-word;
             overflow-wrap: break-word;
+            overflow: visible;
             min-width: 0;
             position: relative;
             z-index: 2;
@@ -4450,8 +4458,10 @@
         .behavioral-name-wrapper {
             position: relative;
             min-width: 0;
+            max-width: 100%;
             display: block;
             width: 100%;
+            overflow: visible;
         }
 
         .behavioral-pct {
