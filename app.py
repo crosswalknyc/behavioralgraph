@@ -353,6 +353,35 @@ def ensure_metadata_folder():
 # Ensure metadata folder exists at startup
 ensure_metadata_folder()
 
+# Minimum percentage threshold for AI insights and callouts
+MIN_PCT_FOR_INSIGHTS = 25  # Only include items with 25% or higher profile percentage
+
+def _filter_demographics_for_insights(demographics, min_pct=MIN_PCT_FOR_INSIGHTS):
+    """Filter demographics to only include values >= min_pct."""
+    filtered = {}
+    for cat, values in demographics.items():
+        if isinstance(values, dict):
+            filtered_values = {k: v for k, v in values.items() if v >= min_pct}
+            if filtered_values:
+                filtered[cat] = filtered_values
+    return filtered
+
+def _filter_behavioral_for_insights(behavioral, min_pct=MIN_PCT_FOR_INSIGHTS):
+    """Filter behavioral data to only include items >= min_pct."""
+    filtered = {}
+    for cat, items in behavioral.items():
+        if isinstance(items, list):
+            filtered_items = [i for i in items if i.get('pct', 0) >= min_pct]
+            if filtered_items:
+                filtered[cat] = filtered_items
+    return filtered
+
+def _filter_top_items_for_insights(items, min_pct=MIN_PCT_FOR_INSIGHTS):
+    """Filter a list of items to only include those >= min_pct."""
+    if not isinstance(items, list):
+        return items
+    return [i for i in items if i.get('pct', 0) >= min_pct]
+
 def generate_ai_insights(profile_data):
     """Generate AI-powered insights from profile data."""
     client = get_openai_client()
@@ -360,18 +389,19 @@ def generate_ai_insights(profile_data):
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        # Prepare data summary for GPT
-        demographics = profile_data.get('demographics', {})
-        behavioral = profile_data.get('behavioral', {})
+        # Prepare data summary for GPT - filter to only include items >= 25%
+        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
+        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
         sample_size = profile_data.get('sampleSize', 0)
         profile_name = profile_data.get('name', 'This audience')
         
-        # Build context
+        # Build context - only items with 25%+ profile percentage
         demo_summary = []
         for cat, values in demographics.items():
             if isinstance(values, dict):
                 top_items = sorted(values.items(), key=lambda x: x[1], reverse=True)[:3]
-                demo_summary.append(f"{cat}: {', '.join([f'{k} ({v:.1f}%)' for k, v in top_items])}")
+                if top_items:
+                    demo_summary.append(f"{cat}: {', '.join([f'{k} ({v:.1f}%)' for k, v in top_items])}")
         
         behavior_summary = []
         for cat, items in behavioral.items():
@@ -382,18 +412,21 @@ def generate_ai_insights(profile_data):
                     name = i.get('name', i.get('value', ''))
                     pct = i.get('pct', 0)
                     item_strs.append(f"{name} ({pct:.1f}%)")
-                behavior_summary.append(f"{cat}: {', '.join(item_strs)}")
+                if item_strs:
+                    behavior_summary.append(f"{cat}: {', '.join(item_strs)}")
         
         prompt = f"""Analyze this audience profile and provide 5 key insights in bullet points. Be specific and actionable.
 
 Profile: {profile_name}
 Sample Size: {sample_size:,}
 
-Demographics:
-{chr(10).join(demo_summary[:8])}
+Demographics (only showing values with 25%+ of the audience):
+{chr(10).join(demo_summary[:8]) if demo_summary else 'No demographics meet the 25% threshold'}
 
-Top Behaviors:
-{chr(10).join(behavior_summary[:10])}
+Top Behaviors (only showing values with 25%+ of the audience):
+{chr(10).join(behavior_summary[:10]) if behavior_summary else 'No behaviors meet the 25% threshold'}
+
+IMPORTANT: Only cite or reference data points that represent 25% or more of the audience. Do not make up or infer data points that are not provided above.
 
 Provide insights about:
 1. Who this audience is (demographics)
@@ -402,7 +435,7 @@ Provide insights about:
 4. Potential marketing opportunities
 5. Key differentiators
 
-Keep each insight to 1-2 sentences. Be specific with numbers."""
+Keep each insight to 1-2 sentences. Be specific with numbers from the data provided."""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -428,11 +461,12 @@ def generate_persona(profile_data):
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        demographics = profile_data.get('demographics', {})
-        behavioral = profile_data.get('behavioral', {})
+        # Filter to only include items >= 25%
+        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
+        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
         profile_name = profile_data.get('name', 'Audience')
         
-        # Get top demographics
+        # Get top demographics (only those >= 25%)
         gender = demographics.get('gender', {})
         age = demographics.get('age', {})
         income = demographics.get('income', {})
@@ -441,12 +475,13 @@ def generate_persona(profile_data):
         top_age = max(age.items(), key=lambda x: x[1])[0] if age else "Unknown"
         top_income = max(income.items(), key=lambda x: x[1])[0] if income else "Unknown"
         
-        # Get top behaviors
+        # Get top behaviors (only those >= 25%)
         top_behaviors = []
         for cat, items in behavioral.items():
             if isinstance(items, list):
                 for item in items[:2]:
-                    top_behaviors.append(f"{item.get('name', '')} ({cat})")
+                    if item.get('pct', 0) >= MIN_PCT_FOR_INSIGHTS:
+                        top_behaviors.append(f"{item.get('name', '')} ({cat})")
         
         prompt = f"""Create a detailed marketing persona for this audience segment.
 
@@ -503,11 +538,12 @@ def generate_marketing_strategy(profile_data):
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        demographics = profile_data.get('demographics', {})
-        behavioral = profile_data.get('behavioral', {})
+        # Filter to only include items >= 25%
+        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
+        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
         profile_name = profile_data.get('name', 'Audience')
         
-        # Compile behavioral insights
+        # Compile behavioral insights (only those >= 25%)
         behavior_list = []
         for cat, items in behavioral.items():
             if isinstance(items, list):
@@ -517,8 +553,10 @@ def generate_marketing_strategy(profile_data):
         prompt = f"""Create a comprehensive marketing strategy for reaching this audience.
 
 Profile: {profile_name}
-Demographics: {json.dumps(demographics, default=str)[:500]}
-Key Behaviors: {', '.join(behavior_list[:15])}
+Demographics (only values with 25%+ of audience): {json.dumps(demographics, default=str)[:500]}
+Key Behaviors (only values with 25%+ of audience): {', '.join(behavior_list[:15]) if behavior_list else 'No behaviors meet the 25% threshold'}
+
+IMPORTANT: Only cite or reference data points that represent 25% or more of the audience. Do not make up or infer data points that are not provided above.
 
 Provide:
 1. **Channel Strategy** - Which platforms/channels to prioritize and why
@@ -528,7 +566,7 @@ Provide:
 5. **Timing Recommendations** - Best times/days to reach them
 6. **Budget Allocation** - Suggested % split across channels
 
-Be specific and actionable. Reference the actual data provided."""
+Be specific and actionable. Only reference the actual data provided above."""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -554,31 +592,32 @@ def chat_with_data(profile_data, user_question):
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        demographics = profile_data.get('demographics', {})
-        behavioral = profile_data.get('behavioral', {})
-        locations = profile_data.get('locations', [])
+        # Filter to only include items >= 25%
+        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
+        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
+        locations = _filter_top_items_for_insights(profile_data.get('locations', []))
         sample_size = profile_data.get('sampleSize', 0)
         profile_name = profile_data.get('name', 'This audience')
         
-        # Build comprehensive data context
+        # Build comprehensive data context (only items >= 25%)
         data_context = f"""
 Profile: {profile_name}
 Sample Size: {sample_size:,}
 
-DEMOGRAPHICS:
+DEMOGRAPHICS (only values with 25%+ of audience):
 {json.dumps(demographics, indent=2, default=str)[:1500]}
 
-TOP BEHAVIORS BY CATEGORY:
+TOP BEHAVIORS BY CATEGORY (only values with 25%+ of audience):
 {json.dumps({k: v[:5] if isinstance(v, list) else v for k, v in list(behavioral.items())[:10]}, indent=2, default=str)[:2000]}
 
-TOP LOCATIONS:
+TOP LOCATIONS (only values with 25%+ of audience):
 {json.dumps(locations[:10], indent=2, default=str)[:500]}
 """
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": f"You are an audience data analyst. Answer questions about this profile data accurately and concisely. Always cite specific numbers from the data when relevant.\n\nDATA:\n{data_context}"},
+                {"role": "system", "content": f"You are an audience data analyst. Answer questions about this profile data accurately and concisely. IMPORTANT: Only cite or reference data points that represent 25% or more of the audience. Do not make up or infer data points that are not provided.\n\nDATA:\n{data_context}"},
                 {"role": "user", "content": user_question}
             ],
             max_tokens=500,
@@ -599,13 +638,14 @@ def answer_business_question(profile_data, question, conversation_history=None):
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        demographics = profile_data.get('demographics', {})
-        behavioral = profile_data.get('behavioral', {})
-        locations = profile_data.get('locations', [])
+        # Filter to only include items >= 25%
+        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
+        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
+        locations = _filter_top_items_for_insights(profile_data.get('locations', []))
         sample_size = profile_data.get('sampleSize', 0)
         profile_name = profile_data.get('name', 'This audience')
         
-        # Build data context
+        # Build data context (only items >= 25%)
         behavior_summary = []
         for cat, items in behavioral.items():
             if isinstance(items, list) and items:
@@ -615,19 +655,20 @@ def answer_business_question(profile_data, question, conversation_history=None):
                     name = i.get('name', '')
                     pct = i.get('pct', 0)
                     item_strs.append(f"{name} ({pct:.1f}%)")
-                behavior_summary.append(f"{cat}: {', '.join(item_strs)}")
+                if item_strs:
+                    behavior_summary.append(f"{cat}: {', '.join(item_strs)}")
         
         data_context = f"""
 AUDIENCE PROFILE: {profile_name}
 Sample Size: {sample_size:,}
 
-DEMOGRAPHICS:
+DEMOGRAPHICS (only values with 25%+ of audience):
 {json.dumps(demographics, indent=2, default=str)[:1500]}
 
-KEY BEHAVIORS:
-{chr(10).join(behavior_summary[:15])}
+KEY BEHAVIORS (only values with 25%+ of audience):
+{chr(10).join(behavior_summary[:15]) if behavior_summary else 'No behaviors meet the 25% threshold'}
 
-TOP LOCATIONS:
+TOP LOCATIONS (only values with 25%+ of audience):
 {json.dumps(locations[:10] if locations else [], indent=2, default=str)[:500]}
 """
         
@@ -642,12 +683,14 @@ Your role:
 4. After answering, suggest 2-3 follow-up questions that could help them further
 5. Ask how you can make the analysis more useful for their specific business goals
 
+IMPORTANT: Only cite or reference data points that represent 25% or more of the audience. Do not make up or infer data points that are not provided.
+
 AUDIENCE DATA:
 {data_context}
 
 Always format your response with:
 1. **Direct Answer** - Address their question with data-backed insights
-2. **Key Data Points** - Bullet the most relevant numbers
+2. **Key Data Points** - Bullet the most relevant numbers (only those 25%+)
 3. **Business Recommendation** - Actionable next step
 4. **Follow-up Questions** - 2-3 questions to dig deeper
 
@@ -682,16 +725,19 @@ def generate_business_deck(profile_data, business_question, key_findings=None):
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        demographics = profile_data.get('demographics', {})
-        behavioral = profile_data.get('behavioral', {})
+        # Filter to only include items >= 25%
+        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
+        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
         sample_size = profile_data.get('sampleSize', 0)
         profile_name = profile_data.get('name', 'Audience')
         
-        # Build data summary
+        # Build data summary (only items >= 25%)
         behavior_summary = []
         for cat, items in behavioral.items():
             if isinstance(items, list) and items:
-                behavior_summary.append(f"{cat}: {', '.join([i.get('name', '') for i in items[:3]])}")
+                item_names = [i.get('name', '') for i in items[:3]]
+                if item_names:
+                    behavior_summary.append(f"{cat}: {', '.join(item_names)}")
         
         prompt = f"""Create a professional presentation deck outline to answer this business question:
 
@@ -700,15 +746,17 @@ BUSINESS QUESTION: {business_question}
 AUDIENCE: {profile_name}
 Sample Size: {sample_size:,}
 
-KEY DEMOGRAPHICS:
+KEY DEMOGRAPHICS (only values with 25%+ of audience):
 - Gender: {json.dumps(demographics.get('gender', {}), default=str)}
 - Age: {json.dumps(demographics.get('age', {}), default=str)}
 - Income: {json.dumps(demographics.get('income', {}), default=str)}
 
-TOP BEHAVIORS:
-{chr(10).join(behavior_summary[:10])}
+TOP BEHAVIORS (only values with 25%+ of audience):
+{chr(10).join(behavior_summary[:10]) if behavior_summary else 'No behaviors meet the 25% threshold'}
 
 {f'PREVIOUS FINDINGS: {key_findings}' if key_findings else ''}
+
+IMPORTANT: Only cite or reference data points that represent 25% or more of the audience. Do not make up or infer data points that are not provided.
 
 Generate a 6-8 slide deck outline with:
 1. Title slide
@@ -770,10 +818,11 @@ def compare_profiles_ai(profiles_data):
         profiles_summary = []
         for profile in profiles_data:
             name = profile.get('name', 'Unknown')
-            demo = profile.get('demographics', {})
-            behaviors = profile.get('behavioral', {})
+            # Filter to only include items >= 25%
+            demo = _filter_demographics_for_insights(profile.get('demographics', {}))
+            behaviors = _filter_behavioral_for_insights(profile.get('behavioral', {}))
             
-            # Get key stats
+            # Get key stats (only those >= 25%)
             top_behaviors = []
             for cat, items in behaviors.items():
                 if isinstance(items, list) and items:
@@ -781,9 +830,9 @@ def compare_profiles_ai(profiles_data):
             
             profiles_summary.append(f"""
 {name}:
-- Gender: {json.dumps(demo.get('gender', {}), default=str)[:200]}
-- Age: {json.dumps(demo.get('age', {}), default=str)[:200]}
-- Top Behaviors: {', '.join(top_behaviors[:5])}
+- Gender (25%+ only): {json.dumps(demo.get('gender', {}), default=str)[:200]}
+- Age (25%+ only): {json.dumps(demo.get('age', {}), default=str)[:200]}
+- Top Behaviors (25%+ only): {', '.join(top_behaviors[:5]) if top_behaviors else 'None meet threshold'}
 """)
         
         prompt = f"""Compare these audience profiles and identify:
@@ -792,10 +841,12 @@ def compare_profiles_ai(profiles_data):
 3. Overlap opportunities (where they might be reached together)
 4. Distinct positioning for each
 
-Profiles:
+IMPORTANT: Only cite or reference data points that represent 25% or more of the audience. Do not make up or infer data points that are not provided.
+
+Profiles (only showing data points with 25%+ of audience):
 {''.join(profiles_summary)}
 
-Be specific with numbers and percentages."""
+Be specific with numbers and percentages from the data provided."""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -3545,22 +3596,22 @@ def generate_behavioral_summary(profile_data):
         return {"error": "OpenAI not configured. Add OPENAI_API_KEY to environment variables."}
     
     try:
-        # Extract demographic data
-        demographics = profile_data.get('demographics', {})
+        # Extract demographic data - filter to only include items >= 25%
+        demographics = _filter_demographics_for_insights(profile_data.get('demographics', {}))
         demographics_index = profile_data.get('demographicsIndex', {})
         demographics_gen_pop = profile_data.get('demographicsGenPop', {})
         
-        # Extract behavioral data
-        behavioral = profile_data.get('behavioral', {})
+        # Extract behavioral data - filter to only include items >= 25%
+        behavioral = _filter_behavioral_for_insights(profile_data.get('behavioral', {}))
         behavioral_index = profile_data.get('behavioralIndex', {})
         
-        # Extract top over-indexers
-        top_over_indexers = profile_data.get('topOverIndexers', [])
+        # Extract top over-indexers - filter to only include items >= 25%
+        top_over_indexers = [i for i in profile_data.get('topOverIndexers', []) if i.get('pct', 0) >= MIN_PCT_FOR_INSIGHTS]
         
         # Get profile name
         profile_name = profile_data.get('profileName', 'This audience')
         
-        # Build demographic summary
+        # Build demographic summary (only items >= 25%)
         demo_summary = []
         for category, values in demographics.items():
             if isinstance(values, dict) and values:
@@ -3570,9 +3621,10 @@ def generate_behavioral_summary(profile_data):
                 for name, pct in top_items:
                     idx = index_data.get(name, 100) if isinstance(index_data, dict) else 100
                     items_with_index.append(f"{name} ({pct:.1f}%, {idx:.0f} index)")
-                demo_summary.append(f"{category}: {', '.join(items_with_index)}")
+                if items_with_index:
+                    demo_summary.append(f"{category}: {', '.join(items_with_index)}")
         
-        # Build behavioral summary with top items per category
+        # Build behavioral summary with top items per category (only items >= 25%)
         behavior_summary = []
         for category, items in behavioral.items():
             if isinstance(items, list) and items:
@@ -3589,7 +3641,8 @@ def generate_behavioral_summary(profile_data):
                     elif isinstance(item, dict):
                         idx = item.get('index', 100)
                     items_str.append(f"{name} ({pct:.1f}%, {idx:.0f} index)")
-                behavior_summary.append(f"{category}: {', '.join(items_str)}")
+                if items_str:
+                    behavior_summary.append(f"{category}: {', '.join(items_str)}")
         
         # Build top over-indexers summary
         top_indexers_str = ""
@@ -3604,17 +3657,18 @@ def generate_behavioral_summary(profile_data):
 
 PROFILE: {profile_name}
 
-DEMOGRAPHIC PROFILE:
-{chr(10).join(demo_summary[:6])}
+DEMOGRAPHIC PROFILE (only values with 25%+ of audience):
+{chr(10).join(demo_summary[:6]) if demo_summary else 'No demographics meet the 25% threshold'}
 
-BEHAVIORAL DATA (what they engage with):
-{chr(10).join(behavior_summary[:12])}
+BEHAVIORAL DATA (only values with 25%+ of audience):
+{chr(10).join(behavior_summary[:12]) if behavior_summary else 'No behaviors meet the 25% threshold'}
 
-TOP OVER-INDEXING BEHAVIORS (where they most differ from general population):
-{top_indexers_str}
+TOP OVER-INDEXING BEHAVIORS (only values with 25%+ of audience):
+{top_indexers_str if top_indexers_str else 'No over-indexers meet the 25% threshold'}
 
 INSTRUCTIONS:
 - Write 4-6 bullet points describing this audience's behavioral profile
+- IMPORTANT: Only cite or reference data points that represent 25% or more of the audience. Do not make up or infer data points that are not provided.
 - IMPORTANT: Start each bullet with "{profile_name} panelists" to frame it as an analysis of observed behavior
 - Focus on LIFESTYLE and BEHAVIORS, not just demographics
 - Be specific about their interests, habits, media consumption, and shopping patterns
@@ -6899,7 +6953,7 @@ def analyze_ecosystem_with_ai():
                 }), 500
         
         # Prepare data summary for AI (limit to avoid token limits)
-        # Extract key behavioral data
+        # Extract key behavioral data - only include items with 25%+ profile percentage
         behavioral_data = []
         demographic_data = {}
         
@@ -6907,16 +6961,27 @@ def analyze_ecosystem_with_ai():
             col = str(record.get('Column', '')).upper()
             val = record.get('Value', '')
             idx = record.get('Index', 0)
+            pct = record.get('Brand Penetration (Row)', 0) or record.get('pct', 0) or 0
+            
+            # Convert pct to float if it's a string
+            try:
+                pct = float(pct)
+            except:
+                pct = 0
             
             if 'BEHAVIORAL' in col or 'INTEREST' in col:
-                if isinstance(val, (int, float)) and val > 0:
+                # Only include items with 25%+ profile percentage
+                if isinstance(val, (int, float)) and val > 0 and pct >= MIN_PCT_FOR_INSIGHTS:
                     behavioral_data.append({
                         'item': str(record.get('Column', '')),
                         'index': float(idx) if idx else 0,
+                        'pct': pct,
                         'category': str(record.get('Category', 'Other'))
                     })
             elif 'DEMOGRAPHIC' in col or 'AGE' in col or 'GENDER' in col or 'INCOME' in col:
-                demographic_data[col] = val
+                # Only include demographics with 25%+ 
+                if pct >= MIN_PCT_FOR_INSIGHTS:
+                    demographic_data[col] = val
         
         # Sort by index and get top items
         behavioral_data.sort(key=lambda x: x.get('index', 0), reverse=True)
@@ -6954,7 +7019,9 @@ def analyze_ecosystem_with_ai():
    - Examples: productivity breaks, micro-celebrations, stress-relief rituals, solo rewards
    - Not "new flavors" — new moments.
 
-BEHAVIORAL DATA (Top 100 items by index):
+IMPORTANT: Only cite or reference data points that represent 25% or more of the audience. Do not make up or infer data points that are not provided. The data below has already been filtered to only include items with 25%+ profile percentage.
+
+BEHAVIORAL DATA (Top 100 items by index, 25%+ profile percentage only):
 {json.dumps(top_items[:100], indent=2)}
 
 DEMOGRAPHIC DATA:
@@ -7059,33 +7126,33 @@ def analyze_executive_summary_with_ai():
                 'fallback': True
             }), 503
         
-        # Prepare structured data for AI
+        # Prepare structured data for AI - filter to only include items >= 25%
         summary_data = {
             'primaryProfile': {
                 'name': primary_profile.get('name', 'Unknown'),
                 'sampleSize': primary_profile.get('sampleSize', 0),
                 'projectedUS': primary_profile.get('projectedUS', 0),
                 'medianAge': primary_profile.get('medianAge', 'N/A'),
-                'demographics': primary_profile.get('demographics', {}),
-                'demographicsProjection': primary_profile.get('demographicsProjection', {}),
-                'topCategories': primary_profile.get('topCategories', []),
-                'topInterests': primary_profile.get('topInterests', [])
+                'demographics': _filter_demographics_for_insights(primary_profile.get('demographics', {})),
+                'demographicsProjection': _filter_demographics_for_insights(primary_profile.get('demographicsProjection', {})),
+                'topCategories': _filter_top_items_for_insights(primary_profile.get('topCategories', [])),
+                'topInterests': _filter_top_items_for_insights(primary_profile.get('topInterests', []))
             },
             'competitors': [
                 {
                     'name': comp.get('name', 'Unknown'),
-                    'demographics': comp.get('demographics', {}),
-                    'demographicsProjection': comp.get('demographicsProjection', {}),
-                    'topCategories': comp.get('topCategories', []),
-                    'topInterests': comp.get('topInterests', [])
+                    'demographics': _filter_demographics_for_insights(comp.get('demographics', {})),
+                    'demographicsProjection': _filter_demographics_for_insights(comp.get('demographicsProjection', {})),
+                    'topCategories': _filter_top_items_for_insights(comp.get('topCategories', [])),
+                    'topInterests': _filter_top_items_for_insights(comp.get('topInterests', []))
                 }
                 for comp in competitors
             ],
             'genPop': {
-                'demographics': gen_pop_profile.get('demographics', {}) if gen_pop_profile else {},
-                'demographicsProjection': gen_pop_profile.get('demographicsProjection', {}) if gen_pop_profile else {},
-                'topCategories': gen_pop_profile.get('topCategories', []) if gen_pop_profile else [],
-                'topInterests': gen_pop_profile.get('topInterests', []) if gen_pop_profile else []
+                'demographics': _filter_demographics_for_insights(gen_pop_profile.get('demographics', {})) if gen_pop_profile else {},
+                'demographicsProjection': _filter_demographics_for_insights(gen_pop_profile.get('demographicsProjection', {})) if gen_pop_profile else {},
+                'topCategories': _filter_top_items_for_insights(gen_pop_profile.get('topCategories', [])) if gen_pop_profile else [],
+                'topInterests': _filter_top_items_for_insights(gen_pop_profile.get('topInterests', [])) if gen_pop_profile else []
             } if gen_pop_profile else None
         }
         
@@ -7102,7 +7169,9 @@ COMPETITORS: {', '.join([c['name'] for c in summary_data['competitors']]) if sum
 FULL DATA:
 {json.dumps(summary_data, indent=2)}
 
-IMPORTANT: The "Other" category represents the absence of data and should NEVER be used in analysis, comparisons, or callouts. Ignore any "Other" category entries completely.
+IMPORTANT: 
+1. The "Other" category represents the absence of data and should NEVER be used in analysis, comparisons, or callouts. Ignore any "Other" category entries completely.
+2. Only cite or reference data points that represent 25% or more of the audience. Do not make up or infer data points that are not provided.
 
 Your task: Generate a strategic executive summary that:
 1. **Identifies the most critical business insights** - not just data points, but what they mean for strategy
@@ -7204,14 +7273,15 @@ def analyze_key_insights_with_ai():
             }), 503
         
         # Extract focused data: interests, demographics, social media, streaming/platforms, streaming/music, categories (NOT brands)
+        # Filter to only include items with 25%+ profile percentage
         def extract_focused_data(profile):
             focused = {
                 'name': profile.get('name', 'Unknown'),
                 'sampleSize': profile.get('sampleSize', 0),
                 'projectedUS': profile.get('projectedUS', 0),
                 'medianAge': profile.get('medianAge', 'N/A'),
-                'demographics': profile.get('demographics', {}),
-                'demographicsProjection': profile.get('demographicsProjection', {}),
+                'demographics': _filter_demographics_for_insights(profile.get('demographics', {})),
+                'demographicsProjection': _filter_demographics_for_insights(profile.get('demographicsProjection', {})),
                 'interests': [],
                 'socialMedia': [],
                 'streamingPlatforms': [],
@@ -7219,7 +7289,7 @@ def analyze_key_insights_with_ai():
                 'categories': []
             }
             
-            # Extract interests and behavioral items, filtering by category
+            # Extract interests and behavioral items, filtering by category AND by 25% threshold
             behavioral = profile.get('behavioral', {})
             if behavioral:
                 for category, items in behavioral.items():
@@ -7228,61 +7298,58 @@ def analyze_key_insights_with_ai():
                     
                     cat_upper = str(category).upper()
                     
-                    # Interests
+                    # Interests - only include items with 25%+ pct
                     if 'INTEREST' in cat_upper:
                         for item in items:
-                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
+                            if item.get('name') and item.get('pct', 0) >= MIN_PCT_FOR_INSIGHTS:
                                 focused['interests'].append({
                                     'name': item.get('name'),
                                     'pct': item.get('pct', 0),
                                     'index': item.get('index', 0)
                                 })
                     
-                    # Social Media
+                    # Social Media - only include items with 25%+ pct
                     elif 'SOCIAL' in cat_upper and ('MEDIA' in cat_upper or 'PLATFORM' in cat_upper):
                         for item in items:
-                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
+                            if item.get('name') and item.get('pct', 0) >= MIN_PCT_FOR_INSIGHTS:
                                 focused['socialMedia'].append({
                                     'name': item.get('name'),
                                     'pct': item.get('pct', 0),
                                     'index': item.get('index', 0)
                                 })
                     
-                    # Streaming Platforms
+                    # Streaming Platforms - only include items with 25%+ pct
                     elif 'STREAMING' in cat_upper and 'PLATFORM' in cat_upper:
                         for item in items:
-                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
+                            if item.get('name') and item.get('pct', 0) >= MIN_PCT_FOR_INSIGHTS:
                                 focused['streamingPlatforms'].append({
                                     'name': item.get('name'),
                                     'pct': item.get('pct', 0),
                                     'index': item.get('index', 0)
                                 })
                     
-                    # Streaming Music
+                    # Streaming Music - only include items with 25%+ pct
                     elif 'STREAMING' in cat_upper and 'MUSIC' in cat_upper:
                         for item in items:
-                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
+                            if item.get('name') and item.get('pct', 0) >= MIN_PCT_FOR_INSIGHTS:
                                 focused['streamingMusic'].append({
                                     'name': item.get('name'),
                                     'pct': item.get('pct', 0),
                                     'index': item.get('index', 0)
                                 })
                     
-                    # Most Purchased Categories (NOT brands)
-                    # "MOST PURCHASED CATEGORIES" contains category-level purchases like "Food & Beverage", "Apparel", etc.
-                    # "MOST PURCHASED BRANDS" contains brand names - we want to EXCLUDE this
+                    # Most Purchased Categories (NOT brands) - only include items with 25%+ pct
                     elif 'MOST PURCHASED CATEGORIES' in cat_upper or ('PURCHASED' in cat_upper and 'CATEGOR' in cat_upper and 'BRAND' not in cat_upper):
                         for item in items:
-                            if item.get('name') and (item.get('pct', 0) > 0 or item.get('index', 0) > 0):
+                            if item.get('name') and item.get('pct', 0) >= MIN_PCT_FOR_INSIGHTS:
                                 item_name = str(item.get('name', '')).upper()
                                 
-                                # Exclude if it's clearly a brand name (common brand indicators or known brands)
+                                # Exclude if it's clearly a brand name
                                 is_brand = (
                                     any(indicator in item_name for indicator in ['INC', 'LLC', 'CORP', 'CO.', 'COMPANY']) or
                                     item_name in ['NIKE', 'COCA-COLA', 'COKE', 'PEPSI', 'APPLE', 'SAMSUNG', 'AMAZON', 'WALMART', 'TARGET', 'STARBUCKS', 'MCDONALDS', 'ADIDAS', 'UNDER ARMOUR']
                                 )
                                 
-                                # Include category-level items (usually descriptive, multi-word, or contain "&")
                                 if not is_brand:
                                     focused['categories'].append({
                                         'name': item.get('name'),
@@ -7324,6 +7391,9 @@ DO NOT focus on:
 - Individual brand names (focus on categories instead)
 - Generic behavioral items
 - "Other" category (represents missing data)
+- Data points with less than 25% of the audience
+
+IMPORTANT: Only cite or reference data points that represent 25% or more of the audience. Do not make up or infer data points that are not provided.
 
 PRIMARY BRAND DATA:
 {json.dumps(primary_data, indent=2)}
