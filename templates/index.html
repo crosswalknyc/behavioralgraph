@@ -31685,11 +31685,19 @@
                 dateAdded: new Date().toISOString()
             };
             
+            // Create closing slide
+            const closingSlide = {
+                id: 'closing_' + Date.now(),
+                type: 'closing',
+                title: 'Thank You',
+                dateAdded: new Date().toISOString()
+            };
+            
             const newDeck = {
                 id: 'deck_' + Date.now(),
                 name: name,
                 workspaceId: wsId,
-                slides: [tocSlide], // Start with TOC slide
+                slides: [tocSlide, closingSlide], // Start with TOC and closing slides
                 titleSlide: {
                     title: currentProfileData?.name || 'Audience Profile',
                     subtitle: 'Powered by Crosswalk IQ',
@@ -47044,11 +47052,19 @@
                 dateAdded: new Date().toISOString()
             };
             
+            // Create closing slide
+            const closingSlide = {
+                id: 'closing_' + Date.now(),
+                type: 'closing',
+                title: 'Thank You',
+                dateAdded: new Date().toISOString()
+            };
+            
             const newDeck = {
                 id: 'deck_' + Date.now(),
                 name: name,
                 workspaceId: currentWorkspace,
-                slides: [tocSlide], // Start with TOC slide
+                slides: [tocSlide, closingSlide], // Start with TOC and closing slides
                 titleSlide: {
                     title: currentProfileData?.name || 'Audience Profile',
                     subtitle: 'Powered by Crosswalk IQ',
@@ -47502,10 +47518,10 @@
                 const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
                 const profileImage = getDeckTitleSlideProfileImage(currentEditingDeck?.titleSlide || {});
                 
-                // Get list of slide titles for TOC
+                // Get list of slide titles for TOC (exclude TOC and closing slides)
                 const slides = currentEditingDeck?.slides || [];
                 const tocItems = slides
-                    .filter(s => s.type !== 'toc')
+                    .filter(s => s.type !== 'toc' && s.type !== 'closing')
                     .map((s, i) => ({
                         num: i + 1,
                         title: s.customTitle || s.title || s.category || 'Untitled'
@@ -47572,6 +47588,49 @@
                          title="Click to upload image">
                         <span class="placeholder-icon">🖼️</span>
                         <span>Click to add image</span>
+                    </div>
+                    
+                    ${footerHtml}
+                `;
+            }
+            
+            // For Closing/Thank You slide
+            if (slide.type === 'closing') {
+                const today = new Date();
+                const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+                
+                // Get presenter info
+                const presenterName = (currentUserFirstName && currentUserLastName) 
+                    ? `${currentUserFirstName} ${currentUserLastName}` 
+                    : currentUsername || 'Your Name';
+                const presenterCompany = currentUserCompany || 'Your Company';
+                const presenterEmail = currentUserEmail || '';
+                
+                return `
+                    <!-- Header bar -->
+                    <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                        <span>Crosswalk Profile IQ</span>
+                        <span>${dateStr}</span>
+                    </div>
+                    
+                    <!-- Large Thank You centered -->
+                    <div style="position: absolute; left: 50%; top: 35%; transform: translateX(-50%); font-size: 4rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.03em; text-align: center; line-height: 1;">
+                        THANK YOU
+                    </div>
+                    
+                    <!-- Accent line -->
+                    <div style="position: absolute; left: 50%; top: 52%; transform: translateX(-50%); width: 120px; height: 3px; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-lime));"></div>
+                    
+                    <!-- Contact info centered -->
+                    <div style="position: absolute; left: 50%; top: 60%; transform: translateX(-50%); text-align: center;">
+                        <div style="font-size: 1.1rem; font-weight: 600; color: #ffffff; margin-bottom: 0.5rem;">${escapeHtml(presenterName)}</div>
+                        <div style="font-size: 0.85rem; color: rgba(255,255,255,0.7); margin-bottom: 0.25rem;">${escapeHtml(presenterCompany)}</div>
+                        ${presenterEmail ? `<div style="font-size: 0.75rem; color: var(--accent-cyan); margin-top: 0.5rem;">${escapeHtml(presenterEmail)}</div>` : ''}
+                    </div>
+                    
+                    <!-- Powered by footer -->
+                    <div style="position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); font-size: 0.7rem; color: rgba(255,255,255,0.4); text-align: center;">
+                        Powered by Crosswalk Profile IQ
                     </div>
                     
                     ${footerHtml}
