@@ -303,6 +303,35 @@
             max-width: 700px;
             max-height: 90vh;
             overflow-y: auto;
+            text-align: left;
+        }
+        #userForm {
+            text-align: left;
+        }
+        #userForm .form-row,
+        #userForm .form-group,
+        #userForm .access-section,
+        #userForm .dashboard-access-item,
+        #userForm .dashboard-access-header {
+            justify-content: flex-start;
+            text-align: left;
+        }
+        #userForm .form-group label,
+        #userForm .form-group input,
+        #userForm .form-group select,
+        #userForm .form-group small {
+            text-align: left;
+        }
+        #userForm .dashboard-access-header {
+            justify-content: space-between;
+        }
+        #userForm .master-category-group,
+        #userForm .master-category-header,
+        #userForm .master-category-items {
+            text-align: left;
+        }
+        #userForm .master-category-header {
+            justify-content: flex-start;
         }
 
         .modal-header {
@@ -1703,9 +1732,9 @@
                                 <input type="checkbox" id="hasProfileIQAccess" checked onchange="toggleProfileIQSection()">
                                 <span style="font-weight: 600;">✅ PROFILE IQ</span>
                             </label>
-                            <span class="collapse-icon rotated" id="profileIQIcon">▼</span>
+                            <span class="collapse-icon" id="profileIQIcon">▼</span>
                         </div>
-                        <div id="profileIQSection" class="dashboard-access-content" style="display: none;">
+                        <div id="profileIQSection" class="dashboard-access-content" style="display: block;">
                             <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
                                 <div style="margin-bottom: 1rem;">
                                     <h5 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--accent-cyan);">📁 Category Access</h5>
@@ -4083,9 +4112,14 @@
         
         function toggleProfileIQSection() {
             const checkbox = document.getElementById('hasProfileIQAccess');
-            if (!checkbox.checked) {
-                document.getElementById('profileIQSection').style.display = 'none';
-                document.getElementById('profileIQIcon').classList.add('rotated');
+            const section = document.getElementById('profileIQSection');
+            const icon = document.getElementById('profileIQIcon');
+            if (checkbox.checked) {
+                section.style.display = 'block';
+                icon.classList.remove('rotated');
+            } else {
+                section.style.display = 'none';
+                icon.classList.add('rotated');
             }
         }
         
@@ -4598,16 +4632,16 @@
                 
                 html += `
                     <div class="master-category-group" style="margin-bottom: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
-                        <div class="master-category-header" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: var(--bg-input); cursor: pointer;" onclick="toggleMasterCategory('${master}')">
+                        <div class="master-category-header" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: var(--bg-input); cursor: pointer; text-align: left;" onclick="toggleMasterCategory('${master}')">
                             <input type="checkbox" class="master-checkbox" data-master="${master}" ${allMasterChecked ? 'checked' : ''} ${isAll ? 'disabled' : ''} onclick="event.stopPropagation(); toggleMasterCheckbox('${master}', this.checked)">
                             <span style="font-size: 1rem;">${icon}</span>
                             <span style="font-weight: 600; flex: 1; text-align: left;">${master}</span>
                             <span style="margin-left: auto; display: flex; align-items: center; gap: 0.25rem;">
                                 <span style="font-size: 0.75rem; color: var(--text-secondary);">${checkedCount}/${cats.length}</span>
-                                <span class="master-arrow" id="arrow-${master}" style="transition: transform 0.2s;">▼</span>
+                                <span class="master-arrow" id="arrow-${master}" style="transition: transform 0.2s; transform: rotate(180deg);">▼</span>
                             </span>
                         </div>
-                        <div class="master-category-items" id="items-${master}" style="display: none; padding: 0.5rem 0.75rem; background: var(--bg-card); max-height: 200px; overflow-y: auto;">
+                        <div class="master-category-items" id="items-${master}" style="display: block; padding: 0.5rem 0.75rem; background: var(--bg-card); max-height: 200px; overflow-y: auto; text-align: left;">
                             ${cats.sort().map(cat => `
                                 <label class="checkbox-group" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; font-size: 0.85rem;">
                                     <input type="checkbox" class="cat-checkbox" data-master="${master}" value="${cat}" ${isAll || selected?.includes(cat) ? 'checked' : ''} ${isAll ? 'disabled' : ''} onchange="updateMasterCount('${master}')">
