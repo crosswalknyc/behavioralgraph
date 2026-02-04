@@ -13639,8 +13639,8 @@
                                         <a href="javascript:void(0)" onclick="commitDeckToGitHub(); return false;" style="display: block; padding: 0.5rem; cursor: pointer; border-radius: 4px; color: var(--text-primary); text-decoration: none; font-size: 0.8rem; text-align: left;">🐙 Commit to GitHub</a>
                                     </div>
                                 </div>
-                                <button class="btn btn-small" onclick="archiveCurrentDeck()" title="Archive deck" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: rgba(147, 51, 234, 0.2); color: #a78bfa;">📦</button>
-                                <button class="btn btn-small" onclick="deleteDeckFromEditor()" title="Delete deck" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: rgba(239, 68, 68, 0.2); color: #ef4444;">🗑️</button>
+                                <button class="btn btn-small deck-action-with-title" onclick="archiveCurrentDeck()" title="Archive deck" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: rgba(147, 51, 234, 0.2); color: #a78bfa;">📦</button>
+                                <button class="btn btn-small deck-action-with-title" onclick="deleteDeckFromEditor()" title="Delete deck" style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: rgba(239, 68, 68, 0.2); color: #ef4444;">🗑️</button>
                             </div>
                             <div id="deckTitleControls" style="display: none; align-items: center; gap: 0.5rem; padding-left: 0.5rem; margin-left: 0.25rem; border-left: 1px solid var(--border-color);">
                                 <input type="text" id="deckBuilderTitleInput" placeholder="Deck name" 
@@ -46507,6 +46507,13 @@
             if (actionButtons) actionButtons.style.display = 'flex';
             if (titleInput) titleInput.value = deck.name || 'Untitled Deck';
             if (slideCount) slideCount.textContent = `${allSlides.length} slides`;
+            
+            // Update deck action button tooltips with deck title
+            const deckTitle = deck.name || 'Untitled Deck';
+            document.querySelectorAll('.deck-action-with-title').forEach(btn => {
+                const action = btn.textContent.trim() === '📦' ? 'Archive' : 'Delete';
+                btn.title = `Title: ${deckTitle}\n${action} this deck`;
+            });
             
             // Update dropdown selection
             const dropdown = document.getElementById('deckSelectDropdown');
