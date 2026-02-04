@@ -9707,18 +9707,27 @@
         
         .viz-control-panel {
             position: fixed;
-            top: 80px;
-            right: 20px;
-            background: rgba(13, 33, 55, 0.98);
-            border: 2px solid var(--accent-cyan);
-            border-radius: 8px;
+            top: 100px;
+            right: 50px;
+            background: rgba(13, 33, 55, 0.99);
+            border: 3px solid var(--accent-lime);
+            border-radius: 10px;
             padding: 0;
-            z-index: 99999;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(0, 200, 255, 0.3);
-            min-width: 300px;
-            max-width: 340px;
-            max-height: 500px;
+            z-index: 999999;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9), 0 0 0 2px rgba(200, 230, 0, 0.5), 0 0 60px rgba(0, 200, 255, 0.3);
+            min-width: 320px;
+            max-width: 360px;
+            max-height: 520px;
             display: none;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+        }
+        
+        .viz-control-panel.expanded {
+            display: block !important;
+            opacity: 1 !important;
+            visibility: visible !important;
         }
         
         .viz-control-panel-header {
@@ -9733,10 +9742,6 @@
             max-height: 440px;
             overflow-y: auto;
             overflow-x: hidden;
-        }
-        
-        .viz-control-panel.expanded {
-            display: block;
         }
         
         .viz-control-panel-body::-webkit-scrollbar {
@@ -35370,8 +35375,13 @@
             let panel = document.getElementById(`vizPanel${slideIdx}`);
             const toggle = document.getElementById(`vizToggle${slideIdx}`);
             
+            console.log('toggleVizPanel called:', slideIdx, 'panel found:', !!panel);
+            
             if (!panel) {
                 console.warn('Panel not found for slideIdx:', slideIdx);
+                // Try to find any viz panel as fallback
+                const allPanels = document.querySelectorAll('.viz-control-panel');
+                console.log('All panels found:', allPanels.length);
                 return;
             }
             
@@ -35384,35 +35394,40 @@
             
             // Toggle this panel
             const isExpanding = !panel.classList.contains('expanded');
+            console.log('isExpanding:', isExpanding);
             
             if (isExpanding) {
-                // Move panel to body if not already there (ensures it's always visible)
-                if (panel.parentElement !== document.body) {
-                    document.body.appendChild(panel);
+                // Clone panel and move to body to ensure visibility
+                const clonedPanel = panel.cloneNode(true);
+                clonedPanel.id = `vizPanel${slideIdx}`;
+                
+                // Remove old panel if it exists in body
+                const existingInBody = document.body.querySelector(`#vizPanel${slideIdx}`);
+                if (existingInBody && existingInBody.parentElement === document.body) {
+                    existingInBody.remove();
                 }
                 
-                // Position the panel - always visible in top-right area
-                let panelTop = 80;
-                let panelRight = 20;
+                // Add to body
+                document.body.appendChild(clonedPanel);
+                panel = clonedPanel;
                 
-                // Try to position near the toggle button if it exists
-                if (toggle) {
-                    const toggleRect = toggle.getBoundingClientRect();
-                    // Position panel below the button, but ensure it stays on screen
-                    panelTop = Math.max(60, Math.min(toggleRect.bottom + 10, window.innerHeight - 520));
-                    panelRight = Math.max(20, window.innerWidth - toggleRect.right - 150);
-                }
-                
-                // Ensure panel is always visible
+                // Position the panel - ALWAYS in a visible fixed position
                 panel.style.position = 'fixed';
-                panel.style.top = panelTop + 'px';
-                panel.style.right = panelRight + 'px';
+                panel.style.top = '100px';
+                panel.style.right = '50px';
                 panel.style.left = 'auto';
-                panel.style.zIndex = '99999';
+                panel.style.bottom = 'auto';
+                panel.style.zIndex = '999999';
+                panel.style.display = 'block';
+                panel.style.opacity = '1';
+                panel.style.visibility = 'visible';
+                panel.style.pointerEvents = 'auto';
                 
                 panel.classList.add('expanded');
+                console.log('Panel should now be visible at top:100px, right:50px');
             } else {
                 panel.classList.remove('expanded');
+                panel.style.display = 'none';
             }
         }
         
