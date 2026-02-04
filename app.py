@@ -2679,7 +2679,7 @@ def get_admin_content():
 @app.route('/api/jobs')
 @requires_auth
 def list_jobs():
-    """List all jobs (local + S3) - checks for new files and rebuilds cache if needed."""
+    """List all jobs (local + S3) - always scans S3 directly for reliability."""
     import time
     
     job_list = []
@@ -2709,45 +2709,80 @@ def list_jobs():
         })
         categories.add('LOCAL')
     
-    # Quick check for new files in S3 and rebuild if needed
-    if s3_client:
-        try:
-            # First load persisted cache if empty
-            if not s3_cache.get('jobs'):
-                load_persisted_cache()
-            
-            # Quick count of CSV files in S3
-            s3 = boto3.client('s3',
-                              aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-                              aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-                              region_name=S3_REGION)
-            
-            bucket_name = 'dashboard-inputs'
-            current_count = 0
-            paginator = s3.get_paginator('list_objects_v2')
-            for page in paginator.paginate(Bucket=bucket_name, Prefix=''):
-                for obj in page.get('Contents', []):
-                    key = obj['Key']
-                    if key.startswith('historic/') or key.startswith('system/') or not key.endswith('.csv'):
-                        continue
-                    current_count += 1
-            
-            cached_count = s3_cache.get('file_count', 0)
-            
-            # If file count changed, do a full rebuild
-            if current_count != cached_count:
-                print(f"📂 File count changed ({cached_count} -> {current_count}), rebuilding cache...")
-                rebuild_s3_cache_with_categories()
-        except Exception as e:
-            print(f"⚠️ Error checking S3 for new files: {e}")
-            # Fall back to persisted cache
-            if not s3_cache.get('jobs'):
-                load_persisted_cache()
-    
-    # Add S3 jobs (these have proper categories from CSV files)
-    job_list.extend(s3_cache.get('jobs', []))
-    for cat in s3_cache.get('categories', []):
-        categories.add(cat)
+    # Always scan S3 directly for profiles (fast list operation)
+    try:
+        s3 = boto3.client('s3',
+                          aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                          aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                          region_name=S3_REGION)
+        
+        bucket_name = 'dashboard-inputs'
+        
+        # Build a map of existing cached jobs by key for category lookup
+        cached_jobs_by_key = {}
+        for j in s3_cache.get('jobs', []):
+            cached_jobs_by_key[j.get('key') or j.get('s3_key', '')] = j
+        
+        s3_jobs = []
+        paginator = s3.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=bucket_name, Prefix=''):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                # Skip historic folder, system folder, and non-CSV files
+                if key.startswith('historic/') or key.startswith('system/') or not key.endswith('.csv'):
+                    continue
+                
+                filename = key.split('/')[-1]
+                last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
+                
+                # Use cached category if available, otherwise mark as needs-category
+                cached_job = cached_jobs_by_key.get(key)
+                if cached_job and cached_job.get('category') and cached_job.get('category') not in ('', 'Uncategorized', 'OTHER'):
+                    category = cached_job.get('category')
+                else:
+                    # Read category from file (first 4KB)
+                    try:
+                        response = s3.get_object(Bucket=bucket_name, Key=key, Range='bytes=0-4096')
+                        content = response['Body'].read().decode('utf-8', errors='ignore')
+                        category = extract_category_from_csv(content) or 'Uncategorized'
+                    except:
+                        category = 'Uncategorized'
+                
+                # Generate display name
+                name_without_ext = filename.replace('.csv', '')
+                name_without_timestamp = remove_timestamp_from_name(name_without_ext)
+                project_name = smart_title_case(name_without_timestamp.replace('_', ' '))
+                
+                s3_jobs.append({
+                    'key': key,
+                    's3_key': key,
+                    'filename': filename,
+                    'project_name': project_name,
+                    'category': category,
+                    'size': obj.get('Size', 0),
+                    'last_modified': last_modified,
+                    'created_at': last_modified,
+                    'status': 'cached',
+                    'source': 's3'
+                })
+                categories.add(category)
+        
+        # Update cache
+        s3_cache['jobs'] = s3_jobs
+        s3_cache['categories'] = sorted(list(categories))
+        s3_cache['file_count'] = len(s3_jobs)
+        s3_cache['last_updated'] = datetime.now().timestamp()
+        
+        job_list.extend(s3_jobs)
+        
+    except Exception as e:
+        print(f"⚠️ Error scanning S3: {e}")
+        import traceback
+        traceback.print_exc()
+        # Fall back to cached jobs if S3 scan fails
+        job_list.extend(s3_cache.get('jobs', []))
+        for cat in s3_cache.get('categories', []):
+            categories.add(cat)
     
     # Sort by created_at descending
     sorted_jobs = sorted(job_list, key=lambda x: x.get('created_at', ''), reverse=True)
@@ -2758,7 +2793,7 @@ def list_jobs():
         'cache_info': {
             'last_updated': s3_cache.get('last_updated'),
             'file_count': s3_cache.get('file_count', 0),
-            'cached': True
+            'fresh_scan': True
         }
     })
 
