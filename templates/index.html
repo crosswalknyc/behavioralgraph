@@ -48168,18 +48168,55 @@
                     ? `<img src="${profileImage}" alt="${escapeHtml(profileName)}" style="width: 100%; height: 100%; object-fit: cover; object-position: center top; border-radius: 8px;">`
                     : `<div style="width: 100%; height: 100%; background: linear-gradient(135deg, #374151, #1f2937); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 3rem; color: rgba(255,255,255,0.3);">📊</div>`;
                 
+                // Dynamic sizing based on title length to prevent overlap
+                const titleLength = profileName.length;
+                let titleFontSize, titleTop, imageTop, imageSize;
+                
+                if (titleLength <= 10) {
+                    // Short titles - large font, standard positioning
+                    titleFontSize = '8rem';
+                    titleTop = '-2%';
+                    imageTop = '35%';
+                    imageSize = '180px';
+                } else if (titleLength <= 15) {
+                    // Medium titles - slightly smaller font, adjust image down
+                    titleFontSize = '7rem';
+                    titleTop = '0%';
+                    imageTop = '40%';
+                    imageSize = '170px';
+                } else if (titleLength <= 20) {
+                    // Long titles - smaller font, move image down more
+                    titleFontSize = '6rem';
+                    titleTop = '2%';
+                    imageTop = '45%';
+                    imageSize = '160px';
+                } else if (titleLength <= 25) {
+                    // Very long titles - much smaller font, move image significantly
+                    titleFontSize = '5rem';
+                    titleTop = '3%';
+                    imageTop = '50%';
+                    imageSize = '150px';
+                } else {
+                    // Extremely long titles - smallest font, move image to bottom area
+                    titleFontSize = '4rem';
+                    titleTop = '5%';
+                    imageTop = '55%';
+                    imageSize = '140px';
+                }
+                
                 return `
                     <div style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: flex; flex-direction: column;">
-                        <!-- Large profile name - EDITABLE -->
+                        <!-- Large profile name - EDITABLE with dynamic sizing -->
                         <div contenteditable="true" 
-                             style="position: absolute; left: -1%; top: -2%; font-size: 8rem; font-weight: 700; color: #ffffff; line-height: 1; letter-spacing: -0.03em; text-transform: uppercase; cursor: text; padding: 4px 8px; border-radius: 4px;"
+                             id="titleSlideProfileName"
+                             style="position: absolute; left: -1%; top: ${titleTop}; font-size: ${titleFontSize}; font-weight: 700; color: #ffffff; line-height: 1; letter-spacing: -0.03em; text-transform: uppercase; cursor: text; padding: 4px 8px; border-radius: 4px; max-width: 95%; word-wrap: break-word;"
                              onfocus="this.style.background='rgba(255,255,255,0.1)'" 
-                             onblur="this.style.background='transparent'; updateTitleSlideProfileName(this.textContent)">
+                             onblur="this.style.background='transparent'; updateTitleSlideProfileName(this.textContent); renderSlideEditor();">
                             ${escapeHtml(profileName)}.
                         </div>
                         
-                        <!-- Profile image - CLICKABLE TO CHANGE -->
-                        <div style="position: absolute; left: 5%; top: 35%; width: 180px; height: 180px; border: 3px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.4); cursor: pointer; transition: border-color 0.2s;"
+                        <!-- Profile image - CLICKABLE TO CHANGE with dynamic positioning -->
+                        <div style="position: absolute; left: 5%; top: ${imageTop}; width: ${imageSize}; height: ${imageSize}; border: 3px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.4); cursor: pointer; transition: border-color 0.2s;"
                              onclick="uploadTitleImage()"
                              onmouseover="this.style.borderColor='var(--accent-lime)'"
                              onmouseout="this.style.borderColor='rgba(255,255,255,0.2)'"
