@@ -13652,7 +13652,7 @@
                         </div>
                         
                         <!-- Ribbon Toolbar Row (populated by JS when deck is selected) -->
-                        <div id="ribbonToolbarRow" style="display: none; margin-bottom: 0.5rem;"></div>
+                        <div id="ribbonToolbarRow" style="display: none; margin-bottom: 0.5rem; display: flex; justify-content: center;"></div>
                         
                         <div id="collab-tab-decks" class="collab-tab-content active">
                             <div class="workspace-deck-builder">
@@ -46532,7 +46532,7 @@
             // Render ribbon toolbar in header row
             const ribbonRow = document.getElementById('ribbonToolbarRow');
             if (ribbonRow) {
-                ribbonRow.style.display = 'block';
+                ribbonRow.style.display = 'flex';
                 ribbonRow.innerHTML = `
                     <div class="slide-toolbar-ribbon" id="slideToolbar">
                         <div class="ribbon-tabs">
