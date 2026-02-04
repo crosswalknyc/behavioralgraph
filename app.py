@@ -2679,7 +2679,7 @@ def get_admin_content():
 @app.route('/api/jobs')
 @requires_auth
 def list_jobs():
-    """List all jobs (local + S3) - always scans S3 for fresh data to pick up new profiles."""
+    """List all jobs (local + S3) - checks for new files and rebuilds cache if needed."""
     import time
     
     job_list = []
@@ -2709,9 +2709,40 @@ def list_jobs():
         })
         categories.add('LOCAL')
     
-    # Always do a fresh S3 scan to pick up new profiles
+    # Quick check for new files in S3 and rebuild if needed
     if s3_client:
-        rebuild_s3_cache_with_categories()
+        try:
+            # First load persisted cache if empty
+            if not s3_cache.get('jobs'):
+                load_persisted_cache()
+            
+            # Quick count of CSV files in S3
+            s3 = boto3.client('s3',
+                              aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                              aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                              region_name=S3_REGION)
+            
+            bucket_name = 'dashboard-inputs'
+            current_count = 0
+            paginator = s3.get_paginator('list_objects_v2')
+            for page in paginator.paginate(Bucket=bucket_name, Prefix=''):
+                for obj in page.get('Contents', []):
+                    key = obj['Key']
+                    if key.startswith('historic/') or key.startswith('system/') or not key.endswith('.csv'):
+                        continue
+                    current_count += 1
+            
+            cached_count = s3_cache.get('file_count', 0)
+            
+            # If file count changed, do a full rebuild
+            if current_count != cached_count:
+                print(f"📂 File count changed ({cached_count} -> {current_count}), rebuilding cache...")
+                rebuild_s3_cache_with_categories()
+        except Exception as e:
+            print(f"⚠️ Error checking S3 for new files: {e}")
+            # Fall back to persisted cache
+            if not s3_cache.get('jobs'):
+                load_persisted_cache()
     
     # Add S3 jobs (these have proper categories from CSV files)
     job_list.extend(s3_cache.get('jobs', []))
@@ -2727,7 +2758,7 @@ def list_jobs():
         'cache_info': {
             'last_updated': s3_cache.get('last_updated'),
             'file_count': s3_cache.get('file_count', 0),
-            'fresh_scan': True
+            'cached': True
         }
     })
 
