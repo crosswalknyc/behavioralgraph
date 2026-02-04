@@ -8625,6 +8625,7 @@ def rename_file():
                     
                     # Update ALL name fields used for display
                     job['name'] = new_display_name
+                    job['display_name'] = new_display_name
                     job['project_name'] = new_display_name
                     job['brand'] = new_display_name
                     print(f"✅ Updated display name to: {new_display_name}")
@@ -9341,6 +9342,10 @@ def smart_cache_update():
                             # Keep existing category if it was manually set (not UNCATEGORIZED)
                             if job.get('category') and job.get('category') != 'UNCATEGORIZED':
                                 job_data['category'] = job['category']
+                            # Preserve custom display_name if it was manually set
+                            if job.get('display_name') and job.get('display_name') != job.get('project_name'):
+                                job_data['display_name'] = job['display_name']
+                                job_data['name'] = job['display_name']
                             s3_cache['jobs'][i] = job_data
                             break
                     updated_count += 1
@@ -9510,6 +9515,8 @@ def process_s3_file_metadata(key, obj):
     return {
         'job_id': key,
         'project_name': project_name,
+        'display_name': project_name,  # Default to project_name, can be overridden
+        'name': project_name,  # Also set name for compatibility
         'status': 'cached',
         'progress': 100,
         'created_at': obj['LastModified'].isoformat(),
