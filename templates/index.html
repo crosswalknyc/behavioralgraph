@@ -47464,6 +47464,9 @@
                         ? slide.elements.map(el => renderSingleElement(el)).join('') 
                         : '';
                     
+                    // Check if slide has any image elements
+                    const hasImage = slide.elements && slide.elements.some(el => el.type === 'image');
+                    
                     // Layout A: Content left (55%), Image right (35%) - Default
                     if (layoutIndex === 1) {
                         return `
@@ -47487,6 +47490,7 @@
                             ${analysisBlock}
                         </div>
                         
+                        ${!hasImage ? `
                         <!-- Image placeholder right -->
                         <div class="slide-image-placeholder" 
                              style="position: absolute; right: 5%; top: 22%; width: 38%; height: 65%;"
@@ -47496,6 +47500,7 @@
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
                         </div>
+                        ` : ''}
                         
                         ${overlayElements}
                         ${footerHtml}
@@ -47525,6 +47530,7 @@
                             ${analysisBlock}
                         </div>
                         
+                        ${!hasImage ? `
                         <!-- Large image placeholder right -->
                         <div class="slide-image-placeholder" 
                              style="position: absolute; right: 5%; top: 8%; width: 50%; height: 79%;"
@@ -47534,6 +47540,7 @@
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
                         </div>
+                        ` : ''}
                         
                         ${overlayElements}
                         ${footerHtml}
@@ -47549,6 +47556,7 @@
                             <span>${dateStr}</span>
                         </div>
                         
+                        ${!hasImage ? `
                         <!-- Large image placeholder left -->
                         <div class="slide-image-placeholder" 
                              style="position: absolute; left: 5%; top: 18%; width: 58%; height: 69%;"
@@ -47558,6 +47566,7 @@
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
                         </div>
+                        ` : ''}
                         
                         <!-- Section title right -->
                         <div contenteditable="true" style="position: absolute; right: 5%; top: 8%; width: 32%; font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
@@ -47587,6 +47596,7 @@
                             <span>${dateStr}</span>
                         </div>
                         
+                        ${!hasImage ? `
                         <!-- Extra large image placeholder left -->
                         <div class="slide-image-placeholder" 
                              style="position: absolute; left: 5%; top: 8%; width: 63%; height: 79%;"
@@ -47596,6 +47606,7 @@
                             <span>Click to add image</span>
                             <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
                         </div>
+                        ` : ''}
                         
                         <!-- Section title right top -->
                         <div contenteditable="true" style="position: absolute; right: 5%; top: 25%; width: 27%; font-size: 1.8rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
