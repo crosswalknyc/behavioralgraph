@@ -29260,82 +29260,140 @@
             
             // Icon mapping for categories
             const categoryIcons = {
+                // Shopping & Brands
                 'MOST PURCHASED BRANDS': '🏷️',
                 'MOST PURCHASED': '🏷️',
                 'WHERE THEY SHOP': '🛒',
                 'MOST PURCHASED CATEGORIES': '📂',
-                'INTEREST': '💡',
+                'BRAND': '🏢',
+                'ACCESSORIES': '👜',
+                'APPAREL/FOOTWEAR': '👟',
+                'APPAREL': '👕',
+                'FOOTWEAR': '👟',
+                'TOYS': '🧸',
+                'CPG': '🛍️',
+                'PETS': '🐾',
+                
+                // Technology & Apps
                 'APP/PLATFORM': '📱',
                 'APP/PLATFORM USAGE': '📱',
                 'APPS/PLATFORMS': '📱',
+                'TECHNOLOGY/DEVICE': '💻',
+                'TECHNOLOGY BRAND': '💻',
+                'SEARCH ENGINE/AI': '🔍',
+                'SOCIAL MEDIA': '👥',
+                
+                // Entertainment & Streaming
                 'STREAMING/MUSIC': '🎵',
                 'STREAMING MUSIC': '🎵',
                 'STREAMING/PLATFORM': '🎬',
                 'STREAMING/VIDEO': '🎬',
                 'STREAMING VIDEO': '🎬',
                 'BROADCAST/CABLE': '📺',
-                'SOCIAL MEDIA': '👥',
-                'SEARCH ENGINE/AI': '🔍',
-                'QSR': '🍔',
-                'WHERE THEY DINE': '🍽️',
-                'TRAVEL': '✈️',
-                'SPORTS': '⚽',
-                'TALENT': '⭐',
-                'PETS': '🐾',
-                'PHARMACY': '💊',
-                'TECHNOLOGY/DEVICE': '💻',
-                'TECHNOLOGY BRAND': '💻',
-                'WORKOUT FACILITY': '🏋️',
-                'GAMES': '🎮',
-                'GAME PLAYERS': '🎮',
-                'AUTOMOBILE': '🚗',
-                'AUTOMOTIVE': '🚗',
-                'INVESTMENTS': '📈',
-                'INSURANCE': '🛡️',
-                'EDUCATION & LEARNING': '📚',
-                'BANKING': '🏦',
-                'CREDIT PROVIDER': '💳',
-                'FRANCHISE': '🏪',
-                'NON PROFIT/CHARITY': '❤️',
                 'MOVIE THEATER': '🎬',
                 'PODCAST': '🎙️',
                 'PODCASTS': '🎙️',
-                'BETTING': '🎲',
-                'TICKETING': '🎫',
-                'AMUSEMENT PARKS': '🎢',
-                'GOLF': '⛳',
-                'BEAUTY': '💄',
-                'BEAUTY/WELLNESS': '💄',
-                'HOME/OUTDOOR': '🏠',
+                'MEDIA': '📰',
                 'VMVPD/FAST': '📡',
                 'VIRTUAL MVPD FAST': '📡',
-                'MEDIA': '📰',
-                'TELECOM': '📞',
-                'ACCESSORIES': '👜',
-                'APPAREL/FOOTWEAR': '👟',
-                'TOYS': '🧸',
-                'BRAND': '🏢',
-                'EVENTS': '🎉',
-                'VENUE': '🏟️',
+                'GAMES': '🎮',
+                'GAME PLAYERS': '🎮',
+                
+                // Sports Teams & Leagues
+                'SPORTS': '⚽',
+                'SPORTS TEAM': '🏆',
+                'SPORTS ORGANIZATIONS': '🏅',
+                'MLB': '⚾',
+                'NBA': '🏀',
+                'NFL': '🏈',
+                'NHL': '🏒',
+                'MLS': '⚽',
+                'WNBA': '🏀',
+                'MILB': '⚾',
+                'NWSL': '⚽',
+                'GOLF': '⛳',
                 'TENNIS': '🎾',
                 'VOLLEYBALL': '🏐',
-                'COLLEGE/UNIVERSITY': '🎓',
+                
+                // Athletes & Talent
+                'TALENT': '⭐',
+                'ACTOR': '🎭',
+                'ATHLETE': '🏃',
+                'MLB ATHLETE': '⚾',
+                'NBA ATHLETE': '🏀',
+                'NFL ATHLETE': '🏈',
+                'NHL ATHLETE': '🏒',
+                'WNBA ATHLETE': '🏀',
+                'SOCCER ATHLETE': '⚽',
+                'MUSICIAN/BAND': '🎸',
+                'HOST/PERSONALITY': '🎤',
+                'CREATOR/INFLUENCER': '📸',
+                'INFLUENCER/CREATOR': '📸',
+                'EMERGING TALENT': '🌟',
+                'POLITICS/ACTIVIST': '🗳️',
+                'WRITER/DIRECTOR/AUTHOR/ARTIST': '✍️',
+                
+                // Food & Dining
+                'QSR': '🍔',
+                'WHERE THEY DINE': '🍽️',
+                
+                // Finance & Banking
+                'BANKING': '🏦',
                 'DIGITAL BANKING': '💰',
-                'HEAVY MACHINERY': '🏗️',
-                'NHL': '🏒',
+                'CREDIT PROVIDER': '💳',
+                'INVESTMENTS': '📈',
+                'INSURANCE': '🛡️',
+                
+                // Health & Wellness
+                'BEAUTY': '💄',
+                'BEAUTY/WELLNESS': '💄',
+                'HEALTH & WELLNESS': '🧘',
+                'PHARMACY': '💊',
+                'WORKOUT FACILITY': '🏋️',
+                
+                // Travel & Lifestyle
+                'TRAVEL': '✈️',
+                'AUTOMOBILE': '🚗',
+                'AUTOMOTIVE': '🚗',
+                'HOME/OUTDOOR': '🏠',
+                'AMUSEMENT PARKS': '🎢',
+                
+                // Events & Venues
+                'EVENTS': '🎉',
+                'VENUE': '🏟️',
+                'TICKETING': '🎫',
+                
+                // Education & Organizations
+                'EDUCATION & LEARNING': '📚',
+                'COLLEGE/UNIVERSITY': '🎓',
                 'ORGANIZATIONAL MEMBERSHIPS': '🤝',
-                'PORN MEDIA': '🔞',
-                'HEALTH & WELLNESS': '🧘'
+                'NON PROFIT/CHARITY': '❤️',
+                'FRANCHISE': '🏪',
+                
+                // Other
+                'INTEREST': '💡',
+                'BETTING': '🎲',
+                'TELECOM': '📞',
+                'HEAVY MACHINERY': '🏗️',
+                'PORN MEDIA': '🔞'
             };
             
             function getCategoryIcon(cat) {
                 const upper = cat.toUpperCase();
                 if (categoryIcons[upper]) return categoryIcons[upper];
+                // Fallback patterns
                 if (upper.includes('MOST PURCHASED BRANDS') || upper === 'MOST PURCHASED') return '🏷️';
                 if (upper.includes('WHERE THEY SHOP')) return '🛒';
                 if (upper.includes('STREAMING') && !upper.includes('MUSIC')) return '🎬';
                 if (upper.includes('STREAMING')) return '🎵';
                 if (upper.includes('WHERE THEY DINE')) return '🍽️';
+                if (upper.includes('ATHLETE')) return '🏃';
+                if (upper.includes('SPORTS')) return '⚽';
+                if (upper.includes('TALENT')) return '⭐';
+                if (upper.includes('BRAND')) return '🏢';
+                if (upper.includes('BANKING')) return '🏦';
+                if (upper.includes('MUSIC')) return '🎵';
+                if (upper.includes('MEDIA')) return '📰';
                 return '📊';
             }
             
