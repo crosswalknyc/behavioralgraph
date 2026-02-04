@@ -9707,14 +9707,14 @@
         
         .viz-control-panel {
             position: fixed;
-            top: 100px;
+            top: 80px;
             right: 20px;
             background: rgba(13, 33, 55, 0.98);
-            border: 1px solid var(--accent-cyan);
+            border: 2px solid var(--accent-cyan);
             border-radius: 8px;
             padding: 0;
-            z-index: 10000;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+            z-index: 99999;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(0, 200, 255, 0.3);
             min-width: 300px;
             max-width: 340px;
             max-height: 500px;
@@ -35391,14 +35391,24 @@
                     document.body.appendChild(panel);
                 }
                 
-                // Position the panel near the toggle button
+                // Position the panel - always visible in top-right area
+                let panelTop = 80;
+                let panelRight = 20;
+                
+                // Try to position near the toggle button if it exists
                 if (toggle) {
                     const toggleRect = toggle.getBoundingClientRect();
-                    // Position panel below and to the left of the button
-                    panel.style.top = Math.min(toggleRect.bottom + 10, window.innerHeight - 520) + 'px';
-                    panel.style.right = Math.max(10, window.innerWidth - toggleRect.right) + 'px';
-                    panel.style.left = 'auto';
+                    // Position panel below the button, but ensure it stays on screen
+                    panelTop = Math.max(60, Math.min(toggleRect.bottom + 10, window.innerHeight - 520));
+                    panelRight = Math.max(20, window.innerWidth - toggleRect.right - 150);
                 }
+                
+                // Ensure panel is always visible
+                panel.style.position = 'fixed';
+                panel.style.top = panelTop + 'px';
+                panel.style.right = panelRight + 'px';
+                panel.style.left = 'auto';
+                panel.style.zIndex = '99999';
                 
                 panel.classList.add('expanded');
             } else {
