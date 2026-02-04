@@ -2390,6 +2390,102 @@ def upload_profile_picture():
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/company-logo', methods=['POST'])
+@requires_auth
+def upload_company_logo():
+    """Upload company logo for current user or specified user (admin only). Accepts file upload or image URL."""
+    import base64
+    try:
+        current_user = session.get('username')
+        current_role = session.get('role')
+
+        target_username = request.form.get('username', current_user)
+
+        if target_username != current_user and current_role != 'admin' and current_role != 'super_admin':
+            return jsonify({'success': False, 'error': 'Permission denied'}), 403
+
+        data = load_users()
+        if target_username not in data['users']:
+            return jsonify({'success': False, 'error': 'User not found'})
+
+        data_url = None
+        file = request.files.get('file')
+        image_url = (request.form.get('url') or '').strip()
+
+        if file and file.filename:
+            allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+            ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+            if ext not in allowed_extensions:
+                return jsonify({'success': False, 'error': 'Invalid file type. Use PNG, JPG, GIF, or WebP'})
+            file_data = file.read()
+            if len(file_data) > 500 * 1024:
+                return jsonify({'success': False, 'error': 'File too large. Max 500KB'})
+            mime_types = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif', 'webp': 'image/webp'}
+            mime_type = mime_types.get(ext, 'image/png')
+            base64_data = base64.b64encode(file_data).decode('utf-8')
+            data_url = f"data:{mime_type};base64,{base64_data}"
+        elif image_url:
+            if image_url.startswith('data:'):
+                if 'base64,' in image_url and len(image_url) <= 600 * 1024:
+                    data_url = image_url
+                else:
+                    return jsonify({'success': False, 'error': 'Data URL too large. Max 500KB'})
+            else:
+                try:
+                    from urllib.request import urlopen, Request
+                    from urllib.error import URLError, HTTPError
+                    req = Request(image_url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urlopen(req, timeout=10) as resp:
+                        content_type = resp.headers.get('Content-Type', '')
+                        if 'image/' not in content_type:
+                            return jsonify({'success': False, 'error': 'URL did not return an image'})
+                        file_data = resp.read()
+                    if len(file_data) > 500 * 1024:
+                        return jsonify({'success': False, 'error': 'Image too large. Max 500KB'})
+                    mime = content_type.split(';')[0].strip().lower()
+                    if mime not in ('image/png', 'image/jpeg', 'image/gif', 'image/webp'):
+                        mime = 'image/png'
+                    base64_data = base64.b64encode(file_data).decode('utf-8')
+                    data_url = f"data:{mime};base64,{base64_data}"
+                except (URLError, HTTPError, OSError) as e:
+                    return jsonify({'success': False, 'error': 'Could not load image from URL: ' + str(e)})
+        else:
+            return jsonify({'success': False, 'error': 'No file or image URL provided'})
+
+        data['users'][target_username]['company_logo'] = data_url
+        save_users(data)
+        return jsonify({'success': True, 'company_logo': data_url})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/company-logo', methods=['DELETE'])
+@requires_auth
+def delete_company_logo():
+    """Remove company logo for current user or specified user (admin only)."""
+    try:
+        current_user = session.get('username')
+        current_role = session.get('role')
+
+        target_username = request.args.get('username', current_user)
+
+        if target_username != current_user and current_role != 'admin' and current_role != 'super_admin':
+            return jsonify({'success': False, 'error': 'Permission denied'}), 403
+
+        data = load_users()
+        if target_username not in data['users']:
+            return jsonify({'success': False, 'error': 'User not found'})
+
+        data['users'][target_username].pop('company_logo', None)
+        save_users(data)
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/api/profile-picture', methods=['DELETE'])
 @requires_auth
 def delete_profile_picture():
@@ -2984,6 +3080,7 @@ def get_user_info():
         'username': session['username'],
         'role': user.get('role', 'user'),
         'company': user.get('company', ''),
+        'company_logo': user.get('company_logo', ''),
         'department': user.get('department', ''),
         'credits': user.get('credits', 0),
         'credits_used': user.get('credits_used', 0),
@@ -3109,6 +3206,7 @@ def index():
     last_name = user.get('last_name', '') if user else ''
     email = user.get('email', '') if user else ''
     company = user.get('company', '') if user else ''
+    company_logo = user.get('company_logo', '') if user else ''
     
     return render_template('index.html', 
                            username=session.get('username'),
@@ -3116,6 +3214,7 @@ def index():
                            credits=user.get('credits', 0) if user else 0,
                            credits_used=user.get('credits_used', 0) if user else 0,
                            profile_picture=user.get('profile_picture', '') if user else '',
+                           company_logo=company_logo,
                            has_profile_iq_access=has_profile_iq,
                            has_subscriber_iq_access=has_subscriber_iq,
                            has_hedge_fund_iq_access=has_hedge_fund_iq,
