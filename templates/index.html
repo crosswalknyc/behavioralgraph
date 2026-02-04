@@ -23852,8 +23852,20 @@
         async function updateJobStatus() {
             if (!currentJobId) return;
             try {
-                const response = await fetch(`/api/status/${currentJobId}`);
-                const data = await response.json();
+                const response = await fetch(`/api/status/${currentJobId}`, { credentials: 'same-origin' });
+                const data = await response.json().catch(() => ({}));
+                if (response.status === 401) {
+                    clearInterval(pollInterval);
+                    window.location.href = '/login';
+                    return;
+                }
+                if (response.status === 404) {
+                    clearInterval(pollInterval);
+                    const statusMessageElements = document.querySelectorAll('#statusMessage');
+                    statusMessageElements.forEach(el => { el.textContent = 'Status unavailable. Refresh the page and check Results Library for your run.'; el.style.color = 'var(--accent-orange)'; });
+                    loadJobs();
+                    return;
+                }
                 if (response.ok) {
                     // Update all status elements (works for both formView and Custom Analysis)
                     const statusTextElements = document.querySelectorAll('#statusText');
@@ -23861,8 +23873,8 @@
                     const progressFillElements = document.querySelectorAll('#progressFill');
                     
                     statusTextElements.forEach(el => el.textContent = data.project_name || 'Processing...');
-                    statusMessageElements.forEach(el => el.textContent = data.message || 'In progress');
-                    progressFillElements.forEach(el => el.style.width = data.progress + '%');
+                    statusMessageElements.forEach(el => { el.textContent = data.message || 'In progress'; el.style.color = ''; });
+                    progressFillElements.forEach(el => el.style.width = (data.progress || 0) + '%');
 
                     if (data.status === 'completed') {
                         clearInterval(pollInterval);
@@ -23898,7 +23910,7 @@
 
         async function loadJobResult(jobId) {
             try {
-                const response = await fetch(`/api/job-data/${jobId}`);
+                const response = await fetch(`/api/job-data/${jobId}`, { credentials: 'same-origin' });
                 const data = await response.json();
                 if (data.success) {
                     currentCSVData = data.data;
