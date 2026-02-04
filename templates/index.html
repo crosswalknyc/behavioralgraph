@@ -47692,8 +47692,8 @@
                 const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
                 const analysisBlock = slide.aiAnalysis ? `<div style="margin-top: 1rem; padding: 1rem; background: rgba(74, 138, 201, 0.1); border-radius: 8px; border-left: 3px solid var(--accent-cyan); font-size: 0.9rem; line-height: 1.5;"><div style="font-size: 0.8rem; font-weight: 600; color: var(--accent-cyan); margin-bottom: 0.5rem;">🤖 AI Key Points & Takeaways</div><div>${slide.aiAnalysis}</div></div>` : '';
                 
-                // Determine layout variant (rotate through 4 layouts, skipping layout 0 which is title slide and layout 1 which is TOC)
-                const layoutIndex = ((idx - 1) % 4) + 1; // Results in 1, 2, 3, 4, 1, 2, 3, 4...
+                // Determine layout variant (rotate through 8 layouts, skipping layout 0 which is title slide and layout 1 which is TOC)
+                const layoutIndex = ((idx - 1) % 8) + 1; // Results in 1, 2, 3, 4, 5, 6, 7, 8, 1, 2...
                 
                 try {
                     const content = renderSlideContent(slide);
@@ -47863,6 +47863,163 @@
                         ${footerHtml}
                         `;
                     }
+                    
+                    // Layout E: Full width content with small image top right corner
+                    if (layoutIndex === 5) {
+                        return `
+                        <!-- Header bar -->
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                            <span>${dateStr}</span>
+                        </div>
+                        
+                        ${!hasImage ? `
+                        <!-- Small image placeholder top right -->
+                        <div class="slide-image-placeholder" 
+                             style="position: absolute; right: 5%; top: 8%; width: 25%; height: 30%;"
+                             onclick="uploadSlideImage(${idx})"
+                             title="Click to upload image or paste URL">
+                            <span class="placeholder-icon">🖼️</span>
+                            <span>Add image</span>
+                        </div>
+                        ` : ''}
+                        
+                        <!-- Large title left -->
+                        <div contenteditable="true" style="position: absolute; left: 5%; top: 12%; width: 60%; font-size: 2.5rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
+                            ${escapeHtml(title)}
+                        </div>
+                        
+                        <!-- Full width content below -->
+                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 40%; width: 90%; height: 47%; overflow: hidden; padding: 0.5rem; z-index: 1;">
+                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 0.75rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; max-width: 65%;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
+                            </div>
+                            ${content}
+                            ${analysisBlock}
+                        </div>
+                        
+                        ${overlayElements}
+                        ${footerHtml}
+                        `;
+                    }
+                    
+                    // Layout F: Centered content with images on both sides
+                    if (layoutIndex === 6) {
+                        return `
+                        <!-- Header bar -->
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                            <span>${dateStr}</span>
+                        </div>
+                        
+                        ${!hasImage ? `
+                        <!-- Left image placeholder -->
+                        <div class="slide-image-placeholder" 
+                             style="position: absolute; left: 5%; top: 15%; width: 22%; height: 70%;"
+                             onclick="uploadSlideImage(${idx})"
+                             title="Click to upload image or paste URL">
+                            <span class="placeholder-icon">🖼️</span>
+                            <span>Add image</span>
+                        </div>
+                        ` : ''}
+                        
+                        <!-- Centered title -->
+                        <div contenteditable="true" style="position: absolute; left: 30%; top: 15%; width: 40%; font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.2; text-align: center; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
+                            ${escapeHtml(title)}
+                        </div>
+                        
+                        <!-- Centered content -->
+                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 30%; top: 35%; width: 40%; height: 50%; overflow: hidden; padding: 0.5rem; z-index: 1;">
+                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; margin-bottom: 0.5rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; text-align: center;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
+                            </div>
+                            ${content}
+                            ${analysisBlock}
+                        </div>
+                        
+                        ${overlayElements}
+                        ${footerHtml}
+                        `;
+                    }
+                    
+                    // Layout G: Split screen - Title and image top, content bottom
+                    if (layoutIndex === 7) {
+                        return `
+                        <!-- Header bar -->
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                            <span>${dateStr}</span>
+                        </div>
+                        
+                        <!-- Title left top -->
+                        <div contenteditable="true" style="position: absolute; left: 5%; top: 12%; width: 45%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.02em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent)">
+                            ${escapeHtml(title)}
+                        </div>
+                        
+                        ${!hasImage ? `
+                        <!-- Image placeholder right top -->
+                        <div class="slide-image-placeholder" 
+                             style="position: absolute; right: 5%; top: 12%; width: 42%; height: 35%;"
+                             onclick="uploadSlideImage(${idx})"
+                             title="Click to upload image or paste URL">
+                            <span class="placeholder-icon">🖼️</span>
+                            <span>Click to add image</span>
+                        </div>
+                        ` : ''}
+                        
+                        <!-- Full width content bottom -->
+                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 52%; width: 90%; height: 35%; overflow: hidden; padding: 0.5rem; z-index: 1;">
+                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 0.75rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
+                            </div>
+                            ${content}
+                            ${analysisBlock}
+                        </div>
+                        
+                        ${overlayElements}
+                        ${footerHtml}
+                        `;
+                    }
+                    
+                    // Layout H: Asymmetric - Small content left, large image right with overlay title
+                    if (layoutIndex === 8) {
+                        return `
+                        <!-- Header bar -->
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                            <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
+                            <span>${dateStr}</span>
+                        </div>
+                        
+                        ${!hasImage ? `
+                        <!-- Large image placeholder right -->
+                        <div class="slide-image-placeholder" 
+                             style="position: absolute; right: 5%; top: 8%; width: 55%; height: 79%;"
+                             onclick="uploadSlideImage(${idx})"
+                             title="Click to upload image or paste URL">
+                            <span class="placeholder-icon">🖼️</span>
+                            <span>Click to add image</span>
+                            <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
+                        </div>
+                        ` : ''}
+                        
+                        <!-- Title overlay on image (right side) -->
+                        <div contenteditable="true" style="position: absolute; right: 8%; top: 70%; width: 48%; font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 8px 12px; border-radius: 4px; line-height: 1.1; background: linear-gradient(90deg, transparent, rgba(0,0,0,0.7)); word-wrap: break-word; overflow-wrap: break-word; z-index: 2;" onfocus="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.8))'" onblur="this.style.background='linear-gradient(90deg, transparent, rgba(0,0,0,0.7))'; updateSlideTitle(${idx}, this.textContent)">
+                            ${escapeHtml(title)}
+                        </div>
+                        
+                        <!-- Compact content left -->
+                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 15%; width: 32%; height: 70%; overflow: hidden; padding: 0.5rem; z-index: 1;">
+                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; margin-bottom: 0.5rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                ${escapeHtml(description)}
+                            </div>
+                            ${content}
+                            ${analysisBlock}
+                        </div>
+                        
+                        ${overlayElements}
+                        ${footerHtml}
+                        `;
+                    }
                 } catch (e) {
                     console.warn('renderSlideContent error:', e);
                 }
@@ -47983,7 +48140,7 @@
             if (!slide.elements) slide.elements = [];
             
             // Determine layout variant (same logic as renderSlideElements)
-            const layoutIndex = ((slideIdx - 1) % 4) + 1; // Results in 1, 2, 3, 4, 1, 2, 3, 4...
+            const layoutIndex = ((slideIdx - 1) % 8) + 1; // Results in 1, 2, 3, 4, 5, 6, 7, 8, 1, 2...
             
             // Position image based on layout variant to match placeholder position
             let imageConfig;
@@ -48018,6 +48175,38 @@
                     x: 5,
                     y: 8,
                     width: 63,
+                    height: 79
+                };
+            } else if (layoutIndex === 5) {
+                // Layout E: Small image top right (25% width, 30% height, starting at right: 5%, top: 8%)
+                imageConfig = {
+                    x: 70,  // 100% - 5% - 25% = 70%
+                    y: 8,
+                    width: 25,
+                    height: 30
+                };
+            } else if (layoutIndex === 6) {
+                // Layout F: Left image (22% width, 70% height, starting at left: 5%, top: 15%)
+                imageConfig = {
+                    x: 5,
+                    y: 15,
+                    width: 22,
+                    height: 70
+                };
+            } else if (layoutIndex === 7) {
+                // Layout G: Image right top (42% width, 35% height, starting at right: 5%, top: 12%)
+                imageConfig = {
+                    x: 53,  // 100% - 5% - 42% = 53%
+                    y: 12,
+                    width: 42,
+                    height: 35
+                };
+            } else if (layoutIndex === 8) {
+                // Layout H: Large image right (55% width, 79% height, starting at right: 5%, top: 8%)
+                imageConfig = {
+                    x: 40,  // 100% - 5% - 55% = 40%
+                    y: 8,
+                    width: 55,
                     height: 79
                 };
             }
