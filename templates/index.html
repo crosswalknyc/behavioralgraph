@@ -3249,6 +3249,15 @@
             border: 1px solid var(--border-color);
         }
         
+        .spotlight-content.spotlight-whole-card {
+            max-width: 95%;
+            width: 95%;
+        }
+        
+        .spotlight-content.spotlight-whole-card .behavioral-card-popout {
+            min-width: 0;
+        }
+        
         .spotlight-header {
             display: flex;
             justify-content: space-between;
@@ -4393,7 +4402,7 @@
         .behavioral-table .behavioral-item .behavioral-rank,
         .behavioral-table .behavioral-item .behavioral-name-wrapper {
             justify-self: start;
-            align-self: center;
+            align-self: start;
             text-align: left !important;
         }
         .behavioral-table .behavioral-item .behavioral-rank {
@@ -4427,19 +4436,22 @@
             font-size: 0.85rem;
             white-space: normal;
             word-break: break-word;
+            overflow-wrap: break-word;
             min-width: 0;
             position: relative;
             z-index: 2;
             padding: 0.2rem 0.4rem;
             cursor: help;
             text-align: left;
+            line-height: 1.4;
+            display: block;
         }
 
         .behavioral-name-wrapper {
             position: relative;
             min-width: 0;
-            display: flex;
-            align-items: center;
+            display: block;
+            width: 100%;
         }
 
         .behavioral-pct {
@@ -12583,8 +12595,8 @@
                 </div>
                 <!-- Category Reorder Controls -->
                 <div class="behavioral-controls">
-                    <select id="categoryReorderSelect" onchange="moveCategoryToTop(this.value)" class="has-tooltip" data-tooltip="Move Category to Top: Select a behavioral category to move it to the top of the list for easier viewing." style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                        <option value="">📌 Move to top...</option>
+                    <select id="categoryReorderSelect" onchange="moveCategoryToTop(this.value)" class="has-tooltip" data-tooltip="See All Categories: Select a behavioral category to jump to it." style="padding: 0.35rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                        <option value="">📌 See All Categories</option>
                     </select>
                     <button class="btn btn-small btn-secondary has-tooltip" data-tooltip="Reset Category Order: Restore the default category order if you've moved any categories to the top." onclick="resetCategoryOrder()" style="padding: 0.3rem 0.5rem; font-size: 0.7rem;">↻</button>
                 </div>
@@ -14043,6 +14055,8 @@
                         <div id="teamMembersList" class="team-members-list">
                             <div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">Loading team...</div>
                         </div>
+                        <div class="shared-profiles-header" style="margin-top: 1rem; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">Shared Profiles</div>
+                        <div id="sharedProfilesList" class="shared-profiles-list" style="min-height: 80px; margin-top: 0.25rem;"></div>
                     </div>
                     
                     <div class="collab-main">
@@ -15133,6 +15147,8 @@
         // Allowed behavioral categories for this user (controls which categories show in Behavioral tab)
         const allowedBehavioralCategories = {{ allowed_behavioral_categories | tojson | safe }};
         const hasAllBehavioralCategories = allowedBehavioralCategories.includes('*');
+        // Quick-select exclusions: categories unchecked in Admin are hidden for ALL users
+        const quickSelectBehaviorsExclusions = {{ quick_select_behaviors_exclusions | tojson | safe }};
         
         // Rankers IQ access control
         const hasRankersIQAccess = {{ 'true' if has_rankers_iq_access else 'false' }};
@@ -28788,11 +28804,11 @@
             } else {
                 // Aggregate Sports categories into SPORTS module
                 const sportsCategories = [
-                    'AFC', 'SPORTS TEAM', 'LA LIGA', 'METROPOLITAN DIVISION', 'MLB', 'MLS', 
-                    'EASTERN CONFERENCE', 'CENTRAL DIVISION', 'ATLANTIC DIVISION', 'AFC EAST', 
-                    'NBA', 'NFC EAST', 'NFC NORTH', 'NFC SOUTH', 'NFC WEST', 'NFL', 'NFC', 
-                    'AFC NORTH', 'NWSL', 'PREMIER LEAGUE', 'RUGBY', 'SERIE A', 'SOCCER', 
-                    'PACIFIC DIVISION', 'AFC SOUTH', 'AFC WEST', 'AL', 'WNBA', 'AL CENTRAL', 
+                    'AFC', 'SPORTS TEAM', 'LA LIGA', 'METROPOLITAN DIVISION', 'MLB', 'MLS',
+                    'EASTERN CONFERENCE', 'CENTRAL DIVISION', 'ATLANTIC DIVISION', 'AFC EAST',
+                    'NBA', 'NFC EAST', 'NFC NORTH', 'NFC SOUTH', 'NFC WEST', 'NFL', 'NFC',
+                    'AFC NORTH', 'NWSL', 'PREMIER LEAGUE', 'RUGBY', 'SERIE A', 'SOCCER',
+                    'PACIFIC DIVISION', 'AFC SOUTH', 'AFC WEST', 'AL', 'WNBA', 'AL CENTRAL',
                     'AL EAST', 'AL WEST', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'HORSE RACING'
                 ];
                 
@@ -28877,6 +28893,18 @@
                         return upperCat === upperAllowed || upperCat.includes(upperAllowed) || upperAllowed.includes(upperCat);
                     });
                 });
+            }
+            
+            // Exclude INTEREST/INTERESTS from behavioral (they have their own INTERESTS tab)
+            sortedCats = sortedCats.filter(cat => {
+                const u = cat.toUpperCase();
+                return u !== 'INTEREST' && u !== 'INTERESTS';
+            });
+            
+            // Apply quick-select exclusions (admin settings apply to all users)
+            if (quickSelectBehaviorsExclusions && quickSelectBehaviorsExclusions.length > 0) {
+                const exclusionsSet = new Set(quickSelectBehaviorsExclusions.map(c => c.toUpperCase()));
+                sortedCats = sortedCats.filter(cat => !exclusionsSet.has(cat.toUpperCase()));
             }
             
             // Save current order
@@ -29107,7 +29135,7 @@
                 
                 // Check if this is MOST PURCHASED BRANDS for slice dropdown
                 const isMostPurchased = cat.toUpperCase().includes('MOST PURCHASED BRANDS') || cat.toUpperCase() === 'MOST PURCHASED';
-                const mostPurchasedOptions = ['all', 'accessories', 'apparel/footwear', 'beauty/wellness', 'cpg', 'health & wellness', 'home/outdoor', 'pets', 'technology brand', 'toys'];
+                const mostPurchasedOptions = ['all', 'accessories', 'apparel/footwear', 'beauty/wellness', 'cpg', 'health & wellness', 'home/outdoor', 'pets', 'technology brand', 'toys', 'nfl', 'nba', 'mlb', 'mls'];
                 const sliceOptions = mostPurchasedOptions.sort((a, b) => {
                     if (a === 'all') return -1;
                     if (b === 'all') return 1;
@@ -29117,6 +29145,8 @@
                 // Format slice option display names (preserve slashes)
                 const formatSliceOption = (opt) => {
                     if (opt === 'all') return 'Show All';
+                    const acronyms = ['nfl', 'nba', 'mlb', 'mls'];
+                    if (acronyms.includes(opt.toLowerCase())) return opt.toUpperCase();
                     // Split by slash, capitalize each part, rejoin with slash
                     return opt.split('/').map(part => 
                         part.split(/[\s&]+/).map(word => 
@@ -29323,7 +29353,7 @@
                                         <button onclick="event.stopPropagation(); showBehavioralValueSelector('${cat}'); closeBehavioralDeckMenu('${catId}')">Select Values to Add</button>
                                     </div>
                                 </div>
-                                <button class="module-btn spotlight-btn has-tooltip" onclick="event.stopPropagation(); openBehavioralSpotlight('${cat}')" data-tooltip="Spotlight: Expand this category to view all data in a larger popup window.">🔍</button>
+                                <button class="module-btn spotlight-btn has-tooltip" onclick="event.stopPropagation(); openBehavioralSpotlight('${cat}')" data-tooltip="Pop out: Open this whole card in a larger window.">🍿</button>
                                 <select class="item-limit-select has-tooltip" id="limit-${catId}" onchange="event.stopPropagation(); setCategoryItemLimit('${catId}', '${cat}', this.value)" data-tooltip="How many items to show in this list">
                                     ${generateItemLimitOptions(cat, items.length)}
                                 </select>
@@ -29630,7 +29660,7 @@
             }
             
             const sorted = [...categories].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-            select.innerHTML = '<option value="">📌 Move to top...</option>' + 
+            select.innerHTML = '<option value="">📌 See All Categories</option>' + 
                 sorted.map(cat => `<option value="${cat}">${getCategoryIcon(cat)} ${cat}</option>`).join('');
         }
         
@@ -30136,7 +30166,8 @@
                         'home/outdoor': ['HOME/OUTDOOR', 'HOME', 'OUTDOOR', 'FURNITURE', 'GARDEN', 'DECOR'],
                         'toys': ['TOYS', 'TOY', 'GAMES', 'GAMING'],
                         'pets': ['PETS', 'PET'],
-                        'technology brand': ['TECHNOLOGY BRAND', 'TECHNOLOGY/DEVICE', 'TECHNOLOGY', 'DEVICE']
+                        'technology brand': ['TECHNOLOGY BRAND', 'TECHNOLOGY/DEVICE', 'TECHNOLOGY', 'DEVICE'],
+                        'nfl': ['NFL'], 'nba': ['NBA'], 'mlb': ['MLB'], 'mls': ['MLS']
                     };
                     const sliceKeywords = sliceMap[sliceValue.toLowerCase()] || [];
                     filtered = items.filter(item => {
@@ -33094,9 +33125,9 @@
             return item;
         }
         
-        // Spotlight modal for behavioral categories
+        // Pop-out modal: show the whole behavioral card in a larger window
         function openBehavioralSpotlight(category) {
-            console.log('Opening spotlight for category:', category);
+            console.log('Opening pop-out for category:', category);
             
             if (!currentDashboardData || !currentProfileData) {
                 alert('Please select a profile first');
@@ -33104,126 +33135,46 @@
             }
             
             try {
-            trackActivity('spotlight_open', category);
-            
-            // Find the behavioral data for this category
-            const behavioral = currentDashboardData.behavioral || {};
-            let items = [];
-            
-            // Check if this is an aggregated category
-            if (category.toUpperCase() === 'SPORTS') {
-                // Aggregate sports categories
-                const sportsCategories = ['SPORTS TEAMS', 'SPORTS LEAGUES', 'SPORTS EVENTS', 'SPORTS ACTIVITIES'];
-                sportsCategories.forEach(sportsCat => {
-                    if (behavioral[sportsCat]) {
-                        Object.entries(behavioral[sportsCat]).forEach(([name, pct]) => {
-                            items.push({ name, pct, category: sportsCat });
-                        });
-                    }
-                });
-            } else if (category.toUpperCase() === 'TALENT') {
-                // Aggregate talent categories
-                const talentCategories = ['TALENT ACTORS', 'TALENT MUSICIANS', 'TALENT ATHLETES', 'TALENT INFLUENCERS', 'TALENT COMEDIANS', 'TALENT TV PERSONALITIES'];
-                talentCategories.forEach(talentCat => {
-                    if (behavioral[talentCat]) {
-                        Object.entries(behavioral[talentCat]).forEach(([name, pct]) => {
-                            items.push({ name, pct, category: talentCat });
-                        });
-                    }
-                });
-            } else {
-                // Regular category
-                const catData = behavioral[category] || behavioral[category.toUpperCase()] || {};
-                Object.entries(catData).forEach(([name, pct]) => {
-                    items.push({ name, pct, category });
-                });
-            }
-            
-            // Get gen pop data
-            const genPopBehavioral = currentDashboardData.genPopBehavioral || {};
-            
-            // Add gen pop and index to items, ensuring pct is a number
-            items = items.map(item => {
-                const pct = parseFloat(item.pct) || 0;
-                let genPop = 0;
-                if (genPopBehavioral[item.category]) {
-                    genPop = parseFloat(genPopBehavioral[item.category][item.name]) || 0;
-                } else if (genPopBehavioral[category]) {
-                    genPop = parseFloat(genPopBehavioral[category][item.name]) || 0;
-                } else if (genPopBehavioral[category.toUpperCase()]) {
-                    genPop = parseFloat(genPopBehavioral[category.toUpperCase()][item.name]) || 0;
+                trackActivity('spotlight_open', category);
+                
+                const card = document.querySelector(`.behavioral-card[data-category="${category.replace(/"/g, '\\"')}"]`);
+                if (!card) {
+                    alert('Card not found. Try scrolling to the Behavioral tab and opening again.');
+                    return;
                 }
-                const index = genPop > 0 ? Math.round((pct / genPop) * 100) : 0;
-                return { ...item, pct, genPop, index };
-            });
-            
-            // Sort by percentage descending
-            items.sort((a, b) => b.pct - a.pct);
-            
-            // Create modal HTML
-            const modalHtml = `
-                <div class="spotlight-modal" onclick="closeSpotlightModal(event)">
-                    <div class="spotlight-content" onclick="event.stopPropagation()">
-                        <div class="spotlight-header">
-                            <h2>🔍 ${category}</h2>
-                            <button class="spotlight-close" onclick="closeSpotlightModal()">&times;</button>
-                        </div>
-                        <div class="spotlight-body">
-                            <div class="spotlight-item spotlight-item-header">
-                                <span class="spotlight-rank">#</span>
-                                <span class="spotlight-name">Item</span>
-                                <span class="spotlight-pct">Profile %</span>
-                                <span class="spotlight-genpop">Gen Pop %</span>
-                                <span class="spotlight-index">Index</span>
+                
+                const clone = card.cloneNode(true);
+                clone.classList.add('behavioral-card-popout');
+                clone.removeAttribute('data-index');
+                clone.querySelectorAll('.drag-handle').forEach(el => el.remove());
+                const spotlightBtn = clone.querySelector('.module-btn.spotlight-btn');
+                if (spotlightBtn) spotlightBtn.remove();
+                
+                const modalHtml = `
+                    <div class="spotlight-modal" onclick="closeSpotlightModal(event)">
+                        <div class="spotlight-content spotlight-whole-card" onclick="event.stopPropagation()">
+                            <div class="spotlight-header" style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color);">
+                                <span style="font-size: 0.85rem; color: var(--text-secondary);">🍿 ${category}</span>
+                                <button class="spotlight-close" onclick="closeSpotlightModal()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem; line-height: 1; padding: 0.25rem;">&times;</button>
                             </div>
-                            ${items.map((item, idx) => {
-                                const indexColor = item.index >= 150 ? 'var(--accent-lime)' : 
-                                                   item.index >= 120 ? '#84cc16' : 
-                                                   item.index >= 100 ? '#eab308' : 
-                                                   item.index >= 80 ? '#f97316' : '#ef4444';
-                                const pctStr = (item.pct || 0).toFixed(2);
-                                const genPopStr = (item.genPop || 0).toFixed(2);
-                                return `
-                                    <div class="spotlight-item">
-                                        <span class="spotlight-rank">${idx + 1}</span>
-                                        <span class="spotlight-name">${item.name}</span>
-                                        <span class="spotlight-pct">${pctStr}%</span>
-                                        <span class="spotlight-genpop">${genPopStr}%</span>
-                                        <span class="spotlight-index" style="color: ${indexColor};">${item.index}</span>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                        <div class="spotlight-footer">
-                            <span class="spotlight-stats">${items.length} items | Profile: ${currentProfileData.name || 'Unknown'}</span>
-                            <span class="module-action-btns">
-                                <button class="module-btn csv-btn" onclick="exportSpotlightCSV('${category.replace(/'/g, "\\'")}')">Export CSV</button>
-                                <div style="position: relative; display: inline-block;">
-                                    <button class="module-btn deck-btn" onclick="event.stopPropagation(); toggleSpotlightDeckMenu('${category.replace(/'/g, "\\'")}')">➕ Add to Deck ▾</button>
-                                    <div id="spotlightDeckMenu" class="behavioral-deck-menu" style="display: none;">
-                                        <button onclick="event.stopPropagation(); addModuleToDeck('behavioral', '${category.replace(/'/g, "\\'")}'); closeSpotlightModal();">Add All</button>
-                                        <button onclick="event.stopPropagation(); showBehavioralValueSelector('${category.replace(/'/g, "\\'")}'); closeSpotlightModal();">Select Values to Add</button>
-                                    </div>
-                                </div>
-                            </span>
+                            <div class="spotlight-body" style="padding: 1rem; max-height: 85vh; overflow: auto;">
+                            </div>
                         </div>
                     </div>
-                </div>
-            `;
-            
-            // Add modal to body
-            const modalContainer = document.createElement('div');
-            modalContainer.id = 'spotlightModalContainer';
-            modalContainer.innerHTML = modalHtml;
-            document.body.appendChild(modalContainer);
-            
-            // Add escape key listener
-            document.addEventListener('keydown', handleSpotlightEscape);
-            
-            console.log('Spotlight modal opened successfully');
+                `;
+                
+                const modalContainer = document.createElement('div');
+                modalContainer.id = 'spotlightModalContainer';
+                modalContainer.innerHTML = modalHtml;
+                const bodyEl = modalContainer.querySelector('.spotlight-body');
+                bodyEl.appendChild(clone);
+                document.body.appendChild(modalContainer);
+                
+                document.addEventListener('keydown', handleSpotlightEscape);
+                console.log('Pop-out modal opened successfully');
             } catch (error) {
-                console.error('Error opening spotlight:', error);
-                alert('Error opening spotlight: ' + error.message);
+                console.error('Error opening pop-out:', error);
+                alert('Error opening pop-out: ' + error.message);
             }
         }
         
@@ -43132,8 +43083,10 @@
                 </div>`;
             });
 
-            // Add behavioral categories (only if selected)
-            const sortedBehavioralCats = Array.from(allBehavioralCats).sort();
+            // Add behavioral categories (only if selected) - exclude INTEREST/INTERESTS (have their own tab)
+            const sortedBehavioralCats = Array.from(allBehavioralCats)
+                .filter(c => { const u = c.toUpperCase(); return u !== 'INTEREST' && u !== 'INTERESTS'; })
+                .sort();
             const displayedBehavioralCats = []; // Track which categories are displayed for Jump To dropdown
             sortedBehavioralCats.forEach(cat => {
                 const catKey = 'beh_' + cat;
@@ -43268,27 +43221,16 @@
             }
             options += `</optgroup>`;
             
-            // Group 2: Interests (no separate comparison section; optgroup for future use)
-            const interestCats = (sortedBehavioralCats || []).filter(c => /interest/i.test(c));
-            options += `<optgroup label="Interests">`;
-            if (interestCats.length > 0) {
-                interestCats.forEach(cat => {
-                    const safeId = cat.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-                    options += `<option value="comp-beh-${safeId}">🎯 ${cat}</option>`;
-                });
-            } else {
-                options += `<option value="" disabled>—</option>`;
-            }
-            options += `</optgroup>`;
+            // Group 2: Interests - no longer shown (INTEREST card removed from behavioral)
             
-            // Group 3: Behavioral (all behavioral categories, excluding any already under Interests)
-            const behavioralCats = (sortedBehavioralCats || []).filter(c => !/interest/i.test(c));
+            // Group 3: Behavioral (all behavioral categories; INTEREST/INTERESTS excluded)
+            const behavioralCats = (sortedBehavioralCats || []).slice();
             options += `<optgroup label="Behavioral">`;
             behavioralCats.forEach(cat => {
                 const safeId = cat.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
                 options += `<option value="comp-beh-${safeId}">🎯 ${cat}</option>`;
             });
-            if (behavioralCats.length === 0 && interestCats.length === 0) {
+            if (behavioralCats.length === 0) {
                 options += `<option value="" disabled>—</option>`;
             }
             options += `</optgroup>`;
@@ -47520,6 +47462,7 @@
         
         function renderSharedProfiles() {
             const list = document.getElementById('sharedProfilesList');
+            if (!list) return;
             const wsProfiles = collabData.shared.filter(p => 
                 p.workspace === currentWorkspace || p.workspace === 'team'
             );
@@ -47629,6 +47572,7 @@
         
         function renderComments() {
             const list = document.getElementById('commentsList');
+            if (!list) return;
             const filter = document.getElementById('commentProfileFilter')?.value || 'all';
             
             let comments = collabData.comments.filter(c => c.workspace === currentWorkspace || c.workspace === 'default');
@@ -50957,12 +50901,15 @@
                     collabSocket = io({ path: '/socket.io' });
                     
                     collabSocket.on('connect', () => {
-                        console.log('🔗 Collaboration connected');
-                        collabSocket.emit('join_deck', {
-                            deck_id: deckId,
-                            user: currentUsername || 'Anonymous',
-                            color: myCollabColor
-                        });
+                        const s = collabSocket;
+                        if (s && s.connected) {
+                            console.log('🔗 Collaboration connected');
+                            s.emit('join_deck', {
+                                deck_id: deckId,
+                                user: currentUsername || 'Anonymous',
+                                color: myCollabColor
+                            });
+                        }
                     });
                     
                     collabSocket.on('slide_update', (data) => handleCollabMessage({ ...data, type: 'slide_update' }));

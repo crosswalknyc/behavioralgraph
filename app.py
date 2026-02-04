@@ -3048,6 +3048,16 @@ def set_chat_status():
 def index():
     user = get_current_user()
     role = user.get('role', 'user') if user else 'user'
+    
+    # Load quick-select behavioral exclusions (applies to all users globally)
+    quick_select_behaviors_exclusions = []
+    try:
+        quick_selects = load_json_from_s3(QUICK_SELECTS_FILE)
+        behaviors = quick_selects.get('behaviors', {})
+        quick_select_behaviors_exclusions = [cat for cat, val in behaviors.items() if val is False]
+    except Exception as e:
+        print(f"⚠️ Could not load quick selects for behavioral filtering: {e}")
+    
     # Super admins always have access to all dashboards and modules
     # Regular admins now need module access enabled like other users
     if role == 'super_admin':
@@ -3090,6 +3100,7 @@ def index():
                            has_analysis_iq_access=has_analysis_iq,
                            analysis_iq_modules=analysis_iq_modules,
                            allowed_behavioral_categories=allowed_behavioral_categories,
+                           quick_select_behaviors_exclusions=quick_select_behaviors_exclusions,
                            has_rankers_iq_access=has_rankers_iq,
                            rankers_iq_options=rankers_iq_options,
                            first_name=first_name,

@@ -2345,37 +2345,41 @@
             }
             
             if (tabName === 'quickSelects') {
-                // Expand sections by default when tab is shown
-                const profilesSection = document.getElementById('quickSelectProfilesSection');
-                const tickersSection = document.getElementById('quickSelectTickersSection');
-                const behaviorsSection = document.getElementById('quickSelectBehaviorsSection');
-                const categoryAccessSection = document.getElementById('quickSelectCategoryAccessSection');
-                const profilesIcon = document.getElementById('quickSelectProfilesIcon');
-                const tickersIcon = document.getElementById('quickSelectTickersIcon');
-                const behaviorsIcon = document.getElementById('quickSelectBehaviorsIcon');
-                const categoryAccessIcon = document.getElementById('quickSelectCategoryAccessIcon');
-                
-                if (profilesSection && profilesSection.style.display === 'none') {
-                    profilesSection.style.display = 'block';
-                    if (profilesIcon) profilesIcon.classList.remove('rotated');
-                }
-                if (tickersSection && tickersSection.style.display === 'none') {
-                    tickersSection.style.display = 'block';
-                    if (tickersIcon) tickersIcon.classList.remove('rotated');
-                }
-                if (behaviorsSection && behaviorsSection.style.display === 'none') {
-                    behaviorsSection.style.display = 'block';
-                    if (behaviorsIcon) behaviorsIcon.classList.remove('rotated');
-                }
-                if (categoryAccessSection && categoryAccessSection.style.display === 'none') {
-                    categoryAccessSection.style.display = 'block';
-                    if (categoryAccessIcon) categoryAccessIcon.classList.remove('rotated');
-                }
-                
-                loadQuickSelectProfiles();
-                loadQuickSelectTickers();
-                loadQuickSelectBehaviors();
-                loadCategoryAccess();
+                // Load quick selects from server first, then render (ensures persistence)
+                (async () => {
+                    await loadQuickSelects();
+                    // Expand sections by default when tab is shown
+                    const profilesSection = document.getElementById('quickSelectProfilesSection');
+                    const tickersSection = document.getElementById('quickSelectTickersSection');
+                    const behaviorsSection = document.getElementById('quickSelectBehaviorsSection');
+                    const categoryAccessSection = document.getElementById('quickSelectCategoryAccessSection');
+                    const profilesIcon = document.getElementById('quickSelectProfilesIcon');
+                    const tickersIcon = document.getElementById('quickSelectTickersIcon');
+                    const behaviorsIcon = document.getElementById('quickSelectBehaviorsIcon');
+                    const categoryAccessIcon = document.getElementById('quickSelectCategoryAccessIcon');
+                    
+                        if (profilesSection && profilesSection.style.display === 'none') {
+                        profilesSection.style.display = 'block';
+                        if (profilesIcon) profilesIcon.classList.remove('rotated');
+                    }
+                    if (tickersSection && tickersSection.style.display === 'none') {
+                        tickersSection.style.display = 'block';
+                        if (tickersIcon) tickersIcon.classList.remove('rotated');
+                    }
+                    if (behaviorsSection && behaviorsSection.style.display === 'none') {
+                        behaviorsSection.style.display = 'block';
+                        if (behaviorsIcon) behaviorsIcon.classList.remove('rotated');
+                    }
+                    if (categoryAccessSection && categoryAccessSection.style.display === 'none') {
+                        categoryAccessSection.style.display = 'block';
+                        if (categoryAccessIcon) categoryAccessIcon.classList.remove('rotated');
+                    }
+                    
+                    loadQuickSelectProfiles();
+                    loadQuickSelectTickers();
+                    loadQuickSelectBehaviors();
+                    loadCategoryAccess();
+                })();
             }
             
             if (tabName === 'liveFeatures') {
@@ -4598,8 +4602,10 @@
                             <input type="checkbox" class="master-checkbox" data-master="${master}" ${allMasterChecked ? 'checked' : ''} ${isAll ? 'disabled' : ''} onclick="event.stopPropagation(); toggleMasterCheckbox('${master}', this.checked)">
                             <span style="font-size: 1rem;">${icon}</span>
                             <span style="font-weight: 600; flex: 1; text-align: left;">${master}</span>
-                            <span style="font-size: 0.75rem; color: var(--text-secondary);">${checkedCount}/${cats.length}</span>
-                            <span class="master-arrow" id="arrow-${master}" style="transition: transform 0.2s;">▼</span>
+                            <span style="margin-left: auto; display: flex; align-items: center; gap: 0.25rem;">
+                                <span style="font-size: 0.75rem; color: var(--text-secondary);">${checkedCount}/${cats.length}</span>
+                                <span class="master-arrow" id="arrow-${master}" style="transition: transform 0.2s;">▼</span>
+                            </span>
                         </div>
                         <div class="master-category-items" id="items-${master}" style="display: none; padding: 0.5rem 0.75rem; background: var(--bg-card); max-height: 200px; overflow-y: auto;">
                             ${cats.sort().map(cat => `
