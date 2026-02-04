@@ -35410,10 +35410,18 @@
             
             // Get the original panel to copy its content
             const originalPanel = document.getElementById(`vizPanel${slideIdx}`);
+            console.log('Looking for vizPanel' + slideIdx, 'found:', !!originalPanel);
+            
             if (!originalPanel) {
                 console.warn('Original panel not found for slideIdx:', slideIdx);
+                // List all viz panels for debugging
+                const allPanels = document.querySelectorAll('.viz-control-panel');
+                console.log('All viz panels found:', allPanels.length);
+                allPanels.forEach((p, i) => console.log('Panel', i, 'id:', p.id));
                 return;
             }
+            
+            console.log('Original panel innerHTML length:', originalPanel.innerHTML.length);
             
             // Create a new floating panel at the top level of the DOM
             floatingPanel = document.createElement('div');
@@ -35423,12 +35431,13 @@
             floatingPanel.innerHTML = originalPanel.innerHTML;
             floatingPanel.onclick = (e) => e.stopPropagation();
             
-            // Apply critical inline styles to ensure visibility
+            // Apply critical inline styles to ensure visibility - use left position instead of right
             floatingPanel.style.cssText = `
                 position: fixed !important;
-                top: 100px !important;
-                right: 50px !important;
-                left: auto !important;
+                top: 120px !important;
+                left: 50% !important;
+                transform: translateX(-50%) !important;
+                right: auto !important;
                 bottom: auto !important;
                 z-index: 2147483647 !important;
                 display: block !important;
@@ -35436,16 +35445,23 @@
                 visibility: visible !important;
                 pointer-events: auto !important;
                 background: rgba(13, 33, 55, 0.99) !important;
-                border: 3px solid #c8e600 !important;
+                border: 4px solid #ff0000 !important;
                 border-radius: 10px !important;
                 min-width: 320px !important;
-                max-width: 360px !important;
+                max-width: 400px !important;
                 max-height: 520px !important;
-                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9), 0 0 0 2px rgba(200, 230, 0, 0.5), 0 0 60px rgba(0, 200, 255, 0.3) !important;
+                box-shadow: 0 0 0 4px #ffff00, 0 10px 40px rgba(0, 0, 0, 0.9) !important;
+                padding: 0 !important;
             `;
             
             // Append to body
             document.body.appendChild(floatingPanel);
+            
+            console.log('Floating panel created, checking if visible...');
+            console.log('Panel getBoundingClientRect:', floatingPanel.getBoundingClientRect());
+            console.log('Panel computed style display:', window.getComputedStyle(floatingPanel).display);
+            console.log('Panel computed style visibility:', window.getComputedStyle(floatingPanel).visibility);
+            console.log('Panel computed style opacity:', window.getComputedStyle(floatingPanel).opacity);
             
             // Re-attach event handlers for the header drag
             const header = floatingPanel.querySelector('.viz-control-panel-header');
