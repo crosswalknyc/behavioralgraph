@@ -31689,7 +31689,7 @@
             showNotification(`✅ Deck "${name}" created!`, 'success');
         }
         
-        function confirmAddToDeck(type, category) {
+        async function confirmAddToDeck(type, category) {
             const wsId = document.getElementById('deckSelectWorkspace')?.value;
             const deckId = document.getElementById('deckSelectDeck')?.value;
             
@@ -31732,6 +31732,32 @@
             }
             
             localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            
+            // Sync to backend if it's a cloud deck
+            if (wsId === 'cloud' && deck.serverDeckId) {
+                try {
+                    const response = await fetch(`/api/decks/${deck.serverDeckId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: deck.name,
+                            description: deck.description,
+                            slides: deck.slides,
+                            titleSlide: deck.titleSlide,
+                            template: deck.template
+                        }),
+                        credentials: 'same-origin'
+                    });
+                    const result = await response.json();
+                    if (!result.success) {
+                        console.warn('Failed to sync deck to cloud:', result.error);
+                        showNotification('⚠️ Added locally but cloud sync failed', 'warning');
+                    }
+                } catch (e) {
+                    console.error('Cloud sync error:', e);
+                    showNotification('⚠️ Added locally but cloud sync failed', 'warning');
+                }
+            }
             
             // Also save to data points for easy access
             saveToDataPoints({...item, workspaceId: wsId});
@@ -31893,7 +31919,7 @@
             `).join('');
         }
         
-        function confirmAddInsightToDeck(insightType) {
+        async function confirmAddInsightToDeck(insightType) {
             const wsId = document.getElementById('deckSelectWorkspace')?.value;
             const deckId = document.getElementById('deckSelectDeck')?.value;
             
@@ -31937,6 +31963,32 @@
             }
             
             localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            
+            // Sync to backend if it's a cloud deck
+            if (wsId === 'cloud' && deck.serverDeckId) {
+                try {
+                    const response = await fetch(`/api/decks/${deck.serverDeckId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: deck.name,
+                            description: deck.description,
+                            slides: deck.slides,
+                            titleSlide: deck.titleSlide,
+                            template: deck.template
+                        }),
+                        credentials: 'same-origin'
+                    });
+                    const result = await response.json();
+                    if (!result.success) {
+                        console.warn('Failed to sync deck to cloud:', result.error);
+                        showNotification('⚠️ Added locally but cloud sync failed', 'warning');
+                    }
+                } catch (e) {
+                    console.error('Cloud sync error:', e);
+                    showNotification('⚠️ Added locally but cloud sync failed', 'warning');
+                }
+            }
             
             // Also save to data points for easy access
             saveToDataPoints({...item, workspaceId: wsId});
