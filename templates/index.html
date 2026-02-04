@@ -31698,6 +31698,7 @@
         }
         
         async function confirmAddToDeck(type, category) {
+            let itemAdded = false;
             try {
                 const wsId = document.getElementById('deckSelectWorkspace')?.value;
                 const deckId = document.getElementById('deckSelectDeck')?.value;
@@ -31726,6 +31727,7 @@
                 if (!deck.slides) deck.slides = [];
                 deck.slides.push(item);
                 deck.updatedAt = new Date().toISOString();
+                itemAdded = true; // Mark that item was successfully added
                 
                 // Add collaborators if any were specified
                 if (pendingCollaborators && pendingCollaborators.length > 0) {
@@ -31753,6 +31755,7 @@
                     localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
                 } catch (e) {
                     console.error('Failed to save to localStorage:', e);
+                    throw e; // Re-throw if localStorage fails as this is critical
                 }
                 
                 // Sync to backend if it's a cloud deck
@@ -31776,14 +31779,16 @@
                         }
                     } catch (e) {
                         console.error('Cloud sync error:', e);
+                        // Don't throw - cloud sync failure shouldn't stop the process
                     }
                 }
                 
-                // Also save to data points for easy access
+                // Also save to data points for easy access (non-critical)
                 try {
                     saveToDataPoints({...item, workspaceId: wsId});
                 } catch (e) {
                     console.warn('Failed to save to data points:', e);
+                    // Don't throw - this is non-critical
                 }
                 
                 // Clear pending collaborators
@@ -31814,7 +31819,10 @@
                 }
             } catch (error) {
                 console.error('Error in confirmAddToDeck:', error);
-                alert('Failed to add to deck. Please try again.');
+                // Only show error alert if item wasn't successfully added
+                if (!itemAdded) {
+                    alert('Failed to add to deck. Please try again.');
+                }
             }
         }
         
@@ -31962,6 +31970,7 @@
         }
         
         async function confirmAddInsightToDeck(insightType) {
+            let itemAdded = false;
             try {
                 const wsId = document.getElementById('deckSelectWorkspace')?.value;
                 const deckId = document.getElementById('deckSelectDeck')?.value;
@@ -31990,6 +31999,7 @@
                 if (!deck.slides) deck.slides = [];
                 deck.slides.push(item);
                 deck.updatedAt = new Date().toISOString();
+                itemAdded = true; // Mark that item was successfully added
                 
                 // Add collaborators if any were specified
                 const collabCount = pendingCollaborators ? pendingCollaborators.length : 0;
@@ -32018,6 +32028,7 @@
                     localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
                 } catch (e) {
                     console.error('Failed to save to localStorage:', e);
+                    throw e; // Re-throw if localStorage fails as this is critical
                 }
                 
                 // Sync to backend if it's a cloud deck
@@ -32041,14 +32052,16 @@
                         }
                     } catch (e) {
                         console.error('Cloud sync error:', e);
+                        // Don't throw - cloud sync failure shouldn't stop the process
                     }
                 }
                 
-                // Also save to data points for easy access
+                // Also save to data points for easy access (non-critical)
                 try {
                     saveToDataPoints({...item, workspaceId: wsId});
                 } catch (e) {
                     console.warn('Failed to save to data points:', e);
+                    // Don't throw - this is non-critical
                 }
                 
                 // Clear pending collaborators
@@ -32078,7 +32091,10 @@
                 }
             } catch (error) {
                 console.error('Error in confirmAddInsightToDeck:', error);
-                alert('Failed to add to deck. Please try again.');
+                // Only show error alert if item wasn't successfully added
+                if (!itemAdded) {
+                    alert('Failed to add to deck. Please try again.');
+                }
             }
         }
         
@@ -49189,7 +49205,7 @@
                             const o = overrides[key] || {};
                             const label = o.label !== undefined ? o.label : key;
                             const value = o.value !== undefined ? o.value : parseFloat(val).toFixed(1) + '%';
-                            const bg = o.bgColor || 'var(--bg-input)';
+                            const bg = o.bgColor || '#1e1e1e';
                             const valueColor = o.valueColor || 'var(--accent-lime)';
                             const labelColor = o.labelColor || 'var(--text-secondary)';
                             const boxStyle = o.width || o.height ? `min-width: ${o.width || 'auto'}; min-height: ${o.height || 'auto'};` : '';
@@ -49431,7 +49447,7 @@
                                     const o = overrides[catKey + key] || {};
                                     const l = o.label !== undefined ? o.label : (key || '');
                                     const v = o.value !== undefined ? o.value : parseFloat(val || 0).toFixed(1) + '%';
-                                    const bg = o.bgColor || 'var(--bg-input)';
+                                    const bg = o.bgColor || '#1e1e1e';
                                     const vc = o.valueColor || 'var(--accent-lime)';
                                     const lc = o.labelColor || 'var(--text-secondary)';
                                     return `
