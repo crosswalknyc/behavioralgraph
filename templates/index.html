@@ -47939,7 +47939,10 @@
                 const reader = new FileReader();
                 reader.onload = () => {
                     addImageToSlide(slideIdx, reader.result);
-                    if (modal) modal.remove();
+                    // Remove modal after a short delay to ensure slide is rendered
+                    setTimeout(() => {
+                        if (modal) modal.remove();
+                    }, 100);
                 };
                 reader.readAsDataURL(file);
             } else if (urlInput.value.trim()) {
@@ -47947,7 +47950,10 @@
                 const url = urlInput.value.trim();
                 if (url.startsWith('http://') || url.startsWith('https://')) {
                     addImageToSlide(slideIdx, url);
-                    if (modal) modal.remove();
+                    // Remove modal after a short delay to ensure slide is rendered
+                    setTimeout(() => {
+                        if (modal) modal.remove();
+                    }, 100);
                 } else {
                     alert('Please enter a valid URL starting with http:// or https://');
                 }
@@ -48083,6 +48089,7 @@
         function confirmTocImageUpload(tocSlideIdx) {
             const fileInput = document.getElementById('tocImageFile');
             const urlInput = document.getElementById('tocImageUrl');
+            const modal = document.getElementById('uploadTocImageModal');
             
             const addTocImage = (src) => {
                 const slide = currentEditingDeck.slides[tocSlideIdx];
@@ -48099,7 +48106,10 @@
                 saveDeckChanges();
                 renderSlideEditor();
                 showNotification('✅ Image added to TOC', 'success');
-                document.getElementById('uploadTocImageModal').remove();
+                // Remove modal after a short delay to ensure slide is rendered
+                setTimeout(() => {
+                    if (modal) modal.remove();
+                }, 100);
             };
             
             if (fileInput.files.length > 0) {
