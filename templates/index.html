@@ -47468,23 +47468,29 @@
             // For title slide (Page 1 style - large profile name)
             if ((idx === 0 || slide.type === 'title') && elements.length === 0) {
                 let profileImage = getDeckTitleSlideProfileImage(slide);
-                const profileName = slide.title || currentProfileData?.name || 'PROFILE NAME';
+                const titleSlide = currentEditingDeck?.titleSlide || {};
+                
+                // Use custom values if saved, otherwise use defaults
+                const profileName = titleSlide.title || slide.title || currentProfileData?.name || 'PROFILE NAME';
                 const today = new Date();
-                const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+                const defaultDateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+                const dateStr = titleSlide.date || defaultDateStr;
+                const branding = titleSlide.branding || 'Crosswalk Profile IQ';
                 
                 // Get presenter info - user's name and company
-                const presenterName = (currentUserFirstName && currentUserLastName) 
+                const defaultPresenterName = (currentUserFirstName && currentUserLastName) 
                     ? `${currentUserFirstName} ${currentUserLastName}` 
                     : currentUsername || 'Your Name';
-                const presenterCompany = currentUserCompany || 'Your Company';
+                const presenterName = titleSlide.presenterName || defaultPresenterName;
+                const presenterCompany = titleSlide.presenterCompany || currentUserCompany || 'Your Company';
                 
                 // Get date range from profile data or header
                 const dateRangeEl = document.getElementById('dashDateRangeHeader');
-                let dateRangeText = dateRangeEl?.textContent?.replace('Date Range: ', '') || '';
-                if (!dateRangeText && currentProfileData?.dateRange) {
-                    dateRangeText = currentProfileData.dateRange;
+                let defaultDateRangeText = dateRangeEl?.textContent?.replace('Date Range: ', '') || '';
+                if (!defaultDateRangeText && currentProfileData?.dateRange) {
+                    defaultDateRangeText = currentProfileData.dateRange;
                 }
-                const dateRangeDisplay = dateRangeText || 'Date Range: Not specified';
+                const dateRangeDisplay = titleSlide.dateRange || defaultDateRangeText || 'Date Range: Not specified';
                 
                 // Profile image HTML
                 const profileImageHtml = profileImage 
@@ -47493,26 +47499,48 @@
                 
                 return `
                     <div style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: flex; flex-direction: column;">
-                        <!-- Large profile name -->
-                        <div style="position: absolute; left: -1%; top: -2%; font-size: 8rem; font-weight: 700; color: #ffffff; line-height: 1; letter-spacing: -0.03em; text-transform: uppercase;">
+                        <!-- Large profile name - EDITABLE -->
+                        <div contenteditable="true" 
+                             style="position: absolute; left: -1%; top: -2%; font-size: 8rem; font-weight: 700; color: #ffffff; line-height: 1; letter-spacing: -0.03em; text-transform: uppercase; cursor: text; padding: 4px 8px; border-radius: 4px;"
+                             onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                             onblur="this.style.background='transparent'; updateTitleSlideProfileName(this.textContent)">
                             ${escapeHtml(profileName)}.
                         </div>
                         
-                        <!-- Profile image - left justified under profile name -->
-                        <div style="position: absolute; left: 5%; top: 35%; width: 180px; height: 180px; border: 3px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.4);">
+                        <!-- Profile image - CLICKABLE TO CHANGE -->
+                        <div style="position: absolute; left: 5%; top: 35%; width: 180px; height: 180px; border: 3px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.4); cursor: pointer; transition: border-color 0.2s;"
+                             onclick="uploadTitleImage()"
+                             onmouseover="this.style.borderColor='var(--accent-lime)'"
+                             onmouseout="this.style.borderColor='rgba(255,255,255,0.2)'"
+                             title="Click to change image">
                             ${profileImageHtml}
                         </div>
                         
-                        <!-- Right side info -->
+                        <!-- Right side info - EDITABLE -->
                         <div style="position: absolute; right: 5%; top: 45%; text-align: right; font-size: 0.7rem; color: rgba(255,255,255,0.7);">
-                            <div>${dateStr}</div>
-                            <div style="margin-top: 0.5rem;">Crosswalk Profile IQ</div>
-                            <div style="margin-top: 0.75rem; font-size: 0.8rem; color: rgba(255,255,255,0.9); font-weight: 500;">${escapeHtml(presenterName)}</div>
-                            <div style="margin-top: 0.15rem; font-size: 0.7rem; color: rgba(255,255,255,0.6);">${escapeHtml(presenterCompany)}</div>
+                            <div contenteditable="true" 
+                                 style="cursor: text; padding: 2px 4px; border-radius: 3px;"
+                                 onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                                 onblur="this.style.background='transparent'; updateTitleSlideDate(this.textContent)">${dateStr}</div>
+                            <div contenteditable="true" 
+                                 style="margin-top: 0.5rem; cursor: text; padding: 2px 4px; border-radius: 3px;"
+                                 onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                                 onblur="this.style.background='transparent'; updateTitleSlideBranding(this.textContent)">${escapeHtml(branding)}</div>
+                            <div contenteditable="true" 
+                                 style="margin-top: 0.75rem; font-size: 0.8rem; color: rgba(255,255,255,0.9); font-weight: 500; cursor: text; padding: 2px 4px; border-radius: 3px;"
+                                 onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                                 onblur="this.style.background='transparent'; updateTitleSlidePresenterName(this.textContent)">${escapeHtml(presenterName)}</div>
+                            <div contenteditable="true" 
+                                 style="margin-top: 0.15rem; font-size: 0.7rem; color: rgba(255,255,255,0.6); cursor: text; padding: 2px 4px; border-radius: 3px;"
+                                 onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                                 onblur="this.style.background='transparent'; updateTitleSlidePresenterCompany(this.textContent)">${escapeHtml(presenterCompany)}</div>
                         </div>
                         
-                        <!-- Bottom description - Date Range -->
-                        <div style="position: absolute; left: 5%; bottom: 15%; width: 60%; font-size: 0.85rem; color: rgba(255,255,255,0.8); line-height: 1.6; font-weight: 500;">
+                        <!-- Bottom description - Date Range - EDITABLE -->
+                        <div contenteditable="true" 
+                             style="position: absolute; left: 5%; bottom: 15%; width: 60%; font-size: 0.85rem; color: rgba(255,255,255,0.8); line-height: 1.6; font-weight: 500; cursor: text; padding: 4px 8px; border-radius: 4px;"
+                             onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                             onblur="this.style.background='transparent'; updateTitleSlideDateRange(this.textContent)">
                             ${escapeHtml(dateRangeDisplay)}
                         </div>
                     </div>
@@ -47547,14 +47575,20 @@
                         <span>${dateStr}</span>
                     </div>
                     
-                    <!-- Section title -->
-                    <div style="position: absolute; left: 5%; top: 8%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase;">
-                        TABLE OF CONTENTS
+                    <!-- Section title - EDITABLE -->
+                    <div contenteditable="true" 
+                         style="position: absolute; left: 5%; top: 8%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; cursor: text; padding: 4px 8px; border-radius: 4px;"
+                         onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                         onblur="this.style.background='transparent'; updateTocTitle(this.textContent)">
+                        ${escapeHtml(slide.customTitle || slide.title || 'TABLE OF CONTENTS')}
                     </div>
                     
-                    <!-- Description -->
-                    <div style="position: absolute; left: 5%; top: 22%; width: 40%; font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6;">
-                        This presentation provides comprehensive audience insights including demographics, behavioral patterns, and strategic recommendations for ${currentProfileData?.name || 'your target audience'}.
+                    <!-- Description - EDITABLE -->
+                    <div contenteditable="true" 
+                         style="position: absolute; left: 5%; top: 22%; width: 40%; font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; cursor: text; padding: 4px 8px; border-radius: 4px;"
+                         onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                         onblur="this.style.background='transparent'; updateTocDescription(this.textContent)">
+                        ${escapeHtml(slide.customDescription || `This presentation provides comprehensive audience insights including demographics, behavioral patterns, and strategic recommendations for ${currentProfileData?.name || 'your target audience'}.`)}
                     </div>
                     
                     <!-- TOC Items - Column 1 -->
@@ -47621,24 +47655,39 @@
                         <span>${dateStr}</span>
                     </div>
                     
-                    <!-- Large Thank You centered -->
-                    <div style="position: absolute; left: 50%; top: 35%; transform: translateX(-50%); font-size: 4rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.03em; text-align: center; line-height: 1;">
-                        THANK YOU
+                    <!-- Large Thank You centered - EDITABLE -->
+                    <div contenteditable="true" 
+                         style="position: absolute; left: 50%; top: 35%; transform: translateX(-50%); font-size: 4rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.03em; text-align: center; line-height: 1; cursor: text; padding: 8px 16px; border-radius: 4px;"
+                         onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                         onblur="this.style.background='transparent'; updateClosingTitle(this.textContent)">
+                        ${escapeHtml(slide.customTitle || slide.title || 'THANK YOU')}
                     </div>
                     
                     <!-- Accent line -->
                     <div style="position: absolute; left: 50%; top: 52%; transform: translateX(-50%); width: 120px; height: 3px; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-lime));"></div>
                     
-                    <!-- Contact info centered -->
+                    <!-- Contact info centered - EDITABLE -->
                     <div style="position: absolute; left: 50%; top: 60%; transform: translateX(-50%); text-align: center;">
-                        <div style="font-size: 1.1rem; font-weight: 600; color: #ffffff; margin-bottom: 0.5rem;">${escapeHtml(presenterName)}</div>
-                        <div style="font-size: 0.85rem; color: rgba(255,255,255,0.7); margin-bottom: 0.25rem;">${escapeHtml(presenterCompany)}</div>
-                        ${presenterEmail ? `<div style="font-size: 0.75rem; color: var(--accent-cyan); margin-top: 0.5rem;">${escapeHtml(presenterEmail)}</div>` : ''}
+                        <div contenteditable="true" 
+                             style="font-size: 1.1rem; font-weight: 600; color: #ffffff; margin-bottom: 0.5rem; cursor: text; padding: 2px 4px; border-radius: 3px; display: inline-block;"
+                             onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                             onblur="this.style.background='transparent'; updateClosingPresenterName(this.textContent)">${escapeHtml(slide.presenterName || presenterName)}</div>
+                        <div contenteditable="true" 
+                             style="font-size: 0.85rem; color: rgba(255,255,255,0.7); margin-bottom: 0.25rem; cursor: text; padding: 2px 4px; border-radius: 3px; display: inline-block;"
+                             onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                             onblur="this.style.background='transparent'; updateClosingPresenterCompany(this.textContent)">${escapeHtml(slide.presenterCompany || presenterCompany)}</div>
+                        <div contenteditable="true" 
+                             style="font-size: 0.75rem; color: var(--accent-cyan); margin-top: 0.5rem; cursor: text; padding: 2px 4px; border-radius: 3px; display: inline-block;"
+                             onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                             onblur="this.style.background='transparent'; updateClosingPresenterEmail(this.textContent)">${escapeHtml(slide.presenterEmail || presenterEmail || 'your@email.com')}</div>
                     </div>
                     
-                    <!-- Powered by footer -->
-                    <div style="position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); font-size: 0.7rem; color: rgba(255,255,255,0.4); text-align: center;">
-                        Powered by Crosswalk Profile IQ
+                    <!-- Powered by footer - EDITABLE -->
+                    <div contenteditable="true" 
+                         style="position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); font-size: 0.7rem; color: rgba(255,255,255,0.4); text-align: center; cursor: text; padding: 2px 4px; border-radius: 3px;"
+                         onfocus="this.style.background='rgba(255,255,255,0.1)'" 
+                         onblur="this.style.background='transparent'; updateClosingFooter(this.textContent)">
+                        ${escapeHtml(slide.footer || 'Powered by Crosswalk Profile IQ')}
                     </div>
                     
                     ${footerHtml}
@@ -49911,6 +49960,111 @@
             if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
             currentEditingDeck.titleSlide[field] = value;
             saveDeckChanges();
+        }
+        
+        function updateTitleSlideProfileName(value) {
+            if (!currentEditingDeck) return;
+            if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
+            currentEditingDeck.titleSlide.title = value.replace(/\.$/, ''); // Remove trailing period
+            saveDeckChanges();
+        }
+        
+        function updateTitleSlideDate(value) {
+            if (!currentEditingDeck) return;
+            if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
+            currentEditingDeck.titleSlide.date = value;
+            saveDeckChanges();
+        }
+        
+        function updateTitleSlideBranding(value) {
+            if (!currentEditingDeck) return;
+            if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
+            currentEditingDeck.titleSlide.branding = value;
+            saveDeckChanges();
+        }
+        
+        function updateTitleSlidePresenterName(value) {
+            if (!currentEditingDeck) return;
+            if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
+            currentEditingDeck.titleSlide.presenterName = value;
+            saveDeckChanges();
+        }
+        
+        function updateTitleSlidePresenterCompany(value) {
+            if (!currentEditingDeck) return;
+            if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
+            currentEditingDeck.titleSlide.presenterCompany = value;
+            saveDeckChanges();
+        }
+        
+        function updateTitleSlideDateRange(value) {
+            if (!currentEditingDeck) return;
+            if (!currentEditingDeck.titleSlide) currentEditingDeck.titleSlide = {};
+            currentEditingDeck.titleSlide.dateRange = value;
+            saveDeckChanges();
+        }
+        
+        function updateTocTitle(value) {
+            if (!currentEditingDeck) return;
+            const tocSlide = currentEditingDeck.slides.find(s => s.type === 'toc');
+            if (tocSlide) {
+                tocSlide.customTitle = value;
+                saveDeckChanges();
+            }
+        }
+        
+        function updateTocDescription(value) {
+            if (!currentEditingDeck) return;
+            const tocSlide = currentEditingDeck.slides.find(s => s.type === 'toc');
+            if (tocSlide) {
+                tocSlide.customDescription = value;
+                saveDeckChanges();
+            }
+        }
+        
+        function updateClosingTitle(value) {
+            if (!currentEditingDeck) return;
+            const closingSlide = currentEditingDeck.slides.find(s => s.type === 'closing');
+            if (closingSlide) {
+                closingSlide.customTitle = value;
+                saveDeckChanges();
+            }
+        }
+        
+        function updateClosingPresenterName(value) {
+            if (!currentEditingDeck) return;
+            const closingSlide = currentEditingDeck.slides.find(s => s.type === 'closing');
+            if (closingSlide) {
+                closingSlide.presenterName = value;
+                saveDeckChanges();
+            }
+        }
+        
+        function updateClosingPresenterCompany(value) {
+            if (!currentEditingDeck) return;
+            const closingSlide = currentEditingDeck.slides.find(s => s.type === 'closing');
+            if (closingSlide) {
+                closingSlide.presenterCompany = value;
+                saveDeckChanges();
+            }
+        }
+        
+        function updateClosingPresenterEmail(value) {
+            if (!currentEditingDeck) return;
+            const closingSlide = currentEditingDeck.slides.find(s => s.type === 'closing');
+            if (closingSlide) {
+                closingSlide.presenterEmail = value;
+                saveDeckChanges();
+            }
+        }
+        
+        function updateClosingFooter(value) {
+            if (!currentEditingDeck) return;
+            const closingSlide = currentEditingDeck.slides.find(s => s.type === 'closing');
+            if (closingSlide) {
+                closingSlide.footer = value;
+                saveDeckChanges();
+            }
         }
         
         function updateSlideTitle(idx, value) {
