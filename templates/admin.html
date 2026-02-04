@@ -332,6 +332,15 @@
         }
         #userForm .master-category-header {
             justify-content: flex-start;
+            padding-left: 0;
+        }
+        #userForm .master-category-items {
+            padding-left: 0;
+        }
+        #userForm #profileIQSection .checkbox-group,
+        #userForm #profileIQSection label.checkbox-group {
+            justify-content: flex-start;
+            text-align: left;
         }
         #userForm .dashboard-access-content,
         #userForm .dashboard-access-content .checkbox-group,
@@ -1772,13 +1781,19 @@
                         <div id="profileIQSection" class="dashboard-access-content" style="display: none;">
                             <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
                                 <div style="margin-bottom: 1rem;">
-                                    <h5 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--accent-cyan);">📁 Category Access</h5>
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="allCategories" checked onchange="toggleAllCategories()">
-                                        <span>All Categories</span>
-                                    </label>
-                                    <div id="categoryCheckboxes" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;">
-                                        <!-- Populated by JS -->
+                                    <div class="master-category-header" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; cursor: pointer; text-align: left; justify-content: flex-start;" onclick="toggleCategoryAccessSection()">
+                                        <span style="font-size: 1rem;">📁</span>
+                                        <h5 style="margin: 0; font-size: 0.85rem; color: var(--accent-cyan);">Category Access</h5>
+                                        <span class="collapse-icon rotated" id="categoryAccessSectionIcon" style="margin-left: 0.25rem;">▼</span>
+                                    </div>
+                                    <div id="categoryAccessSectionContent" style="display: none; margin-top: 0.5rem;">
+                                        <label class="checkbox-group">
+                                            <input type="checkbox" id="allCategories" checked onchange="toggleAllCategories()">
+                                            <span>All Categories</span>
+                                        </label>
+                                        <div id="categoryCheckboxes" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;">
+                                            <!-- Populated by JS -->
+                                        </div>
                                     </div>
                                 </div>
                                 <div style="margin-bottom: 1rem;">
@@ -3830,10 +3845,20 @@
             
             document.getElementById('originalUsername').value = '';
             
-            populateCategoryCheckboxes();
-            populateRunCheckboxes();
-            // Load admin quick selects so behavioral defaults match; then show all options with quick-select default
+            // Load quick selects first so Run Access and Behavioral defaults come from quick select
             await loadQuickSelects();
+            
+            // Category Access: no quick select for dashboard categories; keep all selected for new user
+            document.getElementById('allCategories').checked = true;
+            populateCategoryCheckboxes(['*']);
+            
+            // Run Access: default from quick select profiles (run key = profile id; empty object = all selected)
+            const selectedRunKeys = allRuns.length === 0 ? ['*'] : allRuns.map(r => r.key).filter(key => quickSelectProfilesData[key] !== false);
+            const useAllRuns = selectedRunKeys.length >= allRuns.length;
+            document.getElementById('allRuns').checked = useAllRuns;
+            populateRunCheckboxes(useAllRuns ? ['*'] : selectedRunKeys);
+            
+            // Behavioral: default from quick select (uses quickSelectBehaviorsData)
             populateBehavioralCategoryCheckboxes();
             
             userModalSetAvatarPreview(null, '');
@@ -4221,6 +4246,19 @@
         function toggleRunAccessSection() {
             const content = document.getElementById('runAccessContent');
             const icon = document.getElementById('runAccessIcon');
+            if (!content || !icon) return;
+            if (content.style.display === 'none' || content.style.display === '') {
+                content.style.display = 'block';
+                icon.classList.remove('rotated');
+            } else {
+                content.style.display = 'none';
+                icon.classList.add('rotated');
+            }
+        }
+        
+        function toggleCategoryAccessSection() {
+            const content = document.getElementById('categoryAccessSectionContent');
+            const icon = document.getElementById('categoryAccessSectionIcon');
             if (!content || !icon) return;
             if (content.style.display === 'none' || content.style.display === '') {
                 content.style.display = 'block';
@@ -4753,7 +4791,7 @@
                 
                 html += `
                     <div class="master-category-group" style="margin-bottom: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
-                        <div class="master-category-header" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: var(--bg-input); cursor: pointer; text-align: left; justify-content: flex-start;" onclick="toggleMasterCategory('${master}')">
+                        <div class="master-category-header" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem 0.5rem 0; background: var(--bg-input); cursor: pointer; text-align: left; justify-content: flex-start;" onclick="toggleMasterCategory('${master}')">
                             <input type="checkbox" class="master-checkbox" data-master="${master}" ${allMasterChecked ? 'checked' : ''} ${isAll ? 'disabled' : ''} onclick="event.stopPropagation(); toggleMasterCheckbox('${master}', this.checked)">
                             <span style="font-size: 1rem;">${icon}</span>
                             <span style="font-weight: 600; text-align: left;">${master}</span>
@@ -4762,7 +4800,7 @@
                                 <span class="master-arrow" id="arrow-${master}" style="transition: transform 0.2s; transform: rotate(0deg);">▼</span>
                             </span>
                         </div>
-                        <div class="master-category-items" id="items-${master}" style="display: none; padding: 0.5rem 0.75rem; background: var(--bg-card); max-height: 200px; overflow-y: auto; text-align: left;">
+                        <div class="master-category-items" id="items-${master}" style="display: none; padding: 0.5rem 0.75rem 0.5rem 0; background: var(--bg-card); max-height: 200px; overflow-y: auto; text-align: left;">
                             ${cats.sort().map(cat => `
                                 <label class="checkbox-group" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; font-size: 0.85rem;">
                                     <input type="checkbox" class="cat-checkbox" data-master="${master}" value="${cat}" ${isAll || selected?.includes(cat) ? 'checked' : ''} ${isAll ? 'disabled' : ''} onchange="updateMasterCount('${master}')">

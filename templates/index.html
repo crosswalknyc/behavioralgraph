@@ -12857,6 +12857,9 @@
                 <div class="rankers-container">
                     <div class="rankers-platform-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
                         <button class="tab-btn active" onclick="showRankerPlatform('netflix')" id="rankerPlatformNetflix"><span class="tab-icon">📺</span> Netflix</button>
+                        <button class="tab-btn" onclick="showRankerPlatform('goodshort')" id="rankerPlatformGoodshort"><span class="tab-icon">📱</span> GoodShort</button>
+                        <button class="tab-btn" onclick="showRankerPlatform('shorttv')" id="rankerPlatformShorttv"><span class="tab-icon">📱</span> ShortTV</button>
+                        <button class="tab-btn" onclick="showRankerPlatform('reelshort')" id="rankerPlatformReelshort"><span class="tab-icon">📱</span> ReelShort</button>
                     </div>
                     <div id="rankerPlatformContent" class="ranker-platform-content">
                         <!-- Netflix sub-view -->
@@ -12970,16 +12973,17 @@
                                 </div>
                             </div>
                         </div>
-                        
-                        <!-- Netflix Show Details Modal -->
-                        <div id="netflixShowDetailsModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; overflow-y: auto;">
-                            <div style="max-width: 900px; margin: 2rem auto; background: var(--bg-card); border-radius: 12px; padding: 1.5rem; position: relative;">
-                                <button onclick="closeNetflixShowDetails()" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer;">&times;</button>
-                                <div id="netflixShowDetailsContent">
-                                    <div style="text-align: center; padding: 3rem;"><div class="loading-spinner"></div><p>Loading show details...</p></div>
-                                </div>
-                            </div>
+                        <!-- GoodShort / ShortTV / ReelShort placeholder panels -->
+                        <div id="ranker-goodshort" class="ranker-platform-panel" style="padding: 2rem; text-align: center;">
+                            <p style="color: var(--text-secondary); margin-bottom: 1rem;">Ranker data for GoodShort will appear here when available.</p>
                         </div>
+                        <div id="ranker-shorttv" class="ranker-platform-panel" style="padding: 2rem; text-align: center;">
+                            <p style="color: var(--text-secondary); margin-bottom: 1rem;">Ranker data for ShortTV will appear here when available.</p>
+                        </div>
+                        <div id="ranker-reelshort" class="ranker-platform-panel" style="padding: 2rem; text-align: center;">
+                            <p style="color: var(--text-secondary); margin-bottom: 1rem;">Ranker data for ReelShort will appear here when available.</p>
+                        </div>
+                        
                         
                     </div>
                     <div id="rankersLoadBlock" style="padding: 2rem; text-align: center; background: var(--bg-card); border-radius: 8px; margin-top: 1rem;">
@@ -14176,6 +14180,16 @@
             </div><!-- End dashboard-layout -->
         </div><!-- End dashboardView -->
 
+        <!-- Netflix Show Details Modal (global so it works from Rankers tab and Ranker IQ view) -->
+        <div id="netflixShowDetailsModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; overflow-y: auto;">
+            <div style="max-width: 900px; margin: 2rem auto; background: var(--bg-card); border-radius: 12px; padding: 1.5rem; position: relative;">
+                <button onclick="closeNetflixShowDetails()" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer;">&times;</button>
+                <div id="netflixShowDetailsContent">
+                    <div style="text-align: center; padding: 3rem;"><div class="loading-spinner"></div><p>Loading show details...</p></div>
+                </div>
+            </div>
+        </div>
+
         <!-- SUBSCRIBER IQ VIEW -->
         <div id="subscriberIQView">
             <div class="dashboard-layout">
@@ -14383,6 +14397,9 @@
             <div class="rankers-container">
                 <div class="rankers-platform-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
                     <button class="tab-btn active" onclick="showRankerIQPlatform('netflix')" id="rankerIQPlatformNetflix"><span class="tab-icon">📺</span> Netflix</button>
+                    <button class="tab-btn" onclick="showRankerIQPlatform('goodshort')" id="rankerIQPlatformGoodshort"><span class="tab-icon">📱</span> GoodShort</button>
+                    <button class="tab-btn" onclick="showRankerIQPlatform('shorttv')" id="rankerIQPlatformShorttv"><span class="tab-icon">📱</span> ShortTV</button>
+                    <button class="tab-btn" onclick="showRankerIQPlatform('reelshort')" id="rankerIQPlatformReelshort"><span class="tab-icon">📱</span> ReelShort</button>
                 </div>
                 <div id="rankerIQPlatformContent" class="ranker-platform-content">
                     <!-- Netflix sub-view - reuses the existing ranker tab content -->
@@ -14489,6 +14506,16 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    <!-- GoodShort / ShortTV / ReelShort placeholder panels -->
+                    <div id="rankeriq-goodshort" class="ranker-platform-panel" style="padding: 2rem; text-align: center;">
+                        <p style="color: var(--text-secondary); margin-bottom: 1rem;">Ranker data for GoodShort will appear here when available.</p>
+                    </div>
+                    <div id="rankeriq-shorttv" class="ranker-platform-panel" style="padding: 2rem; text-align: center;">
+                        <p style="color: var(--text-secondary); margin-bottom: 1rem;">Ranker data for ShortTV will appear here when available.</p>
+                    </div>
+                    <div id="rankeriq-reelshort" class="ranker-platform-panel" style="padding: 2rem; text-align: center;">
+                        <p style="color: var(--text-secondary); margin-bottom: 1rem;">Ranker data for ReelShort will appear here when available.</p>
                     </div>
                 </div>
                 <div id="rankerIQLoadBlock" style="padding: 2rem; text-align: center; background: var(--bg-card); border-radius: 8px; margin-top: 1rem;">
@@ -31563,7 +31590,12 @@
             if (rows.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="6" style="padding: 1.5rem; text-align: center; color: var(--text-secondary);">No data for this date' + (date ? ' (' + date + ')' : '') + '. Try another date or check filters.</td></tr>';
             } else {
-                tbody.innerHTML = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td><a href="#" onclick="showNetflixEpisodesForShow(\'' + (r.show_name || '').replace(/'/g, "\\'") + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + (r.show_name || '') + '</a></td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td><td>' + (r.genre || '-') + '</td><td>' + netflixFormatMin(r.avg_watch_time) + '</td><td>' + netflixFormatMin(r.run_time) + '</td></tr>').join('');
+                const esc = (s) => (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                tbody.innerHTML = rows.map((r, i) => {
+                    const showName = r.show_name || '';
+                    const link = '<a href="#" onclick="openNetflixShowDetails(\'' + esc(showName) + '\', \'\', \'\', \'' + (date || '') + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + showName + '</a>';
+                    return '<tr><td>' + (i + 1) + '</td><td>' + link + '</td><td>' + netflixProjectedViews(r.views).toLocaleString() + '</td><td>' + (r.genre || '-') + '</td><td>' + netflixFormatMin(r.avg_watch_time) + '</td><td>' + netflixFormatMin(r.run_time) + '</td></tr>';
+                }).join('');
             }
         }
         
@@ -53604,7 +53636,12 @@
             let rows = (rankerIQNetflixData.by_date && rankerIQNetflixData.by_date[date]) || [];
             rows = rows.filter(r => !(r.genre || '').toLowerCase().includes('indian'));
             rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            tbody.innerHTML = rows.slice(0, 100).map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + netflixProjectedViewsRankerIQ(r.views).toLocaleString() + '</td><td>' + (r.genre || '') + '</td><td>' + (r.avg_watch_time || '') + '</td><td>' + (r.run_time || '') + '</td></tr>').join('');
+            const esc = (s) => (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            tbody.innerHTML = rows.slice(0, 100).map((r, i) => {
+                const showName = r.show_name || '';
+                const link = '<a href="#" onclick="openNetflixShowDetails(\'' + esc(showName) + '\', \'\', \'\', \'' + (date || '') + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + showName + '</a>';
+                return '<tr><td>' + (i + 1) + '</td><td>' + link + '</td><td>' + netflixProjectedViewsRankerIQ(r.views).toLocaleString() + '</td><td>' + (r.genre || '') + '</td><td>' + (r.avg_watch_time || '') + '</td><td>' + (r.run_time || '') + '</td></tr>';
+            }).join('');
         }
         
         function renderRankerIQNetflixSeasonsRanker() {
@@ -53614,7 +53651,13 @@
             const date = dateInp ? dateInp.value : (rankerIQNetflixData.date_range && rankerIQNetflixData.date_range.max);
             let rows = (rankerIQNetflixData.by_date_season && rankerIQNetflixData.by_date_season[date]) || [];
             rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            tbody.innerHTML = rows.slice(0, 100).map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.season || '') + '</td><td>' + netflixProjectedViewsRankerIQ(r.views).toLocaleString() + '</td><td>' + (r.avg_watch_time || '') + '</td><td>' + (r.run_time || '') + '</td></tr>').join('');
+            const esc = (s) => (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            tbody.innerHTML = rows.slice(0, 100).map((r, i) => {
+                const showName = r.show_name || '';
+                const season = r.season || '';
+                const link = '<a href="#" onclick="openNetflixShowDetails(\'' + esc(showName) + '\', \'' + esc(season) + '\', \'\', \'' + (date || '') + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + showName + '</a>';
+                return '<tr><td>' + (i + 1) + '</td><td>' + link + '</td><td>' + (season) + '</td><td>' + netflixProjectedViewsRankerIQ(r.views).toLocaleString() + '</td><td>' + (r.avg_watch_time || '') + '</td><td>' + (r.run_time || '') + '</td></tr>';
+            }).join('');
         }
         
         function renderRankerIQNetflixEpisodesRanker() {
@@ -53624,7 +53667,15 @@
             const date = dateInp ? dateInp.value : (rankerIQNetflixData.date_range && rankerIQNetflixData.date_range.max);
             let rows = (rankerIQNetflixData.by_date_episode && rankerIQNetflixData.by_date_episode[date]) || [];
             rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            tbody.innerHTML = rows.slice(0, 100).map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.episode || '') + '</td><td>' + (r.episode_name || '') + '</td><td>' + (r.season || '') + '</td><td>' + netflixProjectedViewsRankerIQ(r.views).toLocaleString() + '</td><td>' + (r.avg_watch_time || '') + '</td><td>' + (r.run_time || '') + '</td></tr>').join('');
+            const esc = (s) => (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            tbody.innerHTML = rows.slice(0, 100).map((r, i) => {
+                const showName = r.show_name || '';
+                const season = r.season || '';
+                const epName = r.episode_name || '';
+                const showLink = '<a href="#" onclick="openNetflixShowDetails(\'' + esc(showName) + '\', \'' + esc(season) + '\', \'' + esc(epName) + '\', \'' + (date || '') + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + showName + '</a>';
+                const epLink = (epName && epName !== '-') ? '<a href="#" onclick="openNetflixShowDetails(\'' + esc(showName) + '\', \'' + esc(season) + '\', \'' + esc(epName) + '\', \'' + (date || '') + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + epName + '</a>' : (epName || '-');
+                return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (r.episode || '') + '</td><td>' + epLink + '</td><td>' + (season || '') + '</td><td>' + netflixProjectedViewsRankerIQ(r.views).toLocaleString() + '</td><td>' + (r.avg_watch_time || '') + '</td><td>' + (r.run_time || '') + '</td></tr>';
+            }).join('');
         }
         
         function renderRankerIQNetflixAllRanker() {
@@ -53637,7 +53688,15 @@
                 rows = rankerIQNetflixData.by_date[date];
             }
             rows = rows.slice().sort((a, b) => (b.views || 0) - (a.views || 0));
-            tbody.innerHTML = rows.slice(0, 100).map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.show_name || '') + '</td><td>' + (r.season || '') + '</td><td>' + (r.episode || '') + '</td><td>' + (r.episode_name || '') + '</td><td>' + netflixProjectedViewsRankerIQ(r.views).toLocaleString() + '</td><td>' + (r.avg_watch_time || '') + '</td><td>' + (r.run_time || '') + '</td></tr>').join('');
+            const esc = (s) => (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            tbody.innerHTML = rows.slice(0, 100).map((r, i) => {
+                const showName = r.show_name || '';
+                const season = r.season || '';
+                const epName = r.episode_name || '';
+                const showLink = '<a href="#" onclick="openNetflixShowDetails(\'' + esc(showName) + '\', \'' + esc(season) + '\', \'' + esc(epName) + '\', \'' + (date || '') + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + showName + '</a>';
+                const epLink = (epName && epName !== '-') ? '<a href="#" onclick="openNetflixShowDetails(\'' + esc(showName) + '\', \'' + esc(season) + '\', \'' + esc(epName) + '\', \'' + (date || '') + '\'); return false;" style="color: var(--accent-cyan); text-decoration: none; cursor: pointer;">' + epName + '</a>' : (epName || '');
+                return '<tr><td>' + (i + 1) + '</td><td>' + showLink + '</td><td>' + (season || '') + '</td><td>' + (r.episode || '') + '</td><td>' + epLink + '</td><td>' + netflixProjectedViewsRankerIQ(r.views).toLocaleString() + '</td><td>' + (r.avg_watch_time || '') + '</td><td>' + (r.run_time || '') + '</td></tr>';
+            }).join('');
         }
         
         function renderRankerIQNetflixByGenre() {
@@ -53697,7 +53756,13 @@
         }
         
         function showRankerIQPlatform(id) {
-            // Currently only Netflix, but ready for expansion
+            document.querySelectorAll('#rankerIQPlatformContent .ranker-platform-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.rankers-container .rankers-platform-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+            const panel = document.getElementById('rankeriq-' + id);
+            const btnId = 'rankerIQPlatform' + id.charAt(0).toUpperCase() + id.slice(1);
+            const btn = document.getElementById(btnId);
+            if (panel) panel.classList.add('active');
+            if (btn) btn.classList.add('active');
         }
         
         function renderRankerIQNetflixTrends() {
