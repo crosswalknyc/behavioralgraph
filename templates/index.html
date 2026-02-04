@@ -42437,7 +42437,7 @@
                 return;
             }
             
-            // Collect ALL behavioral AND demographic data (all sections) including items with index < 100
+            // Collect ONLY demographic and TELECOM data
             benchmarkCategoryData = {};
             
             // Calculate aggregate metrics for each profile
@@ -42445,28 +42445,28 @@
                 const allItems = [];
                 const categoryItems = {};
                 
-                // Behavioral categories (Content & Entertainment, Brand Affinities, etc.)
-                if (p.behavioral) {
-                    Object.entries(p.behavioral).forEach(([cat, items]) => {
-                        if (!categoryItems[cat]) categoryItems[cat] = [];
-                        if (Array.isArray(items)) {
-                            items.forEach(item => {
-                                if (item && item.name) {
-                                    const idx = typeof item.index === 'number' ? item.index : 100;
-                                    const itemData = { ...item, index: idx, category: cat };
-                                    allItems.push(itemData);
-                                    categoryItems[cat].push(itemData);
-                                    
-                                    if (!benchmarkCategoryData[cat]) benchmarkCategoryData[cat] = {};
-                                    if (!benchmarkCategoryData[cat][p.name]) benchmarkCategoryData[cat][p.name] = [];
-                                    benchmarkCategoryData[cat][p.name].push(itemData);
-                                }
-                            });
-                        }
-                    });
+                // TELECOM behavioral category only
+                if (p.behavioral && p.behavioral.TELECOM) {
+                    const cat = 'TELECOM';
+                    const items = p.behavioral.TELECOM;
+                    if (!categoryItems[cat]) categoryItems[cat] = [];
+                    if (Array.isArray(items)) {
+                        items.forEach(item => {
+                            if (item && item.name) {
+                                const idx = typeof item.index === 'number' ? item.index : 100;
+                                const itemData = { ...item, index: idx, category: cat };
+                                allItems.push(itemData);
+                                categoryItems[cat].push(itemData);
+                                
+                                if (!benchmarkCategoryData[cat]) benchmarkCategoryData[cat] = {};
+                                if (!benchmarkCategoryData[cat][p.name]) benchmarkCategoryData[cat][p.name] = [];
+                                benchmarkCategoryData[cat][p.name].push(itemData);
+                            }
+                        });
+                    }
                 }
                 
-                // Demographic categories (Age, Gender, Parental Status, etc.) so Compare includes all sections
+                // Demographic categories (Age, Gender, Parental Status, etc.)
                 const demoIndex = p.demographicsIndex || {};
                 Object.entries(BENCHMARK_DEMO_CATEGORY_NAMES).forEach(([demoKey, displayName]) => {
                     const indexMap = demoIndex[demoKey];
@@ -42977,31 +42977,55 @@
             const primaryProfile = nonGenPopProfiles[0] || profiles[0];
             const comparisonProfiles = genPopProfile ? [genPopProfile, ...nonGenPopProfiles.slice(1)] : profiles.slice(1);
             
-            // Collect all behaviors with their indices across profiles
+            // Collect demographics and TELECOM data only
             const allBehaviors = {};
             
             profiles.forEach(p => {
-                if (p.behavioral) {
-                    Object.entries(p.behavioral).forEach(([cat, items]) => {
-                        if (Array.isArray(items)) {
-                            items.forEach(item => {
-                                if (item && item.name) {
-                                    const key = cat + '|' + item.name;
-                                    if (!allBehaviors[key]) {
-                                        allBehaviors[key] = { 
-                                            name: item.name, 
-                                            category: cat, 
-                                            profileIndices: {}
-                                        };
-                                    }
-                                    allBehaviors[key].profileIndices[p.name] = {
-                                        index: item.index || 100,
-                                        pct: item.pct || item.percentage || 0
+                // Add demographics data
+                if (p.demographics && p.demographicsIndex) {
+                    const demoCategories = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'];
+                    demoCategories.forEach(cat => {
+                        const catData = p.demographics[cat] || {};
+                        const catIndex = p.demographicsIndex[cat] || {};
+                        Object.entries(catData).forEach(([value, pct]) => {
+                            const key = cat.toUpperCase() + '|' + value;
+                            const index = catIndex[value] || 100;
+                            if (!allBehaviors[key]) {
+                                allBehaviors[key] = { 
+                                    name: value, 
+                                    category: cat.toUpperCase(), 
+                                    profileIndices: {}
+                                };
+                            }
+                            allBehaviors[key].profileIndices[p.name] = {
+                                index: index,
+                                pct: pct || 0
+                            };
+                        });
+                    });
+                }
+                
+                // Add TELECOM behavioral data only
+                if (p.behavioral && p.behavioral.TELECOM) {
+                    const items = p.behavioral.TELECOM;
+                    if (Array.isArray(items)) {
+                        items.forEach(item => {
+                            if (item && item.name) {
+                                const key = 'TELECOM|' + item.name;
+                                if (!allBehaviors[key]) {
+                                    allBehaviors[key] = { 
+                                        name: item.name, 
+                                        category: 'TELECOM', 
+                                        profileIndices: {}
                                     };
                                 }
-                            });
-                        }
-                    });
+                                allBehaviors[key].profileIndices[p.name] = {
+                                    index: item.index || 100,
+                                    pct: item.pct || item.percentage || 0
+                                };
+                            }
+                        });
+                    }
                 }
             });
             
