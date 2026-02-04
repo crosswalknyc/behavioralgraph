@@ -35432,27 +35432,28 @@
             floatingPanel.onclick = (e) => e.stopPropagation();
             
             // Apply critical inline styles to ensure visibility - use left position instead of right
-            floatingPanel.style.cssText = `
-                position: fixed !important;
-                top: 120px !important;
-                left: 50% !important;
-                transform: translateX(-50%) !important;
-                right: auto !important;
-                bottom: auto !important;
-                z-index: 2147483647 !important;
-                display: block !important;
-                opacity: 1 !important;
-                visibility: visible !important;
-                pointer-events: auto !important;
-                background: rgba(13, 33, 55, 0.99) !important;
-                border: 4px solid #ff0000 !important;
-                border-radius: 10px !important;
-                min-width: 320px !important;
-                max-width: 400px !important;
-                max-height: 520px !important;
-                box-shadow: 0 0 0 4px #ffff00, 0 10px 40px rgba(0, 0, 0, 0.9) !important;
-                padding: 0 !important;
-            `;
+            floatingPanel.style.position = 'fixed';
+            floatingPanel.style.top = '120px';
+            floatingPanel.style.left = '50%';
+            floatingPanel.style.transform = 'translateX(-50%)';
+            floatingPanel.style.zIndex = '2147483647';
+            floatingPanel.style.display = 'block';
+            floatingPanel.style.opacity = '1';
+            floatingPanel.style.visibility = 'visible';
+            floatingPanel.style.pointerEvents = 'auto';
+            floatingPanel.style.background = '#ff0000';  // BRIGHT RED to see it
+            floatingPanel.style.border = '5px solid #ffff00';
+            floatingPanel.style.borderRadius = '10px';
+            floatingPanel.style.minWidth = '350px';
+            floatingPanel.style.maxWidth = '400px';
+            floatingPanel.style.maxHeight = '500px';
+            floatingPanel.style.overflow = 'auto';
+            floatingPanel.style.boxShadow = '0 0 100px 20px rgba(255,255,0,1)';
+            floatingPanel.style.padding = '20px';
+            floatingPanel.style.color = '#ffffff';
+            
+            // Remove the class that might have conflicting styles
+            floatingPanel.className = '';
             
             // Append to body
             document.body.appendChild(floatingPanel);
