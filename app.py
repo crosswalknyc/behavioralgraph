@@ -9055,67 +9055,96 @@ def list_jobs():
     """List all jobs (local + S3 cached) with caching for performance."""
     import time
     
-    job_list = []
-    categories = set()
-    
-    # Return quickly if cache is still loading
-    if not cache_loading_complete and not s3_cache.get('jobs'):
+    try:
+        job_list = []
+        categories = set()
+        
+        # Return quickly if cache is still loading
+        if not cache_loading_complete and not s3_cache.get('jobs'):
+            return jsonify({
+                'jobs': [],
+                'categories': [],
+                'cache_info': {'loading': True, 'message': 'Loading profiles...'},
+                'loading': True
+            })
+        
+        # Update user's last activity time (but don't block on it)
+        username = session.get('username')
+        if username:
+            try:
+                users = load_users()
+                if username in users:
+                    users[username]['last_activity'] = time.time()
+                    save_users(users)
+            except Exception:
+                pass  # Don't block on activity tracking
+        
+        # Add local jobs (always fresh)
+        for job_id, job in jobs.items():
+            job_list.append({
+                'job_id': job_id,
+                'project_name': job.get('project_name', ''),
+                'status': job.get('status', 'unknown'),
+                'progress': job.get('progress', 0),
+                'created_at': job.get('created_at', ''),
+                'source': 'local',
+                'category': 'LOCAL'
+            })
+            categories.add('LOCAL')
+        
+        # Use persisted cache only - no S3 scanning on page load for speed
+        # If cache is empty, try to load persisted cache
+        cache_jobs = s3_cache.get('jobs') or []
+        if not cache_jobs and s3_client:
+            load_persisted_cache()
+            cache_jobs = s3_cache.get('jobs') or []
+        
+        # Add cached S3 jobs (ensure each has created_at for sorting)
+        for j in cache_jobs:
+            if isinstance(j, dict):
+                entry = {
+                    'job_id': j.get('job_id') or j.get('s3_key', ''),
+                    'project_name': j.get('project_name') or j.get('name', 'Unknown'),
+                    'status': j.get('status', 'cached'),
+                    'progress': j.get('progress', 100),
+                    'created_at': j.get('created_at') or j.get('last_modified', ''),
+                    'source': j.get('source', 's3'),
+                    'category': j.get('category', 'OTHER'),
+                    's3_key': j.get('s3_key'),
+                    'display_name': j.get('display_name')
+                }
+                # Preserve bucket/is_svod for SVOD profile detection
+                if 'bucket' in j:
+                    entry['bucket'] = j['bucket']
+                if 'is_svod' in j:
+                    entry['is_svod'] = j['is_svod']
+                job_list.append(entry)
+                cat = j.get('category')
+                if cat:
+                    categories.add(cat)
+        
+        # Sort by created_at descending (safe key for missing/None values)
+        sorted_jobs = sorted(job_list, key=lambda x: x.get('created_at') or '', reverse=True)
+        
+        return jsonify({
+            'jobs': sorted_jobs,
+            'categories': sorted(list(categories)),
+            'cache_info': {
+                'last_updated': s3_cache.get('last_updated'),
+                'file_count': s3_cache.get('file_count', 0),
+                'cached': True
+            }
+        })
+    except Exception as e:
+        traceback.print_exc()
+        print(f"⚠️ list_jobs error: {e}")
+        # Return empty jobs instead of 500 so UI can still render
         return jsonify({
             'jobs': [],
             'categories': [],
-            'cache_info': {'loading': True, 'message': 'Loading profiles...'},
-            'loading': True
-        })
-    
-    # Update user's last activity time (but don't block on it)
-    username = session.get('username')
-    if username:
-        try:
-            users = load_users()
-            if username in users:
-                users[username]['last_activity'] = time.time()
-                save_users(users)
-        except:
-            pass  # Don't block on activity tracking
-    
-    # Add local jobs (always fresh)
-    for job_id, job in jobs.items():
-        job_list.append({
-            'job_id': job_id,
-            'project_name': job['project_name'],
-            'status': job['status'],
-            'progress': job['progress'],
-            'created_at': job['created_at'],
-            'source': 'local',
-            'category': 'LOCAL'
-        })
-        categories.add('LOCAL')
-    
-    # Use persisted cache only - no S3 scanning on page load for speed
-    # If cache is empty, try to load persisted cache
-    if not s3_cache['jobs'] and s3_client:
-        load_persisted_cache()
-    
-    # Don't auto-refresh - user can manually refresh if needed
-    # This makes page loads instant
-    
-    # Add cached S3 jobs
-    job_list.extend(s3_cache['jobs'])
-    for cat in s3_cache['categories']:
-        categories.add(cat)
-    
-    # Sort by created_at descending
-    sorted_jobs = sorted(job_list, key=lambda x: x['created_at'], reverse=True)
-    
-    return jsonify({
-        'jobs': sorted_jobs,
-        'categories': sorted(list(categories)),
-        'cache_info': {
-            'last_updated': s3_cache.get('last_updated'),
-            'file_count': s3_cache.get('file_count', 0),
-            'cached': True
-        }
-    })
+            'cache_info': {'error': str(e), 'cached': False},
+            'loading': False
+        }), 200
 
 
 @app.route('/api/refresh-cache')
