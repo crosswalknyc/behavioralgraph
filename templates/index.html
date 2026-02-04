@@ -31409,6 +31409,10 @@
             }
         });
         
+        // Store items globally for behavioral value selector
+        let behavioralSelectorItems = [];
+        let behavioralSelectorCategory = '';
+        
         function showBehavioralValueSelector(category) {
             if (!currentDashboardData || !currentProfileData) {
                 alert('Please select a profile first');
@@ -31425,13 +31429,15 @@
                 // If it's already an array of objects with name/pct
                 items = catData.map(item => ({
                     name: item.name || item.value || String(item),
-                    pct: parseFloat(item.pct || item.percentage || 0)
+                    pct: parseFloat(item.pct || item.percentage || 0),
+                    index: item.index || 100
                 }));
             } else if (typeof catData === 'object') {
                 // If it's an object with key-value pairs
                 items = Object.entries(catData).map(([name, pct]) => ({
                     name: String(name),
-                    pct: parseFloat(pct) || 0
+                    pct: parseFloat(pct) || 0,
+                    index: 100
                 }));
             }
             
@@ -31444,6 +31450,10 @@
             }
             
             console.log('Behavioral value selector items:', items);
+            
+            // Store globally to avoid passing through onclick
+            behavioralSelectorItems = items;
+            behavioralSelectorCategory = category;
             
             // Create modal
             const modal = document.createElement('div');
@@ -31458,12 +31468,12 @@
                     <div style="padding: 1.5rem; overflow-y: auto; max-height: calc(80vh - 200px);">
                         <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-dark); border-radius: 8px; border-left: 3px solid var(--accent-lime);">
                             <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Category:</div>
-                            <div style="font-weight: 600;">${category}</div>
+                            <div style="font-weight: 600;">${escapeHtml(category)}</div>
                         </div>
                         
                         <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
-                            <button onclick="selectAllBehavioralValues(true)" class="btn btn-small" style="padding: 0.4rem 0.75rem; font-size: 0.75rem;">Select All</button>
-                            <button onclick="selectAllBehavioralValues(false)" class="btn btn-small" style="padding: 0.4rem 0.75rem; font-size: 0.75rem;">Deselect All</button>
+                            <button onclick="selectAllBehavioralValues(true)" class="btn btn-small" style="padding: 0.4rem 0.75rem; font-size: 0.75rem;">SELECT ALL</button>
+                            <button onclick="selectAllBehavioralValues(false)" class="btn btn-small" style="padding: 0.4rem 0.75rem; font-size: 0.75rem;">DESELECT ALL</button>
                             <span id="selectedCount" style="margin-left: auto; font-size: 0.75rem; color: var(--text-secondary);">0 selected</span>
                         </div>
                         
@@ -31478,8 +31488,8 @@
                         </div>
                     </div>
                     <div style="padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; gap: 0.75rem;">
-                        <button class="btn btn-secondary" onclick="document.getElementById('behavioralValueSelectorModal').remove()" style="flex: 1;">Cancel</button>
-                        <button class="btn btn-primary" onclick="confirmBehavioralValueSelection('${category.replace(/'/g, "\\'")}', ${JSON.stringify(items).replace(/'/g, "\\'")})" style="flex: 1;">Add Selected to Deck</button>
+                        <button class="btn btn-secondary" onclick="document.getElementById('behavioralValueSelectorModal').remove()" style="flex: 1;">CANCEL</button>
+                        <button class="btn btn-primary" onclick="confirmBehavioralValueSelection()" style="flex: 1;">ADD SELECTED TO DECK</button>
                     </div>
                 </div>
             `;
@@ -31501,7 +31511,7 @@
             }
         }
         
-        function confirmBehavioralValueSelection(category, allItems) {
+        function confirmBehavioralValueSelection() {
             const checkboxes = document.querySelectorAll('#behavioralValuesList input[type="checkbox"]');
             const selectedIndices = Array.from(checkboxes)
                 .filter(cb => cb.checked)
@@ -31512,14 +31522,16 @@
                 return;
             }
             
-            // Filter items to only selected ones
-            const selectedItems = selectedIndices.map(idx => allItems[idx]);
+            // Filter items to only selected ones using global variable
+            const selectedItems = selectedIndices.map(idx => behavioralSelectorItems[idx]);
+            
+            console.log('Selected items:', selectedItems);
             
             // Close the selector modal
             document.getElementById('behavioralValueSelectorModal')?.remove();
             
             // Now show the deck selection popup with the filtered items
-            addModuleToDeck('behavioral', category, selectedItems);
+            addModuleToDeck('behavioral', behavioralSelectorCategory, selectedItems);
         }
         
         function addModuleToDeck(type, category, selectedItems = null) {
