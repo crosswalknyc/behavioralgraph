@@ -31729,7 +31729,8 @@
             deck.updatedAt = new Date().toISOString();
             
             // Add collaborators if any were specified
-            if (pendingCollaborators.length > 0) {
+            const collabCount = pendingCollaborators.length;
+            if (collabCount > 0) {
                 if (!deck.collaborators) deck.collaborators = [];
                 pendingCollaborators.forEach(email => {
                     if (!deck.collaborators.find(c => c.email === email)) {
@@ -31747,14 +31748,17 @@
             
             localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
             
+            // Also save to data points for easy access
+            saveToDataPoints({...item, workspaceId: wsId});
+            
             // Clear pending collaborators
             pendingCollaborators = [];
             
             document.getElementById('deckSelectionModal')?.remove();
             
             let message = `✅ Added "${item.title}" to ${deck.name}`;
-            if (pendingCollaborators.length > 0) {
-                message += ` and invited ${pendingCollaborators.length} collaborator(s)`;
+            if (collabCount > 0) {
+                message += ` and invited ${collabCount} collaborator(s)`;
             }
             showNotification(message, 'success');
             trackActivity('add_insight_to_deck', `${insightType}:${deck.name}`);
