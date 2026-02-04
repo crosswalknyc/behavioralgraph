@@ -15237,6 +15237,7 @@
         let currentUserFirstName = '{{ first_name | default("") }}';
         let currentUserLastName = '{{ last_name | default("") }}';
         let currentUserCompany = '{{ company | default("") }}';
+        let currentUserCompanyLogo = '{{ company_logo | default("") }}';
         let currentUserEmail = '{{ user_email | default("") }}';
         
         // Toast notification function (needed early for deck operations)
@@ -49191,6 +49192,12 @@
                              onblur="this.style.background='transparent'; updateTitleSlideDateRange(this.textContent)">
                             ${escapeHtml(dateRangeDisplay)}
                         </div>
+                        ${(titleSlide.companyLogo || currentUserCompanyLogo) ? `
+                        <!-- Company logo - bottom right -->
+                        <div style="position: absolute; right: 5%; bottom: 8%; max-width: 140px; max-height: 50px; display: flex; align-items: center; justify-content: flex-end;">
+                            <img src="${escapeHtml(titleSlide.companyLogo || currentUserCompanyLogo)}" alt="Company" style="max-width: 100%; max-height: 50px; object-fit: contain; opacity: 0.9;">
+                        </div>
+                        ` : ''}
                     </div>
                     ${footerHtml}
                 `;
@@ -49344,6 +49351,12 @@
                                 ${escapeHtml(slide.presenterEmail || presenterEmail)}
                             </div>
                         </div>
+                        ${(slide.companyLogo || currentUserCompanyLogo) ? `
+                        <!-- Company logo - bottom right -->
+                        <div style="position: absolute; right: 4%; bottom: 4%; max-width: 120px; max-height: 45px; display: flex; align-items: center; justify-content: flex-end;">
+                            <img src="${escapeHtml(slide.companyLogo || currentUserCompanyLogo)}" alt="Company" style="max-width: 100%; max-height: 45px; object-fit: contain; opacity: 0.85;">
+                        </div>
+                        ` : ''}
                     </div>
                 `;
             }
@@ -52903,6 +52916,7 @@
                         currentUserFirstName = userData.first_name || '';
                         currentUserLastName = userData.last_name || '';
                         currentUserCompany = userData.company || '';
+                        currentUserCompanyLogo = userData.company_logo || '';
                         
                         // Display user's company and department
                         document.getElementById('userCompany').textContent = userData.company || 'Not assigned';
