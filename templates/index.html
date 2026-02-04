@@ -14242,6 +14242,7 @@
                             <button class="tab-btn" onclick="showRankerIQNetflixSubTab('genre')" id="rankerIQNetflixSubTabGenre">🎬 By Genre</button>
                             <button class="tab-btn" onclick="showRankerIQNetflixSubTab('topshows')" id="rankerIQNetflixSubTabTopShows">🏆 Top Shows Over Time</button>
                             <button class="tab-btn" onclick="showRankerIQNetflixSubTab('insights')" id="rankerIQNetflixSubTabInsights">💡 Insights</button>
+                            <button class="tab-btn" onclick="showRankerIQNetflixSubTab('livetop10')" id="rankerIQNetflixSubTabLivetop10">🔴 Live Top 10</button>
                         </div>
                         <div id="rankerIQNetflixSubTabContent">
                             <div id="rankeriq-netflix-all" class="netflix-sub-content">
@@ -14308,6 +14309,30 @@
                             <div id="rankeriq-netflix-insights" class="netflix-sub-content">
                                 <h3 style="margin: 0 0 0.75rem 0;">💡 Netflix Ranker Insights</h3>
                                 <div id="rankerIQNetflixInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
+                            </div>
+                            <div id="rankeriq-netflix-livetop10" class="netflix-sub-content">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                    <h3 style="margin: 0;">🔴 Live Top 10</h3>
+                                    <button class="module-btn" onclick="loadRankerIQNetflixLiveTop10(true)" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">↻ Refresh</button>
+                                </div>
+                                <p style="margin: 0 0 0.75rem 0; font-size: 0.8rem; color: var(--text-secondary);">Real-time Netflix viewing data. Updated every 5 minutes.</p>
+                                <div id="rankerIQNetflixLiveTop10TableWrap" style="overflow-x: auto;">
+                                    <table class="rankers-table" style="width: 100%; border-collapse: collapse;">
+                                        <thead>
+                                            <tr>
+                                                <th>Rank</th>
+                                                <th>Title</th>
+                                                <th>Projected Views</th>
+                                                <th>% of Total</th>
+                                                <th>Link</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="rankerIQNetflixLiveTop10Body"></tbody>
+                                    </table>
+                                </div>
+                                <div id="rankerIQNetflixLiveTop10Loading" style="display: none; text-align: center; padding: 2rem;">
+                                    <span class="spinner"></span> Loading live data...
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -49872,10 +49897,15 @@
             document.querySelectorAll('#rankerIQNetflixSubTabContent .netflix-sub-content').forEach(c => c.classList.remove('active'));
             document.querySelectorAll('#rankeriq-netflix .netflix-subtabs .tab-btn').forEach(b => b.classList.remove('active'));
             const content = document.getElementById('rankeriq-netflix-' + id);
-            const btnId = id === 'topshows' ? 'TopShows' : id.charAt(0).toUpperCase() + id.slice(1);
+            const btnId = id === 'topshows' ? 'TopShows' : id === 'livetop10' ? 'Livetop10' : id.charAt(0).toUpperCase() + id.slice(1);
             const btn = document.getElementById('rankerIQNetflixSubTab' + btnId);
             if (content) content.classList.add('active');
             if (btn) btn.classList.add('active');
+            
+            // Load live top 10 data when switching to that tab
+            if (id === 'livetop10') {
+                loadRankerIQNetflixLiveTop10();
+            }
         }
         
         function showRankerIQPlatform(id) {
@@ -49884,6 +49914,55 @@
         
         function renderRankerIQNetflixTrends() {
             // Trends chart - simplified for now
+        }
+        
+        let rankerIQLiveTop10Data = null;
+        
+        function loadRankerIQNetflixLiveTop10(forceRefresh) {
+            const tbody = document.getElementById('rankerIQNetflixLiveTop10Body');
+            const loading = document.getElementById('rankerIQNetflixLiveTop10Loading');
+            
+            // If we have cached data and not forcing refresh, just render
+            if (rankerIQLiveTop10Data && !forceRefresh) {
+                renderRankerIQNetflixLiveTop10();
+                return;
+            }
+            
+            if (loading) loading.style.display = 'block';
+            if (tbody) tbody.innerHTML = '';
+            
+            fetch('/api/rankers/netflix/live-top10', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    if (loading) loading.style.display = 'none';
+                    if (data.error) {
+                        if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">Error: ' + data.error + '</td></tr>';
+                        return;
+                    }
+                    rankerIQLiveTop10Data = data;
+                    renderRankerIQNetflixLiveTop10();
+                })
+                .catch(err => {
+                    if (loading) loading.style.display = 'none';
+                    console.error('[RankerIQ Live Top 10] Error:', err);
+                    if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">Failed to load live data</td></tr>';
+                });
+        }
+        
+        function renderRankerIQNetflixLiveTop10() {
+            const tbody = document.getElementById('rankerIQNetflixLiveTop10Body');
+            if (!tbody || !rankerIQLiveTop10Data || !rankerIQLiveTop10Data.top_10) return;
+            
+            tbody.innerHTML = rankerIQLiveTop10Data.top_10.map(r => {
+                const displayName = r.show_name || r.title_id || r.url;
+                return '<tr>' +
+                    '<td>' + r.rank + '</td>' +
+                    '<td>' + displayName + '</td>' +
+                    '<td>' + (r.projected_views || 0).toLocaleString() + '</td>' +
+                    '<td>' + (r.pct_of_total || 0) + '%</td>' +
+                    '<td><a href="' + r.url + '" target="_blank" style="color: var(--accent-color);">View</a></td>' +
+                '</tr>';
+            }).join('');
         }
     </script>
     

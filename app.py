@@ -4548,6 +4548,117 @@ def get_netflix_show_details():
         return jsonify({'error': str(e)}), 500
 
 
+# ============================================================================
+# NETFLIX LIVE TOP 10 - Real-time Netflix viewing data from S3
+# ============================================================================
+NETFLIX_LIVE_TOP10_CACHE = {'data': None, 'loaded_at': 0}
+NETFLIX_LIVE_TOP10_CACHE_DURATION = 300  # 5 minutes
+
+@app.route('/api/rankers/netflix/live-top10', methods=['GET'])
+def get_netflix_live_top10():
+    """
+    Return live Netflix Top 10 from the netflix-liveish S3 bucket.
+    Reads data_netflix.csv, counts URL occurrences, and returns top 10 ranked.
+    """
+    global NETFLIX_LIVE_TOP10_CACHE
+    
+    try:
+        now = datetime.now().timestamp()
+        cache_age = now - NETFLIX_LIVE_TOP10_CACHE.get('loaded_at', 0)
+        
+        # Return cached data if fresh
+        if NETFLIX_LIVE_TOP10_CACHE.get('data') and cache_age < NETFLIX_LIVE_TOP10_CACHE_DURATION:
+            return jsonify(NETFLIX_LIVE_TOP10_CACHE['data'])
+        
+        # Fetch from S3
+        live_bucket = 'netflix-liveish'
+        live_key = 'data_netflix.csv'
+        
+        try:
+            response = s3_client.get_object(Bucket=live_bucket, Key=live_key)
+            csv_content = response['Body'].read().decode('utf-8')
+        except Exception as e:
+            print(f"[Netflix Live Top 10] S3 fetch error: {e}")
+            if NETFLIX_LIVE_TOP10_CACHE.get('data'):
+                return jsonify(NETFLIX_LIVE_TOP10_CACHE['data'])
+            return jsonify({'error': f'Failed to fetch live data: {e}'}), 500
+        
+        # Parse CSV and count URLs
+        from collections import Counter
+        lines = csv_content.strip().split('\n')
+        
+        # Find header row and column indices
+        header = None
+        url_col = -1
+        name_col = -1
+        for i, line in enumerate(lines[:5]):
+            cols = line.split(',')
+            for j, col in enumerate(cols):
+                col_lower = col.strip().lower().replace('"', '')
+                if col_lower == 'url':
+                    url_col = j
+                    header = i
+                if col_lower == 'name_of_show':
+                    name_col = j
+        
+        if url_col < 0:
+            return jsonify({'error': 'URL column not found in CSV'}), 500
+        
+        # Count URLs and collect show names
+        url_counts = Counter()
+        url_to_name = {}
+        
+        for line in lines[header + 1:] if header is not None else lines[1:]:
+            cols = line.split(',')
+            if len(cols) > url_col:
+                url = cols[url_col].strip().replace('"', '')
+                if url and url.startswith('http'):
+                    url_counts[url] += 1
+                    # Get show name if available
+                    if name_col >= 0 and len(cols) > name_col:
+                        name = cols[name_col].strip().replace('"', '')
+                        if name and url not in url_to_name:
+                            url_to_name[url] = name
+        
+        # Build top 10 with projected views (no 150x boost per user request)
+        total_count = sum(url_counts.values())
+        top_10 = []
+        
+        for rank, (url, count) in enumerate(url_counts.most_common(10), 1):
+            # Project views: (count / panel_size) * US_population
+            projected_views = int(count / 10_000_000 * 329_900_000)
+            pct_of_total = round((count / total_count * 100), 2) if total_count > 0 else 0
+            
+            # Extract title_id from URL
+            title_id = url.split('/')[-1].split('?')[0] if '/' in url else url
+            
+            top_10.append({
+                'rank': rank,
+                'url': url,
+                'title_id': title_id,
+                'show_name': url_to_name.get(url, ''),
+                'raw_count': count,
+                'projected_views': projected_views,
+                'pct_of_total': pct_of_total
+            })
+        
+        result = {
+            'top_10': top_10,
+            'total_urls': len(url_counts),
+            'total_views': sum(url_counts.values()),
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        NETFLIX_LIVE_TOP10_CACHE['data'] = result
+        NETFLIX_LIVE_TOP10_CACHE['loaded_at'] = now
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"[Netflix Live Top 10] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 # Eager-load ranker caches from disk at startup so first request in each worker is fast
 def _preload_ranker_caches():
     try:
