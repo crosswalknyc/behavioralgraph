@@ -11975,32 +11975,57 @@
                     </div>
                 </div>
                 
-                <!-- Category Heatmap -->
+                <!-- Category Heatmap - Enhanced Interactive Version -->
                 <div class="interests-heatmap-section" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Interest Category Heatmap" style="position: relative;">
                     <h3 style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="display: flex; align-items: center; gap: 0.3rem;">
                             <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
-                            🗺️ Interest Category Heatmap
+                            🎯 Interest Index Distribution
                         </span>
                         <span class="module-action-btns">
                             <button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('interests', 'Category Heatmap')" data-tooltip="Export CSV: Download the interest category heatmap data as a CSV file.">CSV</button>
                             <button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('interests', 'Category Heatmap')" data-tooltip="Add to Deck: Save the interest category heatmap to your presentation deck.">➕</button>
                         </span>
                     </h3>
-                    <p class="interests-heatmap-instruction" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.6rem;">Click a segment to see all interests in that index range (divided into 5 equal-sized quintiles).</p>
-                    <div class="interests-heatmap-bar-wrap">
-                        <span class="axis-label">Under-index</span>
-                        <div id="interestsHeatmapBar" class="interests-heatmap-bar" role="slider" aria-label="Index range quintiles" tabindex="0">
-                            <!-- 5 quintile segments filled by JS -->
+                    
+                    <!-- Stats Summary Row -->
+                    <div id="heatmapStatsSummary" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; margin-bottom: 1rem;">
+                        <!-- Filled by JS with quintile stats -->
+                    </div>
+                    
+                    <!-- Interactive Bar -->
+                    <div class="interests-heatmap-bar-wrap" style="position: relative;">
+                        <span class="axis-label" style="display: flex; flex-direction: column; align-items: center;">
+                            <span style="font-size: 1.2rem;">📉</span>
+                            <span>Under</span>
+                        </span>
+                        <div style="flex: 1; max-width: 500px;">
+                            <div id="interestsHeatmapBar" class="interests-heatmap-bar" role="slider" aria-label="Index range quintiles" tabindex="0" style="height: 48px; border-radius: 12px;">
+                                <!-- 5 quintile segments filled by JS -->
+                            </div>
+                            <!-- Range labels under bar -->
+                            <div id="heatmapRangeLabels" style="display: flex; justify-content: space-between; margin-top: 0.35rem; font-size: 0.65rem; color: var(--text-secondary);"></div>
                         </div>
-                        <span class="axis-label">Over-index</span>
+                        <span class="axis-label" style="display: flex; flex-direction: column; align-items: center;">
+                            <span style="font-size: 1.2rem;">📈</span>
+                            <span>Over</span>
+                        </span>
                     </div>
-                    <div id="interestsHeatmapResults" class="interests-heatmap-results" style="min-height: 2rem;">
-                        <div class="interests-heatmap-placeholder" style="padding: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.8rem;">Select a segment above to view all interests in that quintile.</div>
+                    
+                    <!-- Quintile Info Tooltip (shown on hover) -->
+                    <div id="heatmapQuintileTooltip" style="display: none; position: absolute; background: rgba(15, 23, 42, 0.98); border: 1px solid var(--accent-cyan); border-radius: 8px; padding: 0.75rem; font-size: 0.75rem; z-index: 100; pointer-events: none; box-shadow: 0 8px 32px rgba(0,0,0,0.4); min-width: 180px;">
+                        <div id="tooltipContent"></div>
                     </div>
-                    <div class="interests-heatmap-grid" id="interestsHeatmapGrid" style="display: none;">
-                        <!-- Legacy grid hidden; quintile results shown in interestsHeatmapResults -->
+                    
+                    <!-- Results Area -->
+                    <div id="interestsHeatmapResults" class="interests-heatmap-results" style="min-height: 2rem; margin-top: 1rem;">
+                        <div class="interests-heatmap-placeholder" style="padding: 1.5rem; text-align: center; color: var(--text-secondary); font-size: 0.85rem; background: linear-gradient(135deg, rgba(30, 41, 59, 0.4), rgba(15, 23, 42, 0.6)); border-radius: 10px; border: 1px dashed rgba(6, 182, 212, 0.3);">
+                            <div style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.6;">👆</div>
+                            <div>Click any segment above to explore interests in that index range</div>
+                            <div style="margin-top: 0.5rem; font-size: 0.75rem; opacity: 0.7;">Use ← → arrow keys to navigate between quintiles</div>
+                        </div>
                     </div>
+                    <div class="interests-heatmap-grid" id="interestsHeatmapGrid" style="display: none;"></div>
                 </div>
                 
                 <!-- Top Interests by Category -->
@@ -27644,35 +27669,102 @@
         
         // Quintile state for interactive heatmap (used by bar click handler)
         let interestsHeatmapQuintiles = [];
+        let heatmapQuintileStats = [];
         
         function renderInterestsHeatmap(items) {
             const barEl = document.getElementById('interestsHeatmapBar');
             const resultsEl = document.getElementById('interestsHeatmapResults');
+            const statsEl = document.getElementById('heatmapStatsSummary');
+            const rangeLabelsEl = document.getElementById('heatmapRangeLabels');
             const placeholderEl = resultsEl ? resultsEl.querySelector('.interests-heatmap-placeholder') : null;
+            
             items = (items || []).filter(item => Number(item.index) !== 0);
+            
             // Sort all interest values by index ascending and split into 5 equal-sized quintiles
             const sortedByIndex = [...items].sort((a, b) => a.index - b.index);
             const n = sortedByIndex.length;
             const size = Math.ceil(n / 5) || 1;
             interestsHeatmapQuintiles = [];
+            heatmapQuintileStats = [];
+            
             for (let q = 0; q < 5; q++) {
                 const start = q * size;
                 const end = Math.min(start + size, n);
-                interestsHeatmapQuintiles.push(sortedByIndex.slice(start, end));
+                const quintileItems = sortedByIndex.slice(start, end);
+                interestsHeatmapQuintiles.push(quintileItems);
+                
+                // Calculate stats for this quintile
+                if (quintileItems.length > 0) {
+                    const indices = quintileItems.map(i => i.index);
+                    const minIdx = Math.min(...indices);
+                    const maxIdx = Math.max(...indices);
+                    const avgIdx = Math.round(indices.reduce((a, b) => a + b, 0) / indices.length);
+                    heatmapQuintileStats.push({ count: quintileItems.length, min: minIdx, max: maxIdx, avg: avgIdx });
+                } else {
+                    heatmapQuintileStats.push({ count: 0, min: 0, max: 0, avg: 0 });
+                }
             }
             
-            // Bar segment colors (under to over)
+            // Bar segment colors and labels
             const segmentColors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'];
+            const segmentLabels = ['Very Low', 'Low', 'Average', 'High', 'Very High'];
+            const segmentEmojis = ['🔻', '📉', '➖', '📈', '🔺'];
+            
+            // Render stats summary cards
+            if (statsEl) {
+                statsEl.innerHTML = heatmapQuintileStats.map((stat, i) => {
+                    const pctOfTotal = n > 0 ? Math.round((stat.count / n) * 100) : 0;
+                    return `
+                        <div class="heatmap-stat-card" data-quintile="${i}" onclick="selectInterestsHeatmapQuintile(${i})" style="
+                            background: linear-gradient(135deg, ${segmentColors[i]}22, ${segmentColors[i]}11);
+                            border: 1px solid ${segmentColors[i]}44;
+                            border-radius: 8px;
+                            padding: 0.6rem;
+                            cursor: pointer;
+                            transition: all 0.2s ease;
+                            text-align: center;
+                        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px ${segmentColors[i]}33';" onmouseout="this.style.transform=''; this.style.boxShadow='';">
+                            <div style="font-size: 1.1rem; margin-bottom: 0.2rem;">${segmentEmojis[i]}</div>
+                            <div style="font-size: 0.65rem; color: ${segmentColors[i]}; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">${segmentLabels[i]}</div>
+                            <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">${stat.count}</div>
+                            <div style="font-size: 0.6rem; color: var(--text-secondary);">Index: ${stat.min}-${stat.max}</div>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            // Render the bar with enhanced segments
             if (barEl) {
-                barEl.innerHTML = interestsHeatmapQuintiles.map((_, i) =>
-                    `<div class="quintile-segment" data-quintile="${i}" style="background: ${segmentColors[i]};" title="Quintile ${i + 1}: click to see all interests in this index range"></div>`
-                ).join('');
+                barEl.innerHTML = interestsHeatmapQuintiles.map((quintile, i) => {
+                    const stat = heatmapQuintileStats[i];
+                    const widthPct = n > 0 ? (quintile.length / n) * 100 : 20;
+                    return `
+                        <div class="quintile-segment" data-quintile="${i}" style="
+                            background: linear-gradient(180deg, ${segmentColors[i]}, ${segmentColors[i]}cc);
+                            flex: ${widthPct};
+                            position: relative;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                        " title="${segmentLabels[i]}: ${stat.count} interests (Index ${stat.min}-${stat.max})">
+                            <span style="font-size: 0.7rem; font-weight: 700; color: rgba(0,0,0,0.7); text-shadow: 0 1px 2px rgba(255,255,255,0.3);">${stat.count}</span>
+                        </div>
+                    `;
+                }).join('');
+                
+                // Add event listeners
                 barEl.querySelectorAll('.quintile-segment').forEach(seg => {
                     seg.addEventListener('click', function () {
                         const q = parseInt(this.getAttribute('data-quintile'), 10);
                         selectInterestsHeatmapQuintile(q);
                     });
+                    seg.addEventListener('mouseenter', function(e) {
+                        const q = parseInt(this.getAttribute('data-quintile'), 10);
+                        showHeatmapTooltip(e, q);
+                    });
+                    seg.addEventListener('mouseleave', hideHeatmapTooltip);
                 });
+                
                 barEl.addEventListener('keydown', function (e) {
                     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
                     e.preventDefault();
@@ -27685,7 +27777,18 @@
                 });
             }
             
-            // Reset results area to placeholder (no segment selected)
+            // Render range labels
+            if (rangeLabelsEl && heatmapQuintileStats.length > 0) {
+                const minAll = heatmapQuintileStats[0].min;
+                const maxAll = heatmapQuintileStats[4].max;
+                rangeLabelsEl.innerHTML = `
+                    <span style="color: ${segmentColors[0]};">Index ${minAll}</span>
+                    <span style="color: var(--text-secondary);">← Click segments to explore →</span>
+                    <span style="color: ${segmentColors[4]};">Index ${maxAll}</span>
+                `;
+            }
+            
+            // Reset results area to placeholder
             if (resultsEl && placeholderEl) {
                 resultsEl.innerHTML = '';
                 resultsEl.appendChild(placeholderEl);
@@ -27693,9 +27796,57 @@
             if (barEl) barEl.querySelectorAll('.quintile-segment').forEach(s => s.classList.remove('selected'));
         }
         
+        function showHeatmapTooltip(e, quintileIndex) {
+            const tooltip = document.getElementById('heatmapQuintileTooltip');
+            const content = document.getElementById('tooltipContent');
+            if (!tooltip || !content || !heatmapQuintileStats[quintileIndex]) return;
+            
+            const stat = heatmapQuintileStats[quintileIndex];
+            const quintile = interestsHeatmapQuintiles[quintileIndex];
+            const segmentLabels = ['Very Low', 'Low', 'Average', 'High', 'Very High'];
+            const segmentColors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'];
+            
+            // Get top 3 interests in this quintile
+            const topItems = [...quintile].sort((a, b) => b.index - a.index).slice(0, 3);
+            const topItemsHtml = topItems.map(item => 
+                `<div style="display: flex; justify-content: space-between; padding: 0.2rem 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <span style="color: var(--text-primary); font-size: 0.7rem; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.name}</span>
+                    <span style="color: ${segmentColors[quintileIndex]}; font-weight: 600; font-size: 0.7rem;">${item.index}</span>
+                </div>`
+            ).join('');
+            
+            content.innerHTML = `
+                <div style="font-weight: 700; color: ${segmentColors[quintileIndex]}; margin-bottom: 0.5rem; font-size: 0.85rem;">${segmentLabels[quintileIndex]} Index</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem; margin-bottom: 0.5rem;">
+                    <div style="background: rgba(255,255,255,0.05); padding: 0.3rem; border-radius: 4px; text-align: center;">
+                        <div style="font-size: 0.6rem; color: var(--text-secondary);">Count</div>
+                        <div style="font-size: 0.9rem; font-weight: 700;">${stat.count}</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.05); padding: 0.3rem; border-radius: 4px; text-align: center;">
+                        <div style="font-size: 0.6rem; color: var(--text-secondary);">Avg Index</div>
+                        <div style="font-size: 0.9rem; font-weight: 700;">${stat.avg}</div>
+                    </div>
+                </div>
+                <div style="font-size: 0.65rem; color: var(--text-secondary); margin-bottom: 0.3rem;">Range: ${stat.min} - ${stat.max}</div>
+                <div style="font-size: 0.65rem; color: var(--accent-cyan); margin-bottom: 0.3rem;">Top interests:</div>
+                ${topItemsHtml}
+                <div style="font-size: 0.6rem; color: var(--text-secondary); margin-top: 0.4rem; text-align: center;">Click to see all ${stat.count}</div>
+            `;
+            
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.pageX + 15) + 'px';
+            tooltip.style.top = (e.pageY - 10) + 'px';
+        }
+        
+        function hideHeatmapTooltip() {
+            const tooltip = document.getElementById('heatmapQuintileTooltip');
+            if (tooltip) tooltip.style.display = 'none';
+        }
+        
         function selectInterestsHeatmapQuintile(quintileIndex) {
             const barEl = document.getElementById('interestsHeatmapBar');
             const resultsEl = document.getElementById('interestsHeatmapResults');
+            const statsEl = document.getElementById('heatmapStatsSummary');
             if (!resultsEl || !interestsHeatmapQuintiles.length) return;
             
             const quintile = interestsHeatmapQuintiles[quintileIndex];
@@ -27704,17 +27855,35 @@
             // Show all items in this quintile, sorted by index descending within the quintile
             const sortedItems = [...quintile].sort((a, b) => b.index - a.index);
             
-            // Highlight selected segment
+            // Highlight selected segment in bar
             if (barEl) {
                 barEl.querySelectorAll('.quintile-segment').forEach((s, i) => {
                     s.classList.toggle('selected', i === quintileIndex);
                 });
             }
             
+            // Highlight selected stat card
+            if (statsEl) {
+                statsEl.querySelectorAll('.heatmap-stat-card').forEach((card, i) => {
+                    if (i === quintileIndex) {
+                        card.style.transform = 'scale(1.05)';
+                        card.style.boxShadow = '0 4px 20px rgba(6, 182, 212, 0.3)';
+                        card.style.borderColor = 'var(--accent-cyan)';
+                    } else {
+                        card.style.transform = '';
+                        card.style.boxShadow = '';
+                        card.style.borderColor = '';
+                    }
+                });
+            }
+            
             const segmentColors = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'];
+            const segmentLabels = ['Very Low', 'Low', 'Average', 'High', 'Very High'];
             const borderColor = segmentColors[quintileIndex];
+            const stat = heatmapQuintileStats[quintileIndex];
             const isProjection = dashDisplayMode === 'projection';
             const US_POP = 324700000;
+            
             function buildItemTooltip(item) {
                 let genPopPct = item.genPopPct || 0;
                 if (genPopPct > 0 && genPopPct < 1) genPopPct = genPopPct * 100;
@@ -27726,24 +27895,92 @@
                     : formatValueOrNA(genPopPct, true);
                 return (item.name || '') + ' · ' + profileDisplay + ' (' + genPopDisplay + ') · ' + formatIndex(item.index) + ' index';
             }
-            const headerHtml = '<div class="quintile-result-header"><span class="count-badge">' + sortedItems.length + '</span> interests in this index range</div>';
+            
+            // Enhanced header with search
+            const headerHtml = `
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                    <div class="quintile-result-header" style="margin-bottom: 0;">
+                        <span style="font-size: 1.2rem; margin-right: 0.3rem;">${['🔻', '📉', '➖', '📈', '🔺'][quintileIndex]}</span>
+                        <span style="color: ${borderColor}; font-weight: 600;">${segmentLabels[quintileIndex]}</span>
+                        <span class="count-badge">${sortedItems.length}</span>
+                        <span style="color: var(--text-secondary); font-size: 0.75rem;">interests (Index ${stat.min}-${stat.max})</span>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <input type="text" id="heatmapResultsSearch" placeholder="Search..." oninput="filterHeatmapResults()" style="
+                            padding: 0.35rem 0.6rem;
+                            font-size: 0.75rem;
+                            background: var(--bg-input);
+                            border: 1px solid var(--border-color);
+                            border-radius: 6px;
+                            color: var(--text-primary);
+                            width: 140px;
+                        ">
+                        <select id="heatmapResultsSort" onchange="sortHeatmapResults()" style="
+                            padding: 0.35rem 0.5rem;
+                            font-size: 0.7rem;
+                            background: var(--bg-input);
+                            border: 1px solid var(--border-color);
+                            border-radius: 6px;
+                            color: var(--text-primary);
+                        ">
+                            <option value="index-desc">Index ↓</option>
+                            <option value="index-asc">Index ↑</option>
+                            <option value="name-asc">Name A-Z</option>
+                            <option value="name-desc">Name Z-A</option>
+                        </select>
+                    </div>
+                </div>
+            `;
+            
             const listHtml = sortedItems.map(item => {
                 const safeName = (item.name || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                const safeNameJs = (item.name || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 const safeCategory = (item.category || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 const tooltipSafe = buildItemTooltip(item).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 const idxColor = item.index >= 100 ? '#10b981' : '#ef4444';
-                return `<div class="quintile-result-card has-tooltip" style="border-left: 3px solid ${borderColor};" data-tooltip="${tooltipSafe}" onclick="filterInterestsByCategory('${safeCategory}')">
-                    <span class="result-name">${safeName}</span>
+                const categoryBadge = item.category ? `<span style="font-size: 0.6rem; background: rgba(255,255,255,0.1); padding: 0.15rem 0.4rem; border-radius: 4px; margin-left: 0.5rem; color: var(--text-secondary);">${item.category}</span>` : '';
+                return `<div class="quintile-result-card has-tooltip" data-name="${safeName.toLowerCase()}" data-index="${item.index}" style="border-left: 3px solid ${borderColor};" data-tooltip="${tooltipSafe}" onclick="filterInterestsByCategory('${safeCategory}')">
+                    <span class="result-name">${safeName}${categoryBadge}</span>
                     <span class="result-stats" style="color: ${idxColor}; font-weight: 600;">${formatIndex(item.index)}</span>
                 </div>`;
             }).join('');
-            resultsEl.innerHTML = headerHtml + '<div class="quintile-result-list">' + listHtml + '</div>';
+            
+            resultsEl.innerHTML = headerHtml + '<div class="quintile-result-list" id="heatmapResultsList">' + listHtml + '</div>';
             resultsEl.classList.add('heatmap-results-enter');
             resultsEl.addEventListener('animationend', function onEnd() {
                 resultsEl.classList.remove('heatmap-results-enter');
                 resultsEl.removeEventListener('animationend', onEnd);
             }, { once: true });
+        }
+        
+        function filterHeatmapResults() {
+            const searchInput = document.getElementById('heatmapResultsSearch');
+            const list = document.getElementById('heatmapResultsList');
+            if (!searchInput || !list) return;
+            
+            const query = searchInput.value.toLowerCase().trim();
+            list.querySelectorAll('.quintile-result-card').forEach(card => {
+                const name = card.getAttribute('data-name') || '';
+                card.style.display = name.includes(query) ? '' : 'none';
+            });
+        }
+        
+        function sortHeatmapResults() {
+            const sortSelect = document.getElementById('heatmapResultsSort');
+            const list = document.getElementById('heatmapResultsList');
+            if (!sortSelect || !list) return;
+            
+            const sortBy = sortSelect.value;
+            const cards = Array.from(list.querySelectorAll('.quintile-result-card'));
+            
+            cards.sort((a, b) => {
+                if (sortBy === 'index-desc') return parseFloat(b.getAttribute('data-index')) - parseFloat(a.getAttribute('data-index'));
+                if (sortBy === 'index-asc') return parseFloat(a.getAttribute('data-index')) - parseFloat(b.getAttribute('data-index'));
+                if (sortBy === 'name-asc') return (a.getAttribute('data-name') || '').localeCompare(b.getAttribute('data-name') || '');
+                if (sortBy === 'name-desc') return (b.getAttribute('data-name') || '').localeCompare(a.getAttribute('data-name') || '');
+                return 0;
+            });
+            
+            cards.forEach(card => list.appendChild(card));
         }
         
         function getHeatmapColor(index) {
