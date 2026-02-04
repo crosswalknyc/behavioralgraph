@@ -2314,7 +2314,8 @@ def get_gmail_shared_users():
 @app.route('/api/profile-picture', methods=['POST'])
 @requires_auth
 def upload_profile_picture():
-    """Upload profile picture for current user or specified user (admin only)."""
+    """Upload profile picture for current user or specified user (admin only). Accepts file upload or image URL."""
+    import base64
     try:
         current_user = session.get('username')
         current_role = session.get('role')
@@ -2326,41 +2327,59 @@ def upload_profile_picture():
         if target_username != current_user and current_role != 'admin' and current_role != 'super_admin':
             return jsonify({'success': False, 'error': 'Permission denied'}), 403
         
-        if 'file' not in request.files:
-            return jsonify({'success': False, 'error': 'No file provided'})
-        
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'success': False, 'error': 'No file selected'})
-        
-        # Validate file type
-        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-        ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
-        if ext not in allowed_extensions:
-            return jsonify({'success': False, 'error': 'Invalid file type. Use PNG, JPG, GIF, or WebP'})
-        
-        # Read and encode as base64 (store in user data for simplicity)
-        import base64
-        file_data = file.read()
-        
-        # Limit file size to 500KB
-        if len(file_data) > 500 * 1024:
-            return jsonify({'success': False, 'error': 'File too large. Max 500KB'})
-        
-        # Convert to base64 data URL
-        mime_types = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif', 'webp': 'image/webp'}
-        mime_type = mime_types.get(ext, 'image/png')
-        base64_data = base64.b64encode(file_data).decode('utf-8')
-        data_url = f"data:{mime_type};base64,{base64_data}"
-        
-        # Save to user data
         data = load_users()
         if target_username not in data['users']:
             return jsonify({'success': False, 'error': 'User not found'})
         
+        data_url = None
+        file = request.files.get('file')
+        image_url = (request.form.get('url') or '').strip()
+        
+        if file and file.filename:
+            # Upload from file
+            allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+            ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+            if ext not in allowed_extensions:
+                return jsonify({'success': False, 'error': 'Invalid file type. Use PNG, JPG, GIF, or WebP'})
+            file_data = file.read()
+            if len(file_data) > 500 * 1024:
+                return jsonify({'success': False, 'error': 'File too large. Max 500KB'})
+            mime_types = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif', 'webp': 'image/webp'}
+            mime_type = mime_types.get(ext, 'image/png')
+            base64_data = base64.b64encode(file_data).decode('utf-8')
+            data_url = f"data:{mime_type};base64,{base64_data}"
+        elif image_url:
+            # Fetch from URL (allow data URLs or http/https)
+            if image_url.startswith('data:'):
+                # Already a data URL
+                if 'base64,' in image_url and len(image_url) <= 600 * 1024:  # ~500KB base64 is ~666KB string
+                    data_url = image_url
+                else:
+                    return jsonify({'success': False, 'error': 'Data URL too large. Max 500KB'})
+            else:
+                try:
+                    from urllib.request import urlopen, Request
+                    from urllib.error import URLError, HTTPError
+                    req = Request(image_url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urlopen(req, timeout=10) as resp:
+                        content_type = resp.headers.get('Content-Type', '')
+                        if 'image/' not in content_type:
+                            return jsonify({'success': False, 'error': 'URL did not return an image'})
+                        file_data = resp.read()
+                    if len(file_data) > 500 * 1024:
+                        return jsonify({'success': False, 'error': 'Image too large. Max 500KB'})
+                    mime = content_type.split(';')[0].strip().lower()
+                    if mime not in ('image/png', 'image/jpeg', 'image/gif', 'image/webp'):
+                        mime = 'image/png'
+                    base64_data = base64.b64encode(file_data).decode('utf-8')
+                    data_url = f"data:{mime};base64,{base64_data}"
+                except (URLError, HTTPError, OSError) as e:
+                    return jsonify({'success': False, 'error': 'Could not load image from URL: ' + str(e)})
+        else:
+            return jsonify({'success': False, 'error': 'No file or image URL provided'})
+        
         data['users'][target_username]['profile_picture'] = data_url
         save_users(data)
-        
         return jsonify({'success': True, 'profile_picture': data_url})
         
     except Exception as e:
