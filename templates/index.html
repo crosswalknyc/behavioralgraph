@@ -50791,6 +50791,23 @@
                 return '<p style="color: var(--text-secondary);">Comparison data</p>';
             }
             
+            // Handle HTML content (e.g., Audience Snapshot, Behavioral Profile, etc.)
+            if (slide.data.html) {
+                let htmlContent = slide.data.html;
+                
+                // Add takeaways if available (for audience snapshot)
+                if (slide.data.takeaways) {
+                    htmlContent += `
+                        <div style="margin-top: 1rem; padding: 1rem; background: rgba(74, 138, 201, 0.1); border-radius: 8px; border-left: 3px solid var(--accent-cyan);">
+                            <div style="font-size: 0.8rem; font-weight: 600; color: var(--accent-cyan); margin-bottom: 0.5rem;">📊 Key Takeaways</div>
+                            ${slide.data.takeaways}
+                        </div>
+                    `;
+                }
+                
+                return htmlContent;
+            }
+            
             return '<p style="color: var(--text-secondary);">Content preview</p>';
         }
         
