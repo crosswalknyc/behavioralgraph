@@ -13745,23 +13745,6 @@
                                         </div>
                                     </div>
                                     
-                                    <!-- Right: Data Points (draggable to slides) - collapsed by default -->
-                                    <div class="data-points-sidebar collapsed" id="dataPointsSidebar" style="grid-column: 3;">
-                                        <button class="data-points-toggle" onclick="toggleDataPointsSidebar()" title="Toggle Data Points Panel">
-                                            <span class="toggle-icon">📦</span>
-                                            <span class="toggle-label">Data Points</span>
-                                        </button>
-                                        <div class="data-points-header-content" style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                                            <h4 style="margin: 0; font-size: 0.8rem; color: var(--text-secondary);">📦 Data Points</h4>
-                                            <button class="btn btn-small" onclick="clearAllDataPoints()" style="font-size: 0.65rem; padding: 0.2rem 0.4rem; background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary);">Clear</button>
-                                        </div>
-                                        <div class="data-points-drag-list" id="dataPointsDragList" style="padding: 0.5rem; overflow-y: auto; flex: 1;">
-                                            <div class="collab-empty" style="padding: 1rem; text-align: center;">
-                                                <p style="font-size: 0.75rem; margin: 0;">No data points</p>
-                                                <p style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.25rem;">Add using ➕ on charts</p>
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -31425,16 +31408,33 @@
             
             // Get the behavioral data for this category
             const behavioral = currentDashboardData.behavioral || {};
-            const catData = behavioral[category] || behavioral[category.toUpperCase()] || {};
-            const items = Object.entries(catData).map(([name, pct]) => ({
-                name,
-                pct: parseFloat(pct) || 0
-            })).sort((a, b) => b.pct - a.pct);
+            let catData = behavioral[category] || behavioral[category.toUpperCase()] || {};
+            
+            // Handle both object and array formats
+            let items = [];
+            if (Array.isArray(catData)) {
+                // If it's already an array of objects with name/pct
+                items = catData.map(item => ({
+                    name: item.name || item.value || String(item),
+                    pct: parseFloat(item.pct || item.percentage || 0)
+                }));
+            } else if (typeof catData === 'object') {
+                // If it's an object with key-value pairs
+                items = Object.entries(catData).map(([name, pct]) => ({
+                    name: String(name),
+                    pct: parseFloat(pct) || 0
+                }));
+            }
+            
+            // Sort by percentage descending
+            items = items.sort((a, b) => b.pct - a.pct);
             
             if (items.length === 0) {
                 alert('No data available for this category');
                 return;
             }
+            
+            console.log('Behavioral value selector items:', items);
             
             // Create modal
             const modal = document.createElement('div');
