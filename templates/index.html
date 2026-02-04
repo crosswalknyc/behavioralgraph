@@ -9668,23 +9668,22 @@
         
         /* Data Visualization Control Panel */
         .viz-control-toggle {
-            position: absolute;
-            top: 8px;
-            right: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
             background: var(--accent-cyan);
             border: none;
             border-radius: 6px;
-            padding: 6px 10px;
+            padding: 4px 8px;
             z-index: 101;
             cursor: pointer;
-            font-size: 0.75rem;
+            font-size: 0.65rem;
             font-weight: 600;
             color: #000;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
             transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 4px;
+            margin-left: 8px;
+            vertical-align: middle;
         }
         
         .viz-control-toggle:hover {
@@ -48999,9 +48998,11 @@
                         
                         <!-- Content area left -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: ${contentTop}; width: 48%; height: ${contentHeight}; overflow: hidden; padding: 0.5rem; z-index: 1;">
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
-                            <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 1rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                ${escapeHtml(description)}
+                            <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 0.5rem;">
+                                <div contenteditable="true" style="flex: 1; font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                    ${escapeHtml(description)}
+                                </div>
+                                ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             </div>
                             ${content}
                             ${analysisBlock}
@@ -49040,9 +49041,11 @@
                         
                         <!-- Content area left -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 22%; width: 36%; height: 65%; overflow: hidden; padding: 0.5rem; z-index: 1;">
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
-                            <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 1rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                ${escapeHtml(description)}
+                            <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 0.5rem;">
+                                <div contenteditable="true" style="flex: 1; font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                    ${escapeHtml(description)}
+                                </div>
+                                ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             </div>
                             ${content}
                             ${analysisBlock}
@@ -49093,9 +49096,11 @@
                         
                         <!-- Content area right -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; right: 5%; top: 35%; width: 30%; height: 52%; overflow: hidden; padding: 0.5rem; z-index: 1;">
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
-                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 0.75rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                ${escapeHtml(description)}
+                            <div style="display: flex; align-items: flex-start; gap: 6px; margin-bottom: 0.5rem;">
+                                <div contenteditable="true" style="flex: 1; font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                    ${escapeHtml(description)}
+                                </div>
+                                ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             </div>
                             ${content}
                             ${analysisBlock}
@@ -49134,9 +49139,11 @@
                         
                         <!-- Content area right bottom -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; right: 5%; top: 50%; width: 26%; height: 37%; overflow: hidden; padding: 0.5rem; z-index: 1;">
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
-                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; margin-bottom: 0.5rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                ${escapeHtml(description)}
+                            <div style="display: flex; align-items: flex-start; gap: 6px; margin-bottom: 0.5rem;">
+                                <div contenteditable="true" style="flex: 1; font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                    ${escapeHtml(description)}
+                                </div>
+                                ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             </div>
                             ${content}
                             ${analysisBlock}
@@ -49174,9 +49181,11 @@
                         
                         <!-- Full width content below -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 40%; width: 90%; height: 47%; overflow: hidden; padding: 0.5rem; z-index: 1;">
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
-                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 0.75rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; max-width: 65%;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                ${escapeHtml(description)}
+                            <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 0.5rem;">
+                                <div contenteditable="true" style="flex: 1; max-width: 65%; font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                    ${escapeHtml(description)}
+                                </div>
+                                ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             </div>
                             ${content}
                             ${analysisBlock}
@@ -49214,9 +49223,11 @@
                         
                         <!-- Centered content -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 30%; top: 35%; width: 40%; height: 50%; overflow: hidden; padding: 0.5rem; z-index: 1;">
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
-                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; margin-bottom: 0.5rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; text-align: center;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                ${escapeHtml(description)}
+                            <div style="display: flex; align-items: flex-start; gap: 6px; margin-bottom: 0.5rem; justify-content: center;">
+                                <div contenteditable="true" style="flex: 1; font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; text-align: center;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                    ${escapeHtml(description)}
+                                </div>
+                                ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             </div>
                             ${content}
                             ${analysisBlock}
@@ -49254,9 +49265,11 @@
                         
                         <!-- Full width content bottom -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 52%; width: 90%; height: 35%; overflow: hidden; padding: 0.5rem; z-index: 1;">
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
-                            <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 0.75rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                ${escapeHtml(description)}
+                            <div style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 0.5rem;">
+                                <div contenteditable="true" style="flex: 1; font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                    ${escapeHtml(description)}
+                                </div>
+                                ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             </div>
                             ${content}
                             ${analysisBlock}
@@ -49295,9 +49308,11 @@
                         
                         <!-- Compact content left -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 15%; width: 32%; height: 70%; overflow: hidden; padding: 0.5rem; z-index: 1;">
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
-                            <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; margin-bottom: 0.5rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
-                                ${escapeHtml(description)}
+                            <div style="display: flex; align-items: flex-start; gap: 6px; margin-bottom: 0.5rem;">
+                                <div contenteditable="true" style="flex: 1; font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
+                                    ${escapeHtml(description)}
+                                </div>
+                                ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             </div>
                             ${content}
                             ${analysisBlock}
@@ -51629,15 +51644,24 @@
             
             if (!currentEditingDeck.slides) currentEditingDeck.slides = [];
             
-            checked.forEach(cb => {
+            // Find closing slide index to insert before it
+            const closingIdx = currentEditingDeck.slides.findIndex(s => s.type === 'closing');
+            
+            checked.forEach((cb, i) => {
                 const type = cb.dataset.type;
                 const cat = cb.dataset.cat;
                 const item = createModuleItem(type, cat);
-                currentEditingDeck.slides.push(item);
+                
+                if (closingIdx !== -1) {
+                    currentEditingDeck.slides.splice(closingIdx + i, 0, item);
+                } else {
+                    currentEditingDeck.slides.push(item);
+                }
             });
             
             saveDeckChanges();
-            currentEditingSlide = Math.max(1, currentEditingDeck.slides.length - checked.length + 1);
+            const newClosingIdx = currentEditingDeck.slides.findIndex(s => s.type === 'closing');
+            currentEditingSlide = newClosingIdx !== -1 ? newClosingIdx : currentEditingDeck.slides.length;
             renderSlideEditor();
             renderSlideThumbnails();
             showNotification(`✅ Added ${checked.length} module(s) to deck`, 'success');
@@ -51650,10 +51674,18 @@
             const item = createModuleItem(type, category);
             
             if (!currentEditingDeck.slides) currentEditingDeck.slides = [];
-            currentEditingDeck.slides.push(item);
-            saveDeckChanges();
             
-            currentEditingSlide = currentEditingDeck.slides.length;
+            // Insert before closing slide if it exists
+            const closingIdx = currentEditingDeck.slides.findIndex(s => s.type === 'closing');
+            if (closingIdx !== -1) {
+                currentEditingDeck.slides.splice(closingIdx, 0, item);
+                currentEditingSlide = closingIdx + 1;
+            } else {
+                currentEditingDeck.slides.push(item);
+                currentEditingSlide = currentEditingDeck.slides.length;
+            }
+            
+            saveDeckChanges();
             renderSlideEditor();
             showNotification(`✅ Added ${category} slide`, 'success');
         }
