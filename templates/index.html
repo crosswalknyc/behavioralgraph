@@ -12053,59 +12053,6 @@
                     </div>
                 </div>
                 
-                <!-- Category Heatmap - Enhanced Interactive Version -->
-                <div class="interests-heatmap-section" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Interest Category Heatmap" style="position: relative;">
-                    <h3 style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="display: flex; align-items: center; gap: 0.3rem;">
-                            <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5;">⋮⋮</span>
-                            🎯 Interest Index Distribution
-                        </span>
-                        <span class="module-action-btns">
-                            <button class="module-btn csv-btn has-tooltip" onclick="exportModuleCSV('interests', 'Category Heatmap')" data-tooltip="Export CSV: Download the interest category heatmap data as a CSV file.">CSV</button>
-                            <button class="module-btn deck-btn has-tooltip" onclick="addModuleToDeck('interests', 'Category Heatmap')" data-tooltip="Add to Deck: Save the interest category heatmap to your presentation deck.">➕</button>
-                        </span>
-                    </h3>
-                    
-                    <!-- Stats Summary Row -->
-                    <div id="heatmapStatsSummary" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; margin-bottom: 1rem;">
-                        <!-- Filled by JS with quintile stats -->
-                    </div>
-                    
-                    <!-- Interactive Bar -->
-                    <div class="interests-heatmap-bar-wrap" style="position: relative;">
-                        <span class="axis-label" style="display: flex; flex-direction: column; align-items: center;">
-                            <span style="font-size: 1.2rem;">📉</span>
-                            <span>Under</span>
-                        </span>
-                        <div style="flex: 1; max-width: 500px;">
-                            <div id="interestsHeatmapBar" class="interests-heatmap-bar" role="slider" aria-label="Index range quintiles" tabindex="0" style="height: 48px; border-radius: 12px;">
-                                <!-- 5 quintile segments filled by JS -->
-                            </div>
-                            <!-- Range labels under bar -->
-                            <div id="heatmapRangeLabels" style="display: flex; justify-content: space-between; margin-top: 0.35rem; font-size: 0.65rem; color: var(--text-secondary);"></div>
-                        </div>
-                        <span class="axis-label" style="display: flex; flex-direction: column; align-items: center;">
-                            <span style="font-size: 1.2rem;">📈</span>
-                            <span>Over</span>
-                        </span>
-                    </div>
-                    
-                    <!-- Quintile Info Tooltip (shown on hover) -->
-                    <div id="heatmapQuintileTooltip" style="display: none; position: absolute; background: rgba(15, 23, 42, 0.98); border: 1px solid var(--accent-cyan); border-radius: 8px; padding: 0.75rem; font-size: 0.75rem; z-index: 100; pointer-events: none; box-shadow: 0 8px 32px rgba(0,0,0,0.4); min-width: 180px;">
-                        <div id="tooltipContent"></div>
-                    </div>
-                    
-                    <!-- Results Area -->
-                    <div id="interestsHeatmapResults" class="interests-heatmap-results" style="min-height: 2rem; margin-top: 1rem;">
-                        <div class="interests-heatmap-placeholder" style="padding: 1.5rem; text-align: center; color: var(--text-secondary); font-size: 0.85rem; background: linear-gradient(135deg, rgba(30, 41, 59, 0.4), rgba(15, 23, 42, 0.6)); border-radius: 10px; border: 1px dashed rgba(6, 182, 212, 0.3);">
-                            <div style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.6;">👆</div>
-                            <div>Click any segment above to explore interests in that index range</div>
-                            <div style="margin-top: 0.5rem; font-size: 0.75rem; opacity: 0.7;">Use ← → arrow keys to navigate between quintiles</div>
-                        </div>
-                    </div>
-                    <div class="interests-heatmap-grid" id="interestsHeatmapGrid" style="display: none;"></div>
-                </div>
-                
                 <!-- Top Interests by Category -->
                 <div class="interests-categories-section" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Top Interests by Category" style="position: relative;">
                     <h3 style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem;">
