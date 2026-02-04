@@ -31665,11 +31665,19 @@
             const name = prompt('Enter deck name:', 'New Deck');
             if (!name) return;
             
+            // Create TOC slide
+            const tocSlide = {
+                id: 'toc_' + Date.now(),
+                type: 'toc',
+                title: 'Table of Contents',
+                dateAdded: new Date().toISOString()
+            };
+            
             const newDeck = {
                 id: 'deck_' + Date.now(),
                 name: name,
                 workspaceId: wsId,
-                slides: [],
+                slides: [tocSlide], // Start with TOC slide
                 titleSlide: {
                     title: currentProfileData?.name || 'Audience Profile',
                     subtitle: 'Powered by Crosswalk IQ',
@@ -31791,6 +31799,12 @@
                     message += ` and invited ${collabCount} collaborator(s)`;
                 }
                 showNotification(message, 'success');
+                
+                // If this deck is currently being edited, refresh the editor to show the new slide
+                if (currentEditingDeck && currentEditingDeck.id === deck.id) {
+                    renderSlideEditor();
+                    renderSlideThumbnails();
+                }
                 
                 // Track activity (non-blocking)
                 try {
@@ -32049,6 +32063,12 @@
                     message += ` and invited ${collabCount} collaborator(s)`;
                 }
                 showNotification(message, 'success');
+                
+                // If this deck is currently being edited, refresh the editor to show the new slide
+                if (currentEditingDeck && currentEditingDeck.id === deck.id) {
+                    renderSlideEditor();
+                    renderSlideThumbnails();
+                }
                 
                 // Track activity (non-blocking)
                 try {
@@ -46931,11 +46951,19 @@
                 }
             }
             
+            // Create TOC slide
+            const tocSlide = {
+                id: 'toc_' + Date.now(),
+                type: 'toc',
+                title: 'Table of Contents',
+                dateAdded: new Date().toISOString()
+            };
+            
             const newDeck = {
                 id: 'deck_' + Date.now(),
                 name: name,
                 workspaceId: currentWorkspace,
-                slides: [],
+                slides: [tocSlide], // Start with TOC slide
                 titleSlide: {
                     title: currentProfileData?.name || 'Audience Profile',
                     subtitle: 'Powered by Crosswalk IQ',
@@ -47393,12 +47421,15 @@
                 const slides = currentEditingDeck?.slides || [];
                 const tocItems = slides
                     .filter(s => s.type !== 'toc')
-                    .map(s => s.customTitle || s.title || s.category || 'Untitled')
-                    .slice(0, 8); // Max 8 items
+                    .map((s, i) => ({
+                        num: i + 1,
+                        title: s.customTitle || s.title || s.category || 'Untitled'
+                    }))
+                    .slice(0, 16); // Max 16 items
                 
                 // Split into two columns
-                const col1 = tocItems.slice(0, 4);
-                const col2 = tocItems.slice(4, 8);
+                const col1 = tocItems.slice(0, 8);
+                const col2 = tocItems.slice(8, 16);
                 
                 return `
                     <!-- Header bar -->
@@ -47419,18 +47450,20 @@
                     
                     <!-- TOC Items - Column 1 -->
                     <div style="position: absolute; left: 52%; top: 22%; width: 20%;">
-                        ${col1.map((item, i) => `
-                            <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.85rem; color: #ffffff; font-weight: 500;">
-                                ${escapeHtml(item)}
+                        ${col1.map((item) => `
+                            <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.75rem; color: #ffffff; font-weight: 500; display: flex; gap: 0.5rem; align-items: baseline;">
+                                <span style="color: var(--accent-lime); font-size: 0.7rem; flex-shrink: 0;">${item.num}</span>
+                                <span style="flex: 1; line-height: 1.3;">${escapeHtml(item.title)}</span>
                             </div>
                         `).join('')}
                     </div>
                     
                     <!-- TOC Items - Column 2 -->
                     <div style="position: absolute; left: 75%; top: 22%; width: 20%;">
-                        ${col2.map((item, i) => `
-                            <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.85rem; color: #ffffff; font-weight: 500;">
-                                ${escapeHtml(item)}
+                        ${col2.map((item) => `
+                            <div style="padding: 0.4rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.75rem; color: #ffffff; font-weight: 500; display: flex; gap: 0.5rem; align-items: baseline;">
+                                <span style="color: var(--accent-lime); font-size: 0.7rem; flex-shrink: 0;">${item.num}</span>
+                                <span style="flex: 1; line-height: 1.3;">${escapeHtml(item.title)}</span>
                             </div>
                         `).join('')}
                     </div>
