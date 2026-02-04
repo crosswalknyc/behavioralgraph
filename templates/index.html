@@ -47358,7 +47358,7 @@
                     
                     <!-- Description -->
                     <div style="position: absolute; left: 5%; top: 22%; width: 40%; font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6;">
-                        Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+                        This presentation provides comprehensive audience insights including demographics, behavioral patterns, and strategic recommendations for ${currentProfileData?.name || 'your target audience'}.
                     </div>
                     
                     <!-- TOC Items - Column 1 -->
@@ -47450,7 +47450,70 @@
             if (idx > 0 && hasModuleData) {
                 const title = slide.customTitle || slide.title || slide.category || 'Slide';
                 const headerProfileName = slide.customHeader?.profileName || currentProfileData?.name || 'Profile';
-                const description = slide.customDescription || 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.';
+                
+                // Generate smart description based on slide data
+                const generateSlideDescription = (slide) => {
+                    if (slide.customDescription) return slide.customDescription;
+                    
+                    const data = slide.data || {};
+                    const type = slide.type;
+                    const category = slide.category || '';
+                    
+                    // Demographic data
+                    if (type === 'demographic' && data.values) {
+                        const entries = Object.entries(data.values).sort((a, b) => b[1] - a[1]);
+                        const top = entries.slice(0, 3);
+                        const topStr = top.map(([k, v]) => `${k} (${v.toFixed(1)}%)`).join(', ');
+                        const indexData = data.index || {};
+                        const overIndexing = Object.entries(indexData).filter(([k, v]) => v >= 120).length;
+                        return `This audience shows strong representation in ${topStr}. ${overIndexing > 0 ? `${overIndexing} segment(s) significantly over-index vs general population.` : ''}`;
+                    }
+                    
+                    // Behavioral data
+                    if (type === 'behavioral' && data.items) {
+                        const items = Array.isArray(data.items) ? data.items : Object.entries(data.items).map(([name, pct]) => ({name, pct}));
+                        const sorted = items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+                        const top3 = sorted.slice(0, 3);
+                        if (top3.length > 0) {
+                            const names = top3.map(i => i.name).join(', ');
+                            const topPct = top3[0].pct || 0;
+                            return `Top ${category.toLowerCase()} preferences include ${names}. Leading item reaches ${topPct.toFixed(1)}% of this audience, indicating strong affinity in this category.`;
+                        }
+                    }
+                    
+                    // Location data
+                    if (type === 'location' && data.locations) {
+                        const locs = data.locations.slice(0, 5);
+                        const topDMAs = locs.map(l => l.dma || l.name).join(', ');
+                        const overIndexCount = locs.filter(l => (l.index || 100) >= 120).length;
+                        return `Geographic concentration in ${topDMAs}. ${overIndexCount > 0 ? `${overIndexCount} market(s) show significant over-indexing.` : 'Distribution aligns with general population patterns.'}`;
+                    }
+                    
+                    // Affinity data
+                    if (type === 'affinity' && data.items) {
+                        const items = data.items.slice(0, 3);
+                        const names = items.map(i => i.name).join(', ');
+                        return `Strong affinity for ${names}. These ${category.toLowerCase()} resonate particularly well with this audience segment.`;
+                    }
+                    
+                    // Insight cards
+                    if (type === 'insight') {
+                        if (category === 'audience-snapshot') return 'Quick overview of key demographic characteristics and how they compare to the general population.';
+                        if (category === 'behavioral-profile') return 'Summary of behavioral patterns, interests, and engagement preferences for this audience.';
+                        if (category === 'demographic-summary') return 'Comprehensive demographic breakdown showing age, gender, income, and ethnicity distribution.';
+                        return 'Strategic insights and recommendations based on audience data analysis.';
+                    }
+                    
+                    // Comparison data
+                    if (slide.data?.profiles && Array.isArray(slide.data.profiles)) {
+                        return `Comparative analysis across ${slide.data.profiles.length} audience segments, highlighting key differences and similarities in demographics and behaviors.`;
+                    }
+                    
+                    // Default fallback
+                    return `Analysis of ${category || 'audience data'} showing key patterns and insights for strategic decision-making.`;
+                };
+                
+                const description = generateSlideDescription(slide);
                 const today = new Date();
                 const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
                 const analysisBlock = slide.aiAnalysis ? `<div style="margin-top: 1rem; padding: 1rem; background: rgba(74, 138, 201, 0.1); border-radius: 8px; border-left: 3px solid var(--accent-cyan); font-size: 0.9rem; line-height: 1.5;"><div style="font-size: 0.8rem; font-weight: 600; color: var(--accent-cyan); margin-bottom: 0.5rem;">🤖 AI Key Points & Takeaways</div><div>${slide.aiAnalysis}</div></div>` : '';
