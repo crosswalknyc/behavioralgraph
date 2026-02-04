@@ -3859,7 +3859,7 @@
             populateRunCheckboxes(useAllRuns ? ['*'] : selectedRunKeys);
             
             // Behavioral: default from quick select (uses quickSelectBehaviorsData)
-            populateBehavioralCategoryCheckboxes();
+            populateBehavioralCategoryCheckboxes(undefined, true);
             
             userModalSetAvatarPreview(null, '');
             document.getElementById('userModalAvatarFile').value = '';
@@ -4879,7 +4879,26 @@
         function expandRunCheckboxes() {
             const container = document.getElementById('runCheckboxes');
             const isAll = document.getElementById('allRuns')?.checked;
-            const selected = isAll ? ['*'] : Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+            let selected;
+            if (isAll) {
+                selected = ['*'];
+            } else {
+                const selectedFromVisible = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+                selected = new Set(selectedFromVisible);
+                // For runs not in the first 20, use quick select (new user) or saved user data (edit)
+                const isEdit = !!document.getElementById('editUsername')?.value;
+                allRuns.slice(20).forEach(r => {
+                    if (isEdit) {
+                        const username = document.getElementById('editUsername').value;
+                        const user = allUsers[username];
+                        if (user && (user.allowed_runs?.includes('*') || user.allowed_runs?.includes(r.key)))
+                            selected.add(r.key);
+                    } else {
+                        if (quickSelectProfilesData[r.key] !== false) selected.add(r.key);
+                    }
+                });
+                selected = Array.from(selected);
+            }
             populateRunCheckboxes(selected, true);
         }
         
@@ -4891,14 +4910,14 @@
         }
         
         // Populate Behavioral Category Checkboxes in user modal (always show ALL options; default selection from quick select when adding new user)
-        function populateBehavioralCategoryCheckboxes(selected = ['*']) {
+        function populateBehavioralCategoryCheckboxes(selected = ['*'], useQuickSelect = false) {
             const container = document.getElementById('behavioralCategoryCheckboxes');
             if (!container) return;
             
             // Always show all behavioral categories (same list as admin Quick Selects)
             const categories = MASTER_BEHAVIORAL_CATEGORIES;
-            const isAllSelected = Array.isArray(selected) && selected.includes('*');
-            const hasExplicitList = Array.isArray(selected) && !selected.includes('*'); // explicit list (including [])
+            const isAllSelected = !useQuickSelect && Array.isArray(selected) && selected.includes('*');
+            const hasExplicitList = !useQuickSelect && Array.isArray(selected) && !selected.includes('*'); // explicit list (including [])
             
             let isAll;
             let isChecked = (cat) => {
