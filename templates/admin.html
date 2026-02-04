@@ -333,6 +333,24 @@
         #userForm .master-category-header {
             justify-content: flex-start;
         }
+        #userForm .dashboard-access-content,
+        #userForm .dashboard-access-content .checkbox-group,
+        #userForm .dashboard-access-content label {
+            text-align: left;
+            justify-content: flex-start;
+        }
+        #userForm .dashboard-access-content .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        #userForm #categoryCheckboxes .checkbox-group,
+        #userForm #runCheckboxes .checkbox-group,
+        #userForm #behavioralCategoryCheckboxes .checkbox-group,
+        #userForm #behavioralCategoryCheckboxes label {
+            justify-content: flex-start;
+            text-align: left;
+        }
 
         .modal-header {
             display: flex;
@@ -1732,9 +1750,9 @@
                                 <input type="checkbox" id="hasProfileIQAccess" checked onchange="toggleProfileIQSection()">
                                 <span style="font-weight: 600;">✅ PROFILE IQ</span>
                             </label>
-                            <span class="collapse-icon" id="profileIQIcon">▼</span>
+                            <span class="collapse-icon rotated" id="profileIQIcon">▼</span>
                         </div>
-                        <div id="profileIQSection" class="dashboard-access-content" style="display: block;">
+                        <div id="profileIQSection" class="dashboard-access-content" style="display: none;">
                             <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
                                 <div style="margin-bottom: 1rem;">
                                     <h5 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--accent-cyan);">📁 Category Access</h5>
@@ -1943,7 +1961,7 @@
                         Select team members who can collaborate with this user.
                     </p>
                     
-                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; justify-content: flex-start;">
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; justify-content: flex-start; align-items: center; text-align: left;">
                         <button type="button" class="btn btn-small btn-secondary" onclick="selectAllTeamMembersAdmin()">Select All</button>
                         <button type="button" class="btn btn-small btn-secondary" onclick="deselectAllTeamMembersAdmin()">Clear All</button>
                         <select id="selectByDepartment" onchange="selectTeamByDepartment()" style="padding: 0.4rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
@@ -3737,7 +3755,7 @@
             document.getElementById('totalCreditsUsed').textContent = userList.reduce((sum, u) => sum + (u.credits_used || 0), 0);
         }
 
-        function showAddUserModal() {
+        async function showAddUserModal() {
             document.getElementById('modalTitle').textContent = 'Add New User';
             document.getElementById('editUsername').value = '';
             document.getElementById('newUsername').value = '';
@@ -3761,6 +3779,7 @@
             document.getElementById('unlimitedCredits').checked = false;
             document.getElementById('allCategories').checked = true;
             document.getElementById('allRuns').checked = true;
+            document.getElementById('allBehavioralCategories').checked = true;
             document.getElementById('hasProfileIQAccess').checked = true;
             document.getElementById('hasSubscriberIQAccess').checked = false;
             document.getElementById('hasHedgeFundIQAccess').checked = false;
@@ -3790,6 +3809,9 @@
             
             populateCategoryCheckboxes();
             populateRunCheckboxes();
+            // Load admin quick selects so behavioral defaults match; then show all options with quick-select default
+            await loadQuickSelects();
+            populateBehavioralCategoryCheckboxes();
             
             // Preload Hedge Fund tickers so they're ready when user expands section
             loadHedgeFundTickersForAccess();
@@ -4632,16 +4654,16 @@
                 
                 html += `
                     <div class="master-category-group" style="margin-bottom: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
-                        <div class="master-category-header" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: var(--bg-input); cursor: pointer; text-align: left;" onclick="toggleMasterCategory('${master}')">
+                        <div class="master-category-header" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: var(--bg-input); cursor: pointer; text-align: left; justify-content: flex-start;" onclick="toggleMasterCategory('${master}')">
                             <input type="checkbox" class="master-checkbox" data-master="${master}" ${allMasterChecked ? 'checked' : ''} ${isAll ? 'disabled' : ''} onclick="event.stopPropagation(); toggleMasterCheckbox('${master}', this.checked)">
                             <span style="font-size: 1rem;">${icon}</span>
-                            <span style="font-weight: 600; flex: 1; text-align: left;">${master}</span>
-                            <span style="margin-left: auto; display: flex; align-items: center; gap: 0.25rem;">
+                            <span style="font-weight: 600; text-align: left;">${master}</span>
+                            <span style="display: flex; align-items: center; gap: 0.25rem;">
                                 <span style="font-size: 0.75rem; color: var(--text-secondary);">${checkedCount}/${cats.length}</span>
-                                <span class="master-arrow" id="arrow-${master}" style="transition: transform 0.2s; transform: rotate(180deg);">▼</span>
+                                <span class="master-arrow" id="arrow-${master}" style="transition: transform 0.2s; transform: rotate(0deg);">▼</span>
                             </span>
                         </div>
-                        <div class="master-category-items" id="items-${master}" style="display: block; padding: 0.5rem 0.75rem; background: var(--bg-card); max-height: 200px; overflow-y: auto; text-align: left;">
+                        <div class="master-category-items" id="items-${master}" style="display: none; padding: 0.5rem 0.75rem; background: var(--bg-card); max-height: 200px; overflow-y: auto; text-align: left;">
                             ${cats.sort().map(cat => `
                                 <label class="checkbox-group" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; font-size: 0.85rem;">
                                     <input type="checkbox" class="cat-checkbox" data-master="${master}" value="${cat}" ${isAll || selected?.includes(cat) ? 'checked' : ''} ${isAll ? 'disabled' : ''} onchange="updateMasterCount('${master}')">
@@ -4709,25 +4731,35 @@
             }
         }
         
-        // Populate Behavioral Category Checkboxes in user modal
+        // Populate Behavioral Category Checkboxes in user modal (always show ALL options; default selection from quick select when adding new user)
         function populateBehavioralCategoryCheckboxes(selected = ['*']) {
             const container = document.getElementById('behavioralCategoryCheckboxes');
             if (!container) return;
             
-            const isAll = selected?.includes('*') ?? true; // Default to all if not set
+            // Always show all behavioral categories (same list as admin Quick Selects)
+            const categories = MASTER_BEHAVIORAL_CATEGORIES;
+            const isAllSelected = Array.isArray(selected) && selected.includes('*');
+            const hasExplicitList = Array.isArray(selected) && !selected.includes('*'); // explicit list (including [])
             
-            // Use the quick select behaviors if available, otherwise use master list
-            const categories = getQuickSelectBehaviors().length > 0 ? getQuickSelectBehaviors() : MASTER_BEHAVIORAL_CATEGORIES;
+            let isAll;
+            let isChecked = (cat) => {
+                if (isAllSelected || (hasExplicitList && selected.includes(cat))) return true;
+                if (hasExplicitList) return false;
+                // New user: default from admin quick select (missing key = selected)
+                return quickSelectBehaviorsData[cat] !== false;
+            };
+            isAll = isAllSelected ? true : (hasExplicitList ? selected.length >= categories.length : categories.every(cat => quickSelectBehaviorsData[cat] !== false));
             
-            container.innerHTML = categories.map(cat => `
-                <label class="checkbox-group" style="font-size: 0.8rem;">
-                    <input type="checkbox" class="behavioral-cat-checkbox" value="${cat}" ${isAll || selected?.includes(cat) ? 'checked' : ''} ${isAll ? 'disabled' : ''}>
+            container.innerHTML = categories.map(cat => {
+                const checked = isAll || isChecked(cat);
+                return `<label class="checkbox-group" style="font-size: 0.8rem;">
+                    <input type="checkbox" class="behavioral-cat-checkbox" value="${cat}" ${checked ? 'checked' : ''} ${isAll ? 'disabled' : ''}>
                     <span>${cat}</span>
-                </label>
-            `).join('');
+                </label>`;
+            }).join('');
             
-            // Update the "All" checkbox state
-            document.getElementById('allBehavioralCategories').checked = isAll;
+            const allEl = document.getElementById('allBehavioralCategories');
+            if (allEl) allEl.checked = isAll;
         }
         
         // Toggle All Behavioral Categories
