@@ -2679,20 +2679,11 @@ def get_admin_content():
 @app.route('/api/jobs')
 @requires_auth
 def list_jobs():
-    """List all jobs (local + S3 cached) with caching for performance. Uses persisted cache with proper categories."""
+    """List all jobs (local + S3) - always scans S3 for fresh data to pick up new profiles."""
     import time
     
     job_list = []
     categories = set()
-    
-    # Return quickly if cache is still loading
-    if not cache_loading_complete and not s3_cache.get('jobs'):
-        return jsonify({
-            'jobs': [],
-            'categories': [],
-            'cache_info': {'loading': True, 'message': 'Loading profiles...'},
-            'loading': True
-        })
     
     # Update user's last activity time (but don't block on it)
     username = session.get('username')
@@ -2718,12 +2709,11 @@ def list_jobs():
         })
         categories.add('LOCAL')
     
-    # Use persisted cache only - no S3 scanning on page load for speed
-    # If cache is empty, try to load persisted cache
-    if not s3_cache.get('jobs') and s3_client:
-        load_persisted_cache()
+    # Always do a fresh S3 scan to pick up new profiles
+    if s3_client:
+        rebuild_s3_cache_with_categories()
     
-    # Add cached S3 jobs (these have proper categories from CSV files)
+    # Add S3 jobs (these have proper categories from CSV files)
     job_list.extend(s3_cache.get('jobs', []))
     for cat in s3_cache.get('categories', []):
         categories.add(cat)
@@ -2737,7 +2727,7 @@ def list_jobs():
         'cache_info': {
             'last_updated': s3_cache.get('last_updated'),
             'file_count': s3_cache.get('file_count', 0),
-            'cached': True
+            'fresh_scan': True
         }
     })
 
