@@ -9669,22 +9669,22 @@
         /* Data Visualization Control Panel */
         .viz-control-toggle {
             position: absolute;
-            top: -8px;
-            right: -8px;
+            top: -12px;
+            right: -12px;
             display: flex;
             align-items: center;
-            gap: 3px;
-            background: var(--accent-cyan);
-            border: none;
-            border-radius: 6px;
-            padding: 4px 8px;
-            z-index: 200;
-            cursor: grab;
-            font-size: 0.65rem;
-            font-weight: 600;
+            gap: 4px;
+            background: #ffff00;
+            border: 2px solid #000;
+            border-radius: 8px;
+            padding: 6px 12px;
+            z-index: 9999;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 700;
             color: #000;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-            transition: background 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(255, 255, 0, 0.5);
+            transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
             user-select: none;
         }
         
@@ -10875,6 +10875,25 @@
     </style>
 </head>
 <body>
+    <!-- TEST: Floating Chart Editor Button - Always visible for testing -->
+    <button id="testChartBtn" onclick="openTestChartPanel()" style="position: fixed; top: 10px; right: 200px; z-index: 2147483647; background: #ff0000; color: white; padding: 10px 20px; border: 3px solid yellow; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+        🔧 OPEN CHART EDITOR
+    </button>
+    <script>
+        function openTestChartPanel() {
+            // Find the current slide index
+            const slideIdx = typeof currentEditingSlide !== 'undefined' ? currentEditingSlide : 1;
+            console.log('Test button clicked, slideIdx:', slideIdx);
+            
+            // Try to call toggleVizPanel
+            if (typeof toggleVizPanel === 'function') {
+                toggleVizPanel(slideIdx);
+            } else {
+                alert('toggleVizPanel function not found!');
+            }
+        }
+    </script>
+    
     <!-- Global Tooltip Element - MUST be at top of body to render correctly -->
     <div id="globalTooltip" style="position: fixed; left: -9999px; top: -9999px; background: linear-gradient(135deg, #1a2a3a, #0d1a2a); color: #e6f1ff; padding: 12px 16px; border-radius: 8px; font-size: 14px; max-width: 300px; z-index: 2147483647; box-shadow: 0 8px 32px rgba(0,0,0,0.8), 0 0 0 2px #c8e600; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity 0.15s ease;"></div>
     
@@ -35372,7 +35391,6 @@
         }
         
         function toggleVizPanel(slideIdx) {
-            alert('toggleVizPanel called! slideIdx=' + slideIdx);
             console.log('toggleVizPanel called with slideIdx:', slideIdx);
             
             // Check if a floating panel already exists
