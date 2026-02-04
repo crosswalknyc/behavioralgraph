@@ -10,18 +10,18 @@
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <style>
         :root {
-            --bg-dark: #0a1929;
-            --bg-card: #0d2137;
-            --bg-input: #132f4c;
-            --accent-blue: #5a9ad9;
-            --accent-cyan: #66d9ef;
+            --bg-dark: #0a0a0a;
+            --bg-card: #1a1a1a;
+            --bg-input: #252525;
+            --accent-blue: #6b6b6b;
+            --accent-cyan: #8a8a8a;
             --accent-green: #a6e22e;
             --accent-orange: #fd971f;
             --accent-red: #f92672;
             --accent-lime: #c8ff00;
             --text-primary: #e6f1ff;
             --text-secondary: #8892b0;
-            --border-color: #1e3a5f;
+            --border-color: #333333;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -29,7 +29,7 @@
         /* Global Scrollbar Styling - Dark Theme */
         * {
             scrollbar-width: thin;
-            scrollbar-color: #1e3a5f var(--bg-dark);
+            scrollbar-color: #333333 var(--bg-dark);
         }
 
         *::-webkit-scrollbar {
@@ -42,17 +42,17 @@
         }
 
         *::-webkit-scrollbar-thumb {
-            background: #1e3a5f;
+            background: #333333;
             border-radius: 4px;
         }
 
         *::-webkit-scrollbar-thumb:hover {
-            background: #2a4a6f;
+            background: #444444;
         }
 
         /* Global Select/Dropdown Styling - Sleek Dark Theme */
         select {
-            background: linear-gradient(135deg, #0f1f2f 0%, #1a2a3a 100%);
+            background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
             border: 1px solid rgba(102, 217, 239, 0.2);
             border-radius: 6px;
             color: var(--text-primary);
@@ -71,7 +71,7 @@
         }
 
         select:hover {
-            background: linear-gradient(135deg, #1a2a3a 0%, #0f1f2f 100%);
+            background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
             border-color: var(--accent-cyan);
             box-shadow: 0 4px 12px rgba(102, 217, 239, 0.2);
             transform: translateY(-1px);
@@ -433,7 +433,7 @@
         .user-role-badge.super_admin { background: rgba(255, 99, 132, 0.2); color: #ff6384; }
         .user-role-badge.admin { background: rgba(174, 129, 255, 0.2); color: #ae81ff; }
         .user-role-badge.enterprise { background: rgba(253, 151, 31, 0.2); color: #fd971f; }
-        .user-role-badge.user { background: rgba(90, 154, 217, 0.2); color: var(--accent-blue); }
+        .user-role-badge.user { background: rgba(107, 107, 107, 0.2); color: var(--accent-blue); }
 
         .header-right-section {
             display: flex;
@@ -483,7 +483,7 @@
             font-size: 0.85rem;
         }
         .export-menu button:hover {
-            background: rgba(74, 138, 201, 0.2);
+            background: rgba(107, 107, 107, 0.2);
         }
 
         #formView { display: none; flex: 1; overflow-y: auto; }
@@ -727,7 +727,7 @@
         }
 
         .executive-summary-card {
-            background: linear-gradient(135deg, rgba(90, 154, 217, 0.1), rgba(90, 154, 217, 0.05));
+            background: linear-gradient(135deg, rgba(107, 107, 107, 0.1), rgba(107, 107, 107, 0.05));
             border: 2px solid var(--accent-blue);
             border-radius: 16px;
             padding: 2rem;
@@ -765,12 +765,12 @@
 
         .performance-badge.strong {
             border-color: var(--accent-cyan);
-            background: rgba(90, 154, 217, 0.1);
+            background: rgba(107, 107, 107, 0.1);
         }
 
         .performance-badge.good {
             border-color: var(--accent-blue);
-            background: rgba(90, 154, 217, 0.05);
+            background: rgba(107, 107, 107, 0.05);
         }
 
         .performance-badge.developing {
@@ -945,7 +945,7 @@
         }
 
         .value-indicator.moderate {
-            background: rgba(90, 154, 217, 0.2);
+            background: rgba(107, 107, 107, 0.2);
             color: var(--accent-cyan);
         }
 
@@ -1081,7 +1081,7 @@
 
         /* Tab Insights Sections */
         .tab-insights-section {
-            background: linear-gradient(135deg, rgba(90, 154, 217, 0.1), rgba(90, 154, 217, 0.05));
+            background: linear-gradient(135deg, rgba(107, 107, 107, 0.1), rgba(107, 107, 107, 0.05));
             border: 1px solid var(--accent-blue);
             border-radius: 12px;
             padding: 1.5rem;
@@ -1224,7 +1224,7 @@
         }
 
         .demographics-table tbody tr:hover {
-            background: rgba(90, 154, 217, 0.05);
+            background: rgba(107, 107, 107, 0.05);
         }
 
         .demographics-table tbody tr:last-child td {
@@ -1277,7 +1277,7 @@
             padding: 0.75rem 1.25rem; font-family: 'Space Mono', monospace; font-size: 0.85rem;
             font-weight: 700; text-transform: uppercase; border: none; border-radius: 6px; cursor: pointer; width: 100%;
         }
-        .btn-primary { background: linear-gradient(135deg, var(--accent-blue), #4a8ac9); color: white; }
+        .btn-primary { background: linear-gradient(135deg, var(--accent-blue), #5a5a5a); color: white; }
         .btn-success { background: var(--accent-lime); color: #1a1a1a; }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .btn-small { padding: 0.35rem 0.75rem; font-size: 0.7rem; width: auto; }
@@ -1292,7 +1292,7 @@
         .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan)); transition: width 0.5s; }
         .status-badge { padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
         .status-badge.completed, .status-badge.cached { background: rgba(166, 226, 46, 0.2); color: var(--accent-green); }
-        .status-badge.running { background: rgba(90, 154, 217, 0.2); color: var(--accent-blue); }
+        .status-badge.running { background: rgba(107, 107, 107, 0.2); color: var(--accent-blue); }
         .status-badge.failed { background: rgba(249, 38, 114, 0.2); color: var(--accent-red); }
 
         .job-item { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-input); border-radius: 6px; margin-bottom: 0.4rem; }
@@ -1479,13 +1479,13 @@
 
         .profile-tab:hover {
             background: var(--bg-input);
-            border-color: #5a9ad9;
+            border-color: #6b6b6b;
         }
 
         .profile-tab.active {
-            background: linear-gradient(135deg, #5a9ad9, #4a8bc9);
+            background: linear-gradient(135deg, #6b6b6b, #5a5a5a);
             color: #fff;
-            border-color: #5a9ad9;
+            border-color: #6b6b6b;
             font-weight: 600;
         }
 
@@ -1752,14 +1752,14 @@
         }
 
         .tab-btn:hover {
-            background: rgba(74, 138, 201, 0.2);
+            background: rgba(107, 107, 107, 0.2);
             border-color: var(--accent-blue);
         }
 
         .tab-btn.active {
-            background: #5a9ad9;
+            background: #6b6b6b;
             color: white;
-            border-color: #5a9ad9;
+            border-color: #6b6b6b;
         }
 
         /* Tool tabs - purple to distinguish from data tabs */
@@ -3707,7 +3707,7 @@
         
         .interest-bar {
             height: 100%;
-            background: linear-gradient(90deg, #5a9ad9, #7fb8e8);
+            background: linear-gradient(90deg, #6b6b6b, #8a8a8a);
             border-radius: 2px;
             margin-left: 0;
             margin-right: auto;
@@ -4569,7 +4569,7 @@
             border-radius: 8px;
         }
         .chat-message.user {
-            background: rgba(74, 138, 201, 0.2);
+            background: rgba(107, 107, 107, 0.2);
             border-left: 3px solid var(--accent-blue);
         }
         .chat-message.assistant {
@@ -4688,7 +4688,7 @@
             transition: all 0.2s;
         }
         .followup-suggestion:hover {
-            background: rgba(74, 138, 201, 0.2);
+            background: rgba(107, 107, 107, 0.2);
             border-color: var(--accent-blue);
         }
         .followup-input {
@@ -6811,7 +6811,7 @@
             transition: all 0.2s;
         }
         .platform-option:hover {
-            background: rgba(74, 138, 201, 0.2);
+            background: rgba(107, 107, 107, 0.2);
         }
         .platform-option input:checked + span,
         .platform-option:has(input:checked) {
@@ -6825,7 +6825,7 @@
             text-align: center;
         }
         .analysis-status.loading {
-            background: rgba(74, 138, 201, 0.2);
+            background: rgba(107, 107, 107, 0.2);
             color: var(--accent-blue);
         }
         .analysis-status.success {
@@ -7009,7 +7009,7 @@
         }
         .logline-tag {
             padding: 0.25rem 0.75rem;
-            background: rgba(74, 138, 201, 0.2);
+            background: rgba(107, 107, 107, 0.2);
             border-radius: 15px;
             font-size: 0.75rem;
         }
@@ -7119,7 +7119,7 @@
             font-size: 0.85rem;
         }
         .seg-status.loading {
-            background: rgba(74, 138, 201, 0.2);
+            background: rgba(107, 107, 107, 0.2);
             color: var(--accent-blue);
         }
         .seg-status.error {
@@ -7195,7 +7195,7 @@
             justify-content: space-between;
             align-items: center;
             padding: 0.4rem 0.5rem;
-            background: rgba(90, 154, 217, 0.15);
+            background: rgba(107, 107, 107, 0.15);
             border-radius: 4px;
             margin-bottom: 0.5rem;
             font-weight: 600;
@@ -7225,7 +7225,7 @@
             transition: all 0.2s;
         }
         .saved-segment-chip:hover {
-            background: rgba(74, 138, 201, 0.2);
+            background: rgba(107, 107, 107, 0.2);
             border-color: var(--accent-blue);
         }
 
@@ -7564,7 +7564,7 @@
         }
 
         .tree-item.selected {
-            background: rgba(90, 154, 217, 0.15);
+            background: rgba(107, 107, 107, 0.15);
         }
 
         .tree-item.category-item {
@@ -7883,7 +7883,7 @@
 
         .comp-bar-fill {
             height: 100%;
-            background: linear-gradient(90deg, var(--accent-blue), #4a8ac9);
+            background: linear-gradient(90deg, var(--accent-blue), #5a5a5a);
         }
 
         .comp-bar-pct {
@@ -7915,7 +7915,7 @@
         }
 
         .comp-table th.sortable.sorted {
-            background: rgba(90, 154, 217, 0.3);
+            background: rgba(107, 107, 107, 0.3);
         }
 
         .comp-table th.sortable::after {
@@ -17415,7 +17415,7 @@
             const demographicsIndex = parsed.demographicsIndex || {};
             const demographicsGenPop = parsed.demographicsGenPop || {};
             
-            const colors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74', '#75715e'];
+                const colors = ['#6b6b6b', '#8a8a8a', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74', '#75715e'];
             
             // Age Chart
             if (demographics.age && Object.keys(demographics.age).length > 0) {
@@ -18492,7 +18492,7 @@
                 // Color code based on rating
                 let color = 'var(--text-secondary)';
                 if (stats.accuracy_score >= 95) color = '#10b981'; // Green - Excellent
-                else if (stats.accuracy_score >= 85) color = '#3b82f6'; // Blue - Very Good
+                else if (stats.accuracy_score >= 85) color = '#6b6b6b'; // Gray - Very Good
                 else if (stats.accuracy_score >= 75) color = '#f59e0b'; // Orange - Good
                 else if (stats.accuracy_score >= 65) color = '#f97316'; // Dark Orange - Fair
                 else color = '#ef4444'; // Red - Needs Improvement
@@ -19463,7 +19463,7 @@
             });
             const accentCyan = 'rgba(0, 255, 255, 0.9)';
             const green = '#10b981';
-            const blue = 'rgba(59, 130, 246, 0.9)';
+            const blue = 'rgba(107, 107, 107, 0.9)';
             const commonOptions = {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -19578,7 +19578,7 @@
             const accentCyan = 'rgba(0, 255, 255, 0.9)';
             const green = '#10b981';
             const red = '#ef4444';
-            const blue = 'rgba(59, 130, 246, 0.9)';
+            const blue = 'rgba(107, 107, 107, 0.9)';
             
             const commonOptions = {
                 responsive: true,
@@ -19639,7 +19639,7 @@
                             label: 'Total Consumers',
                             data: consumers,
                             borderColor: blue,
-                            backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                            backgroundColor: 'rgba(107, 107, 107, 0.12)',
                             borderWidth: 2,
                             fill: true,
                             tension: 0.35,
@@ -25414,7 +25414,7 @@
             charts = {};
             currentDemoIndexes = demographicsIndex;
 
-            const colors = ['#5a9ad9', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74', '#75715e'];
+                const colors = ['#6b6b6b', '#8a8a8a', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74', '#75715e'];
             const isProjection = dashDisplayMode === 'projection';
             const isGenPop = isSelectedProfileGenPop();
             const US_POPULATION = 324700000;
@@ -25483,9 +25483,9 @@
                     labels: ageLabels, 
                     datasets: [{ 
                         data: ageData, 
-                        backgroundColor: ageIsCircular ? colors : '#5a9ad9', 
+                        backgroundColor: ageIsCircular ? colors : '#6b6b6b', 
                         borderRadius: ageIsCircular ? 0 : 4,
-                        borderColor: ageChartType === 'line' ? '#5a9ad9' : undefined,
+                        borderColor: ageChartType === 'line' ? '#6b6b6b' : undefined,
                         fill: ageChartType === 'line' ? false : undefined,
                         tension: ageChartType === 'line' ? 0.3 : undefined
                     }] 
@@ -36454,7 +36454,7 @@
                 </div>
                 
                 ${insights.keyRecommendations && insights.keyRecommendations.length > 0 ? `
-                    <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(90, 154, 217, 0.1); border-radius: 6px; border-left: 3px solid var(--accent-blue);">
+                    <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(107, 107, 107, 0.1); border-radius: 6px; border-left: 3px solid var(--accent-blue);">
                         <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-blue);">💡 Key Strategic Recommendations</h4>
                         <ul style="margin: 0; padding-left: 1.5rem; color: var(--text-secondary); line-height: 1.8;">
                             ${insights.keyRecommendations.map(rec => `<li style="margin-bottom: 0.5rem;">${rec}</li>`).join('')}
