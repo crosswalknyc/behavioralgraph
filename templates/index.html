@@ -46369,6 +46369,9 @@
             initDeckCollaboration();
         }
         
+        // Current ribbon tab state (must be defined before renderSlideEditor)
+        let currentRibbonTab = 'view';
+        
         function renderSlideEditor() {
             const emptyEl = document.getElementById('slideEditorEmpty');
             const contentEl = document.getElementById('slideEditorContent');
@@ -46654,8 +46657,6 @@
             }
             setTimeout(updateSlideCanvasScale, 100);
         }
-        
-        let currentRibbonTab = 'view';
         
         function switchRibbonTab(tabName) {
             currentRibbonTab = tabName;
