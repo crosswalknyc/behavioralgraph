@@ -49067,9 +49067,48 @@
             if (slideType === 'demographic' || (slide.data.values && typeof slide.data.values === 'object' && !slide.data.categories)) {
                 const values = slide.data.values || {};
                 const overrides = slide.data.boxOverrides || {};
-                const entries = Object.entries(values).sort((a, b) => b[1] - a[1]).slice(0, 8);
+                const allEntries = Object.entries(values).sort((a, b) => b[1] - a[1]);
+                const itemCount = allEntries.length;
+                
+                // Determine how many items to show and layout based on count
+                let entries, columns, fontSize, valueFontSize, padding, gap;
+                
+                if (itemCount <= 8) {
+                    // Standard 2-column layout
+                    entries = allEntries.slice(0, 8);
+                    columns = 2;
+                    fontSize = '0.8rem';
+                    valueFontSize = '1.5rem';
+                    padding = '0.75rem';
+                    gap = '1rem';
+                } else if (itemCount <= 12) {
+                    // 3-column layout with slightly smaller text
+                    entries = allEntries.slice(0, 12);
+                    columns = 3;
+                    fontSize = '0.75rem';
+                    valueFontSize = '1.3rem';
+                    padding = '0.6rem';
+                    gap = '0.75rem';
+                } else if (itemCount <= 16) {
+                    // 4-column layout with smaller text
+                    entries = allEntries.slice(0, 16);
+                    columns = 4;
+                    fontSize = '0.7rem';
+                    valueFontSize = '1.1rem';
+                    padding = '0.5rem';
+                    gap = '0.6rem';
+                } else {
+                    // 4-column layout with smallest text, show top 20
+                    entries = allEntries.slice(0, 20);
+                    columns = 4;
+                    fontSize = '0.65rem';
+                    valueFontSize = '1rem';
+                    padding = '0.4rem';
+                    gap = '0.5rem';
+                }
+                
                 return `
-                    <div class="editable-boxes-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                    <div class="editable-boxes-grid" style="display: grid; grid-template-columns: repeat(${columns}, 1fr); gap: ${gap};">
                         ${entries.map(([key, val]) => {
                             const o = overrides[key] || {};
                             const label = o.label !== undefined ? o.label : key;
@@ -49081,11 +49120,11 @@
                             return `
                             <div class="editable-demo-box" data-key="${escapeHtml(key)}" data-orig-val="${parseFloat(val).toFixed(1)}" data-label="${escapeHtml(label)}" data-value="${escapeHtml(String(value))}"
                                  data-bg="${escapeHtml(bg)}" data-value-color="${escapeHtml(valueColor)}" data-label-color="${escapeHtml(labelColor)}"
-                                 style="background: ${bg}; padding: 0.75rem; border-radius: 6px; cursor: pointer; position: relative; transition: box-shadow 0.2s; ${boxStyle}"
+                                 style="background: ${bg}; padding: ${padding}; border-radius: 6px; cursor: pointer; position: relative; transition: box-shadow 0.2s; ${boxStyle}"
                                  onclick="selectEditableBox(event, this)">
-                                <span class="demo-box-drag-handle" draggable="true" ondragstart="handleDemoBoxDragStart(event, this.closest('.editable-demo-box'))" onmousedown="event.stopPropagation()" title="Drag to slide or drop zone to add" style="position: absolute; top: 4px; left: 4px; cursor: grab; opacity: 0.6; font-size: 0.7rem; user-select: none;">⋮⋮</span>
-                                <div class="editable-box-label" contenteditable="true" spellcheck="false" style="font-size: 0.8rem; color: ${labelColor}; padding-left: 14px;" onblur="saveEditableBoxEdit(this)">${escapeHtml(label)}</div>
-                                <div class="editable-box-value" contenteditable="true" spellcheck="false" style="font-size: 1.5rem; font-weight: 700; color: ${valueColor};" onblur="saveEditableBoxEdit(this)">${escapeHtml(String(value))}</div>
+                                <span class="demo-box-drag-handle" draggable="true" ondragstart="handleDemoBoxDragStart(event, this.closest('.editable-demo-box'))" onmousedown="event.stopPropagation()" title="Drag to slide or drop zone to add" style="position: absolute; top: 4px; left: 4px; cursor: grab; opacity: 0.6; font-size: 0.65rem; user-select: none;">⋮⋮</span>
+                                <div class="editable-box-label" contenteditable="true" spellcheck="false" style="font-size: ${fontSize}; color: ${labelColor}; padding-left: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" onblur="saveEditableBoxEdit(this)">${escapeHtml(label)}</div>
+                                <div class="editable-box-value" contenteditable="true" spellcheck="false" style="font-size: ${valueFontSize}; font-weight: 700; color: ${valueColor};" onblur="saveEditableBoxEdit(this)">${escapeHtml(String(value))}</div>
                                 <div class="editable-box-toolbar" style="display: none; position: absolute; bottom: -42px; left: 0; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem; flex-wrap: wrap; gap: 0.35rem; z-index: 50; box-shadow: 0 4px 12px rgba(0,0,0,0.4);" onclick="event.stopPropagation()">
                                     <input type="color" title="Background color" value="${bg.startsWith('#') ? bg : '#1e293b'}" onchange="updateEditableBoxColor(this, 'bg')" style="width: 24px; height: 24px; border: none; cursor: pointer; padding: 0; border-radius: 4px;">
                                     <input type="color" title="Value color" value="${valueColor.startsWith('#') ? valueColor : '#c8e600'}" onchange="updateEditableBoxColor(this, 'value')" style="width: 24px; height: 24px; border: none; cursor: pointer; padding: 0; border-radius: 4px;">
@@ -49095,6 +49134,11 @@
                             </div>
                         `}).join('')}
                     </div>
+                    ${itemCount > entries.length ? `
+                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
+                            Showing top ${entries.length} of ${itemCount} segments
+                        </div>
+                    ` : ''}
                 `;
             }
             
@@ -49104,64 +49148,134 @@
                     ? items.map(i => [i.name, i.pct]).filter(([k]) => k).sort((a, b) => (parseFloat(b[1]) || 0) - (parseFloat(a[1]) || 0))
                     : Object.entries(items).sort((a, b) => (parseFloat(b[1]) || 0) - (parseFloat(a[1]) || 0));
                 
-                // Calculate how many items fit on one page (assuming ~60% height available, ~2rem per row)
-                const maxItemsPerPage = 18; // Approximate fit for the content area
-                const totalPages = Math.ceil(entries.length / maxItemsPerPage);
+                // Determine display strategy based on number of items
+                const itemCount = entries.length;
                 
-                if (totalPages === 1) {
-                    // All items fit on one page - use multi-column layout if needed
-                    const useColumns = entries.length > 12;
+                // Strategy 1: If 30+ items, show as horizontal bar chart
+                if (itemCount >= 30) {
+                    const topItems = entries.slice(0, 20); // Show top 20 in chart
+                    const maxVal = Math.max(...topItems.map(([_, v]) => parseFloat(v || 0)));
+                    
                     return `
-                        <div style="display: grid; grid-template-columns: ${useColumns ? 'repeat(2, 1fr)' : '1fr'}; gap: 0.4rem; font-size: ${entries.length > 15 ? '0.8rem' : '0.85rem'};">
+                        <div style="display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.7rem;">
+                            ${topItems.map(([key, val], i) => {
+                                const pct = parseFloat(val || 0);
+                                const barWidth = maxVal > 0 ? (pct / maxVal * 100) : 0;
+                                return `
+                                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                    <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0; text-align: right;">${i + 1}</span>
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div style="font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">${(key || '').replace(/</g, '&lt;')}</div>
+                                        <div style="position: relative; height: 14px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;">
+                                            <div style="position: absolute; left: 0; top: 0; height: 100%; width: ${barWidth}%; background: linear-gradient(90deg, var(--accent-lime), var(--accent-cyan)); border-radius: 3px;"></div>
+                                            <span style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: ${barWidth > 50 ? '#000' : 'var(--accent-lime)'};">${pct.toFixed(1)}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `}).join('')}
+                            <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
+                                📊 Showing top 20 of ${itemCount} items
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // Strategy 2: If 19-29 items, use 3 columns with smaller font
+                if (itemCount >= 19 && itemCount < 30) {
+                    return `
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.3rem; font-size: 0.7rem;">
                             ${entries.map(([key, val], i) => `
-                                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem; background: #1a1f2e; border-radius: 4px; font-family: 'Poppins', sans-serif;">
-                                    <span style="font-size: 0.7rem; color: var(--text-secondary); width: 18px; flex-shrink: 0;">${i + 1}</span>
-                                    <span style="flex: 1; font-size: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(key || '').replace(/</g, '&lt;')}</span>
+                                <div style="display: flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.4rem; background: #1a1f2e; border-radius: 3px; font-family: 'Poppins', sans-serif;">
+                                    <span style="font-size: 0.6rem; color: var(--text-secondary); width: 14px; flex-shrink: 0;">${i + 1}</span>
+                                    <span style="flex: 1; font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(key || '').replace(/</g, '&lt;')}</span>
+                                    <span style="font-weight: 600; color: var(--accent-lime); flex-shrink: 0; font-size: 0.7rem;">${parseFloat(val || 0).toFixed(1)}%</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+                
+                // Strategy 3: If 13-18 items, use 2 columns
+                if (itemCount >= 13 && itemCount < 19) {
+                    return `
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem; font-size: 0.75rem;">
+                            ${entries.map(([key, val], i) => `
+                                <div style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.5rem; background: #1a1f2e; border-radius: 4px; font-family: 'Poppins', sans-serif;">
+                                    <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0;">${i + 1}</span>
+                                    <span style="flex: 1; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(key || '').replace(/</g, '&lt;')}</span>
                                     <span style="font-weight: 600; color: var(--accent-lime); flex-shrink: 0;">${parseFloat(val || 0).toFixed(1)}%</span>
                                 </div>
                             `).join('')}
                         </div>
                     `;
-                } else {
-                    // Need multiple pages - store in slide data for pagination
-                    if (!slide.behavioralPages) {
-                        slide.behavioralPages = [];
-                        for (let p = 0; p < totalPages; p++) {
-                            const start = p * maxItemsPerPage;
-                            const pageEntries = entries.slice(start, start + maxItemsPerPage);
-                            slide.behavioralPages.push(pageEntries);
-                        }
-                    }
-                    
-                    // Render first page with pagination indicator
-                    const pageEntries = slide.behavioralPages[0];
-                    return `
-                        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-                            ${pageEntries.map(([key, val], i) => `
-                                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem; background: #1a1f2e; border-radius: 4px; font-family: 'Poppins', sans-serif;">
-                                    <span style="font-size: 0.7rem; color: var(--text-secondary); width: 18px;">${i + 1}</span>
-                                    <span style="flex: 1; font-size: 0.85rem;">${(key || '').replace(/</g, '&lt;')}</span>
-                                    <span style="font-weight: 600; color: var(--accent-lime);">${parseFloat(val || 0).toFixed(1)}%</span>
-                                </div>
-                            `).join('')}
-                            <div style="margin-top: 0.5rem; padding: 0.5rem; text-align: center; font-size: 0.75rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
-                                📄 Page 1 of ${totalPages} • ${entries.length} total items
-                            </div>
-                        </div>
-                    `;
                 }
+                
+                // Strategy 4: If 12 or fewer items, use single column with normal font
+                return `
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem;">
+                        ${entries.map(([key, val], i) => `
+                            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; background: #1a1f2e; border-radius: 4px; font-family: 'Poppins', sans-serif;">
+                                <span style="font-size: 0.7rem; color: var(--text-secondary); width: 18px; flex-shrink: 0;">${i + 1}</span>
+                                <span style="flex: 1; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(key || '').replace(/</g, '&lt;')}</span>
+                                <span style="font-weight: 600; color: var(--accent-lime); flex-shrink: 0;">${parseFloat(val || 0).toFixed(1)}%</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
             }
             
             if (slideType === 'location') {
                 const locations = slide.data.locations || slide.data.regions || [];
+                const itemCount = locations.length;
+                
+                // Determine layout based on count
+                let displayLocations, columns, fontSize, padding, gap;
+                
+                if (itemCount <= 12) {
+                    // Standard 2-column layout
+                    displayLocations = locations.slice(0, 12);
+                    columns = 2;
+                    fontSize = '0.8rem';
+                    padding = '0.5rem';
+                    gap = '0.5rem';
+                } else if (itemCount <= 18) {
+                    // 3-column layout
+                    displayLocations = locations.slice(0, 18);
+                    columns = 3;
+                    fontSize = '0.75rem';
+                    padding = '0.45rem';
+                    gap = '0.4rem';
+                } else if (itemCount <= 24) {
+                    // 4-column layout
+                    displayLocations = locations.slice(0, 24);
+                    columns = 4;
+                    fontSize = '0.7rem';
+                    padding = '0.4rem';
+                    gap = '0.35rem';
+                } else {
+                    // 4-column with smallest text, show top 28
+                    displayLocations = locations.slice(0, 28);
+                    columns = 4;
+                    fontSize = '0.65rem';
+                    padding = '0.35rem';
+                    gap = '0.3rem';
+                }
+                
                 return `
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
-                        ${locations.slice(0, 12).map(loc => `
-                            <div style="padding: 0.5rem; background: #1a1f2e; border-radius: 4px; font-size: 0.8rem; font-family: 'Poppins', sans-serif;">
-                                ${loc.name || loc.dma || loc.region} - ${loc.value || loc.pct?.toFixed(1) + '%' || ''}
+                    <div style="display: grid; grid-template-columns: repeat(${columns}, 1fr); gap: ${gap};">
+                        ${displayLocations.map((loc, i) => `
+                            <div style="padding: ${padding}; background: #1a1f2e; border-radius: 4px; font-size: ${fontSize}; font-family: 'Poppins', sans-serif; display: flex; align-items: center; gap: 0.3rem;">
+                                <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0;">${i + 1}</span>
+                                <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${loc.name || loc.dma || loc.region}</span>
+                                <span style="color: var(--accent-lime); font-weight: 600; flex-shrink: 0;">${loc.value || loc.pct?.toFixed(1) + '%' || ''}</span>
                             </div>
                         `).join('')}
                     </div>
+                    ${itemCount > displayLocations.length ? `
+                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
+                            Showing top ${displayLocations.length} of ${itemCount} locations
+                        </div>
+                    ` : ''}
                 `;
             }
             
@@ -49171,16 +49285,57 @@
             
             if (slideType === 'affinity' && slide.data.items) {
                 const items = slide.data.items || [];
-                const entries = Array.isArray(items) ? items.slice(0, 12) : [];
+                const entries = Array.isArray(items) ? items : [];
+                const itemCount = entries.length;
+                
+                // Determine layout based on count
+                let displayItems, columns, fontSize, padding, gap;
+                
+                if (itemCount <= 12) {
+                    // Standard 2-column layout
+                    displayItems = entries.slice(0, 12);
+                    columns = 2;
+                    fontSize = '0.85rem';
+                    padding = '0.5rem';
+                    gap = '0.5rem';
+                } else if (itemCount <= 18) {
+                    // 3-column layout
+                    displayItems = entries.slice(0, 18);
+                    columns = 3;
+                    fontSize = '0.75rem';
+                    padding = '0.45rem';
+                    gap = '0.4rem';
+                } else if (itemCount <= 24) {
+                    // 4-column layout
+                    displayItems = entries.slice(0, 24);
+                    columns = 4;
+                    fontSize = '0.7rem';
+                    padding = '0.4rem';
+                    gap = '0.35rem';
+                } else {
+                    // 4-column with smallest text, show top 28
+                    displayItems = entries.slice(0, 28);
+                    columns = 4;
+                    fontSize = '0.65rem';
+                    padding = '0.35rem';
+                    gap = '0.3rem';
+                }
+                
                 return `
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
-                        ${entries.map(item => `
-                            <div style="padding: 0.5rem; background: var(--bg-input); border-radius: 4px; font-size: 0.85rem;">
-                                <span>${(item.name || '').replace(/</g, '&lt;')}</span>
-                                <span style="color: var(--accent-lime); margin-left: 0.5rem;">${String(item.index || '').replace(/</g, '&lt;')}</span>
+                    <div style="display: grid; grid-template-columns: repeat(${columns}, 1fr); gap: ${gap};">
+                        ${displayItems.map((item, i) => `
+                            <div style="padding: ${padding}; background: var(--bg-input); border-radius: 4px; font-size: ${fontSize}; display: flex; align-items: center; gap: 0.3rem;">
+                                <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0;">${i + 1}</span>
+                                <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${(item.name || '').replace(/</g, '&lt;')}</span>
+                                <span style="color: var(--accent-lime); margin-left: 0.3rem; font-weight: 600; flex-shrink: 0;">${String(item.index || item.pct || '').replace(/</g, '&lt;')}</span>
                             </div>
                         `).join('')}
                     </div>
+                    ${itemCount > displayItems.length ? `
+                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
+                            Showing top ${displayItems.length} of ${itemCount} items
+                        </div>
+                    ` : ''}
                 `;
             }
             
