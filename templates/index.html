@@ -9666,6 +9666,174 @@
             z-index: 5;
         }
         
+        /* Data Visualization Control Panel */
+        .viz-control-panel {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: rgba(13, 33, 55, 0.98);
+            border: 1px solid var(--accent-cyan);
+            border-radius: 8px;
+            padding: 0.75rem;
+            z-index: 100;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+            min-width: 280px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+        
+        .slide-module-content:hover .viz-control-panel {
+            opacity: 1;
+            pointer-events: all;
+        }
+        
+        .viz-control-section {
+            margin-bottom: 0.75rem;
+        }
+        
+        .viz-control-section:last-child {
+            margin-bottom: 0;
+        }
+        
+        .viz-control-label {
+            font-size: 0.7rem;
+            color: var(--accent-cyan);
+            margin-bottom: 0.4rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .viz-type-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.4rem;
+        }
+        
+        .viz-type-btn {
+            padding: 0.4rem 0.5rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.7rem;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+        
+        .viz-type-btn:hover {
+            background: var(--bg-card);
+            border-color: var(--accent-cyan);
+            color: var(--text-primary);
+        }
+        
+        .viz-type-btn.active {
+            background: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+            color: #000;
+            font-weight: 600;
+        }
+        
+        .viz-count-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.3rem;
+        }
+        
+        .viz-count-btn {
+            padding: 0.3rem 0.5rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.65rem;
+            transition: all 0.2s ease;
+        }
+        
+        .viz-count-btn:hover {
+            background: var(--bg-card);
+            border-color: var(--accent-lime);
+            color: var(--text-primary);
+        }
+        
+        .viz-count-btn.active {
+            background: var(--accent-lime);
+            border-color: var(--accent-lime);
+            color: #000;
+            font-weight: 600;
+        }
+        
+        .viz-threshold-input {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        
+        .viz-threshold-input input {
+            width: 60px;
+            padding: 0.3rem 0.5rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 0.7rem;
+        }
+        
+        .viz-threshold-input button {
+            padding: 0.3rem 0.6rem;
+            background: var(--accent-lime);
+            border: none;
+            border-radius: 4px;
+            color: #000;
+            cursor: pointer;
+            font-size: 0.65rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        
+        .viz-threshold-input button:hover {
+            background: var(--accent-cyan);
+            transform: scale(1.05);
+        }
+        
+        .viz-overflow-warning {
+            background: rgba(253, 151, 31, 0.15);
+            border: 1px solid var(--accent-orange);
+            border-radius: 4px;
+            padding: 0.5rem;
+            font-size: 0.65rem;
+            color: var(--accent-orange);
+            margin-top: 0.5rem;
+        }
+        
+        .viz-overflow-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+            margin-top: 0.4rem;
+        }
+        
+        .viz-overflow-btn {
+            padding: 0.4rem 0.6rem;
+            background: var(--bg-input);
+            border: 1px solid var(--accent-orange);
+            border-radius: 4px;
+            color: var(--accent-orange);
+            cursor: pointer;
+            font-size: 0.65rem;
+            transition: all 0.2s ease;
+            text-align: left;
+        }
+        
+        .viz-overflow-btn:hover {
+            background: var(--accent-orange);
+            color: #000;
+            font-weight: 600;
+        }
+        
         /* Slide placeholder for images */
         .slide-image-placeholder {
             background: linear-gradient(135deg, #3d3d3d 0%, #2a2a2a 100%);
@@ -34543,6 +34711,347 @@
             return result;
         }
         
+        function createVizControlPanel(slideIdx, totalItems) {
+            const slide = currentEditingDeck?.slides?.[slideIdx - 1];
+            if (!slide) return '';
+            
+            const vizPrefs = slide.vizPrefs || {
+                type: 'auto', // auto, bars, table, columns, pie
+                count: 'auto', // auto, 3, 5, 10, 15, 20, 'all', 'threshold'
+                threshold: 30 // for threshold mode
+            };
+            
+            const currentType = vizPrefs.type || 'auto';
+            const currentCount = vizPrefs.count || 'auto';
+            const currentThreshold = vizPrefs.threshold || 30;
+            
+            // Determine if overflow warning is needed
+            const maxFit = slide.type === 'demographic' ? 20 : 30;
+            const showOverflow = currentCount === 'all' && totalItems > maxFit;
+            
+            return `
+                <div class="viz-control-panel" onclick="event.stopPropagation()">
+                    <div class="viz-control-section">
+                        <div class="viz-control-label">📊 Visualization</div>
+                        <div class="viz-type-buttons">
+                            <button class="viz-type-btn ${currentType === 'auto' ? 'active' : ''}" 
+                                    onclick="updateVizType(${slideIdx}, 'auto')">Auto</button>
+                            <button class="viz-type-btn ${currentType === 'bars' ? 'active' : ''}" 
+                                    onclick="updateVizType(${slideIdx}, 'bars')">Bars</button>
+                            <button class="viz-type-btn ${currentType === 'table' ? 'active' : ''}" 
+                                    onclick="updateVizType(${slideIdx}, 'table')">Table</button>
+                            <button class="viz-type-btn ${currentType === 'columns' ? 'active' : ''}" 
+                                    onclick="updateVizType(${slideIdx}, 'columns')">Columns</button>
+                            <button class="viz-type-btn ${currentType === 'pie' ? 'active' : ''}" 
+                                    onclick="updateVizType(${slideIdx}, 'pie')">Pie Chart</button>
+                            <button class="viz-type-btn ${currentType === 'boxes' ? 'active' : ''}" 
+                                    onclick="updateVizType(${slideIdx}, 'boxes')">Boxes</button>
+                        </div>
+                    </div>
+                    
+                    <div class="viz-control-section">
+                        <div class="viz-control-label">🔢 Display Count</div>
+                        <div class="viz-count-options">
+                            <button class="viz-count-btn ${currentCount === 'auto' ? 'active' : ''}" 
+                                    onclick="updateVizCount(${slideIdx}, 'auto')">Auto</button>
+                            <button class="viz-count-btn ${currentCount === 3 ? 'active' : ''}" 
+                                    onclick="updateVizCount(${slideIdx}, 3)">Top 3</button>
+                            <button class="viz-count-btn ${currentCount === 5 ? 'active' : ''}" 
+                                    onclick="updateVizCount(${slideIdx}, 5)">Top 5</button>
+                            <button class="viz-count-btn ${currentCount === 10 ? 'active' : ''}" 
+                                    onclick="updateVizCount(${slideIdx}, 10)">Top 10</button>
+                            <button class="viz-count-btn ${currentCount === 15 ? 'active' : ''}" 
+                                    onclick="updateVizCount(${slideIdx}, 15)">Top 15</button>
+                            <button class="viz-count-btn ${currentCount === 20 ? 'active' : ''}" 
+                                    onclick="updateVizCount(${slideIdx}, 20)">Top 20</button>
+                            <button class="viz-count-btn ${currentCount === 'all' ? 'active' : ''}" 
+                                    onclick="updateVizCount(${slideIdx}, 'all')">All</button>
+                        </div>
+                    </div>
+                    
+                    <div class="viz-control-section">
+                        <div class="viz-control-label">📈 Threshold Filter</div>
+                        <div class="viz-threshold-input">
+                            <span style="font-size: 0.7rem; color: var(--text-secondary);">Show ≥</span>
+                            <input type="number" 
+                                   value="${currentThreshold}" 
+                                   min="0" 
+                                   max="100" 
+                                   step="1"
+                                   id="vizThreshold${slideIdx}"
+                                   onkeypress="if(event.key==='Enter') updateVizThreshold(${slideIdx})">
+                            <span style="font-size: 0.7rem; color: var(--text-secondary);">%</span>
+                            <button onclick="updateVizThreshold(${slideIdx})">Apply</button>
+                        </div>
+                        <button class="viz-count-btn" style="margin-top: 0.3rem; width: 100%;" 
+                                onclick="updateVizCount(${slideIdx}, 'threshold')">
+                            ${currentCount === 'threshold' ? '✓ ' : ''}Use Threshold
+                        </button>
+                    </div>
+                    
+                    ${showOverflow ? `
+                        <div class="viz-overflow-warning">
+                            ⚠️ ${totalItems} items may not fit on one slide
+                            <div class="viz-overflow-actions">
+                                <button class="viz-overflow-btn" onclick="handleOverflowSplit(${slideIdx})">
+                                    📄 Split into multiple slides
+                                </button>
+                                <button class="viz-overflow-btn" onclick="handleOverflowRemoveImage(${slideIdx})">
+                                    🖼️ Remove images & fit all data
+                                </button>
+                                <button class="viz-overflow-btn" onclick="handleOverflowAuto(${slideIdx})">
+                                    ✨ Auto-optimize layout
+                                </button>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        function updateVizType(slideIdx, type) {
+            const slide = currentEditingDeck?.slides?.[slideIdx - 1];
+            if (!slide) return;
+            
+            if (!slide.vizPrefs) slide.vizPrefs = {};
+            slide.vizPrefs.type = type;
+            
+            saveDeckChanges();
+            renderSlideEditor();
+            showNotification(`Visualization changed to ${type}`, 'success');
+        }
+        
+        function updateVizCount(slideIdx, count) {
+            const slide = currentEditingDeck?.slides?.[slideIdx - 1];
+            if (!slide) return;
+            
+            if (!slide.vizPrefs) slide.vizPrefs = {};
+            slide.vizPrefs.count = count;
+            
+            saveDeckChanges();
+            renderSlideEditor();
+            showNotification(`Display count set to ${count}`, 'success');
+        }
+        
+        function updateVizThreshold(slideIdx) {
+            const slide = currentEditingDeck?.slides?.[slideIdx - 1];
+            if (!slide) return;
+            
+            const input = document.getElementById(`vizThreshold${slideIdx}`);
+            const threshold = parseFloat(input?.value || 30);
+            
+            if (!slide.vizPrefs) slide.vizPrefs = {};
+            slide.vizPrefs.threshold = threshold;
+            
+            saveDeckChanges();
+            renderSlideEditor();
+            showNotification(`Threshold set to ${threshold}%`, 'success');
+        }
+        
+        function handleOverflowSplit(slideIdx) {
+            const slide = currentEditingDeck?.slides?.[slideIdx - 1];
+            if (!slide || !slide.data) return;
+            
+            // Get all items
+            let allItems = [];
+            if (slide.type === 'demographic' && slide.data.values) {
+                allItems = Object.entries(slide.data.values).sort((a, b) => b[1] - a[1]);
+            } else if (slide.type === 'behavioral' && slide.data.items) {
+                allItems = slide.data.items.map(i => [i.name, i.pct]).sort((a, b) => b[1] - a[1]);
+            } else if (slide.type === 'location' && slide.data.items) {
+                allItems = slide.data.items.map(i => [i.location, i.pct]).sort((a, b) => b[1] - a[1]);
+            } else if (slide.type === 'affinity' && slide.data.items) {
+                allItems = slide.data.items.map(i => [i.name, i.pct]).sort((a, b) => b[1] - a[1]);
+            }
+            
+            if (allItems.length === 0) return;
+            
+            // Split into chunks of 20
+            const chunkSize = 20;
+            const chunks = [];
+            for (let i = 0; i < allItems.length; i += chunkSize) {
+                chunks.push(allItems.slice(i, i + chunkSize));
+            }
+            
+            if (chunks.length <= 1) {
+                showNotification('No need to split - data fits on one slide', 'info');
+                return;
+            }
+            
+            // Create new slides for each chunk (except the first, which replaces current)
+            const baseTitle = slide.customTitle || slide.title || slide.category || 'Data';
+            
+            // Update first slide
+            if (slide.type === 'demographic') {
+                slide.data.values = Object.fromEntries(chunks[0]);
+            } else if (slide.type === 'behavioral') {
+                slide.data.items = chunks[0].map(([name, pct]) => ({ name, pct }));
+            } else if (slide.type === 'location') {
+                slide.data.items = chunks[0].map(([location, pct]) => ({ location, pct }));
+            } else if (slide.type === 'affinity') {
+                slide.data.items = chunks[0].map(([name, pct]) => ({ name, pct }));
+            }
+            slide.customTitle = `${baseTitle} (1/${chunks.length})`;
+            
+            // Create additional slides
+            for (let i = 1; i < chunks.length; i++) {
+                const newSlide = JSON.parse(JSON.stringify(slide)); // Deep copy
+                newSlide.id = 'slide_' + Date.now() + '_' + i;
+                newSlide.customTitle = `${baseTitle} (${i + 1}/${chunks.length})`;
+                
+                if (newSlide.type === 'demographic') {
+                    newSlide.data.values = Object.fromEntries(chunks[i]);
+                } else if (newSlide.type === 'behavioral') {
+                    newSlide.data.items = chunks[i].map(([name, pct]) => ({ name, pct }));
+                } else if (newSlide.type === 'location') {
+                    newSlide.data.items = chunks[i].map(([location, pct]) => ({ location, pct }));
+                } else if (newSlide.type === 'affinity') {
+                    newSlide.data.items = chunks[i].map(([name, pct]) => ({ name, pct }));
+                }
+                
+                // Remove images from continuation slides
+                delete newSlide.image;
+                if (newSlide.elements) {
+                    newSlide.elements = newSlide.elements.filter(el => el.type !== 'image');
+                }
+                
+                // Insert after current slide
+                currentEditingDeck.slides.splice(slideIdx + i, 0, newSlide);
+            }
+            
+            saveDeckChanges();
+            renderSlideEditor();
+            renderSlideThumbnails();
+            showNotification(`Split into ${chunks.length} slides`, 'success');
+        }
+        
+        function handleOverflowRemoveImage(slideIdx) {
+            const slide = currentEditingDeck?.slides?.[slideIdx - 1];
+            if (!slide) return;
+            
+            // Remove image and image elements
+            delete slide.image;
+            if (slide.elements) {
+                slide.elements = slide.elements.filter(el => el.type !== 'image');
+            }
+            
+            // Set viz to auto-optimize
+            if (!slide.vizPrefs) slide.vizPrefs = {};
+            slide.vizPrefs.type = 'auto';
+            slide.vizPrefs.count = 'all';
+            
+            saveDeckChanges();
+            renderSlideEditor();
+            showNotification('Images removed, showing all data', 'success');
+        }
+        
+        function handleOverflowAuto(slideIdx) {
+            const slide = currentEditingDeck?.slides?.[slideIdx - 1];
+            if (!slide) return;
+            
+            // Set to auto mode with smart count
+            if (!slide.vizPrefs) slide.vizPrefs = {};
+            slide.vizPrefs.type = 'auto';
+            slide.vizPrefs.count = 'auto';
+            
+            saveDeckChanges();
+            renderSlideEditor();
+            showNotification('Auto-optimized layout', 'success');
+        }
+        
+        function renderDemographicBars(entries, totalCount) {
+            const maxVal = Math.max(...entries.map(([_, v]) => parseFloat(v)));
+            return `
+                <div style="display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.7rem;">
+                    ${entries.map(([key, val], i) => {
+                        const pct = parseFloat(val);
+                        const barWidth = maxVal > 0 ? (pct / maxVal * 100) : 0;
+                        return `
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <span style="font-size: 0.65rem; color: var(--text-secondary); width: 16px; flex-shrink: 0; text-align: right;">${i + 1}</span>
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;">${escapeHtml(key)}</div>
+                                <div style="position: relative; height: 14px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;">
+                                    <div style="position: absolute; left: 0; top: 0; height: 100%; width: ${barWidth}%; background: linear-gradient(90deg, var(--accent-lime), var(--accent-cyan)); border-radius: 3px;"></div>
+                                    <span style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); font-size: 0.65rem; font-weight: 600; color: ${barWidth > 50 ? '#000' : 'var(--accent-lime)'};">${pct.toFixed(1)}%</span>
+                                </div>
+                            </div>
+                        </div>
+                    `}).join('')}
+                    ${entries.length < totalCount ? `
+                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
+                            📊 Showing ${entries.length} of ${totalCount} segments
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        function renderDemographicTable(entries, totalCount) {
+            return `
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+                        <thead>
+                            <tr style="background: rgba(200, 230, 0, 0.1); border-bottom: 2px solid var(--accent-lime);">
+                                <th style="padding: 0.4rem; text-align: left; color: var(--accent-lime);">#</th>
+                                <th style="padding: 0.4rem; text-align: left; color: var(--accent-lime);">Segment</th>
+                                <th style="padding: 0.4rem; text-align: right; color: var(--accent-lime);">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${entries.map(([key, val], i) => `
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                    <td style="padding: 0.4rem; color: var(--text-secondary);">${i + 1}</td>
+                                    <td style="padding: 0.4rem; color: var(--text-primary);">${escapeHtml(key)}</td>
+                                    <td style="padding: 0.4rem; text-align: right; font-weight: 600; color: var(--accent-lime);">${parseFloat(val).toFixed(1)}%</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                    ${entries.length < totalCount ? `
+                        <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
+                            📊 Showing ${entries.length} of ${totalCount} segments
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+        
+        function renderDemographicPie(entries, totalCount) {
+            // Simple pie chart using CSS conic-gradient
+            const total = entries.reduce((sum, [_, v]) => sum + parseFloat(v), 0);
+            let currentAngle = 0;
+            const colors = ['#c8ff00', '#66d9ef', '#a6e22e', '#fd971f', '#f92672', '#ae81ff', '#e6db74', '#66d9ef'];
+            
+            const gradientStops = entries.map(([key, val], i) => {
+                const pct = (parseFloat(val) / total) * 100;
+                const startAngle = currentAngle;
+                currentAngle += (pct / 100) * 360;
+                const color = colors[i % colors.length];
+                return `${color} ${startAngle}deg ${currentAngle}deg`;
+            }).join(', ');
+            
+            return `
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <div style="width: 200px; height: 200px; border-radius: 50%; background: conic-gradient(${gradientStops}); flex-shrink: 0;"></div>
+                    <div style="flex: 1; display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.7rem; max-height: 200px; overflow-y: auto;">
+                        ${entries.map(([key, val], i) => `
+                            <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                <div style="width: 12px; height: 12px; border-radius: 2px; background: ${colors[i % colors.length]}; flex-shrink: 0;"></div>
+                                <span style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(key)}</span>
+                                <span style="font-weight: 600; color: var(--accent-lime); flex-shrink: 0;">${parseFloat(val).toFixed(1)}%</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ${entries.length < totalCount ? `
+                    <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
+                        📊 Showing ${entries.length} of ${totalCount} segments
+                    </div>
+                ` : ''}
+            `;
+        }
+        
         // Reset business conversation when switching profiles
         function resetBusinessConversation() {
             businessConversationHistory = [];
@@ -47875,6 +48384,7 @@
                         
                         <!-- Content area left -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 22%; width: 52%; height: 65%; overflow: hidden; padding: 0.5rem; z-index: 1;">
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 1rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
@@ -47915,6 +48425,7 @@
                         
                         <!-- Content area left -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 22%; width: 40%; height: 65%; overflow: hidden; padding: 0.5rem; z-index: 1;">
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 1rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
@@ -47967,6 +48478,7 @@
                         
                         <!-- Content area right -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; right: 5%; top: 35%; width: 32%; height: 52%; overflow: hidden; padding: 0.5rem; z-index: 1;">
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 0.75rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
@@ -48007,6 +48519,7 @@
                         
                         <!-- Content area right bottom -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; right: 5%; top: 50%; width: 27%; height: 37%; overflow: hidden; padding: 0.5rem; z-index: 1;">
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; margin-bottom: 0.5rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
@@ -48046,6 +48559,7 @@
                         
                         <!-- Full width content below -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 40%; width: 90%; height: 47%; overflow: hidden; padding: 0.5rem; z-index: 1;">
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 0.75rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; max-width: 65%;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
@@ -48085,6 +48599,7 @@
                         
                         <!-- Centered content -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 30%; top: 35%; width: 40%; height: 50%; overflow: hidden; padding: 0.5rem; z-index: 1;">
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; margin-bottom: 0.5rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif; text-align: center;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
@@ -48124,6 +48639,7 @@
                         
                         <!-- Full width content bottom -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 52%; width: 90%; height: 35%; overflow: hidden; padding: 0.5rem; z-index: 1;">
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 0.75rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
@@ -48164,6 +48680,7 @@
                         
                         <!-- Compact content left -->
                         <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 15%; width: 32%; height: 70%; overflow: hidden; padding: 0.5rem; z-index: 1;">
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; margin-bottom: 0.5rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
                             </div>
@@ -49579,47 +50096,88 @@
             }
             const slideType = (slide.type || '').toLowerCase();
             
+            // Get visualization preferences
+            const vizPrefs = slide.vizPrefs || { type: 'auto', count: 'auto', threshold: 30 };
+            
             if (slideType === 'demographic' || (slide.data.values && typeof slide.data.values === 'object' && !slide.data.categories)) {
                 const values = slide.data.values || {};
                 const overrides = slide.data.boxOverrides || {};
-                const allEntries = Object.entries(values).sort((a, b) => b[1] - a[1]);
+                let allEntries = Object.entries(values).sort((a, b) => b[1] - a[1]);
+                
+                // Apply threshold filter if specified
+                if (vizPrefs.count === 'threshold') {
+                    const threshold = vizPrefs.threshold || 30;
+                    allEntries = allEntries.filter(([k, v]) => parseFloat(v) >= threshold);
+                }
+                
                 const itemCount = allEntries.length;
                 
-                // Determine how many items to show and layout based on count
-                let entries, columns, fontSize, valueFontSize, padding, gap;
+                // Determine how many items to show based on vizPrefs
+                let maxItems;
+                if (vizPrefs.count === 'auto') {
+                    // Auto mode: use smart defaults
+                    maxItems = itemCount <= 8 ? 8 : itemCount <= 12 ? 12 : itemCount <= 16 ? 16 : 20;
+                } else if (vizPrefs.count === 'all') {
+                    maxItems = Math.min(itemCount, 50); // Cap at 50 for performance
+                } else if (vizPrefs.count === 'threshold') {
+                    maxItems = itemCount; // Already filtered above
+                } else {
+                    maxItems = parseInt(vizPrefs.count) || 20;
+                }
                 
-                if (itemCount <= 8) {
+                // Determine layout based on count
+                let entries, columns, fontSize, valueFontSize, padding, gap;
+                const displayCount = Math.min(maxItems, itemCount);
+                
+                if (displayCount <= 8) {
                     // Standard 2-column layout
-                    entries = allEntries.slice(0, 8);
+                    entries = allEntries.slice(0, displayCount);
                     columns = 2;
                     fontSize = '0.8rem';
                     valueFontSize = '1.5rem';
                     padding = '0.75rem';
                     gap = '1rem';
-                } else if (itemCount <= 12) {
+                } else if (displayCount <= 12) {
                     // 3-column layout with slightly smaller text
-                    entries = allEntries.slice(0, 12);
+                    entries = allEntries.slice(0, displayCount);
                     columns = 3;
                     fontSize = '0.75rem';
                     valueFontSize = '1.3rem';
                     padding = '0.6rem';
                     gap = '0.75rem';
-                } else if (itemCount <= 16) {
+                } else if (displayCount <= 16) {
                     // 4-column layout with smaller text
-                    entries = allEntries.slice(0, 16);
+                    entries = allEntries.slice(0, displayCount);
                     columns = 4;
                     fontSize = '0.7rem';
                     valueFontSize = '1.1rem';
                     padding = '0.5rem';
                     gap = '0.6rem';
-                } else {
-                    // 4-column layout with smallest text, show top 20
-                    entries = allEntries.slice(0, 20);
+                } else if (displayCount <= 24) {
+                    // 4-column layout with smallest text
+                    entries = allEntries.slice(0, displayCount);
                     columns = 4;
                     fontSize = '0.65rem';
                     valueFontSize = '1rem';
                     padding = '0.4rem';
                     gap = '0.5rem';
+                } else {
+                    // 5-column ultra-compact for 25+
+                    entries = allEntries.slice(0, displayCount);
+                    columns = 5;
+                    fontSize = '0.6rem';
+                    valueFontSize = '0.9rem';
+                    padding = '0.3rem';
+                    gap = '0.4rem';
+                }
+                
+                // Override visualization type if specified
+                if (vizPrefs.type === 'bars') {
+                    return renderDemographicBars(entries, itemCount);
+                } else if (vizPrefs.type === 'table') {
+                    return renderDemographicTable(entries, itemCount);
+                } else if (vizPrefs.type === 'pie') {
+                    return renderDemographicPie(entries, itemCount);
                 }
                 
                 return `
@@ -49659,21 +50217,43 @@
             
             if (slideType === 'behavioral') {
                 const items = slide.data.items || [];
-                const entries = Array.isArray(items)
+                let entries = Array.isArray(items)
                     ? items.map(i => [i.name, i.pct]).filter(([k]) => k).sort((a, b) => (parseFloat(b[1]) || 0) - (parseFloat(a[1]) || 0))
                     : Object.entries(items).sort((a, b) => (parseFloat(b[1]) || 0) - (parseFloat(a[1]) || 0));
                 
-                // Determine display strategy based on number of items
-                const itemCount = entries.length;
+                // Apply threshold filter if specified
+                if (vizPrefs.count === 'threshold') {
+                    const threshold = vizPrefs.threshold || 30;
+                    entries = entries.filter(([k, v]) => parseFloat(v) >= threshold);
+                }
                 
-                // Strategy 1: If 30+ items, show as horizontal bar chart
-                if (itemCount >= 30) {
-                    const topItems = entries.slice(0, 20); // Show top 20 in chart
-                    const maxVal = Math.max(...topItems.map(([_, v]) => parseFloat(v || 0)));
+                // Determine display strategy based on number of items
+                let itemCount = entries.length;
+                
+                // Determine how many items to show based on vizPrefs
+                let maxItems;
+                if (vizPrefs.count === 'auto') {
+                    // Auto mode: use smart defaults based on count
+                    maxItems = itemCount >= 30 ? 20 : itemCount >= 19 ? itemCount : itemCount >= 13 ? itemCount : 12;
+                } else if (vizPrefs.count === 'all') {
+                    maxItems = Math.min(itemCount, 50); // Cap at 50
+                } else if (vizPrefs.count === 'threshold') {
+                    maxItems = itemCount; // Already filtered
+                } else {
+                    maxItems = parseInt(vizPrefs.count) || 20;
+                }
+                
+                entries = entries.slice(0, maxItems);
+                const displayCount = entries.length;
+                
+                // Override visualization type if specified
+                if (vizPrefs.type === 'bars' || (vizPrefs.type === 'auto' && displayCount >= 30)) {
+                    const barItems = entries;
+                    const maxVal = Math.max(...barItems.map(([_, v]) => parseFloat(v || 0)));
                     
                     return `
                         <div style="display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.7rem;">
-                            ${topItems.map(([key, val], i) => {
+                            ${barItems.map(([key, val], i) => {
                                 const pct = parseFloat(val || 0);
                                 const barWidth = maxVal > 0 ? (pct / maxVal * 100) : 0;
                                 return `
@@ -49688,15 +50268,17 @@
                                     </div>
                                 </div>
                             `}).join('')}
-                            <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
-                                📊 Showing top 20 of ${itemCount} items
-                            </div>
+                            ${displayCount < itemCount ? `
+                                <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
+                                    📊 Showing ${displayCount} of ${itemCount} items
+                                </div>
+                            ` : ''}
                         </div>
                     `;
                 }
                 
                 // Strategy 2: If 19-29 items, use 3 columns with smaller font
-                if (itemCount >= 19 && itemCount < 30) {
+                if (vizPrefs.type === 'columns' || (vizPrefs.type === 'auto' && displayCount >= 19 && displayCount < 30)) {
                     return `
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.3rem; font-size: 0.7rem;">
                             ${entries.map(([key, val], i) => `
@@ -49711,7 +50293,7 @@
                 }
                 
                 // Strategy 3: If 13-18 items, use 2 columns
-                if (itemCount >= 13 && itemCount < 19) {
+                if (vizPrefs.type === 'table' || (vizPrefs.type === 'auto' && displayCount >= 13 && displayCount < 19)) {
                     return `
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem; font-size: 0.75rem;">
                             ${entries.map(([key, val], i) => `
