@@ -13395,10 +13395,6 @@
                     <!-- Insights Sub-tabs -->
                     <div class="insights-tabs" id="insightsSubTabs">
                         <button class="insights-tab active" data-feature="insightsSummary" onclick="showInsightsTab('summary')">📋 Summary<span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="insights-tab" data-feature="insightsBehavioral" onclick="showInsightsTab('behavioral')">🧬 Behavioral DNA<span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="insights-tab" data-feature="insightsMedia" onclick="showInsightsTab('media')">📺 Media Patterns<span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="insights-tab" data-feature="insightsOpportunities" onclick="showInsightsTab('opportunities')">💰 Opportunities<span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                        <button class="insights-tab" data-feature="insightsActivation" onclick="showInsightsTab('activation')">🚀 Activation<span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                     </div>
                     
                     <!-- Summary Tab -->
@@ -13528,193 +13524,6 @@
                                 </div>
                                 <p class="card-desc">What makes this audience unique</p>
                                 <div id="topDifferentiators" class="differentiator-list-grouped"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Behavioral DNA Tab -->
-                    <div id="insights-tab-behavioral" class="insights-tab-content">
-                        <div class="insights-grid-v2">
-                            <div class="insight-card-v2 full-width">
-                                <h3 class="has-tooltip" data-tooltip="Category Champions: The single highest-indexing item within each behavioral category. Shows what this audience is MOST into within each interest area. Index = (Audience % ÷ Gen Pop %) × 100.">🏆 Category Champions</h3>
-                                <p class="card-desc">Highest indexing item in each behavioral category</p>
-                                <div id="categoryChampions" class="champions-grid"></div>
-                            </div>
-                            
-                            <div class="insight-card-v2 highlight">
-                                <h3 class="has-tooltip" data-tooltip="Biggest Over-Indexers: The top 25 items across ALL categories with the highest index values. An index of 2.0x means this audience is 2x more likely to engage vs. Gen Pop.">📈 Biggest Over-Indexers</h3>
-                                <p class="card-desc">Top 25 items with highest index vs Gen Pop</p>
-                                <div class="insight-list-header">
-                                    <span class="col-rank">#</span>
-                                    <span class="col-name">Item</span>
-                                    <span class="col-cat">Category</span>
-                                    <span class="col-pct has-tooltip" data-tooltip="Profile %: Percentage of this audience that engages.">Profile</span>
-                                    <span class="col-gp has-tooltip" data-tooltip="Gen Pop %: Percentage of general population that engages.">GP</span>
-                                    <span class="col-idx has-tooltip" data-tooltip="Index: Over/under-index vs Gen Pop. 2.0x = twice as likely.">Index</span>
-                                </div>
-                                <div id="topOverIndexers" class="insight-list-v2"></div>
-                            </div>
-                            
-                            <div class="insight-card-v2">
-                                <h3 class="has-tooltip" data-tooltip="Biggest Under-Indexers: Top 25 items where this audience indexes below Gen Pop. An index of 0.5x means 50% less likely to engage. Use to identify what this audience DOESN'T care about.">📉 Biggest Under-Indexers</h3>
-                                <p class="card-desc">Top 25 items where audience under-indexes</p>
-                                <div class="insight-list-header">
-                                    <span class="col-rank">#</span>
-                                    <span class="col-name">Item</span>
-                                    <span class="col-cat">Category</span>
-                                    <span class="col-pct has-tooltip" data-tooltip="Profile %: Percentage of this audience that engages.">Profile</span>
-                                    <span class="col-gp has-tooltip" data-tooltip="Gen Pop %: Percentage of general population that engages.">GP</span>
-                                    <span class="col-idx has-tooltip" data-tooltip="Index: Over/under-index vs Gen Pop. 0.5x = half as likely.">Index</span>
-                                </div>
-                                <div id="topUnderIndexers" class="insight-list-v2"></div>
-                            </div>
-                            
-                            <div class="insight-card-v2">
-                                <h3 class="has-tooltip" data-tooltip="Hidden Gems: High-indexing items (130+) in niche or emerging categories that may have lower audience reach (<5%). Great for targeted activations with less competitive clutter.">💎 Hidden Gems</h3>
-                                <p class="card-desc">High-index items with lower competition</p>
-                                <div class="insight-list-header">
-                                    <span class="col-rank">#</span>
-                                    <span class="col-name">Item</span>
-                                    <span class="col-cat">Category</span>
-                                    <span class="col-pct has-tooltip" data-tooltip="Profile %: Percentage of this audience that engages.">Profile</span>
-                                    <span class="col-gp has-tooltip" data-tooltip="Gen Pop %: Percentage of general population that engages.">GP</span>
-                                    <span class="col-idx has-tooltip" data-tooltip="Index: Over/under-index vs Gen Pop. 2.0x = twice as likely.">Index</span>
-                                </div>
-                                <div id="hiddenGems" class="insight-list-v2"></div>
-                            </div>
-                            
-                            <div class="insight-card-v2">
-                                <h3 class="has-tooltip" data-tooltip="Rising Behaviors: Items in categories like podcasts, emerging platforms, and gaming that show strong indexing. Indicates where this audience is leaning into newer/growing media behaviors.">⚡ Rising Behaviors</h3>
-                                <p class="card-desc">Emerging categories with strong indexing</p>
-                                <div class="insight-list-header">
-                                    <span class="col-rank">#</span>
-                                    <span class="col-name">Item</span>
-                                    <span class="col-cat">Category</span>
-                                    <span class="col-pct has-tooltip" data-tooltip="Profile %: Percentage of this audience that engages.">Profile</span>
-                                    <span class="col-gp has-tooltip" data-tooltip="Gen Pop %: Percentage of general population that engages.">GP</span>
-                                    <span class="col-idx has-tooltip" data-tooltip="Index: Over/under-index vs Gen Pop. 2.0x = twice as likely.">Index</span>
-                                </div>
-                                <div id="risingBehaviors" class="insight-list-v2"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Media Patterns Tab -->
-                    <div id="insights-tab-media" class="insights-tab-content">
-                        <div class="insights-grid-v2">
-                            <div class="insight-card-v2 full-width">
-                                <h3>📊 Media Consumption Summary</h3>
-                                <div id="mediaConsumptionSummary" class="media-summary-grid"></div>
-                            </div>
-                            
-                            <div class="insight-card-v2">
-                                <h3>📺 Streaming Preferences</h3>
-                                <div id="streamingPreferences" class="media-preference-list"></div>
-                            </div>
-                            
-                            <div class="insight-card-v2">
-                                <h3 class="has-tooltip" data-tooltip="Social Media Usage: Breakdown of social platform usage by this audience, showing which platforms they engage with most vs. Gen Pop.">📱 Social Media Usage</h3>
-                                <div id="socialMediaUsage" class="media-preference-list"></div>
-                            </div>
-                            
-                            <div class="insight-card-v2">
-                                <h3 class="has-tooltip" data-tooltip="Audio & Music: Audio streaming and music platform preferences, useful for audio ad targeting and music-related sponsorships.">🎵 Audio & Music</h3>
-                                <div id="audioPreferences" class="media-preference-list"></div>
-                            </div>
-                            
-                            <div class="insight-card-v2">
-                                <h3>🎮 Gaming Affinity</h3>
-                                <div id="gamingAffinity" class="media-preference-list"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Opportunities Tab -->
-                    <div id="insights-tab-opportunities" class="insights-tab-content">
-                        <div class="insights-grid-v2">
-                            <div class="insight-card-v2 highlight">
-                                <h3>💰 Brand Partnership Opportunities</h3>
-                                <p class="card-desc">Brands with highest affinity for sponsorship</p>
-                                <div id="brandOpportunities" class="opportunity-list"></div>
-                            </div>
-                            
-                            <div class="insight-card-v2">
-                                <h3>🎯 Untapped Categories</h3>
-                                <p class="card-desc">Categories with potential for growth</p>
-                                <div id="untappedCategories" class="opportunity-list"></div>
-                            </div>
-                            
-                            <div class="insight-card-v2">
-                                <h3>🛒 Shopping & Retail</h3>
-                                <div class="insight-list-header">
-                                    <span class="col-rank">#</span>
-                                    <span class="col-name">Item</span>
-                                    <span class="col-pct has-tooltip" data-tooltip="Profile %: Percentage of this audience that engages.">Profile</span>
-                                    <span class="col-gp has-tooltip" data-tooltip="Gen Pop %: Percentage of general population that engages.">GP</span>
-                                    <span class="col-idx has-tooltip" data-tooltip="Index: Over/under-index vs Gen Pop. 2.0x = twice as likely.">Index</span>
-                                </div>
-                                <div id="shoppingAffinity" class="insight-list-v2"></div>
-                            </div>
-                            
-                            <div class="insight-card-v2">
-                                <h3>🎬 Content Partnerships</h3>
-                                <p class="card-desc">Shows, movies, and content for collaborations</p>
-                                <div id="contentPartnerships" class="opportunity-list"></div>
-                            </div>
-                            
-                            <div class="insight-card-v2 full-width">
-                                <h3>📍 Geographic Opportunities</h3>
-                                <p class="card-desc">Top markets for activation</p>
-                                <div id="geoOpportunities" class="geo-opportunities-grid"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Activation Tab -->
-                    <div id="insights-tab-activation" class="insights-tab-content">
-                        <div class="activation-container">
-                            <div class="activation-header">
-                                <h2>🚀 Activation Playbook</h2>
-                                <p>Data-driven recommendations for reaching this audience</p>
-                            </div>
-                            
-                            <div class="activation-grid">
-                                <div class="activation-card primary">
-                                    <div class="activation-icon">📺</div>
-                                    <h3>Media Buying</h3>
-                                    <div id="mediaBuyingRecs" class="activation-content"></div>
-                                </div>
-                                
-                                <div class="activation-card">
-                                    <div class="activation-icon">🎨</div>
-                                    <h3>Creative Strategy</h3>
-                                    <div id="creativeStrategyRecs" class="activation-content"></div>
-                                </div>
-                                
-                                <div class="activation-card">
-                                    <div class="activation-icon">🤝</div>
-                                    <h3>Partnership Ideas</h3>
-                                    <div id="partnershipRecs" class="activation-content"></div>
-                                </div>
-                                
-                                <div class="activation-card">
-                                    <div class="activation-icon">📍</div>
-                                    <h3>Geographic Focus</h3>
-                                    <div id="geoFocusRecs" class="activation-content"></div>
-                                </div>
-                                
-                                <div class="activation-card full-width">
-                                    <div class="activation-icon">📋</div>
-                                    <h3>Targeting Checklist</h3>
-                                    <div id="targetingChecklist" class="targeting-checklist"></div>
-                                </div>
-                                
-                                <div class="activation-card full-width">
-                                    <div class="activation-icon">⚠️</div>
-                                    <h3>Things to Avoid</h3>
-                                    <p class="card-desc">Channels and approaches that won't resonate</p>
-                                    <div id="thingsToAvoid" class="avoid-list"></div>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -15080,11 +14889,7 @@
             deckBuilder: true,
             rankers: true,
             // Insights Sub Tabs
-            insightsSummary: true,
-            insightsBehavioral: true,
-            insightsMedia: true,
-            insightsOpportunities: true,
-            insightsActivation: true
+            insightsSummary: true
         };
         
         // Load live features from server and apply visibility

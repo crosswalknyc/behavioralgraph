@@ -1486,49 +1486,6 @@
                             </label>
                         </div>
                         
-                        <!-- Insights Sub Tabs Section -->
-                        <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
-                            <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-cyan);">🔍 Insights Sub Tabs (Deep Insights)</h4>
-                            <p style="color: var(--text-secondary); margin: 0 0 1rem 0; font-size: 0.85rem;">
-                                Control which sub-tabs are visible within the Deep Insights section. Unchecked tabs will be hidden from regular users.
-                            </p>
-                            <div id="insightsSubTabsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.75rem;">
-                                <!-- Summary -->
-                                <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="checkbox" class="live-feature-checkbox" data-feature="insightsSummary" checked onchange="updateLiveFeature('insightsSummary', this.checked)">
-                                    <span style="font-size: 1.25rem;">📋</span>
-                                    <span style="font-size: 0.9rem;">Summary</span>
-                                </label>
-                                
-                                <!-- Behavioral DNA -->
-                                <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="checkbox" class="live-feature-checkbox" data-feature="insightsBehavioral" checked onchange="updateLiveFeature('insightsBehavioral', this.checked)">
-                                    <span style="font-size: 1.25rem;">🧬</span>
-                                    <span style="font-size: 0.9rem;">Behavioral DNA</span>
-                                </label>
-                                
-                                <!-- Media Patterns -->
-                                <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="checkbox" class="live-feature-checkbox" data-feature="insightsMedia" checked onchange="updateLiveFeature('insightsMedia', this.checked)">
-                                    <span style="font-size: 1.25rem;">📺</span>
-                                    <span style="font-size: 0.9rem;">Media Patterns</span>
-                                </label>
-                                
-                                <!-- Opportunities -->
-                                <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="checkbox" class="live-feature-checkbox" data-feature="insightsOpportunities" checked onchange="updateLiveFeature('insightsOpportunities', this.checked)">
-                                    <span style="font-size: 1.25rem;">💰</span>
-                                    <span style="font-size: 0.9rem;">Opportunities</span>
-                                </label>
-                                
-                                <!-- Activation -->
-                                <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
-                                    <input type="checkbox" class="live-feature-checkbox" data-feature="insightsActivation" checked onchange="updateLiveFeature('insightsActivation', this.checked)">
-                                    <span style="font-size: 1.25rem;">🚀</span>
-                                    <span style="font-size: 0.9rem;">Activation</span>
-                                </label>
-                            </div>
-                        </div>
                         
                         <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(239, 68, 68, 0.1); border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.3);">
                             <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary);">
@@ -2808,12 +2765,7 @@
             collaborate: true,
             deckBuilder: true,
             rankers: true,
-            // Insights Sub Tabs
-            insightsSummary: true,
-            insightsBehavioral: true,
-            insightsMedia: true,
-            insightsOpportunities: true,
-            insightsActivation: true
+            insightsSummary: true
         };
         
         // Load Live Features from server
