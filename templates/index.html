@@ -47825,6 +47825,7 @@
         function confirmSlideImageUpload(slideIdx) {
             const fileInput = document.getElementById('slideImageFile');
             const urlInput = document.getElementById('slideImageUrl');
+            const modal = document.getElementById('uploadImageModal');
             
             if (fileInput.files.length > 0) {
                 // Upload from file
@@ -47832,7 +47833,7 @@
                 const reader = new FileReader();
                 reader.onload = () => {
                     addImageToSlide(slideIdx, reader.result);
-                    document.getElementById('uploadImageModal').remove();
+                    if (modal) modal.remove();
                 };
                 reader.readAsDataURL(file);
             } else if (urlInput.value.trim()) {
@@ -47840,7 +47841,7 @@
                 const url = urlInput.value.trim();
                 if (url.startsWith('http://') || url.startsWith('https://')) {
                     addImageToSlide(slideIdx, url);
-                    document.getElementById('uploadImageModal').remove();
+                    if (modal) modal.remove();
                 } else {
                     alert('Please enter a valid URL starting with http:// or https://');
                 }
@@ -47857,14 +47858,56 @@
             
             if (!slide.elements) slide.elements = [];
             
-            // Add image element positioned on the right
+            // Determine layout variant (same logic as renderSlideElements)
+            const layoutIndex = ((slideIdx - 1) % 4) + 1; // Results in 1, 2, 3, 4, 1, 2, 3, 4...
+            
+            // Position image based on layout variant to match placeholder position
+            let imageConfig;
+            
+            if (layoutIndex === 1) {
+                // Layout A: Image right (38% width, 65% height, starting at right: 5%, top: 22%)
+                imageConfig = {
+                    x: 57,  // 100% - 5% - 38% = 57%
+                    y: 22,
+                    width: 38,
+                    height: 65
+                };
+            } else if (layoutIndex === 2) {
+                // Layout B: Large image right (50% width, 79% height, starting at right: 5%, top: 8%)
+                imageConfig = {
+                    x: 45,  // 100% - 5% - 50% = 45%
+                    y: 8,
+                    width: 50,
+                    height: 79
+                };
+            } else if (layoutIndex === 3) {
+                // Layout C: Large image left (58% width, 69% height, starting at left: 5%, top: 18%)
+                imageConfig = {
+                    x: 5,
+                    y: 18,
+                    width: 58,
+                    height: 69
+                };
+            } else if (layoutIndex === 4) {
+                // Layout D: Extra large image left (63% width, 79% height, starting at left: 5%, top: 8%)
+                imageConfig = {
+                    x: 5,
+                    y: 8,
+                    width: 63,
+                    height: 79
+                };
+            }
+            
+            // Add image element at the correct position
             slide.elements.push({
                 id: 'img_' + Date.now(),
                 type: 'image',
-                x: 60, y: 22,
-                width: 35, height: 65,
+                x: imageConfig.x,
+                y: imageConfig.y,
+                width: imageConfig.width,
+                height: imageConfig.height,
                 src: src,
-                borderRadius: 0
+                borderRadius: 8
             });
             
             saveDeckChanges();
