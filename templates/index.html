@@ -9525,13 +9525,68 @@
             width: 960px;
             height: 540px;
             position: relative;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%);
             border-radius: 8px;
             box-shadow: 0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08);
             overflow: hidden;
             transform-origin: center center;
             transition: transform 0.2s ease, width 0.2s ease, height 0.2s ease;
             flex-shrink: 0;
+        }
+        
+        /* Slide footer - source attribution */
+        .slide-footer {
+            position: absolute;
+            bottom: 12px;
+            left: 24px;
+            right: 24px;
+            font-size: 0.55rem;
+            color: rgba(255,255,255,0.4);
+            text-align: left;
+            z-index: 5;
+        }
+        
+        /* Slide placeholder for images */
+        .slide-image-placeholder {
+            background: linear-gradient(135deg, #3d3d3d 0%, #2a2a2a 100%);
+            border: 2px dashed rgba(255,255,255,0.2);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: rgba(255,255,255,0.5);
+            font-size: 0.75rem;
+        }
+        
+        .slide-image-placeholder:hover {
+            border-color: rgba(200, 230, 0, 0.5);
+            background: linear-gradient(135deg, #4d4d4d 0%, #3a3a3a 100%);
+        }
+        
+        .slide-image-placeholder .placeholder-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.6;
+        }
+        
+        /* Title slide large text style */
+        .slide-title-large {
+            font-size: 4rem;
+            font-weight: 700;
+            color: #ffffff;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+        }
+        
+        /* Section header style */
+        .slide-section-header {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 1rem;
         }
         
         .slide-notes-section {
@@ -46652,44 +46707,121 @@
             return null;
         }
         
+        // Source footer text for all slides
+        const SLIDE_FOOTER_TEXT = 'Source: Crosswalk Profile IQ, Prior 12 Months from a 10M Gen Pop Digital Behavioral Panel';
+        
         function renderSlideElements(slide, idx) {
             // Get elements from slide or create defaults for title slide
             let elements = slide.elements || [];
             
-            // For title slide, create default elements if none exist
+            // Footer HTML for all slides
+            const footerHtml = `<div class="slide-footer">${SLIDE_FOOTER_TEXT}</div>`;
+            
+            // For title slide (Page 1 style - large profile name)
             if ((idx === 0 || slide.type === 'title') && elements.length === 0) {
                 let profileImage = getDeckTitleSlideProfileImage(slide);
-                elements = [
-                    profileImage ? {
-                        id: 'title_image',
-                        type: 'image',
-                        x: 42.5, y: 5,
-                        width: 15, height: 25,
-                        src: profileImage,
-                        locked: false
-                    } : null,
-                    {
-                        id: 'title_text',
-                        type: 'text',
-                        x: 10, y: profileImage ? 35 : 30,
-                        width: 80, height: 20,
-                        content: slide.title || 'Presentation Title',
-                        fontSize: 48,
-                        fontWeight: 'bold',
-                        color: '#ffffff',
-                        align: 'center'
-                    },
-                    {
-                        id: 'subtitle_text',
-                        type: 'text',
-                        x: 15, y: profileImage ? 55 : 50,
-                        width: 70, height: 10,
-                        content: slide.subtitle || 'Powered by Crosswalk IQ',
-                        fontSize: 24,
-                        color: '#94a3b8',
-                        align: 'center'
-                    }
-                ].filter(Boolean);
+                const profileName = slide.title || currentProfileData?.name || 'PROFILE NAME';
+                const today = new Date();
+                const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+                
+                return `
+                    <div style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: flex; flex-direction: column;">
+                        <!-- Large profile name -->
+                        <div style="position: absolute; left: -1%; top: -2%; font-size: 8rem; font-weight: 700; color: #ffffff; line-height: 1; letter-spacing: -0.03em; text-transform: uppercase;">
+                            ${escapeHtml(profileName)}.
+                        </div>
+                        
+                        <!-- Right side info -->
+                        <div style="position: absolute; right: 5%; top: 12%; text-align: right; font-size: 0.7rem; color: rgba(255,255,255,0.7);">
+                            <div>${dateStr}</div>
+                            <div style="margin-top: 0.25rem;">Crosswalk Profile IQ</div>
+                            <div style="margin-top: 0.25rem;">Presented By: ${escapeHtml(slide.subtitle || 'Your Company')}</div>
+                        </div>
+                        
+                        <!-- Bottom description -->
+                        <div style="position: absolute; left: 5%; bottom: 15%; width: 60%; font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6;">
+                            Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+                        </div>
+                    </div>
+                    ${footerHtml}
+                `;
+            }
+            
+            // For Table of Contents slide
+            if (slide.type === 'toc') {
+                const today = new Date();
+                const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+                const profileImage = getDeckTitleSlideProfileImage(currentEditingDeck?.titleSlide || {});
+                
+                // Get list of slide titles for TOC
+                const slides = currentEditingDeck?.slides || [];
+                const tocItems = slides
+                    .filter(s => s.type !== 'toc')
+                    .map(s => s.customTitle || s.title || s.category || 'Untitled')
+                    .slice(0, 8); // Max 8 items
+                
+                // Split into two columns
+                const col1 = tocItems.slice(0, 4);
+                const col2 = tocItems.slice(4, 8);
+                
+                return `
+                    <!-- Header bar -->
+                    <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                        <span>Crosswalk Profile IQ</span>
+                        <span>${dateStr}</span>
+                    </div>
+                    
+                    <!-- Section title -->
+                    <div style="position: absolute; left: 5%; top: 8%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase;">
+                        TABLE OF CONTENTS
+                    </div>
+                    
+                    <!-- Description -->
+                    <div style="position: absolute; left: 5%; top: 22%; width: 40%; font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6;">
+                        Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+                    </div>
+                    
+                    <!-- TOC Items - Column 1 -->
+                    <div style="position: absolute; left: 52%; top: 22%; width: 20%;">
+                        ${col1.map((item, i) => `
+                            <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.85rem; color: #ffffff; font-weight: 500;">
+                                ${escapeHtml(item)}
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <!-- TOC Items - Column 2 -->
+                    <div style="position: absolute; left: 75%; top: 22%; width: 20%;">
+                        ${col2.map((item, i) => `
+                            <div style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.85rem; color: #ffffff; font-weight: 500;">
+                                ${escapeHtml(item)}
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <!-- Left image - Profile image -->
+                    ${profileImage ? `
+                        <div style="position: absolute; left: 0; bottom: 0; width: 45%; height: 45%;">
+                            <img src="${profileImage}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 0 8px 0 0;">
+                        </div>
+                    ` : `
+                        <div class="slide-image-placeholder" style="position: absolute; left: 0; bottom: 0; width: 45%; height: 45%; border-radius: 0 8px 0 0;" onclick="uploadTocLeftImage()" title="Profile image placeholder">
+                            <span class="placeholder-icon">👤</span>
+                            <span>Profile Image</span>
+                        </div>
+                    `}
+                    
+                    <!-- Right image placeholder -->
+                    <div class="slide-image-placeholder" 
+                         style="position: absolute; right: 0; bottom: 0; width: 45%; height: 45%; border-radius: 8px 0 0 0;"
+                         onclick="uploadTocRightImage()"
+                         title="Click to upload image">
+                        <span class="placeholder-icon">🖼️</span>
+                        <span>Click to add image</span>
+                    </div>
+                    
+                    ${footerHtml}
+                `;
             }
             
             // For content slides with contentItems but no elements, convert them
@@ -46737,6 +46869,8 @@
             );
             if (idx > 0 && hasModuleData) {
                 const title = slide.customTitle || slide.title || slide.category || 'Slide';
+                const today = new Date();
+                const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
                 const analysisBlock = slide.aiAnalysis ? `<div style="margin-top: 1rem; padding: 1rem; background: rgba(74, 138, 201, 0.1); border-radius: 8px; border-left: 3px solid var(--accent-cyan); font-size: 0.9rem; line-height: 1.5;"><div style="font-size: 0.8rem; font-weight: 600; color: var(--accent-cyan); margin-bottom: 0.5rem;">🤖 AI Key Points & Takeaways</div><div>${slide.aiAnalysis}</div></div>` : '';
                 try {
                     const content = renderSlideContent(slide);
@@ -46744,12 +46878,38 @@
                         ? slide.elements.map(el => renderSingleElement(el)).join('') 
                         : '';
                     return `
-                    <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 10%; width: 90%; height: 80%; overflow-y: auto; padding: 0.5rem; z-index: 1;">
-                        <div class="slide-module-title" style="font-size: 1.5rem; font-weight: 600; color: var(--accent-lime); margin-bottom: 1rem;">${escapeHtml(title)}</div>
+                    <!-- Header bar -->
+                    <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                        <span>Crosswalk Profile IQ</span>
+                        <span>${dateStr}</span>
+                    </div>
+                    
+                    <!-- Section title -->
+                    <div style="position: absolute; left: 5%; top: 8%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em;">
+                        ${escapeHtml(title)}
+                    </div>
+                    
+                    <!-- Content area with placeholder for image on right -->
+                    <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 22%; width: 55%; height: 65%; overflow-y: auto; padding: 0.5rem; z-index: 1;">
+                        <div style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 1rem;">
+                            Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+                        </div>
                         ${content}
                         ${analysisBlock}
                     </div>
+                    
+                    <!-- Image placeholder on right -->
+                    <div class="slide-image-placeholder" 
+                         style="position: absolute; right: 5%; top: 22%; width: 35%; height: 65%;"
+                         onclick="uploadSlideImage(${idx})"
+                         title="Click to upload image or paste URL">
+                        <span class="placeholder-icon">🖼️</span>
+                        <span>Click to add image</span>
+                        <span style="font-size: 0.65rem; margin-top: 0.25rem;">or paste URL</span>
+                    </div>
+                    
                     ${overlayElements}
+                    ${footerHtml}
                     `;
                 } catch (e) {
                     console.warn('renderSlideContent error:', e);
@@ -46763,9 +46923,136 @@
                 return renderSingleElement(el);
             }).join('');
             if (!html && idx > 0) {
-                return `<div style="position: absolute; left: 5%; top: 20%; width: 90%; color: var(--text-secondary); font-size: 0.9rem;"><p>No content on this slide. Use the toolbar to add text, images, or shapes.</p></div>`;
+                const today = new Date();
+                const dateStr = today.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+                return `
+                    <!-- Header bar -->
+                    <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                        <span>Crosswalk Profile IQ</span>
+                        <span>${dateStr}</span>
+                    </div>
+                    <div style="position: absolute; left: 5%; top: 20%; width: 90%; color: var(--text-secondary); font-size: 0.9rem;">
+                        <p>No content on this slide. Use the toolbar to add text, images, or shapes.</p>
+                    </div>
+                    ${footerHtml}
+                `;
             }
-            return html;
+            return html + footerHtml;
+        }
+        
+        function uploadSlideImage(slideIdx) {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                // Convert to base64 for now (could upload to S3 in production)
+                const reader = new FileReader();
+                reader.onload = () => {
+                    addImageToSlide(slideIdx, reader.result);
+                };
+                reader.readAsDataURL(file);
+            };
+            input.click();
+            
+            // Also offer URL option
+            setTimeout(() => {
+                const url = prompt('Or paste an image URL:');
+                if (url && url.startsWith('http')) {
+                    addImageToSlide(slideIdx, url);
+                }
+            }, 100);
+        }
+        
+        function addImageToSlide(slideIdx, src) {
+            if (!currentEditingDeck || slideIdx <= 0) return;
+            
+            const slide = currentEditingDeck.slides[slideIdx - 1];
+            if (!slide) return;
+            
+            if (!slide.elements) slide.elements = [];
+            
+            // Add image element positioned on the right
+            slide.elements.push({
+                id: 'img_' + Date.now(),
+                type: 'image',
+                x: 60, y: 22,
+                width: 35, height: 65,
+                src: src,
+                borderRadius: 4
+            });
+            
+            saveDeckChanges();
+            renderSlideEditor();
+            showNotification('✅ Image added to slide', 'success');
+        }
+        
+        function uploadTocLeftImage() {
+            // TOC left image is the profile image - update title slide
+            uploadTitleImage();
+        }
+        
+        function uploadTocRightImage() {
+            // Find the TOC slide and add image to it
+            if (!currentEditingDeck) return;
+            
+            const tocSlideIdx = currentEditingDeck.slides.findIndex(s => s.type === 'toc');
+            if (tocSlideIdx < 0) return;
+            
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const slide = currentEditingDeck.slides[tocSlideIdx];
+                    if (!slide.elements) slide.elements = [];
+                    
+                    // Remove existing right image if any
+                    slide.elements = slide.elements.filter(el => el.id !== 'toc_right_img');
+                    
+                    slide.elements.push({
+                        id: 'toc_right_img',
+                        type: 'image',
+                        x: 55, y: 55,
+                        width: 45, height: 45,
+                        src: reader.result,
+                        borderRadius: 0
+                    });
+                    
+                    saveDeckChanges();
+                    renderSlideEditor();
+                    showNotification('✅ Image added to TOC', 'success');
+                };
+                reader.readAsDataURL(file);
+            };
+            input.click();
+            
+            // Also offer URL option
+            setTimeout(() => {
+                const url = prompt('Or paste an image URL:');
+                if (url && url.startsWith('http')) {
+                    const slide = currentEditingDeck.slides[tocSlideIdx];
+                    if (!slide.elements) slide.elements = [];
+                    slide.elements = slide.elements.filter(el => el.id !== 'toc_right_img');
+                    slide.elements.push({
+                        id: 'toc_right_img',
+                        type: 'image',
+                        x: 55, y: 55,
+                        width: 45, height: 45,
+                        src: url,
+                        borderRadius: 0
+                    });
+                    saveDeckChanges();
+                    renderSlideEditor();
+                    showNotification('✅ Image added to TOC', 'success');
+                }
+            }, 100);
         }
         
         function renderSingleElement(el) {
@@ -48224,28 +48511,56 @@
             modal.className = 'deck-workspace-modal';
             modal.id = 'addSlideModal';
             modal.innerHTML = `
-                <div class="deck-workspace-content" style="max-width: 500px;">
+                <div class="deck-workspace-content" style="max-width: 600px;">
                     <div class="deck-workspace-header">
                         <h2>➕ Add Slide</h2>
                         <button onclick="document.getElementById('addSlideModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
                     </div>
                     <div style="padding: 1.5rem;">
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
                             <div onclick="addBlankSlide()" style="padding: 1.5rem; background: var(--bg-input); border-radius: 8px; cursor: pointer; text-align: center; border: 2px solid transparent; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-lime)'" onmouseout="this.style.borderColor='transparent'">
                                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">📄</div>
                                 <div style="font-weight: 600;">Blank Slide</div>
                                 <div style="font-size: 0.75rem; color: var(--text-secondary);">Start from scratch</div>
                             </div>
+                            <div onclick="addTableOfContentsSlide()" style="padding: 1.5rem; background: var(--bg-input); border-radius: 8px; cursor: pointer; text-align: center; border: 2px solid transparent; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-lime)'" onmouseout="this.style.borderColor='transparent'">
+                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">📋</div>
+                                <div style="font-weight: 600;">Table of Contents</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Auto-generated TOC</div>
+                            </div>
                             <div onclick="addSlideFromModule()" style="padding: 1.5rem; background: var(--bg-input); border-radius: 8px; cursor: pointer; text-align: center; border: 2px solid transparent; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent-lime)'" onmouseout="this.style.borderColor='transparent'">
                                 <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
                                 <div style="font-weight: 600;">From Module</div>
-                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Select modules to add (multi-select)</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">Select modules to add</div>
                             </div>
                         </div>
                     </div>
                 </div>
             `;
             document.body.appendChild(modal);
+        }
+        
+        function addTableOfContentsSlide() {
+            document.getElementById('addSlideModal')?.remove();
+            if (!currentEditingDeck) return;
+            
+            const slide = {
+                id: 'slide_' + Date.now(),
+                type: 'toc',
+                title: 'TABLE OF CONTENTS',
+                customTitle: 'TABLE OF CONTENTS',
+                data: null,
+                notes: ''
+            };
+            
+            if (!currentEditingDeck.slides) currentEditingDeck.slides = [];
+            // Insert TOC as first slide after title
+            currentEditingDeck.slides.unshift(slide);
+            saveDeckChanges();
+            
+            currentEditingSlide = 1; // TOC is now slide 1
+            renderSlideEditor();
+            showNotification('✅ Table of Contents added', 'success');
         }
         
         function addBlankSlide() {
