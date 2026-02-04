@@ -47593,29 +47593,78 @@
         }
         
         function uploadSlideImage(slideIdx) {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.onchange = async (e) => {
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'uploadImageModal';
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 500px;">
+                    <div class="deck-workspace-header">
+                        <h2>🖼️ Add Image</h2>
+                        <button onclick="document.getElementById('uploadImageModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1.5rem;">
+                        <div style="margin-bottom: 1.5rem;">
+                            <label style="display: block; margin-bottom: 0.75rem; font-weight: 600; font-size: 0.9rem;">Upload from Computer</label>
+                            <input type="file" id="slideImageFile" accept="image/*" style="display: none;">
+                            <button onclick="document.getElementById('slideImageFile').click()" class="btn btn-secondary" style="width: 100%; padding: 1rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                                <span style="font-size: 1.5rem;">📁</span>
+                                <span>Choose File</span>
+                            </button>
+                            <div id="selectedFileName" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary); text-align: center;"></div>
+                        </div>
+                        
+                        <div style="text-align: center; margin: 1rem 0; color: var(--text-secondary); font-size: 0.85rem;">
+                            — OR —
+                        </div>
+                        
+                        <div style="margin-bottom: 1.5rem;">
+                            <label style="display: block; margin-bottom: 0.75rem; font-weight: 600; font-size: 0.9rem;">Paste Image URL</label>
+                            <input type="url" id="slideImageUrl" placeholder="https://example.com/image.jpg" style="width: 100%; padding: 0.75rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.9rem;">
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.75rem;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('uploadImageModal').remove()" style="flex: 1;">Cancel</button>
+                            <button class="btn btn-primary" onclick="confirmSlideImageUpload(${slideIdx})" style="flex: 1;">Add Image</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            // Handle file selection
+            document.getElementById('slideImageFile').onchange = (e) => {
                 const file = e.target.files[0];
-                if (!file) return;
-                
-                // Convert to base64 for now (could upload to S3 in production)
+                if (file) {
+                    document.getElementById('selectedFileName').textContent = file.name;
+                }
+            };
+        }
+        
+        function confirmSlideImageUpload(slideIdx) {
+            const fileInput = document.getElementById('slideImageFile');
+            const urlInput = document.getElementById('slideImageUrl');
+            
+            if (fileInput.files.length > 0) {
+                // Upload from file
+                const file = fileInput.files[0];
                 const reader = new FileReader();
                 reader.onload = () => {
                     addImageToSlide(slideIdx, reader.result);
+                    document.getElementById('uploadImageModal').remove();
                 };
                 reader.readAsDataURL(file);
-            };
-            input.click();
-            
-            // Also offer URL option
-            setTimeout(() => {
-                const url = prompt('Or paste an image URL:');
-                if (url && url.startsWith('http')) {
+            } else if (urlInput.value.trim()) {
+                // Use URL
+                const url = urlInput.value.trim();
+                if (url.startsWith('http://') || url.startsWith('https://')) {
                     addImageToSlide(slideIdx, url);
+                    document.getElementById('uploadImageModal').remove();
+                } else {
+                    alert('Please enter a valid URL starting with http:// or https://');
                 }
-            }, 100);
+            } else {
+                alert('Please select a file or enter an image URL');
+            }
         }
         
         function addImageToSlide(slideIdx, src) {
@@ -47653,58 +47702,94 @@
             const tocSlideIdx = currentEditingDeck.slides.findIndex(s => s.type === 'toc');
             if (tocSlideIdx < 0) return;
             
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.onchange = async (e) => {
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'uploadTocImageModal';
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 500px;">
+                    <div class="deck-workspace-header">
+                        <h2>🖼️ Add Image to Table of Contents</h2>
+                        <button onclick="document.getElementById('uploadTocImageModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1.5rem;">
+                        <div style="margin-bottom: 1.5rem;">
+                            <label style="display: block; margin-bottom: 0.75rem; font-weight: 600; font-size: 0.9rem;">Upload from Computer</label>
+                            <input type="file" id="tocImageFile" accept="image/*" style="display: none;">
+                            <button onclick="document.getElementById('tocImageFile').click()" class="btn btn-secondary" style="width: 100%; padding: 1rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                                <span style="font-size: 1.5rem;">📁</span>
+                                <span>Choose File</span>
+                            </button>
+                            <div id="tocSelectedFileName" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-secondary); text-align: center;"></div>
+                        </div>
+                        
+                        <div style="text-align: center; margin: 1rem 0; color: var(--text-secondary); font-size: 0.85rem;">
+                            — OR —
+                        </div>
+                        
+                        <div style="margin-bottom: 1.5rem;">
+                            <label style="display: block; margin-bottom: 0.75rem; font-weight: 600; font-size: 0.9rem;">Paste Image URL</label>
+                            <input type="url" id="tocImageUrl" placeholder="https://example.com/image.jpg" style="width: 100%; padding: 0.75rem; border-radius: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.9rem;">
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.75rem;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('uploadTocImageModal').remove()" style="flex: 1;">Cancel</button>
+                            <button class="btn btn-primary" onclick="confirmTocImageUpload(${tocSlideIdx})" style="flex: 1;">Add Image</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            // Handle file selection
+            document.getElementById('tocImageFile').onchange = (e) => {
                 const file = e.target.files[0];
-                if (!file) return;
-                
+                if (file) {
+                    document.getElementById('tocSelectedFileName').textContent = file.name;
+                }
+            };
+        }
+        
+        function confirmTocImageUpload(tocSlideIdx) {
+            const fileInput = document.getElementById('tocImageFile');
+            const urlInput = document.getElementById('tocImageUrl');
+            
+            const addTocImage = (src) => {
+                const slide = currentEditingDeck.slides[tocSlideIdx];
+                if (!slide.elements) slide.elements = [];
+                slide.elements = slide.elements.filter(el => el.id !== 'toc_right_img');
+                slide.elements.push({
+                    id: 'toc_right_img',
+                    type: 'image',
+                    x: 55, y: 55,
+                    width: 45, height: 45,
+                    src: src,
+                    borderRadius: 0
+                });
+                saveDeckChanges();
+                renderSlideEditor();
+                showNotification('✅ Image added to TOC', 'success');
+                document.getElementById('uploadTocImageModal').remove();
+            };
+            
+            if (fileInput.files.length > 0) {
+                // Upload from file
+                const file = fileInput.files[0];
                 const reader = new FileReader();
                 reader.onload = () => {
-                    const slide = currentEditingDeck.slides[tocSlideIdx];
-                    if (!slide.elements) slide.elements = [];
-                    
-                    // Remove existing right image if any
-                    slide.elements = slide.elements.filter(el => el.id !== 'toc_right_img');
-                    
-                    slide.elements.push({
-                        id: 'toc_right_img',
-                        type: 'image',
-                        x: 55, y: 55,
-                        width: 45, height: 45,
-                        src: reader.result,
-                        borderRadius: 0
-                    });
-                    
-                    saveDeckChanges();
-                    renderSlideEditor();
-                    showNotification('✅ Image added to TOC', 'success');
+                    addTocImage(reader.result);
                 };
                 reader.readAsDataURL(file);
-            };
-            input.click();
-            
-            // Also offer URL option
-            setTimeout(() => {
-                const url = prompt('Or paste an image URL:');
-                if (url && url.startsWith('http')) {
-                    const slide = currentEditingDeck.slides[tocSlideIdx];
-                    if (!slide.elements) slide.elements = [];
-                    slide.elements = slide.elements.filter(el => el.id !== 'toc_right_img');
-                    slide.elements.push({
-                        id: 'toc_right_img',
-                        type: 'image',
-                        x: 55, y: 55,
-                        width: 45, height: 45,
-                        src: url,
-                        borderRadius: 0
-                    });
-                    saveDeckChanges();
-                    renderSlideEditor();
-                    showNotification('✅ Image added to TOC', 'success');
+            } else if (urlInput.value.trim()) {
+                // Use URL
+                const url = urlInput.value.trim();
+                if (url.startsWith('http://') || url.startsWith('https://')) {
+                    addTocImage(url);
+                } else {
+                    alert('Please enter a valid URL starting with http:// or https://');
                 }
-            }, 100);
+            } else {
+                alert('Please select a file or enter an image URL');
+            }
         }
         
         function renderSingleElement(el) {
