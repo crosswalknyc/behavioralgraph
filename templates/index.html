@@ -34643,7 +34643,7 @@
             
             // Interest Highlights - top over-indexing interests/behaviors
             const interestHighlightsData = allItems
-                .filter(i => i.index >= 120 && i.pct < 99) // Over-indexing items, exclude near-100% items
+                .filter(i => i.index >= 120 && i.pct < 99 && i.pct >= 30) // Over-indexing items, exclude near-100% items, require profile % >= 30%
                 .sort((a, b) => b.index - a.index)
                 .slice(0, 20) // Keep top 20 for sorting flexibility
                 .map(item => ({
@@ -34662,7 +34662,7 @@
             
             // Top differentiators - group by SMART category based on item name, show top 5 items per category
             const itemsBySmartCategory = {};
-            allItems.filter(i => i.index > 120).forEach(item => {
+            allItems.filter(i => i.index > 120 && i.pct >= 30).forEach(item => { // Require profile % >= 30%
                 // Use smart categorization based on item name instead of raw data category
                 const smartCategory = categorizeInterest(item.name);
                 if (!itemsBySmartCategory[smartCategory]) {
