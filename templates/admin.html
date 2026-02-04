@@ -3846,14 +3846,17 @@
             document.getElementById('allCategories').checked = true;
             populateCategoryCheckboxes(['*']);
             
-            // Run Access: default from quick select profiles (run key = profile id; empty object = all selected)
-            const selectedRunKeys = allRuns.length === 0 ? ['*'] : allRuns.map(r => r.key).filter(key => quickSelectProfilesData[key] !== false);
-            const useAllRuns = selectedRunKeys.length >= allRuns.length;
+            // Run Access: no quick select for runs; default to all
+            const runsData = (await fetch('/api/admin/quick-selects', { credentials: 'same-origin' }).then(r => r.json())).runs || {};
+            const runKeys = allRuns.length === 0 ? ['*'] : allRuns.map(r => r.key).filter(key => runsData[key] !== false);
+            const useAllRuns = runKeys.length >= allRuns.length || Object.keys(runsData).length === 0;
             document.getElementById('allRuns').checked = useAllRuns;
-            populateRunCheckboxes(useAllRuns ? ['*'] : selectedRunKeys);
+            populateRunCheckboxes(useAllRuns ? ['*'] : runKeys);
             
-            // Behavioral: default from quick select (uses quickSelectBehaviorsData)
-            populateBehavioralCategoryCheckboxes(undefined, true);
+            // Behavioral: default from quick select (Behavioral Categories Access Control)
+            const behSelected = MASTER_BEHAVIORAL_CATEGORIES.filter(cat => quickSelectBehaviorsData[cat] !== false);
+            const useAllBeh = behSelected.length >= MASTER_BEHAVIORAL_CATEGORIES.length;
+            populateBehavioralCategoryCheckboxes(useAllBeh ? ['*'] : behSelected, false);
             
             userModalSetAvatarPreview(null, '');
             document.getElementById('userModalAvatarFile').value = '';
@@ -4810,15 +4813,18 @@
         
         async function restoreRunAccessDefaults() {
             await loadQuickSelects();
-            const selectedRunKeys = allRuns.length === 0 ? ['*'] : allRuns.map(r => r.key).filter(key => quickSelectProfilesData[key] !== false);
-            const useAllRuns = selectedRunKeys.length >= allRuns.length;
+            const runsData = (await fetch('/api/admin/quick-selects', { credentials: 'same-origin' }).then(r => r.json())).runs || {};
+            const selectedRunKeys = allRuns.length === 0 ? ['*'] : allRuns.map(r => r.key).filter(key => runsData[key] !== false);
+            const useAllRuns = selectedRunKeys.length >= allRuns.length || Object.keys(runsData).length === 0;
             document.getElementById('allRuns').checked = useAllRuns;
             populateRunCheckboxes(useAllRuns ? ['*'] : selectedRunKeys);
         }
         
         async function restoreBehavioralCategoryDefaults() {
             await loadQuickSelects();
-            populateBehavioralCategoryCheckboxes(undefined, true);
+            const selected = MASTER_BEHAVIORAL_CATEGORIES.filter(cat => quickSelectBehaviorsData[cat] !== false);
+            const useAll = selected.length >= MASTER_BEHAVIORAL_CATEGORIES.length;
+            populateBehavioralCategoryCheckboxes(useAll ? ['*'] : selected, false);
         }
 
         function toggleAllRuns() {
