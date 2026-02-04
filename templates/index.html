@@ -23277,7 +23277,8 @@
                 demographics: parsed.demographics,
                 behavioral: parsed.behavioral,
                 locations: parsed.locations,
-                s3Key: currentS3Key
+                s3Key: currentS3Key,
+                dateRange: dateRange || ''
             };
             applyGenPopMode();
 
@@ -24104,7 +24105,8 @@
                 demographics: parsed.demographics,
                 behavioral: parsed.behavioral,
                 locations: parsed.locations,
-                s3Key: profileId
+                s3Key: profileId,
+                dateRange: dateRange || ''
             };
             applyGenPopMode();
             updateSegmentBuilderTitle();
@@ -47014,6 +47016,14 @@
                     : currentUsername || 'Your Name';
                 const presenterCompany = currentUserCompany || 'Your Company';
                 
+                // Get date range from profile data or header
+                const dateRangeEl = document.getElementById('dashDateRangeHeader');
+                let dateRangeText = dateRangeEl?.textContent?.replace('Date Range: ', '') || '';
+                if (!dateRangeText && currentProfileData?.dateRange) {
+                    dateRangeText = currentProfileData.dateRange;
+                }
+                const dateRangeDisplay = dateRangeText || 'Date Range: Not specified';
+                
                 // Profile image HTML
                 const profileImageHtml = profileImage 
                     ? `<img src="${profileImage}" alt="${escapeHtml(profileName)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">`
@@ -47039,9 +47049,9 @@
                             <div style="margin-top: 0.15rem; font-size: 0.7rem; color: rgba(255,255,255,0.6);">${escapeHtml(presenterCompany)}</div>
                         </div>
                         
-                        <!-- Bottom description -->
-                        <div style="position: absolute; left: 5%; bottom: 15%; width: 60%; font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6;">
-                            Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+                        <!-- Bottom description - Date Range -->
+                        <div style="position: absolute; left: 5%; bottom: 15%; width: 60%; font-size: 0.85rem; color: rgba(255,255,255,0.8); line-height: 1.6; font-weight: 500;">
+                            ${escapeHtml(dateRangeDisplay)}
                         </div>
                     </div>
                     ${footerHtml}
