@@ -9452,7 +9452,7 @@
         
         .data-points-toggle {
             width: 100%;
-            padding: 0.5rem;
+            padding: 0.75rem 0.5rem;
             background: transparent;
             border: none;
             color: var(--text-secondary);
@@ -9462,18 +9462,23 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.75rem;
+        }
+        
+        .data-points-toggle .toggle-icon {
+            font-size: 1.25rem;
         }
         
         .data-points-toggle .toggle-label {
             writing-mode: vertical-rl;
             text-orientation: mixed;
             font-size: 0.7rem;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
             white-space: nowrap;
         }
         
-        .data-points-sidebar:not(.collapsed) .data-points-toggle .toggle-label {
+        .data-points-sidebar:not(.collapsed) .data-points-toggle .toggle-label,
+        .data-points-sidebar:not(.collapsed) .data-points-toggle .toggle-icon {
             display: none;
         }
         
@@ -13631,8 +13636,8 @@
                                     <!-- Right: Data Points (draggable to slides) - collapsed by default -->
                                     <div class="data-points-sidebar collapsed" id="dataPointsSidebar" style="grid-column: 3;">
                                         <button class="data-points-toggle" onclick="toggleDataPointsSidebar()" title="Toggle Data Points Panel">
-                                            <span id="dataPointsToggleIcon">◀</span>
-                                            <span class="toggle-label">📦 Data Points</span>
+                                            <span class="toggle-icon">📦</span>
+                                            <span class="toggle-label">Data Points</span>
                                         </button>
                                         <div class="data-points-header-content" style="padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
                                             <h4 style="margin: 0; font-size: 0.8rem; color: var(--text-secondary);">📦 Data Points</h4>
@@ -45976,18 +45981,15 @@
         
         function toggleDataPointsSidebar() {
             const sidebar = document.getElementById('dataPointsSidebar');
-            const icon = document.getElementById('dataPointsToggleIcon');
             if (!sidebar) return;
             
             sidebar.classList.toggle('collapsed');
             
             if (sidebar.classList.contains('collapsed')) {
-                icon.textContent = '◀';
                 // Adjust grid to give more space to editor
                 const container = sidebar.closest('.deck-builder-container');
                 if (container) container.style.gridTemplateColumns = '200px 1fr 40px';
             } else {
-                icon.textContent = '▶';
                 const container = sidebar.closest('.deck-builder-container');
                 if (container) container.style.gridTemplateColumns = '200px 1fr 280px';
             }
