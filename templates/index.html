@@ -9667,10 +9667,35 @@
         }
         
         /* Data Visualization Control Panel */
+        .viz-control-toggle {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: var(--accent-cyan);
+            border: none;
+            border-radius: 6px;
+            padding: 6px 10px;
+            z-index: 101;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #000;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .viz-control-toggle:hover {
+            background: var(--accent-lime);
+            transform: scale(1.05);
+        }
+        
         .viz-control-panel {
             position: absolute;
-            top: 0;
-            right: 0;
+            top: 8px;
+            right: 8px;
             background: rgba(13, 33, 55, 0.98);
             border: 1px solid var(--accent-cyan);
             border-radius: 8px;
@@ -9678,14 +9703,33 @@
             z-index: 100;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
             min-width: 280px;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s ease;
+            max-width: 320px;
+            max-height: 400px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            display: none;
         }
         
-        .slide-module-content:hover .viz-control-panel {
-            opacity: 1;
-            pointer-events: all;
+        .viz-control-panel.expanded {
+            display: block;
+        }
+        
+        .viz-control-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .viz-control-panel::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+        }
+        
+        .viz-control-panel::-webkit-scrollbar-thumb {
+            background: var(--accent-cyan);
+            border-radius: 3px;
+        }
+        
+        .viz-control-panel::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-lime);
         }
         
         .viz-control-section {
@@ -34875,7 +34919,15 @@
             const showOverflow = currentCount === 'all' && totalItems > maxFit;
             
             return `
-                <div class="viz-control-panel" onclick="event.stopPropagation()">
+                <button class="viz-control-toggle" onclick="toggleVizPanel(${slideIdx}); event.stopPropagation();">
+                    <span>⚙️</span>
+                    <span>Chart</span>
+                </button>
+                <div class="viz-control-panel" id="vizPanel${slideIdx}" onclick="event.stopPropagation()">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <div style="font-size: 0.85rem; font-weight: 600; color: var(--accent-cyan);">Chart Controls</div>
+                        <button onclick="toggleVizPanel(${slideIdx})" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem; padding: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.color='var(--text-primary)'" onmouseout="this.style.background='none'; this.style.color='var(--text-secondary)'">×</button>
+                    </div>
                     <div class="viz-control-section">
                         <div class="viz-control-label">📊 Visualization</div>
                         <div class="viz-type-buttons">
@@ -34953,6 +35005,30 @@
                 </div>
             `;
         }
+        
+        function toggleVizPanel(slideIdx) {
+            const panel = document.getElementById(`vizPanel${slideIdx}`);
+            if (!panel) return;
+            
+            // Close all other panels first
+            document.querySelectorAll('.viz-control-panel').forEach(p => {
+                if (p.id !== `vizPanel${slideIdx}`) {
+                    p.classList.remove('expanded');
+                }
+            });
+            
+            // Toggle this panel
+            panel.classList.toggle('expanded');
+        }
+        
+        // Close viz panels when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.viz-control-panel') && !e.target.closest('.viz-control-toggle')) {
+                document.querySelectorAll('.viz-control-panel').forEach(p => {
+                    p.classList.remove('expanded');
+                });
+            }
+        });
         
         function updateVizType(slideIdx, type) {
             const slide = currentEditingDeck?.slides?.[slideIdx - 1];
