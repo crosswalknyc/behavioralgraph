@@ -1424,7 +1424,7 @@
                                     Control which behavioral categories are available by default when granting user access. Unselected categories will be hidden from the Behavioral tab.
                                 </p>
                                 <p style="color: var(--accent-red); font-size: 0.8rem; margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(239, 68, 68, 0.1); border-radius: 6px; border-left: 3px solid var(--accent-red);">
-                                    ⭐ Features that are not live will show a red star to admins indicating they are "Admin Only" and will be hidden from regular users.
+                                    Features that are not live will show a red dotted outline to admins indicating they are "Admin Only" and will be hidden from regular users.
                                 </p>
                                 <div style="max-height: 400px; overflow-y: auto;">
                                     <input type="text" id="categoryAccessSearch" placeholder="🔍 Search categories..." 
@@ -1446,7 +1446,7 @@
                     <div class="card-header">
                         <h2>🚀 Live Features</h2>
                         <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-                            Control which Analysis Tools are visible to all users. Unchecked features will only be visible to admins with a red star indicator.
+                            Control which Analysis Tools are visible to all users. Unchecked features will only be visible to admins with a red dotted outline.
                         </p>
                     </div>
                     
@@ -1527,7 +1527,7 @@
                         
                         <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(239, 68, 68, 0.1); border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.3);">
                             <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary);">
-                                <span style="color: #ef4444;">★</span> Features that are not live will show a red star to admins indicating they are "Admin Only" and will be hidden from regular users.
+                                Features that are not live will show a red dotted outline to admins indicating they are "Admin Only" and will be hidden from regular users.
                             </p>
                         </div>
                     </div>
@@ -1755,10 +1755,13 @@
                                         <span class="collapse-icon rotated" id="categoryAccessSectionIcon" style="margin-left: 0.25rem;">▼</span>
                                     </div>
                                     <div id="categoryAccessSectionContent" style="display: none; margin-top: 0.5rem;">
-                                        <label class="checkbox-group">
-                                            <input type="checkbox" id="allCategories" checked onchange="toggleAllCategories()">
-                                            <span>All Categories</span>
-                                        </label>
+                                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                                            <label class="checkbox-group" style="margin: 0;">
+                                                <input type="checkbox" id="allCategories" checked onchange="toggleAllCategories()">
+                                                <span>All Categories</span>
+                                            </label>
+                                            <button type="button" class="btn btn-small btn-secondary" onclick="restoreCategoryAccessDefaults()">Restore Defaults</button>
+                                        </div>
                                         <div id="categoryCheckboxes" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;">
                                             <!-- Populated by JS -->
                                         </div>
@@ -1771,10 +1774,13 @@
                                         <span class="collapse-icon rotated" id="runAccessIcon" style="margin-left: 0.25rem;">▼</span>
                                     </div>
                                     <div id="runAccessContent" style="display: none; margin-top: 0.5rem;">
-                                        <label class="checkbox-group">
-                                            <input type="checkbox" id="allRuns" checked onchange="toggleAllRuns()">
-                                            <span>All Runs</span>
-                                        </label>
+                                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                                            <label class="checkbox-group" style="margin: 0;">
+                                                <input type="checkbox" id="allRuns" checked onchange="toggleAllRuns()">
+                                                <span>All Runs</span>
+                                            </label>
+                                            <button type="button" class="btn btn-small btn-secondary" onclick="restoreRunAccessDefaults()">Restore Defaults</button>
+                                        </div>
                                         <div id="runCheckboxes" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto;">
                                             <!-- Populated by JS -->
                                         </div>
@@ -1785,10 +1791,13 @@
                                     <p style="color: var(--text-secondary); font-size: 0.75rem; margin-bottom: 0.5rem;">
                                         Control which behavioral categories this user can see in the Behavioral tab.
                                     </p>
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="allBehavioralCategories" checked onchange="toggleAllBehavioralCategories()">
-                                        <span>All Behavioral Categories</span>
-                                    </label>
+                                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                                        <label class="checkbox-group" style="margin: 0;">
+                                            <input type="checkbox" id="allBehavioralCategories" checked onchange="toggleAllBehavioralCategories()">
+                                            <span>All Behavioral Categories</span>
+                                        </label>
+                                        <button type="button" class="btn btn-small btn-secondary" onclick="restoreBehavioralCategoryDefaults()">Restore Defaults</button>
+                                    </div>
                                     <div id="behavioralCategoryCheckboxes" style="margin-top: 0.5rem; max-height: 200px; overflow-y: auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.25rem;">
                                         <!-- Populated by JS -->
                                     </div>
@@ -1873,33 +1882,37 @@
                         <div id="analysisIQSection" class="dashboard-access-content" style="display: none;">
                             <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
                                 <h5 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--accent-cyan);">📑 Module Access</h5>
+                                <label class="checkbox-group" style="margin-bottom: 0.75rem;">
+                                    <input type="checkbox" id="allAnalysisModules" onchange="toggleAllAnalysisModules()">
+                                    <span>All Modules</span>
+                                </label>
                                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
                                     <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleProfileAnalysis" class="analysis-module-checkbox">
+                                        <input type="checkbox" id="moduleProfileAnalysis" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
                                         <span>🎯 Profile Analysis</span>
                                     </label>
                                     <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleTalentSearch" class="analysis-module-checkbox">
+                                        <input type="checkbox" id="moduleTalentSearch" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
                                         <span>🔍 Talent Search</span>
                                     </label>
                                     <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleTalentTheater" class="analysis-module-checkbox">
+                                        <input type="checkbox" id="moduleTalentTheater" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
                                         <span>🎭 Ticket Sales</span>
                                     </label>
                                     <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleSVOD" class="analysis-module-checkbox">
+                                        <input type="checkbox" id="moduleSVOD" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
                                         <span>📺 SVOD</span>
                                     </label>
                                     <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleCampaign" class="analysis-module-checkbox">
+                                        <input type="checkbox" id="moduleCampaign" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
                                         <span>📈 Campaign</span>
                                     </label>
                                     <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleCrossShow" class="analysis-module-checkbox">
+                                        <input type="checkbox" id="moduleCrossShow" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
                                         <span>🔄 Cross Show</span>
                                     </label>
                                     <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleWatchTime" class="analysis-module-checkbox">
+                                        <input type="checkbox" id="moduleWatchTime" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
                                         <span>⏱️ Watch Time</span>
                                     </label>
                                 </div>
@@ -3090,7 +3103,7 @@
                 }
                 
                 if (data.success) {
-                    alert('✅ Category access settings saved successfully! Unchecked categories will show a red star for admins and be hidden from regular users.');
+                    alert('✅ Category access settings saved successfully! Unchecked categories will show a red dotted outline for admins and be hidden from regular users.');
                 } else {
                     throw new Error(data.error || 'Unknown error');
                 }
@@ -3794,6 +3807,8 @@
             
             // Reset Analysis IQ section
             document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
+            const allModEl = document.getElementById('allAnalysisModules');
+            if (allModEl) { allModEl.checked = false; allModEl.indeterminate = false; }
             document.getElementById('analysisIQSection').style.display = 'none';
             document.getElementById('analysisIQIcon').classList.add('rotated');
             
@@ -4277,7 +4292,24 @@
                 icon.classList.add('rotated');
                 // Uncheck all module checkboxes
                 document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
+                const allMod = document.getElementById('allAnalysisModules');
+                if (allMod) allMod.checked = false;
             }
+        }
+        
+        function toggleAllAnalysisModules() {
+            const allMod = document.getElementById('allAnalysisModules');
+            const checkboxes = document.querySelectorAll('.analysis-module-checkbox');
+            checkboxes.forEach(cb => cb.checked = allMod.checked);
+        }
+        
+        function updateAllAnalysisModulesCheckbox() {
+            const allMod = document.getElementById('allAnalysisModules');
+            if (!allMod) return;
+            const checkboxes = document.querySelectorAll('.analysis-module-checkbox');
+            const checked = Array.from(checkboxes).filter(cb => cb.checked).length;
+            allMod.checked = checked === checkboxes.length;
+            allMod.indeterminate = checked > 0 && checked < checkboxes.length;
         }
         
         // Keep old function for backward compatibility
@@ -4594,7 +4626,10 @@
             // Reset all checkboxes first
             document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
             
-            if (!modules || modules.length === 0) return;
+            if (!modules || modules.length === 0) {
+                updateAllAnalysisModulesCheckbox();
+                return;
+            }
             
             modules.forEach(mod => {
                 switch(mod) {
@@ -4607,6 +4642,7 @@
                     case 'watch_time': document.getElementById('moduleWatchTime').checked = true; break;
                 }
             });
+            updateAllAnalysisModulesCheckbox();
         }
         
         // Rankers IQ Functions
@@ -4685,6 +4721,25 @@
                 cb.disabled = allChecked;
                 cb.indeterminate = false;
             });
+        }
+        
+        async function restoreCategoryAccessDefaults() {
+            // Default: all categories selected (no quick select for dashboard categories)
+            document.getElementById('allCategories').checked = true;
+            populateCategoryCheckboxes(['*']);
+        }
+        
+        async function restoreRunAccessDefaults() {
+            await loadQuickSelects();
+            const selectedRunKeys = allRuns.length === 0 ? ['*'] : allRuns.map(r => r.key).filter(key => quickSelectProfilesData[key] !== false);
+            const useAllRuns = selectedRunKeys.length >= allRuns.length;
+            document.getElementById('allRuns').checked = useAllRuns;
+            populateRunCheckboxes(useAllRuns ? ['*'] : selectedRunKeys);
+        }
+        
+        async function restoreBehavioralCategoryDefaults() {
+            await loadQuickSelects();
+            populateBehavioralCategoryCheckboxes(undefined, true);
         }
 
         function toggleAllRuns() {

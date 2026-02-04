@@ -1975,7 +1975,8 @@ def create_user():
             'has_analysis_iq_access': req_data.get('has_analysis_iq_access', False),
             'analysis_iq_modules': req_data.get('analysis_iq_modules', []),
             'has_rankers_iq_access': req_data.get('has_rankers_iq_access', False),
-            'rankers_iq_options': req_data.get('rankers_iq_options', [])
+            'rankers_iq_options': req_data.get('rankers_iq_options', []),
+            'collab_team': req_data.get('collab_team', [])
         }
         
         save_users(data)
@@ -2061,6 +2062,8 @@ def update_user(username):
             user['has_rankers_iq_access'] = req_data['has_rankers_iq_access']
         if 'rankers_iq_options' in req_data:
             user['rankers_iq_options'] = req_data['rankers_iq_options']
+        if 'collab_team' in req_data:
+            user['collab_team'] = req_data['collab_team']
         
         # Handle username change
         new_username = req_data.get('new_username', '').strip().lower()

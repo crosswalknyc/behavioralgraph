@@ -15356,10 +15356,10 @@
             } else {
                 // Feature is NOT live
                 if (isAdmin) {
-                    // Admin can see it with red star
+                    // Admin can see it with red dotted outline (no star)
                     btn.style.display = '';
                     btn.classList.add('admin-only');
-                    if (star) star.style.display = 'inline';
+                    if (star) star.style.display = 'none';
                 } else {
                     // Non-admin cannot see it
                     btn.style.display = 'none';
