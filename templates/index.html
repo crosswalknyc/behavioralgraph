@@ -31690,90 +31690,118 @@
         }
         
         async function confirmAddToDeck(type, category) {
-            const wsId = document.getElementById('deckSelectWorkspace')?.value;
-            const deckId = document.getElementById('deckSelectDeck')?.value;
-            
-            if (!wsId || !deckId) {
-                alert('Please select a workspace and deck');
-                return;
-            }
-            
-            // Find the deck
-            const decks = workspaceDecks[wsId] || [];
-            const deck = decks.find(d => d.id === deckId);
-            if (!deck) {
-                alert('Deck not found');
-                return;
-            }
-            
-            // Create the slide/module item
-            const item = createModuleItem(type, category, pendingSelectedItems);
-            
-            // Add to deck slides
-            if (!deck.slides) deck.slides = [];
-            deck.slides.push(item);
-            deck.updatedAt = new Date().toISOString();
-            
-            // Add collaborators if any were specified
-            if (pendingCollaborators.length > 0) {
-                if (!deck.collaborators) deck.collaborators = [];
-                pendingCollaborators.forEach(email => {
-                    if (!deck.collaborators.find(c => c.email === email)) {
-                        deck.collaborators.push({
-                            email: email,
-                            addedAt: new Date().toISOString(),
-                            addedBy: currentUsername || 'unknown'
-                        });
-                    }
-                });
+            try {
+                const wsId = document.getElementById('deckSelectWorkspace')?.value;
+                const deckId = document.getElementById('deckSelectDeck')?.value;
                 
-                // Send invitations to collaborators
-                inviteDeckCollaborators(deck.id, deck.name, pendingCollaborators);
-            }
-            
-            localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
-            
-            // Sync to backend if it's a cloud deck
-            if (wsId === 'cloud' && deck.serverDeckId) {
-                try {
-                    const response = await fetch(`/api/decks/${deck.serverDeckId}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            name: deck.name,
-                            description: deck.description,
-                            slides: deck.slides,
-                            titleSlide: deck.titleSlide,
-                            template: deck.template
-                        }),
-                        credentials: 'same-origin'
-                    });
-                    const result = await response.json();
-                    if (!result.success) {
-                        console.warn('Failed to sync deck to cloud:', result.error);
-                        showNotification('⚠️ Added locally but cloud sync failed', 'warning');
-                    }
-                } catch (e) {
-                    console.error('Cloud sync error:', e);
-                    showNotification('⚠️ Added locally but cloud sync failed', 'warning');
+                if (!wsId || !deckId) {
+                    alert('Please select a workspace and deck');
+                    return;
                 }
+                
+                // Find the deck
+                const decks = workspaceDecks[wsId] || [];
+                const deck = decks.find(d => d.id === deckId);
+                if (!deck) {
+                    alert('Deck not found');
+                    return;
+                }
+                
+                // Create the slide/module item
+                const item = createModuleItem(type, category, pendingSelectedItems);
+                if (!item) {
+                    alert('Failed to create slide item');
+                    return;
+                }
+                
+                // Add to deck slides
+                if (!deck.slides) deck.slides = [];
+                deck.slides.push(item);
+                deck.updatedAt = new Date().toISOString();
+                
+                // Add collaborators if any were specified
+                if (pendingCollaborators && pendingCollaborators.length > 0) {
+                    if (!deck.collaborators) deck.collaborators = [];
+                    pendingCollaborators.forEach(email => {
+                        if (!deck.collaborators.find(c => c.email === email)) {
+                            deck.collaborators.push({
+                                email: email,
+                                addedAt: new Date().toISOString(),
+                                addedBy: currentUsername || 'unknown'
+                            });
+                        }
+                    });
+                    
+                    // Send invitations to collaborators
+                    try {
+                        inviteDeckCollaborators(deck.id, deck.name, pendingCollaborators);
+                    } catch (e) {
+                        console.warn('Failed to send collaborator invitations:', e);
+                    }
+                }
+                
+                // Save to localStorage
+                try {
+                    localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+                } catch (e) {
+                    console.error('Failed to save to localStorage:', e);
+                }
+                
+                // Sync to backend if it's a cloud deck
+                if (wsId === 'cloud' && deck.serverDeckId) {
+                    try {
+                        const response = await fetch(`/api/decks/${deck.serverDeckId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                name: deck.name,
+                                description: deck.description,
+                                slides: deck.slides,
+                                titleSlide: deck.titleSlide,
+                                template: deck.template
+                            }),
+                            credentials: 'same-origin'
+                        });
+                        const result = await response.json();
+                        if (!result.success) {
+                            console.warn('Failed to sync deck to cloud:', result.error);
+                        }
+                    } catch (e) {
+                        console.error('Cloud sync error:', e);
+                    }
+                }
+                
+                // Also save to data points for easy access
+                try {
+                    saveToDataPoints({...item, workspaceId: wsId});
+                } catch (e) {
+                    console.warn('Failed to save to data points:', e);
+                }
+                
+                // Clear pending collaborators
+                const collabCount = pendingCollaborators ? pendingCollaborators.length : 0;
+                pendingCollaborators = [];
+                
+                // Close modal
+                document.getElementById('deckSelectionModal')?.remove();
+                
+                // Show success message
+                let message = `✅ Added "${item.title}" to ${deck.name}`;
+                if (collabCount > 0) {
+                    message += ` and invited ${collabCount} collaborator(s)`;
+                }
+                showNotification(message, 'success');
+                
+                // Track activity (non-blocking)
+                try {
+                    trackActivity('add_module_to_deck', `${type}:${category}:${deck.name}`);
+                } catch (e) {
+                    console.warn('Failed to track activity:', e);
+                }
+            } catch (error) {
+                console.error('Error in confirmAddToDeck:', error);
+                alert('Failed to add to deck. Please try again.');
             }
-            
-            // Also save to data points for easy access
-            saveToDataPoints({...item, workspaceId: wsId});
-            
-            // Clear pending collaborators
-            const collabCount = pendingCollaborators.length;
-            pendingCollaborators = [];
-            
-            document.getElementById('deckSelectionModal')?.remove();
-            
-            let message = `✅ Added "${item.title}" to ${deck.name}`;
-            if (collabCount > 0) {
-                message += ` and invited ${collabCount} collaborator(s)`;
-            }
-            showNotification(message, 'success');
-            trackActivity('add_module_to_deck', `${type}:${category}:${deck.name}`);
         }
         
         // Add insight cards (Audience Snapshot, Behavioral Profile, etc.) to deck
@@ -31920,90 +31948,118 @@
         }
         
         async function confirmAddInsightToDeck(insightType) {
-            const wsId = document.getElementById('deckSelectWorkspace')?.value;
-            const deckId = document.getElementById('deckSelectDeck')?.value;
-            
-            if (!wsId || !deckId) {
-                alert('Please select a workspace and deck');
-                return;
-            }
-            
-            // Find the deck
-            const decks = workspaceDecks[wsId] || [];
-            const deck = decks.find(d => d.id === deckId);
-            if (!deck) {
-                alert('Deck not found');
-                return;
-            }
-            
-            // Create the insight item
-            const item = createInsightItem(insightType);
-            
-            // Add to deck slides
-            if (!deck.slides) deck.slides = [];
-            deck.slides.push(item);
-            deck.updatedAt = new Date().toISOString();
-            
-            // Add collaborators if any were specified
-            const collabCount = pendingCollaborators.length;
-            if (collabCount > 0) {
-                if (!deck.collaborators) deck.collaborators = [];
-                pendingCollaborators.forEach(email => {
-                    if (!deck.collaborators.find(c => c.email === email)) {
-                        deck.collaborators.push({
-                            email: email,
-                            addedAt: new Date().toISOString(),
-                            addedBy: currentUsername || 'unknown'
-                        });
-                    }
-                });
+            try {
+                const wsId = document.getElementById('deckSelectWorkspace')?.value;
+                const deckId = document.getElementById('deckSelectDeck')?.value;
                 
-                // Send invitations to collaborators
-                inviteDeckCollaborators(deck.id, deck.name, pendingCollaborators);
-            }
-            
-            localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
-            
-            // Sync to backend if it's a cloud deck
-            if (wsId === 'cloud' && deck.serverDeckId) {
-                try {
-                    const response = await fetch(`/api/decks/${deck.serverDeckId}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            name: deck.name,
-                            description: deck.description,
-                            slides: deck.slides,
-                            titleSlide: deck.titleSlide,
-                            template: deck.template
-                        }),
-                        credentials: 'same-origin'
-                    });
-                    const result = await response.json();
-                    if (!result.success) {
-                        console.warn('Failed to sync deck to cloud:', result.error);
-                        showNotification('⚠️ Added locally but cloud sync failed', 'warning');
-                    }
-                } catch (e) {
-                    console.error('Cloud sync error:', e);
-                    showNotification('⚠️ Added locally but cloud sync failed', 'warning');
+                if (!wsId || !deckId) {
+                    alert('Please select a workspace and deck');
+                    return;
                 }
+                
+                // Find the deck
+                const decks = workspaceDecks[wsId] || [];
+                const deck = decks.find(d => d.id === deckId);
+                if (!deck) {
+                    alert('Deck not found');
+                    return;
+                }
+                
+                // Create the insight item
+                const item = createInsightItem(insightType);
+                if (!item) {
+                    alert('Failed to create insight item');
+                    return;
+                }
+                
+                // Add to deck slides
+                if (!deck.slides) deck.slides = [];
+                deck.slides.push(item);
+                deck.updatedAt = new Date().toISOString();
+                
+                // Add collaborators if any were specified
+                const collabCount = pendingCollaborators ? pendingCollaborators.length : 0;
+                if (collabCount > 0) {
+                    if (!deck.collaborators) deck.collaborators = [];
+                    pendingCollaborators.forEach(email => {
+                        if (!deck.collaborators.find(c => c.email === email)) {
+                            deck.collaborators.push({
+                                email: email,
+                                addedAt: new Date().toISOString(),
+                                addedBy: currentUsername || 'unknown'
+                            });
+                        }
+                    });
+                    
+                    // Send invitations to collaborators
+                    try {
+                        inviteDeckCollaborators(deck.id, deck.name, pendingCollaborators);
+                    } catch (e) {
+                        console.warn('Failed to send collaborator invitations:', e);
+                    }
+                }
+                
+                // Save to localStorage
+                try {
+                    localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+                } catch (e) {
+                    console.error('Failed to save to localStorage:', e);
+                }
+                
+                // Sync to backend if it's a cloud deck
+                if (wsId === 'cloud' && deck.serverDeckId) {
+                    try {
+                        const response = await fetch(`/api/decks/${deck.serverDeckId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                name: deck.name,
+                                description: deck.description,
+                                slides: deck.slides,
+                                titleSlide: deck.titleSlide,
+                                template: deck.template
+                            }),
+                            credentials: 'same-origin'
+                        });
+                        const result = await response.json();
+                        if (!result.success) {
+                            console.warn('Failed to sync deck to cloud:', result.error);
+                        }
+                    } catch (e) {
+                        console.error('Cloud sync error:', e);
+                    }
+                }
+                
+                // Also save to data points for easy access
+                try {
+                    saveToDataPoints({...item, workspaceId: wsId});
+                } catch (e) {
+                    console.warn('Failed to save to data points:', e);
+                }
+                
+                // Clear pending collaborators
+                pendingCollaborators = [];
+                
+                // Close modal
+                document.getElementById('deckSelectionModal')?.remove();
+                
+                // Show success message
+                let message = `✅ Added "${item.title}" to ${deck.name}`;
+                if (collabCount > 0) {
+                    message += ` and invited ${collabCount} collaborator(s)`;
+                }
+                showNotification(message, 'success');
+                
+                // Track activity (non-blocking)
+                try {
+                    trackActivity('add_insight_to_deck', `${insightType}:${deck.name}`);
+                } catch (e) {
+                    console.warn('Failed to track activity:', e);
+                }
+            } catch (error) {
+                console.error('Error in confirmAddInsightToDeck:', error);
+                alert('Failed to add to deck. Please try again.');
             }
-            
-            // Also save to data points for easy access
-            saveToDataPoints({...item, workspaceId: wsId});
-            
-            // Clear pending collaborators
-            pendingCollaborators = [];
-            
-            document.getElementById('deckSelectionModal')?.remove();
-            
-            let message = `✅ Added "${item.title}" to ${deck.name}`;
-            if (collabCount > 0) {
-                message += ` and invited ${collabCount} collaborator(s)`;
-            }
-            showNotification(message, 'success');
-            trackActivity('add_insight_to_deck', `${insightType}:${deck.name}`);
         }
         
         async function inviteDeckCollaborators(deckId, deckName, emails) {
