@@ -1347,11 +1347,11 @@
                         </div>
                     </div>
                     
-                    <!-- Behavioral Categories Section -->
-                    <div class="dashboard-access-item">
+                    <!-- Profile Selector Section (formerly Behavioral Categories) -->
+                    <div class="dashboard-access-item" style="margin-bottom: 1.5rem;">
                         <div class="dashboard-access-header" onclick="toggleQuickSelectSection('behaviors')">
                             <label class="checkbox-group" onclick="event.stopPropagation()">
-                                <span style="font-weight: 600; font-size: 1rem;">🧬 Behavioral Categories</span>
+                                <span style="font-weight: 600; font-size: 1rem;">🎯 Profile Selector</span>
                             </label>
                             <span class="collapse-icon rotated" id="quickSelectBehaviorsIcon">▼</span>
                         </div>
@@ -1372,6 +1372,41 @@
                                            style="width: 100%; padding: 0.5rem; margin-bottom: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);"
                                            onkeyup="filterQuickSelectBehaviors()">
                                     <div id="quickSelectBehaviorsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5rem;">
+                                        <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading categories...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Behavioral Categories Access Control Section -->
+                    <div class="dashboard-access-item">
+                        <div class="dashboard-access-header" onclick="toggleQuickSelectSection('categoryAccess')">
+                            <label class="checkbox-group" onclick="event.stopPropagation()">
+                                <span style="font-weight: 600; font-size: 1rem;">🧬 Behavioral Categories Access Control</span>
+                            </label>
+                            <span class="collapse-icon rotated" id="quickSelectCategoryAccessIcon">▼</span>
+                        </div>
+                        <div id="quickSelectCategoryAccessSection" class="dashboard-access-content" style="display: none;">
+                            <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
+                                <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                                    <label class="checkbox-group">
+                                        <input type="checkbox" id="categoryAccessSelectAll" checked onchange="toggleAllCategoryAccess()">
+                                        <span>SELECT ALL CATEGORIES</span>
+                                    </label>
+                                    <button class="btn btn-small btn-primary" onclick="saveCategoryAccess()">💾 SAVE QUICK SELECTS</button>
+                                </div>
+                                <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 0.75rem;">
+                                    Control which behavioral categories are available by default when granting user access. Unselected categories will be hidden from the Behavioral tab.
+                                </p>
+                                <p style="color: var(--accent-red); font-size: 0.8rem; margin-bottom: 0.75rem; padding: 0.5rem; background: rgba(239, 68, 68, 0.1); border-radius: 6px; border-left: 3px solid var(--accent-red);">
+                                    ⭐ Features that are not live will show a red star to admins indicating they are "Admin Only" and will be hidden from regular users.
+                                </p>
+                                <div style="max-height: 400px; overflow-y: auto;">
+                                    <input type="text" id="categoryAccessSearch" placeholder="🔍 Search categories..." 
+                                           style="width: 100%; padding: 0.5rem; margin-bottom: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);"
+                                           onkeyup="filterCategoryAccess()">
+                                    <div id="categoryAccessList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5rem;">
                                         <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading categories...</div>
                                     </div>
                                 </div>
@@ -2284,9 +2319,11 @@
                 const profilesSection = document.getElementById('quickSelectProfilesSection');
                 const tickersSection = document.getElementById('quickSelectTickersSection');
                 const behaviorsSection = document.getElementById('quickSelectBehaviorsSection');
+                const categoryAccessSection = document.getElementById('quickSelectCategoryAccessSection');
                 const profilesIcon = document.getElementById('quickSelectProfilesIcon');
                 const tickersIcon = document.getElementById('quickSelectTickersIcon');
                 const behaviorsIcon = document.getElementById('quickSelectBehaviorsIcon');
+                const categoryAccessIcon = document.getElementById('quickSelectCategoryAccessIcon');
                 
                 if (profilesSection && profilesSection.style.display === 'none') {
                     profilesSection.style.display = 'block';
@@ -2300,10 +2337,15 @@
                     behaviorsSection.style.display = 'block';
                     if (behaviorsIcon) behaviorsIcon.classList.remove('rotated');
                 }
+                if (categoryAccessSection && categoryAccessSection.style.display === 'none') {
+                    categoryAccessSection.style.display = 'block';
+                    if (categoryAccessIcon) categoryAccessIcon.classList.remove('rotated');
+                }
                 
                 loadQuickSelectProfiles();
                 loadQuickSelectTickers();
                 loadQuickSelectBehaviors();
+                loadCategoryAccess();
             }
             
             if (tabName === 'liveFeatures') {
@@ -2748,6 +2790,136 @@
         // Filter Quick Select Behaviors
         function filterQuickSelectBehaviors() {
             renderQuickSelectBehaviors();
+        }
+        
+        // ============ CATEGORY ACCESS CONTROL ============
+        
+        let categoryAccessData = {}; // Stores which categories are live (checked) or admin-only (unchecked)
+        
+        // Load Category Access Control
+        async function loadCategoryAccess() {
+            const container = document.getElementById('categoryAccessList');
+            if (!container) {
+                console.error('categoryAccessList container not found');
+                return;
+            }
+            
+            // Use the same master list as behaviors
+            const categories = [...MASTER_BEHAVIORAL_CATEGORIES];
+            
+            // Load saved settings from server (we'll use the same quick-selects endpoint for now)
+            await loadQuickSelects();
+            
+            // Initialize categoryAccessData from quickSelectBehaviorsData
+            // Default all to true (live) unless explicitly set to false
+            categoryAccessData = {};
+            categories.forEach(cat => {
+                categoryAccessData[cat] = quickSelectBehaviorsData[cat] !== false;
+            });
+            
+            renderCategoryAccess();
+        }
+        
+        // Render Category Access Control
+        function renderCategoryAccess() {
+            const container = document.getElementById('categoryAccessList');
+            const searchTerm = (document.getElementById('categoryAccessSearch')?.value || '').toLowerCase();
+            
+            const categories = [...MASTER_BEHAVIORAL_CATEGORIES];
+            const filtered = categories.filter(cat => {
+                return cat.toLowerCase().includes(searchTerm);
+            });
+            
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); text-align: center;">No categories match your search</div>';
+                return;
+            }
+            
+            container.innerHTML = filtered.map(cat => {
+                const isLive = categoryAccessData[cat] !== false; // Default to true (live)
+                const starIcon = isLive ? '' : ' <span style="color: #ef4444; font-size: 0.8rem; animation: pulse-star 2s infinite;">⭐</span>';
+                
+                return `
+                    <label class="checkbox-group" style="padding: 0.5rem; background: var(--bg-card); border-radius: 6px; border: 1px solid ${isLive ? 'var(--border-color)' : 'rgba(239, 68, 68, 0.5)'}; ${isLive ? '' : 'border-style: dashed;'}">
+                        <input type="checkbox" class="category-access-checkbox" value="${cat}" ${isLive ? 'checked' : ''} onchange="updateCategoryAccess('${cat}', this.checked)">
+                        <span style="font-size: 0.8rem;">${cat}${starIcon}</span>
+                    </label>
+                `;
+            }).join('');
+            
+            // Update "Select All" checkbox
+            const allChecked = filtered.every(cat => categoryAccessData[cat] !== false);
+            document.getElementById('categoryAccessSelectAll').checked = allChecked;
+        }
+        
+        // Update Category Access
+        function updateCategoryAccess(category, isLive) {
+            categoryAccessData[category] = isLive;
+            
+            // Update "Select All" checkbox
+            const allCategories = [...MASTER_BEHAVIORAL_CATEGORIES];
+            const allChecked = allCategories.every(cat => categoryAccessData[cat] !== false);
+            document.getElementById('categoryAccessSelectAll').checked = allChecked;
+            
+            // Re-render to update star icons
+            renderCategoryAccess();
+        }
+        
+        // Toggle All Category Access
+        function toggleAllCategoryAccess() {
+            const selectAll = document.getElementById('categoryAccessSelectAll').checked;
+            
+            const categories = [...MASTER_BEHAVIORAL_CATEGORIES];
+            categories.forEach(cat => {
+                categoryAccessData[cat] = selectAll;
+            });
+            
+            renderCategoryAccess();
+        }
+        
+        // Filter Category Access
+        function filterCategoryAccess() {
+            renderCategoryAccess();
+        }
+        
+        // Save Category Access
+        async function saveCategoryAccess() {
+            // Convert categoryAccessData to the same format as quickSelectBehaviorsData
+            const behaviorsToSave = {};
+            Object.keys(categoryAccessData).forEach(cat => {
+                if (!categoryAccessData[cat]) {
+                    behaviorsToSave[cat] = false; // Only store false values (exclusions)
+                }
+            });
+            
+            try {
+                const response = await fetch('/api/admin/quick-selects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        profiles: quickSelectProfilesData,
+                        tickers: quickSelectTickersData,
+                        behaviors: behaviorsToSave
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    const errorMsg = data.error || `HTTP ${response.status}: ${response.statusText}`;
+                    throw new Error(errorMsg);
+                }
+                
+                if (data.success) {
+                    alert('✅ Category access settings saved successfully! Unchecked categories will show a red star for admins and be hidden from regular users.');
+                } else {
+                    throw new Error(data.error || 'Unknown error');
+                }
+            } catch (error) {
+                console.error('Error saving category access:', error);
+                alert('❌ Error saving settings: ' + error.message);
+            }
         }
         
         // ============ LIVE FEATURES ============

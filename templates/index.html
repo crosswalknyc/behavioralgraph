@@ -48615,6 +48615,28 @@
                 // Determine layout variant (rotate through 8 layouts, skipping layout 0 which is title slide and layout 1 which is TOC)
                 const layoutIndex = ((idx - 1) % 8) + 1; // Results in 1, 2, 3, 4, 5, 6, 7, 8, 1, 2...
                 
+                // Smart layout adjustments to prevent overlap
+                const titleLength = title.length;
+                let titleFontSize, titleTop, contentTop, titleWidth;
+                
+                // Calculate dynamic positioning based on title length
+                if (titleLength > 80) {
+                    // Very long title: smaller font, more space
+                    titleFontSize = '1.6rem';
+                    titleTop = '7%';
+                    contentTop = '24%';
+                } else if (titleLength > 50) {
+                    // Long title: slightly smaller font
+                    titleFontSize = '1.9rem';
+                    titleTop = '7.5%';
+                    contentTop = '23%';
+                } else {
+                    // Normal title: standard sizing
+                    titleFontSize = '2.2rem';
+                    titleTop = '8%';
+                    contentTop = '22%';
+                }
+                
                 try {
                     const content = renderSlideContent(slide);
                     const overlayElements = (slide.elements && slide.elements.length > 0) 
@@ -48624,22 +48646,23 @@
                     // Check if slide has any image elements
                     const hasImage = slide.elements && slide.elements.some(el => el.type === 'image');
                     
-                    // Layout A: Content left (55%), Image right (35%) - Default
+                    // Layout A: Content left (50%), Image right (38%) with 2% gap - Default
                     if (layoutIndex === 1) {
+                        const contentHeight = `calc(87% - ${contentTop})`;
                         return `
                         <!-- Header bar -->
-                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
+                        <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5); z-index: 3;">
                             <span contenteditable="true" style="cursor: text; padding: 2px 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideHeaderText(${idx}, 'profileName', this.textContent)">${escapeHtml(headerProfileName)}</span>
                             <span>${dateStr}</span>
                         </div>
                         
                         <!-- Section title -->
-                        <div contenteditable="true" style="position: absolute; left: 5%; top: 8%; width: 52%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                        <div contenteditable="true" style="position: absolute; left: 5%; top: ${titleTop}; width: 48%; font-size: ${titleFontSize}; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word; z-index: 2;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' ')); renderSlideEditor();">
                             ${formatTitleWithBreaks(title)}
                         </div>
                         
                         <!-- Content area left -->
-                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 22%; width: 52%; height: 65%; overflow: hidden; padding: 0.5rem; z-index: 1;">
+                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: ${contentTop}; width: 48%; height: ${contentHeight}; overflow: hidden; padding: 0.5rem; z-index: 1;">
                             ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 1rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
@@ -48651,7 +48674,7 @@
                         ${!hasImage ? `
                         <!-- Image placeholder right -->
                         <div class="slide-image-placeholder" 
-                             style="position: absolute; right: 5%; top: 22%; width: 38%; height: 65%;"
+                             style="position: absolute; right: 5%; top: ${contentTop}; width: 37%; height: ${contentHeight}; z-index: 1;"
                              onclick="uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
                             <span class="placeholder-icon">🖼️</span>
@@ -48675,12 +48698,12 @@
                         </div>
                         
                         <!-- Section title -->
-                        <div contenteditable="true" style="position: absolute; left: 5%; top: 8%; width: 40%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                        <div contenteditable="true" style="position: absolute; left: 5%; top: 8%; width: 36%; font-size: 2.2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                             ${formatTitleWithBreaks(title)}
                         </div>
                         
                         <!-- Content area left -->
-                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 22%; width: 40%; height: 65%; overflow: hidden; padding: 0.5rem; z-index: 1;">
+                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; left: 5%; top: 22%; width: 36%; height: 65%; overflow: hidden; padding: 0.5rem; z-index: 1;">
                             ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.75rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 1rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
@@ -48692,7 +48715,7 @@
                         ${!hasImage ? `
                         <!-- Large image placeholder right -->
                         <div class="slide-image-placeholder" 
-                             style="position: absolute; right: 5%; top: 8%; width: 50%; height: 79%;"
+                             style="position: absolute; right: 5%; top: 8%; width: 46%; height: 79%;"
                              onclick="uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
                             <span class="placeholder-icon">🖼️</span>
@@ -48718,7 +48741,7 @@
                         ${!hasImage ? `
                         <!-- Large image placeholder left -->
                         <div class="slide-image-placeholder" 
-                             style="position: absolute; left: 5%; top: 18%; width: 58%; height: 69%;"
+                             style="position: absolute; left: 5%; top: 18%; width: 54%; height: 69%;"
                              onclick="uploadSlideImage(${idx})"
                              title="Click to upload image or paste URL">
                             <span class="placeholder-icon">🖼️</span>
@@ -48728,12 +48751,12 @@
                         ` : ''}
                         
                         <!-- Section title right -->
-                        <div contenteditable="true" style="position: absolute; right: 5%; top: 8%; width: 32%; font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                        <div contenteditable="true" style="position: absolute; right: 5%; top: 8%; width: 30%; font-size: 2rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                             ${formatTitleWithBreaks(title)}
                         </div>
                         
                         <!-- Content area right -->
-                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; right: 5%; top: 35%; width: 32%; height: 52%; overflow: hidden; padding: 0.5rem; z-index: 1;">
+                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; right: 5%; top: 35%; width: 30%; height: 52%; overflow: hidden; padding: 0.5rem; z-index: 1;">
                             ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.7rem; color: rgba(255,255,255,0.6); line-height: 1.5; margin-bottom: 0.75rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
@@ -48769,12 +48792,12 @@
                         ` : ''}
                         
                         <!-- Section title right top -->
-                        <div contenteditable="true" style="position: absolute; right: 5%; top: 25%; width: 27%; font-size: 1.8rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
+                        <div contenteditable="true" style="position: absolute; right: 5%; top: 25%; width: 26%; font-size: 1.8rem; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: -0.01em; cursor: text; padding: 4px 8px; border-radius: 4px; line-height: 1.1; word-wrap: break-word; overflow-wrap: break-word;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideTitle(${idx}, this.textContent.replace(/<br>/g, ' '))">
                             ${formatTitleWithBreaks(title)}
                         </div>
                         
                         <!-- Content area right bottom -->
-                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; right: 5%; top: 50%; width: 27%; height: 37%; overflow: hidden; padding: 0.5rem; z-index: 1;">
+                        <div class="slide-module-content" data-slide-idx="${idx}" style="position: absolute; right: 5%; top: 50%; width: 26%; height: 37%; overflow: hidden; padding: 0.5rem; z-index: 1;">
                             ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
                             <div contenteditable="true" style="font-size: 0.65rem; color: rgba(255,255,255,0.6); line-height: 1.4; margin-bottom: 0.5rem; cursor: text; padding: 4px; border-radius: 3px; font-family: 'Poppins', sans-serif;" onfocus="this.style.background='rgba(255,255,255,0.1)'" onblur="this.style.background='transparent'; updateSlideDescription(${idx}, this.textContent)">
                                 ${escapeHtml(description)}
