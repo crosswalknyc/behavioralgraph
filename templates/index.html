@@ -24372,9 +24372,10 @@
                 const matchingProfiles = profiles.filter(p => {
                     const fullName = getProfileFullName(p).toLowerCase();
                     const cat = (p.category || 'UNCATEGORIZED').toLowerCase();
+                    const catDisplay = getCategoryDisplayLabel(p.category || 'UNCATEGORIZED').toLowerCase();
                     const isSvod = p.is_svod || (p.key && p.key.startsWith('svod-acquisition/')) || (p.s3_key && p.bucket === 'svod-acquisition');
                     const masterCat = getMasterCategory(p.category || 'UNCATEGORIZED', isSvod).toLowerCase();
-                    return fullName.includes(searchTerm) || cat.includes(searchTerm) || masterCat.includes(searchTerm);
+                    return fullName.includes(searchTerm) || cat.includes(searchTerm) || catDisplay.includes(searchTerm) || masterCat.includes(searchTerm);
                 });
                 
                 if (matchingProfiles.length === 0) {
@@ -24405,7 +24406,7 @@
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <span style="font-size: 0.9rem; opacity: 0.7;">${icon}</span>
                                 <span style="flex: 1;">${fullName}</span>
-                                <span style="font-size: 0.75rem; color: var(--text-secondary); opacity: 0.6;">${cat}</span>
+                                <span style="font-size: 0.75rem; color: var(--text-secondary); opacity: 0.6;">${getCategoryDisplayLabel(cat)}</span>
                             </div>
                         </div>
                     `;
@@ -24471,7 +24472,7 @@
                     html += `
                         <div class="profile-cat-item ${isExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleDashCategory('${catId}')">
                             <span class="cat-arrow">▸</span>
-                            <span class="profile-cat-label">${cat}</span>
+                            <span class="profile-cat-label">${getCategoryDisplayLabel(cat)}</span>
                             <span class="profile-cat-count">(${items.length})</span>
                         </div>
                         <div class="profile-cat-children ${isExpanded ? 'open' : ''}" id="cat-${catId}">
@@ -41035,6 +41036,14 @@
             'TALENT': '⭐',
             'SVOD ACQUISITION': '📺'  // TV icon for SVOD
         };
+        
+        // Display labels for sub-categories (e.g. PLATFORMS under Platforms -> Streaming Video)
+        const CATEGORY_DISPLAY_LABELS = {
+            'PLATFORMS': 'Streaming Video'
+        };
+        function getCategoryDisplayLabel(cat) {
+            return CATEGORY_DISPLAY_LABELS[(cat || '').toUpperCase()] || cat;
+        }
         
         function getMasterCategory(category, isSvod = false) {
             // If this is a SVOD file, it's always under SVOD ACQUISITION master
