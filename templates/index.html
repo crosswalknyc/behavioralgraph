@@ -9964,30 +9964,42 @@
         
         .slide-draggable-section .drag-handle {
             position: absolute;
-            top: -12px;
+            top: -14px;
             left: 4px;
             background: rgba(200, 230, 0, 0.95);
             color: #000;
             font-size: 0.5rem;
             font-weight: 700;
-            padding: 2px 6px;
+            padding: 3px 8px;
             border-radius: 3px;
             opacity: 0;
             transition: opacity 0.15s ease;
-            pointer-events: none;
+            pointer-events: auto;
+            cursor: grab;
             white-space: nowrap;
             z-index: 100;
             text-transform: uppercase;
             letter-spacing: 0.03em;
+            user-select: none;
         }
         
         .slide-draggable-section:hover .drag-handle {
             opacity: 1;
         }
         
+        .slide-draggable-section .drag-handle:hover {
+            background: var(--accent-lime);
+            transform: scale(1.05);
+        }
+        
+        .slide-draggable-section .drag-handle:active {
+            cursor: grabbing;
+        }
+        
         .slide-draggable-section.dragging .drag-handle {
             opacity: 1;
             background: var(--accent-lime);
+            cursor: grabbing;
         }
         
         /* Title slide large text style */
@@ -35355,8 +35367,13 @@
         }
         
         function toggleVizPanel(slideIdx) {
-            const panel = document.getElementById(`vizPanel${slideIdx}`);
-            if (!panel) return;
+            let panel = document.getElementById(`vizPanel${slideIdx}`);
+            const toggle = document.getElementById(`vizToggle${slideIdx}`);
+            
+            if (!panel) {
+                console.warn('Panel not found for slideIdx:', slideIdx);
+                return;
+            }
             
             // Close all other panels first
             document.querySelectorAll('.viz-control-panel').forEach(p => {
@@ -35366,7 +35383,27 @@
             });
             
             // Toggle this panel
-            panel.classList.toggle('expanded');
+            const isExpanding = !panel.classList.contains('expanded');
+            
+            if (isExpanding) {
+                // Move panel to body if not already there (ensures it's always visible)
+                if (panel.parentElement !== document.body) {
+                    document.body.appendChild(panel);
+                }
+                
+                // Position the panel near the toggle button
+                if (toggle) {
+                    const toggleRect = toggle.getBoundingClientRect();
+                    // Position panel below and to the left of the button
+                    panel.style.top = Math.min(toggleRect.bottom + 10, window.innerHeight - 520) + 'px';
+                    panel.style.right = Math.max(10, window.innerWidth - toggleRect.right) + 'px';
+                    panel.style.left = 'auto';
+                }
+                
+                panel.classList.add('expanded');
+            } else {
+                panel.classList.remove('expanded');
+            }
         }
         
         // Drag functionality for viz control panels
@@ -35508,12 +35545,16 @@
         let slideSectionSlideIdx = null;
         
         function startDragSlideSection(event, slideIdx, sectionType) {
-            // Don't drag if clicking on editable content or buttons
-            if (event.target.closest('[contenteditable="true"]') || 
+            // Allow dragging from the drag handle
+            const isDragHandle = event.target.closest('.drag-handle');
+            
+            // Don't drag if clicking on editable content, buttons, or inputs (unless clicking drag handle)
+            if (!isDragHandle && (
+                event.target.closest('[contenteditable="true"]') || 
                 event.target.closest('button') || 
                 event.target.closest('input') ||
                 event.target.closest('.viz-control-toggle') ||
-                event.target.closest('.viz-control-panel')) {
+                event.target.closest('.viz-control-panel'))) {
                 return;
             }
             
