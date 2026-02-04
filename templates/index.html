@@ -40647,6 +40647,7 @@
         // Sorting state
         let currentSortColumn = null;
         let currentSortSection = null;
+        let currentSortDirection = 'desc'; // 'asc' or 'desc'
         
         // Primary profile state (index of the primary profile in comparison)
         let primaryProfileIndex = 0;
@@ -40701,6 +40702,13 @@
             const profiles = window.comparisonProfilesData;
             if (!profiles || profiles.length === 0) return;
 
+            // Toggle direction if clicking the same column again
+            if (currentSortSection === section && currentSortColumn === profileIndex) {
+                currentSortDirection = currentSortDirection === 'desc' ? 'asc' : 'desc';
+            } else {
+                currentSortDirection = 'desc'; // Default to descending for new column
+            }
+            
             currentSortColumn = profileIndex;
             currentSortSection = section;
             
@@ -40875,7 +40883,8 @@
                 const primaryClass = isPrimary ? 'primary-col' : '';
                 // Only show median age badge in the Age section
                 const ageDisplay = (section === 'age' && medianAge > 0) ? `<span class="header-median-age" title="Median Age">Median: ${medianAge.toFixed(2)}</span>` : '';
-                return `<th class="sortable ${isSorted ? 'sorted' : ''} ${primaryClass}" style="border-bottom: 3px solid ${color}" onclick="sortComparisonTable('${section}', ${idx})">${name} ${ageDisplay}</th>`;
+                const sortIndicator = isSorted ? (currentSortDirection === 'asc' ? ' ↑' : ' ↓') : '';
+                return `<th class="sortable ${isSorted ? 'sorted' : ''} ${primaryClass}" style="border-bottom: 3px solid ${color}; cursor: pointer;" onclick="sortComparisonTable('${section}', ${idx})">${name}${sortIndicator} ${ageDisplay}</th>`;
             };
 
             // Build profile tabs bar for comparison (no median age in tabs)
@@ -41390,11 +41399,18 @@
                 }
                 return row.pctData[idx] || 0;
             };
+            
+            // Get sort direction (use global currentSortDirection)
+            const behSortDir = currentSortDirection || 'desc';
 
             // Sort by selected profile column or by primary profile descending
             const sortIdx = (sortByProfileIdx !== null && sortByProfileIdx >= 0) ? sortByProfileIdx : ((primaryProfileIndex >= 0 && primaryProfileIndex < profiles.length) ? primaryProfileIndex : null);
             if (sortIdx !== null) {
-                dataRows.sort((a, b) => getSortValue(b, sortIdx) - getSortValue(a, sortIdx));
+                if (behSortDir === 'asc') {
+                    dataRows.sort((a, b) => getSortValue(a, sortIdx) - getSortValue(b, sortIdx));
+                } else {
+                    dataRows.sort((a, b) => getSortValue(b, sortIdx) - getSortValue(a, sortIdx));
+                }
             } else {
                 if (sortType === 'index') {
                     dataRows.sort((a, b) => Math.max(...b.indexData) - Math.max(...a.indexData));
@@ -41495,11 +41511,18 @@
                 }
                 return row.pctData[idx] || 0;
             };
+            
+            // Get sort direction (use global currentSortDirection)
+            const locSortDir = currentSortDirection || 'desc';
 
             // Sort by selected profile column or by primary profile descending
             const sortIdx = (sortByProfileIdx !== null && sortByProfileIdx >= 0) ? sortByProfileIdx : ((primaryProfileIndex >= 0 && primaryProfileIndex < profiles.length) ? primaryProfileIndex : null);
             if (sortIdx !== null) {
-                dataRows.sort((a, b) => getSortValue(b, sortIdx) - getSortValue(a, sortIdx));
+                if (locSortDir === 'asc') {
+                    dataRows.sort((a, b) => getSortValue(a, sortIdx) - getSortValue(b, sortIdx));
+                } else {
+                    dataRows.sort((a, b) => getSortValue(b, sortIdx) - getSortValue(a, sortIdx));
+                }
             } else {
                 if (sortType === 'index') {
                     dataRows.sort((a, b) => Math.max(...b.indexData) - Math.max(...a.indexData));
@@ -41590,10 +41613,17 @@
                 }
                 return row.pctData[idx] || 0;
             };
+            
+            // Get sort direction (use global currentSortDirection)
+            const sortDir = currentSortDirection || 'desc';
 
             // Sort by selected profile column or default sort
             if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
-                dataRows.sort((a, b) => getSortValue(b, sortByProfileIdx) - getSortValue(a, sortByProfileIdx));
+                if (sortDir === 'asc') {
+                    dataRows.sort((a, b) => getSortValue(a, sortByProfileIdx) - getSortValue(b, sortByProfileIdx));
+                } else {
+                    dataRows.sort((a, b) => getSortValue(b, sortByProfileIdx) - getSortValue(a, sortByProfileIdx));
+                }
             } else if (demoType === 'age' && sortType === 'age') {
                 // By age ascending (youngest first): <16 at top, then 17-18, 19-20, ..., 60+ at bottom
                 const getAgeSortKey = (val) => {
