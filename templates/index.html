@@ -46989,11 +46989,21 @@
                     : currentUsername || 'Your Name';
                 const presenterCompany = currentUserCompany || 'Your Company';
                 
+                // Profile image HTML
+                const profileImageHtml = profileImage 
+                    ? `<img src="${profileImage}" alt="${escapeHtml(profileName)}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;">`
+                    : `<div style="width: 100%; height: 100%; background: linear-gradient(135deg, #374151, #1f2937); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 3rem; color: rgba(255,255,255,0.3);">📊</div>`;
+                
                 return `
                     <div style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: flex; flex-direction: column;">
                         <!-- Large profile name -->
                         <div style="position: absolute; left: -1%; top: -2%; font-size: 8rem; font-weight: 700; color: #ffffff; line-height: 1; letter-spacing: -0.03em; text-transform: uppercase;">
                             ${escapeHtml(profileName)}.
+                        </div>
+                        
+                        <!-- Profile image - left justified under profile name -->
+                        <div style="position: absolute; left: 5%; top: 35%; width: 180px; height: 180px; border: 3px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.4);">
+                            ${profileImageHtml}
                         </div>
                         
                         <!-- Right side info -->
