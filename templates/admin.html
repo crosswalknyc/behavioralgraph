@@ -5121,7 +5121,8 @@
             const useAllRuns = selectedRunKeys.length >= allRuns.length || Object.keys(runsData).length === 0;
             runAccessDefaultKeys = useAllRuns ? ['*'] : selectedRunKeys; // Store for expandRunCheckboxes
             document.getElementById('allRuns').checked = useAllRuns;
-            populateRunCheckboxes(useAllRuns ? ['*'] : selectedRunKeys);
+            // Show all runs so every checkbox gets the correct default state (not just the first 20)
+            populateRunCheckboxes(useAllRuns ? ['*'] : selectedRunKeys, true);
         }
         
         async function restoreBehavioralCategoryDefaults() {
