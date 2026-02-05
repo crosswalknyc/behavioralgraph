@@ -46362,12 +46362,12 @@
             `).join('');
             
             modal.innerHTML = `
-                <div class="deck-workspace-content" style="max-width: 520px;">
-                    <div class="deck-workspace-header">
+                <div class="deck-workspace-content" style="max-width: 520px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden;">
+                    <div class="deck-workspace-header" style="flex-shrink: 0;">
                         <h2>➕ Add Comparison to Deck</h2>
                         <button onclick="document.getElementById('comparisonDeckModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
                     </div>
-                    <div style="padding: 1.5rem; text-align: left;">
+                    <div style="padding: 1.5rem; text-align: left; overflow-y: auto; flex: 1; min-height: 0;">
                         <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-dark); border-radius: 8px; border-left: 3px solid var(--accent-cyan);">
                             <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Adding:</div>
                             <div style="font-weight: 600;">Comparison: ${sectionTitle}</div>
