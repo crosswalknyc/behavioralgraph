@@ -9406,6 +9406,13 @@ def release_purgatory_item():
             return jsonify({'success': False, 'error': 'Item not found in purgatory'})
         
         item = metadata[purgatory_id]
+        if data.get('title'):
+            item['title'] = data['title']
+            item['project_name'] = data['title']
+        if data.get('category'):
+            item['category'] = data['category']
+        save_purgatory_metadata(metadata)
+        item = metadata[purgatory_id]
         
         success, result = release_from_purgatory(purgatory_id)
         

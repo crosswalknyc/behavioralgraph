@@ -2121,6 +2121,7 @@
             </div>
             <input type="hidden" id="profileImageKey">
             <input type="hidden" id="profileImageName">
+            <input type="hidden" id="profileImagePurgatoryId">
             
             <div style="text-align: center; margin-bottom: 1.5rem;">
                 <div id="profileImagePreview" style="width: 120px; height: 120px; border-radius: 50%; background: var(--bg-input); margin: 0 auto 1rem; overflow: hidden; border: 3px solid var(--border-color);">
@@ -2493,6 +2494,65 @@
         // PURGATORY FUNCTIONS
         // ============================================================================
         
+        /** Same category options as Change Category modal (brand/CMS categories). */
+        function getPurgatoryCategoryOptions(selectedCategory) {
+            const sel = String(selectedCategory || 'Uncategorized').trim() || 'Uncategorized';
+            const isSel = (v) => (v === sel || String(v).toUpperCase() === sel.toUpperCase());
+            return `
+                <option value="Uncategorized" ${isSel('Uncategorized') ? 'selected' : ''}>Uncategorized</option>
+                <optgroup label="📺 CONTENT">
+                    <option value="GAME PLAYERS" ${isSel('GAME PLAYERS') ? 'selected' : ''}>GAME PLAYERS</option>
+                    <option value="GAMES" ${isSel('GAMES') ? 'selected' : ''}>GAMES</option>
+                    <option value="MOVIE THEATER" ${isSel('MOVIE THEATER') ? 'selected' : ''}>MOVIE THEATER</option>
+                    <option value="PODCAST" ${isSel('PODCAST') ? 'selected' : ''}>PODCAST</option>
+                    <option value="SERIES - APPLE" ${isSel('SERIES - APPLE') ? 'selected' : ''}>SERIES - APPLE</option>
+                    <option value="SERIES - FXP" ${isSel('SERIES - FXP') ? 'selected' : ''}>SERIES - FXP</option>
+                    <option value="SERIES - HBO ENTERTAINMENT" ${isSel('SERIES - HBO ENTERTAINMENT') ? 'selected' : ''}>SERIES - HBO ENTERTAINMENT</option>
+                    <option value="SERIES - HBO MAX" ${isSel('SERIES - HBO MAX') ? 'selected' : ''}>SERIES - HBO MAX</option>
+                    <option value="SERIES - NETFLIX" ${isSel('SERIES - NETFLIX') ? 'selected' : ''}>SERIES - NETFLIX</option>
+                    <option value="SERIES - PARAMOUNT TV STUDIOS" ${isSel('SERIES - PARAMOUNT TV STUDIOS') ? 'selected' : ''}>SERIES - PARAMOUNT TV STUDIOS</option>
+                    <option value="SERIES - SONY" ${isSel('SERIES - SONY') ? 'selected' : ''}>SERIES - SONY</option>
+                    <option value="SERIES - UNIVERSAL TV" ${isSel('SERIES - UNIVERSAL TV') ? 'selected' : ''}>SERIES - UNIVERSAL TV</option>
+                    <option value="SERIES - WBD" ${isSel('SERIES - WBD') ? 'selected' : ''}>SERIES - WBD</option>
+                </optgroup>
+                <optgroup label="⭐ TALENT">
+                    <option value="ACTOR" ${isSel('ACTOR') ? 'selected' : ''}>ACTOR</option>
+                    <option value="ATHLETE" ${isSel('ATHLETE') ? 'selected' : ''}>ATHLETE</option>
+                    <option value="CREATOR/INFLUENCER" ${isSel('CREATOR/INFLUENCER') ? 'selected' : ''}>CREATOR/INFLUENCER</option>
+                    <option value="HOST/PERSONALITY" ${isSel('HOST/PERSONALITY') ? 'selected' : ''}>HOST/PERSONALITY</option>
+                    <option value="MUSICIAN/BAND" ${isSel('MUSICIAN/BAND') ? 'selected' : ''}>MUSICIAN/BAND</option>
+                    <option value="PODCASTER" ${isSel('PODCASTER') ? 'selected' : ''}>PODCASTER</option>
+                    <option value="WRITER/DIRECTOR/AUTHOR/ARTIST" ${isSel('WRITER/DIRECTOR/AUTHOR/ARTIST') ? 'selected' : ''}>WRITER/DIRECTOR/AUTHOR/ARTIST</option>
+                </optgroup>
+                <optgroup label="📺 PLATFORMS">
+                    <option value="APP/PLATFORM" ${isSel('APP/PLATFORM') ? 'selected' : ''}>APP/PLATFORM</option>
+                    <option value="BROADCAST/CABLE" ${isSel('BROADCAST/CABLE') ? 'selected' : ''}>BROADCAST/CABLE</option>
+                    <option value="STREAMING VIDEO" ${isSel('STREAMING VIDEO') ? 'selected' : ''}>STREAMING VIDEO</option>
+                    <option value="STREAMING MUSIC" ${isSel('STREAMING MUSIC') ? 'selected' : ''}>STREAMING MUSIC</option>
+                    <option value="SOCIAL MEDIA" ${isSel('SOCIAL MEDIA') ? 'selected' : ''}>SOCIAL MEDIA</option>
+                    <option value="VIRTUAL MVPD FAST" ${isSel('VIRTUAL MVPD FAST') ? 'selected' : ''}>VIRTUAL MVPD FAST</option>
+                </optgroup>
+                <optgroup label="📦 BRAND">
+                    <option value="APPAREL" ${isSel('APPAREL') ? 'selected' : ''}>APPAREL</option>
+                    <option value="BEAUTY" ${isSel('BEAUTY') ? 'selected' : ''}>BEAUTY</option>
+                    <option value="BEVERAGE" ${isSel('BEVERAGE') ? 'selected' : ''}>BEVERAGE</option>
+                    <option value="FOOTWEAR" ${isSel('FOOTWEAR') ? 'selected' : ''}>FOOTWEAR</option>
+                    <option value="GROCERY" ${isSel('GROCERY') ? 'selected' : ''}>GROCERY</option>
+                    <option value="QSR" ${isSel('QSR') ? 'selected' : ''}>QSR</option>
+                    <option value="RETAILERS" ${isSel('RETAILERS') ? 'selected' : ''}>RETAILERS</option>
+                    <option value="TELECOM" ${isSel('TELECOM') ? 'selected' : ''}>TELECOM</option>
+                    <option value="CREDIT PROVIDER" ${isSel('CREDIT PROVIDER') ? 'selected' : ''}>CREDIT PROVIDER</option>
+                </optgroup>
+                <optgroup label="⚽ SPORT">
+                    <option value="MLB" ${isSel('MLB') ? 'selected' : ''}>MLB</option>
+                    <option value="NBA" ${isSel('NBA') ? 'selected' : ''}>NBA</option>
+                    <option value="NFL" ${isSel('NFL') ? 'selected' : ''}>NFL</option>
+                    <option value="WNBA" ${isSel('WNBA') ? 'selected' : ''}>WNBA</option>
+                    <option value="SPORTS ORGANIZATIONS" ${isSel('SPORTS ORGANIZATIONS') ? 'selected' : ''}>SPORTS ORGANIZATIONS</option>
+                </optgroup>
+            `;
+        }
+        
         async function loadPurgatoryItems() {
             try {
                 const response = await fetch('/api/admin/purgatory', {
@@ -2554,36 +2614,40 @@
                 const createdAt = item.created_at ? new Date(item.created_at).toLocaleString() : 'Unknown';
                 const sourceLabel = item.source_type === 'svod_acquisition' ? '📺 SVOD' : '🎯 Profile';
                 const imageUrl = item.image_url || '';
+                const titleVal = (item.title || item.project_name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const purgatoryIdEsc = (item.purgatory_id || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 
+                const itemImageUrl = (item.image_url || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 html += `
-                    <tr data-purgatory-id="${item.purgatory_id}">
+                    <tr data-purgatory-id="${(item.purgatory_id || '').replace(/"/g, '&quot;')}" data-image-url="${itemImageUrl}">
                         <td>
-                            <div class="purgatory-image-preview" style="width: 60px; height: 60px; border-radius: 8px; overflow: hidden; background: var(--bg-input); display: flex; align-items: center; justify-content: center;">
+                            <div class="purgatory-image-preview" style="width: 60px; height: 60px; border-radius: 8px; overflow: hidden; background: var(--bg-input); display: flex; align-items: center; justify-content: center; position: relative;">
                                 ${imageUrl ? 
-                                    `<img src="${imageUrl}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.parentElement.innerHTML='📊'">` : 
+                                    `<img src="${imageUrl.replace(/"/g, '&quot;')}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.parentElement.innerHTML='📊'">` : 
                                     '<span style="font-size: 1.5rem;">📊</span>'
                                 }
                             </div>
+                            <button type="button" class="btn btn-small btn-secondary" data-action="purgatory-edit-image" title="Add or edit image" style="margin-top: 0.25rem; width: 100%; font-size: 0.7rem;">🖼️ Edit image</button>
                         </td>
                         <td>
-                            <input type="text" class="purgatory-title-input" value="${item.title || item.project_name}" 
+                            <input type="text" class="purgatory-title-input" value="${titleVal}" 
                                    style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; padding: 0.5rem; color: var(--text-primary); width: 100%;"
                                    data-field="title">
                         </td>
                         <td>
-                            <input type="text" class="purgatory-category-input" value="${item.category || ''}" 
-                                   style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; padding: 0.5rem; color: var(--text-primary); width: 100%;"
-                                   data-field="category">
+                            <select class="purgatory-category-select" data-field="category" style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; padding: 0.5rem; color: var(--text-primary); width: 100%; font-size: 0.85rem;">
+                                ${getPurgatoryCategoryOptions(item.category || 'Uncategorized')}
+                            </select>
                         </td>
                         <td><span class="badge ${item.source_type === 'svod_acquisition' ? 'badge-admin' : 'badge-user'}">${sourceLabel}</span></td>
                         <td style="color: var(--text-secondary);">${item.created_by}</td>
                         <td style="color: var(--text-secondary); font-size: 0.8rem;">${createdAt}</td>
                         <td>
                             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                                <button class="btn btn-small btn-secondary" onclick="previewPurgatoryFile('${item.purgatory_id}')" title="Preview">👁️</button>
-                                <button class="btn btn-small btn-secondary" onclick="downloadPurgatoryFile('${item.purgatory_id}')" title="Download">⬇️</button>
-                                <button class="btn btn-small btn-success" onclick="releasePurgatoryItem('${item.purgatory_id}')" title="Release">✅ Release</button>
-                                <button class="btn btn-small btn-danger" onclick="rejectPurgatoryItem('${item.purgatory_id}')" title="Reject">❌</button>
+                                <button class="btn btn-small btn-secondary" onclick="previewPurgatoryFile('${purgatoryIdEsc}')" title="Preview">👁️</button>
+                                <button class="btn btn-small btn-secondary" onclick="downloadPurgatoryFile('${purgatoryIdEsc}')" title="Download">⬇️</button>
+                                <button class="btn btn-small btn-success" onclick="releasePurgatoryItem('${purgatoryIdEsc}')" title="Release">✅ Release</button>
+                                <button class="btn btn-small btn-danger" onclick="rejectPurgatoryItem('${purgatoryIdEsc}')" title="Reject">❌</button>
                             </div>
                         </td>
                     </tr>
@@ -2595,10 +2659,13 @@
         }
         
         async function releasePurgatoryItem(purgatoryId) {
-            // Get the updated values from the row
-            const row = document.querySelector(`tr[data-purgatory-id="${purgatoryId}"]`);
+            // Get the updated values from the row (category is a select)
+            const rows = document.querySelectorAll('#purgatoryItemsList tr[data-purgatory-id]');
+            const row = Array.from(rows).find(tr => tr.getAttribute('data-purgatory-id') === purgatoryId);
+            if (!row) { alert('Row not found'); return; }
             const title = row.querySelector('input[data-field="title"]').value;
-            const category = row.querySelector('input[data-field="category"]').value;
+            const categorySelect = row.querySelector('select[data-field="category"]');
+            const category = categorySelect ? categorySelect.value : '';
             
             if (!confirm(`Release "${title}" to the main dashboard?\n\nThis will make it visible to all users.`)) {
                 return;
@@ -2660,6 +2727,23 @@
         function downloadPurgatoryFile(purgatoryId) {
             window.open(`/api/purgatory/download/${encodeURIComponent(purgatoryId)}`, '_blank');
         }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const listEl = document.getElementById('purgatoryItemsList');
+            if (listEl) {
+                listEl.addEventListener('click', function(e) {
+                    const btn = e.target.closest('[data-action="purgatory-edit-image"]');
+                    if (!btn) return;
+                    const row = btn.closest('tr[data-purgatory-id]');
+                    if (!row) return;
+                    const purgatoryId = row.getAttribute('data-purgatory-id');
+                    const titleInput = row.querySelector('input[data-field="title"]');
+                    const profileName = (titleInput && titleInput.value) ? titleInput.value.trim() : '';
+                    const currentImageUrl = row.getAttribute('data-image-url') || '';
+                    openProfileImageModal(profileName, '', purgatoryId, currentImageUrl);
+                });
+            }
+        });
         
         async function previewPurgatoryFile(purgatoryId) {
             // Open in new tab for preview
@@ -5562,40 +5646,50 @@
 
         // ============ PROFILE IMAGE MANAGEMENT ============
         
-        async function openProfileImageModal(profileName, fileKey) {
-            document.getElementById('profileImageKey').value = fileKey;
-            document.getElementById('profileImageName').value = profileName;
-            document.getElementById('profileImageTitle').textContent = `Set Image: ${profileName}`;
+        async function openProfileImageModal(profileName, fileKey, purgatoryId, purgatoryImageUrl) {
+            document.getElementById('profileImageKey').value = fileKey || '';
+            document.getElementById('profileImageName').value = profileName || '';
+            document.getElementById('profileImagePurgatoryId').value = purgatoryId || '';
+            document.getElementById('profileImageTitle').textContent = purgatoryId ? `Set image (Purgatory): ${profileName || 'Item'}` : `Set Image: ${profileName}`;
             document.getElementById('profileImageFile').value = '';
             document.getElementById('profileImageUrl').value = '';
             
-            // Check for existing custom image
-            try {
-                const response = await fetch(`/api/profile-image-info/${encodeURIComponent(profileName)}`);
-                const data = await response.json();
-                
-                const preview = document.getElementById('profileImagePreviewImg');
-                const sourceLabel = document.getElementById('currentImageSource');
-                
-                if (data.success && data.image_url) {
-                    preview.src = data.image_url;
-                    preview.style.display = 'block';
-                    sourceLabel.innerHTML = `Current source: <strong style="color: ${data.is_custom ? 'var(--accent-lime)' : 'var(--accent-blue)'}">${data.source || 'auto'}</strong>`;
-                    if (data.is_custom) {
-                        document.getElementById('profileImageUrl').value = data.image_url;
+            const preview = document.getElementById('profileImagePreviewImg');
+            const sourceLabel = document.getElementById('currentImageSource');
+            
+            if (purgatoryImageUrl && (purgatoryImageUrl.startsWith('/') || purgatoryImageUrl.startsWith('http'))) {
+                preview.src = purgatoryImageUrl;
+                preview.style.display = 'block';
+                sourceLabel.innerHTML = 'Current: <strong style="color: var(--accent-lime);">Purgatory image</strong>';
+                document.getElementById('profileImageUrl').value = purgatoryImageUrl;
+            } else {
+                try {
+                    const response = await fetch(`/api/profile-image-info/${encodeURIComponent(profileName)}`);
+                    const data = await response.json();
+                    
+                    if (data.success && data.image_url) {
+                        preview.src = data.image_url;
+                        preview.style.display = 'block';
+                        sourceLabel.innerHTML = `Current source: <strong style="color: ${data.is_custom ? 'var(--accent-lime)' : 'var(--accent-blue)'}">${data.source || 'auto'}</strong>`;
+                        if (data.is_custom) {
+                            document.getElementById('profileImageUrl').value = data.image_url;
+                        }
+                    } else {
+                        preview.style.display = 'none';
+                        sourceLabel.textContent = 'No image found';
                     }
-                } else {
+                } catch (e) {
+                    console.error('Error loading profile image info:', e);
                     preview.style.display = 'none';
                     sourceLabel.textContent = 'No image found';
                 }
-            } catch (e) {
-                console.error('Error loading profile image info:', e);
             }
             
             document.getElementById('profileImageModal').classList.add('show');
         }
         
         function closeProfileImageModal() {
+            document.getElementById('profileImagePurgatoryId').value = '';
             document.getElementById('profileImageModal').classList.remove('show');
         }
         
@@ -5888,6 +5982,25 @@
                     console.log('✅ Image saved successfully!', data);
                     showToast('Profile image saved!');
                     
+                    const purgatoryId = document.getElementById('profileImagePurgatoryId').value;
+                    if (purgatoryId && data.image_url) {
+                        try {
+                            const updateRes = await fetch('/api/admin/purgatory/update', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'same-origin',
+                                body: JSON.stringify({ purgatory_id: purgatoryId, image_url: data.image_url })
+                            });
+                            const updateData = await updateRes.json();
+                            if (updateData.success) {
+                                showToast('Image saved and purgatory item updated');
+                                loadPurgatoryItems();
+                            }
+                        } catch (e) {
+                            console.error('Purgatory update error:', e);
+                        }
+                    }
+                    
                     // Verify it's in the cache
                     setTimeout(async () => {
                         try {
@@ -5905,6 +6018,7 @@
                     }, 1000);
                     
                     closeProfileImageModal();
+                    document.getElementById('profileImagePurgatoryId').value = '';
                     // Small delay to ensure cache is updated on server
                     setTimeout(() => {
                         loadContentFiles(); // Refresh to show new image
