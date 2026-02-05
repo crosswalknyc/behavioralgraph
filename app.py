@@ -7381,16 +7381,41 @@ Respond ONLY with valid JSON, no additional text."""
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+def _normalize_sec_quarter(quarter):
+    """Normalize quarter string to 'Qn YYYY' (e.g. Q4 2024) for consistent matching with frontend."""
+    if not quarter or not isinstance(quarter, str):
+        return (quarter or '').strip()
+    s = quarter.strip()
+    # Already "Q1 2024" style
+    if re.match(r'^Q[1-4]\s+\d{4}$', s, re.IGNORECASE):
+        return s[0].upper() + s[1:].lower()
+    # "2024 Q1" or "2024-Q1"
+    m = re.match(r'^(\d{4})[\s\-]+Q?([1-4])$', s, re.IGNORECASE)
+    if m:
+        return 'Q' + m.group(2) + ' ' + m.group(1)
+    return s
+
+
 @app.route('/api/hedge-fund-iq/sec-actuals/<ticker>')
 @requires_auth
 def get_sec_actuals(ticker):
-    """Get SEC actuals for a ticker."""
+    """Get SEC actuals for a ticker. Ticker is normalized to uppercase for lookup."""
     try:
-        # Load SEC actuals from S3
         all_actuals = load_json_from_s3(SEC_ACTUALS_FILE)
+        ticker_upper = (ticker or '').strip().upper()
+        # Try normalized key first, then original (for legacy data)
+        actuals = all_actuals.get(ticker_upper) or all_actuals.get(ticker) or {}
+        # Normalize quarter keys in response so frontend "Q4 2024" matches
+        if actuals and isinstance(actuals, dict):
+            normalized = {}
+            for q, val in actuals.items():
+                nq = _normalize_sec_quarter(q)
+                if nq:
+                    normalized[nq] = val
+            actuals = normalized
         return jsonify({
             'success': True,
-            'actuals': all_actuals.get(ticker, {})
+            'actuals': actuals
         })
     except Exception as e:
         print(f"❌ Error getting SEC actuals: {e}")
@@ -7400,33 +7425,37 @@ def get_sec_actuals(ticker):
 @app.route('/api/hedge-fund-iq/sec-actuals', methods=['POST'])
 @requires_admin
 def update_sec_actuals():
-    """Update SEC actuals for a ticker and quarter (admin only)."""
+    """Update SEC actuals for a ticker and quarter (admin only). Ticker and quarter are normalized for consistent storage."""
     try:
         data = request.get_json()
-        ticker = data.get('ticker')
-        quarter = data.get('quarter')
+        ticker_raw = data.get('ticker')
+        quarter_raw = data.get('quarter')
         actual_value = data.get('actual_value')
         
-        if not ticker or not quarter:
+        if not ticker_raw or not quarter_raw:
             return jsonify({'success': False, 'error': 'Ticker and quarter required'}), 400
         
-        # Load existing actuals from S3
+        ticker = (ticker_raw or '').strip().upper()
+        quarter = _normalize_sec_quarter(quarter_raw)
+        if not quarter:
+            return jsonify({'success': False, 'error': 'Invalid quarter format. Use e.g. Q1 2026'}), 400
+        
         all_actuals = load_json_from_s3(SEC_ACTUALS_FILE)
         
-        # Update actuals for this ticker
+        # Merge any legacy lowercase ticker key into uppercase so we don't lose data
+        if ticker not in all_actuals and ticker_raw.strip() in all_actuals:
+            all_actuals[ticker] = dict(all_actuals[ticker_raw.strip()])
+        
         if ticker not in all_actuals:
             all_actuals[ticker] = {}
         
         if actual_value is None or actual_value == '':
-            # Remove the entry if value is empty
             if quarter in all_actuals[ticker]:
                 del all_actuals[ticker][quarter]
         else:
             all_actuals[ticker][quarter] = float(actual_value)
         
-        # Save back to S3
         save_json_to_s3(SEC_ACTUALS_FILE, all_actuals)
-        
         return jsonify({'success': True})
         
     except Exception as e:
@@ -13261,6 +13290,15 @@ def submit_svod_acquisition():
         if not platform_url_patterns:
             return jsonify({'error': 'At least one platform URL pattern is required'}), 400
         
+        # Genre: optional; if provided must be one of the allowed SVOD genres
+        SVOD_ALLOWED_GENRES = [
+            'Serialized Drama', 'Non-Scripted Competition', 'Adult Animation', 'Stand Up Comedy',
+            'Single Camera Sitcom', 'Procedural Drama', 'Multi Camera Sitcom', 'Live Sports'
+        ]
+        genre = (data.get('genre') or '').strip()
+        if genre and genre not in SVOD_ALLOWED_GENRES:
+            return jsonify({'error': f'Genre must be one of: {", ".join(SVOD_ALLOWED_GENRES)}'}), 400
+        
         # Create job
         job_id = str(uuid.uuid4())
         username = user.get('username', 'unknown')
@@ -13285,7 +13323,8 @@ def submit_svod_acquisition():
                 'show_search_terms': show_search_terms,
                 'is_new_show': data.get('is_new_show', False),
                 'platform_name': platform_name,
-                'platform_url_patterns': platform_url_patterns
+                'platform_url_patterns': platform_url_patterns,
+                'genre': genre if genre else ''
             }
         }
         
@@ -13429,7 +13468,8 @@ def run_svod_acquisition(job_id):
             'tracking_mode': None,
             'episode_dates': [],
             'platform_name': params['platform_name'],
-            'platform_url_patterns': params['platform_url_patterns']
+            'platform_url_patterns': params['platform_url_patterns'],
+            'genre': params.get('genre', '') or ''
         }
         
         # Run the analysis function

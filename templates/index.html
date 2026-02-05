@@ -12074,6 +12074,24 @@
                                 
                                 <div class="form-row">
                                     <div class="form-group">
+                                        <label>Genre</label>
+                                        <select id="customSVODGenre" style="padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; min-width: 200px;">
+                                            <option value="">Select genre...</option>
+                                            <option value="Serialized Drama">Serialized Drama</option>
+                                            <option value="Non-Scripted Competition">Non-Scripted Competition</option>
+                                            <option value="Adult Animation">Adult Animation</option>
+                                            <option value="Stand Up Comedy">Stand Up Comedy</option>
+                                            <option value="Single Camera Sitcom">Single Camera Sitcom</option>
+                                            <option value="Procedural Drama">Procedural Drama</option>
+                                            <option value="Multi Camera Sitcom">Multi Camera Sitcom</option>
+                                            <option value="Live Sports">Live Sports</option>
+                                        </select>
+                                        <small>Content genre for the report</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-row">
+                                    <div class="form-group">
                                         <label>Platform URL Patterns (comma-separated)</label>
                                         <input type="text" id="customSVODPlatformURLs" placeholder="e.g., primevideo.com, amazon.com/prime" required>
                                         <small>Enter URL patterns separated by commas</small>
@@ -16553,6 +16571,8 @@
             const showTermsInput = document.getElementById('customSVODShowTerms').value;
             const isNewShow = document.getElementById('customSVODIsNewShow').checked;
             const platformName = document.getElementById('customSVODPlatformName').value;
+            const genreEl = document.getElementById('customSVODGenre');
+            const genre = genreEl ? genreEl.value : '';
             const platformURLsInput = document.getElementById('customSVODPlatformURLs').value;
             
             const showTerms = showTermsInput.split(',').map(t => t.trim()).filter(t => t);
@@ -16572,6 +16592,7 @@
                 show_search_terms: showTerms,
                 is_new_show: isNewShow,
                 platform_name: platformName,
+                genre: genre || '',
                 platform_url_patterns: platformURLs
             };
             
@@ -20165,9 +20186,9 @@
             }
         }
         
-        // Store quarterly data globally for sorting and chart
+        // Store quarterly data globally for sorting and chart. SEC actuals keyed by ticker so each ticker shows its own data.
         let quarterlyDataCache = null;
-        let secActualsCache = null;
+        let secActualsCache = {};
         let currentQuarterlySortMode = 'chronological';
         let historicSortedQuartersCache = [];
         let currentHistoricView = 'table';
@@ -20215,23 +20236,27 @@
             quarterlyDataCache = quarters;
             currentQuarterlySortMode = sortMode;
             
-            // Fetch SEC actuals from backend
-            if (!secActualsCache) {
+            // Fetch SEC actuals for this ticker (cache per ticker so switching tickers shows correct data)
+            const tickerKey = (currentTickerData && currentTickerData.ticker) ? currentTickerData.ticker : '';
+            if (tickerKey && secActualsCache[tickerKey] === undefined) {
                 try {
-                    const response = await fetch(`/api/hedge-fund-iq/sec-actuals/${encodeURIComponent(currentTickerData.ticker)}`, { credentials: 'same-origin' });
+                    const response = await fetch(`/api/hedge-fund-iq/sec-actuals/${encodeURIComponent(tickerKey)}`, { credentials: 'same-origin' });
                     if (response.ok) {
                         const data = await response.json();
                         if (data.success) {
-                            secActualsCache = data.actuals || {};
+                            secActualsCache[tickerKey] = data.actuals || {};
+                        } else {
+                            secActualsCache[tickerKey] = {};
                         }
+                    } else {
+                        secActualsCache[tickerKey] = {};
                     }
                 } catch (error) {
                     console.warn('Could not fetch SEC actuals:', error);
-                    secActualsCache = {};
+                    secActualsCache[tickerKey] = {};
                 }
             }
-            
-            const secActuals = secActualsCache;
+            const secActuals = (tickerKey && secActualsCache[tickerKey]) ? secActualsCache[tickerKey] : {};
             
             let html = '<table class="data-table" style="width: 100%; border-collapse: collapse;"><thead><tr style="background: var(--bg-input); border-bottom: 2px solid var(--border-color);"><th style="padding: 0.75rem; text-align: left;">Quarter</th><th style="padding: 0.75rem; text-align: right;">Total Subs</th><th style="padding: 0.75rem; text-align: right;">Total Cancels</th><th style="padding: 0.75rem; text-align: right;">Net Growth</th><th style="padding: 0.75rem; text-align: right;">Growth %</th><th style="padding: 0.75rem; text-align: right;">SEC Actuals</th><th style="padding: 0.75rem; text-align: right;">Variance</th></tr></thead><tbody>';
             
@@ -20339,7 +20364,8 @@
             if (!chartView) return;
             const quarters = quarterlyDataCache;
             const sortedQuarters = historicSortedQuartersCache;
-            const secActuals = secActualsCache || {};
+            const tickerKey = (currentTickerData && currentTickerData.ticker) ? currentTickerData.ticker : '';
+            const secActuals = (tickerKey && secActualsCache[tickerKey]) ? secActualsCache[tickerKey] : {};
             if (!quarters || !sortedQuarters || sortedQuarters.length === 0) {
                 chartView.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary);">No quarterly data. Load a ticker with historic data.</div>';
                 return;
