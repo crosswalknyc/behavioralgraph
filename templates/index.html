@@ -16131,7 +16131,7 @@
             const formView = document.getElementById('formView');
             if (formView) formView.style.display = 'none';
             
-            // Apply ranker access control - hide tabs user doesn't have access to
+            // Apply ranker access control - hide Netflix sub-tabs and platform tabs user doesn't have access to
             if (!isSuperAdmin && !hasAllRankerOptions) {
                 const rankerTabMap = {
                     'all_netflix': 'netflixSubTabAll',
@@ -16143,16 +16143,14 @@
                     'top_shows': 'netflixSubTabTopShows',
                     'insights': 'netflixSubTabInsights'
                 };
-                
                 Object.entries(rankerTabMap).forEach(([option, tabId]) => {
                     const tab = document.getElementById(tabId);
-                    if (tab) {
-                        if (rankersIQOptions.includes(option)) {
-                            tab.style.display = '';
-                        } else {
-                            tab.style.display = 'none';
-                        }
-                    }
+                    if (tab) tab.style.display = rankersIQOptions.includes(option) ? '' : 'none';
+                });
+                // Shorts platform tabs (GoodShort, ShortTV, ReelShort)
+                ['goodshort', 'shorttv', 'reelshort'].forEach(platform => {
+                    const tab = document.getElementById('rankerIQPlatform' + platform.charAt(0).toUpperCase() + platform.slice(1));
+                    if (tab) tab.style.display = rankersIQOptions.includes(platform) ? '' : 'none';
                 });
             }
             const customAnalysisView = document.getElementById('customAnalysisView');
@@ -31852,27 +31850,29 @@
             }
         }
         
-        // Show episodes for a specific show on the selected date
+        // Show episodes for a specific show on the selected date (drill-down from Daily Ranker by Series)
         function showNetflixEpisodesForShow(showName) {
-            if (!netflixRankerData || !netflixRankerData.by_date_episode) {
-                const dateInp = document.getElementById('netflixDailyDate');
-                let date = dateInp ? dateInp.value : null;
-                if (!date) date = _getLastNetflixDateWithData(netflixRankerData || {}, 'by_date_episode');
-                if (!date && netflixRankerData) date = (netflixRankerData.date_range && netflixRankerData.date_range.max);
-                openNetflixShowDetails(showName, '', '', date || '');
+            if (!netflixRankerData) {
+                openNetflixShowDetails(showName, '', '', '');
                 return;
             }
             const dateInp = document.getElementById('netflixDailyDate');
             let date = dateInp ? dateInp.value : null;
             if (!date) date = _getLastNetflixDateWithData(netflixRankerData);
             if (!date) date = (netflixRankerData.date_range && netflixRankerData.date_range.max);
+            const showNameNorm = (showName || '').toLowerCase().trim();
+            const matchShow = (e) => (e.show_name || '').toLowerCase().trim() === showNameNorm;
             
-            // Get episodes for this show on this date
-            const allEpisodes = netflixRankerData.by_date_episode[date] || [];
-            const showEpisodes = allEpisodes.filter(e => (e.show_name || '').toLowerCase() === showName.toLowerCase());
+            // Try by_date_episode first, then by_date_all as fallback (same structure: show_name, season, episode, episode_name, views)
+            let allEpisodes = (netflixRankerData.by_date_episode && netflixRankerData.by_date_episode[date]) || [];
+            let showEpisodes = allEpisodes.filter(matchShow);
+            if (showEpisodes.length === 0 && netflixRankerData.by_date_all) {
+                allEpisodes = netflixRankerData.by_date_all[date] || [];
+                showEpisodes = allEpisodes.filter(matchShow);
+            }
             
             if (showEpisodes.length === 0) {
-                openNetflixShowDetails(showName, '', '', date);
+                openNetflixShowDetails(showName, '', '', date || '');
                 return;
             }
             
@@ -54206,17 +54206,22 @@
         }
         
         function showRankerIQNetflixEpisodesForShow(showName) {
-            if (!rankerIQNetflixData || !rankerIQNetflixData.by_date_episode) {
-                const dateInp = document.getElementById('rankerIQNetflixDailyDate');
-                const date = dateInp ? dateInp.value : (rankerIQNetflixData && rankerIQNetflixData.date_range && rankerIQNetflixData.date_range.max);
-                openNetflixShowDetails(showName, '', '', date || '');
+            if (!rankerIQNetflixData) {
+                openNetflixShowDetails(showName, '', '', '');
                 return;
             }
             const dateInp = document.getElementById('rankerIQNetflixDailyDate');
             let date = dateInp ? dateInp.value : null;
             if (!date) date = (rankerIQNetflixData.date_range && rankerIQNetflixData.date_range.max);
-            const allEpisodes = rankerIQNetflixData.by_date_episode[date] || [];
-            const showEpisodes = allEpisodes.filter(e => (e.show_name || '').toLowerCase() === showName.toLowerCase());
+            const showNameNorm = (showName || '').toLowerCase().trim();
+            const matchShow = (e) => (e.show_name || '').toLowerCase().trim() === showNameNorm;
+            // Try by_date_episode first, then by_date_all as fallback
+            let allEpisodes = (rankerIQNetflixData.by_date_episode && rankerIQNetflixData.by_date_episode[date]) || [];
+            let showEpisodes = allEpisodes.filter(matchShow);
+            if (showEpisodes.length === 0 && rankerIQNetflixData.by_date_all) {
+                allEpisodes = rankerIQNetflixData.by_date_all[date] || [];
+                showEpisodes = allEpisodes.filter(matchShow);
+            }
             if (showEpisodes.length === 0) {
                 openNetflixShowDetails(showName, '', '', date || '');
                 return;
