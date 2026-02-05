@@ -2293,7 +2293,20 @@
             position: relative;
         }
         
-        /* Content action buttons - positioned above sidebar, matching sidebar width */
+        /* Action row: same column alignment as dashboard-layout (sidebar | content) so headers align with data below */
+        .action-buttons-row {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 1rem;
+            align-items: center;
+            margin-top: 0.75rem;
+            margin-bottom: 0.5rem;
+            min-width: 0;
+        }
+        .action-buttons-row .inline-tab-header {
+            min-width: 0;
+        }
+        /* Content action buttons - first column, over sidebar */
         .content-action-buttons {
             display: flex;
             gap: 0.3rem;
@@ -2303,9 +2316,9 @@
             z-index: 100;
             background: transparent;
             width: auto;
-            max-width: 320px;
+            max-width: 280px;
             justify-content: flex-start;
-            margin-top: 0.75rem;
+            margin-top: 0;
             align-items: center;
         }
         
@@ -12456,9 +12469,9 @@
                 </div>
             </div>
             
-            <!-- Action Buttons Row with Tab Title -->
-            <div class="action-buttons-row" style="display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem; margin-bottom: 0.5rem;">
-                <div class="content-action-buttons" id="contentActionButtons" style="margin-top: 0;">
+            <!-- Action Buttons Row with Tab Title (grid aligns with sidebar | content below) -->
+            <div class="action-buttons-row">
+                <div class="content-action-buttons" id="contentActionButtons">
                     <div class="dash-dropdown">
                         <button class="dash-action-btn has-tooltip" data-tooltip="Export: Download data as CSV, charts as PNG, or full report as PDF." onclick="toggleExportMenu()">📥 EXPORT ▾</button>
                         <div id="tabExportDropdown" class="dash-dropdown-menu" style="display: none;">
@@ -12525,7 +12538,7 @@
                                 <div class="stat-label">📊 Crosswalk Respondents</div>
                                 <div class="stat-value"><span class="stat-prefix">n=</span><span id="dashSampleSize">0</span></div>
                             </div>
-                            <div class="stat-card has-tooltip" data-tooltip="US Projection: Estimated total US population represented. Calculated by applying panel weighting factors to sample size based on census data.">
+                            <div class="stat-card has-tooltip" data-tooltip="US Projection: Estimated total US population represented. Calculated by applying panel weighting factors to sample size based on census data." data-projection-number="true">
                                 <div class="stat-label">🇺🇸 Projected US</div>
                                 <div class="stat-value" id="dashProjectedUS">0</div>
                             </div>
@@ -13852,7 +13865,7 @@
                                         <span class="metric-label">Sample Size</span>
                                     </div>
                                 </div>
-                                <div class="metric-card has-tooltip" data-tooltip="US Projection: Estimated total US population represented by this audience. Calculated by applying panel weighting factors to the sample size based on census data.">
+                                <div class="metric-card has-tooltip" data-tooltip="US Projection: Estimated total US population represented by this audience. Calculated by applying panel weighting factors to the sample size based on census data." data-projection-number="true">
                                     <div class="metric-icon">🇺🇸</div>
                                     <div class="metric-content">
                                         <span class="metric-value" id="insightsProjectedUS">--</span>
@@ -15674,7 +15687,16 @@
                         const text = this.getAttribute('data-tooltip');
                         if (!text) return;
                         
-                        tooltip.textContent = text;
+                        let displayText = text;
+                        let el = this;
+                        while (el) {
+                            if (el.getAttribute && el.getAttribute('data-projection-number') === 'true') {
+                                displayText = text + '\n\nProjected using the 2026 Gen Pop number of 329,900,000';
+                                break;
+                            }
+                            el = el.parentElement;
+                        }
+                        tooltip.textContent = displayText;
                         
                         // Position below the mouse pointer
                         let left = e.clientX - 150;
@@ -18167,7 +18189,7 @@
                                 <div style="font-size: 0.75rem; color: var(--text-secondary);">Sample Size</div>
                                 <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);">${formatNumber(parsed.sampleSize)}</div>
                             </div>
-                            <div>
+                            <div class="has-tooltip" data-tooltip="Projected US population for this profile." data-projection-number="true">
                                 <div style="font-size: 0.75rem; color: var(--text-secondary);">Projected US</div>
                                 <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);">${formatNumber(parsed.projectedUS)}</div>
                             </div>
@@ -42934,7 +42956,7 @@
                                 <span class="profile-stat-label">Crosswalk Respondents</span>
                                 <span class="profile-stat-value">n=${formatNumber(profile.sampleSize)}</span>
                             </div>
-                            <div class="profile-stat-row">
+                            <div class="profile-stat-row has-tooltip" data-tooltip="Projected US population for this profile." data-projection-number="true">
                                 <span class="profile-stat-label">Projected US</span>
                                 <span class="profile-stat-value">${formatNumber(profile.projectedUS)}</span>
                             </div>
@@ -43971,7 +43993,7 @@
                                 <td>Crosswalk Respondents</td>
                                 ${profiles.map((p, idx) => `<td class="${idx === primaryProfileIndex ? 'primary-col' : ''}">n=${formatNumber(p.sampleSize)}</td>`).join('')}
                             </tr>
-                            <tr>
+                            <tr class="has-tooltip" data-tooltip="Projected US population for each profile." data-projection-number="true">
                                 <td>Projected US</td>
                                 ${profiles.map((p, idx) => `<td class="${idx === primaryProfileIndex ? 'primary-col' : ''}">${formatNumber(p.projectedUS)}</td>`).join('')}
                             </tr>
@@ -45306,7 +45328,7 @@
                                         return `<td style="color: ${pct >= 50 ? 'var(--accent-lime)' : 'var(--accent-red)'};">${pct}%</td>`;
                                     }).join('')}
                                 </tr>
-                                <tr class="has-tooltip" data-tooltip="Projected US population for this audience segment.">
+                                <tr class="has-tooltip" data-tooltip="Projected US population for this audience segment." data-projection-number="true">
                                     <td>Projected US Pop</td>
                                     ${benchmarks.map(b => `<td>${formatNumber(b.projectedUS || 0)}</td>`).join('')}
                                 </tr>
@@ -54088,7 +54110,7 @@
                             </thead>
                             <tbody>
                                 <tr><td>Respondents</td>${profiles.map(p => `<td>n=${formatNumber(compareProjectedN(p.sampleSize))}</td>`).join('')}</tr>
-                                <tr><td>Projected US</td>${profiles.map(p => `<td>${formatNumber(p.projectedUS)}</td>`).join('')}</tr>
+                                <tr class="has-tooltip" data-tooltip="Projected US population for each profile." data-projection-number="true"><td>Projected US</td>${profiles.map(p => `<td>${formatNumber(p.projectedUS)}</td>`).join('')}</tr>
                                 <tr><td>Median Age</td>${profiles.map(p => `<td>${p.medianAge > 0 ? p.medianAge.toFixed(2) : '-'}</td>`).join('')}</tr>
                             </tbody>
                         </table>

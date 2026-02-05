@@ -5458,38 +5458,28 @@ def get_csv_data(s3_key):
     if not s3_client:
         print("❌ S3 client not configured")
         return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    if not s3_cache.get('jobs') and s3_client:
+        load_persisted_cache()
     
-    try:
-        print(f"📂 Fetching from S3: {S3_BUCKET}/{s3_key}")
-        response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+    def _fetch_and_return(key):
+        """Fetch CSV from S3 by key and return (content, brand_name, date_range) or raise."""
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
         csv_content = response['Body'].read().decode('utf-8')
-        print(f"✅ Got CSV content: {len(csv_content)} bytes")
-        
-        # Parse CSV
         df = pd.read_csv(io.StringIO(csv_content))
-        # Replace NaN with None (which becomes null in JSON)
         df = df.fillna('')
-        print(f"✅ Parsed CSV: {len(df)} rows")
-        
-        # Display name: use admin-edited display_name from cache when present, else derive from filename
-        if not s3_cache.get('jobs') and s3_client:
-            load_persisted_cache()
         brand_name = None
         for job in s3_cache.get('jobs', []):
-            if (job.get('s3_key') or job.get('key')) == s3_key:
+            if (job.get('s3_key') or job.get('key')) == key:
                 brand_name = job.get('display_name') or job.get('project_name') or job.get('name')
                 break
         if not brand_name:
-            name_without_ext = s3_key.replace('.csv', '')
+            name_without_ext = key.replace('.csv', '')
             match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
             if match:
                 brand_name = match.group(1).replace('_', ' ')
             else:
                 brand_name = name_without_ext.replace('_', ' ')
-        
         date_range = ''
-        
-        # Try to get from INPUT_METADATA
         metadata_rows = df[df['Column'] == 'INPUT_METADATA']
         if not metadata_rows.empty:
             metadata_value = str(metadata_rows.iloc[0]['Value'])
@@ -5497,16 +5487,17 @@ def get_csv_data(s3_key):
                 start = metadata_value.split('SAMPLE_START:')[1].split('_')[0]
                 end = metadata_value.split('SAMPLE_END:')[1].split('_')[0]
                 date_range = f"{start} - {end}"
-        
-        # Convert to records
         data = df.to_dict('records')
-        # Normalize Latinx -> Latino for display (never show "Latinx" in UI)
         for row in data:
             val = row.get('Value')
             if isinstance(val, str) and val.strip().lower() == 'latinx':
                 row['Value'] = 'Latino'
-
-        print(f"✅ Returning data for brand: {brand_name}")
+        return csv_content, df, brand_name, date_range, data
+    
+    try:
+        print(f"📂 Fetching from S3: {S3_BUCKET}/{s3_key}")
+        csv_content, df, brand_name, date_range, data = _fetch_and_return(s3_key)
+        print(f"✅ Got CSV content: {len(csv_content)} bytes for brand: {brand_name}")
         return jsonify({
             'success': True,
             'data': data,
@@ -5514,6 +5505,24 @@ def get_csv_data(s3_key):
             'date_range': date_range,
             's3_key': s3_key
         })
+    except s3_client.exceptions.NoSuchKey:
+        # File not in S3 (e.g. released from purgatory — key was purgatory/... and is now at root)
+        if s3_key.startswith(S3_PURGATORY_PREFIX):
+            released_key = s3_key[len(S3_PURGATORY_PREFIX):]
+            try:
+                csv_content, df, brand_name, date_range, data = _fetch_and_return(released_key)
+                print(f"✅ Loaded from released location: {released_key}")
+                return jsonify({
+                    'success': True,
+                    'data': data,
+                    'brand': brand_name,
+                    'date_range': date_range,
+                    's3_key': released_key
+                })
+            except Exception:
+                pass
+        print(f"❌ Profile not found: {s3_key}")
+        return jsonify({'success': False, 'error': 'Profile file not found. It may have been moved (e.g. after release from Purgatory). Click ↻ to refresh the profile list.', 's3_key': s3_key}), 404
     except Exception as e:
         print(f"❌ Error in get_csv_data: {e}")
         import traceback
@@ -10721,7 +10730,7 @@ def smart_cache_update():
         for page in paginator.paginate(Bucket=S3_BUCKET):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                if not key.endswith('.csv') or key.startswith('system/') or key.startswith('historic/'):
+                if not key.endswith('.csv') or key.startswith('system/') or key.startswith('historic/') or key.startswith(S3_PURGATORY_PREFIX):
                     continue
                 
                 current_s3_keys.add(key)
@@ -10816,7 +10825,7 @@ def refresh_s3_cache(incremental=True):
         for page in paginator.paginate(Bucket=S3_BUCKET):
             for obj in page.get('Contents', []):
                 key = obj['Key']
-                if not key.endswith('.csv') or key.startswith('system/'):
+                if not key.endswith('.csv') or key.startswith('system/') or key.startswith(S3_PURGATORY_PREFIX):
                     continue
                 
                 job_data = process_s3_file_metadata(key, obj)
