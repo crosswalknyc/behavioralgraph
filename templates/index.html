@@ -23805,7 +23805,7 @@
                     if (job.status === 'cached' || job.status === 'completed') {
                         const option = document.createElement('option');
                         option.value = job.s3_key || job.job_id;
-                        option.textContent = `${job.project_name} (${job.category || 'Uncategorized'})`;
+                        option.textContent = `${capitalizeFirstLetters(job.project_name || '')} (${capitalizeFirstLetters(job.category || 'Uncategorized')})`;
                         select.appendChild(option);
                     }
                 });
@@ -23973,7 +23973,7 @@
             });
 
             const formData = {
-                project_name: getElement('project_name')?.value || '',
+                project_name: capitalizeFirstLetters((getElement('project_name')?.value || '').trim()),
                 brands: brandsValue,
                 brand_category: getElement('brand_category')?.value || 'GENERAL',
                 is_genpop: getElement('is_genpop')?.checked || false,
@@ -24097,7 +24097,7 @@
                     const statusTextElements = document.querySelectorAll('#statusText');
                     const statusMessageElements = document.querySelectorAll('#statusMessage');
                     const progressFillElements = document.querySelectorAll('#progressFill');
-                    statusTextElements.forEach(el => el.textContent = data.project_name || 'Processing...');
+                    statusTextElements.forEach(el => el.textContent = (capitalizeFirstLetters(data.project_name || '') || 'Processing...'));
                     statusMessageElements.forEach(el => { el.textContent = data.message || 'In progress'; el.style.color = ''; });
                     progressFillElements.forEach(el => el.style.width = (data.progress || 0) + '%');
 
@@ -41783,11 +41783,13 @@
                     `;
                 }
                 
+                const displayName = capitalizeFirstLetters(result.project_name || 'Unknown');
+                const categoryLabel = capitalizeFirstLetters(result.category || '');
                 return `
                     <div class="job-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;">
                         <div style="flex: 1; min-width: 0;">
-                            <div style="font-weight: 600; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${result.project_name || 'Unknown'}</div>
-                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${result.category || ''} • ${dateStr}</div>
+                            <div style="font-weight: 600; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</div>
+                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${categoryLabel} • ${dateStr}</div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.35rem; margin-left: 0.5rem;">
                             ${statusBadge}
@@ -41871,11 +41873,13 @@
                     `;
                 }
                 
+                const displayName = capitalizeFirstLetters(result.project_name || 'Unknown');
+                const categoryLabel = capitalizeFirstLetters(result.category || '');
                 return `
                     <div class="job-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;">
                         <div style="flex: 1; min-width: 0;">
-                            <div style="font-weight: 600; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${result.project_name || 'Unknown'}</div>
-                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${result.category || ''} • ${dateStr}</div>
+                            <div style="font-weight: 600; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayName}</div>
+                            <div style="font-size: 0.7rem; color: var(--text-secondary);">${categoryLabel} • ${dateStr}</div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 0.35rem; margin-left: 0.5rem;">
                             ${statusBadge}
@@ -42192,21 +42196,28 @@
             updateSelectedCount();
         }
 
+        function capitalizeFirstLetters(str) {
+            if (!str || typeof str !== 'string') return str || '';
+            return str.trim().split(/\s+/).map(word =>
+                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+            ).join(' ');
+        }
+
         function getProfileFullName(profile) {
             // Prefer admin-edited display name (same as "DISPLAY NAME (SHOWN IN DASHBOARD)" in admin)
+            let name = '';
             if (profile.display_name && profile.display_name.trim()) {
-                return profile.display_name.trim();
+                name = profile.display_name.trim();
+            } else if (profile.project_name && profile.project_name.trim()) {
+                name = profile.project_name.replace(/_/g, ' ');
+            } else if (profile.s3_key) {
+                let n = profile.s3_key.replace('.csv', '');
+                n = n.replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '');
+                name = n.replace(/_/g, ' ');
+            } else {
+                return 'Unknown';
             }
-            if (profile.project_name && profile.project_name.trim()) {
-                return profile.project_name.replace(/_/g, ' ');
-            }
-            // Fallback: derive from s3_key filename
-            if (profile.s3_key) {
-                let name = profile.s3_key.replace('.csv', '');
-                name = name.replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '');
-                return name.replace(/_/g, ' ');
-            }
-            return 'Unknown';
+            return capitalizeFirstLetters(name);
         }
 
         function renderComparisonProfiles(profiles) {
@@ -55229,7 +55240,7 @@
             const textEl = document.getElementById('statusModalText');
             const msgEl = document.getElementById('statusModalMessage');
             const progEl = document.getElementById('statusModalProgress');
-            if (textEl) textEl.textContent = data.project_name || 'Processing...';
+            if (textEl) textEl.textContent = (capitalizeFirstLetters(data.project_name || '') || 'Processing...');
             if (msgEl) msgEl.textContent = data.message || 'In progress';
             if (progEl) progEl.style.width = (data.progress || 0) + '%';
         }
