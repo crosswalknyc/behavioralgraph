@@ -45766,13 +45766,6 @@
             // Close the dropdown menu first
             document.querySelectorAll('.comp-export-menu').forEach(m => m.style.display = 'none');
             
-            if (!currentEditingDeck) {
-                showNotification('⚠️ Please create or select a deck first', 'warning');
-                showTab('collaboration');
-                setTimeout(() => showCollabTab('decks'), 100);
-                return;
-            }
-            
             const profiles = window.comparisonProfilesData || [];
             if (profiles.length === 0) {
                 showNotification('⚠️ No comparison data available', 'warning');
@@ -45785,6 +45778,135 @@
                 sectionTitle = moduleType.replace('behavioral_', '').replace(/_/g, ' ').toUpperCase();
             } else if (moduleType.startsWith('demo_')) {
                 sectionTitle = moduleType.replace('demo_', '').replace(/\b\w/g, c => c.toUpperCase());
+            }
+            
+            // Show the deck selection modal (same as other sections)
+            showComparisonDeckSelectionPopup(moduleType, sectionTitle, profiles);
+        }
+        
+        function showComparisonDeckSelectionPopup(moduleType, sectionTitle, profiles) {
+            // Check if there are any workspaces/decks
+            const hasWorkspaces = Object.keys(workspaces || {}).length > 0;
+            const hasDecks = Object.values(workspaceDecks || {}).some(decks => decks && decks.length > 0);
+            
+            if (!hasWorkspaces || !hasDecks) {
+                // Show "create first" modal
+                const modal = document.createElement('div');
+                modal.className = 'deck-workspace-modal';
+                modal.id = 'createFirstModal';
+                modal.innerHTML = `
+                    <div class="deck-workspace-content" style="max-width: 400px;">
+                        <div class="deck-workspace-header">
+                            <h2>📁 Create a Deck First</h2>
+                            <button onclick="document.getElementById('createFirstModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                        </div>
+                        <div style="padding: 1.5rem; text-align: left;">
+                            <p style="margin-bottom: 1.5rem; color: var(--text-secondary); line-height: 1.6;">
+                                To add comparison data to a deck, you need to create a workspace and deck first. 
+                                Go to the <strong>Workspace</strong> tab to create a deck.
+                            </p>
+                            <div style="display: flex; gap: 0.75rem;">
+                                <button class="btn btn-secondary" onclick="document.getElementById('createFirstModal').remove()" style="flex: 1;">Cancel</button>
+                                <button class="btn btn-primary" onclick="document.getElementById('createFirstModal').remove(); showTab('collaboration'); setTimeout(() => showCollabTab('decks'), 100);" style="flex: 1;">Go to Workspace</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                return;
+            }
+            
+            // Build workspace and deck options
+            let workspaceOptions = '';
+            Object.entries(workspaces || {}).forEach(([wsId, ws]) => {
+                const selected = (lastUsedWorkspace && wsId === lastUsedWorkspace) ? 'selected' : '';
+                workspaceOptions += `<option value="${wsId}" ${selected}>${ws.name || wsId}</option>`;
+            });
+            
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'comparisonDeckModal';
+            
+            // Store the comparison data for later use
+            window.pendingComparisonData = { moduleType, sectionTitle, profiles };
+            
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 480px;">
+                    <div class="deck-workspace-header">
+                        <h2>➕ Add Comparison to Deck</h2>
+                        <button onclick="document.getElementById('comparisonDeckModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1.5rem; text-align: left;">
+                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-dark); border-radius: 8px; border-left: 3px solid var(--accent-cyan);">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Adding:</div>
+                            <div style="font-weight: 600;">Comparison: ${sectionTitle}</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                                Profiles: ${profiles.map(p => p.name).join(', ')}
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Workspace</label>
+                            <select id="compDeckSelectWorkspace" onchange="updateComparisonDeckOptions()" style="width: 100%; padding: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                ${workspaceOptions}
+                            </select>
+                        </div>
+                        
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Deck</label>
+                            <select id="compDeckSelectDeck" style="width: 100%; padding: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                                <option value="">Select a deck...</option>
+                            </select>
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+                            <button class="btn btn-secondary" onclick="document.getElementById('comparisonDeckModal').remove()" style="flex: 1;">CANCEL</button>
+                            <button class="btn btn-primary" onclick="confirmAddComparisonToDeck()" style="flex: 1;">ADD TO DECK</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            // Populate deck options for the first workspace
+            updateComparisonDeckOptions();
+        }
+        
+        function updateComparisonDeckOptions() {
+            const wsId = document.getElementById('compDeckSelectWorkspace')?.value;
+            const deckSelect = document.getElementById('compDeckSelectDeck');
+            if (!wsId || !deckSelect) return;
+            
+            const decks = workspaceDecks[wsId] || [];
+            let options = '<option value="">Select a deck...</option>';
+            decks.forEach(deck => {
+                const selected = (lastUsedDeck && deck.id === lastUsedDeck) ? 'selected' : '';
+                options += `<option value="${deck.id}" ${selected}>${deck.name}</option>`;
+            });
+            deckSelect.innerHTML = options;
+        }
+        
+        async function confirmAddComparisonToDeck() {
+            const wsId = document.getElementById('compDeckSelectWorkspace')?.value;
+            const deckId = document.getElementById('compDeckSelectDeck')?.value;
+            
+            if (!wsId || !deckId) {
+                showNotification('⚠️ Please select a workspace and deck', 'warning');
+                return;
+            }
+            
+            const { moduleType, sectionTitle, profiles } = window.pendingComparisonData || {};
+            if (!profiles || profiles.length === 0) {
+                showNotification('⚠️ No comparison data available', 'warning');
+                return;
+            }
+            
+            // Find the deck
+            const decks = workspaceDecks[wsId] || [];
+            const deck = decks.find(d => d.id === deckId);
+            if (!deck) {
+                showNotification('⚠️ Deck not found', 'warning');
+                return;
             }
             
             // Extract only the relevant data for this section
@@ -45802,8 +45924,6 @@
                 } else if (moduleType === 'location') {
                     return { ...baseData, locations: profile.locations };
                 } else if (moduleType.startsWith('behavioral_')) {
-                    const catName = moduleType.replace('behavioral_', '').replace(/_/g, ' ');
-                    // Find actual category name
                     let actualCat = null;
                     if (profile.behavioral) {
                         actualCat = Object.keys(profile.behavioral).find(c => 
@@ -45815,7 +45935,6 @@
                         behavioral: actualCat ? { [actualCat]: profile.behavioral[actualCat] } : {}
                     };
                 } else {
-                    // Demographics - moduleType is like 'gender', 'age', 'ethnicity', 'income', etc.
                     const demoType = moduleType.replace('demo_', '');
                     return { 
                         ...baseData, 
@@ -45825,7 +45944,7 @@
                 }
             };
             
-            // Create a slide with only the relevant comparison data for this section
+            // Create the slide
             const slide = {
                 id: 'slide_' + Date.now(),
                 type: 'comparison',
@@ -45841,11 +45960,64 @@
                 elements: []
             };
             
-            if (!currentEditingDeck.slides) currentEditingDeck.slides = [];
-            currentEditingDeck.slides.push(slide);
-            saveDeckChanges();
-            renderSlideThumbnails();
-            showNotification(`✅ ${slide.title} added to deck!`, 'success');
+            // Add to deck
+            if (!deck.slides) deck.slides = [];
+            
+            // Find closing slide index and insert before it
+            const closingSlideIndex = deck.slides.findIndex(s => s.type === 'closing');
+            if (closingSlideIndex !== -1) {
+                deck.slides.splice(closingSlideIndex, 0, slide);
+            } else {
+                deck.slides.push(slide);
+            }
+            
+            deck.updatedAt = new Date().toISOString();
+            
+            // Save last used workspace and deck
+            lastUsedWorkspace = wsId;
+            lastUsedDeck = deckId;
+            
+            // Save to localStorage
+            try {
+                localStorage.setItem('workspaceDecks', JSON.stringify(workspaceDecks));
+            } catch (e) {
+                console.error('Failed to save to localStorage:', e);
+            }
+            
+            // Sync to backend if cloud deck
+            if (wsId === 'cloud' && deck.serverDeckId) {
+                try {
+                    await fetch(`/api/decks/${deck.serverDeckId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: deck.name,
+                            description: deck.description,
+                            slides: deck.slides,
+                            titleSlide: deck.titleSlide,
+                            template: deck.template
+                        }),
+                        credentials: 'same-origin'
+                    });
+                } catch (e) {
+                    console.error('Cloud sync error:', e);
+                }
+            }
+            
+            // Close modal
+            document.getElementById('comparisonDeckModal')?.remove();
+            
+            // Show success
+            showNotification(`✅ Added "${slide.title}" to ${deck.name}`, 'success');
+            
+            // Refresh deck editor if this deck is being edited
+            if (currentEditingDeck && currentEditingDeck.id === deck.id) {
+                renderSlideEditor();
+                renderSlideThumbnails();
+            }
+            
+            // Clean up
+            window.pendingComparisonData = null;
         }
         
         function findSharedBehaviors(profiles) {
