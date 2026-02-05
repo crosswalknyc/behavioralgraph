@@ -49018,6 +49018,17 @@
             currentEditingDeck = deck;
             currentEditingSlide = 0;
             populateDeckSlidesWithProfileImage(deck);
+            // If profile image not in cache yet, fetch by deck's profile name and re-populate when loaded
+            const deckProfileName = deck?.titleSlide?.title || deck?.slides?.[0]?.customHeader?.profileName 
+                || deck?.slides?.find(s => s.customHeader?.profileName)?.customHeader?.profileName;
+            if (deckProfileName && !getProfileImageForDeck(deck)) {
+                fetchProfileImage(deckProfileName, 0, false, (imageUrl) => {
+                    if (currentEditingDeck && imageUrl) {
+                        populateDeckSlidesWithProfileImage(currentEditingDeck);
+                        renderSlideEditor();
+                    }
+                });
+            }
             
             renderWorkspaceDecks();
             renderSlideEditor();
@@ -49370,8 +49381,19 @@
             return null;
         }
         
-        function getProfileImageForDeck() {
-            return getDeckTitleSlideProfileImage({});
+        function getProfileImageForDeck(deck) {
+            let img = getDeckTitleSlideProfileImage(deck?.titleSlide || {});
+            if (img) return img;
+            // Fallback: look up by deck/slide profile name (e.g. when opening deck from Workspace)
+            const profileName = deck?.titleSlide?.title 
+                || deck?.slides?.[0]?.customHeader?.profileName 
+                || (deck?.slides?.find(s => s.customHeader?.profileName)?.customHeader?.profileName);
+            if (profileName) {
+                const k = profileName.toLowerCase().trim();
+                const c = profileImageCache[k];
+                if (c && c !== 'pending' && c !== 'none') return c;
+            }
+            return null;
         }
         
         function getImageConfigForLayout(layoutIndex) {
@@ -49388,7 +49410,7 @@
         
         function populateDeckSlidesWithProfileImage(deck) {
             if (!deck?.slides) return;
-            const profileSrc = getProfileImageForDeck();
+            const profileSrc = getProfileImageForDeck(deck);
             if (!profileSrc) return;
             const slides = deck.slides;
             for (let i = 0; i < slides.length; i++) {
@@ -49753,6 +49775,7 @@
             if (idx > 0 && hasModuleData) {
                 const title = slide.customTitle || slide.title || slide.category || 'Slide';
                 const headerProfileName = slide.customHeader?.profileName || currentProfileData?.name || 'Profile';
+                const profileImgForPlaceholder = getProfileImageForDeck(currentEditingDeck);
                 
                 // Generate smart description based on slide data
                 const generateSlideDescription = (slide) => {
