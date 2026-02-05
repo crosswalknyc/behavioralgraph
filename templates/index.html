@@ -46451,6 +46451,14 @@
             const name = prompt('Enter deck name:', 'New Comparison Deck');
             if (!name) return;
             
+            // Build comparison profile images for title slide (both profiles being compared)
+            const profiles = window.comparisonProfilesData || [];
+            const comparisonProfiles = profiles.slice(0, 10).map(p => {
+                const cacheKey = (p.name || '').toLowerCase().trim();
+                const img = p.image || (typeof profileImageCache !== 'undefined' && profileImageCache[cacheKey] && profileImageCache[cacheKey] !== 'pending' && profileImageCache[cacheKey] !== 'none' ? profileImageCache[cacheKey] : null);
+                return { name: p.name || 'Profile', image: img || null };
+            });
+            
             // Create TOC slide
             const tocSlide = {
                 id: 'toc_' + Date.now(),
@@ -46475,7 +46483,9 @@
                 titleSlide: {
                     title: 'Audience Comparison',
                     subtitle: 'Powered by Crosswalk IQ',
-                    image: null
+                    image: comparisonProfiles.length === 1 ? (comparisonProfiles[0].image || null) : null,
+                    isComparison: comparisonProfiles.length >= 1,
+                    comparisonProfiles: comparisonProfiles
                 },
                 createdBy: currentUsername,
                 createdAt: new Date().toISOString(),
@@ -50646,8 +50656,12 @@
             
             // For title slide (Page 1 style - large profile name)
             if ((idx === 0 || slide.type === 'title') && elements.length === 0) {
-                let profileImage = getDeckTitleSlideProfileImage(slide);
                 const titleSlide = currentEditingDeck?.titleSlide || {};
+                const isComparisonTitle = titleSlide.isComparison && titleSlide.comparisonProfiles && titleSlide.comparisonProfiles.length >= 1;
+                const compProfiles = (titleSlide.comparisonProfiles || []).slice(0, 6);
+                
+                let profileImage = getDeckTitleSlideProfileImage(slide);
+                if (isComparisonTitle && compProfiles.length === 1 && compProfiles[0].image) profileImage = compProfiles[0].image;
                 
                 // Use custom values if saved, otherwise use defaults
                 const profileName = titleSlide.title || slide.title || currentProfileData?.name || 'PROFILE NAME';
@@ -50671,9 +50685,9 @@
                 }
                 const dateRangeDisplay = titleSlide.dateRange || defaultDateRangeText || 'Date Range: Not specified';
                 
-                // Profile image HTML
-                const profileImageHtml = profileImage 
-                    ? `<img src="${profileImage}" alt="${escapeHtml(profileName)}" style="width: 100%; height: 100%; object-fit: cover; object-position: center top; border-radius: 8px;">`
+                // Single profile image HTML (used when not comparison or fallback)
+                const singleImageHtml = (img, alt) => img 
+                    ? `<img src="${img}" alt="${escapeHtml(alt)}" style="width: 100%; height: 100%; object-fit: cover; object-position: center top; border-radius: 8px;">`
                     : `<div style="width: 100%; height: 100%; background: linear-gradient(135deg, #374151, #1f2937); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 3rem; color: rgba(255,255,255,0.3);">📊</div>`;
                 
                 // Dynamic sizing based on title length to prevent overlap
@@ -50681,36 +50695,55 @@
                 let titleFontSize, titleTop, imageTop, imageSize;
                 
                 if (titleLength <= 10) {
-                    // Short titles - large font, standard positioning
                     titleFontSize = '8rem';
                     titleTop = '-2%';
                     imageTop = '35%';
                     imageSize = '180px';
                 } else if (titleLength <= 15) {
-                    // Medium titles - slightly smaller font, adjust image down
                     titleFontSize = '7rem';
                     titleTop = '0%';
                     imageTop = '40%';
                     imageSize = '170px';
                 } else if (titleLength <= 20) {
-                    // Long titles - smaller font, move image down more
                     titleFontSize = '6rem';
                     titleTop = '2%';
                     imageTop = '45%';
                     imageSize = '160px';
                 } else if (titleLength <= 25) {
-                    // Very long titles - much smaller font, move image significantly
                     titleFontSize = '5rem';
                     titleTop = '3%';
                     imageTop = '50%';
                     imageSize = '150px';
                 } else {
-                    // Extremely long titles - smallest font, move image to bottom area
                     titleFontSize = '4rem';
                     titleTop = '5%';
                     imageTop = '55%';
                     imageSize = '140px';
                 }
+                
+                // Comparison: multiple profile images side by side (smaller so they fit)
+                const comparisonImagesHtml = isComparisonTitle && compProfiles.length >= 2
+                    ? `<div style="position: absolute; left: 5%; top: ${imageTop}; display: flex; gap: 1.5rem; flex-wrap: wrap;">
+                        ${compProfiles.map((cp, i) => {
+                            const size = compProfiles.length <= 2 ? '140px' : '110px';
+                            return `<div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                                <div style="width: ${size}; height: ${size}; border: 3px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.4); flex-shrink: 0;">
+                                    ${singleImageHtml(cp.image, cp.name)}
+                                </div>
+                                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.9); font-weight: 600; text-align: center; max-width: ${size}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(cp.name)}</div>
+                            </div>`;
+                        }).join('')}
+                        </div>`
+                    : (isComparisonTitle && compProfiles.length === 1
+                        ? `<div style="position: absolute; left: 5%; top: ${imageTop}; display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                            <div style="width: ${imageSize}; height: ${imageSize}; border: 3px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.4);">
+                                ${singleImageHtml(compProfiles[0].image, compProfiles[0].name)}
+                            </div>
+                            <div style="font-size: 0.8rem; color: rgba(255,255,255,0.9); font-weight: 600;">${escapeHtml(compProfiles[0].name)}</div>
+                            </div>`
+                        : null);
+                
+                const profileImageHtml = singleImageHtml(profileImage, profileName);
                 
                 return `
                     <div style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: flex; flex-direction: column;">
@@ -50723,6 +50756,7 @@
                             ${escapeHtml(profileName)}.
                         </div>
                         
+                        ${comparisonImagesHtml ? comparisonImagesHtml : `
                         <!-- Profile image - CLICKABLE TO CHANGE with dynamic positioning -->
                         <div style="position: absolute; left: 5%; top: ${imageTop}; width: ${imageSize}; height: ${imageSize}; border: 3px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.4); cursor: pointer; transition: border-color 0.2s;"
                              onclick="uploadTitleImage()"
@@ -50730,7 +50764,7 @@
                              onmouseout="this.style.borderColor='rgba(255,255,255,0.2)'"
                              title="Click to change image">
                             ${profileImageHtml}
-                        </div>
+                        </div>`}
                         
                         <!-- Right side info - EDITABLE -->
                         <div style="position: absolute; right: 5%; top: 45%; text-align: right; font-size: 0.7rem; color: rgba(255,255,255,0.7);">
