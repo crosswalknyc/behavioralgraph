@@ -955,6 +955,7 @@
                         <div style="display: flex; gap: 0.5rem;">
                             <button class="btn btn-small btn-secondary" onclick="loadUsers()">↻ Refresh</button>
                             <button class="btn btn-small btn-success" onclick="showAddUserModal()">+ Add User</button>
+                            <button class="btn btn-small btn-primary" onclick="restoreDefaultValuesForAllUsers()">Restore Default Values For All Users</button>
                         </div>
                     </div>
                     <table class="user-table">
@@ -3893,6 +3894,22 @@
                 }
             } catch (error) {
                 showToast('Failed to load users', true);
+            }
+        }
+
+        async function restoreDefaultValuesForAllUsers() {
+            if (!confirm('Restore default values for all users? This will set everyone\'s categories, runs, behavioral categories, and IQ access to the defaults (all categories/runs, Profile IQ on, others off).')) return;
+            try {
+                const response = await fetch('/api/admin/users/restore-defaults-all', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } });
+                const data = await response.json();
+                if (data.success) {
+                    showToast(data.message || `Default values restored for ${data.count} user(s).`);
+                    loadUsers();
+                } else {
+                    showToast(data.error || 'Failed to restore defaults', true);
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, true);
             }
         }
 

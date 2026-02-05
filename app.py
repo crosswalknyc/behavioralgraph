@@ -2154,6 +2154,33 @@ def delete_user(username):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/admin/users/restore-defaults-all', methods=['POST'])
+@requires_admin
+def restore_defaults_all_users():
+    """Set default access values for all users (categories, runs, behavioral categories, IQ flags)."""
+    try:
+        data = load_users()
+        users = data.get('users', {})
+        count = 0
+        for username, user in users.items():
+            user['allowed_categories'] = ['*']
+            user['allowed_runs'] = ['*']
+            user['allowed_behavioral_categories'] = ['*']
+            user['has_profile_iq_access'] = True
+            user['has_subscriber_iq_access'] = False
+            user['has_hedge_fund_iq_access'] = False
+            user['hedge_fund_iq_tabs'] = user.get('hedge_fund_iq_tabs', [])
+            user['hedge_fund_iq_tickers'] = user.get('hedge_fund_iq_tickers', [])
+            user['has_analysis_iq_access'] = False
+            user['analysis_iq_modules'] = user.get('analysis_iq_modules', [])
+            user['has_rankers_iq_access'] = False
+            user['rankers_iq_options'] = user.get('rankers_iq_options', [])
+            count += 1
+        save_users(data)
+        return jsonify({'success': True, 'message': f'Default values restored for {count} user(s)', 'count': count})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/api/admin/users/<username>/reset-password', methods=['POST'])
 @requires_admin
 def reset_user_password(username):
