@@ -9304,56 +9304,6 @@ def get_my_purgatory_items():
         print(f"Error getting user purgatory items: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-@app.route('/api/purgatory/download/<path:s3_key>')
-@requires_auth
-def download_purgatory_file(s3_key):
-    """Download a file from purgatory (user can only download their own files)."""
-    try:
-        user = get_current_user()
-        if not user:
-            return jsonify({'success': False, 'error': 'Not authenticated'}), 401
-        
-        username = session.get('username', '')
-        is_admin = user.get('role') in ['admin', 'super_admin']
-        
-        # Check if user owns this file or is admin
-        metadata = load_purgatory_metadata()
-        
-        # Find the item by s3_key
-        item = None
-        for pid, pitem in metadata.items():
-            if pitem.get('s3_key') == s3_key or s3_key in pid:
-                item = pitem
-                break
-        
-        if not item:
-            return jsonify({'success': False, 'error': 'File not found'}), 404
-        
-        if not is_admin and item.get('created_by') != username:
-            return jsonify({'success': False, 'error': 'Access denied'}), 403
-        
-        bucket = item.get('bucket', S3_BUCKET)
-        
-        # Get the file from S3
-        response = s3_client.get_object(Bucket=bucket, Key=s3_key)
-        content = response['Body'].read()
-        
-        # Get filename from key
-        filename = s3_key.split('/')[-1]
-        
-        return Response(
-            content,
-            mimetype='text/csv',
-            headers={
-                'Content-Disposition': f'attachment; filename="{filename}"',
-                'Content-Type': 'text/csv'
-            }
-        )
-        
-    except Exception as e:
-        print(f"Error downloading purgatory file: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
 # Default KPI mappings for known tickers
 DEFAULT_TICKER_KPIS = {
     'ADT': 'Monitoring & Related Services Revenue Against Churn',
