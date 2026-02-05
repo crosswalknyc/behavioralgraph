@@ -50776,7 +50776,7 @@
                              style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 48%; height: ${contentHeight}; overflow: visible; padding: 0.5rem; z-index: 2;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'content')">
                             <div class="drag-handle">⋮⋮ DRAG DATA</div>
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || (slide.data.profiles && Array.isArray(slide.data.profiles) ? 30 : 0)) : 0)}
                             ${content}
                             ${analysisBlock}
                         </div>
@@ -50826,7 +50826,7 @@
                              style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 40%; height: 55%; overflow: visible; padding: 0.5rem; z-index: 2;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'content')">
                             <div class="drag-handle">⋮⋮ DRAG DATA</div>
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || (slide.data.profiles && Array.isArray(slide.data.profiles) ? 30 : 0)) : 0)}
                             ${content}
                             ${analysisBlock}
                         </div>
@@ -50904,7 +50904,7 @@
                              style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 33%; height: 52%; overflow: visible; padding: 0.5rem; z-index: 2;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'content')">
                             <div class="drag-handle">⋮⋮ DRAG DATA</div>
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || (slide.data.profiles && Array.isArray(slide.data.profiles) ? 30 : 0)) : 0)}
                             ${content}
                             ${analysisBlock}
                         </div>
@@ -50968,7 +50968,7 @@
                              style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 26%; height: 42%; overflow: visible; padding: 0.5rem; z-index: 2;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'content')">
                             <div class="drag-handle">⋮⋮ DRAG DATA</div>
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || (slide.data.profiles && Array.isArray(slide.data.profiles) ? 30 : 0)) : 0)}
                             ${content}
                             ${analysisBlock}
                         </div>
@@ -51031,7 +51031,7 @@
                              style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 90%; height: 50%; overflow: visible; padding: 0.5rem; z-index: 2;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'content')">
                             <div class="drag-handle">⋮⋮ DRAG DATA</div>
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || (slide.data.profiles && Array.isArray(slide.data.profiles) ? 30 : 0)) : 0)}
                             ${content}
                             ${analysisBlock}
                         </div>
@@ -51094,7 +51094,7 @@
                              style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 40%; height: 50%; overflow: visible; padding: 0.5rem; z-index: 2;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'content')">
                             <div class="drag-handle">⋮⋮ DRAG DATA</div>
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || (slide.data.profiles && Array.isArray(slide.data.profiles) ? 30 : 0)) : 0)}
                             ${content}
                             ${analysisBlock}
                         </div>
@@ -51157,7 +51157,7 @@
                              style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 90%; height: 45%; overflow: visible; padding: 0.5rem; z-index: 2;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'content')">
                             <div class="drag-handle">⋮⋮ DRAG DATA</div>
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || (slide.data.profiles && Array.isArray(slide.data.profiles) ? 30 : 0)) : 0)}
                             ${content}
                             ${analysisBlock}
                         </div>
@@ -51221,7 +51221,7 @@
                              style="position: absolute; left: ${contentPos.left}; top: ${contentPos.top}; width: 32%; height: 62%; overflow: visible; padding: 0.5rem; z-index: 2;"
                              onmousedown="startDragSlideSection(event, ${idx}, 'content')">
                             <div class="drag-handle">⋮⋮ DRAG DATA</div>
-                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || 0) : 0)}
+                            ${createVizControlPanel(idx, slide.data ? (slide.data.items?.length || Object.keys(slide.data.values || {}).length || (slide.data.profiles && Array.isArray(slide.data.profiles) ? 30 : 0)) : 0)}
                             ${content}
                             ${analysisBlock}
                         </div>
@@ -53092,6 +53092,8 @@
                 const moduleType = slide.data.moduleType || 'summary';
                 const displayMode = slide.data.displayMode || 'percentage';
                 const modeLabel = displayMode === 'projection' ? 'US POP #' : 'US %';
+                const compVizPrefs = slide.vizPrefs || { type: 'auto', count: 'auto', threshold: 30 };
+                const compVizType = (compVizPrefs.type === 'columns' ? 'columnchart' : compVizPrefs.type) || 'auto';
                 
                 if (moduleType === 'summary') {
                     return `
@@ -53117,7 +53119,49 @@
                             Object.keys(p.demographics[demoKey]).forEach(v => allValues.add(v));
                         }
                     });
-                    const sortedValues = Array.from(allValues).sort();
+                    let sortedValues = Array.from(allValues).sort();
+                    const demoMax = compVizPrefs.count === 'all' ? 50 : (parseInt(compVizPrefs.count) || 15);
+                    sortedValues = sortedValues.slice(0, demoMax);
+                    
+                    if (compVizType === 'bars') {
+                        const maxPct = Math.max(...profiles.flatMap(p => sortedValues.map(v => p.demographics?.[demoKey]?.[v] || 0)), 1);
+                        return `
+                            <div style="display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.65rem;">
+                                ${sortedValues.map(val => `
+                                    <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                        <span style="min-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${val}</span>
+                                        <div style="flex: 1; display: flex; gap: 2px; align-items: center;">
+                                            ${profiles.map(p => {
+                                                const pct = p.demographics?.[demoKey]?.[val] || 0;
+                                                const barW = maxPct > 0 ? (pct / maxPct * 100) : 0;
+                                                return `<div style="flex: 1; min-width: 20px; height: 12px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden;"><div style="height: 100%; width: ${barW}%; background: ${p.color || 'var(--accent-cyan)'}; border-radius: 2px;"></div></div>`;
+                                            }).join('')}
+                                        </div>
+                                        <span style="min-width: 60px; font-size: 0.6rem;">${profiles.map(p => (p.demographics?.[demoKey]?.[val] || 0).toFixed(1) + '%').join(' / ')}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    }
+                    if (compVizType === 'columnchart') {
+                        const maxPct = Math.max(...profiles.flatMap(p => sortedValues.map(v => p.demographics?.[demoKey]?.[v] || 0)), 1);
+                        return `
+                            <div style="display: flex; align-items: flex-end; gap: 0.2rem; height: 140px; padding: 0.5rem 0;">
+                                ${sortedValues.slice(0, 12).map(val => `
+                                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; min-width: 0;">
+                                        <div style="width: 100%; height: 100px; display: flex; align-items: flex-end; justify-content: center; gap: 2px;">
+                                            ${profiles.map(p => {
+                                                const pct = p.demographics?.[demoKey]?.[val] || 0;
+                                                const barH = maxPct > 0 ? (pct / maxPct * 100) : 0;
+                                                return `<div style="width: 60%; min-height: 2px; height: ${barH}%; background: ${p.color || 'var(--accent-cyan)'}; border-radius: 2px 2px 0 0;"></div>`;
+                                            }).join('')}
+                                        </div>
+                                        <div style="font-size: 0.5rem; color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;" title="${val}">${(val || '').slice(0, 8)}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    }
                     
                     return `
                         <table class="comp-table" style="width: 100%; font-size: 0.75rem;">
@@ -53128,7 +53172,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${sortedValues.slice(0, 15).map(val => `
+                                ${sortedValues.map(val => `
                                     <tr>
                                         <td>${val}</td>
                                         ${profiles.map(p => {
@@ -53168,16 +53212,62 @@
                     });
                     
                     // Sort by first profile's index (descending)
-                    const sortedItems = Array.from(allItems.entries())
+                    let sortedItems = Array.from(allItems.entries())
                         .sort((a, b) => {
                             const aIdx = Object.values(a[1])[0]?.index || 0;
                             const bIdx = Object.values(b[1])[0]?.index || 0;
                             return bIdx - aIdx;
-                        })
-                        .slice(0, 25); // Show top 25 items
+                        });
+                    const behMax = compVizPrefs.count === 'all' ? 50 : (parseInt(compVizPrefs.count) || 25);
+                    sortedItems = sortedItems.slice(0, behMax);
                     
                     if (sortedItems.length === 0) {
                         return '<p style="color: var(--text-secondary);">No behavioral data available</p>';
+                    }
+                    
+                    if (compVizType === 'bars') {
+                        const maxPct = Math.max(...sortedItems.flatMap(([, pd]) => profiles.map(p => (pd[p.name] && (pd[p.name].percent !== undefined ? pd[p.name].percent : pd[p.name].pct)) || 0)), 1);
+                        return `
+                            <div style="display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.65rem;">
+                                ${sortedItems.map(([itemName, profileData]) => `
+                                    <div style="display: flex; align-items: center; gap: 0.35rem;">
+                                        <span style="min-width: 90px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">${(itemName || '').replace(/</g, '&lt;')}</span>
+                                        <div style="flex: 1; display: flex; gap: 2px; align-items: center;">
+                                            ${profiles.map(prof => {
+                                                const datum = profileData[prof.name];
+                                                const pct = (datum && (datum.percent !== undefined ? datum.percent : datum.pct)) || 0;
+                                                const barW = maxPct > 0 ? (pct / maxPct * 100) : 0;
+                                                return `<div style="flex: 1; min-width: 18px; height: 11px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden;"><div style="height: 100%; width: ${barW}%; background: ${prof.color || 'var(--accent-cyan)'}; border-radius: 2px;"></div></div>`;
+                                            }).join('')}
+                                        </div>
+                                        <span style="min-width: 55px; font-size: 0.6rem;">${profiles.map(prof => {
+                                            const datum = profileData[prof.name];
+                                            return datum ? (datum.percent || datum.pct || 0).toFixed(1) + '%' : '-';
+                                        }).join(' / ')}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    }
+                    if (compVizType === 'columnchart') {
+                        const maxPct = Math.max(...sortedItems.flatMap(([, pd]) => profiles.map(p => (pd[p.name] && (pd[p.name].percent !== undefined ? pd[p.name].percent : pd[p.name].pct)) || 0)), 1);
+                        return `
+                            <div style="display: flex; align-items: flex-end; gap: 0.15rem; height: 130px; padding: 0.5rem 0;">
+                                ${sortedItems.slice(0, 15).map(([itemName, profileData]) => `
+                                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.15rem; min-width: 0;">
+                                        <div style="width: 100%; height: 95px; display: flex; align-items: flex-end; justify-content: center; gap: 1px;">
+                                            ${profiles.map(prof => {
+                                                const datum = profileData[prof.name];
+                                                const pct = (datum && (datum.percent !== undefined ? datum.percent : datum.pct)) || 0;
+                                                const barH = maxPct > 0 ? (pct / maxPct * 100) : 0;
+                                                return `<div style="width: 55%; min-height: 2px; height: ${barH}%; background: ${prof.color || 'var(--accent-cyan)'}; border-radius: 2px 2px 0 0;"></div>`;
+                                            }).join('')}
+                                        </div>
+                                        <div style="font-size: 0.48rem; color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;" title="${(itemName || '').replace(/"/g, '&quot;')}">${(itemName || '').slice(0, 6).replace(/</g, '&lt;')}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
                     }
                     
                     return `
@@ -53191,13 +53281,14 @@
                             <tbody>
                                 ${sortedItems.map(([itemName, profileData]) => `
                                     <tr>
-                                        <td style="text-align: left; font-weight: 500;">${itemName}</td>
+                                        <td style="text-align: left; font-weight: 500;">${(itemName || '').replace(/</g, '&lt;')}</td>
                                         ${profiles.map(p => {
                                             const data = profileData[p.name];
                                             if (!data) return '<td style="text-align: center; color: var(--text-secondary);">-</td>';
+                                                const pctVal = (data.percent !== undefined ? data.percent : data.pct) || 0;
                                             const idx = data.index || 100;
                                             const idxColor = idx > 120 ? 'var(--accent-lime)' : idx > 100 ? 'var(--accent-cyan)' : idx < 80 ? 'var(--accent-orange)' : 'var(--text-secondary)';
-                                            return `<td style="text-align: center;">${data.percent.toFixed(1)}% <span style="color: ${idxColor}; font-size: 0.6rem;">(${Math.round(idx)})</span></td>`;
+                                            return `<td style="text-align: center;">${pctVal.toFixed(1)}% <span style="color: ${idxColor}; font-size: 0.6rem;">(${Math.round(idx)})</span></td>`;
                                         }).join('')}
                                     </tr>
                                 `).join('')}
