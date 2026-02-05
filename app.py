@@ -4100,15 +4100,23 @@ def _run_netflix_ranker_backfill(start_d, end_d):
 
 def _netflix_ranker_s3_list_cached_dates():
     """Return sorted list of date strings (YYYY-MM-DD) that are cached in S3."""
-    if not s3_client:
+    idx = _netflix_ranker_s3_get_index()
+    if not idx:
         return []
+    dates = idx.get('dates', [])
+    return sorted(dates) if isinstance(dates, list) else []
+
+
+def _netflix_ranker_s3_get_index():
+    """Return full S3 index: {'dates': [...], 'updated_at': 'ISO str'} or None."""
+    if not s3_client:
+        return None
     try:
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=NETFLIX_RANKER_S3_INDEX_KEY)
         data = json.loads(response['Body'].read().decode('utf-8'))
-        dates = data.get('dates', [])
-        return sorted(dates) if isinstance(dates, list) else []
+        return data
     except (ClientError, Exception):
-        return []
+        return None
 
 
 def _netflix_ranker_s3_load_day(date_str):
@@ -4614,7 +4622,18 @@ def get_netflix_ranker_data():
             return jsonify(payload)
 
         # S3 path: use per-day cache, fetch only today if missing
-        cached_dates = _netflix_ranker_s3_list_cached_dates()
+        s3_index = _netflix_ranker_s3_get_index()
+        cached_dates = []
+        s3_index_updated_at = None
+        if s3_index:
+            cached_dates = sorted(s3_index.get('dates', [])) if isinstance(s3_index.get('dates'), list) else []
+            u = s3_index.get('updated_at')
+            if u:
+                try:
+                    s = u.replace('Z', '+00:00')
+                    s3_index_updated_at = datetime.fromisoformat(s).timestamp()
+                except Exception:
+                    pass
         # When user clicks Refresh and cache is empty, start backfill in background so one run primes cache for everyone
         if force_refresh and len(cached_dates) == 0:
             global NETFLIX_RANKER_BACKFILL_RUNNING
@@ -5800,6 +5819,11 @@ def parse_subscriber_iq_csv(csv_content):
                 parsed['metadata']['exclusion_window'] = row[1].strip() if len(row) > 1 else ''
             elif 'Attribution Window' in first_col:
                 parsed['metadata']['attribution_window'] = row[1].strip() if len(row) > 1 else ''
+            elif 'Genre' in first_col:
+                genre_val = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '') or (row[3].strip() if len(row) > 3 else '')
+                parsed['metadata']['genre'] = genre_val
+                if genre_val:
+                    print(f"   📂 Found genre: '{genre_val}' from row {i}")
             elif 'KEY METRICS' in first_col.upper() or 'KEY METRICS' in second_col.upper() or 'KEY METRICS' in combined_check:
                 current_section = 'key_metrics'
                 print(f"   ✅ Entered KEY METRICS section at row {i}: first_col='{first_col}', second_col='{second_col}'")
@@ -5862,8 +5886,9 @@ def parse_subscriber_iq_csv(csv_content):
                 episode_num = first_col.replace(' ', '').strip()
             
             if episode_num:
-                signups_val = parse_number(row[1]) if len(row) > 1 else None
-                # CSV columns: 0=Episode N, 1=signups, 2=label, 3=days_avg value, 4=label, 5=min_avg_view value, 6=label, 7=%, 8=gen_pop
+                # Support two CSV layouts:
+                # New: 0=Episode N, 1=Episode Date, 2=Count, 3=label, 4=days_avg, 5=label, 6=min_avg_view, 7=label, 8=%, 9=gen_pop
+                # Old: 0=Episode N, 1=Count, 2=label, 3=days_avg, 4=label, 5=min_avg_view, 6=label, 7=%, 8=gen_pop
                 def _val(col_idx, skip_labels=None):
                     if col_idx >= len(row): return ''
                     s = row[col_idx].strip()
@@ -5872,19 +5897,35 @@ def parse_subscriber_iq_csv(csv_content):
                     if parse_number(s) is not None: return s
                     if '%' in s: return s
                     return s
-                days_avg = _val(3, ('signups', 'days avg', 'min avg view'))
-                min_avg_view = _val(5, ('signups', 'days avg', 'min avg view'))
-                pct_val = _val(7, ('signups', 'days avg', 'min avg view'))
-                if not pct_val and len(row) > 7 and '%' in row[7]:
-                    pct_val = row[7].strip()
-                print(f"   📊 Found Episode {episode_num}: signups={signups_val}, days_avg={days_avg}, pct={pct_val}, row={row[:8]}")
+                cell1 = row[1].strip() if len(row) > 1 else ''
+                has_episode_date = bool(cell1 and ('/' in cell1 or cell1.replace('-', '').replace('.', '').isdigit()) and parse_number(cell1) is None)
+                if has_episode_date and len(row) >= 10:
+                    episode_date = cell1
+                    signups_val = parse_number(row[2]) if len(row) > 2 else None
+                    days_avg = _val(4, ('signups', 'days avg', 'min avg view'))
+                    min_avg_view = _val(6, ('signups', 'days avg', 'min avg view'))
+                    pct_val = _val(8, ('signups', 'days avg', 'min avg view'))
+                    if not pct_val and len(row) > 8 and '%' in row[8]:
+                        pct_val = row[8].strip()
+                    gen_pop = row[9].strip() if len(row) > 9 else ''
+                else:
+                    episode_date = ''
+                    signups_val = parse_number(row[1]) if len(row) > 1 else None
+                    days_avg = _val(3, ('signups', 'days avg', 'min avg view'))
+                    min_avg_view = _val(5, ('signups', 'days avg', 'min avg view'))
+                    pct_val = _val(7, ('signups', 'days avg', 'min avg view'))
+                    if not pct_val and len(row) > 7 and '%' in row[7]:
+                        pct_val = row[7].strip()
+                    gen_pop = row[8].strip() if len(row) > 8 else ''
+                print(f"   📊 Found Episode {episode_num}: episode_date={episode_date or 'N/A'}, signups={signups_val}, days_avg={days_avg}, pct={pct_val}, row={row[:10]}")
                 parsed['episode_attribution'].append({
                     'episode': episode_num,
+                    'episode_date': episode_date,
                     'signups': signups_val,
                     'days_avg': days_avg,
                     'min_avg_view': min_avg_view,
                     'percentage': pct_val,
-                    'gen_pop': row[8].strip() if len(row) > 8 else ''
+                    'gen_pop': gen_pop
                 })
             elif 'ATTRIBUTION SUMMARY' in first_col.upper() or 'ATTRIBUTION SUMMARY' in second_col.upper() or 'ATTRIBUTION SUMMARY' in combined_check:
                 current_section = 'attribution_summary'

@@ -21152,7 +21152,7 @@
             
             const metadata = data.metadata || {};
             // Get platform from metadata
-            const platform = metadata.platform || '';
+            const genre = metadata.genre || '';
             const exclusion = metadata.exclusion_window || '';
             const attribution = metadata.attribution_window || '';
             // Get date range from tab, response, or metadata as fallback
@@ -21160,14 +21160,13 @@
             const finalShow = show || showFromData || 'UNKNOWN SHOW';
             
             console.log('📅 Date range check:', { dateRange, date_range, metadata_date_range: metadata.date_range, final: finalDateRange });
-            console.log('📱 Platform check:', { metadata_platform: metadata.platform, final: platform, metadata_keys: Object.keys(metadata) });
+            console.log('📂 Genre check:', { metadata_genre: metadata.genre, final: genre });
             
             if (showNameHeader) showNameHeader.textContent = finalShow.toUpperCase();
             
             if (platformHeader) {
-                platformHeader.textContent = platform ? `Platform Tracked: ${platform}` : '';
-                platformHeader.style.display = platform ? 'block' : 'none';
-                console.log('📱 Setting platform header:', platform, 'display:', platform ? 'block' : 'none');
+                platformHeader.textContent = genre ? `Genre: ${genre}` : '';
+                platformHeader.style.display = genre ? 'block' : 'none';
             }
             
             if (dateRangeHeader) {
@@ -22312,9 +22311,15 @@
                 container.innerHTML = `
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1rem;">
                         ${episodes.map(ep => `
-                            <div class="episode-card has-tooltip" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;" data-tooltip="Episode ${ep.episode}: Drove ${formatNumber(ep.signups)} platform signups (${pct(ep)} of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
+                            <div class="episode-card has-tooltip" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;" data-tooltip="Episode ${ep.episode}${ep.episode_date ? ' · ' + ep.episode_date : ''}: Drove ${formatNumber(ep.signups)} platform signups (${pct(ep)} of total). ${ep.days_avg ? `Average ${ep.days_avg} days from episode release to signup.` : ''}">
                                 <h4 style="margin: 0 0 0.75rem 0; color: var(--accent-cyan);">Episode ${ep.episode}</h4>
                                 <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                    ${ep.episode_date ? `
+                                    <div class="has-tooltip" data-tooltip="Date this episode became available" style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-secondary);">Episode date:</span>
+                                        <span style="color: var(--text-primary);">${ep.episode_date}</span>
+                                    </div>
+                                    ` : ''}
                                     <div class="has-tooltip" data-tooltip="Signups: Number of people who signed up for the platform specifically to watch this episode" style="display: flex; justify-content: space-between;">
                                         <span style="color: var(--text-secondary);">Signups:</span>
                                         <span style="font-weight: 700; color: var(--accent-lime);">${formatNumber(ep.signups)}</span>
