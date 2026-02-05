@@ -43338,6 +43338,28 @@
                 const sortIndicator = isSorted ? (currentSortDirection === 'asc' ? ' ↑' : ' ↓') : '';
                 return `<th class="sortable ${isSorted ? 'sorted' : ''} ${primaryClass}" style="border-bottom: 3px solid ${color}; cursor: pointer;" onclick="sortComparisonTable('${section}', ${idx})">${name}${sortIndicator} ${ageDisplay}</th>`;
             };
+            
+            // Helper to generate export menu HTML for comparison sections
+            const exportMenuHtml = (moduleType, sectionId) => `
+                <div class="comp-export-dropdown" style="position: relative; display: inline-block;">
+                    <button class="btn btn-small" onclick="toggleComparisonExportMenu('${sectionId}', event)" 
+                            style="font-size: 0.7rem; padding: 0.3rem 0.6rem; background: var(--accent-blue); color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        📥 Export ▼
+                    </button>
+                    <div id="comp-export-menu-${sectionId}" class="comp-export-menu" style="display: none; position: absolute; right: 0; top: 100%; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; min-width: 150px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                        <button onclick="exportComparisonSectionCSV('${moduleType}')" style="display: block; width: 100%; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-primary); text-align: left; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='none'">
+                            📄 Download CSV
+                        </button>
+                        <button onclick="exportComparisonSectionPNG('${moduleType}')" style="display: block; width: 100%; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-primary); text-align: left; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='none'">
+                            🖼️ Download PNG
+                        </button>
+                        <div style="border-top: 1px solid var(--border-color); margin: 0.25rem 0;"></div>
+                        <button onclick="addComparisonModuleToDeck('${moduleType}')" style="display: block; width: 100%; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-primary); text-align: left; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='none'">
+                            ➕ Add to Deck
+                        </button>
+                    </div>
+                </div>
+            `;
 
             // Build profile tabs bar for comparison (no median age in tabs)
             const profileTabsHtml = profiles.map((p, idx) => {
@@ -43366,7 +43388,7 @@
                 <div class="comp-section" id="comp-summary">
                     <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center;">
                         <span>Comparison Data</span>
-                        <button class="btn btn-small btn-primary" onclick="addComparisonModuleToDeck('summary')" title="Add this comparison to deck" style="font-size: 0.7rem; padding: 0.3rem 0.6rem;">➕ Add to Deck</button>
+                        ${exportMenuHtml('summary', 'summary')}
                     </div>
                     <table class="comp-table">
                         <thead>
@@ -43420,7 +43442,7 @@
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${genderCount} values</span>
                         </span>
                         <span style="display: flex; align-items: center; gap: 0.35rem;">
-                            <button class="btn btn-small btn-primary" onclick="addComparisonModuleToDeck('gender')" title="Add this comparison to deck" style="font-size: 0.7rem; padding: 0.3rem 0.6rem;">➕ Add to Deck</button>
+                            ${exportMenuHtml('gender', 'gender')}
                             <select onchange="setComparisonSectionLimit('demo_gender', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                 <option value="15" ${genderLimit == 15 ? 'selected' : ''}>Top 15</option>
                                 <option value="25" ${genderLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -43460,7 +43482,7 @@
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${ageCount} values</span>
                         </span>
                         <span style="display: flex; align-items: center; gap: 0.35rem;">
-                            <button class="btn btn-small btn-primary" onclick="addComparisonModuleToDeck('age')" title="Add this comparison to deck" style="font-size: 0.7rem; padding: 0.3rem 0.6rem;">➕ Add to Deck</button>
+                            ${exportMenuHtml('age', 'age')}
                             <select onchange="setComparisonSectionLimit('demo_age', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                 <option value="15" ${ageLimit == 15 ? 'selected' : ''}>Top 15</option>
                                 <option value="25" ${ageLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -43501,7 +43523,7 @@
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${ethnicityCount} values</span>
                         </span>
                         <span style="display: flex; align-items: center; gap: 0.35rem;">
-                            <button class="btn btn-small btn-primary" onclick="addComparisonModuleToDeck('ethnicity')" title="Add this comparison to deck" style="font-size: 0.7rem; padding: 0.3rem 0.6rem;">➕ Add to Deck</button>
+                            ${exportMenuHtml('ethnicity', 'ethnicity')}
                             <select onchange="setComparisonSectionLimit('demo_ethnicity', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                 <option value="15" ${ethnicityLimit == 15 ? 'selected' : ''}>Top 15</option>
                                 <option value="25" ${ethnicityLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -43541,7 +43563,7 @@
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${incomeCount} values</span>
                         </span>
                         <span style="display: flex; align-items: center; gap: 0.35rem;">
-                            <button class="btn btn-small btn-primary" onclick="addComparisonModuleToDeck('income')" title="Add this comparison to deck" style="font-size: 0.7rem; padding: 0.3rem 0.6rem;">➕ Add to Deck</button>
+                            ${exportMenuHtml('income', 'income')}
                             <select onchange="setComparisonSectionLimit('demo_income', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                 <option value="15" ${incomeLimit == 15 ? 'selected' : ''}>Top 15</option>
                                 <option value="25" ${incomeLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -43589,7 +43611,7 @@
                             <span style="font-size: 0.7rem; font-weight: normal; opacity: 0.7; white-space: nowrap;">${count} values</span>
                         </span>
                         <span style="display: flex; align-items: center; gap: 0.35rem;">
-                            <button class="btn btn-small btn-primary" onclick="addComparisonModuleToDeck('${key}')" title="Add this comparison to deck" style="font-size: 0.7rem; padding: 0.3rem 0.6rem;">➕ Add to Deck</button>
+                            ${exportMenuHtml(key, 'demo_' + key)}
                             <select onchange="setComparisonSectionLimit('demo_${key}', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                 <option value="15" ${limit == 15 ? 'selected' : ''}>Top 15</option>
                                 <option value="25" ${limit == 25 ? 'selected' : ''}>Top 25</option>
@@ -43641,7 +43663,7 @@
                                 <span style="font-size: 0.65rem; font-weight: normal; opacity: 0.7;">Index: <span style="color: #10b981;">●</span> &gt;100 | <span style="color: #ef4444;">●</span> &lt;100</span>
                             </span>
                             <span style="display: flex; align-items: center; gap: 0.35rem;">
-                                <button class="btn btn-small btn-primary" onclick="addComparisonModuleToDeck('behavioral_${safeCatId}')" title="Add this comparison to deck" style="font-size: 0.7rem; padding: 0.3rem 0.6rem;">➕ Add to Deck</button>
+                                ${exportMenuHtml('behavioral_' + safeCatId, 'beh_' + safeCatId)}
                                 <select onchange="setComparisonSectionLimit('${catKey}', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                     <option value="15" ${currentLimit == 15 ? 'selected' : ''}>Top 15</option>
                                     <option value="25" ${currentLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -43684,7 +43706,7 @@
                         <div class="comp-section-title" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
                             <span style="white-space: nowrap;">Locations/DMAs</span>
                             <span style="display: flex; align-items: center; gap: 0.35rem;">
-                                <button class="btn btn-small btn-primary" onclick="addComparisonModuleToDeck('location')" title="Add this comparison to deck" style="font-size: 0.7rem; padding: 0.3rem 0.6rem;">➕ Add to Deck</button>
+                                ${exportMenuHtml('location', 'location')}
                                 <select onchange="setComparisonSectionLimit('location', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 85px;">
                                     <option value="15" ${locationLimit == 15 ? 'selected' : ''}>Top 15</option>
                                     <option value="25" ${locationLimit == 25 ? 'selected' : ''}>Top 25</option>
@@ -45509,6 +45531,182 @@
             `;
             
             document.getElementById('compInsightsContent').innerHTML = html;
+        }
+        
+        // Toggle comparison export dropdown menu
+        function toggleComparisonExportMenu(sectionId, event) {
+            event.stopPropagation();
+            const menu = document.getElementById('comp-export-menu-' + sectionId);
+            if (!menu) return;
+            
+            // Close all other menus first
+            document.querySelectorAll('.comp-export-menu').forEach(m => {
+                if (m.id !== 'comp-export-menu-' + sectionId) {
+                    m.style.display = 'none';
+                }
+            });
+            
+            // Toggle this menu
+            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+            
+            // Close on click outside
+            const closeHandler = (e) => {
+                if (!menu.contains(e.target)) {
+                    menu.style.display = 'none';
+                    document.removeEventListener('click', closeHandler);
+                }
+            };
+            setTimeout(() => document.addEventListener('click', closeHandler), 10);
+        }
+        
+        // Export comparison section to CSV
+        function exportComparisonSectionCSV(moduleType) {
+            const profiles = window.comparisonProfilesData || [];
+            if (profiles.length === 0) {
+                showNotification('No comparison data available', 'warning');
+                return;
+            }
+            
+            let csvContent = '';
+            const sectionTitle = moduleType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            
+            // Header row with profile names
+            csvContent += 'Value,' + profiles.map(p => `"${p.name}"`).join(',') + '\n';
+            
+            // Get data based on module type
+            if (moduleType === 'summary') {
+                csvContent += 'Crosswalk Respondents,' + profiles.map(p => p.sampleSize || 0).join(',') + '\n';
+                csvContent += 'Projected US,' + profiles.map(p => p.projectedUS || 0).join(',') + '\n';
+                csvContent += 'Median Age,' + profiles.map(p => p.medianAge ? p.medianAge.toFixed(2) : '-').join(',') + '\n';
+            } else if (moduleType.startsWith('behavioral_')) {
+                const catName = moduleType.replace('behavioral_', '').replace(/_/g, ' ');
+                // Find the actual category name (case-insensitive match)
+                const actualCat = Object.keys(profiles[0]?.behavioral || {}).find(c => 
+                    c.toLowerCase().replace(/[^a-z0-9]/g, '_') === moduleType.replace('behavioral_', '')
+                ) || catName;
+                
+                // Get all unique values across profiles
+                const allValues = new Set();
+                profiles.forEach(p => {
+                    (p.behavioral?.[actualCat] || []).forEach(item => allValues.add(item.name));
+                });
+                
+                Array.from(allValues).forEach(value => {
+                    const row = ['"' + value + '"'];
+                    profiles.forEach(p => {
+                        const item = (p.behavioral?.[actualCat] || []).find(i => i.name === value);
+                        if (item) {
+                            row.push(`"${item.pct?.toFixed(2) || 0}% (Idx: ${item.index || '-'})"`);
+                        } else {
+                            row.push('-');
+                        }
+                    });
+                    csvContent += row.join(',') + '\n';
+                });
+            } else if (moduleType === 'location') {
+                // Get all unique locations
+                const allLocations = new Set();
+                profiles.forEach(p => {
+                    (p.locations || []).forEach(loc => allLocations.add(loc.name || loc.dma));
+                });
+                
+                Array.from(allLocations).forEach(locName => {
+                    const row = ['"' + locName + '"'];
+                    profiles.forEach(p => {
+                        const loc = (p.locations || []).find(l => (l.name || l.dma) === locName);
+                        if (loc) {
+                            row.push(`"${loc.pct?.toFixed(2) || 0}% (Idx: ${loc.index || '-'})"`);
+                        } else {
+                            row.push('-');
+                        }
+                    });
+                    csvContent += row.join(',') + '\n';
+                });
+            } else {
+                // Demographics (gender, age, ethnicity, income, etc.)
+                const demoType = moduleType.replace('demo_', '');
+                const allValues = new Set();
+                profiles.forEach(p => {
+                    Object.keys(p.demographics?.[demoType] || {}).forEach(v => allValues.add(v));
+                });
+                
+                Array.from(allValues).forEach(value => {
+                    const row = ['"' + value + '"'];
+                    profiles.forEach(p => {
+                        const pct = p.demographics?.[demoType]?.[value];
+                        if (pct !== undefined) {
+                            row.push(pct.toFixed(2) + '%');
+                        } else {
+                            row.push('-');
+                        }
+                    });
+                    csvContent += row.join(',') + '\n';
+                });
+            }
+            
+            // Download the CSV
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `comparison_${moduleType}_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+            
+            showNotification(`CSV downloaded: ${sectionTitle}`, 'success');
+        }
+        
+        // Export comparison section to PNG
+        async function exportComparisonSectionPNG(moduleType) {
+            const profiles = window.comparisonProfilesData || [];
+            if (profiles.length === 0) {
+                showNotification('No comparison data available', 'warning');
+                return;
+            }
+            
+            // Find the section element
+            let sectionId = 'comp-' + moduleType;
+            if (moduleType.startsWith('behavioral_')) {
+                sectionId = 'comp-beh-' + moduleType.replace('behavioral_', '');
+            } else if (moduleType.startsWith('demo_')) {
+                sectionId = 'comp-' + moduleType.replace('demo_', '');
+            }
+            
+            const section = document.getElementById(sectionId);
+            if (!section) {
+                showNotification('Section not found: ' + moduleType, 'error');
+                return;
+            }
+            
+            try {
+                // Use html2canvas if available, otherwise load it
+                if (typeof html2canvas === 'undefined') {
+                    // Load html2canvas dynamically
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                    document.head.appendChild(script);
+                    await new Promise((resolve, reject) => {
+                        script.onload = resolve;
+                        script.onerror = reject;
+                    });
+                }
+                
+                showNotification('Generating PNG...', 'info');
+                
+                const canvas = await html2canvas(section, {
+                    backgroundColor: '#1a1a2e',
+                    scale: 2,
+                    logging: false
+                });
+                
+                const link = document.createElement('a');
+                link.download = `comparison_${moduleType}_${new Date().toISOString().split('T')[0]}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                
+                showNotification('PNG downloaded!', 'success');
+            } catch (error) {
+                console.error('PNG export error:', error);
+                showNotification('Failed to export PNG: ' + error.message, 'error');
+            }
         }
         
         function addComparisonModuleToDeck(moduleType) {
