@@ -36613,7 +36613,8 @@
             const US_POP_INSIGHTS = 324700000;
             const isProjectionInsights = dashDisplayMode === 'projection';
             
-            document.getElementById('topOverIndexers').innerHTML = topOverIndexers.map((item, i) => {
+            const topOverEl = document.getElementById('topOverIndexers');
+            if (topOverEl) topOverEl.innerHTML = topOverIndexers.map((item, i) => {
                 const profilePct = item.pct || 0;
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionInsights 
@@ -36635,7 +36636,8 @@
             }).join('') || '<p style="color: var(--text-secondary); padding: 1rem;">No over-indexing items</p>';
             
             // Render under-indexers with Profile % and Gen Pop %
-            document.getElementById('topUnderIndexers').innerHTML = topUnderIndexers.map((item, i) => {
+            const topUnderEl = document.getElementById('topUnderIndexers');
+            if (topUnderEl) topUnderEl.innerHTML = topUnderIndexers.map((item, i) => {
                 const profilePct = item.pct || 0;
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionInsights 
@@ -36665,7 +36667,8 @@
             });
             const US_POP_CHAMP = 324700000;
             const isProjectionChamp = dashDisplayMode === 'projection';
-            document.getElementById('categoryChampions').innerHTML = Object.entries(categoryChampions)
+            const categoryChampEl = document.getElementById('categoryChampions');
+            if (categoryChampEl) categoryChampEl.innerHTML = Object.entries(categoryChampions)
                 .sort((a, b) => b[1].index - a[1].index)
                 .slice(0, 24)
                 .map(([cat, item]) => {
@@ -36704,7 +36707,8 @@
                 .slice(0, 12);
             const US_POP_HIDDEN = 324700000;
             const isProjectionHidden = dashDisplayMode === 'projection';
-            document.getElementById('hiddenGems').innerHTML = hiddenGems.map((item, i) => {
+            const hiddenGemsEl = document.getElementById('hiddenGems');
+            if (hiddenGemsEl) hiddenGemsEl.innerHTML = hiddenGems.map((item, i) => {
                 const profilePct = item.pct || 0;
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionHidden 
@@ -41946,6 +41950,7 @@
 
         function renderJobs(jobs) {
             const container = document.getElementById('jobsList');
+            if (!container) return;
 
             if (jobs.length === 0) {
                 container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary); font-size: 0.8rem;">No results found</div>';
