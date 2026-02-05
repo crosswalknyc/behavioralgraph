@@ -46497,9 +46497,15 @@
             const name = prompt('Enter deck name:', 'New Comparison Deck');
             if (!name) return;
             
-            // Build comparison profile images for title slide (both profiles being compared)
-            const profiles = window.comparisonProfilesData || [];
-            const comparisonProfiles = profiles.slice(0, 10).map(p => {
+            // Use only profiles selected in the modal (checked checkboxes), not all comparison profiles
+            const allProfiles = window.pendingComparisonData?.profiles || window.comparisonProfilesData || [];
+            const selectedIds = new Set(
+                Array.from(document.querySelectorAll('.comp-profile-checkbox:checked')).map(cb => cb.value)
+            );
+            const profilesToUse = selectedIds.size > 0
+                ? allProfiles.filter(p => selectedIds.has(String(p.id || p.name)))
+                : allProfiles.slice(0, 10);
+            const comparisonProfiles = (profilesToUse.length > 0 ? profilesToUse : allProfiles.slice(0, 10)).slice(0, 10).map(p => {
                 const cacheKey = (p.name || '').toLowerCase().trim();
                 const img = p.image || (typeof profileImageCache !== 'undefined' && profileImageCache[cacheKey] && profileImageCache[cacheKey] !== 'pending' && profileImageCache[cacheKey] !== 'none' ? profileImageCache[cacheKey] : null);
                 return { name: p.name || 'Profile', image: img || null };
@@ -46732,6 +46738,19 @@
                 notes: '',
                 elements: []
             };
+            
+            // Update deck title slide to show only the selected profiles (so "Audience Comparison" shows 2 images, not all 3)
+            const comparisonProfilesForTitle = profiles.map(p => {
+                const cacheKey = (p.name || '').toLowerCase().trim();
+                const img = p.image || (typeof profileImageCache !== 'undefined' && profileImageCache[cacheKey] && profileImageCache[cacheKey] !== 'pending' && profileImageCache[cacheKey] !== 'none' ? profileImageCache[cacheKey] : null);
+                return { name: p.name || 'Profile', image: img || null };
+            });
+            if (!deck.titleSlide) deck.titleSlide = {};
+            deck.titleSlide.title = deck.titleSlide.title || 'Audience Comparison';
+            deck.titleSlide.subtitle = deck.titleSlide.subtitle || 'Powered by Crosswalk IQ';
+            deck.titleSlide.isComparison = comparisonProfilesForTitle.length >= 1;
+            deck.titleSlide.comparisonProfiles = comparisonProfilesForTitle;
+            if (comparisonProfilesForTitle.length === 1) deck.titleSlide.image = comparisonProfilesForTitle[0].image || null;
             
             // Add to deck
             if (!deck.slides) deck.slides = [];
