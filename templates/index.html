@@ -43810,11 +43810,12 @@
                 const isPrimary = idx === primaryProfileIndex;
                 const primaryIndicator = isPrimary ? '<span class="comp-profile-tab-primary" title="Primary Profile">★</span>' : '';
                 const primaryClass = isPrimary ? 'is-primary' : '';
+                const idEsc = escapeIdForOnclick(p.id);
                 return `
                     <div class="comp-profile-tab ${primaryClass}" style="background: linear-gradient(135deg, ${p.color}dd, ${p.color}99); border-bottom: 3px solid ${p.color};" onclick="setPrimaryProfile(${idx})" title="${isPrimary ? 'Primary Profile' : 'Click to set as primary'}">
                         ${primaryIndicator}
                         <span class="comp-profile-tab-name">${p.name}</span>
-                        <button class="comp-profile-tab-close" onclick="event.stopPropagation(); removeProfileFromComparison('${p.id}', ${p.isSegment || false})" title="Remove from comparison">×</button>
+                        <button class="comp-profile-tab-close" onclick="event.stopPropagation(); removeProfileFromComparison('${idEsc}', ${p.isSegment || false})" title="Remove from comparison">×</button>
                     </div>
                 `;
             }).join('');
