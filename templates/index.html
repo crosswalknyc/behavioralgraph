@@ -35419,12 +35419,12 @@
             if (!slide) return '';
             
             const vizPrefs = slide.vizPrefs || {
-                type: 'auto', // auto, bars, table, columns, pie
+                type: 'auto', // auto, bars, columnchart, table, pie, boxes, gauge, line, area, scatter
                 count: 'auto', // auto, 3, 5, 10, 15, 20, 'all', 'threshold'
                 threshold: 30 // for threshold mode
             };
             
-            const currentType = vizPrefs.type || 'auto';
+            const currentType = (vizPrefs.type === 'columns' ? 'columnchart' : vizPrefs.type) || 'auto';
             const currentCount = vizPrefs.count || 'auto';
             const currentThreshold = vizPrefs.threshold || 30;
             
@@ -35452,19 +35452,27 @@
                     <div class="viz-control-panel-body" onmousedown="event.stopPropagation();">
                     <div class="viz-control-section">
                         <div class="viz-control-label">📊 Visualization</div>
-                        <div class="viz-type-buttons">
+                        <div class="viz-type-buttons" style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
                             <button class="viz-type-btn ${currentType === 'auto' ? 'active' : ''}" 
                                     onclick="event.stopPropagation(); updateVizType(${slideIdx}, 'auto')">Auto</button>
                             <button class="viz-type-btn ${currentType === 'bars' ? 'active' : ''}" 
-                                    onclick="event.stopPropagation(); updateVizType(${slideIdx}, 'bars')">Bars</button>
+                                    onclick="event.stopPropagation(); updateVizType(${slideIdx}, 'bars')">Bar Chart</button>
+                            <button class="viz-type-btn ${currentType === 'columnchart' ? 'active' : ''}" 
+                                    onclick="event.stopPropagation(); updateVizType(${slideIdx}, 'columnchart')">Column Chart</button>
                             <button class="viz-type-btn ${currentType === 'table' ? 'active' : ''}" 
                                     onclick="event.stopPropagation(); updateVizType(${slideIdx}, 'table')">Table</button>
-                            <button class="viz-type-btn ${currentType === 'columns' ? 'active' : ''}" 
-                                    onclick="event.stopPropagation(); updateVizType(${slideIdx}, 'columns')">Columns</button>
                             <button class="viz-type-btn ${currentType === 'pie' ? 'active' : ''}" 
                                     onclick="event.stopPropagation(); updateVizType(${slideIdx}, 'pie')">Pie Chart</button>
                             <button class="viz-type-btn ${currentType === 'boxes' ? 'active' : ''}" 
                                     onclick="event.stopPropagation(); updateVizType(${slideIdx}, 'boxes')">Boxes</button>
+                            <button class="viz-type-btn ${currentType === 'gauge' ? 'active' : ''}" 
+                                    onclick="event.stopPropagation(); updateVizType(${slideIdx}, 'gauge')">Gauge</button>
+                            <button class="viz-type-btn ${currentType === 'line' ? 'active' : ''}" 
+                                    onclick="event.stopPropagation(); updateVizType(${slideIdx}, 'line')">Line</button>
+                            <button class="viz-type-btn ${currentType === 'area' ? 'active' : ''}" 
+                                    onclick="event.stopPropagation(); updateVizType(${slideIdx}, 'area')">Area</button>
+                            <button class="viz-type-btn ${currentType === 'scatter' ? 'active' : ''}" 
+                                    onclick="event.stopPropagation(); updateVizType(${slideIdx}, 'scatter')">Scatter</button>
                         </div>
                     </div>
                     
@@ -35801,7 +35809,8 @@
             
             saveDeckChanges();
             renderSlideEditor();
-            showNotification(`Visualization changed to ${type}`, 'success');
+            const typeLabels = { auto: 'Auto', bars: 'Bar Chart', columnchart: 'Column Chart', columns: 'Column Chart', table: 'Table', pie: 'Pie Chart', boxes: 'Boxes', gauge: 'Gauge', line: 'Line', area: 'Area', scatter: 'Scatter' };
+            showNotification(`Visualization changed to ${typeLabels[type] || type}`, 'success');
         }
         
         function updateVizCount(slideIdx, count) {
@@ -36000,6 +36009,117 @@
             `;
         }
         
+        function renderDemographicColumnChart(entries, totalCount) {
+            const maxVal = Math.max(...entries.map(([_, v]) => parseFloat(v)), 1);
+            return `
+                <div style="display: flex; align-items: flex-end; justify-content: space-around; gap: 0.25rem; height: 180px; padding: 0.5rem 0;">
+                    ${entries.map(([key, val], i) => {
+                        const pct = parseFloat(val);
+                        const barHeight = maxVal > 0 ? (pct / maxVal * 100) : 0;
+                        return `
+                        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; min-width: 0;">
+                            <div style="width: 100%; height: 140px; display: flex; align-items: flex-end; justify-content: center;">
+                                <div style="width: 75%; max-width: 40px; height: ${barHeight}%; min-height: 2px; background: linear-gradient(180deg, var(--accent-lime), var(--accent-cyan)); border-radius: 4px 4px 0 0; transition: height 0.3s;"></div>
+                            </div>
+                            <div style="font-size: 0.55rem; color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;" title="${escapeHtml(key)}">${escapeHtml((key || '').slice(0, 8))}</div>
+                            <div style="font-size: 0.6rem; font-weight: 600; color: var(--accent-lime);">${pct.toFixed(1)}%</div>
+                        </div>
+                    `}).join('')}
+                </div>
+                ${entries.length < totalCount ? `
+                    <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
+                        📊 Showing ${entries.length} of ${totalCount} segments
+                    </div>
+                ` : ''}
+            `;
+        }
+
+        function renderDemographicGauge(entries, totalCount) {
+            const topVal = entries.length ? parseFloat(entries[0][1]) : 0;
+            const angle = Math.min((topVal / 100) * 180, 180);
+            const colors = ['#c8ff00', '#66d9ef', '#a6e22e'];
+            return `
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <div style="position: relative; width: 160px; height: 90px; flex-shrink: 0;">
+                        <div style="position: absolute; width: 100%; height: 100%; border-radius: 80px 80px 0 0; background: conic-gradient(from 0.5turn at 50% 100%, ${colors[0]} 0deg, ${colors[1]} 90deg, ${colors[2]} 180deg); opacity: 0.2;"></div>
+                        <div style="position: absolute; width: 100%; height: 100%; border-radius: 80px 80px 0 0; background: conic-gradient(from 0.5turn at 50% 100%, transparent ${angle}deg, var(--accent-lime) ${angle}deg); opacity: 0.95;"></div>
+                        <div style="position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%); font-size: 1.2rem; font-weight: 700; color: var(--accent-lime);">${topVal.toFixed(1)}%</div>
+                    </div>
+                    <div style="flex: 1; font-size: 0.7rem; color: var(--text-secondary);">Top: ${escapeHtml(entries[0]?.[0] || '')}</div>
+                </div>
+                ${entries.length < totalCount ? `
+                    <div style="margin-top: 0.5rem; padding: 0.4rem; text-align: center; font-size: 0.65rem; color: var(--text-secondary); background: rgba(200, 230, 0, 0.1); border-radius: 4px;">
+                        📊 Showing top of ${totalCount} segments
+                    </div>
+                ` : ''}
+            `;
+        }
+
+        function renderDemographicLineChart(entries, totalCount) {
+            const values = entries.map(([_, v]) => parseFloat(v));
+            const maxVal = Math.max(...values, 1);
+            const n = Math.max(values.length - 1, 1);
+            const pts = values.map((v, i) => {
+                const x = (i / n) * 90 + 5;
+                const y = 90 - (v / maxVal * 80);
+                return x + ',' + y;
+            });
+            return `
+                <div style="position: relative; height: 160px; padding: 0.5rem 0;">
+                    <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="position: absolute; inset: 0; width: 100%; height: 100%;">
+                        <polyline fill="none" stroke="var(--accent-lime)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts.join(' ')}"/>
+                    </svg>
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.55rem; color: var(--text-secondary);">
+                        ${entries.map(([k]) => '<span style="flex:1; text-align:center; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml((k||'').slice(0,6)) + '</span>').join('')}
+                    </div>
+                </div>
+                ${entries.length < totalCount ? `<div style="margin-top: 0.3rem; font-size: 0.65rem; color: var(--text-secondary); text-align: center;">Showing ${entries.length} of ${totalCount}</div>` : ''}
+            `;
+        }
+
+        function renderDemographicAreaChart(entries, totalCount) {
+            const values = entries.map(([_, v]) => parseFloat(v));
+            const maxVal = Math.max(...values, 1);
+            const n = Math.max(values.length - 1, 1);
+            const pts = values.map((v, i) => {
+                const x = (i / n) * 90 + 5;
+                const y = 90 - (v / maxVal * 80);
+                return x + ',' + y;
+            });
+            const areaPts = '5,90 ' + pts.join(' ') + ' 95,90';
+            return `
+                <div style="position: relative; height: 160px; padding: 0.5rem 0;">
+                    <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="position: absolute; inset: 0; width: 100%; height: 100%;">
+                        <polygon fill="rgba(200, 230, 0, 0.35)" stroke="var(--accent-lime)" stroke-width="1.5" points="${areaPts}"/>
+                    </svg>
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.55rem; color: var(--text-secondary);">
+                        ${entries.map(([k]) => '<span style="flex:1; text-align:center; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml((k||'').slice(0,6)) + '</span>').join('')}
+                    </div>
+                </div>
+                ${entries.length < totalCount ? `<div style="margin-top: 0.3rem; font-size: 0.65rem; color: var(--text-secondary); text-align: center;">Showing ${entries.length} of ${totalCount}</div>` : ''}
+            `;
+        }
+
+        function renderDemographicScatterChart(entries, totalCount) {
+            const maxVal = Math.max(...entries.map(([_, v]) => parseFloat(v)), 1);
+            return `
+                <div style="position: relative; height: 160px; padding: 0.5rem 0;">
+                    <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="position: absolute; inset: 0; width: 100%; height: 100%;">
+                        ${entries.map(([_, v], i) => {
+                            const pct = parseFloat(v);
+                            const x = (i / Math.max(entries.length - 1, 1)) * 90 + 5;
+                            const y = 95 - (pct / maxVal * 85);
+                            return `<circle cx="${x}" cy="${y}" r="4" fill="var(--accent-lime)" opacity="0.9"/>`;
+                        }).join('')}
+                    </svg>
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.55rem; color: var(--text-secondary);">
+                        ${entries.map(([k]) => '<span style="flex:1; text-align:center; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml((k||'').slice(0,6)) + '</span>').join('')}
+                    </div>
+                </div>
+                ${entries.length < totalCount ? `<div style="margin-top: 0.3rem; font-size: 0.65rem; color: var(--text-secondary); text-align: center;">Showing ${entries.length} of ${totalCount}</div>` : ''}
+            `;
+        }
+
         function renderDemographicPie(entries, totalCount) {
             // Simple pie chart using CSS conic-gradient
             const total = entries.reduce((sum, [_, v]) => sum + parseFloat(v), 0);
@@ -51505,12 +51625,23 @@
                 }
                 
                 // Override visualization type if specified
-                if (vizPrefs.type === 'bars') {
+                const vizType = vizPrefs.type === 'columns' ? 'columnchart' : (vizPrefs.type || 'auto');
+                if (vizType === 'bars') {
                     return renderDemographicBars(entries, itemCount);
-                } else if (vizPrefs.type === 'table') {
+                } else if (vizType === 'columnchart') {
+                    return renderDemographicColumnChart(entries, itemCount);
+                } else if (vizType === 'table') {
                     return renderDemographicTable(entries, itemCount);
-                } else if (vizPrefs.type === 'pie') {
+                } else if (vizType === 'pie') {
                     return renderDemographicPie(entries, itemCount);
+                } else if (vizType === 'gauge') {
+                    return renderDemographicGauge(entries, itemCount);
+                } else if (vizType === 'line') {
+                    return renderDemographicLineChart(entries, itemCount);
+                } else if (vizType === 'area') {
+                    return renderDemographicAreaChart(entries, itemCount);
+                } else if (vizType === 'scatter') {
+                    return renderDemographicScatterChart(entries, itemCount);
                 }
                 
                 return `
@@ -51610,8 +51741,66 @@
                     `;
                 }
                 
-                // Strategy 2: If 19-29 items, use 3 columns with smaller font
-                if (vizPrefs.type === 'columns' || (vizPrefs.type === 'auto' && displayCount >= 19 && displayCount < 30)) {
+                // Column Chart (vertical bars) - explicit type
+                const bevVizType = vizPrefs.type === 'columns' ? 'columnchart' : (vizPrefs.type || 'auto');
+                if (bevVizType === 'columnchart') {
+                    const maxVal = Math.max(...entries.map(([_, v]) => parseFloat(v || 0)), 1);
+                    return `
+                        <div style="display: flex; align-items: flex-end; justify-content: space-around; gap: 0.2rem; height: 160px; padding: 0.5rem 0;">
+                            ${entries.map(([key, val], i) => {
+                                const pct = parseFloat(val || 0);
+                                const barHeight = maxVal > 0 ? (pct / maxVal * 100) : 0;
+                                return `
+                                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; min-width: 0;">
+                                    <div style="width: 100%; height: 120px; display: flex; align-items: flex-end; justify-content: center;">
+                                        <div style="width: 70%; max-width: 36px; height: ${barHeight}%; min-height: 2px; background: linear-gradient(180deg, var(--accent-lime), var(--accent-cyan)); border-radius: 4px 4px 0 0;"></div>
+                                    </div>
+                                    <div style="font-size: 0.5rem; color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;" title="${(key || '').replace(/"/g, '&quot;')}">${(key || '').slice(0, 6).replace(/</g, '&lt;')}</div>
+                                    <div style="font-size: 0.55rem; font-weight: 600; color: var(--accent-lime);">${pct.toFixed(1)}%</div>
+                                </div>
+                            `}).join('')}
+                        </div>
+                        ${displayCount < itemCount ? `<div style="margin-top: 0.5rem; font-size: 0.65rem; color: var(--text-secondary); text-align: center;">Showing ${displayCount} of ${itemCount}</div>` : ''}
+                    `;
+                }
+                if (bevVizType === 'gauge') {
+                    const topVal = entries.length ? parseFloat(entries[0][1] || 0) : 0;
+                    const angle = Math.min((topVal / 100) * 180, 180);
+                    return `
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <div style="position: relative; width: 140px; height: 80px; flex-shrink: 0;">
+                                <div style="position: absolute; width: 100%; height: 100%; border-radius: 70px 70px 0 0; background: linear-gradient(90deg, rgba(200,230,0,0.15) 0%, rgba(0,212,255,0.15) 100%);"></div>
+                                <div style="position: absolute; width: 100%; height: 100%; border-radius: 70px 70px 0 0; background: conic-gradient(from 0.5turn at 50% 100%, transparent ${angle}deg, var(--accent-lime) ${angle}deg); opacity: 0.9;"></div>
+                                <div style="position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); font-size: 1rem; font-weight: 700; color: var(--accent-lime);">${topVal.toFixed(1)}%</div>
+                            </div>
+                            <div style="flex: 1; font-size: 0.65rem; color: var(--text-secondary);">Top: ${(entries[0]?.[0] || '').slice(0, 40).replace(/</g, '&lt;')}</div>
+                        </div>
+                    `;
+                }
+                if (bevVizType === 'line' || bevVizType === 'area' || bevVizType === 'scatter') {
+                    const values = entries.map(([_, v]) => parseFloat(v || 0));
+                    const maxVal = Math.max(...values, 1);
+                    const n = Math.max(values.length - 1, 1);
+                    if (bevVizType === 'line') {
+                        const pts = values.map((v, i) => ((i / n) * 90 + 5) + ',' + (90 - (v / maxVal * 80)));
+                        return `<div style="position: relative; height: 140px;"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;"><polyline fill="none" stroke="var(--accent-lime)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="${pts.join(' ')}"/></svg></div>`;
+                    }
+                    if (bevVizType === 'area') {
+                        const pts = values.map((v, i) => ((i / n) * 90 + 5) + ',' + (90 - (v / maxVal * 80)));
+                        const areaPts = '5,90 ' + pts.join(' ') + ' 95,90';
+                        return `<div style="position: relative; height: 140px;"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;"><polygon fill="rgba(200, 230, 0, 0.35)" stroke="var(--accent-lime)" stroke-width="1.5" points="${areaPts}"/></svg></div>`;
+                    }
+                    if (bevVizType === 'scatter') {
+                        const circles = values.map((v, i) => {
+                            const x = (i / n) * 90 + 5;
+                            const y = 90 - (v / maxVal * 80);
+                            return `<circle cx="${x}" cy="${y}" r="3.5" fill="var(--accent-lime)" opacity="0.9"/>`;
+                        }).join('');
+                        return `<div style="position: relative; height: 140px;"><svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;">${circles}</svg></div>`;
+                    }
+                }
+                // Strategy 2: If 19-29 items, use 3 columns with smaller font (auto mode only)
+                if (bevVizType === 'auto' && displayCount >= 19 && displayCount < 30) {
                     return `
                         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.3rem; font-size: 0.7rem;">
                             ${entries.map(([key, val], i) => `
