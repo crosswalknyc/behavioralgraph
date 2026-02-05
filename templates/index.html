@@ -51067,8 +51067,6 @@
             
             // For Table of Contents slide
             if (slide.type === 'toc') {
-                const today = new Date();
-                const dateStr = today.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', day: '2-digit', month: 'short', year: 'numeric' }) + ' PST';
                 const profileImage = getDeckTitleSlideProfileImage(currentEditingDeck?.titleSlide || {});
                 
                 // Get list of slide titles for TOC (exclude TOC and closing slides)
@@ -51086,10 +51084,9 @@
                 const col2 = tocItems.slice(8, 16);
                 
                 return `
-                    <!-- Header bar -->
+                    <!-- Header bar (no date in top right per request) -->
                     <div style="position: absolute; left: 5%; top: 2%; width: 90%; display: flex; justify-content: space-between; align-items: center; font-size: 0.65rem; color: rgba(255,255,255,0.5);">
                         <span>Crosswalk Profile IQ</span>
-                        <span>${dateStr}</span>
                     </div>
                     
                     <!-- Section title - EDITABLE -->
@@ -51155,9 +51152,6 @@
             
             // For Closing/Thank You slide - Bold typography matching inspiration
             if (slide.type === 'closing') {
-                const today = new Date();
-                const dateStr = today.toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', day: '2-digit', month: 'short', year: 'numeric' }) + ' PST';
-                
                 // Get presenter info
                 const presenterName = (currentUserFirstName && currentUserLastName) 
                     ? `${currentUserFirstName} ${currentUserLastName}` 
@@ -51185,9 +51179,8 @@
                             ${escapeHtml(slide.customSubtitle || 'YOU.')}
                         </div>
                         
-                        <!-- Right side info panel -->
+                        <!-- Right side info panel (no date in top right per request) -->
                         <div style="position: absolute; top: 4%; right: 4%; text-align: right;">
-                            <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-bottom: 0.3rem;">${dateStr}</div>
                             <div contenteditable="true" 
                                  style="font-size: 0.85rem; font-weight: 700; color: #ffffff; cursor: text; padding: 2px 4px; border-radius: 3px;"
                                  onfocus="this.style.background='rgba(255,255,255,0.05)'" 

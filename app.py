@@ -3519,6 +3519,79 @@ This email was sent from Crosswalk IQ
         return jsonify({'success': False, 'error': str(e)})
 
 
+def _send_deck_collaboration_invite(to_email, deck_name, inviter_display, app_url):
+    """Send email when someone is invited to collaborate on a deck. Content: asked to collaborate on PROFILE NAME deck by FIRST LAST, link to log in."""
+    subject = f"You've been asked to collaborate on {deck_name} deck"
+    login_url = app_url.rstrip('/') + '/login'
+    html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 20px; }}
+        .container {{ max-width: 600px; margin: 0 auto; background: #16213e; border-radius: 12px; padding: 30px; }}
+        .header {{ text-align: center; margin-bottom: 30px; }}
+        .header h1 {{ color: #00d9ff; margin: 0; font-size: 24px; }}
+        .content {{ line-height: 1.8; }}
+        .deck-card {{ background: #1a1a2e; border-radius: 8px; padding: 20px; margin: 20px 0; border-left: 4px solid #a6e22e; }}
+        .deck-name {{ font-size: 20px; font-weight: bold; color: #a6e22e; margin-bottom: 10px; }}
+        .inviter {{ color: #888; font-size: 14px; }}
+        .btn {{ display: inline-block; background: #a6e22e; color: #000; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 20px; }}
+        .footer {{ margin-top: 30px; padding-top: 20px; border-top: 1px solid #333; text-align: center; color: #666; font-size: 12px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>You've been asked to collaborate on a deck</h1>
+        </div>
+        <div class="content">
+            <p><strong>{inviter_display}</strong> has invited you to collaborate on their presentation deck in Crosswalk IQ.</p>
+            <div class="deck-card">
+                <div class="deck-name">{deck_name}</div>
+                <div class="inviter">Invited by {inviter_display}</div>
+            </div>
+            <p>You have full access to view and edit this deck. Log in to the dashboard to get started.</p>
+            <center>
+                <a href="{login_url}" class="btn">Log in to Crosswalk IQ</a>
+            </center>
+        </div>
+        <div class="footer">
+            <p>This email was sent from Crosswalk IQ</p>
+            <p>© Crosswalk NYC</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+    text_content = f"""
+You've been asked to collaborate on a deck
+
+{inviter_display} has invited you to collaborate on their presentation deck in Crosswalk IQ.
+
+Deck: {deck_name}
+Invited by: {inviter_display}
+
+You have full access to view and edit this deck.
+
+Log in to the dashboard: {login_url}
+
+---
+This email was sent from Crosswalk IQ
+© Crosswalk NYC
+"""
+    try:
+        success, message = send_email_via_gmail(to_email, subject, html_content, text_content)
+        if success:
+            print(f"✅ Deck collaboration invite sent to {to_email}")
+        else:
+            print(f"❌ Failed to send deck collaboration invite to {to_email}: {message}")
+        return success
+    except Exception as e:
+        print(f"❌ Error sending deck collaboration invite to {to_email}: {e}")
+        return False
+
+
 @app.route('/api/health')
 def health_check():
     """Quick health check endpoint."""
@@ -11520,10 +11593,22 @@ def get_user_decks():
                         )
                         
                         if can_view:
+                            # Resolve owner display name for deck builder avatars
+                            owner_name = owner
+                            try:
+                                users_data = load_users()
+                                u = (users_data.get('users') or {}).get(owner) or {}
+                                fn = (u.get('first_name') or '').strip()
+                                ln = (u.get('last_name') or '').strip()
+                                if fn or ln:
+                                    owner_name = f"{fn} {ln}".strip()
+                            except Exception:
+                                pass
                             decks.append({
                                 'id': deck_data.get('id'),
                                 'name': deck_data.get('name', 'Untitled Deck'),
                                 'owner': owner,
+                                'owner_name': owner_name,
                                 'is_mine': owner == username,
                                 'is_team_deck': is_team_deck,
                                 'is_collaborator': is_collaborator,
@@ -11623,6 +11708,20 @@ def get_deck(deck_id):
             return jsonify({'success': False, 'error': 'Permission denied'})
         
         deck['can_edit'] = owner == username or username in shared_with or is_collaborator
+        
+        # Add owner_name for deck builder avatars
+        if not deck.get('owner_name') and owner:
+            try:
+                users_data = load_users()
+                u = (users_data.get('users') or {}).get(owner) or {}
+                fn = (u.get('first_name') or '').strip()
+                ln = (u.get('last_name') or '').strip()
+                if fn or ln:
+                    deck['owner_name'] = f"{fn} {ln}".strip()
+                else:
+                    deck['owner_name'] = owner
+            except Exception:
+                deck['owner_name'] = owner
         
         return jsonify({'success': True, 'deck': deck})
     except s3_client.exceptions.NoSuchKey:
