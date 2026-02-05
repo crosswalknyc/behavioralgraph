@@ -36537,7 +36537,8 @@
                 'Top Income': 'The income bracket most common among this audience.'
             };
             
-            document.getElementById('audienceSnapshot').innerHTML = demoInsights.map(d => {
+            const audienceSnapshotEl2 = document.getElementById('audienceSnapshot');
+            if (audienceSnapshotEl2) audienceSnapshotEl2.innerHTML = demoInsights.map(d => {
                 const idxValue = (d.index / 100).toFixed(3);
                 const idxColor = d.index >= 100 ? '#10b981' : '#ef4444';
                 return `
@@ -36763,7 +36764,8 @@
                 .slice(0, 12);
             const US_POP_RISING = 324700000;
             const isProjectionRising = dashDisplayMode === 'projection';
-            document.getElementById('risingBehaviors').innerHTML = risingBehaviors.map((item, i) => {
+            const risingBehaviorsEl = document.getElementById('risingBehaviors');
+            if (risingBehaviorsEl) risingBehaviorsEl.innerHTML = risingBehaviors.map((item, i) => {
                 const profilePct = item.pct || 0;
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionRising 
@@ -36800,7 +36802,8 @@
             const maxStreamPct = Math.max(...streamingItems.map(i => i.pct), 1);
             const US_POP_STREAM = 324700000;
             const isProjectionStream = dashDisplayMode === 'projection';
-            document.getElementById('streamingPreferences').innerHTML = streamingItems.map(item => {
+            const streamingEl = document.getElementById('streamingPreferences');
+            if (streamingEl) streamingEl.innerHTML = streamingItems.map(item => {
                 const profilePct = item.pct || 0;
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionStream 
@@ -36833,7 +36836,8 @@
             const maxSocialPct = Math.max(...socialItems.map(i => i.pct), 1);
             const US_POP_SOCIAL = 324700000;
             const isProjectionSocial = dashDisplayMode === 'projection';
-            document.getElementById('socialMediaUsage').innerHTML = socialItems.map(item => {
+            const socialEl = document.getElementById('socialMediaUsage');
+            if (socialEl) socialEl.innerHTML = socialItems.map(item => {
                 const profilePct = item.pct || 0;
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionSocial 
@@ -36866,7 +36870,8 @@
             const maxAudioPct = Math.max(...audioItems.map(i => i.pct), 1);
             const US_POP_AUDIO = 324700000;
             const isProjectionAudio = dashDisplayMode === 'projection';
-            document.getElementById('audioPreferences').innerHTML = audioItems.map(item => {
+            const audioEl = document.getElementById('audioPreferences');
+            if (audioEl) audioEl.innerHTML = audioItems.map(item => {
                 const profilePct = item.pct || 0;
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionAudio 
@@ -36899,7 +36904,8 @@
             const maxGamingPct = Math.max(...gamingItems.map(i => i.pct), 1);
             const US_POP_GAMING = 324700000;
             const isProjectionGaming = dashDisplayMode === 'projection';
-            document.getElementById('gamingAffinity').innerHTML = gamingItems.map(item => {
+            const gamingEl = document.getElementById('gamingAffinity');
+            if (gamingEl) gamingEl.innerHTML = gamingItems.map(item => {
                 const profilePct = item.pct || 0;
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionGaming 
@@ -36945,7 +36951,8 @@
             }).filter(m => m.avgIndex > 0 && m.count > 0);
             const US_POP_MEDIA = 324700000;
             const isProjectionMedia = dashDisplayMode === 'projection';
-            document.getElementById('mediaConsumptionSummary').innerHTML = mediaSummary.map(m => {
+            const mediaSummaryEl = document.getElementById('mediaConsumptionSummary');
+            if (mediaSummaryEl) mediaSummaryEl.innerHTML = mediaSummary.map(m => {
                 const profileDisplay = isProjectionMedia 
                     ? formatNumber(Math.round((m.avgProfilePct / 100) * US_POP_MEDIA))
                     : m.avgProfilePct.toFixed(2) + '%';
@@ -36984,7 +36991,8 @@
             ).sort((a, b) => b.index - a.index).slice(0, 10);
             const US_POP_BRAND = 324700000;
             const isProjectionBrand = dashDisplayMode === 'projection';
-            document.getElementById('brandOpportunities').innerHTML = brandItems.map((item, i) => {
+            const brandOppEl = document.getElementById('brandOpportunities');
+            if (brandOppEl) brandOppEl.innerHTML = brandItems.map((item, i) => {
                 const profilePct = item.pct || 0;
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionBrand 
@@ -37035,7 +37043,8 @@
                 .slice(0, 10);
             const US_POP_UNTAPPED = 324700000;
             const isProjectionUntapped = dashDisplayMode === 'projection';
-            document.getElementById('untappedCategories').innerHTML = untappedCats.map((cat, i) => {
+            const untappedEl = document.getElementById('untappedCategories');
+            if (untappedEl) untappedEl.innerHTML = untappedCats.map((cat, i) => {
                 const profileDisplay = isProjectionUntapped 
                     ? formatNumber(Math.round((cat.avgProfilePct / 100) * US_POP_UNTAPPED))
                     : cat.avgProfilePct.toFixed(2) + '%';
@@ -37070,7 +37079,8 @@
                 .slice(0, 12);
             const US_POP_SHOP = 324700000;
             const isProjectionShop = dashDisplayMode === 'projection';
-            document.getElementById('shoppingAffinity').innerHTML = shoppingItems.map((item, i) => {
+            const shoppingEl = document.getElementById('shoppingAffinity');
+            if (shoppingEl) shoppingEl.innerHTML = shoppingItems.map((item, i) => {
                 const profilePct = item.pct || 0;
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionShop 
@@ -37096,7 +37106,8 @@
             ).sort((a, b) => b.index - a.index).slice(0, 10);
             const US_POP_CONTENT = 324700000;
             const isProjectionContent = dashDisplayMode === 'projection';
-            document.getElementById('contentPartnerships').innerHTML = contentItems.map((item, i) => {
+            const contentPartEl = document.getElementById('contentPartnerships');
+            if (contentPartEl) contentPartEl.innerHTML = contentItems.map((item, i) => {
                 const profilePct = item.pct || 0;
                 const genPopPct = item.genPopPct || 0;
                 const profileDisplay = isProjectionContent 
@@ -37129,7 +37140,8 @@
             const topLocations = (data.locations || []).filter(l => l.index > 100).sort((a, b) => b.index - a.index).slice(0, 10);
             const US_POP_GEO = 324700000;
             const isProjectionGeo = dashDisplayMode === 'projection';
-            document.getElementById('geoOpportunities').innerHTML = topLocations.map(loc => {
+            const geoOppEl = document.getElementById('geoOpportunities');
+            if (geoOppEl) geoOppEl.innerHTML = topLocations.map(loc => {
                 const profilePct = loc.pct || 0;
                 const genPopPct = loc.genPopPct || 0;
                 const profileDisplay = isProjectionGeo 
@@ -37162,25 +37174,29 @@
             const topMedia = allItems.filter(i => 
                 ['STREAMING', 'BROADCAST', 'SOCIAL', 'PODCAST', 'CABLE'].some(m => i.category.toUpperCase().includes(m))
             ).sort((a, b) => b.index - a.index).slice(0, 5);
-            document.getElementById('mediaBuyingRecs').innerHTML = topMedia.map(item => `
+            const mediaBuyingEl = document.getElementById('mediaBuyingRecs');
+            if (mediaBuyingEl) mediaBuyingEl.innerHTML = topMedia.map(item => `
                 <div class="activation-item">Prioritize ${item.name} (Index: ${item.index})</div>
             `).join('') || '<div class="activation-item">Analyze media patterns for recommendations</div>';
             
             // Creative strategy recommendations
             const topBehaviors = topOverIndexers.slice(0, 3);
-            document.getElementById('creativeStrategyRecs').innerHTML = `
+            const creativeStrategyEl = document.getElementById('creativeStrategyRecs');
+            if (creativeStrategyEl) creativeStrategyEl.innerHTML = `
                 <div class="activation-item">Feature themes around: ${topBehaviors.map(b => b.name).join(', ')}</div>
                 <div class="activation-item">Target age group: ${demoInsights.find(d => d.label.includes('Age'))?.value || 'All ages'}</div>
                 <div class="activation-item">Tone: ${uniquenessScore > 60 ? 'Bold and distinctive' : 'Broad and inclusive'}</div>
             `;
             
             // Partnership recommendations
-            document.getElementById('partnershipRecs').innerHTML = brandItems.slice(0, 3).map(item => `
+            const partnershipRecsEl = document.getElementById('partnershipRecs');
+            if (partnershipRecsEl) partnershipRecsEl.innerHTML = brandItems.slice(0, 3).map(item => `
                 <div class="activation-item">Partner with ${item.name} for audience alignment</div>
             `).join('') || '<div class="activation-item">Explore brand partnerships based on affinities</div>';
             
             // Geographic focus
-            document.getElementById('geoFocusRecs').innerHTML = topLocations.slice(0, 3).map(loc => `
+            const geoFocusEl = document.getElementById('geoFocusRecs');
+            if (geoFocusEl) geoFocusEl.innerHTML = topLocations.slice(0, 3).map(loc => `
                 <div class="activation-item">Focus on ${loc.name} (${loc.index} index)</div>
             `).join('') || '<div class="activation-item">National campaign recommended</div>';
             
@@ -37190,13 +37206,15 @@
                 ...demoInsights.slice(0, 2).map(d => d.value),
                 ...topLocations.slice(0, 2).map(l => l.name)
             ].slice(0, 10);
-            document.getElementById('targetingChecklist').innerHTML = targetingItems.map(item => `
+            const targetingEl = document.getElementById('targetingChecklist');
+            if (targetingEl) targetingEl.innerHTML = targetingItems.map(item => `
                 <div class="checklist-item">${item}</div>
             `).join('') || '<div class="checklist-item">Build targeting based on insights</div>';
             
             // Things to avoid
             const avoidItems = topUnderIndexers.slice(0, 6).map(i => i.name);
-            document.getElementById('thingsToAvoid').innerHTML = avoidItems.map(item => `
+            const thingsToAvoidEl = document.getElementById('thingsToAvoid');
+            if (thingsToAvoidEl) thingsToAvoidEl.innerHTML = avoidItems.map(item => `
                 <div class="avoid-item">${item}</div>
             `).join('') || '<div class="avoid-item">No significant items to avoid</div>';
             
