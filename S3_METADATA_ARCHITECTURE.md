@@ -76,6 +76,17 @@ All Users See New Data Instantly
 
 ---
 
+## 📋 Profile list cache (Profile IQ dashboard)
+
+The dashboard profile list is backed by `system/s3_cache.json` (list of CSV profiles in S3). To have **new S3 uploads show up immediately** for users:
+
+1. **On dashboard load:** The first time a user opens Profile IQ, the app calls `/api/jobs?refresh=1`, which runs a smart sync from S3 and then returns the list (and caches it for the session).
+2. **Manual refresh:** Users can click the ↻ button next to "Search profiles" to clear the session cache and reload from S3.
+3. **Background:** A background thread runs `smart_cache_update()` every **1 minute**, so new files appear within a minute even if no one refreshes.
+4. **Push from uploaders:** After uploading a new CSV to S3, call **`GET or POST /api/push-cache-update`** to update the dashboard cache immediately. Optional: set env `PUSH_CACHE_SECRET` and pass `?secret=<value>` to restrict who can trigger the update.
+
+---
+
 ## 📊 Metadata Files
 
 ### 1. Ticker Images Cache

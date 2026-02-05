@@ -12432,7 +12432,10 @@
                 <div class="persistent-sidebar">
                     <div class="sidebar-header-section">
                         <h3>Select Profile</h3>
-                        <input type="text" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()">
+                        <div style="display: flex; gap: 0.25rem; align-items: center;">
+                            <input type="text" id="dashProfileSearchInput" placeholder="Search profiles..." class="sidebar-search has-tooltip" data-tooltip="Search Profiles: Type to filter the profile list by name or category. Results update as you type." onkeyup="filterDashboardProfiles()" style="flex: 1;">
+                            <button type="button" class="btn btn-small has-tooltip" data-tooltip="Refresh profile list from S3 (new uploads will appear)" onclick="refreshDashboardProfiles()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
+                        </div>
                     </div>
                     <div class="profile-select-tree" id="dashProfileTree">
                         <!-- Profiles will be loaded here -->
@@ -25084,6 +25087,13 @@
             try { sessionStorage.removeItem(SESSION_JOBS_CACHE_KEY); } catch (e) {}
         }
         
+        async function refreshDashboardProfiles() {
+            clearSessionJobsCache();
+            const container = document.getElementById('dashProfileTree');
+            if (container) container.innerHTML = '<div style="padding: 0.75rem; color: var(--accent-cyan); font-size: 0.8rem;"><span class="spinner"></span> Refreshing from S3...</div>';
+            await loadDashboardProfiles();
+        }
+        
         async function loadDashboardProfiles() {
             const container = document.getElementById('dashProfileTree');
             
@@ -25095,8 +25105,8 @@
                     if (openProfileTabs.length === 0) restoreSavedTabs();
                     return;
                 }
-                
-                const response = await fetch('/api/jobs', { credentials: 'same-origin' });
+                // First load: refresh from S3 so new profiles show up, then cache for session
+                const response = await fetch('/api/jobs?refresh=1', { credentials: 'same-origin' });
                 
                 // Handle authentication errors
                 if (response.status === 401) {

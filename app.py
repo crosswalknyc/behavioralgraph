@@ -10038,7 +10038,7 @@ def extract_demographics_summary(csv_content):
 @app.route('/api/jobs')
 @requires_auth
 def list_jobs():
-    """List all jobs (local + S3 cached) with caching for performance."""
+    """List all jobs (local + S3 cached) with caching for performance. Use ?refresh=1 to sync from S3 before returning."""
     import time
     
     try:
@@ -10053,6 +10053,13 @@ def list_jobs():
                 'cache_info': {'loading': True, 'message': 'Loading profiles...'},
                 'loading': True
             })
+        
+        # If refresh=1, sync cache from S3 so new/updated files show up immediately (e.g. Profile IQ dashboard load)
+        if request.args.get('refresh') and s3_client and cache_loading_complete:
+            try:
+                smart_cache_update()
+            except Exception as e:
+                print(f"⚠️ list_jobs refresh error: {e}")
         
         # Update user's last activity time (but don't block on it)
         username = session.get('username')
@@ -10148,6 +10155,34 @@ def force_refresh_cache():
             'message': f"Added {result.get('new', 0)}, updated {result.get('updated', 0)}, removed {result.get('deleted', 0)} files"
         })
     return jsonify({'success': False, 'error': 'S3 not configured'})
+
+
+@app.route('/api/push-cache-update', methods=['GET', 'POST'])
+def push_cache_update():
+    """
+    Push cache update: sync dashboard profile cache from S3 immediately.
+    Call this after uploading a new file to S3 so it shows up on the Profile IQ dashboard right away.
+    If env PUSH_CACHE_SECRET is set, require ?secret=<value> to match; otherwise no auth (for Lambda/upload scripts).
+    """
+    if not s3_client:
+        return jsonify({'success': False, 'error': 'S3 not configured'}), 500
+    push_secret = os.environ.get('PUSH_CACHE_SECRET')
+    if push_secret:
+        provided = request.args.get('secret') or (request.get_json() or {}).get('secret')
+        if provided != push_secret:
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+    try:
+        result = smart_cache_update()
+        return jsonify({
+            'success': True,
+            'new': result.get('new', 0),
+            'updated': result.get('updated', 0),
+            'deleted': result.get('deleted', 0),
+            'total': result.get('total', 0),
+            'message': f"Cache updated: {result.get('new', 0)} new, {result.get('updated', 0)} updated, {result.get('deleted', 0)} removed"
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/full-refresh-cache')
@@ -10945,7 +10980,7 @@ import threading
 import time as time_module
 
 cache_loading_complete = False
-BACKGROUND_CHECK_INTERVAL = 300  # Check for new files every 5 minutes
+BACKGROUND_CHECK_INTERVAL = 60  # Check for new files every 1 minute so new S3 uploads show up quickly
 
 def async_cache_loader():
     """Load cache in background - doesn't block app startup."""
@@ -11148,7 +11183,7 @@ def background_cache_checker():
     except Exception as e:
         print(f"   ⚠️ Image prefetch error: {e}")
     
-    print("🔄 Starting background cache checker (every 5 min)...")
+    print("🔄 Starting background cache checker (every 1 min)...")
     while True:
         time_module.sleep(BACKGROUND_CHECK_INTERVAL)
         try:
