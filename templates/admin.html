@@ -3989,7 +3989,7 @@
                         <span class="credits-display ${creditsClass}">${creditsLeft}</span>
                         <span style="font-size: 0.65rem; color: var(--text-secondary);">/ ${user.credits_used || 0} used</span>
                     </td>
-                    <td style="font-size: 0.75rem; color: ${lastLoginColor};" title="${user.last_login ? new Date(user.last_login).toLocaleString() : 'Never logged in'}">
+                    <td style="font-size: 0.75rem; color: ${lastLoginColor};" title="${user.last_login ? formatDateTimePST(user.last_login) : 'Never logged in'}">
                         ${lastLoginDisplay}
                     </td>
                     <td style="min-width: 80px;">
@@ -4428,7 +4428,7 @@
                             </div>
                             <div class="feature-item">
                                 <span>Last Login</span>
-                                <span>${user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}</span>
+                                <span>${user.last_login ? formatDateTimePST(user.last_login) : 'Never'}</span>
                             </div>
                             <div class="feature-item">
                                 <span>Account Created</span>
@@ -4531,6 +4531,17 @@
 
         function formatFeatureName(feature) {
             return feature.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
+
+        function formatDateTimePST(isoString) {
+            if (!isoString) return null;
+            try {
+                const d = new Date(isoString);
+                const formatted = d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'short', timeStyle: 'medium' });
+                return formatted + ' PST';
+            } catch (e) {
+                return isoString;
+            }
         }
 
         function getActionIcon(action) {
