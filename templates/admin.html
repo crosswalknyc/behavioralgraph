@@ -1630,7 +1630,7 @@
                     <div class="card-header">
                         <h2>📺 SVOD Pricing</h2>
                         <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-                            Set monthly subscription costs per streaming platform. Used in Subscriber IQ to estimate subscription revenue from show-attributed signups. Platform key must match the CSV "Platform Tracked" value (e.g. paramount+, netflix).
+                            Enter the <strong>monthly</strong> subscription price per subscriber for each platform. Used in Subscriber IQ to estimate subscription revenue from show-attributed signups. Platform key must match the CSV "Platform Tracked" value (e.g. paramount+, netflix).
                         </p>
                     </div>
                     <div style="padding: 1rem;">
@@ -1642,7 +1642,7 @@
                             <!-- Rows populated by JS -->
                         </div>
                         <p style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-secondary);">
-                            Revenue in Subscriber IQ = (Total Signups × monthly price) for weekly (÷4.33), monthly, and yearly (×12).
+                            <strong>All values are monthly price per subscriber.</strong> Subscriber IQ lifetime value uses: (Total Signups × monthly price) for monthly revenue; weekly = monthly ÷ 4.33; yearly = monthly × 12.
                         </p>
                     </div>
                 </div>
@@ -2950,12 +2950,12 @@
             div.innerHTML = `
                 <input type="text" class="svod-platform-key" data-key="${keyId}" value="${(platformKey || '').replace(/"/g, '&quot;')}" placeholder="e.g. paramount+, netflix" style="padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
                 <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
-                    <span>Ad $</span>
-                    <input type="number" step="0.01" min="0" id="${adId}" value="${adSupported != null && adSupported !== '' ? Number(adSupported) : ''}" placeholder="5.99" style="width: 5rem; padding: 0.35rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                    <span>Ad $/mo</span>
+                    <input type="number" step="0.01" min="0" id="${adId}" value="${adSupported != null && adSupported !== '' ? Number(adSupported) : ''}" placeholder="5.99" style="width: 5rem; padding: 0.35rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);" title="Monthly price per subscriber">
                 </label>
                 <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
-                    <span>Premium $</span>
-                    <input type="number" step="0.01" min="0" id="${premId}" value="${premium != null && premium !== '' ? Number(premium) : ''}" placeholder="11.99" style="width: 5rem; padding: 0.35rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
+                    <span>Premium $/mo</span>
+                    <input type="number" step="0.01" min="0" id="${premId}" value="${premium != null && premium !== '' ? Number(premium) : ''}" placeholder="11.99" style="width: 5rem; padding: 0.35rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);" title="Monthly price per subscriber">
                 </label>
                 <button type="button" class="btn btn-small" onclick="this.closest('.svod-pricing-row').remove()" style="background: rgba(239,68,68,0.2); color: #ef4444;">Remove</button>
             `;

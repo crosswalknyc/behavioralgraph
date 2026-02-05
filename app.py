@@ -9954,8 +9954,9 @@ def svod_pricing_api():
             return jsonify({'success': True, 'pricing': pricing})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
-    # POST
-    if not (g.get('user') and g.user.get('role') in ['admin', 'super_admin']):
+    # POST (admin only)
+    user = get_current_user()
+    if not user or user.get('role') not in ['admin', 'super_admin']:
         return jsonify({'success': False, 'error': 'Admin required'}), 403
     try:
         data = request.get_json() or {}
