@@ -5360,14 +5360,21 @@ def get_csv_data(s3_key):
         df = df.fillna('')
         print(f"✅ Parsed CSV: {len(df)} rows")
         
-        # Extract brand name from filename
-        # Format: NAME_MM_DD_YYYY_HH_MM.csv where NAME can have multiple underscores
-        name_without_ext = s3_key.replace('.csv', '')
-        match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
-        if match:
-            brand_name = match.group(1).replace('_', ' ')
-        else:
-            brand_name = name_without_ext.replace('_', ' ')
+        # Display name: use admin-edited display_name from cache when present, else derive from filename
+        if not s3_cache.get('jobs') and s3_client:
+            load_persisted_cache()
+        brand_name = None
+        for job in s3_cache.get('jobs', []):
+            if (job.get('s3_key') or job.get('key')) == s3_key:
+                brand_name = job.get('display_name') or job.get('project_name') or job.get('name')
+                break
+        if not brand_name:
+            name_without_ext = s3_key.replace('.csv', '')
+            match = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
+            if match:
+                brand_name = match.group(1).replace('_', ' ')
+            else:
+                brand_name = name_without_ext.replace('_', ' ')
         
         date_range = ''
         
@@ -5388,11 +5395,11 @@ def get_csv_data(s3_key):
             if isinstance(val, str) and val.strip().lower() == 'latinx':
                 row['Value'] = 'Latino'
 
-        print(f"✅ Returning data for brand: {brand_name.upper()}")
+        print(f"✅ Returning data for brand: {brand_name}")
         return jsonify({
             'success': True,
             'data': data,
-            'brand': brand_name.upper(),
+            'brand': brand_name,
             'date_range': date_range,
             's3_key': s3_key
         })

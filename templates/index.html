@@ -24162,7 +24162,7 @@
             const profileInfo = document.getElementById('dashProfileInfo');
             if (profileInfo && brandName) {
                 profileInfo.style.display = 'flex';
-                document.getElementById('dashBrandNameHeader').textContent = displayTitle.toUpperCase();
+                document.getElementById('dashBrandNameHeader').textContent = displayTitle;
                 document.getElementById('dashDateRangeHeader').textContent = dateRange ? 'Date Range: ' + dateRange : '';
                 document.getElementById('dashDateRangeHeader').style.display = dateRange ? 'block' : 'none';
                 
@@ -25010,7 +25010,7 @@
                 profileInfo.style.display = 'flex';
                 const brandNameEl = document.getElementById('dashBrandNameHeader');
                 const dateRangeEl = document.getElementById('dashDateRangeHeader');
-                if (brandNameEl) brandNameEl.textContent = displayTitle.toUpperCase();
+                if (brandNameEl) brandNameEl.textContent = displayTitle;
                 if (dateRangeEl) {
                     dateRangeEl.textContent = dateRange ? `Date Range: ${dateRange}` : '';
                     dateRangeEl.style.display = dateRange ? 'block' : 'none';
@@ -42172,19 +42172,18 @@
         }
 
         function getProfileFullName(profile) {
-            // Get full name from s3_key or project_name
-            // File format: NAME_MM_DD_YYYY_HH_MM.csv where NAME can have multiple underscores
-            if (profile.s3_key) {
-                // Remove .csv extension first
-                let name = profile.s3_key.replace('.csv', '');
-                // Remove the date/time pattern at the end: _MM_DD_YYYY_HH_MM
-                name = name.replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '');
-                // Replace remaining underscores with spaces
-                return name.replace(/_/g, ' ');
+            // Prefer admin-edited display name (same as "DISPLAY NAME (SHOWN IN DASHBOARD)" in admin)
+            if (profile.display_name && profile.display_name.trim()) {
+                return profile.display_name.trim();
             }
-            // For project_name, also handle underscore-to-space conversion
-            if (profile.project_name) {
+            if (profile.project_name && profile.project_name.trim()) {
                 return profile.project_name.replace(/_/g, ' ');
+            }
+            // Fallback: derive from s3_key filename
+            if (profile.s3_key) {
+                let name = profile.s3_key.replace('.csv', '');
+                name = name.replace(/_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}$/, '');
+                return name.replace(/_/g, ' ');
             }
             return 'Unknown';
         }
