@@ -43608,9 +43608,15 @@
                             🖼️ Download PNG
                         </button>
                         <div style="border-top: 1px solid var(--border-color); margin: 0.25rem 0;"></div>
-                        <button onclick="addComparisonModuleToDeck('${moduleType}')" style="display: block; width: 100%; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-primary); text-align: left; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='none'">
-                            ➕ Add to Deck
-                        </button>
+                        <div style="position: relative; display: inline-block; width: 100%;">
+                            <button onclick="toggleComparisonDeckMenu('${sectionId}', event)" style="display: block; width: 100%; padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-primary); text-align: left; cursor: pointer; font-size: 0.8rem;" onmouseover="this.style.background='var(--bg-input)'" onmouseout="this.style.background='none'">
+                                ➕ Add to Deck ▾
+                            </button>
+                            <div id="comp-deck-menu-${sectionId}" class="behavioral-deck-menu" style="display: none; position: absolute; left: 0; top: 100%; min-width: 160px;">
+                                <button onclick="event.stopPropagation(); addComparisonModuleToDeck('${moduleType}', null); closeComparisonDeckMenu('${sectionId}')">Add All</button>
+                                <button onclick="event.stopPropagation(); showComparisonValueSelector('${moduleType}', '${sectionId}'); closeComparisonDeckMenu('${sectionId}')">Select Values to Add</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -45799,6 +45805,7 @@
                     m.style.display = 'none';
                 }
             });
+            document.querySelectorAll('.behavioral-deck-menu').forEach(m => m.style.display = 'none');
             
             // Toggle this menu
             menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
@@ -45807,10 +45814,29 @@
             const closeHandler = (e) => {
                 if (!menu.contains(e.target)) {
                     menu.style.display = 'none';
+                    document.querySelectorAll('.behavioral-deck-menu').forEach(m => m.style.display = 'none');
                     document.removeEventListener('click', closeHandler);
                 }
             };
             setTimeout(() => document.addEventListener('click', closeHandler), 10);
+        }
+        
+        function toggleComparisonDeckMenu(sectionId, event) {
+            event.stopPropagation();
+            const deckMenu = document.getElementById('comp-deck-menu-' + sectionId);
+            if (!deckMenu) return;
+            
+            document.querySelectorAll('.behavioral-deck-menu').forEach(m => {
+                if (m.id !== 'comp-deck-menu-' + sectionId) m.style.display = 'none';
+            });
+            
+            deckMenu.style.display = deckMenu.style.display === 'block' ? 'none' : 'block';
+        }
+        
+        function closeComparisonDeckMenu(sectionId) {
+            const deckMenu = document.getElementById('comp-deck-menu-' + sectionId);
+            if (deckMenu) deckMenu.style.display = 'none';
+            document.querySelectorAll('.comp-export-menu').forEach(m => m.style.display = 'none');
         }
         
         // Export comparison section to CSV
@@ -46017,9 +46043,10 @@
             }
         }
         
-        function addComparisonModuleToDeck(moduleType) {
+        function addComparisonModuleToDeck(moduleType, selectedValues) {
             // Close the dropdown menu first
             document.querySelectorAll('.comp-export-menu').forEach(m => m.style.display = 'none');
+            document.querySelectorAll('.behavioral-deck-menu').forEach(m => m.style.display = 'none');
             
             const profiles = window.comparisonProfilesData || [];
             if (profiles.length === 0) {
@@ -46036,10 +46063,133 @@
             }
             
             // Show the deck selection modal (same as other sections)
-            showComparisonDeckSelectionPopup(moduleType, sectionTitle, profiles);
+            showComparisonDeckSelectionPopup(moduleType, sectionTitle, profiles, selectedValues);
         }
         
-        function showComparisonDeckSelectionPopup(moduleType, sectionTitle, profiles) {
+        function showComparisonValueSelector(moduleType, sectionId) {
+            const profiles = window.comparisonProfilesData || [];
+            if (profiles.length === 0) {
+                showNotification('⚠️ No comparison data available', 'warning');
+                return;
+            }
+            
+            let values = [];
+            if (moduleType === 'summary') {
+                values = ['Crosswalk Respondents', 'Projected US', 'Median Age'];
+            } else if (moduleType.startsWith('behavioral_')) {
+                const targetCatId = moduleType.replace('behavioral_', '');
+                let actualCat = null;
+                for (const p of profiles) {
+                    if (p.behavioral) {
+                        actualCat = Object.keys(p.behavioral).find(c =>
+                            c.toLowerCase().replace(/[^a-z0-9]/g, '_') === targetCatId
+                        );
+                        if (actualCat) break;
+                    }
+                }
+                const allValues = new Set();
+                profiles.forEach(p => {
+                    (p.behavioral?.[actualCat] || []).forEach(item => allValues.add(item.name));
+                });
+                values = Array.from(allValues).sort();
+            } else if (moduleType === 'location') {
+                const allLocations = new Set();
+                profiles.forEach(p => {
+                    (p.locations || []).forEach(loc => allLocations.add(loc.name || loc.dma || loc.state));
+                });
+                values = Array.from(allLocations).sort();
+            } else {
+                // Demographics (gender, age, ethnicity, income, education, etc.)
+                const demoKey = moduleType.startsWith('demo_') ? moduleType.replace('demo_', '') : moduleType;
+                const allValues = new Set();
+                profiles.forEach(p => {
+                    Object.keys(p.demographics?.[demoKey] || {}).forEach(v => allValues.add(v));
+                });
+                values = Array.from(allValues).sort();
+            }
+            
+            if (values.length === 0) {
+                showNotification('No values available for this section', 'warning');
+                return;
+            }
+            
+            let sectionTitle = moduleType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            if (moduleType.startsWith('behavioral_')) sectionTitle = moduleType.replace('behavioral_', '').replace(/_/g, ' ').toUpperCase();
+            else if (moduleType.startsWith('demo_')) sectionTitle = moduleType.replace('demo_', '').replace(/\b\w/g, c => c.toUpperCase());
+            
+            const modal = document.createElement('div');
+            modal.className = 'deck-workspace-modal';
+            modal.id = 'comparisonValueSelectorModal';
+            modal.innerHTML = `
+                <div class="deck-workspace-content" style="max-width: 520px; max-height: 80vh;">
+                    <div class="deck-workspace-header">
+                        <h2>Select Values to Add</h2>
+                        <button onclick="document.getElementById('comparisonValueSelectorModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
+                    </div>
+                    <div style="padding: 1.5rem; overflow-y: auto; max-height: calc(80vh - 200px);">
+                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-dark); border-radius: 8px; border-left: 3px solid var(--accent-lime);">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Section:</div>
+                            <div style="font-weight: 600;">Comparison: ${sectionTitle}</div>
+                        </div>
+                        <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
+                            <button onclick="selectAllComparisonValues(true)" class="btn btn-small" style="padding: 0.4rem 0.75rem; font-size: 0.75rem;">SELECT ALL</button>
+                            <button onclick="selectAllComparisonValues(false)" class="btn btn-small" style="padding: 0.4rem 0.75rem; font-size: 0.75rem;">DESELECT ALL</button>
+                            <span id="comparisonSelectedCount" style="margin-left: auto; font-size: 0.75rem; color: var(--text-secondary);">${values.length} selected</span>
+                        </div>
+                        <div id="comparisonValuesList" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            ${values.map((val, idx) => `
+                                <label style="display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem; background: var(--bg-input); border-radius: 6px; cursor: pointer;">
+                                    <input type="checkbox" value="${idx}" checked style="width: 18px; height: 18px; cursor: pointer;" onchange="updateComparisonSelectedCount()">
+                                    <span style="flex: 1; font-size: 0.9rem;">${escapeHtml(val)}</span>
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <div style="padding: 1rem 1.5rem; border-top: 1px solid var(--border-color); display: flex; gap: 0.75rem;">
+                        <button class="btn btn-secondary" onclick="document.getElementById('comparisonValueSelectorModal').remove()" style="flex: 1;">CANCEL</button>
+                        <button class="btn btn-primary" onclick="confirmComparisonValueSelection()" style="flex: 1;">ADD SELECTED TO DECK</button>
+                    </div>
+                </div>
+            `;
+            
+            window.comparisonSelectorValues = values;
+            window.comparisonSelectorModuleType = moduleType;
+            document.body.appendChild(modal);
+        }
+        
+        function selectAllComparisonValues(select) {
+            const checkboxes = document.querySelectorAll('#comparisonValuesList input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = select);
+            updateComparisonSelectedCount();
+        }
+        
+        function updateComparisonSelectedCount() {
+            const checkboxes = document.querySelectorAll('#comparisonValuesList input[type="checkbox"]');
+            const selected = Array.from(checkboxes).filter(cb => cb.checked).length;
+            const countEl = document.getElementById('comparisonSelectedCount');
+            if (countEl) countEl.textContent = selected + ' selected';
+        }
+        
+        function confirmComparisonValueSelection() {
+            const checkboxes = document.querySelectorAll('#comparisonValuesList input[type="checkbox"]');
+            const selectedIndices = Array.from(checkboxes).filter(cb => cb.checked).map(cb => parseInt(cb.value));
+            
+            if (selectedIndices.length === 0) {
+                showNotification('Please select at least one value', 'warning');
+                return;
+            }
+            
+            const selectedValues = selectedIndices.map(idx => window.comparisonSelectorValues[idx]);
+            const moduleType = window.comparisonSelectorModuleType;
+            
+            document.getElementById('comparisonValueSelectorModal')?.remove();
+            window.comparisonSelectorValues = null;
+            window.comparisonSelectorModuleType = null;
+            
+            addComparisonModuleToDeck(moduleType, selectedValues);
+        }
+        
+        function showComparisonDeckSelectionPopup(moduleType, sectionTitle, profiles, selectedValues) {
             // Check if there are any workspaces
             const hasWorkspaces = Object.keys(workspaces || {}).length > 0;
             
@@ -46081,13 +46231,20 @@
             modal.className = 'deck-workspace-modal';
             modal.id = 'comparisonDeckModal';
             
-            // Store the comparison data for later use
-            window.pendingComparisonData = { moduleType, sectionTitle, profiles };
+            // Store the comparison data for later use (including selectedValues)
+            window.pendingComparisonData = { moduleType, sectionTitle, profiles, selectedValues };
             // Reset pending collaborators for comparison
             window.pendingComparisonCollaborators = [];
             
+            const profileCheckboxes = profiles.map((p, idx) => `
+                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0; cursor: pointer;">
+                    <input type="checkbox" class="comp-profile-checkbox" value="${p.id || p.name}" checked style="width: 16px; height: 16px; cursor: pointer;">
+                    <span style="font-size: 0.85rem;">${escapeHtml(p.name)}</span>
+                </label>
+            `).join('');
+            
             modal.innerHTML = `
-                <div class="deck-workspace-content" style="max-width: 480px;">
+                <div class="deck-workspace-content" style="max-width: 520px;">
                     <div class="deck-workspace-header">
                         <h2>➕ Add Comparison to Deck</h2>
                         <button onclick="document.getElementById('comparisonDeckModal').remove()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.5rem;">✕</button>
@@ -46096,8 +46253,18 @@
                         <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-dark); border-radius: 8px; border-left: 3px solid var(--accent-cyan);">
                             <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Adding:</div>
                             <div style="font-weight: 600;">Comparison: ${sectionTitle}</div>
-                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                                Profiles: ${profiles.map(p => p.name).join(', ')}
+                            ${selectedValues && selectedValues.length > 0 ? `<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Selected values: ${selectedValues.length} of many</div>` : '<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">All values</div>'}
+                        </div>
+                        
+                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-dark); border-radius: 8px; border: 1px solid var(--border-color);">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.8rem; color: var(--text-secondary);">PROFILES TO INCLUDE</label>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Select which profiles to include (all selected by default)</p>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem;">
+                                ${profileCheckboxes}
+                            </div>
+                            <div style="margin-top: 0.5rem; display: flex; gap: 0.35rem;">
+                                <button onclick="selectAllCompProfiles(true)" type="button" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--accent-blue); color: white; border: none; border-radius: 4px; cursor: pointer;">Select All</button>
+                                <button onclick="selectAllCompProfiles(false)" type="button" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: var(--bg-input); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer;">Deselect All</button>
                             </div>
                         </div>
                         
@@ -46265,6 +46432,10 @@
             }
         }
         
+        function selectAllCompProfiles(select) {
+            document.querySelectorAll('.comp-profile-checkbox').forEach(cb => cb.checked = select);
+        }
+        
         async function confirmAddComparisonToDeck() {
             const wsId = document.getElementById('compDeckSelectWorkspace')?.value;
             const deckId = document.getElementById('compDeckSelectDeck')?.value;
@@ -46274,9 +46445,20 @@
                 return;
             }
             
-            const { moduleType, sectionTitle, profiles } = window.pendingComparisonData || {};
-            if (!profiles || profiles.length === 0) {
+            const { moduleType, sectionTitle, profiles: allProfiles, selectedValues } = window.pendingComparisonData || {};
+            if (!allProfiles || allProfiles.length === 0) {
                 showNotification('⚠️ No comparison data available', 'warning');
+                return;
+            }
+            
+            // Filter profiles to only those selected
+            const selectedProfileIds = new Set(
+                Array.from(document.querySelectorAll('.comp-profile-checkbox:checked')).map(cb => cb.value)
+            );
+            const profiles = allProfiles.filter(p => selectedProfileIds.has(String(p.id || p.name)));
+            
+            if (profiles.length === 0) {
+                showNotification('⚠️ Please select at least one profile to include', 'warning');
                 return;
             }
             
@@ -46288,7 +46470,7 @@
                 return;
             }
             
-            // Extract only the relevant data for this section
+            // Extract only the relevant data for this section (filtered by selectedValues and profiles)
             const extractSectionData = (profile) => {
                 const baseData = {
                     name: profile.name,
@@ -46299,20 +46481,33 @@
                 };
                 
                 if (moduleType === 'summary') {
+                    if (selectedValues && selectedValues.length > 0) {
+                        const metricMap = {
+                            'Crosswalk Respondents': 'sampleSize',
+                            'Projected US': 'projectedUS',
+                            'Median Age': 'medianAge'
+                        };
+                        const keep = selectedValues.map(v => metricMap[v]).filter(Boolean);
+                        if (keep.includes('sampleSize')) baseData.sampleSize = profile.sampleSize;
+                        if (keep.includes('projectedUS')) baseData.projectedUS = profile.projectedUS;
+                        if (keep.includes('medianAge')) baseData.medianAge = profile.medianAge;
+                    }
                     return baseData;
                 } else if (moduleType === 'location') {
-                    return { ...baseData, locations: profile.locations };
+                    let locs = profile.locations || [];
+                    if (selectedValues && selectedValues.length > 0) {
+                        const valSet = new Set(selectedValues.map(v => String(v).toLowerCase()));
+                        locs = locs.filter(loc => valSet.has(String(loc.name || loc.dma || loc.state || '').toLowerCase()));
+                    }
+                    return { ...baseData, locations: locs };
                 } else if (moduleType.startsWith('behavioral_')) {
                     const targetCatId = moduleType.replace('behavioral_', '');
                     let actualCat = null;
                     if (profile.behavioral) {
-                        // Try multiple matching strategies
                         actualCat = Object.keys(profile.behavioral).find(c => {
                             const normalized = c.toLowerCase().replace(/[^a-z0-9]/g, '_');
                             return normalized === targetCatId;
                         });
-                        
-                        // If no match, try case-insensitive partial match
                         if (!actualCat) {
                             const targetWords = targetCatId.split('_').filter(w => w);
                             actualCat = Object.keys(profile.behavioral).find(c => {
@@ -46320,19 +46515,37 @@
                                 return targetWords.every(tw => catWords.includes(tw));
                             });
                         }
-                        
-                        console.log(`Behavioral extraction for ${profile.name}: target="${targetCatId}", found="${actualCat}", available cats:`, Object.keys(profile.behavioral));
+                    }
+                    let catData = actualCat ? (profile.behavioral[actualCat] || []) : [];
+                    if (Array.isArray(catData) && selectedValues && selectedValues.length > 0) {
+                        const valSet = new Set(selectedValues.map(v => String(v).toLowerCase()));
+                        catData = catData.filter(item => valSet.has(String(item.name || item).toLowerCase()));
                     }
                     return { 
                         ...baseData, 
-                        behavioral: actualCat ? { [actualCat]: profile.behavioral[actualCat] } : profile.behavioral || {}
+                        behavioral: actualCat ? { [actualCat]: catData } : profile.behavioral || {}
                     };
                 } else {
                     const demoType = moduleType.replace('demo_', '');
+                    let demoData = profile.demographics?.[demoType] || {};
+                    let demoIndex = profile.demographicsIndex?.[demoType] || {};
+                    if (selectedValues && selectedValues.length > 0) {
+                        const valSet = new Set(selectedValues.map(v => String(v).toLowerCase()));
+                        const fDemo = {};
+                        const fIdx = {};
+                        Object.entries(demoData).forEach(([k, v]) => {
+                            if (valSet.has(String(k).toLowerCase())) {
+                                fDemo[k] = v;
+                                if (demoIndex[k] !== undefined) fIdx[k] = demoIndex[k];
+                            }
+                        });
+                        demoData = fDemo;
+                        demoIndex = fIdx;
+                    }
                     return { 
                         ...baseData, 
-                        demographics: { [demoType]: profile.demographics?.[demoType] || {} },
-                        demographicsIndex: profile.demographicsIndex ? { [demoType]: profile.demographicsIndex[demoType] } : {}
+                        demographics: { [demoType]: demoData },
+                        demographicsIndex: { [demoType]: demoIndex }
                     };
                 }
             };
