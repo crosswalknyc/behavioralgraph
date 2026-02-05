@@ -21151,7 +21151,7 @@
             currentSubscriberData = data;
             
             const metadata = data.metadata || {};
-            // Get platform from metadata
+            // Genre displayed in header (replaces former Platform Tracked)
             const genre = metadata.genre || '';
             const exclusion = metadata.exclusion_window || '';
             const attribution = metadata.attribution_window || '';
@@ -21455,8 +21455,9 @@
                 return;
             }
             
-            const platform = data.metadata?.platform || 'the platform';
             const show = data.metadata?.show || 'this show';
+            // Generic label for strategic copy (Platform Tracked removed from schema; use show context)
+            const platformLabel = 'the streaming platform';
             const metrics = data.key_metrics || {};
             const summary = data.attribution_summary || {};
             
@@ -21602,7 +21603,7 @@
                         </div>
                     </div>
                     <div class="value-insight-box">
-                        <strong>Strategic Value:</strong> ${show} delivered ${valueStrength}-value subscriber growth for ${platform}, 
+                        <strong>Strategic Value:</strong> ${show} delivered ${valueStrength}-value subscriber growth for ${platformLabel}, 
                         with ${attributionPct}% direct attribution demonstrating clear ROI. 
                         ${isStrongReactivation ? `Strong reactivation (${reactivationPct}%) indicated retention value beyond new acquisition.` : 
                         'Focus on new subscriber acquisition with opportunity to improve reactivation.'}
@@ -56236,3 +56237,4 @@
 </body>
 </html>
 </html>
+

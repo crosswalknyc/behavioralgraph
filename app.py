@@ -4668,8 +4668,15 @@ def get_netflix_ranker_data():
             data = None if force_refresh else NETFLIX_RANKER_CACHE.get('data')
             if data is None and not force_refresh:
                 data = _load_netflix_ranker_cache()
+            # When S3 index is newer than our in-memory cache, rebuild so we always show latest uploaded data
+            loaded_at = NETFLIX_RANKER_CACHE.get('loaded_at') or 0
+            s3_is_newer = s3_index_updated_at is not None and s3_index_updated_at > loaded_at
+            need_rebuild = data is None or force_refresh or s3_is_newer
+            if s3_is_newer and data:
+                print(f"[Netflix Ranker] S3 index newer than cache (index_ts={s3_index_updated_at}, cache_ts={loaded_at}); rebuilding from S3")
+                data = None
 
-            if data is None or force_refresh:
+            if need_rebuild:
                 # Rebuild from S3: load each cached day and merge
                 base = {}
                 for d in cached_dates:
@@ -5030,16 +5037,28 @@ def get_netflix_live_top10():
     
     try:
         now = datetime.now().timestamp()
-        cache_age = now - NETFLIX_LIVE_TOP10_CACHE.get('loaded_at', 0)
-        
-        # Return cached data if fresh
-        if NETFLIX_LIVE_TOP10_CACHE.get('data') and cache_age < NETFLIX_LIVE_TOP10_CACHE_DURATION:
-            return jsonify(NETFLIX_LIVE_TOP10_CACHE['data'])
-        
-        # Fetch from S3
+        cache_loaded_at = NETFLIX_LIVE_TOP10_CACHE.get('loaded_at', 0)
+        cache_age = now - cache_loaded_at
+        use_cache = NETFLIX_LIVE_TOP10_CACHE.get('data') and cache_age < NETFLIX_LIVE_TOP10_CACHE_DURATION
+
         live_bucket = 'netflix-liveish'
         live_key = 'data_netflix.csv'
-        
+
+        # If we would use cache, check S3 LastModified so we refetch when a new file was uploaded
+        if use_cache and s3_client:
+            try:
+                head = s3_client.head_object(Bucket=live_bucket, Key=live_key)
+                s3_modified = head.get('LastModified')
+                if s3_modified:
+                    s3_ts = s3_modified.timestamp()
+                    if s3_ts > cache_loaded_at:
+                        use_cache = False
+            except Exception:
+                pass
+        if use_cache:
+            return jsonify(NETFLIX_LIVE_TOP10_CACHE['data'])
+
+        # Fetch from S3
         try:
             response = s3_client.get_object(Bucket=live_bucket, Key=live_key)
             csv_content = response['Body'].read().decode('utf-8')
@@ -5784,22 +5803,8 @@ def parse_subscriber_iq_csv(csv_content):
             continue
         elif current_section == 'metadata':
             if 'Show/Content Tracked' in first_col:
-                parsed['metadata']['show'] = (row[1].strip() or (row[2].strip() if len(row) > 2 else '')) or ''
-            elif 'Platform Tracked' in first_col or 'platform tracked' in first_col.lower():
-                # Try multiple columns for platform
-                platform_val = ''
-                if len(row) > 1:
-                    platform_val = row[1].strip()
-                if not platform_val and len(row) > 2:
-                    platform_val = row[2].strip()
-                if not platform_val and len(row) > 0:
-                    # Sometimes the platform might be in the same cell after a colon
-                    if ':' in first_col:
-                        parts = first_col.split(':', 1)
-                        if len(parts) > 1:
-                            platform_val = parts[1].strip()
-                parsed['metadata']['platform'] = platform_val
-                print(f"   📱 Found platform: '{platform_val}' from row {i}: {row[:3]}")
+                # New schema: value often in col 3 (e.g. "Show/Content Tracked,,,Landman")
+                parsed['metadata']['show'] = (row[3].strip() if len(row) > 3 else '') or (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '') or ''
             elif 'Analysis Date Range' in first_col or 'Date Range' in first_col or 'date range' in first_col.lower():
                 # Try multiple columns for date range
                 date_range_val = ''
@@ -5820,7 +5825,8 @@ def parse_subscriber_iq_csv(csv_content):
             elif 'Attribution Window' in first_col:
                 parsed['metadata']['attribution_window'] = row[1].strip() if len(row) > 1 else ''
             elif 'Genre' in first_col:
-                genre_val = (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '') or (row[3].strip() if len(row) > 3 else '')
+                # New schema: Genre value in col 3 (e.g. "Genre,,,Serialized Drama"); fallback to col 2, then col 1
+                genre_val = (row[3].strip() if len(row) > 3 else '') or (row[2].strip() if len(row) > 2 else '') or (row[1].strip() if len(row) > 1 else '')
                 parsed['metadata']['genre'] = genre_val
                 if genre_val:
                     print(f"   📂 Found genre: '{genre_val}' from row {i}")
