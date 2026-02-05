@@ -53539,10 +53539,14 @@
                     const demoMax = compVizPrefs.count === 'all' ? 50 : (parseInt(compVizPrefs.count) || 15);
                     sortedValues = sortedValues.slice(0, demoMax);
                     
+                    const compLegendHtml = `<div style="display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-bottom: 0.5rem; font-size: 0.65rem; align-items: center;">
+                        ${profiles.map(p => `<span style="display: inline-flex; align-items: center; gap: 0.25rem;"><span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: ${p.color || 'var(--accent-cyan)'}; flex-shrink: 0;"></span><span>${(p.name || '').replace(/</g, '&lt;')}</span></span>`).join('')}
+                    </div>`;
                     if (compVizType === 'bars') {
                         const maxPct = Math.max(...profiles.flatMap(p => sortedValues.map(v => p.demographics?.[demoKey]?.[v] || 0)), 1);
                         return `
                             <div style="display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.65rem;">
+                                ${compLegendHtml}
                                 ${sortedValues.map(val => `
                                     <div style="display: flex; align-items: center; gap: 0.4rem;">
                                         <span style="min-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${val}</span>
@@ -53562,7 +53566,9 @@
                     if (compVizType === 'columnchart') {
                         const maxPct = Math.max(...profiles.flatMap(p => sortedValues.map(v => p.demographics?.[demoKey]?.[v] || 0)), 1);
                         return `
-                            <div style="display: flex; align-items: flex-end; gap: 0.2rem; height: 140px; padding: 0.5rem 0;">
+                            <div style="display: flex; flex-direction: column;">
+                                ${compLegendHtml}
+                                <div style="display: flex; align-items: flex-end; gap: 0.2rem; height: 140px; padding: 0.5rem 0;">
                                 ${sortedValues.slice(0, 12).map(val => `
                                     <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; min-width: 0;">
                                         <div style="width: 100%; height: 100px; display: flex; align-items: flex-end; justify-content: center; gap: 2px;">
@@ -53575,6 +53581,7 @@
                                         <div style="font-size: 0.5rem; color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;" title="${val}">${(val || '').slice(0, 8)}</div>
                                     </div>
                                 `).join('')}
+                                </div>
                             </div>
                         `;
                     }
@@ -53641,10 +53648,14 @@
                         return '<p style="color: var(--text-secondary);">No behavioral data available</p>';
                     }
                     
+                    const behLegendHtml = `<div style="display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-bottom: 0.5rem; font-size: 0.65rem; align-items: center;">
+                        ${profiles.map(p => `<span style="display: inline-flex; align-items: center; gap: 0.25rem;"><span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: ${p.color || 'var(--accent-cyan)'}; flex-shrink: 0;"></span><span>${(p.name || '').replace(/</g, '&lt;')}</span></span>`).join('')}
+                    </div>`;
                     if (compVizType === 'bars') {
                         const maxPct = Math.max(...sortedItems.flatMap(([, pd]) => profiles.map(p => (pd[p.name] && (pd[p.name].percent !== undefined ? pd[p.name].percent : pd[p.name].pct)) || 0)), 1);
                         return `
                             <div style="display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.65rem;">
+                                ${behLegendHtml}
                                 ${sortedItems.map(([itemName, profileData]) => `
                                     <div style="display: flex; align-items: center; gap: 0.35rem;">
                                         <span style="min-width: 90px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">${(itemName || '').replace(/</g, '&lt;')}</span>
@@ -53668,7 +53679,9 @@
                     if (compVizType === 'columnchart') {
                         const maxPct = Math.max(...sortedItems.flatMap(([, pd]) => profiles.map(p => (pd[p.name] && (pd[p.name].percent !== undefined ? pd[p.name].percent : pd[p.name].pct)) || 0)), 1);
                         return `
-                            <div style="display: flex; align-items: flex-end; gap: 0.15rem; height: 130px; padding: 0.5rem 0;">
+                            <div style="display: flex; flex-direction: column;">
+                                ${behLegendHtml}
+                                <div style="display: flex; align-items: flex-end; gap: 0.15rem; height: 130px; padding: 0.5rem 0;">
                                 ${sortedItems.slice(0, 15).map(([itemName, profileData]) => `
                                     <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.15rem; min-width: 0;">
                                         <div style="width: 100%; height: 95px; display: flex; align-items: flex-end; justify-content: center; gap: 1px;">
@@ -53682,6 +53695,7 @@
                                         <div style="font-size: 0.48rem; color: var(--text-secondary); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;" title="${(itemName || '').replace(/"/g, '&quot;')}">${(itemName || '').slice(0, 6).replace(/</g, '&lt;')}</div>
                                     </div>
                                 `).join('')}
+                                </div>
                             </div>
                         `;
                     }
