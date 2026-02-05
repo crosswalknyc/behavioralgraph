@@ -1127,6 +1127,28 @@ def requires_admin(f):
         return f(*args, **kwargs)
     return decorated
 
+def requires_purgatory_access(f):
+    """Decorator that allows admins, super_admins, and users with purgatory approval access."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'username' not in session:
+            if request.path.startswith('/api/'):
+                return jsonify({'success': False, 'error': 'Session expired. Please log in again.'}), 401
+            return redirect(url_for('login_page'))
+        user = get_current_user()
+        if not user:
+            return jsonify({'success': False, 'error': 'User not found'}), 403
+        
+        role = user.get('role', '')
+        has_purgatory_approval = user.get('has_purgatory_approval', False)
+        
+        # Allow admins, super_admins, or users with purgatory approval
+        if role in ['admin', 'super_admin'] or has_purgatory_approval:
+            return f(*args, **kwargs)
+        
+        return jsonify({'success': False, 'error': 'Purgatory access required'}), 403
+    return decorated
+
 
 # Store for job status and results
 jobs = {}
@@ -1459,7 +1481,11 @@ def privacy_page():
 @app.route('/admin')
 @requires_admin
 def admin_portal():
-    return render_template('admin.html')
+    # Get current user's role to pass to template
+    username = session.get('username')
+    user = get_user(username)
+    current_role = user.get('role', 'user') if user else 'user'
+    return render_template('admin.html', current_user_role=current_role)
 
 # ============================================================================
 # ADMIN API ROUTES
@@ -1991,8 +2017,14 @@ def create_user():
             'analysis_iq_modules': req_data.get('analysis_iq_modules', []),
             'has_rankers_iq_access': req_data.get('has_rankers_iq_access', False),
             'rankers_iq_options': req_data.get('rankers_iq_options', []),
-            'collab_team': req_data.get('collab_team', [])
+            'collab_team': req_data.get('collab_team', []),
+            'has_purgatory_approval': False  # Default to false, only super_admin can enable
         }
+        
+        # Purgatory approval (only super_admin can set this on create)
+        current_user = get_user(session.get('username'))
+        if current_user and current_user.get('role') == 'super_admin':
+            data['users'][username]['has_purgatory_approval'] = req_data.get('has_purgatory_approval', False)
         
         save_users(data)
         
@@ -2079,6 +2111,11 @@ def update_user(username):
             user['rankers_iq_options'] = req_data['rankers_iq_options']
         if 'collab_team' in req_data:
             user['collab_team'] = req_data['collab_team']
+        # Purgatory approval (only super_admin can set this)
+        if 'has_purgatory_approval' in req_data:
+            current_user = get_user(session.get('username'))
+            if current_user and current_user.get('role') == 'super_admin':
+                user['has_purgatory_approval'] = req_data['has_purgatory_approval']
         
         # Handle username change
         new_username = req_data.get('new_username', '').strip().lower()
@@ -9009,6 +9046,117 @@ def save_purgatory_metadata(metadata):
         print(f"Error saving purgatory metadata: {e}")
         return False
 
+def get_purgatory_approvers():
+    """Get all users who can approve purgatory items (super_admins and users with has_purgatory_approval)."""
+    data = load_users()
+    approvers = []
+    
+    for username, user in data.get('users', {}).items():
+        email = user.get('email')
+        if not email:
+            continue
+            
+        # Super admins always get purgatory notifications
+        if user.get('role') == 'super_admin':
+            approvers.append({
+                'username': username,
+                'email': email,
+                'first_name': user.get('first_name', username),
+                'last_name': user.get('last_name', ''),
+                'is_super_admin': True
+            })
+        # Users with purgatory approval permission
+        elif user.get('has_purgatory_approval'):
+            approvers.append({
+                'username': username,
+                'email': email,
+                'first_name': user.get('first_name', username),
+                'last_name': user.get('last_name', ''),
+                'is_super_admin': False
+            })
+    
+    return approvers
+
+def send_purgatory_notification(created_by, project_name, purgatory_id):
+    """Send email notification to all purgatory approvers when a new item is added."""
+    # Get the user who created the profile
+    data = load_users()
+    creator = data.get('users', {}).get(created_by, {})
+    creator_first_name = creator.get('first_name', created_by)
+    creator_last_name = creator.get('last_name', '')
+    creator_company = creator.get('company', 'Unknown Company')
+    
+    creator_display = f"{creator_first_name} {creator_last_name}".strip() or created_by
+    if creator_company and creator_company != 'Unknown Company':
+        creator_display += f" ({creator_company})"
+    
+    # Get all approvers
+    approvers = get_purgatory_approvers()
+    
+    if not approvers:
+        print("⚠️ No purgatory approvers found to notify")
+        return
+    
+    # Build the purgatory review URL
+    # Use environment variable for base URL or default
+    base_url = os.environ.get('APP_BASE_URL', 'https://behavioral-graph.onrender.com')
+    purgatory_url = f"{base_url}/admin#purgatory"
+    
+    subject = f"Purgatory: {project_name}"
+    
+    html_content = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; background-color: #1a1a1a; color: #ffffff; padding: 20px;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #2a2a2a; border-radius: 12px; padding: 30px;">
+            <h2 style="color: #00d4ff; margin-top: 0;">New Profile Awaiting Review</h2>
+            
+            <p style="font-size: 16px; line-height: 1.6;">
+                <strong>{creator_display}</strong> has pulled a profile for:
+            </p>
+            
+            <div style="background-color: #3a3a3a; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                <h3 style="color: #c8ff00; margin: 0 0 10px 0;">{project_name}</h3>
+            </div>
+            
+            <p style="font-size: 14px; color: #aaaaaa;">
+                Please review and release this profile from purgatory.
+            </p>
+            
+            <a href="{purgatory_url}" style="display: inline-block; background-color: #00d4ff; color: #1a1a1a; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; margin-top: 15px;">
+                Review in Purgatory
+            </a>
+            
+            <hr style="border: none; border-top: 1px solid #444; margin: 30px 0;">
+            
+            <p style="font-size: 12px; color: #666;">
+                This is an automated notification from Behavioral Graph.
+            </p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    text_content = f"""
+New Profile Awaiting Review
+
+{creator_display} has pulled a profile for: {project_name}
+
+Please review and release this profile from purgatory.
+
+Review here: {purgatory_url}
+    """
+    
+    # Send email to each approver
+    for approver in approvers:
+        try:
+            success, msg = send_email_via_gmail(approver['email'], subject, html_content, text_content)
+            if success:
+                print(f"✅ Purgatory notification sent to {approver['email']}")
+            else:
+                print(f"⚠️ Failed to send purgatory notification to {approver['email']}: {msg}")
+        except Exception as e:
+            print(f"❌ Error sending purgatory notification to {approver['email']}: {e}")
+
 def add_to_purgatory(s3_key, bucket, created_by, project_name, category, source_type='profile_analysis'):
     """Add a file to purgatory with metadata for admin review."""
     metadata = load_purgatory_metadata()
@@ -9030,6 +9178,13 @@ def add_to_purgatory(s3_key, bucket, created_by, project_name, category, source_
     }
     
     save_purgatory_metadata(metadata)
+    
+    # Send email notification to all purgatory approvers
+    try:
+        send_purgatory_notification(created_by, project_name, purgatory_id)
+    except Exception as e:
+        print(f"⚠️ Failed to send purgatory notification: {e}")
+    
     return purgatory_id
 
 def release_from_purgatory(purgatory_id):
@@ -9099,7 +9254,7 @@ def _add_user_profile(s3_key, created_by):
 # ============================================================================
 
 @app.route('/api/admin/purgatory', methods=['GET'])
-@requires_admin
+@requires_purgatory_access
 def get_purgatory_items():
     """Get all items in purgatory for admin review."""
     try:
@@ -9152,7 +9307,7 @@ def get_purgatory_items():
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/admin/purgatory/update', methods=['POST'])
-@requires_admin
+@requires_purgatory_access
 def update_purgatory_item():
     """Update purgatory item metadata (title, category, image)."""
     try:
@@ -9189,7 +9344,7 @@ def update_purgatory_item():
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/admin/purgatory/release', methods=['POST'])
-@requires_admin
+@requires_purgatory_access
 def release_purgatory_item():
     """Release an item from purgatory to the main bucket."""
     global s3_cache
@@ -9242,7 +9397,7 @@ def release_purgatory_item():
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/admin/purgatory/reject', methods=['POST'])
-@requires_admin
+@requires_purgatory_access
 def reject_purgatory_item():
     """Reject and delete an item from purgatory."""
     try:
@@ -9280,6 +9435,29 @@ def reject_purgatory_item():
         
     except Exception as e:
         print(f"Error rejecting purgatory item: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/purgatory/check-access', methods=['GET'])
+@requires_auth
+def check_purgatory_access():
+    """Check if current user has purgatory approval access."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'success': False, 'has_access': False})
+        
+        role = user.get('role', '')
+        has_purgatory_approval = user.get('has_purgatory_approval', False)
+        
+        has_access = role in ['admin', 'super_admin'] or has_purgatory_approval
+        
+        return jsonify({
+            'success': True,
+            'has_access': has_access,
+            'is_admin': role in ['admin', 'super_admin'],
+            'has_purgatory_approval': has_purgatory_approval
+        })
+    except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/purgatory/my-items', methods=['GET'])
