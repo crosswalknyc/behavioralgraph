@@ -15289,7 +15289,11 @@
         let currentUserFirstName = '{{ first_name | default("") }}';
         let currentUserLastName = '{{ last_name | default("") }}';
         let currentUserCompany = '{{ company | default("") }}';
+<<<<<<< HEAD
         let currentUserCompanyLogo = {{ (company_logo or "") | tojson }};
+=======
+        let currentUserCompanyLogo = '{{ company_logo | default("") }}';
+>>>>>>> bdac94c32969107fde0c3cb309257cd0322aad6c
         let currentUserEmail = '{{ user_email | default("") }}';
         
         // Toast notification function (needed early for deck operations)

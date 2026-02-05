@@ -9073,6 +9073,267 @@ def get_user_purgatory_items(username):
     
     return user_items
 
+
+# ============================================================================
+# PURGATORY API ENDPOINTS
+# ============================================================================
+
+@app.route('/api/admin/purgatory', methods=['GET'])
+@requires_admin
+def get_purgatory_items():
+    """Get all items in purgatory for admin review."""
+    try:
+        metadata = load_purgatory_metadata()
+        items = []
+        
+        for purgatory_id, item in metadata.items():
+            if item.get('status') == 'pending':
+                # Get file info from S3
+                bucket = item.get('bucket', S3_BUCKET)
+                s3_key = item.get('s3_key', '')
+                
+                try:
+                    # Get file size and last modified
+                    response = s3_client.head_object(Bucket=bucket, Key=s3_key)
+                    file_size = response.get('ContentLength', 0)
+                    last_modified = response.get('LastModified')
+                    if last_modified:
+                        last_modified = last_modified.isoformat()
+                except:
+                    file_size = 0
+                    last_modified = item.get('created_at')
+                
+                items.append({
+                    'purgatory_id': purgatory_id,
+                    's3_key': s3_key,
+                    'bucket': bucket,
+                    'project_name': item.get('project_name', ''),
+                    'title': item.get('title', item.get('project_name', '')),
+                    'category': item.get('category', 'Uncategorized'),
+                    'created_by': item.get('created_by', 'unknown'),
+                    'created_at': item.get('created_at', ''),
+                    'source_type': item.get('source_type', 'profile_analysis'),
+                    'image_url': item.get('image_url'),
+                    'file_size': file_size,
+                    'last_modified': last_modified
+                })
+        
+        # Sort by created_at descending (newest first)
+        items.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'items': items,
+            'count': len(items)
+        })
+        
+    except Exception as e:
+        print(f"Error getting purgatory items: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/purgatory/update', methods=['POST'])
+@requires_admin
+def update_purgatory_item():
+    """Update purgatory item metadata (title, category, image)."""
+    try:
+        data = request.get_json()
+        purgatory_id = data.get('purgatory_id')
+        
+        if not purgatory_id:
+            return jsonify({'success': False, 'error': 'Purgatory ID required'})
+        
+        metadata = load_purgatory_metadata()
+        
+        if purgatory_id not in metadata:
+            return jsonify({'success': False, 'error': 'Item not found in purgatory'})
+        
+        # Update allowed fields
+        if 'title' in data:
+            metadata[purgatory_id]['title'] = data['title']
+        if 'category' in data:
+            metadata[purgatory_id]['category'] = data['category']
+        if 'image_url' in data:
+            metadata[purgatory_id]['image_url'] = data['image_url']
+        if 'project_name' in data:
+            metadata[purgatory_id]['project_name'] = data['project_name']
+        
+        save_purgatory_metadata(metadata)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Purgatory item updated'
+        })
+        
+    except Exception as e:
+        print(f"Error updating purgatory item: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/purgatory/release', methods=['POST'])
+@requires_admin
+def release_purgatory_item():
+    """Release an item from purgatory to the main bucket."""
+    global s3_cache
+    
+    try:
+        data = request.get_json()
+        purgatory_id = data.get('purgatory_id')
+        
+        if not purgatory_id:
+            return jsonify({'success': False, 'error': 'Purgatory ID required'})
+        
+        metadata = load_purgatory_metadata()
+        
+        if purgatory_id not in metadata:
+            return jsonify({'success': False, 'error': 'Item not found in purgatory'})
+        
+        item = metadata[purgatory_id]
+        
+        success, result = release_from_purgatory(purgatory_id)
+        
+        if success:
+            # Update the profile image cache with the custom image if set
+            if item.get('image_url'):
+                cache_key = item.get('project_name', '').lower().strip()
+                if cache_key:
+                    profile_image_cache[cache_key] = {
+                        'image_url': item['image_url'],
+                        'title': item.get('title', item.get('project_name', '')),
+                        'source': 'custom',
+                        'is_custom': True,
+                        'cached_at': datetime.now().isoformat()
+                    }
+                    save_profile_image_cache()
+            
+            # Refresh cache to pick up the new file
+            smart_cache_update()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Item released from purgatory',
+                'new_key': result
+            })
+        else:
+            return jsonify({'success': False, 'error': result})
+        
+    except Exception as e:
+        print(f"Error releasing purgatory item: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/purgatory/reject', methods=['POST'])
+@requires_admin
+def reject_purgatory_item():
+    """Reject and delete an item from purgatory."""
+    try:
+        data = request.get_json()
+        purgatory_id = data.get('purgatory_id')
+        
+        if not purgatory_id:
+            return jsonify({'success': False, 'error': 'Purgatory ID required'})
+        
+        metadata = load_purgatory_metadata()
+        
+        if purgatory_id not in metadata:
+            return jsonify({'success': False, 'error': 'Item not found in purgatory'})
+        
+        item = metadata[purgatory_id]
+        bucket = item.get('bucket', S3_BUCKET)
+        s3_key = item.get('s3_key', '')
+        
+        # Delete the file from S3
+        try:
+            s3_client.delete_object(Bucket=bucket, Key=s3_key)
+            print(f"🗑️ Deleted purgatory file: {bucket}/{s3_key}")
+        except Exception as e:
+            print(f"Warning: Could not delete S3 file: {e}")
+        
+        # Update metadata status
+        metadata[purgatory_id]['status'] = 'rejected'
+        metadata[purgatory_id]['rejected_at'] = datetime.now().isoformat()
+        save_purgatory_metadata(metadata)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Item rejected and deleted from purgatory'
+        })
+        
+    except Exception as e:
+        print(f"Error rejecting purgatory item: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/purgatory/my-items', methods=['GET'])
+@requires_auth
+def get_my_purgatory_items():
+    """Get purgatory items for the current user (visible only to them)."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'success': False, 'error': 'Not authenticated'})
+        
+        username = session.get('username', '')
+        items = get_user_purgatory_items(username)
+        
+        return jsonify({
+            'success': True,
+            'items': items,
+            'count': len(items)
+        })
+        
+    except Exception as e:
+        print(f"Error getting user purgatory items: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/purgatory/download/<path:s3_key>')
+@requires_auth
+def download_purgatory_file(s3_key):
+    """Download a file from purgatory (user can only download their own files)."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+        
+        username = session.get('username', '')
+        is_admin = user.get('role') in ['admin', 'super_admin']
+        
+        # Check if user owns this file or is admin
+        metadata = load_purgatory_metadata()
+        
+        # Find the item by s3_key
+        item = None
+        for pid, pitem in metadata.items():
+            if pitem.get('s3_key') == s3_key or s3_key in pid:
+                item = pitem
+                break
+        
+        if not item:
+            return jsonify({'success': False, 'error': 'File not found'}), 404
+        
+        if not is_admin and item.get('created_by') != username:
+            return jsonify({'success': False, 'error': 'Access denied'}), 403
+        
+        bucket = item.get('bucket', S3_BUCKET)
+        
+        # Get the file from S3
+        response = s3_client.get_object(Bucket=bucket, Key=s3_key)
+        content = response['Body'].read()
+        
+        # Get filename from key
+        filename = s3_key.split('/')[-1]
+        
+        return Response(
+            content,
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Content-Type': 'text/csv'
+            }
+        )
+        
+    except Exception as e:
+        print(f"Error downloading purgatory file: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # Default KPI mappings for known tickers
 DEFAULT_TICKER_KPIS = {
     'ADT': 'Monitoring & Related Services Revenue Against Churn',
@@ -9148,6 +9409,245 @@ def save_svod_metadata(metadata):
         return True
     except:
         return False
+
+# ============================================================================
+# PURGATORY API ENDPOINTS
+# ============================================================================
+
+@app.route('/api/admin/purgatory', methods=['GET'])
+@requires_admin
+def get_purgatory_items():
+    """Get all items in purgatory for admin review."""
+    try:
+        metadata = load_purgatory_metadata()
+        
+        items = []
+        for purgatory_id, item in metadata.items():
+            if item.get('status') == 'pending':
+                # Get file info from S3
+                bucket = item.get('bucket', S3_BUCKET)
+                s3_key = item.get('s3_key', '')
+                
+                file_info = {
+                    'purgatory_id': purgatory_id,
+                    'project_name': item.get('project_name', ''),
+                    'title': item.get('title', item.get('project_name', '')),
+                    'category': item.get('category', 'Uncategorized'),
+                    'created_by': item.get('created_by', 'unknown'),
+                    'created_at': item.get('created_at', ''),
+                    'source_type': item.get('source_type', 'profile_analysis'),
+                    'image_url': item.get('image_url'),
+                    's3_key': s3_key,
+                    'bucket': bucket
+                }
+                
+                # Try to get file size
+                try:
+                    response = s3_client.head_object(Bucket=bucket, Key=s3_key)
+                    file_info['size'] = response.get('ContentLength', 0)
+                except:
+                    file_info['size'] = 0
+                
+                items.append(file_info)
+        
+        # Sort by created_at descending
+        items.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'items': items,
+            'count': len(items)
+        })
+        
+    except Exception as e:
+        print(f"❌ Error getting purgatory items: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/purgatory/release', methods=['POST'])
+@requires_admin
+def release_purgatory_item():
+    """Release an item from purgatory to the main bucket."""
+    try:
+        data = request.get_json()
+        purgatory_id = data.get('purgatory_id')
+        
+        if not purgatory_id:
+            return jsonify({'success': False, 'error': 'Purgatory ID required'})
+        
+        # Update metadata before release (title, category, image)
+        metadata = load_purgatory_metadata()
+        if purgatory_id in metadata:
+            if data.get('title'):
+                metadata[purgatory_id]['title'] = data['title']
+            if data.get('category'):
+                metadata[purgatory_id]['category'] = data['category']
+            if data.get('image_url'):
+                metadata[purgatory_id]['image_url'] = data['image_url']
+            save_purgatory_metadata(metadata)
+        
+        success, result = release_from_purgatory(purgatory_id)
+        
+        if success:
+            # Refresh cache to include the new file
+            smart_cache_update()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Item released from purgatory',
+                'new_key': result
+            })
+        else:
+            return jsonify({'success': False, 'error': result})
+        
+    except Exception as e:
+        print(f"❌ Error releasing from purgatory: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/purgatory/reject', methods=['POST'])
+@requires_admin
+def reject_purgatory_item():
+    """Reject and delete an item from purgatory."""
+    try:
+        data = request.get_json()
+        purgatory_id = data.get('purgatory_id')
+        
+        if not purgatory_id:
+            return jsonify({'success': False, 'error': 'Purgatory ID required'})
+        
+        metadata = load_purgatory_metadata()
+        
+        if purgatory_id not in metadata:
+            return jsonify({'success': False, 'error': 'Item not found'})
+        
+        item = metadata[purgatory_id]
+        bucket = item.get('bucket', S3_BUCKET)
+        s3_key = item.get('s3_key', '')
+        
+        # Delete the file from S3
+        try:
+            s3_client.delete_object(Bucket=bucket, Key=s3_key)
+        except Exception as e:
+            print(f"Warning: Could not delete S3 file: {e}")
+        
+        # Update status
+        item['status'] = 'rejected'
+        item['rejected_at'] = datetime.now().isoformat()
+        save_purgatory_metadata(metadata)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Item rejected and deleted'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error rejecting purgatory item: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/admin/purgatory/update', methods=['POST'])
+@requires_admin
+def update_purgatory_item():
+    """Update metadata for a purgatory item (title, category, image)."""
+    try:
+        data = request.get_json()
+        purgatory_id = data.get('purgatory_id')
+        
+        if not purgatory_id:
+            return jsonify({'success': False, 'error': 'Purgatory ID required'})
+        
+        metadata = load_purgatory_metadata()
+        
+        if purgatory_id not in metadata:
+            return jsonify({'success': False, 'error': 'Item not found'})
+        
+        # Update fields
+        if 'title' in data:
+            metadata[purgatory_id]['title'] = data['title']
+        if 'category' in data:
+            metadata[purgatory_id]['category'] = data['category']
+        if 'image_url' in data:
+            metadata[purgatory_id]['image_url'] = data['image_url']
+        if 'project_name' in data:
+            metadata[purgatory_id]['project_name'] = data['project_name']
+        
+        save_purgatory_metadata(metadata)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Purgatory item updated'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error updating purgatory item: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/user/purgatory', methods=['GET'])
+@requires_auth
+def get_user_purgatory():
+    """Get purgatory items for the current user (visible only to them until released)."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'success': False, 'error': 'Not authenticated'})
+        
+        username = session.get('username', '')
+        items = get_user_purgatory_items(username)
+        
+        return jsonify({
+            'success': True,
+            'items': items,
+            'count': len(items)
+        })
+        
+    except Exception as e:
+        print(f"❌ Error getting user purgatory: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/purgatory/download/<purgatory_id>')
+@requires_auth
+def download_purgatory_file(purgatory_id):
+    """Download a file from purgatory (user can download their own files)."""
+    try:
+        user = get_current_user()
+        if not user:
+            return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+        
+        username = session.get('username', '')
+        is_admin = user.get('role') in ['admin', 'super_admin']
+        
+        metadata = load_purgatory_metadata()
+        
+        if purgatory_id not in metadata:
+            return jsonify({'success': False, 'error': 'Item not found'}), 404
+        
+        item = metadata[purgatory_id]
+        
+        # Check permission - user can download their own, admins can download any
+        if item.get('created_by') != username and not is_admin:
+            return jsonify({'success': False, 'error': 'Access denied'}), 403
+        
+        bucket = item.get('bucket', S3_BUCKET)
+        s3_key = item.get('s3_key', '')
+        
+        # Get the file from S3
+        response = s3_client.get_object(Bucket=bucket, Key=s3_key)
+        content = response['Body'].read()
+        
+        # Generate filename
+        filename = s3_key.split('/')[-1]
+        
+        return Response(
+            content,
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Content-Type': 'text/csv'
+            }
+        )
+        
+    except Exception as e:
+        print(f"❌ Error downloading purgatory file: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/api/admin/change-category', methods=['POST'])
 @requires_admin
