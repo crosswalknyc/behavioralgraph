@@ -46269,15 +46269,29 @@
                 } else if (moduleType === 'location') {
                     return { ...baseData, locations: profile.locations };
                 } else if (moduleType.startsWith('behavioral_')) {
+                    const targetCatId = moduleType.replace('behavioral_', '');
                     let actualCat = null;
                     if (profile.behavioral) {
-                        actualCat = Object.keys(profile.behavioral).find(c => 
-                            c.toLowerCase().replace(/[^a-z0-9]/g, '_') === moduleType.replace('behavioral_', '')
-                        );
+                        // Try multiple matching strategies
+                        actualCat = Object.keys(profile.behavioral).find(c => {
+                            const normalized = c.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                            return normalized === targetCatId;
+                        });
+                        
+                        // If no match, try case-insensitive partial match
+                        if (!actualCat) {
+                            const targetWords = targetCatId.split('_').filter(w => w);
+                            actualCat = Object.keys(profile.behavioral).find(c => {
+                                const catWords = c.toLowerCase().split(/[^a-z0-9]+/).filter(w => w);
+                                return targetWords.every(tw => catWords.includes(tw));
+                            });
+                        }
+                        
+                        console.log(`Behavioral extraction for ${profile.name}: target="${targetCatId}", found="${actualCat}", available cats:`, Object.keys(profile.behavioral));
                     }
                     return { 
                         ...baseData, 
-                        behavioral: actualCat ? { [actualCat]: profile.behavioral[actualCat] } : {}
+                        behavioral: actualCat ? { [actualCat]: profile.behavioral[actualCat] } : profile.behavioral || {}
                     };
                 } else {
                     const demoType = moduleType.replace('demo_', '');
@@ -53093,8 +53107,8 @@
                             </tbody>
                         </table>
                     `;
-                } else if (['gender', 'age', 'ethnicity', 'income'].includes(moduleType)) {
-                    const demoKey = moduleType;
+                } else if (['gender', 'age', 'ethnicity', 'income'].includes(moduleType) || moduleType.startsWith('demo_')) {
+                    const demoKey = moduleType.startsWith('demo_') ? moduleType.replace('demo_', '') : moduleType;
                     const allValues = new Set();
                     profiles.forEach(p => {
                         if (p.demographics && p.demographics[demoKey]) {
@@ -53107,8 +53121,8 @@
                         <table class="comp-table" style="width: 100%; font-size: 0.75rem;">
                             <thead>
                                 <tr>
-                                    <th>${moduleType.charAt(0).toUpperCase() + moduleType.slice(1)}</th>
-                                    ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}</th>`).join('')}
+                                    <th>${demoKey.charAt(0).toUpperCase() + demoKey.slice(1)}</th>
+                                    ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}">${p.name}<br><span style="font-size: 0.65rem; font-weight: normal;">% / Index</span></th>`).join('')}
                                 </tr>
                             </thead>
                             <tbody>
@@ -53117,7 +53131,106 @@
                                         <td>${val}</td>
                                         ${profiles.map(p => {
                                             const pct = p.demographics?.[demoKey]?.[val] || 0;
-                                            return `<td>${pct.toFixed(1)}%</td>`;
+                                            const idx = p.demographicsIndex?.[demoKey]?.[val] || 100;
+                                            return `<td>${pct.toFixed(1)}% <span style="color: ${idx > 100 ? 'var(--accent-lime)' : idx < 100 ? 'var(--accent-orange)' : 'var(--text-secondary)'}; font-size: 0.65rem;">(${Math.round(idx)})</span></td>`;
+                                        }).join('')}
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                } else if (moduleType.startsWith('behavioral_') || (profiles[0] && profiles[0].behavioral)) {
+                    // Handle behavioral comparison data
+                    const behavioralCategory = moduleType.startsWith('behavioral_') 
+                        ? moduleType.replace('behavioral_', '').replace(/_/g, ' ')
+                        : Object.keys(profiles[0]?.behavioral || {})[0] || 'Behavioral';
+                    
+                    // Collect all behavioral items across profiles
+                    const allItems = new Map();
+                    profiles.forEach(p => {
+                        if (p.behavioral) {
+                            Object.entries(p.behavioral).forEach(([cat, items]) => {
+                                if (Array.isArray(items)) {
+                                    items.forEach(item => {
+                                        if (!allItems.has(item.name)) {
+                                            allItems.set(item.name, {});
+                                        }
+                                        allItems.get(item.name)[p.name] = {
+                                            percent: item.percent || item.pct || 0,
+                                            index: item.index || 100
+                                        };
+                                    });
+                                }
+                            });
+                        }
+                    });
+                    
+                    // Sort by first profile's index (descending)
+                    const sortedItems = Array.from(allItems.entries())
+                        .sort((a, b) => {
+                            const aIdx = Object.values(a[1])[0]?.index || 0;
+                            const bIdx = Object.values(b[1])[0]?.index || 0;
+                            return bIdx - aIdx;
+                        })
+                        .slice(0, 25); // Show top 25 items
+                    
+                    if (sortedItems.length === 0) {
+                        return '<p style="color: var(--text-secondary);">No behavioral data available</p>';
+                    }
+                    
+                    return `
+                        <table class="comp-table" style="width: 100%; font-size: 0.7rem;">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: left;">Brand/Item</th>
+                                    ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}; text-align: center;">${p.name}<br><span style="font-size: 0.6rem; font-weight: normal;">% / Index</span></th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${sortedItems.map(([itemName, profileData]) => `
+                                    <tr>
+                                        <td style="text-align: left; font-weight: 500;">${itemName}</td>
+                                        ${profiles.map(p => {
+                                            const data = profileData[p.name];
+                                            if (!data) return '<td style="text-align: center; color: var(--text-secondary);">-</td>';
+                                            const idx = data.index || 100;
+                                            const idxColor = idx > 120 ? 'var(--accent-lime)' : idx > 100 ? 'var(--accent-cyan)' : idx < 80 ? 'var(--accent-orange)' : 'var(--text-secondary)';
+                                            return `<td style="text-align: center;">${data.percent.toFixed(1)}% <span style="color: ${idxColor}; font-size: 0.6rem;">(${Math.round(idx)})</span></td>`;
+                                        }).join('')}
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                } else if (moduleType === 'location') {
+                    // Handle location comparison
+                    const allLocations = new Set();
+                    profiles.forEach(p => {
+                        if (p.locations && Array.isArray(p.locations)) {
+                            p.locations.forEach(loc => allLocations.add(loc.name || loc.state));
+                        }
+                    });
+                    
+                    const sortedLocations = Array.from(allLocations).slice(0, 20);
+                    
+                    return `
+                        <table class="comp-table" style="width: 100%; font-size: 0.7rem;">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: left;">Location</th>
+                                    ${profiles.map(p => `<th style="border-bottom: 3px solid ${p.color}; text-align: center;">${p.name}<br><span style="font-size: 0.6rem; font-weight: normal;">% / Index</span></th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${sortedLocations.map(locName => `
+                                    <tr>
+                                        <td style="text-align: left;">${locName}</td>
+                                        ${profiles.map(p => {
+                                            const loc = p.locations?.find(l => (l.name || l.state) === locName);
+                                            if (!loc) return '<td style="text-align: center; color: var(--text-secondary);">-</td>';
+                                            const idx = loc.index || 100;
+                                            const idxColor = idx > 120 ? 'var(--accent-lime)' : idx > 100 ? 'var(--accent-cyan)' : idx < 80 ? 'var(--accent-orange)' : 'var(--text-secondary)';
+                                            return `<td style="text-align: center;">${(loc.percent || loc.pct || 0).toFixed(1)}% <span style="color: ${idxColor}; font-size: 0.6rem;">(${Math.round(idx)})</span></td>`;
                                         }).join('')}
                                     </tr>
                                 `).join('')}
