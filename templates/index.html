@@ -43487,6 +43487,17 @@
 
             availableCategories.behavioral.sort();
 
+            // Filter behavioral by user's allowed categories (globally turned on per user)
+            if (!hasAllBehavioralCategories && allowedBehavioralCategories.length > 0) {
+                availableCategories.behavioral = availableCategories.behavioral.filter(cat => {
+                    const upperCat = cat.toUpperCase();
+                    return allowedBehavioralCategories.some(allowed => {
+                        const upperAllowed = allowed.toUpperCase();
+                        return upperCat === upperAllowed || upperCat.includes(upperAllowed) || upperAllowed.includes(upperCat);
+                    });
+                });
+            }
+
             // Restore previous selections or select all by default
             if (preserveSelection && prevSelected.size > 0) {
                 // Keep existing selections, but only if they're still valid
@@ -43942,10 +43953,19 @@
                 </div>`;
             });
 
-            // Add behavioral categories (only if selected) - exclude INTEREST/INTERESTS (have their own tab)
-            const sortedBehavioralCats = Array.from(allBehavioralCats)
+            // Add behavioral categories (only if selected) - exclude INTEREST/INTERESTS, filter by user access
+            let sortedBehavioralCats = Array.from(allBehavioralCats)
                 .filter(c => { const u = c.toUpperCase(); return u !== 'INTEREST' && u !== 'INTERESTS'; })
                 .sort();
+            if (!hasAllBehavioralCategories && allowedBehavioralCategories.length > 0) {
+                sortedBehavioralCats = sortedBehavioralCats.filter(cat => {
+                    const upperCat = cat.toUpperCase();
+                    return allowedBehavioralCategories.some(allowed => {
+                        const upperAllowed = allowed.toUpperCase();
+                        return upperCat === upperAllowed || upperCat.includes(upperAllowed) || upperAllowed.includes(upperCat);
+                    });
+                });
+            }
             const displayedBehavioralCats = []; // Track which categories are displayed for Jump To dropdown
             sortedBehavioralCats.forEach(cat => {
                 const catKey = 'beh_' + cat;
