@@ -9693,50 +9693,67 @@ def get_user_purgatory():
         print(f"❌ Error getting user purgatory: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
-@app.route('/api/purgatory/download/<path:purgatory_id>')
+def _get_purgatory_file_response(purgatory_id, disposition='attachment'):
+    """Fetch purgatory file from S3 and return a Response. disposition: 'attachment' (download) or 'inline' (view in browser)."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
+    
+    username = session.get('username', '')
+    is_admin = user.get('role') in ['admin', 'super_admin']
+    
+    metadata = load_purgatory_metadata()
+    
+    if purgatory_id not in metadata:
+        return jsonify({'success': False, 'error': 'Item not found'}), 404
+    
+    item = metadata[purgatory_id]
+    
+    if item.get('created_by') != username and not is_admin:
+        return jsonify({'success': False, 'error': 'Access denied'}), 403
+    
+    bucket = item.get('bucket', S3_BUCKET)
+    s3_key = item.get('s3_key', '')
+    
+    response = s3_client.get_object(Bucket=bucket, Key=s3_key)
+    content = response['Body'].read()
+    filename = s3_key.split('/')[-1]
+    
+    return Response(
+        content,
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition': f'{disposition}; filename="{filename}"',
+            'Content-Type': 'text/csv; charset=utf-8'
+        }
+    )
+
+
+@app.route('/api/purgatory/download')
 @requires_auth
-def download_purgatory_file(purgatory_id):
-    """Download a file from purgatory (user can download their own files). purgatory_id may contain colons and slashes (e.g. bucket:key)."""
+def download_purgatory_file():
+    """Download a file from purgatory. Use ?purgatory_id=... (URL-encoded; may contain colons/slashes)."""
     try:
-        user = get_current_user()
-        if not user:
-            return jsonify({'success': False, 'error': 'Not authenticated'}), 401
-        
-        username = session.get('username', '')
-        is_admin = user.get('role') in ['admin', 'super_admin']
-        
-        metadata = load_purgatory_metadata()
-        
-        if purgatory_id not in metadata:
-            return jsonify({'success': False, 'error': 'Item not found'}), 404
-        
-        item = metadata[purgatory_id]
-        
-        # Check permission - user can download their own, admins can download any
-        if item.get('created_by') != username and not is_admin:
-            return jsonify({'success': False, 'error': 'Access denied'}), 403
-        
-        bucket = item.get('bucket', S3_BUCKET)
-        s3_key = item.get('s3_key', '')
-        
-        # Get the file from S3
-        response = s3_client.get_object(Bucket=bucket, Key=s3_key)
-        content = response['Body'].read()
-        
-        # Generate filename
-        filename = s3_key.split('/')[-1]
-        
-        return Response(
-            content,
-            mimetype='text/csv',
-            headers={
-                'Content-Disposition': f'attachment; filename="{filename}"',
-                'Content-Type': 'text/csv'
-            }
-        )
-        
+        purgatory_id = request.args.get('purgatory_id') or request.args.get('id')
+        if not purgatory_id:
+            return jsonify({'success': False, 'error': 'purgatory_id required'}), 400
+        return _get_purgatory_file_response(purgatory_id, disposition='attachment')
     except Exception as e:
         print(f"❌ Error downloading purgatory file: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/purgatory/view')
+@requires_auth
+def view_purgatory_file():
+    """Open a purgatory CSV in the browser (inline). Use ?purgatory_id=... (URL-encoded)."""
+    try:
+        purgatory_id = request.args.get('purgatory_id') or request.args.get('id')
+        if not purgatory_id:
+            return jsonify({'success': False, 'error': 'purgatory_id required'}), 400
+        return _get_purgatory_file_response(purgatory_id, disposition='inline')
+    except Exception as e:
+        print(f"❌ Error viewing purgatory file: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

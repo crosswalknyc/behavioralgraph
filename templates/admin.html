@@ -2725,7 +2725,7 @@
         }
         
         function downloadPurgatoryFile(purgatoryId) {
-            window.open(`/api/purgatory/download/${encodeURIComponent(purgatoryId)}`, '_blank');
+            window.open(`/api/purgatory/download?purgatory_id=${encodeURIComponent(purgatoryId)}`, '_blank');
         }
         
         document.addEventListener('DOMContentLoaded', function() {
@@ -2745,9 +2745,8 @@
             }
         });
         
-        async function previewPurgatoryFile(purgatoryId) {
-            // Open in new tab for preview
-            window.open(`/api/purgatory/download/${encodeURIComponent(purgatoryId)}`, '_blank');
+        function previewPurgatoryFile(purgatoryId) {
+            window.open(`/api/purgatory/view?purgatory_id=${encodeURIComponent(purgatoryId)}`, '_blank');
         }
         
         // Settings Tab Switching

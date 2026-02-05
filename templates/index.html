@@ -41803,7 +41803,7 @@
         }
         
         function downloadPurgatoryResult(purgatoryId) {
-            window.open(`/api/purgatory/download/${encodeURIComponent(purgatoryId)}`, '_blank');
+            window.open(`/api/purgatory/download?purgatory_id=${encodeURIComponent(purgatoryId)}`, '_blank');
         }
         
         function openReleasedResult(s3Key, bucket) {
@@ -55296,7 +55296,7 @@
                 const purgatoryId = currentAnalysisType === 'svod_acquisition' 
                     ? `svod-acquisition:${currentAnalysisS3Key}`
                     : `dashboard-inputs:${currentAnalysisS3Key}`;
-                window.open(`/api/purgatory/download/${encodeURIComponent(purgatoryId)}`, '_blank');
+                window.open(`/api/purgatory/download?purgatory_id=${encodeURIComponent(purgatoryId)}`, '_blank');
             }
         }
         
