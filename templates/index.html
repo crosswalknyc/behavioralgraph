@@ -43487,15 +43487,24 @@
 
             availableCategories.behavioral.sort();
 
-            // Filter behavioral by user's allowed categories (globally turned on per user)
-            if (!hasAllBehavioralCategories && allowedBehavioralCategories.length > 0) {
-                availableCategories.behavioral = availableCategories.behavioral.filter(cat => {
-                    const upperCat = cat.toUpperCase();
-                    return allowedBehavioralCategories.some(allowed => {
-                        const upperAllowed = allowed.toUpperCase();
-                        return upperCat === upperAllowed || upperCat.includes(upperAllowed) || upperAllowed.includes(upperCat);
+            // Only show behavioral categories the user has been granted access to (demographics + location always shown)
+            if (!hasAllBehavioralCategories) {
+                if (allowedBehavioralCategories.length === 0) {
+                    availableCategories.behavioral = [];
+                } else {
+                    availableCategories.behavioral = availableCategories.behavioral.filter(cat => {
+                        const upperCat = cat.toUpperCase();
+                        return allowedBehavioralCategories.some(allowed => {
+                            const upperAllowed = (allowed || '').toUpperCase();
+                            return upperCat === upperAllowed || upperCat.includes(upperAllowed) || upperAllowed.includes(upperCat);
+                        });
                     });
-                });
+                }
+                // Apply admin quick-select exclusions (hidden for all users)
+                if (typeof quickSelectBehaviorsExclusions !== 'undefined' && quickSelectBehaviorsExclusions && quickSelectBehaviorsExclusions.length > 0) {
+                    const exclusionsSet = new Set(quickSelectBehaviorsExclusions.map(c => (c || '').toUpperCase()));
+                    availableCategories.behavioral = availableCategories.behavioral.filter(cat => !exclusionsSet.has(cat.toUpperCase()));
+                }
             }
 
             // Restore previous selections or select all by default
@@ -43957,14 +43966,24 @@
             let sortedBehavioralCats = Array.from(allBehavioralCats)
                 .filter(c => { const u = c.toUpperCase(); return u !== 'INTEREST' && u !== 'INTERESTS'; })
                 .sort();
-            if (!hasAllBehavioralCategories && allowedBehavioralCategories.length > 0) {
-                sortedBehavioralCats = sortedBehavioralCats.filter(cat => {
-                    const upperCat = cat.toUpperCase();
-                    return allowedBehavioralCategories.some(allowed => {
-                        const upperAllowed = allowed.toUpperCase();
-                        return upperCat === upperAllowed || upperCat.includes(upperAllowed) || upperAllowed.includes(upperCat);
+            // Only show behavioral categories the user has been granted access to (demographics + location always shown)
+            if (!hasAllBehavioralCategories) {
+                if (allowedBehavioralCategories.length === 0) {
+                    sortedBehavioralCats = [];
+                } else {
+                    sortedBehavioralCats = sortedBehavioralCats.filter(cat => {
+                        const upperCat = cat.toUpperCase();
+                        return allowedBehavioralCategories.some(allowed => {
+                            const upperAllowed = (allowed || '').toUpperCase();
+                            return upperCat === upperAllowed || upperCat.includes(upperAllowed) || upperAllowed.includes(upperCat);
+                        });
                     });
-                });
+                }
+                // Apply admin quick-select exclusions (hidden for all users)
+                if (typeof quickSelectBehaviorsExclusions !== 'undefined' && quickSelectBehaviorsExclusions && quickSelectBehaviorsExclusions.length > 0) {
+                    const exclusionsSet = new Set(quickSelectBehaviorsExclusions.map(c => (c || '').toUpperCase()));
+                    sortedBehavioralCats = sortedBehavioralCats.filter(cat => !exclusionsSet.has(cat.toUpperCase()));
+                }
             }
             const displayedBehavioralCats = []; // Track which categories are displayed for Jump To dropdown
             sortedBehavioralCats.forEach(cat => {
@@ -44102,17 +44121,16 @@
             
             // Group 2: Interests - no longer shown (INTEREST card removed from behavioral)
             
-            // Group 3: Behavioral (all behavioral categories; INTEREST/INTERESTS excluded)
+            // Group 3: Behavioral (only categories user has been granted access to)
             const behavioralCats = (sortedBehavioralCats || []).slice();
-            options += `<optgroup label="Behavioral">`;
-            behavioralCats.forEach(cat => {
-                const safeId = cat.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-                options += `<option value="comp-beh-${safeId}">🎯 ${cat}</option>`;
-            });
-            if (behavioralCats.length === 0) {
-                options += `<option value="" disabled>—</option>`;
+            if (behavioralCats.length > 0) {
+                options += `<optgroup label="Behavioral">`;
+                behavioralCats.forEach(cat => {
+                    const safeId = cat.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+                    options += `<option value="comp-beh-${safeId}">🎯 ${cat}</option>`;
+                });
+                options += `</optgroup>`;
             }
-            options += `</optgroup>`;
             
             dropdown.innerHTML = options;
         }
