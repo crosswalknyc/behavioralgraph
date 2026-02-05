@@ -9713,8 +9713,16 @@
             font-weight: 700;
             color: #000;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(255, 255, 0, 0.5);
-            transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
+            transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease, opacity 0.2s ease;
             user-select: none;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .slide-module-content:hover .viz-control-toggle,
+        .viz-control-toggle.dragging,
+        .viz-control-toggle:focus {
+            opacity: 1;
+            pointer-events: auto;
         }
         
         .viz-control-toggle:hover {
@@ -12997,15 +13005,33 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- GoodShort / ShortTV / ReelShort placeholder panels -->
-                        <div id="ranker-goodshort" class="ranker-platform-panel" style="padding: 2rem; text-align: center;">
-                            <p style="color: var(--text-secondary); margin-bottom: 1rem;">Ranker data for GoodShort will appear here when available.</p>
+                        <!-- GoodShort / ShortTV / ReelShort ranker panels -->
+                        <div id="ranker-goodshort" class="ranker-platform-panel">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                                <h3 style="margin: 0;">📱 GoodShort</h3>
+                                <button class="btn btn-primary" onclick="loadGoodshortRankerData()" id="goodshortRefreshBtn">🔄 Refresh</button>
+                            </div>
+                            <div id="goodshortInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
+                            <div id="goodshortLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading GoodShort data...</div>
+                            <div id="goodshortError" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
                         </div>
-                        <div id="ranker-shorttv" class="ranker-platform-panel" style="padding: 2rem; text-align: center;">
-                            <p style="color: var(--text-secondary); margin-bottom: 1rem;">Ranker data for ShortTV will appear here when available.</p>
+                        <div id="ranker-shorttv" class="ranker-platform-panel">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                                <h3 style="margin: 0;">📱 ShortTV</h3>
+                                <button class="btn btn-primary" onclick="loadShortstvRankerData()" id="shortstvRefreshBtn">🔄 Refresh</button>
+                            </div>
+                            <div id="shortstvInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
+                            <div id="shortstvLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading ShortTV data...</div>
+                            <div id="shortstvError" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
                         </div>
-                        <div id="ranker-reelshort" class="ranker-platform-panel" style="padding: 2rem; text-align: center;">
-                            <p style="color: var(--text-secondary); margin-bottom: 1rem;">Ranker data for ReelShort will appear here when available.</p>
+                        <div id="ranker-reelshort" class="ranker-platform-panel">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                                <h3 style="margin: 0;">📱 ReelShort</h3>
+                                <button class="btn btn-primary" onclick="loadReelShortRankerData()" id="reelshortRefreshBtn">🔄 Refresh</button>
+                            </div>
+                            <div id="reelshortInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
+                            <div id="reelshortLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading ReelShort data...</div>
+                            <div id="reelshortError" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
                         </div>
                         
                         
@@ -13018,9 +13044,12 @@
                             </div>
                         </div>
                         <div id="rankersLoadDone" style="display: none;">
-                            <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data loaded. Use the Netflix tab above to view.</p>
+                            <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data loaded. Use the tabs above to view.</p>
                             <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
                                 <button class="btn btn-primary" onclick="loadNetflixRankerData(true)" id="rankersLoadBtnNetflix">📺 Refresh Netflix</button>
+                                <button class="btn btn-primary" onclick="loadReelShortRankerData()">📱 Refresh ReelShort</button>
+                                <button class="btn btn-primary" onclick="loadShortstvRankerData()">📱 Refresh ShortTV</button>
+                                <button class="btn btn-primary" onclick="loadGoodshortRankerData()">📱 Refresh GoodShort</button>
                             </div>
                         </div>
                     </div>
@@ -14531,15 +14560,33 @@
                             </div>
                         </div>
                     </div>
-                    <!-- GoodShort / ShortTV / ReelShort placeholder panels -->
-                    <div id="rankeriq-goodshort" class="ranker-platform-panel" style="padding: 2rem; text-align: center;">
-                        <p style="color: var(--text-secondary); margin-bottom: 1rem;">Ranker data for GoodShort will appear here when available.</p>
+                    <!-- GoodShort / ShortTV / ReelShort ranker panels -->
+                    <div id="rankeriq-goodshort" class="ranker-platform-panel">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <h3 style="margin: 0;">📱 GoodShort</h3>
+                            <button class="btn btn-primary" onclick="loadGoodshortRankerData()" id="rankerIQGoodshortRefreshBtn">🔄 Refresh</button>
+                        </div>
+                        <div id="rankerIQGoodshortInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
+                        <div id="rankerIQGoodshortLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading GoodShort data...</div>
+                        <div id="rankerIQGoodshortError" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
                     </div>
-                    <div id="rankeriq-shorttv" class="ranker-platform-panel" style="padding: 2rem; text-align: center;">
-                        <p style="color: var(--text-secondary); margin-bottom: 1rem;">Ranker data for ShortTV will appear here when available.</p>
+                    <div id="rankeriq-shorttv" class="ranker-platform-panel">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <h3 style="margin: 0;">📱 ShortTV</h3>
+                            <button class="btn btn-primary" onclick="loadShortstvRankerData()" id="rankerIQShortstvRefreshBtn">🔄 Refresh</button>
+                        </div>
+                        <div id="rankerIQShortstvInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
+                        <div id="rankerIQShortstvLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading ShortTV data...</div>
+                        <div id="rankerIQShortstvError" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
                     </div>
-                    <div id="rankeriq-reelshort" class="ranker-platform-panel" style="padding: 2rem; text-align: center;">
-                        <p style="color: var(--text-secondary); margin-bottom: 1rem;">Ranker data for ReelShort will appear here when available.</p>
+                    <div id="rankeriq-reelshort" class="ranker-platform-panel">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <h3 style="margin: 0;">📱 ReelShort</h3>
+                            <button class="btn btn-primary" onclick="loadReelShortRankerData()" id="rankerIQReelshortRefreshBtn">🔄 Refresh</button>
+                        </div>
+                        <div id="rankerIQReelshortInsightsCards" class="rankers-insights-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;"></div>
+                        <div id="rankerIQReelshortLoading" style="padding: 2rem; text-align: center; color: var(--text-secondary); display: none;">Loading ReelShort data...</div>
+                        <div id="rankerIQReelshortError" style="padding: 1rem; color: var(--accent-red); display: none;"></div>
                     </div>
                 </div>
                 <div id="rankerIQLoadBlock" style="padding: 2rem; text-align: center; background: var(--bg-card); border-radius: 8px; margin-top: 1rem;">
@@ -14549,7 +14596,12 @@
                     </div>
                     <div id="rankerIQLoadDone" style="display: none;">
                         <p style="color: var(--text-secondary); margin-bottom: 0.75rem;">Ranker data loaded.</p>
-                        <button class="btn btn-primary" onclick="loadRankerIQNetflixData(true)">📺 Refresh Netflix</button>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
+                            <button class="btn btn-primary" onclick="loadRankerIQNetflixData(true)">📺 Refresh Netflix</button>
+                            <button class="btn btn-primary" onclick="loadReelShortRankerData()">📱 Refresh ReelShort</button>
+                            <button class="btn btn-primary" onclick="loadShortstvRankerData()">📱 Refresh ShortTV</button>
+                            <button class="btn btn-primary" onclick="loadGoodshortRankerData()">📱 Refresh GoodShort</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -31248,6 +31300,9 @@
             if (panel) panel.classList.add('active');
             if (btn) btn.classList.add('active');
             if (id === 'netflix') showNetflixSubTab('daily');
+            else if (id === 'goodshort') loadGoodshortRankerData();
+            else if (id === 'shorttv') loadShortstvRankerData();
+            else if (id === 'reelshort') loadReelShortRankerData();
         }
 
         function showNetflixSubTab(id) {
@@ -31415,6 +31470,101 @@
                     if (btn) btn.disabled = false;
                     showRankersProgressBlock();
                 });
+        }
+
+        function loadReelShortRankerData() {
+            _setShortsEls('reelshort','display','block'); _setShortsEls('reelshort','innerHTML',''); _setShortsEls('reelshort','display','none'); _setShortsEls('reelshort','disabled',true);
+            const loadingIds = ['reelshortLoading','rankerIQReelshortLoading'];
+            const cardIds = ['reelshortInsightsCards','rankerIQReelshortInsightsCards'];
+            const errIds = ['reelshortError','rankerIQReelshortError'];
+            const btnIds = ['reelshortRefreshBtn','rankerIQReelshortRefreshBtn'];
+            loadingIds.forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'block'; });
+            cardIds.forEach(id => { const e = document.getElementById(id); if (e) e.innerHTML = ''; });
+            errIds.forEach(id => { const e = document.getElementById(id); if (e) { e.style.display = 'none'; e.textContent = ''; } });
+            btnIds.forEach(id => { const e = document.getElementById(id); if (e) e.disabled = true; });
+            fetch('/api/rankers/reelshort/data', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    loadingIds.forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'none'; });
+                    btnIds.forEach(id => { const e = document.getElementById(id); if (e) e.disabled = false; });
+                    if (data.error) {
+                        errIds.forEach(id => { const e = document.getElementById(id); if (e) { e.textContent = data.error; e.style.display = 'block'; } });
+                        return;
+                    }
+                    renderShortsRanker('reelshort', data);
+                })
+                .catch(e => {
+                    loadingIds.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+                    btnIds.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
+                    errIds.forEach(id => { const el = document.getElementById(id); if (el) { el.textContent = e.message || String(e); el.style.display = 'block'; } });
+                });
+        }
+
+        function loadShortstvRankerData() {
+            const loadingIds = ['shortstvLoading','rankerIQShortstvLoading'];
+            const cardIds = ['shortstvInsightsCards','rankerIQShortstvInsightsCards'];
+            const errIds = ['shortstvError','rankerIQShortstvError'];
+            const btnIds = ['shortstvRefreshBtn','rankerIQShortstvRefreshBtn'];
+            loadingIds.forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'block'; });
+            cardIds.forEach(id => { const e = document.getElementById(id); if (e) e.innerHTML = ''; });
+            errIds.forEach(id => { const e = document.getElementById(id); if (e) { e.style.display = 'none'; e.textContent = ''; } });
+            btnIds.forEach(id => { const e = document.getElementById(id); if (e) e.disabled = true; });
+            fetch('/api/rankers/shortstv/data', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    loadingIds.forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'none'; });
+                    btnIds.forEach(id => { const e = document.getElementById(id); if (e) e.disabled = false; });
+                    if (data.error) {
+                        errIds.forEach(id => { const e = document.getElementById(id); if (e) { e.textContent = data.error; e.style.display = 'block'; } });
+                        return;
+                    }
+                    renderShortsRanker('shortstv', data);
+                })
+                .catch(e => {
+                    loadingIds.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+                    btnIds.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
+                    errIds.forEach(id => { const el = document.getElementById(id); if (el) { el.textContent = e.message || String(e); el.style.display = 'block'; } });
+                });
+        }
+
+        function loadGoodshortRankerData() {
+            const loadingIds = ['goodshortLoading','rankerIQGoodshortLoading'];
+            const cardIds = ['goodshortInsightsCards','rankerIQGoodshortInsightsCards'];
+            const errIds = ['goodshortError','rankerIQGoodshortError'];
+            const btnIds = ['goodshortRefreshBtn','rankerIQGoodshortRefreshBtn'];
+            loadingIds.forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'block'; });
+            cardIds.forEach(id => { const e = document.getElementById(id); if (e) e.innerHTML = ''; });
+            errIds.forEach(id => { const e = document.getElementById(id); if (e) { e.style.display = 'none'; e.textContent = ''; } });
+            btnIds.forEach(id => { const e = document.getElementById(id); if (e) e.disabled = true; });
+            fetch('/api/rankers/goodshort/data', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    loadingIds.forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'none'; });
+                    btnIds.forEach(id => { const e = document.getElementById(id); if (e) e.disabled = false; });
+                    if (data.error) {
+                        errIds.forEach(id => { const e = document.getElementById(id); if (e) { e.textContent = data.error; e.style.display = 'block'; } });
+                        return;
+                    }
+                    renderShortsRanker('goodshort', data);
+                })
+                .catch(e => {
+                    loadingIds.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+                    btnIds.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
+                    errIds.forEach(id => { const el = document.getElementById(id); if (el) { el.textContent = e.message || String(e); el.style.display = 'block'; } });
+                });
+        }
+
+        function renderShortsRanker(platform, data) {
+            const cardIds = platform === 'reelshort' ? ['reelshortInsightsCards','rankerIQReelshortInsightsCards'] :
+                platform === 'shortstv' ? ['shortstvInsightsCards','rankerIQShortstvInsightsCards'] : ['goodshortInsightsCards','rankerIQGoodshortInsightsCards'];
+            const cards = [
+                { label: 'Active Accounts', value: (data.active_accounts != null ? Number(data.active_accounts).toLocaleString() : '—') },
+                { label: 'Total Cancels', value: (data.total_cancels_pct != null ? data.total_cancels_pct + '%' : '—') },
+                { label: 'Watched Paid Content', value: (data.watched_paid_content_pct != null ? data.watched_paid_content_pct + '%' : '—') },
+                { label: 'Watched Free Content', value: (data.watched_free_content_pct != null ? data.watched_free_content_pct + '%' : '—') }
+            ];
+            const html = cards.map(c => '<div class="insight-card"><div class="insight-label">' + c.label + '</div><div class="insight-value">' + c.value + '</div></div>').join('');
+            cardIds.forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = html; });
         }
 
         function populateNetflixTrendsShowSelect() {

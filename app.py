@@ -120,6 +120,8 @@ def server_error(e):
 
 S3_BUCKET = 'dashboard-inputs'
 SUBSCRIBER_S3_BUCKET = 'svod-acquisition'  # Bucket for Subscriber IQ data
+S3_PURGATORY_PREFIX = 'purgatory/'  # Files go here first; admin releases to main bucket
+JOBS_STATUS_S3_KEY = 'system/jobs_status.json'  # Cross-worker job status persistence (Render)
 HEDGE_FUND_S3_BUCKET = 'aggregated-tickers'  # Bucket for Hedge Fund IQ ticker data
 # FORCE us-east-2 - all buckets are in this region, ignore AWS_REGION env var if set
 S3_REGION = 'us-east-2'
@@ -1347,15 +1349,14 @@ def validate_demographics_consistency(new_demographics, existing_demographics, t
     is_valid = len(discrepancies) == 0
     return is_valid, discrepancies
 
-def upload_to_s3(file_path, brand_name, start_date, end_date):
-    """Upload a result file to S3."""
+def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, use_purgatory=True):
+    """Upload a result file to S3. By default uploads to purgatory/ for admin review before release."""
     if not s3_client:
         return None
-    
     try:
         timestamp = datetime.now().strftime('%m_%d_%Y_%H_%M')
-        s3_key = f"{brand_name}_{timestamp}.csv"
-        
+        base_key = f"{brand_name}_{timestamp}.csv"
+        s3_key = (S3_PURGATORY_PREFIX + base_key) if use_purgatory else base_key
         s3_client.upload_file(file_path, S3_BUCKET, s3_key)
         return s3_key
     except Exception as e:
@@ -4752,6 +4753,157 @@ def get_netflix_show_details():
         
     except Exception as e:
         print(f"[Netflix Show Details] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# REELSHORT / SHORTSTV / GOODSHORT RANKERS - Clickstream data (PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL)
+# ============================================================================
+REELSHORT_RANKER_CACHE = {}
+REELSHORT_RANKER_LOCK = threading.Lock()
+REELSHORT_RANKER_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'reelshort_ranker_cache.json')
+SHORTSTV_RANKER_CACHE = {}
+SHORTSTV_RANKER_LOCK = threading.Lock()
+SHORTSTV_RANKER_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'shortstv_ranker_cache.json')
+GOODSHORT_RANKER_CACHE = {}
+GOODSHORT_RANKER_LOCK = threading.Lock()
+GOODSHORT_RANKER_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'goodshort_ranker_cache.json')
+CLICKSTREAM_RANKER_WAREHOUSE = os.environ.get('SNOWFLAKE_WAREHOUSE', 'BEHAVIORGRAPH6X')
+
+
+def _fetch_clickstream_ranker_payload(common_name_substring, today_str):
+    """Run clickstream ranker query for COMMON_NAME containing common_name_substring (case insensitive). Returns payload dict."""
+    import bg
+    conn = bg.connect_snowflake()
+    cur = conn.cursor()
+    cur.execute(f"USE WAREHOUSE {CLICKSTREAM_RANKER_WAREHOUSE}")
+    pattern = f"%{common_name_substring}%"
+    sql = """
+        SELECT
+            COUNT(*) AS total,
+            COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%con%' OR LOWER(COALESCE(URL, '')) LIKE '%paid%' OR LOWER(COALESCE(URL, '')) LIKE '%thank%' THEN 1 END) AS new_subs,
+            COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%stop%' OR LOWER(COALESCE(URL, '')) LIKE '%cancel%' THEN 1 END) AS cancels,
+            COUNT(CASE WHEN LOWER(COALESCE(URL, '')) LIKE '%dashboard%' THEN 1 END) AS paid_content
+        FROM PROCESSEDCLICKSTREAM.PUBLIC.CLICKSTREAM_FINAL
+        WHERE DELIVERED = CURRENT_DATE()
+          AND LOWER(COALESCE(COMMON_NAME, '')) LIKE %s
+    """
+    cur.execute(sql, (pattern,))
+    row = cur.fetchone()
+    conn.close()
+    total = row[0] or 0
+    new_subs = row[1] or 0
+    cancels = row[2] or 0
+    paid_content = row[3] or 0
+    active_accounts = (total * 150) / 10_000_000 * 329_900_000 if total else 0
+    new_subscriptions_pct = (new_subs / total * 100) if total else 0
+    total_cancels_pct = (cancels / total * 100) if total else 0
+    watched_paid_pct = (paid_content / total * 100) if total else 0
+    display_paid_pct = watched_paid_pct if watched_paid_pct > 0 else new_subscriptions_pct
+    watched_free_pct = 100.0 - display_paid_pct
+    return {
+        'date': today_str,
+        'total_rows': total,
+        'active_accounts': round(active_accounts, 2),
+        'new_subscriptions_pct': round(new_subscriptions_pct, 2),
+        'total_cancels_pct': round(total_cancels_pct, 2),
+        'watched_paid_content_pct': round(display_paid_pct, 2),
+        'watched_free_content_pct': round(watched_free_pct, 2),
+    }
+
+
+def _save_clickstream_ranker_cache(date_str, payload, cache_file, cache_dict, lock, log_name):
+    with lock:
+        cache_dict[date_str] = payload
+    try:
+        existing = {}
+        if os.path.exists(cache_file):
+            with open(cache_file, 'r') as f:
+                existing = json.load(f)
+        if not isinstance(existing, dict):
+            existing = {}
+        existing[date_str] = payload
+        with open(cache_file, 'w') as f:
+            json.dump(existing, f, indent=0)
+    except Exception as e:
+        print(f"[{log_name}] Cache save failed: {e}")
+
+
+@app.route('/api/rankers/reelshort/data', methods=['GET'])
+def get_reelshort_ranker_data():
+    """ReelShort ranker: clickstream data where COMMON_NAME contains 'reelshort'."""
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    with REELSHORT_RANKER_LOCK:
+        cached = REELSHORT_RANKER_CACHE.get(today_str)
+        if cached is None and os.path.exists(REELSHORT_RANKER_CACHE_FILE):
+            try:
+                with open(REELSHORT_RANKER_CACHE_FILE, 'r') as f:
+                    by_date = json.load(f)
+                cached = by_date.get(today_str) if isinstance(by_date, dict) else None
+                if cached is not None:
+                    REELSHORT_RANKER_CACHE[today_str] = cached
+            except Exception:
+                pass
+        if cached is not None:
+            return jsonify(cached)
+    try:
+        payload = _fetch_clickstream_ranker_payload('reelshort', today_str)
+        _save_clickstream_ranker_cache(today_str, payload, REELSHORT_RANKER_CACHE_FILE, REELSHORT_RANKER_CACHE, REELSHORT_RANKER_LOCK, 'ReelShort Ranker')
+        return jsonify(payload)
+    except Exception as e:
+        print(f"[ReelShort Ranker] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/rankers/shortstv/data', methods=['GET'])
+def get_shortstv_ranker_data():
+    """ShortsTV ranker: clickstream data where COMMON_NAME contains 'shortstv'."""
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    with SHORTSTV_RANKER_LOCK:
+        cached = SHORTSTV_RANKER_CACHE.get(today_str)
+        if cached is None and os.path.exists(SHORTSTV_RANKER_CACHE_FILE):
+            try:
+                with open(SHORTSTV_RANKER_CACHE_FILE, 'r') as f:
+                    by_date = json.load(f)
+                cached = by_date.get(today_str) if isinstance(by_date, dict) else None
+                if cached is not None:
+                    SHORTSTV_RANKER_CACHE[today_str] = cached
+            except Exception:
+                pass
+        if cached is not None:
+            return jsonify(cached)
+    try:
+        payload = _fetch_clickstream_ranker_payload('shortstv', today_str)
+        _save_clickstream_ranker_cache(today_str, payload, SHORTSTV_RANKER_CACHE_FILE, SHORTSTV_RANKER_CACHE, SHORTSTV_RANKER_LOCK, 'ShortsTV Ranker')
+        return jsonify(payload)
+    except Exception as e:
+        print(f"[ShortsTV Ranker] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/rankers/goodshort/data', methods=['GET'])
+def get_goodshort_ranker_data():
+    """GoodShort ranker: clickstream data where COMMON_NAME contains 'goodshort'."""
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    with GOODSHORT_RANKER_LOCK:
+        cached = GOODSHORT_RANKER_CACHE.get(today_str)
+        if cached is None and os.path.exists(GOODSHORT_RANKER_CACHE_FILE):
+            try:
+                with open(GOODSHORT_RANKER_CACHE_FILE, 'r') as f:
+                    by_date = json.load(f)
+                cached = by_date.get(today_str) if isinstance(by_date, dict) else None
+                if cached is not None:
+                    GOODSHORT_RANKER_CACHE[today_str] = cached
+            except Exception:
+                pass
+        if cached is not None:
+            return jsonify(cached)
+    try:
+        payload = _fetch_clickstream_ranker_payload('goodshort', today_str)
+        _save_clickstream_ranker_cache(today_str, payload, GOODSHORT_RANKER_CACHE_FILE, GOODSHORT_RANKER_CACHE, GOODSHORT_RANKER_LOCK, 'GoodShort Ranker')
+        return jsonify(payload)
+    except Exception as e:
+        print(f"[GoodShort Ranker] Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -8248,8 +8400,12 @@ def submit_analysis():
             'error': None,
             'logs': [],
             'reference_demographics': reference_demographics,
-            'reference_sample_size': reference_sample_size
+            'reference_sample_size': reference_sample_size,
+            'created_by': username,
+            's3_key': None,
         }
+        if s3_client:
+            _save_job_status_to_s3(job_id, jobs[job_id])
         
         # Start processing
         thread = threading.Thread(
@@ -8285,20 +8441,23 @@ def submit_analysis():
 @app.route('/api/job-status/<job_id>', strict_slashes=False)
 @requires_auth
 def get_job_status(job_id):
-    """Get simplified status of a specific job. /api/status/ and /api/job-status/ both supported."""
-    if job_id not in jobs:
+    """Get simplified status of a specific job. Falls back to S3 when not in memory (Render multi-worker)."""
+    job = jobs.get(job_id)
+    if job is None and s3_client:
+        all_jobs = _load_jobs_status_from_s3()
+        job = all_jobs.get(job_id)
+    if job is None:
         return jsonify({'error': 'Job not found'}), 404
-    
-    job = jobs[job_id]
     return jsonify({
         'job_id': job_id,
         'project_name': job.get('project_name', ''),
-        'status': job['status'],
-        'progress': job['progress'],
-        'message': job['message'],
-        'created_at': job['created_at'],
-        'error': job['error'],
-        'result_file': job['result_file'],
+        'status': job.get('status', 'unknown'),
+        'progress': job.get('progress', 0),
+        'message': job.get('message', ''),
+        'created_at': job.get('created_at', ''),
+        'error': job.get('error'),
+        'result_file': job.get('result_file'),
+        's3_key': job.get('s3_key'),
         'demographic_validation': job.get('demographic_validation')
     })
 
@@ -8306,23 +8465,43 @@ def get_job_status(job_id):
 @app.route('/api/download/<job_id>', strict_slashes=False)
 @requires_auth
 def download_result(job_id):
-    """Download the result CSV file for a completed job."""
-    if job_id not in jobs:
+    """Download the result CSV file for a completed job. Uses S3 when local file unavailable (Render multi-worker)."""
+    job = jobs.get(job_id)
+    if job is None and s3_client:
+        all_jobs = _load_jobs_status_from_s3()
+        job = all_jobs.get(job_id)
+    if job is None:
         return jsonify({'error': 'Job not found'}), 404
-    
-    job = jobs[job_id]
-    if job['status'] != 'completed':
+    if job.get('status') != 'completed':
         return jsonify({'error': 'Job not completed yet'}), 400
-    
-    if not job['result_file'] or not os.path.exists(job['result_file']):
-        return jsonify({'error': 'Result file not found'}), 404
-    
-    return send_file(
-        job['result_file'],
-        mimetype='text/csv',
-        as_attachment=True,
-        download_name=f"{job['project_name']}_behavioral_graph.csv"
-    )
+
+    # Try local file first
+    result_file = job.get('result_file')
+    if result_file and os.path.exists(result_file):
+        return send_file(
+            result_file,
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f"{job.get('project_name', 'data')}_behavioral_graph.csv"
+        )
+
+    # Fallback: stream from S3
+    s3_key = job.get('s3_key')
+    if s3_client and s3_key:
+        try:
+            response = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+            from io import BytesIO
+            body = response['Body'].read()
+            return send_file(
+                BytesIO(body),
+                mimetype='text/csv',
+                as_attachment=True,
+                download_name=f"{job.get('project_name', 'data')}_behavioral_graph.csv"
+            )
+        except Exception as e:
+            return jsonify({'error': f'Download failed: {str(e)}'}), 500
+
+    return jsonify({'error': 'Result file not found'}), 404
 
 
 # Cache for S3 file list - now persisted to S3 for faster loads
@@ -8786,6 +8965,113 @@ SVOD_METADATA_KEY = 'system/svod_metadata.json'
 
 # Hedge Fund IQ ticker metadata storage key
 TICKER_METADATA_KEY = 'system/ticker_metadata.json'
+
+# Purgatory metadata storage key - tracks files pending admin review
+PURGATORY_METADATA_KEY = 'system/purgatory_metadata.json'
+
+def load_purgatory_metadata():
+    """Load purgatory file metadata from S3."""
+    if not s3_client:
+        return {}
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=PURGATORY_METADATA_KEY)
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except:
+        return {}
+
+def save_purgatory_metadata(metadata):
+    """Save purgatory file metadata to S3."""
+    if not s3_client:
+        return False
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=PURGATORY_METADATA_KEY,
+            Body=json.dumps(metadata, indent=2),
+            ContentType='application/json'
+        )
+        return True
+    except Exception as e:
+        print(f"Error saving purgatory metadata: {e}")
+        return False
+
+def add_to_purgatory(s3_key, bucket, created_by, project_name, category, source_type='profile_analysis'):
+    """Add a file to purgatory with metadata for admin review."""
+    metadata = load_purgatory_metadata()
+    
+    # Create unique ID for this purgatory item
+    purgatory_id = f"{bucket}:{s3_key}"
+    
+    metadata[purgatory_id] = {
+        's3_key': s3_key,
+        'bucket': bucket,
+        'created_by': created_by,
+        'project_name': project_name,
+        'category': category,
+        'source_type': source_type,  # 'profile_analysis' or 'svod_acquisition'
+        'created_at': datetime.now().isoformat(),
+        'status': 'pending',  # pending, approved, rejected
+        'image_url': None,
+        'title': project_name
+    }
+    
+    save_purgatory_metadata(metadata)
+    return purgatory_id
+
+def release_from_purgatory(purgatory_id):
+    """Move a file from purgatory to the main bucket location."""
+    metadata = load_purgatory_metadata()
+    
+    if purgatory_id not in metadata:
+        return False, "Item not found in purgatory"
+    
+    item = metadata[purgatory_id]
+    bucket = item['bucket']
+    old_key = item['s3_key']
+    
+    # The old key should be in purgatory/ prefix
+    if not old_key.startswith(S3_PURGATORY_PREFIX):
+        return False, "Item is not in purgatory folder"
+    
+    # New key is without the purgatory/ prefix
+    new_key = old_key.replace(S3_PURGATORY_PREFIX, '', 1)
+    
+    try:
+        # Copy to new location
+        s3_client.copy_object(
+            Bucket=bucket,
+            CopySource={'Bucket': bucket, 'Key': old_key},
+            Key=new_key
+        )
+        
+        # Delete from purgatory
+        s3_client.delete_object(Bucket=bucket, Key=old_key)
+        
+        # Update metadata
+        item['status'] = 'approved'
+        item['released_at'] = datetime.now().isoformat()
+        item['released_key'] = new_key
+        save_purgatory_metadata(metadata)
+        
+        print(f"✅ Released from purgatory: {old_key} -> {new_key}")
+        return True, new_key
+    except Exception as e:
+        print(f"❌ Error releasing from purgatory: {e}")
+        return False, str(e)
+
+def get_user_purgatory_items(username):
+    """Get purgatory items created by a specific user."""
+    metadata = load_purgatory_metadata()
+    user_items = []
+    
+    for purgatory_id, item in metadata.items():
+        if item.get('created_by') == username and item.get('status') == 'pending':
+            user_items.append({
+                'purgatory_id': purgatory_id,
+                **item
+            })
+    
+    return user_items
 
 # Default KPI mappings for known tickers
 DEFAULT_TICKER_KPIS = {
@@ -9690,10 +9976,47 @@ def process_s3_file_metadata(key, obj):
 
 
 # ============================================================================
+# JOB STATUS S3 PERSISTENCE (cross-worker visibility on Render)
+# ============================================================================
+
+def _load_jobs_status_from_s3():
+    """Load job statuses from S3. Returns dict job_id -> job_data."""
+    if not s3_client:
+        return {}
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=JOBS_STATUS_S3_KEY)
+        return json.loads(response['Body'].read().decode('utf-8'))
+    except Exception:
+        return {}
+
+def _save_job_status_to_s3(job_id, job_data):
+    """Save a single job's status to S3 (merge into existing)."""
+    if not s3_client:
+        return
+    try:
+        all_jobs = _load_jobs_status_from_s3()
+        # Only store fields needed for status display (no local paths)
+        safe = {
+            'status': job_data.get('status'),
+            'progress': job_data.get('progress', 0),
+            'message': job_data.get('message'),
+            'created_at': job_data.get('created_at'),
+            'project_name': job_data.get('project_name'),
+            'error': job_data.get('error'),
+            's3_key': job_data.get('s3_key'),
+            'created_by': job_data.get('created_by'),
+        }
+        all_jobs[job_id] = safe
+        s3_client.put_object(Bucket=S3_BUCKET, Key=JOBS_STATUS_S3_KEY, Body=json.dumps(all_jobs), ContentType='application/json')
+    except Exception as e:
+        print(f"[Job Status] S3 save failed: {e}")
+
+
+# ============================================================================
 # ANALYSIS RUNNER
 # ============================================================================
 
-def update_job_status(job_id, status=None, progress=None, message=None, error=None, result_file=None, demographic_validation=None):
+def update_job_status(job_id, status=None, progress=None, message=None, error=None, result_file=None, demographic_validation=None, s3_key=None):
     """Update job status - simplified to avoid verbose terminal output."""
     if job_id in jobs:
         if status:
@@ -9702,7 +10025,6 @@ def update_job_status(job_id, status=None, progress=None, message=None, error=No
             jobs[job_id]['progress'] = progress
         if message:
             jobs[job_id]['message'] = message
-            # Only keep last 5 log entries for cleaner display
             jobs[job_id]['logs'].append(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
             jobs[job_id]['logs'] = jobs[job_id]['logs'][-5:]
         if error:
@@ -9711,6 +10033,10 @@ def update_job_status(job_id, status=None, progress=None, message=None, error=No
             jobs[job_id]['result_file'] = result_file
         if demographic_validation:
             jobs[job_id]['demographic_validation'] = demographic_validation
+        if s3_key:
+            jobs[job_id]['s3_key'] = s3_key
+        if s3_client:
+            _save_job_status_to_s3(job_id, jobs[job_id])
 
 
 def run_analysis(job_id, project_name, brands, sample_start, sample_end, 
@@ -10002,17 +10328,20 @@ def run_analysis(job_id, project_name, brands, sample_start, sample_end,
                 import shutil
                 shutil.copy2(result_file, output_path)
                 
-                # Upload to S3
+                # Upload to S3 (purgatory - admin must release to main bucket)
                 update_job_status(job_id, progress=95, message='Saving to cache...')
-                s3_key = upload_to_s3(output_path, brands[0] if brands else project_name, sample_start, sample_end)
-                
+                created_by = jobs.get(job_id, {}).get('created_by', '')
+                s3_key = upload_to_s3(output_path, brands[0] if brands else project_name, sample_start, sample_end, created_by=created_by, use_purgatory=True)
+                if s3_key:
+                    _add_user_profile(s3_key, created_by)
                 update_job_status(
                     job_id, 
                     status='completed', 
                     progress=100, 
                     message='Complete!',
                     result_file=output_path,
-                    demographic_validation=demographic_validation
+                    demographic_validation=demographic_validation,
+                    s3_key=s3_key
                 )
             else:
                 update_job_status(job_id, status='failed', error='No output file generated')
@@ -11849,7 +12178,7 @@ def run_talent_theater(job_id):
         update_job_status(job_id, progress=10, message='Initializing...')
         
         # Import the script module
-        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Talent_Theater_Attribution.py')
+        script_path = os.path.join(os.path.dirname(__file__), 'Talent_Theater_Attribution.py')
         if not os.path.exists(script_path):
             update_job_status(job_id, status='failed', error=f'Script not found: {script_path}')
             return
@@ -11871,8 +12200,7 @@ def run_talent_theater(job_id):
         from datetime import datetime
         start_date = datetime.strptime(params['start_date'], '%Y-%m-%d')
         end_date = datetime.strptime(params['end_date'], '%Y-%m-%d')
-        
-        # Run the query function
+
         conn = module.connect_snowflake()
         try:
             script_params = {
@@ -11884,36 +12212,30 @@ def run_talent_theater(job_id):
             }
             results = module.run_query(conn, script_params)
             update_job_status(job_id, progress=80, message='Writing output...')
-            
-            # Write output
-            module.write_output(results, script_params)
-            
-            # Find the output file (it's written to Desktop/attribution folder)
+
+            # Write output to server output dir (not Desktop - doesn't exist on Render)
             from pathlib import Path
-            output_folder = Path.home() / "Desktop" / "attribution"
-            if output_folder.exists():
-                # Find the most recent CSV file matching the pattern (movie_talent_timestamp.csv)
-                # The file name format is: {safe_movie_name}_{safe_talent_name}_{timestamp}.csv
-                csv_files = list(output_folder.glob("*.csv"))
-                # Filter to files that match the pattern (have timestamp at end)
-                csv_files = [f for f in csv_files if len(f.stem.split('_')) >= 3]
-                if csv_files:
-                    # Sort by modification time, get most recent
-                    csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-                    output_file = str(csv_files[0])
-                    if os.path.exists(output_file):
-                        jobs[job_id]['result_file'] = output_file
-                        update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
-                    else:
-                        update_job_status(job_id, status='failed', error='Output file not found')
+            output_folder = Path(OUTPUT_DIR) / "attribution"
+            output_folder.mkdir(parents=True, exist_ok=True)
+            module.write_output(results, script_params, output_dir=str(output_folder))
+
+            # Find the output file in our output folder
+            csv_files = list(output_folder.glob("*.csv"))
+            csv_files = [f for f in csv_files if len(f.stem.split('_')) >= 3]
+            if csv_files:
+                csv_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                output_file = str(csv_files[0])
+                if os.path.exists(output_file):
+                    jobs[job_id]['result_file'] = output_file
+                    update_job_status(job_id, progress=100, status='completed', message='Analysis complete!')
                 else:
-                    update_job_status(job_id, status='failed', error='No output file created')
+                    update_job_status(job_id, status='failed', error='Output file not found')
             else:
-                update_job_status(job_id, status='failed', error='Output folder not found')
+                update_job_status(job_id, status='failed', error='No output file created')
         finally:
             try:
                 conn.close()
-            except:
+            except Exception:
                 pass
                 
     except Exception as e:
