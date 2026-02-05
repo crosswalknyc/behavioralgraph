@@ -54381,6 +54381,10 @@
             const btn = document.getElementById(btnId);
             if (panel) panel.classList.add('active');
             if (btn) btn.classList.add('active');
+            if (id === 'netflix') showRankerIQNetflixSubTab('daily');
+            else if (id === 'goodshort') loadGoodshortRankerData();
+            else if (id === 'shorttv') loadShortstvRankerData();
+            else if (id === 'reelshort') loadReelShortRankerData();
         }
         
         function renderRankerIQNetflixTrends() {
