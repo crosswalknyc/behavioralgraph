@@ -14217,6 +14217,10 @@
                     <div class="collab-main">
                         <!-- Unified Workspace + Deck Bar -->
                         <div class="workspace-selector-bar" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); flex-wrap: wrap;">
+                            <div class="display-mode-toggle has-tooltip" onclick="toggleToolbar()" data-tooltip="Collapse/Expand main toolbar" style="display: flex; align-items: center; gap: 0.2rem; cursor: pointer; padding: 0.25rem 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.65rem;">
+                                <span id="workspaceToolbarCollapseIcon" style="font-size: 0.5rem;">▲</span>
+                                <span class="toolbar-collapse-label" id="workspaceToolbarCollapseLabel">HIDE</span>
+                            </div>
                             <label style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">WORKSPACE:</label>
                             <div class="workspace-dropdown" style="position: relative; min-width: 280px;">
                                 <button id="workspaceDropdownBtn" onclick="toggleWorkspaceDropdown()" style="width: 100%; padding: 0.4rem 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem;">
@@ -25224,6 +25228,7 @@
             const toolbarRow = document.getElementById('toolbarRow');
             const profileHeaderRow = document.getElementById('profileHeaderRow');
             const collapseIcon = document.getElementById('toolbarCollapseIcon');
+            const workspaceCollapseIcon = document.getElementById('workspaceToolbarCollapseIcon');
             if (!toolbarRow) return;
             
             toolbarCollapsed = !toolbarCollapsed;
@@ -25233,13 +25238,18 @@
                 toolbarRow.classList.add('collapsed');
                 if (profileHeaderRow) profileHeaderRow.classList.add('collapsed');
                 if (collapseIcon) collapseIcon.style.transform = 'rotate(180deg)';
+                if (workspaceCollapseIcon) workspaceCollapseIcon.style.transform = 'rotate(180deg)';
             } else {
                 toolbarRow.classList.remove('collapsed');
                 if (profileHeaderRow) profileHeaderRow.classList.remove('collapsed');
                 if (collapseIcon) collapseIcon.style.transform = 'rotate(0deg)';
+                if (workspaceCollapseIcon) workspaceCollapseIcon.style.transform = 'rotate(0deg)';
             }
             const labelEl = document.getElementById('toolbarCollapseLabel');
-            if (labelEl) labelEl.textContent = toolbarCollapsed ? 'SHOW' : 'HIDE';
+            const workspaceLabel = document.getElementById('workspaceToolbarCollapseLabel');
+            const labelText = toolbarCollapsed ? 'SHOW' : 'HIDE';
+            if (labelEl) labelEl.textContent = labelText;
+            if (workspaceLabel) workspaceLabel.textContent = labelText;
         }
         
         // Initialize toolbar state on page load
@@ -25247,15 +25257,22 @@
             const toolbarRow = document.getElementById('toolbarRow');
             const profileHeaderRow = document.getElementById('profileHeaderRow');
             const labelEl = document.getElementById('toolbarCollapseLabel');
+            const workspaceLabel = document.getElementById('workspaceToolbarCollapseLabel');
             const collapseIcon = document.getElementById('toolbarCollapseIcon');
+            const workspaceCollapseIcon = document.getElementById('workspaceToolbarCollapseIcon');
+            const labelText = toolbarCollapsed ? 'SHOW' : 'HIDE';
             if (toolbarCollapsed) {
                 if (toolbarRow) toolbarRow.classList.add('collapsed');
                 if (profileHeaderRow) profileHeaderRow.classList.add('collapsed');
                 if (collapseIcon) collapseIcon.style.transform = 'rotate(180deg)';
-                if (labelEl) labelEl.textContent = 'SHOW';
+                if (workspaceCollapseIcon) workspaceCollapseIcon.style.transform = 'rotate(180deg)';
+                if (labelEl) labelEl.textContent = labelText;
+                if (workspaceLabel) workspaceLabel.textContent = labelText;
             } else {
                 if (collapseIcon) collapseIcon.style.transform = 'rotate(0deg)';
-                if (labelEl) labelEl.textContent = 'HIDE';
+                if (workspaceCollapseIcon) workspaceCollapseIcon.style.transform = 'rotate(0deg)';
+                if (labelEl) labelEl.textContent = labelText;
+                if (workspaceLabel) workspaceLabel.textContent = labelText;
             }
         }
         
