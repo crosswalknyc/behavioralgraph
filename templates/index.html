@@ -24602,6 +24602,15 @@
             }
         }
 
+        function escapeIdForOnclick(id) {
+            if (id == null) return '';
+            return String(id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        }
+        function escapeAttr(s) {
+            if (s == null) return '';
+            return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        }
+
         function renderDashboardProfileTree(profiles) {
             dashboardProfiles = profiles;
             const container = document.getElementById('dashProfileTree');
@@ -24636,15 +24645,17 @@
                 let html = '';
                 matchingProfiles.forEach(p => {
                     const id = p.s3_key || p.job_id;
+                    const idEsc = escapeIdForOnclick(id);
                     const isActive = selectedDashProfile === id;
                     const fullName = getProfileFullName(p);
+                    const fullNameAttr = escapeAttr(fullName);
                     const cat = p.category || 'UNCATEGORIZED';
                     const isSvod = p.is_svod || (p.key && p.key.startsWith('svod-acquisition/')) || (p.s3_key && p.bucket === 'svod-acquisition');
                     const masterCat = getMasterCategory(cat, isSvod);
                     const icon = MASTER_CATEGORY_ICONS[masterCat] || '📁';
                     
                     html += `
-                        <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="selectDashboardProfile('${id}')" title="${fullName}">
+                        <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="selectDashboardProfile('${idEsc}')" title="${fullNameAttr}">
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <span style="font-size: 0.9rem; opacity: 0.7;">${icon}</span>
                                 <span style="flex: 1;">${fullName}</span>
@@ -24720,10 +24731,12 @@
                         <div class="profile-cat-children ${isExpanded ? 'open' : ''}" id="cat-${catId}">
                             ${sortedItems.map(p => {
                                 const id = p.s3_key || p.job_id;
+                                const idEsc = escapeIdForOnclick(id);
                                 const isActive = selectedDashProfile === id;
                                 const fullName = getProfileFullName(p);
+                                const fullNameAttr = escapeAttr(fullName);
                                 return `
-                                    <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${id}')" title="${fullName}">
+                                    <div class="profile-select-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectDashboardProfile('${idEsc}')" title="${fullNameAttr}">
                                         ${fullName}
                                     </div>
                                 `;
@@ -42262,13 +42275,15 @@
                         <div class="tree-children ${isExpanded ? 'open' : ''}" id="cat-${catId}">
                             ${items.map(p => {
                                 const id = p.s3_key || p.job_id;
+                                const idEsc = escapeIdForOnclick(id);
                                 const isSelected = selectedForComparison.has(id);
                                 const colorIdx = Array.from(selectedForComparison).indexOf(id);
                                 const color = isSelected && colorIdx >= 0 ? profileColors[colorIdx % profileColors.length] : '#555';
                                 const fullName = getProfileFullName(p);
+                                const fullNameAttr = escapeAttr(fullName);
                                 return `
-                                    <div class="tree-item profile-item ${isSelected ? 'selected' : ''}" onclick="event.stopPropagation(); toggleComparisonProfile('${id}')" title="${fullName}">
-                                        <input type="checkbox" class="tree-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleComparisonProfile('${id}')">
+                                    <div class="tree-item profile-item ${isSelected ? 'selected' : ''}" onclick="event.stopPropagation(); toggleComparisonProfile('${idEsc}')" title="${fullNameAttr}">
+                                        <input type="checkbox" class="tree-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleComparisonProfile('${idEsc}')">
                                         <span class="tree-color" style="background: ${color}"></span>
                                         <span class="tree-label">${fullName}</span>
                                     </div>
@@ -42293,15 +42308,17 @@
                     </div>
                     <div class="tree-children ${segmentsExpanded ? 'open' : ''}" id="cat-comp_segments">
                         ${segmentProfiles.map(p => {
+                            const nameEsc = escapeIdForOnclick(p.name);
+                            const nameAttr = escapeAttr(p.name);
                             const isSelected = selectedForComparison.has(p.name);
                             const colorIdx = Array.from(selectedForComparison).indexOf(p.name);
                             const color = isSelected && colorIdx >= 0 ? p.color || profileColors[colorIdx % profileColors.length] : '#555';
                             return `
-                                <div class="tree-item profile-item ${isSelected ? 'selected' : ''}" onclick="event.stopPropagation(); toggleComparisonProfile('${p.name}')" title="${p.name}">
-                                    <input type="checkbox" class="tree-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleComparisonProfile('${p.name}')">
+                                <div class="tree-item profile-item ${isSelected ? 'selected' : ''}" onclick="event.stopPropagation(); toggleComparisonProfile('${nameEsc}')" title="${nameAttr}">
+                                    <input type="checkbox" class="tree-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleComparisonProfile('${nameEsc}')">
                                     <span class="tree-color" style="background: ${color}"></span>
                                     <span class="tree-label">${p.name}</span>
-                                    <button class="btn btn-small btn-danger" onclick="event.stopPropagation(); removeSegmentFromComparison('${p.name}')" style="font-size: 0.6rem; padding: 0.15rem 0.3rem; margin-left: auto;">✕</button>
+                                    <button class="btn btn-small btn-danger" onclick="event.stopPropagation(); removeSegmentFromComparison('${nameEsc}')" style="font-size: 0.6rem; padding: 0.15rem 0.3rem; margin-left: auto;">✕</button>
                                 </div>
                             `;
                         }).join('')}
@@ -42612,10 +42629,12 @@
                     <div class="tree-children ${isExpanded ? 'open' : ''}" id="cat-${catId}">
                         ${items.map(p => {
                             const id = p.s3_key || p.job_id;
+                            const idEsc = escapeIdForOnclick(id);
                             const isSelected = selectedSingleProfile === id;
                             const fullName = getProfileFullName(p);
+                            const fullNameAttr = escapeAttr(fullName);
                             return `
-                                <div class="profile-select-item ${isSelected ? 'selected' : ''}" onclick="selectSingleProfile('${id}')" title="${fullName}">
+                                <div class="profile-select-item ${isSelected ? 'selected' : ''}" onclick="selectSingleProfile('${idEsc}')" title="${fullNameAttr}">
                                     <span class="radio"></span>
                                     <span>${fullName}</span>
                                 </div>
